@@ -371,6 +371,9 @@ export function InlineOpportunityFocusPanel() {
             // nested cards, so a Work-View change re-resolves the whole panel coherently.
             workViewId={operational.decision?.workViewId ?? null}
             stageKey={operational.situation?.stageKey ?? null}
+            // A — the answer-resolved published composition: the committed panel's first frame is the
+            // PUBLISHED Summary composition (seed covers the window until the scope fetch settles).
+            seed={operational.summaryDocSeed}
         >
             <section
                 data-inline-focus-panel="true"

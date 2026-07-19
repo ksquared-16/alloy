@@ -17,6 +17,7 @@ import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { deleteLayout, getLayoutById, updateDraft } from "@/lib/layout/entityLayoutsRepo";
+import { invalidateFocusPanelSummaryConfigRead } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryConfigInvalidation";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -118,6 +119,10 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
         const { supabase, record } = await loadOwned(id, ctx.orgId);
         if (!record) return notFound();
         await deleteLayout(supabase, id);
+        // Deleting a published Summary row changes which variant resolves — bust the `fps:` config read.
+        if (record.status === "published") {
+            invalidateFocusPanelSummaryConfigRead(ctx.orgId, record);
+        }
         logAdminAudit({
             entity: "entity_layouts",
             id,

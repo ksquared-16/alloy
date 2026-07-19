@@ -14,6 +14,7 @@ import { logAdminAudit } from "@/lib/adminAuth";
 import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { getLayoutById, rollbackLayoutFromVersion } from "@/lib/layout/entityLayoutsRepo";
+import { invalidateFocusPanelSummaryConfigRead } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryConfigInvalidation";
 
 function notFound() {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -54,6 +55,9 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
             orgId: ctx.orgId,
             createdBy: ctx.userId,
         });
+
+        // A rollback publishes a new version — bust the provisioning answer's `fps:` config read.
+        invalidateFocusPanelSummaryConfigRead(ctx.orgId, source);
 
         logAdminAudit({
             entity: "entity_layouts",

@@ -123,6 +123,9 @@ export function ProvisionedWorkUnitSurface() {
                     workIntentRuntime={op ? op.focusPanelStageWork?.work_intent_runtime ?? null : null}
                     // A — commit-critical Household + Children snapshot (renders those cards meaningful at commit).
                     subjectSnapshot={op ? op.focusPanelSubjectSnapshot ?? null : null}
+                    // A — the published Summary composition for the committed scope: the panel presents
+                    // the PUBLISHED composition at commit, not the code default standing in for a fetch.
+                    summaryDocSeed={op ? op.focusPanelSummaryDoc ?? null : null}
                 >
                     <WorkUnitSurfaceBodyFromModel model={model} intents={intents} />
                 </OperationalSubjectProvider>

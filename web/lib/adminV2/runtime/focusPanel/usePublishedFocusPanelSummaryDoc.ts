@@ -148,6 +148,7 @@ export function FocusPanelSummaryDocProvider({
     workViewId = null,
     stageKey = null,
     statusKey = null,
+    seed = null,
     children,
 }: {
     enabled: boolean;
@@ -155,13 +156,26 @@ export function FocusPanelSummaryDocProvider({
     workViewId?: string | null;
     stageKey?: string | null;
     statusKey?: string | null;
+    /**
+     * COMMIT-CRITICAL SEED (A) — the published doc the provisioning answer resolved server-side for
+     * the committed scope. While the client fetch for this scope has not settled, the seed IS the
+     * answer (`loaded: true`), so the committed panel presents the PUBLISHED composition on its first
+     * frame — no default-doc stand-in, no post-commit composition reflow. `{doc: null}` means
+     * resolved-nothing-published (the code default is correct). The scope fetch still runs and, once
+     * settled, replaces the seed — so a publish-event invalidation always wins over a stale seed.
+     */
+    seed?: { doc: LayoutDoc | null } | null;
     children: ReactNode;
 }) {
     const ctx = useMemo<FocusPanelSummaryDocContextValue>(
         () => ({ businessProcessKey, workViewId, stageKey, statusKey }),
         [businessProcessKey, workViewId, stageKey, statusKey],
     );
-    const value = usePublishedFocusPanelSummaryDocForScope(enabled, ctx);
+    const fetched = usePublishedFocusPanelSummaryDocForScope(enabled, ctx);
+    const value = useMemo(
+        () => (!fetched.loaded && seed ? { doc: seed.doc, loaded: true } : fetched),
+        [fetched, seed],
+    );
     return createElement(FocusPanelSummaryDocContext.Provider, { value }, children);
 }
 

@@ -80,6 +80,16 @@ import { queueRowSurfaceIdForDepartment } from "@/lib/presentation/runtime/workU
 import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
 import { cachedConfigRead } from "./configReadCache";
 import { loadRightRailActionsBundleServer } from "@/lib/workspace/loadRightRailActionsBundleServer";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import { listOrgLayouts } from "@/lib/layout/entityLayoutsRepo";
+import type { EntityLayoutRecord, LayoutDoc } from "@/lib/layout/layoutV2";
+import { isLayoutRuntimeReadPathEnabled } from "@/lib/layout/featureFlag";
+import {
+    FOCUS_PANEL_SUMMARY_ENTITY_TYPE,
+    FOCUS_PANEL_SUMMARY_LAYOUT_KEY,
+    FOCUS_PANEL_SUMMARY_SURFACE,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelLayoutDocModel";
+import { resolvePublishedFocusPanelSummaryRecord } from "@/lib/adminV2/runtime/focusPanel/resolveFocusPanelSummaryVariant";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import {
     resolveOpportunityStageWorkSlice,
@@ -171,6 +181,17 @@ export type FocusPanelSubjectSnapshot = {
     inquiryChildren: unknown;
 };
 
+/**
+ * COMMIT-CRITICAL PUBLISHED SUMMARY COMPOSITION (A — the committed panel must present the PUBLISHED
+ * Summary composition, not the code default). The applicable published Focus Panel Summary doc for
+ * the committed scope, selected server-side by the ONE applicability resolver (P3-A) and carried in
+ * the answer so the committed panel renders the published composition IMMEDIATELY — no async client
+ * fetch stand-in, no default-doc first frame, no post-commit composition reflow. `doc: null` means
+ * RESOLVED: nothing published applies, the code default IS the composition. A null projection means
+ * unresolved (read failed) — the client degrades to its own fetch, never an operational failure.
+ */
+export type FocusPanelSummaryDocProjection = { doc: LayoutDoc | null };
+
 export type ProvisioningAnswer =
     | {
           terminal: "operational";
@@ -213,6 +234,8 @@ export type ProvisioningAnswer =
           focusPanelStageWork: OpportunityStageWorkSlice | null;
           /** A — commit-critical Household + Children snapshot (see {@link FocusPanelSubjectSnapshot}). */
           focusPanelSubjectSnapshot: FocusPanelSubjectSnapshot | null;
+          /** A — the published Summary composition for the committed scope (see {@link FocusPanelSummaryDocProjection}). */
+          focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null;
           /**
            * U-P7 — the RESOLVED operational presentation composition, sufficient to render
            * U-O1…U-O5 in FINAL layout with no further configuration request. Identifiers survive
@@ -544,6 +567,25 @@ export async function composeWorkUnitProvisioningAnswer(
         : Promise.resolve(EMPTY_ACTIONS_PROJECTION);
     void actionsProjectionPromise.catch(() => {});
 
+    // ── A: COMMIT-CRITICAL PUBLISHED SUMMARY COMPOSITION — read the org's Focus Panel Summary layout
+    // rows CONCURRENTLY (config-cached, `fps:` prefix, busted on a summary publish/rollback/delete).
+    // Variant selection against the committed subject's scope happens at assembly (pure, in-memory).
+    // Non-fatal: a failed read degrades to the client's own fetch — never fails the answer. Flag off
+    // = resolved-empty (no published docs → the code default IS the composition), matching the API route.
+    const focusPanelSummaryRowsPromise: Promise<readonly EntityLayoutRecord[] | null> =
+        isLayoutRuntimeReadPathEnabled()
+            ? cachedConfigRead(`fps:${req.orgId}`, async () => {
+                  const layoutRows = await listOrgLayouts(
+                      createAdminClient(),
+                      req.orgId,
+                      FOCUS_PANEL_SUMMARY_ENTITY_TYPE,
+                      FOCUS_PANEL_SUMMARY_SURFACE,
+                  );
+                  return layoutRows.filter((r) => r.layoutKey === FOCUS_PANEL_SUMMARY_LAYOUT_KEY);
+              }).catch(() => null)
+            : Promise.resolve([]);
+    void focusPanelSummaryRowsPromise.catch(() => {});
+
     // ── §6: Row Grain explicit, Stage-owned. Grain-ambiguous config is refused honestly. ──
     const grain = resolveLensRowGrain(activeView, stages);
     if (!grain.ok) return fail("grain_ambiguous", `Work View "${activeView.label}": ${grain.reason}`, workUnit);
@@ -695,6 +737,20 @@ export async function composeWorkUnitProvisioningAnswer(
         inquiryChildren: subjectMetadata?.inquiry_children ?? null,
     };
 
+    // A — the published Summary composition for the committed scope. Selected with the SAME axes the
+    // client doc provider sends (`workViewId` + committed stage; Business Process / status stay
+    // wildcard), so the carried doc and any later client re-fetch resolve identically.
+    const summaryLayoutRows = await focusPanelSummaryRowsPromise;
+    const focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null = summaryLayoutRows
+        ? {
+              doc:
+                  resolvePublishedFocusPanelSummaryRecord(summaryLayoutRows, {
+                      workViewId: contextFrame.workViewId,
+                      stageKey: stage.key,
+                  })?.doc ?? null,
+          }
+        : null;
+
     const answer: ProvisioningAnswer = {
         terminal: "operational",
         orgId: req.orgId,
@@ -724,6 +780,7 @@ export async function composeWorkUnitProvisioningAnswer(
         },
         focusPanelStageWork,
         focusPanelSubjectSnapshot,
+        focusPanelSummaryDoc,
         presentation,
         settlement,
         actionsProjection,

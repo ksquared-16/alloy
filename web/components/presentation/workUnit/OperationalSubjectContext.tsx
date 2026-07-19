@@ -21,7 +21,10 @@ import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityD
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
-import type { FocusPanelSubjectSnapshot } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import type {
+    FocusPanelSubjectSnapshot,
+    FocusPanelSummaryDocProjection,
+} from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 
 export type OperationalSubject = {
     /** Record of Attention — the committed subject, from the frozen snapshot. Null = none committed. */
@@ -84,11 +87,19 @@ export type OperationalSubject = {
      * the answer did not resolve it (the cards reserve; the drawer VM fills them).
      */
     subjectSnapshot: FocusPanelSubjectSnapshot | null;
+    /**
+     * A — the published Summary composition for the committed scope, carried by the answer so the
+     * committed panel presents the PUBLISHED composition immediately (no default-doc first frame, no
+     * post-commit reflow). `{doc: null}` = resolved, nothing published applies (code default). Null =
+     * the answer did not resolve it (the doc provider degrades to its own fetch).
+     */
+    summaryDocSeed: FocusPanelSummaryDocProjection | null;
 };
 
 const EMPTY: OperationalSubject = {
     subjectId: null, entityType: null, identitySeed: null, situation: null, decision: null, action: null,
     stageWorkRuntime: null, publishedStageInputs: null, workIntentRuntime: null, subjectSnapshot: null,
+    summaryDocSeed: null,
 };
 const Ctx = createContext<OperationalSubject>(EMPTY);
 
@@ -103,6 +114,7 @@ export function OperationalSubjectProvider({
     publishedStageInputs,
     workIntentRuntime,
     subjectSnapshot,
+    summaryDocSeed,
     children,
 }: {
     subjectId: string | null;
@@ -114,6 +126,7 @@ export function OperationalSubjectProvider({
     publishedStageInputs?: PublishedStageInputsForCurrentWork | null;
     workIntentRuntime?: WorkIntentRuntimeProjection | null;
     subjectSnapshot?: FocusPanelSubjectSnapshot | null;
+    summaryDocSeed?: FocusPanelSummaryDocProjection | null;
     children: ReactNode;
 }) {
     const value = useMemo<OperationalSubject>(
@@ -128,8 +141,9 @@ export function OperationalSubjectProvider({
             publishedStageInputs: publishedStageInputs ?? null,
             workIntentRuntime: workIntentRuntime ?? null,
             subjectSnapshot: subjectSnapshot ?? null,
+            summaryDocSeed: summaryDocSeed ?? null,
         }),
-        [subjectId, identitySeed, situation, decision, action, stageWorkRuntime, publishedStageInputs, workIntentRuntime, subjectSnapshot],
+        [subjectId, identitySeed, situation, decision, action, stageWorkRuntime, publishedStageInputs, workIntentRuntime, subjectSnapshot, summaryDocSeed],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

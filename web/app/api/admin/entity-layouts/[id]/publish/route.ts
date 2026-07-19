@@ -16,6 +16,7 @@ import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getLayoutById, publishLayout } from "@/lib/layout/entityLayoutsRepo";
+import { invalidateFocusPanelSummaryConfigRead } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryConfigInvalidation";
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     if (!isLayoutV2ConfigEnabledServer()) {
@@ -45,6 +46,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         }
 
         const published = await publishLayout(supabase, id);
+        // A publish changes which variant the provisioning answer carries — bust its `fps:` config read.
+        invalidateFocusPanelSummaryConfigRead(ctx.orgId, record);
         logAdminAudit({
             entity: "entity_layouts",
             id,
