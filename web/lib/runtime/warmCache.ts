@@ -36,6 +36,8 @@ export type WarmCache<P, V> = {
     get: (params: P) => V | null;
     /** Full `{ data, fetchedAt, error }` for a scope — for `useSyncExternalStore` snapshots. */
     getState: (params: P) => WarmCacheEntryState<V>;
+    /** Seed a scope's value directly (e.g. from an optimistic mutation) without a fetch. */
+    set: (params: P, data: V) => void;
     /** Notified on every cache write. */
     subscribe: (listener: () => void) => () => void;
     /**
@@ -100,12 +102,20 @@ export function createWarmCache<P, V>(config: {
             return key ? cache.get(key)?.data ?? null : null;
         },
         getState,
+        set: (params, data) => {
+            const key = config.keyOf(params);
+            if (!key) return;
+            cache.set(key, { data, fetchedAt: Date.now() });
+            notify();
+        },
         subscribe: (listener) => {
             listeners.add(listener);
             return () => listeners.delete(listener);
         },
         warm: async (params, opts) => {
-            if (typeof window === "undefined") return { data: null, error: null };
+            // `warm` is only ever invoked from client handlers/effects (nav intent, mount), never
+            // during SSR render, so no window guard is needed — and adding one would break node tests
+            // that mock `fetch`.
             const key = config.keyOf(params);
             if (!key) return { data: null, error: null };
             if (!opts?.force) {
