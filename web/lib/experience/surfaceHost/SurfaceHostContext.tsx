@@ -219,11 +219,25 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
             desired.target === WORKSPACE_ATTENTION_TARGET ||
             surfaceIdFor(committed.ref) === surfaceIdFor(desired));
 
+    // A WORK-VIEW (lens) switch is a pure lens move on the SAME Work Unit target — `target::lensA` →
+    // `target::lensB`. The committed surface is still the SAME Work Unit (just the prior lens), so it is
+    // continuity to HOLD, not a mixed/wrong destination to hide. Holding it keeps the one
+    // `ProvisionedWorkUnitSurface` mounted and swaps its content in place at the atomic commit — no
+    // boot-shell flash, no shell/queue/focus-panel remount. This is the same "hold prior payload"
+    // doctrine subject switches already use, lifted to the lens axis so a pill switch is attention
+    // movement, not navigation. A DIFFERENT-target exchange (or cold entry) is NOT held — that would be
+    // a mixed surface — so the loader still owns those (never-blank preserved).
+    const sameTargetLensExchange =
+        committed != null &&
+        committed.ref.target !== WORKSPACE_ATTENTION_TARGET &&
+        desired != null &&
+        desired.target === committed.ref.target;
+
     const showWorkUnit =
         committed != null &&
         committed.ref.target !== WORKSPACE_ATTENTION_TARGET &&
         !desiredIsWorkspace &&
-        committedMatchesDesired;
+        (committedMatchesDesired || sameTargetLensExchange);
 
     // ── THE OUTGOING YIELD (C-36) — the Workspace visibly recedes the instant the operator commits to
     //    leaving it, and is HELD (mounted, out of the way) once the Work Unit reveals. The kernel models

@@ -881,9 +881,6 @@ function SummaryBody({
     onViewFullActivity?: () => void;
     activityPreviewItems: CurrentWorkActivityPreviewItem[];
 }) {
-    const helpfulActions = [...surface.supportingActions, ...surface.communicationActions].filter(
-        isCurrentWorkActionExecutable,
-    );
     const primary =
         surface.primaryAction
         && surface.primaryAction.handlerKey !== "expand_work"
@@ -894,9 +891,6 @@ function SummaryBody({
         surface.recordOutcomeAction && isCurrentWorkActionExecutable(surface.recordOutcomeAction)
             ? surface.recordOutcomeAction
             : null;
-    const additionalLinkedWork =
-        (surface.readiness.workItems?.total ?? 0) > 1
-        || (surface.runtime?.additional?.length ?? 0) > 0;
 
     return (
         <div
@@ -953,25 +947,14 @@ function SummaryBody({
                         Open workspace →
                     </button>
                 </div>
-                <MoreActionsLauncher actions={helpfulActions} onAction={onAction} />
-                <OtherTransitionsDisclosure
-                    actions={surface.alternatePaths.filter(isCurrentWorkActionExecutable)}
-                    onAction={onAction}
-                />
-                {additionalLinkedWork && primaryWorkItem?.work_id ?
-                    <div className="alloy-os-currentwork__linked-work" data-current-work-work-items-link="true">
-                        <p className="alloy-os-currentwork__linked-work-copy">Also tracked in Work Items</p>
-                        <ViewInWorkItemsLink taskId={primaryWorkItem.work_id} opportunityId={opportunityId} />
-                    </div>
-                :   null}
-                <ActivityFooter
-                    surface={surface}
-                    activityPreviewOpen={activityPreviewOpen}
-                    onToggleActivityPreview={onToggleActivityPreview}
-                    onCloseActivityPreview={onCloseActivityPreview}
-                    onViewFullActivity={onViewFullActivity}
-                    activityPreviewItems={activityPreviewItems}
-                />
+                {/* SUMMARY IS THE FIRST OPERATIONAL EXPERIENCE (product doctrine). The committed
+                    Current Work card presents the operational summary only — status, progress, the
+                    requirements readiness, and the first action(s). The workspace-level, SETTLEMENT-
+                    derived affordances (More actions, Other transitions, recent Activity) are NOT
+                    committed here: they reconstructed the card one settlement tick after commit (a
+                    visible second stage) and are drill detail, so they live in the drill-in workspace
+                    ("Open workspace →", presentation="workspace"). Settlement enriches this summary;
+                    it does not rebuild it. */}
             </div>
         </div>
     );
