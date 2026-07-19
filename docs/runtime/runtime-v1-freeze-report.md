@@ -11,6 +11,14 @@ This is the authoritative freeze recommendation for Runtime V1 as constitutional
 supersedes the operational status in `docs/handoffs/runtime-v1-freeze-report.md` (a prior implementation
 artifact). The implementation is the source of truth; documentation was reconciled to it.
 
+> **PROMOTION DECISION (2026-07-19).** Runtime V1 was **accepted as complete** and promoted. The
+> historical Runtime **test debt was explicitly decoupled** into a separate initiative
+> ([`runtime-test-hygiene-initiative.md`](./runtime-test-hygiene-initiative.md)) that does **not** block
+> promotion — it is independent engineering, not Runtime V1 architecture. The recommendation below
+> (Option B) documented the state *before* that decision; with test hygiene decoupled, Runtime V1 met
+> the freeze bar and was merged to `staging` (fast-forward, local). See
+> [`runtime-v1-closeout.md`](./runtime-v1-closeout.md).
+
 ## Recommendation: **OPTION B — architecturally ready to freeze; ONE final targeted sprint remains before merge to staging.**
 
 The Runtime **architecture** is mature, documented, certified, and free of known defects. Products can be
