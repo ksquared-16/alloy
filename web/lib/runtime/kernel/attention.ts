@@ -20,6 +20,8 @@
  * therefore expressed as ordinal depth, and the Law of Scope Supersession is a comparison on it.
  */
 
+import type { DestinationId } from "@/lib/runtime/graph/destinationId";
+
 /** The Workspace surface's attention target. It is a place the operator attends, like any other. */
 export const WORKSPACE_ATTENTION_TARGET = "workspace";
 
@@ -60,6 +62,16 @@ export type AttentionRef = {
     subject: string | null;
     /** Present at ASPECT scope only. */
     aspect: string | null;
+    /**
+     * The CANONICAL Operational Destination this surface resolves to — `(workUnitId, workViewId)`,
+     * resolved server-side (the URL is not the identity; it resolves INTO this). Present when a
+     * producer with resolved identity (a Workspace link) caused the movement; null on a direct-URL
+     * cold load until the provisioning answer resolves it. Runtime owners key preparation/provisioning
+     * on THIS (via `destinationIdKey`), never on the raw `target` slug — so two URLs that resolve to
+     * the same operational destination can never fracture. A SURFACE movement sets it; finer movements
+     * inherit it (a subject/aspect change never leaves the destination).
+     */
+    destination: DestinationId | null;
     source: AttentionSource;
     /** Monotonic supersession identity. Strictly increasing per owner. */
     version: number;
@@ -68,7 +80,14 @@ export type AttentionRef = {
 /** A movement request. Coarser fields are INHERITED, never supplied — this is what makes attention
  *  downward-only by construction rather than by convention (see `move`). */
 export type AttentionIntent =
-    | { scope: 0; source: AttentionSource; target: string; lens?: string | null }
+    | {
+          scope: 0;
+          source: AttentionSource;
+          target: string;
+          lens?: string | null;
+          /** The producer's server-resolved canonical destination, when known (Workspace links). */
+          destination?: DestinationId | null;
+      }
     | { scope: 1; source: AttentionSource; lens: string }
     | { scope: 2; source: AttentionSource; subject: string }
     | { scope: 3; source: AttentionSource; aspect: string };
@@ -81,6 +100,8 @@ export type AttentionHydration = {
     lens?: string | null;
     subject?: string | null;
     aspect?: string | null;
+    /** Server-resolved canonical destination, when the hydrating context could resolve it. */
+    destination?: DestinationId | null;
     source: Extract<AttentionSource, "direct_url" | "history" | "reload">;
 };
 
@@ -172,6 +193,7 @@ export class AttentionOwner {
             lens: h.lens ?? null,
             subject: h.subject ?? null,
             aspect: h.aspect ?? null,
+            destination: h.destination ?? null,
             source: h.source,
             version: ++this.version,
         };
@@ -214,6 +236,9 @@ export class AttentionOwner {
                     lens: intent.lens ?? null,
                     subject: null,
                     aspect: null,
+                    // The canonical destination the producer resolved for this surface (null if it
+                    // could not resolve one — e.g. a bare direct link). Node-level: no subject/mode.
+                    destination: intent.destination ?? null,
                     source: intent.source,
                     version: ++this.version,
                 };
@@ -226,6 +251,11 @@ export class AttentionOwner {
                     // A lens movement abandons the subject/aspect under the lens it leaves.
                     subject: null,
                     aspect: null,
+                    // The lens IS the work view — re-point the canonical destination to it (the
+                    // Work View id and the lens are the same identifier space, U-P2). Subject cleared.
+                    destination: prev!.destination
+                        ? { ...prev!.destination, workViewId: intent.lens, subjectId: null, focusMode: null }
+                        : null,
                     source: intent.source,
                     version: ++this.version,
                 };

@@ -151,7 +151,7 @@ describe("D2 — K1 Attention", () => {
         const o = ownerAt();
         const ref = o.move({ scope: ATTENTION_SCOPE.SUBJECT, subject: "opp-1", source: "pointer" });
         expect(Object.keys(ref).sort()).toEqual([
-            "aspect", "lens", "principal", "scope", "source", "subject", "target", "tenant", "version",
+            "aspect", "destination", "lens", "principal", "scope", "source", "subject", "target", "tenant", "version",
         ]);
         for (const forbidden of ["rows", "snapshot", "payload", "data", "layout", "presentation", "ready", "loading"]) {
             expect(ref).not.toHaveProperty(forbidden);
@@ -182,7 +182,7 @@ describe("D2 — K1 Attention", () => {
     it("tenant/principal isolation is absolute — attention never supersedes across a boundary", () => {
         const mine: AttentionRef = {
             tenant: "org-1", principal: "user-1", scope: 0, target: "t", lens: null,
-            subject: null, aspect: null, source: "pointer", version: 9,
+            subject: null, aspect: null, destination: null, source: "pointer", version: 9,
         };
         const theirs: AttentionRef = { ...mine, tenant: "org-2", version: 1 };
         expect(supersedes(mine, theirs)).toBe(false);
