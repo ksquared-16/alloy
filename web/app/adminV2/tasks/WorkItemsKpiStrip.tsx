@@ -15,12 +15,11 @@ import WorkspaceOperationalHealth, {
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import {
     fetchOperationalTasksSummary,
-    fetchWorkspaceOperationalTasks,
     readJson,
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import {
     getCachedWorkspaceOperationalTasks,
-    prefetchWorkspaceOperationalTasks,
+    loadWorkspaceOperationalTasks,
 } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 
 type TaskCounts = {
@@ -58,8 +57,6 @@ export default function WorkItemsKpiStrip() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        prefetchWorkspaceOperationalTasks("open");
-
         let cancelled = false;
         void (async () => {
             try {
@@ -68,19 +65,19 @@ export default function WorkItemsKpiStrip() {
                     setLoading(false);
                 }
 
-                const [summaryRes, openRes] = await Promise.all([
+                // Warm-first + deduped: the open-tasks list coalesces with the panel + overview landing.
+                const [summaryRes, openResult] = await Promise.all([
                     fetchOperationalTasksSummary(),
-                    fetchWorkspaceOperationalTasks("open"),
+                    loadWorkspaceOperationalTasks("open"),
                 ]);
 
                 const summaryJson = await readJson<{ ok?: boolean; counts?: { due_soon: number; overdue: number } }>(
                     summaryRes
                 );
-                const openJson = await readJson<{ ok?: boolean; tasks?: MyTasksTaskRow[] }>(openRes);
 
                 if (cancelled) return;
 
-                const openRows = Array.isArray(openJson.tasks) ? openJson.tasks : cachedOpen ?? [];
+                const openRows = openResult.tasks ?? cachedOpen ?? [];
                 const { assigned, waiting } = deriveQueueAssignmentCounts(openRows);
 
                 if (summaryRes.ok && summaryJson.ok && summaryJson.counts) {

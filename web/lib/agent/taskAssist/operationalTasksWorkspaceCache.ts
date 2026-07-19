@@ -28,10 +28,67 @@ type CacheEntry = {
     loadedAtMs: number;
 };
 
+export type WorkspaceOperationalTasksResult = {
+    tasks: CachedOperationalTaskRow[] | null;
+    error: string | null;
+};
+
 const cache = new Map<OperationalTaskWorkspaceFilter, CacheEntry>();
-const inflight = new Map<OperationalTaskWorkspaceFilter, Promise<CachedOperationalTaskRow[] | null>>();
+const inflight = new Map<OperationalTaskWorkspaceFilter, Promise<WorkspaceOperationalTasksResult>>();
 
 const DEFAULT_STALE_MS = 90_000;
+
+/**
+ * ONE network fetch per filter, shared by every concurrent caller (the panel, the overview landing,
+ * the KPI strip, the nav). Even a forced load joins an in-flight request for the same filter — force
+ * bypasses cache freshness, never the in-flight dedupe — so the Work Items open no longer fires the
+ * same `/operational-tasks?filter=…` three times. Errors are carried out (not swallowed) so the panel
+ * can still surface them.
+ */
+function runInflightTasksFetch(
+    filter: OperationalTaskWorkspaceFilter
+): Promise<WorkspaceOperationalTasksResult> {
+    const existing = inflight.get(filter);
+    if (existing) return existing;
+
+    const p = (async (): Promise<WorkspaceOperationalTasksResult> => {
+        try {
+            const res = await fetchWorkspaceOperationalTasks(filter);
+            const json = await readJson<{ ok?: boolean; tasks?: CachedOperationalTaskRow[]; error?: string; message?: string }>(res);
+            if (!res.ok || !json.ok) {
+                return { tasks: null, error: json.message || json.error || `Request failed (${res.status})` };
+            }
+            const tasks = Array.isArray(json.tasks) ? json.tasks : [];
+            setCachedWorkspaceOperationalTasks(filter, tasks);
+            return { tasks, error: null };
+        } catch (e) {
+            return { tasks: null, error: e instanceof Error ? e.message : "Failed to load tasks" };
+        } finally {
+            inflight.delete(filter);
+        }
+    })();
+    inflight.set(filter, p);
+    return p;
+}
+
+/**
+ * Warm-first, deduped load. Reuses a fresh cache (paints with no fetch); otherwise shares the single
+ * in-flight request. Pass `{ force: true }` after a mutation to bypass cache freshness and revalidate
+ * (still deduped). Every Work Items consumer routes through this, so they share one cache and one
+ * request per filter — the same treatment the Processing queue/forms warm caches give their surfaces.
+ */
+export async function loadWorkspaceOperationalTasks(
+    filter: OperationalTaskWorkspaceFilter = "open",
+    options?: { force?: boolean }
+): Promise<WorkspaceOperationalTasksResult> {
+    if (!options?.force) {
+        const existing = cache.get(filter);
+        if (existing && Date.now() - existing.loadedAtMs < DEFAULT_STALE_MS) {
+            return { tasks: existing.tasks, error: null };
+        }
+    }
+    return runInflightTasksFetch(filter);
+}
 
 export function getCachedWorkspaceOperationalTasks(
     filter: OperationalTaskWorkspaceFilter = "open"
@@ -62,21 +119,6 @@ export function prefetchWorkspaceOperationalTasks(
     const maxAge = options?.maxAgeMs ?? DEFAULT_STALE_MS;
     const existing = cache.get(filter);
     if (existing && Date.now() - existing.loadedAtMs < maxAge) return;
-    if (inflight.has(filter)) return;
-
-    const p = (async (): Promise<CachedOperationalTaskRow[] | null> => {
-        try {
-            const res = await fetchWorkspaceOperationalTasks(filter);
-            const json = await readJson<{ ok?: boolean; tasks?: CachedOperationalTaskRow[] }>(res);
-            if (!res.ok || !json.ok) return null;
-            const tasks = Array.isArray(json.tasks) ? json.tasks : [];
-            setCachedWorkspaceOperationalTasks(filter, tasks);
-            return tasks;
-        } catch {
-            return null;
-        } finally {
-            inflight.delete(filter);
-        }
-    })();
-    inflight.set(filter, p);
+    // Fire-and-forget through the shared in-flight so a prefetch and a concurrent load coalesce.
+    void runInflightTasksFetch(filter);
 }

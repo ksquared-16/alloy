@@ -20,13 +20,11 @@ import { normalizeOperationalTaskTitleDisplay } from "@/lib/agent/taskAssist/nor
 import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import {
-    fetchWorkspaceOperationalTasks,
-    readJson,
     type OperationalTaskWorkspaceFilter,
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import {
     getCachedWorkspaceOperationalTasks,
-    prefetchWorkspaceOperationalTasks,
+    loadWorkspaceOperationalTasks,
 } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 
 function formatAge(iso: string | null): string {
@@ -73,27 +71,16 @@ export default function WorkItemsOverviewLanding({
     const [completedTasks, setCompletedTasks] = useState<MyTasksTaskRow[]>([]);
 
     useEffect(() => {
-        prefetchWorkspaceOperationalTasks("open");
-        prefetchWorkspaceOperationalTasks("completed");
-
         let cancelled = false;
+        // Warm-first + deduped: coalesces with the panel + KPI strip into ONE request per filter.
         void (async () => {
-            try {
-                const [completedRes, openRes] = await Promise.all([
-                    fetchWorkspaceOperationalTasks("completed"),
-                    fetchWorkspaceOperationalTasks("open"),
-                ]);
-
-                const completedJson = await readJson<{ ok?: boolean; tasks?: MyTasksTaskRow[] }>(completedRes);
-                const openJson = await readJson<{ ok?: boolean; tasks?: MyTasksTaskRow[] }>(openRes);
-
-                if (cancelled) return;
-
-                setOpenTasks(Array.isArray(openJson.tasks) ? openJson.tasks : []);
-                setCompletedTasks(Array.isArray(completedJson.tasks) ? completedJson.tasks : []);
-            } catch {
-                /* non-fatal */
-            }
+            const [open, completed] = await Promise.all([
+                loadWorkspaceOperationalTasks("open"),
+                loadWorkspaceOperationalTasks("completed"),
+            ]);
+            if (cancelled) return;
+            if (open.tasks) setOpenTasks(open.tasks as MyTasksTaskRow[]);
+            if (completed.tasks) setCompletedTasks(completed.tasks as MyTasksTaskRow[]);
         })();
 
         return () => {

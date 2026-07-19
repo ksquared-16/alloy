@@ -33,7 +33,6 @@ import {
 } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
 import {
     createOperationalTask,
-    fetchWorkspaceOperationalTasks,
     patchOperationalTaskFields,
     patchOperationalTaskStatus,
     readJson,
@@ -41,7 +40,7 @@ import {
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import {
     getCachedWorkspaceOperationalTasks,
-    setCachedWorkspaceOperationalTasks,
+    loadWorkspaceOperationalTasks,
 } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import { deriveWorkItemsProcessGroups } from "@/lib/agent/taskAssist/myTasksProcessGroups";
@@ -248,7 +247,7 @@ export default function MyTasksPanel({
             ...(navView ? { view: navView } : {}),
         }));
     }, [navSource, navView]);
-    const load = useCallback(async () => {
+    const load = useCallback(async (opts?: { force?: boolean }) => {
         if (!workEnabled) return;
         const serverFilter = resolveWorkspaceTasksFetchFilter(scope.view, navFilter);
         const cached = getCachedWorkspaceOperationalTasks(serverFilter);
@@ -259,21 +258,16 @@ export default function MyTasksPanel({
             setLoading(true);
         }
         setError(null);
-        try {
-            const res = await fetchWorkspaceOperationalTasks(serverFilter);
-            const json = await readJson<{ ok?: boolean; tasks?: MyTasksTaskRow[]; error?: string; message?: string }>(res);
-            if (!res.ok || !json.ok) {
-                throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
-            }
-            const rows = Array.isArray(json.tasks) ? json.tasks : [];
-            setTasks(rows);
-            setCachedWorkspaceOperationalTasks(serverFilter, rows);
-        } catch (e: unknown) {
-            setError(formatTaskAssistClientError((e as Error).message));
+        // Warm-first + deduped: mount/scope loads reuse a fresh cache and coalesce with the overview
+        // landing + KPI strip into ONE request per filter; mutations pass `{ force: true }` to revalidate.
+        const { tasks: rows, error: loadError } = await loadWorkspaceOperationalTasks(serverFilter, opts);
+        if (loadError) {
+            setError(formatTaskAssistClientError(loadError));
             if (!cached) setTasks([]);
-        } finally {
-            setLoading(false);
+        } else if (rows) {
+            setTasks(rows);
         }
+        setLoading(false);
     }, [navFilter, scope.view, workEnabled]);
 
     useEffect(() => {
@@ -422,7 +416,7 @@ export default function MyTasksPanel({
     }, [onFilterCountChange, visibleTasks.length]);
 
     useEffect(() => {
-        const onRefresh = () => void load();
+        const onRefresh = () => void load({ force: true });
         window.addEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
         return () => window.removeEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
     }, [load]);
@@ -499,7 +493,7 @@ export default function MyTasksPanel({
             const processingCaseId = parseProcessingCaseIdFromWorkItemId(id);
             if (processingCaseId) {
                 dispatchRefresh({ processing_case_id: processingCaseId, kind: "processing_review" });
-                await load();
+                await load({ force: true });
                 return;
             }
             const communicationThreadId = parseCommunicationThreadIdFromWorkItemId(id);
@@ -513,7 +507,7 @@ export default function MyTasksPanel({
                 const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
                 if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
                 clearForms();
-                await load();
+                await load({ force: true });
                 dispatchRefresh();
             } catch (e: unknown) {
                 setError(formatTaskAssistClientError((e as Error).message));
@@ -579,7 +573,7 @@ export default function MyTasksPanel({
                 });
                 if (!result.ok) throw new Error(result.error ?? "Failed to complete work item");
                 clearForms();
-                await load();
+                await load({ force: true });
                 dispatchRefresh();
             } catch (e: unknown) {
                 setError(formatTaskAssistClientError((e as Error).message));
@@ -619,7 +613,7 @@ export default function MyTasksPanel({
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             clearForms();
-            await load();
+            await load({ force: true });
             dispatchRefresh();
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
@@ -639,7 +633,7 @@ export default function MyTasksPanel({
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             clearForms();
-            await load();
+            await load({ force: true });
             dispatchRefresh();
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
@@ -658,7 +652,7 @@ export default function MyTasksPanel({
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             markSessionCommitted(session);
             setCreateOpen(false);
-            await load();
+            await load({ force: true });
             dispatchRefresh();
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));

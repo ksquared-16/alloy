@@ -120,6 +120,12 @@ export function SidebarTasksNavItem({ collapsed }: { collapsed: boolean }) {
             badge={badge}
             active={activeModal === "tasks"}
             dataAttr="tasks"
+            onMouseEnter={() => {
+                prefetchWorkspaceOperationalTasks("open");
+            }}
+            onFocus={() => {
+                prefetchWorkspaceOperationalTasks("open");
+            }}
             onClick={() => {
                 prefetchWorkspaceOperationalTasks("open");
                 dispatchAdminV2OpenTasksPanel();
