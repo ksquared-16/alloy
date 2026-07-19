@@ -68,13 +68,30 @@ export function createWarmCache<P, V>(config: {
     const cache = new Map<string, { data: V; fetchedAt: number }>();
     const inflight = new Map<string, Promise<WarmCacheResult<V>>>();
     const listeners = new Set<() => void>();
+    // Memoized `getState` view per key. `useSyncExternalStore` requires getSnapshot to return a STABLE
+    // reference while the underlying value is unchanged; a fresh object each call trips React's "The
+    // result of getSnapshot should be cached to avoid an infinite loop". We rebuild the view only when
+    // the entry's data/fetchedAt actually change.
+    const stateView = new Map<string, WarmCacheEntryState<V>>();
+    const emptyStateView: WarmCacheEntryState<V> = { data: null, fetchedAt: null, error: null };
 
     const notify = () => listeners.forEach((l) => l());
 
     const getState = (params: P): WarmCacheEntryState<V> => {
         const key = config.keyOf(params);
-        const entry = key ? cache.get(key) : null;
-        return { data: entry?.data ?? null, fetchedAt: entry?.fetchedAt ?? null, error: null };
+        if (!key) return emptyStateView;
+        const entry = cache.get(key);
+        const prev = stateView.get(key);
+        if (prev && prev.data === (entry?.data ?? null) && prev.fetchedAt === (entry?.fetchedAt ?? null)) {
+            return prev;
+        }
+        const next: WarmCacheEntryState<V> = {
+            data: entry?.data ?? null,
+            fetchedAt: entry?.fetchedAt ?? null,
+            error: null,
+        };
+        stateView.set(key, next);
+        return next;
     };
 
     const runInflight = (key: string, params: P): Promise<WarmCacheResult<V>> => {
@@ -137,6 +154,7 @@ export function createWarmCache<P, V>(config: {
             cache.clear();
             inflight.clear();
             listeners.clear();
+            stateView.clear();
         },
     };
 }
