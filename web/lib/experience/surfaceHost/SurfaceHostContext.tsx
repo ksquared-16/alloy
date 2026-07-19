@@ -22,15 +22,10 @@
  * Workspace, which is true, retained, and visibly yielding.
  */
 
-import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
 import { surfaceRefFromPath } from "@/lib/experience/surfaceHost/surfaceRef";
-import {
-    initialSurfaceHostState,
-    surfaceHostReducer,
-    type SurfaceHostState,
-} from "@/lib/experience/surfaceHost/surfaceHostState";
 import { surfaceHostShouldRenderWorkUnit } from "@/lib/experience/surfaceHost/surfaceHostRender";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { attentionFromUrl, ATTENTION_SCOPE, WORKSPACE_ATTENTION_TARGET } from "@/lib/runtime/kernel/attention";
@@ -42,24 +37,6 @@ import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOpe
 
 /** The bare Workspace address — the Workspace is not a work-unit target, so it has no slug URL. */
 const WORKSPACE_URL = "/workspace";
-
-export type SurfaceHostValue = {
-    state: SurfaceHostState;
-};
-
-const SurfaceHostContext = createContext<SurfaceHostValue | null>(null);
-
-/** Consume the Host; null only outside the workspace tree (the Host is always mounted within it). */
-export function useSurfaceHostOptional(): SurfaceHostValue | null {
-    return useContext(SurfaceHostContext);
-}
-
-/** Consume the Host; throws when used outside the workspace tree. */
-export function useSurfaceHost(): SurfaceHostValue {
-    const ctx = useContext(SurfaceHostContext);
-    if (!ctx) throw new Error("useSurfaceHost must be used within SurfaceHostProvider");
-    return ctx;
-}
 
 export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     const pathname = usePathname();
@@ -156,17 +133,6 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
         window.history.replaceState(window.history.state, "", url);
     }, [focus.projectedUrl, desiredIsWorkspace]);
 
-    // The Host's own state model is retained for its anatomy/diagnostics. It is a PROJECTION of the
-    // pathname for compatibility consumers only — it no longer decides what is visible.
-    const state = useMemo<SurfaceHostState>(
-        () => surfaceHostReducer(initialSurfaceHostState(surfaceRefFromPath(pathname)), {
-            type: "hydrate",
-            ref: surfaceRefFromPath(pathname),
-        }),
-        [pathname],
-    );
-    const value = useMemo<SurfaceHostValue>(() => ({ state }), [state]);
-
     // ── THE VISIBLE DECISION — committed Focus, and nothing else. ──
     // Not the pathname, not a mount, not a readiness conjunction, not a timer.
     // The Workspace is an attention target, but it is NOT a Work Unit. Only a committed Work Unit
@@ -232,7 +198,7 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     const showWorkUnitLoader = !showWorkUnit && !desiredIsWorkspace && (routeIsWorkUnit || workUnitExchange);
 
     return (
-        <SurfaceHostContext.Provider value={value}>
+        <>
             <div
                 data-surface-slot={slot}
                 // `held` = a Work Unit has revealed; the Workspace is retained (mounted, scroll preserved)
@@ -262,6 +228,6 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
             ) : showWorkUnitLoader ? (
                 <AlloyOperationalBootShell variant="work_unit" chrome="content" />
             ) : null}
-        </SurfaceHostContext.Provider>
+        </>
     );
 }
