@@ -1,18 +1,28 @@
 ---
 owner: platform
-status: proposed-architecture
-last_reviewed: 2026-07-18
+status: superseded-exploration
+last_reviewed: 2026-07-19
 supersedes: []
 ---
 
 # The Alloy Anticipatory Operational Runtime
 
-**Status:** Proposed architecture; implementation in progress (see *Implementation log*, §16). This document
-expands the Workspace Operational Preparation Runtime from *destination preparation* into a complete
-anticipatory operational runtime.
+> **⚠️ SUPERSEDED EXPLORATION (2026-07-19).** This document is retained as the design *exploration*
+> that informed Runtime V1, but it is **no longer the design**. The Operational Graph (the client
+> materializer / pure compiler) and the Prepared Destination Store described below were built,
+> flag-gated, and **never wired** — the convergence discovered a simpler realization and those
+> experiments have been **deleted** from the codebase (see
+> [`runtime-v1-ownership-and-purification.md`](../../handoffs/runtime-v1-ownership-and-purification.md)).
+>
+> **The canonical Runtime V1 is:** Route → `resolveOperationalDestination` → canonical `DestinationId`
+> → Provisioning → K2 → atomic Commit → Settlement. There is **exactly one anticipatory runtime**: the
+> URL cache (`workUnitProvisioningPrefetch`) keyed by the canonical `DestinationId`. The only surviving
+> pieces of this exploration are `destinationId.ts` (the identity value) and `resolveOperationalDestination.ts`
+> (the one URL→DestinationId boundary). Everything below about a Graph store or a Prepared Destination
+> Store is historical and does not describe current code.
 
-**Implemented so far:** Phase A — the Operational Graph (client materializer + pure compiler + destination
-identity + revision model), flag-gated (`NEXT_PUBLIC_OPERATIONAL_GRAPH`), enumerate-only.
+**Status:** SUPERSEDED design exploration (see notice above). Retained for the reasoning that led to
+Runtime V1, not as an implementation spec.
 
 ## 0. Thesis — the system knows the book
 

@@ -46,16 +46,20 @@ The operator can perform the first meaningful action from the **provisioning ans
 |---|---|---|---|
 | `surfaceHostReducer` + `surfaceHostState` (`surfaceHostState.ts`), and the `state`/`SurfaceHostState` projection in `SurfaceHostContext` | Phase-1 pathname-projection state model | The visible decision is committed Focus (`focus.current`/`desired`) — already the sole authority | `useSurfaceHost().state` has NO consumers (grep-verified; the `focus.ts` `this.state` hits are K3's own state). Compatibility-only, explicitly "no longer decides what is visible". |
 
-### NEEDS YOUR DECISION — built but UNWIRED (doctrine tension)
-Your "Current State" lists these as *complete and accepted*, but they have **zero production
-consumers** — the convergence realized the concept a different way. Delete as abandoned, or is
-wiring still intended?
+### DELETED (2026-07-19, commits `5f4fbbd47`) — abandoned experiments, no capability loss
+Kelly's rule: architecture not consumed by Runtime V1 is an experiment, not architecture — delete.
+Capability parity verified (every intended capability is expressible via
+`resolveOperationalDestination` + `DestinationId` + URL cache + K2; the only aspirational gap is
+revision-coherent invalidation, reachable via the existing unwired `invalidateConfigReadCache`).
 
-| File(s) | Status | Convergence actually used | Decision |
-|---|---|---|---|
-| `lib/runtime/store/preparedDestinationStore.ts` (+ flag, + `preparedOperationalDestination.ts`, + test) | Built, flag-off, **no consumers** | `workUnitProvisioningPrefetch` URL cache keyed by canonical identity | Delete (abandoned) **or** wire as the anticipatory owner? |
-| `lib/runtime/graph/operationalGraph.ts`, `compileOperationalGraph.ts`, `materializeOperationalGraph.ts`, `operationalGraphFlag.ts` (+ test) | Built, flag-off, **no consumers** | `resolveOperationalDestination` uses `resolveWorkUnitByRouteSlug`, not the compiler | Delete (abandoned) **or** keep as the graph source? |
-| `lib/runtime/prep/prepareOperationalDestination.ts` | Used only for Phase H sibling prep (K2-based) | — | Keep (has a live caller) — audit only. |
+| File(s) removed | Replacement owner |
+|---|---|
+| `lib/runtime/store/preparedDestinationStore.ts` + `preparedDestinationStoreFlag.ts` + `preparedOperationalDestination.ts` + test | `workUnitProvisioningPrefetch` URL cache keyed by canonical identity (the ONE anticipatory runtime) |
+| `lib/runtime/graph/operationalGraph.ts` + `compileOperationalGraph.ts` + `materializeOperationalGraph.ts` + `operationalGraphFlag.ts` + test | `resolveOperationalDestination` (URL→DestinationId) + server-resolved workspace enumeration |
+| `lib/experience/surfaceHost/surfaceHostState.ts` (`surfaceHostReducer`/state) + test + the dead `SurfaceHostContext` projection | Committed Focus (K3) — the sole visible-decision authority |
+
+KEPT (load-bearing): `destinationId.ts`, `resolveOperationalDestination.ts`,
+`lib/runtime/prep/prepareOperationalDestination.ts` (live Phase-H sibling-prep caller).
 
 `destinationId.ts` is KEPT and load-bearing (used by `resolveOperationalDestination`,
 `focus.ts` `surfaceIdFor`, `provisioning.ts`, link models). The graph files above import from
