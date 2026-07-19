@@ -43,20 +43,51 @@ import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard
 /** Reverse-zoom dismiss window — matches CSS `--alloy-os-fp-depth-ms` (240ms). */
 const FOCUS_PANEL_DEPTH_MS = 240;
 
+/** Operator-facing identity for a configured card, shown while its settlement detail prepares. */
+const FOCUS_PANEL_CARD_TITLES: Partial<Record<FocusPanelCardKey, string>> = {
+    current_work: "Current Work",
+    household: "Household",
+    children: "Children",
+    readiness_kpi: "Readiness",
+    health: "Enrollment Health",
+    tour_summary: "Tour",
+    communications: "Communications",
+    documents: "Documents",
+    attention: "Why Now",
+    billing_preview: "Billing Preview",
+    required_information: "Required Information",
+    current_mission: "Current Mission",
+    timeline: "Timeline",
+    notes: "Notes",
+};
+
 /**
- * RESERVED cell — a configured card whose data is not yet settled (or not applicable). It holds the
- * cell's geometry (card shell + min-height) so Settlement fills it IN PLACE with no reflow, and never
- * removes a configured cell. Mirrors `FocusPanelSummarySkeleton`'s reserved region exactly, so the
- * pending → enriched transition changes only content, never composition or geometry.
+ * RESERVED cell — a configured card whose SETTLEMENT detail has not yet arrived. It holds the cell's
+ * geometry (card shell + min-height) so Settlement fills it IN PLACE with no reflow, and never removes
+ * a configured cell. Per the Runtime contract, a reserved cell is NOT a blank white rectangle: it
+ * shows the card's IDENTITY (title) and a compact preparing state, so the committed panel reads as a
+ * complete surface whose secondary detail is settling — not a loading placeholder.
  */
-function ReservedFocusPanelCell() {
+function ReservedFocusPanelCell({ typeKey }: { typeKey: FocusPanelCardKey }) {
+    const title = FOCUS_PANEL_CARD_TITLES[typeKey];
     return (
         <div
             className="alloy-os-ucard"
             data-focus-panel-cell-reserved="true"
-            aria-hidden="true"
+            data-focus-panel-cell-preparing={typeKey}
             style={{ minHeight: "7.5rem", padding: "0.875rem" }}
-        />
+        >
+            {title ? (
+                <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-alloy-muted">
+                        {title}
+                    </span>
+                    <span className="text-[11px] text-alloy-midnight/35" role="status" aria-live="polite">
+                        Preparing…
+                    </span>
+                </div>
+            ) : null}
+        </div>
     );
 }
 
@@ -493,7 +524,7 @@ export default function OpportunityFocusPanelModeGrid({
                     const readiness = cardReadiness.get(typeKey) ?? "reserved";
                     const baseModel = cards.get(typeKey);
                     if (readiness !== "ready" || !baseModel) {
-                        return <ReservedFocusPanelCell />;
+                        return <ReservedFocusPanelCell typeKey={typeKey} />;
                     }
                     const cardModel = composeEffectiveCardModel(baseModel, resolution?.config ?? null, record);
                     const receded = mode === "work" && workflowActive && typeKey === "work_launcher";
