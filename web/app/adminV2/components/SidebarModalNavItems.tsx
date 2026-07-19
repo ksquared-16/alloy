@@ -12,6 +12,7 @@ import { useInboxUnreadNavCount } from "@/lib/adminV2/useInboxUnreadNavCount";
 import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { warmOipAnalyticsModal } from "@/lib/metrics/oipWorkspaceWarmCache";
+import { warmOperationalIntelligence } from "@/lib/analytics/runtime/operationalIntelligenceWarmCache";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 import { warmProcessingFormsCache } from "@/lib/pos/processingFormsWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
@@ -228,12 +229,15 @@ export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
             dataAttr="analytics"
             onMouseEnter={() => {
                 void warmOipAnalyticsModal();
+                void warmOperationalIntelligence({ siteId: null, window: "rolling_30d", compare: false });
             }}
             onFocus={() => {
                 void warmOipAnalyticsModal();
+                void warmOperationalIntelligence({ siteId: null, window: "rolling_30d", compare: false });
             }}
             onClick={() => {
                 void warmOipAnalyticsModal();
+                void warmOperationalIntelligence({ siteId: null, window: "rolling_30d", compare: false });
                 dispatchAdminV2OpenAnalyticsModal();
             }}
         />

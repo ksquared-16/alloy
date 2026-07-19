@@ -6,9 +6,13 @@ import { useRouter } from "next/navigation";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
     isInternalDrillHref,
-    buildOperationalIntelligenceQuery,
     type OperationalSurfaceModel,
 } from "@/lib/analytics/runtime/operationalSurfaceModel";
+import {
+    getOperationalIntelligenceWarm,
+    subscribeOperationalIntelligenceWarm,
+    warmOperationalIntelligence,
+} from "@/lib/analytics/runtime/operationalIntelligenceWarmCache";
 import { ANALYTICS_WINDOW_OPTIONS } from "@/lib/analytics/runtime/metricWindow";
 import type { MetricTimeWindowKey } from "@/lib/metrics/types";
 import { OperationalMetricCard } from "@/components/adminV2/intelligence/OperationalMetricCard";
@@ -37,10 +41,15 @@ export function OperationalIntelligencePanel() {
     const [compareOn, setCompareOn] = useState(false);
     const scopeKey = `${siteId ?? ""}|${windowKey}|${compareOn ? "1" : "0"}`;
 
-    // All state lands in async callbacks (no synchronous setState in the effect body);
-    // `loading` is derived by comparing the loaded scope to the current scope.
+    const warmParams = { siteId, window: windowKey, compare: compareOn };
+    // Warm-first: seed from the shared OI warm cache (Analytics nav intent warms it) so a warmed scope
+    // paints with NO skeleton. `loading` is derived by comparing the loaded scope to the current scope,
+    // so a warm seed for the current scope is immediately "not loading".
     const [loaded, setLoaded] = useState<{ scope: string; model: OperationalSurfaceModel | null; error: string | null }>(
-        { scope: "", model: null, error: null },
+        () => {
+            const seed = getOperationalIntelligenceWarm(warmParams);
+            return seed ? { scope: scopeKey, model: seed, error: null } : { scope: "", model: null, error: null };
+        },
     );
     const loading = loaded.scope !== scopeKey;
     const model = loaded.model;
@@ -55,21 +64,23 @@ export function OperationalIntelligencePanel() {
 
     useEffect(() => {
         let cancelled = false;
-        const qs = buildOperationalIntelligenceQuery({ siteId, window: windowKey, compare: compareOn });
-        fetch(`/api/admin/intelligence/operational?${qs}`, { credentials: "include" })
-            .then((res) => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return res.json() as Promise<OperationalSurfaceModel>;
-            })
-            .then((data) => {
-                if (!cancelled) setLoaded({ scope: scopeKey, model: data, error: null });
-            })
-            .catch(() => {
-                if (!cancelled)
-                    setLoaded({ scope: scopeKey, model: null, error: "Unable to load operational intelligence right now." });
-            });
+        // Reflect a warm entry for THIS scope immediately (covers a scope change to an already-warm
+        // scope), then load through the shared cache — warm-first + deduped, SWR on stale.
+        const warm = getOperationalIntelligenceWarm({ siteId, window: windowKey, compare: compareOn });
+        if (warm) setLoaded({ scope: scopeKey, model: warm, error: null });
+        void warmOperationalIntelligence({ siteId, window: windowKey, compare: compareOn }).then((result) => {
+            if (cancelled) return;
+            if (result.model) setLoaded({ scope: scopeKey, model: result.model, error: null });
+            else if (!warm) setLoaded({ scope: scopeKey, model: null, error: result.error });
+        });
+        // Keep in sync if another consumer warms the same scope.
+        const unsubscribe = subscribeOperationalIntelligenceWarm(() => {
+            const snap = getOperationalIntelligenceWarm({ siteId, window: windowKey, compare: compareOn });
+            if (snap && !cancelled) setLoaded({ scope: scopeKey, model: snap, error: null });
+        });
         return () => {
             cancelled = true;
+            unsubscribe();
         };
     }, [scopeKey, siteId, windowKey, compareOn]);
 
