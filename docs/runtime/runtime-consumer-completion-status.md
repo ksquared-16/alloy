@@ -6,7 +6,7 @@ last_reviewed: 2026-07-19
 
 # Runtime V1 — Consumer Completion Status
 
-Branch `agent/claude/3-runtime-drawer-deletion` @ `c3641cd6e` — **89 ahead / 0 behind `origin/staging`**,
+Branch `agent/claude/3-runtime-drawer-deletion` @ `cc6930d43` — **94 ahead / 0 behind `origin/staging`**,
 tree clean, nothing pushed, no PR, no merge.
 
 This session did **Runtime Consumer Completion** on top of the accepted Runtime platform. The platform
@@ -44,27 +44,50 @@ Delivered THIS session (commit hashes):
   - `b47c19ac3` — **preparation completeness (partial):** the answer carries a `focusPanelSubjectSnapshot` (primary contact + `metadata.inquiry_children`, no new DB read); **Household + Children render READY at commit** via shared builders (byte-identical to enriched).
   - `c3641cd6e` — reserved cells show card **identity + "Preparing…"**, not blank white rectangles.
 
+Delivered SESSION 2026-07-19b (commit hashes):
+
+- `26d690564` — **Readiness ready-at-commit** via ONE shared evidence-derived model
+  (`buildReadinessCardModel`, derived from the SAME `buildReadinessCardEvidence` the card body
+  renders, used by BOTH producers; the enriched path's separate `readinessKpiInsight` derivation
+  deleted). Settlement attention blockers enrich the same cell in place.
+- `9ca325c41` — **timing instrumentation** (`focusPanelCommitTiming.ts`): destination commit (K3
+  `onCommitCompleted`) → `model_commit_critical` → per-card `card_ready` → `settlement`, each with
+  `since_commit_ms`. Console filter `[perf:work-unit] focus_panel_chain:*`; mirrored to
+  `window.__alloyPerf.marks`. Dev/staging gated, boundary-only.
+- `a70bd8255` — **published Summary composition is COMMIT-CRITICAL.** The answer resolves the
+  applicable published Focus Panel Summary doc server-side (P3-A resolver, `fps:` config-cached,
+  publish/rollback/delete-invalidated) and carries it (`focusPanelSummaryDoc`); the doc seed threads
+  committed snapshot → `OperationalSubject` → `FocusPanelSummaryDocProvider`, which treats it as the
+  loaded answer until the scope fetch settles. First committed frame = the PUBLISHED composition —
+  no default-doc stand-in, no post-commit composition reflow. (This was the root of the "detail at
+  commit" complaint: mode was already `summary` and densities compact; the default doc was standing
+  in for the async published-doc fetch.)
+- `cc6930d43` — **commit-critical ready set DERIVED from a declared registry**
+  (`focusPanelCommitCriticalCards.ts`, scalability gap 4 for the existing card set): the producer
+  iterates specs declaring `isKnowable(context)` + `build(context)`; promoting the next knowable
+  card is one registry entry.
+
 ---
 
 ## IN PROGRESS
 
-### A — Focus Panel atomic composition (NOT complete)
-- **Implementation state:** remount eliminated; composition configuration-driven; Current Work +
-  Household + Children commit-critical (ready at commit) from the answer, no new DB read; reserved
-  cells show identity. Source typecheck clean; 16 producer/renderer unit tests green.
-- **Browser state:** UNVERIFIED against the operator experience. The pane is isolated from Kelly's
-  Chrome login (separate cookie jar), so cold-frame cert did not run this session. The last operator
-  evidence (before the preparation-completeness commit) showed Current Work resize + blank cells; the
-  fix is committed but not visually confirmed.
+### A — Focus Panel atomic composition (engineering COMPLETE for the knowable set; cert pending)
+- **Implementation state:** remount eliminated; composition configuration-driven AND commit-critical
+  (the answer carries the published Summary doc — first committed frame is the published
+  composition); Current Work + Household + Children + **Readiness** ready at commit from the answer
+  with no new DB read, via the declared commit-critical registry; reserved cells show identity;
+  timing instrumentation in place. Source typecheck clean; producer tests green (7/7); no new
+  failures vs the baseline-red suite.
+- **Browser state:** STILL UNVERIFIED against the authenticated operator experience. The in-app pane
+  has no session (separate cookie jar) and the Claude-in-Chrome extension was not connected this
+  session. Unauthenticated smoke passed (routes compile: /admin 307, provisioning-answer 401 honest,
+  summary-doc API 401).
 - **Remaining engineering:**
-  1. **Summary-vs-detail composition (NEW, product-critical — see focus-panel-runtime-review.md §Product).**
-     The panel currently presents the EXPANDED/detail card presentation, not the published **Summary**
-     composition. The first committed operator experience must be the published Summary composition.
-  2. Promote **Readiness** (and any other card whose first-operational content is now in `truth`) to
-     ready-at-commit; classify the remaining SUMMARY_GRID cells against the published Summary doc.
-  3. **Timing instrumentation** (destination commit → provisioning answer available → model available
-     → each card ready → Settlement arrival) — NOT added; completeness must be measured, not asserted.
-  4. Cold-frame browser cert: complete panel at commit, no preview-plus-placeholders, no geometry shift.
+  1. Cold-frame browser cert (operator-blocked on auth): committed panel = published Summary
+     composition, meaningfully complete, no preview-plus-placeholders, no geometry shift; read the
+     `focus_panel_chain:*` marks to PROVE commit → complete-panel gap ≈ 0.
+  2. Classify any remaining published-doc cells (tour/communications/documents are genuinely
+     Settlement; nothing else is currently knowable at commit).
 
 ### B — Work Unit Actions Runtime
 - **Implementation state:** server-side COMPLETE (answer carries actions, rendered at commit, publish

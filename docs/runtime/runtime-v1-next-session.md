@@ -39,17 +39,24 @@ every consumer item needs browser cert.
 
 ## Remaining work (prioritized)
 
-1. **Finish Focus Panel preparation completeness.** Promote Readiness (its first-operational content —
-   Household/Children completeness — is now in `context.truth`) and any other knowable Summary card to
-   ready-at-commit. Add **timing instrumentation** (destination commit → provisioning answer available
-   → FocusPanelWorkModeModel available → each card ready → Settlement arrival). Cold-frame cert: the
-   committed panel is meaningfully complete, no preview-plus-placeholders, no geometry shift, first
-   action immediately available.
-2. **Summary composition, not detailed commit presentation.** THE panel must initially present the
-   published **Summary** composition, not the expanded detail. The runtime must honor the published
-   Focus Panel Summary doc. Detail is Settlement enrichment. (See `focus-panel-runtime-review.md`
-   §Product and `runtime-scalability-review.md` — moving to archetype + published-placement rendering
-   is the enabling work, so a new published composition is honored with zero engineering.)
+> Session 2026-07-19b DELIVERED former items 1–2's engineering: Readiness ready-at-commit
+> (`26d690564`), timing instrumentation (`9ca325c41`), published Summary composition
+> commit-critical — carried by the answer, seeded to the doc provider, `fps:` cache +
+> publish/rollback/delete invalidation (`a70bd8255`), and the declared commit-critical card
+> registry closing scalability gap 4 for existing cards (`cc6930d43`). What remains of them is
+> BROWSER CERT (auth-blocked) and the full archetype renderer (gaps 1–3).
+
+1. **Cold-frame browser certification (auth first).** Sign the in-app pane into :3013 or connect the
+   Claude-in-Chrome extension. Certify: committed panel = the PUBLISHED Summary composition (check
+   `window.__focusPanelLayoutSource.docSource` ≠ `default-doc` at commit), Current Work + Household +
+   Children + Readiness meaningful at commit, reserved cells show identity, no geometry shift; read
+   `[perf:work-unit] focus_panel_chain:*` / `window.__alloyPerf.marks.focus_panel_chain_*` to PROVE
+   commit → complete-panel ≈ 0 and record per-card `since_commit_ms` + settlement gap.
+2. **Archetype-driven rendering (scalability gaps 1–3).** A brand-new published card type still needs
+   code: `buildCardModels` per-key `map.set` + `FocusPanelCardRenderer` per-key switch remain. Move to
+   archetype + published placement + data bindings so a NEW published card is honored with zero
+   engineering. (Gap 4 — the derived ready set — is closed for the existing card set via
+   `focusPanelCommitCriticalCards.ts`; extend that registry's `isKnowable` to published bindings.)
 3. **Work View transition runtime.** New Leads / Active Pipeline / Registration / Waitlist / Tours must
    feel like attention movement, not navigation — no page reload, no significant remount, no Focus
    Panel flash. `ProvisionedWorkUnitSurface` keys the shell by work-unit target (verify no page reload,
@@ -87,12 +94,16 @@ every consumer item needs browser cert.
 
 ## Branch state
 
-- **Branch:** `agent/claude/3-runtime-drawer-deletion` (managed Slot 3 worktree).
-- **Latest commit:** `c3641cd6e` (reserved cells show identity, not blank).
-- **89 ahead / 0 behind `origin/staging`. Not pushed. No PR. No merge. Tree clean.**
-- **Commits created this session** (newest first): `c3641cd6e`, `b47c19ac3`, `e678f444a`, `881e4b6aa`,
+- **Branch:** `agent/claude/3-runtime-drawer-deletion` (managed Slot 3 worktree,
+  `/Users/Kelly/Code/alloy-worktrees/wt3-runtime-drawer-deletion`, :3013).
+- **Latest commit:** `cc6930d43` (commit-critical card registry). Based on the `origin/staging` tip
+  (`ba5f50cb6`) — 0 behind, nothing to rebase.
+- **Not pushed. No PR. No merge. Tree clean (before this docs commit).**
+- **Commits session 2026-07-19b** (newest first): `cc6930d43` (registry), `a70bd8255` (published
+  composition commit-critical), `9ca325c41` (timing chain), `26d690564` (Readiness ready-at-commit).
+- **Commits session 2026-07-19a** (newest first): `c3641cd6e`, `b47c19ac3`, `e678f444a`, `881e4b6aa`,
   `6c3559e6c`, `62ac1002a`, `fa2ee0cc6`, `40a4f9afe`, `79e07f31a`, `20443d02b`. Plus the handoff docs
-  commit.
+  commit `48134a96d`.
 - **Must know before continuing:**
   - Do NOT push/merge/PR/promote until the operator explicitly authorizes.
   - The Focus Panel input contract is `FocusPanelWorkModeModel` (source-agnostic). Both producers

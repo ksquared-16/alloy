@@ -11,6 +11,13 @@ different order, different placement, different Summary composition — will the
 
 **Answer: PARTIALLY. Not yet fully.**
 
+> UPDATE (session 2026-07-19b): the published Summary doc is now COMMIT-CRITICAL — resolved
+> server-side into the provisioning answer (`fps:` config-cached, publish/rollback/delete
+> invalidated) and seeded to the doc provider, so the committed first frame IS the published
+> composition (`a70bd8255`). **Gap 4 below is closed for the existing card set**: the producer
+> derives its ready set from the declared `COMMIT_CRITICAL_CARD_SPECS` registry (`cc6930d43`).
+> Gaps 1–3 (a BRAND-NEW published card type without code) remain open.
+
 ## What the runtime DOES honor from the published doc
 
 - **Which cells appear + their order + placement + span/geometry** for Summary mode come from the
