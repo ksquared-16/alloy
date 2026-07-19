@@ -18,6 +18,7 @@
  */
 
 import type { OperationalSubjectViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import type { StageWorkItemProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import type {
@@ -242,6 +243,10 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
         stageWorkPending: subjectVm.workspace.stage_work?.status === "pending",
         recordHeaderActions: subjectVm.actions.record_header ?? null,
         publishedStageInputs: subjectVm.workspace.published_stage_inputs ?? null,
+        // SETTLEMENT projections for the drill/enrichment cards — built HERE (the adapter is the one
+        // sanctioned place that reads the drawer VM), so those cards read the context, not the VM.
+        lifecycleRail: buildOpportunityVmLifecycleRailModel({ displayVm: subjectVm, drawerId: input.subjectId }),
+        communicationsPreview: subjectVm.activity.communicationsPreviewVm ?? null,
         capabilities: {
             canMutate,
             maskedChannels: input.maskedChannels ?? false,

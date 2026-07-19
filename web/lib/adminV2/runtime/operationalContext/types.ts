@@ -1,6 +1,8 @@
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
+import type { RecordLifecycleRailModel } from "@/lib/admin/drawer/resolveRecordLifecycleRailModel";
+import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
 
 /**
  * Operational Context — the forward-facing runtime boundary for cards.
@@ -199,6 +201,16 @@ export type OperationalContext = {
      * Same source as /processes stage bootstrap (operating plan + action catalog + field rules).
      */
     publishedStageInputs?: PublishedStageInputsForCurrentWork | null;
+    /**
+     * SETTLEMENT-only projections. These feed drill/enrichment cards (the `workflow_steps` lifecycle
+     * rail, the activity-mode communications workspace) that are RESERVED at commit and filled by the
+     * drawer VM. They exist here so those cards read the context — never the drawer VM directly — which
+     * is what lets `compat.subjectVm` be removed. The commit-critical producer leaves them null (the
+     * cards reserve geometry); the enriched producer (`buildOperationalContext`) fills them. They are
+     * NOT commit-critical — no first operator action depends on them.
+     */
+    lifecycleRail?: RecordLifecycleRailModel | null;
+    communicationsPreview?: FamilyCommunicationWorkspacePreviewVM | null;
     capabilities: OperationalContextCapabilities;
     status: OperationalContextStatus;
 };
