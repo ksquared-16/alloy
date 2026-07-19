@@ -77,14 +77,43 @@ function card(
     };
 }
 
-function stageWorkInsight(displayVm: OpportunityDrawerViewModel): string {
-    const runtime = displayVm.workspace.stage_work_runtime;
+type StageWorkRuntime = OpportunityDrawerViewModel["workspace"]["stage_work_runtime"];
+
+function stageWorkInsight(runtime: StageWorkRuntime): string {
     const primary = runtime?.primary;
     if (!primary) return "No active work for this stage.";
     const label = primary.label?.trim() || primary.template_key || "Work";
     if (primary.state === "open") return label;
     if (primary.state === "completed") return `${label} · completed`;
     return `${label} · planned`;
+}
+
+/**
+ * The canonical `current_work` card model — the SINGLE source both Focus Panel Work-mode producers
+ * use (drawer VM AND provisioning answer), so the Current Work cell is byte-identical pending →
+ * enriched (no change on Settlement). Depends only on the stage-work runtime + the next-action label,
+ * both carried by the commit-critical answer.
+ */
+export function buildCurrentWorkCardModel(input: {
+    stageWorkRuntime: StageWorkRuntime;
+    nextActionLabel: string | null;
+}): FocusPanelCardModel {
+    const primaryOpen = input.stageWorkRuntime?.primary?.state === "open";
+    return card({
+        key: "current_work",
+        title: "Current Work",
+        insight: stageWorkInsight(input.stageWorkRuntime),
+        secondaryInsight: primaryOpen
+            ? "Due today · continue stage steps"
+            : input.nextActionLabel
+              ? `Next: ${input.nextActionLabel}`
+              : "No open work item right now",
+        tier: "work",
+        span: 1,
+        density: "compact",
+        statusChip: primaryOpen ? chip("due") : null,
+        statusTone: primaryOpen ? "due" : "neutral",
+    });
 }
 
 function blockerInsight(displayVm: OpportunityDrawerViewModel): { insight: string; count: number } {
@@ -445,21 +474,9 @@ function buildCardModels(input: {
 
     map.set(
         "current_work",
-        card({
-            key: "current_work",
-            title: "Current Work",
-            insight: stageWorkInsight(displayVm),
-            secondaryInsight:
-                stageRuntime?.primary?.state === "open"
-                    ? "Due today · continue stage steps"
-                    : headerPrimaryAction
-                      ? `Next: ${headerPrimaryAction.label}`
-                      : "No open work item right now",
-            tier: "work",
-            span: 1,
-            density: "compact",
-            statusChip: stageRuntime?.primary?.state === "open" ? chip("due") : null,
-            statusTone: stageRuntime?.primary?.state === "open" ? "due" : "neutral",
+        buildCurrentWorkCardModel({
+            stageWorkRuntime: stageRuntime,
+            nextActionLabel: headerPrimaryAction?.label ?? null,
         }),
     );
 

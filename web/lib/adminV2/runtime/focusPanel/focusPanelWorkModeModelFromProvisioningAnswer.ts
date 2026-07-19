@@ -1,0 +1,117 @@
+/**
+ * Producer: provisioning answer → FocusPanelWorkModeModel (the COMMIT-CRITICAL source).
+ *
+ * Builds a REAL `OperationalContext` from the committed answer — NOT a synthetic drawer VM, and NOT
+ * demo/placeholder data. It sets ONLY semantically-authoritative fields: subject identity, Situation
+ * (business process/stage), the Current Work stage-work runtime + published stage config, and the
+ * truthful primary command. Every settlement-owned signal (attention, tour, communications, billing)
+ * is left at its honest empty state and the card is marked `reserved` — the drawer VM fills it in
+ * place, in reserved geometry, without changing the composition.
+ *
+ * `current_work` is the one card marked `ready` here, built through the SHARED `buildCurrentWorkCardModel`
+ * (so it is byte-identical to the enriched model). Every other configured card defaults to `reserved`
+ * in the grid.
+ */
+
+import { NULL_BILLING_SIGNAL, type OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import { buildCurrentWorkCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
+import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
+import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
+import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
+import type {
+    FocusPanelCardReadiness,
+    FocusPanelWorkModeModel,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
+
+export type FocusPanelWorkModeFromAnswerInput = {
+    mode: FocusPanelMode;
+    subjectId: string;
+    /** Operator-facing title (committed subject's family name, from the queue seed). */
+    title: string;
+    statusLabel: string | null;
+    statusKey: string | null;
+    canMutate: boolean;
+    perspective: RuntimePerspective | null;
+    /** Commit-critical Current Work projection (answer-owned). */
+    stageWorkRuntime: StageWorkRuntimeProjection | null;
+    publishedStageInputs: PublishedStageInputsForCurrentWork | null;
+    /** Situation (U-P5) from the answer's currentBusinessState. */
+    situation: { stageKey: string; stageLabel: string; purpose: string | null } | null;
+    /** Truthful primary Action (U-O5). */
+    primaryAction: { actionRef: string; label: string } | null;
+};
+
+/** A real, authoritative-fields-only OperationalContext from the committed answer. No placeholder data. */
+export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeFromAnswerInput): OperationalContext {
+    const nextActionLabel = input.primaryAction?.label ?? null;
+    return {
+        grain: "case",
+        subject: { type: "opportunity", id: input.subjectId, label: input.title },
+        businessProcess: {
+            key: input.situation?.stageKey ?? null,
+            label: input.situation?.stageLabel ?? input.statusLabel ?? null,
+            stageKey: input.situation?.stageKey ?? null,
+        },
+        perspective: input.perspective
+            ? { missionLabel: input.perspective.defaultMission ?? input.perspective.label ?? null }
+            : null,
+        truth: {
+            id: input.subjectId,
+            ...(input.statusKey ? { status_key: input.statusKey } : {}),
+            ...(input.statusLabel ? { _status_display: input.statusLabel } : {}),
+            ...(input.stageWorkRuntime ? { _stage_work_runtime: input.stageWorkRuntime } : {}),
+        },
+        signals: {
+            // Current Work data lives in `stageWorkRuntime` (below); the work SUMMARY rollup is a
+            // settlement-level projection — reserved here, carrying only the authoritative next action.
+            work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel },
+            // Settlement-owned signals — honest empty (reserved), never fabricated.
+            attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
+            tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+            billing: NULL_BILLING_SIGNAL,
+        },
+        stageWorkRuntime: input.stageWorkRuntime,
+        // The answer OWNS Current Work — it is READY at commit, never a Tier-2 pending.
+        stageWorkPending: false,
+        // Registry supporting actions are Settlement; the truthful primary command is carried in `signals.work`.
+        recordHeaderActions: null,
+        publishedStageInputs: input.publishedStageInputs,
+        capabilities: { canMutate: input.canMutate, maskedChannels: false },
+        status: "ready",
+    };
+}
+
+export function focusPanelWorkModeModelFromProvisioningAnswer(
+    input: FocusPanelWorkModeFromAnswerInput,
+): FocusPanelWorkModeModel {
+    const context = buildCommitCriticalOperationalContext(input);
+
+    // Only Current Work is READY at commit — the shared model builder guarantees it matches the
+    // enriched card byte-for-byte. Every other configured cell defaults to `reserved` in the grid.
+    const cardModels = new Map<FocusPanelCardKey, FocusPanelCardModel>([
+        [
+            "current_work",
+            buildCurrentWorkCardModel({
+                stageWorkRuntime: input.stageWorkRuntime,
+                nextActionLabel: input.primaryAction?.label ?? null,
+            }),
+        ],
+    ]);
+    const cardReadiness = new Map<FocusPanelCardKey, FocusPanelCardReadiness>([["current_work", "ready"]]);
+
+    return {
+        source: "provisioning_answer",
+        mode: input.mode,
+        subject: { id: input.subjectId, type: "opportunity", label: input.title },
+        context,
+        cardModels,
+        cardReadiness,
+        title: input.title,
+        statusLabel: input.statusLabel,
+        canMutate: input.canMutate,
+        perspective: input.perspective,
+    };
+}
