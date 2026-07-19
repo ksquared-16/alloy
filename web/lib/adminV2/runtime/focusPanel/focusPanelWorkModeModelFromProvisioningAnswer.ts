@@ -16,12 +16,7 @@
  */
 
 import { NULL_BILLING_SIGNAL, type OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
-import {
-    buildCurrentWorkCardModel,
-    buildHouseholdCardModel,
-    buildChildrenCardModel,
-    buildReadinessCardModel,
-} from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { COMMIT_CRITICAL_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards";
 import type { FocusPanelSubjectSnapshot } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -114,36 +109,16 @@ export function focusPanelWorkModeModelFromProvisioningAnswer(
 ): FocusPanelWorkModeModel {
     const context = buildCommitCriticalOperationalContext(input);
 
-    // Current Work is ALWAYS ready at commit — the shared model builder guarantees it matches the
-    // enriched card byte-for-byte. Cells not marked ready below default to `reserved` in the grid.
-    const cardModels = new Map<FocusPanelCardKey, FocusPanelCardModel>([
-        [
-            "current_work",
-            buildCurrentWorkCardModel({
-                stageWorkRuntime: input.stageWorkRuntime,
-                nextActionLabel: input.primaryAction?.label ?? null,
-            }),
-        ],
-    ]);
-    const cardReadiness = new Map<FocusPanelCardKey, FocusPanelCardReadiness>([["current_work", "ready"]]);
-
-    // A — HOUSEHOLD + CHILDREN are commit-critical: the answer's subject snapshot carries their
-    // first-operational content (`context.truth` now holds the same keys the enriched record does), so
-    // they render as MEANINGFUL cards at commit — through the SHARED model builders, byte-identical to
-    // the enriched cards. Only the deeper family/settlement detail fills in place when the drawer VM lands.
-    const truth = context.truth;
-    if (input.subjectSnapshot?.primaryContact.name || input.subjectSnapshot?.inquiryChildren != null) {
-        cardModels.set("household", buildHouseholdCardModel(truth, input.title));
-        cardReadiness.set("household", "ready");
-        // READINESS is a pure derivation over the same commit-critical truth (contact + children
-        // completeness), so it is knowable — and READY — the moment the subject snapshot is. The
-        // attention blockers Settlement discovers later enrich the same cell in place.
-        cardModels.set("readiness_kpi", buildReadinessCardModel(context));
-        cardReadiness.set("readiness_kpi", "ready");
-    }
-    if (input.subjectSnapshot?.inquiryChildren != null) {
-        cardModels.set("children", buildChildrenCardModel(truth));
-        cardReadiness.set("children", "ready");
+    // A — the ready set is DERIVED, not hardcoded: every registered commit-critical card whose
+    // first-operational content is knowable from the answer's context renders READY at commit,
+    // through the SHARED builders (byte-identical to the enriched cards). Unknowable cards are simply
+    // absent → the grid reserves their configured cells and Settlement fills them in place.
+    const cardModels = new Map<FocusPanelCardKey, FocusPanelCardModel>();
+    const cardReadiness = new Map<FocusPanelCardKey, FocusPanelCardReadiness>();
+    for (const spec of COMMIT_CRITICAL_CARD_SPECS) {
+        if (!spec.isKnowable(context)) continue;
+        cardModels.set(spec.key, spec.build(context));
+        cardReadiness.set(spec.key, "ready");
     }
 
     // Commit-critical commands: the truthful primary action (U-O5) as one resolved command. The
