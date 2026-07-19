@@ -28,7 +28,28 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRuntime";
 import { prepareOperationalDestination } from "@/lib/runtime/prep/prepareOperationalDestination";
+import { prefetchWorkUnitProvisioning } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
+
+/**
+ * Warm a subject's COMPLETE commit-critical answer for a row selection: the K2 provisioning answer
+ * AND the drawer VM + stage-work. Both are keyed IDENTICALLY to the real row-commit's reads — the
+ * provisioning URL derives from the SAME (target, lens, subject) the entry gesture's `EntryResource`
+ * builds (`provisioningAnswerUrl`), and the VM/stage-work from the same loader `useRecordWorkRuntime`
+ * uses — so the click consumes both with zero network.
+ *
+ * WHY PROVISIONING TOO (not just the VM): `provisioningKey` includes `subject`, so a first-use row is
+ * a DISTINCT K2 preparation with no completed answer to reuse — warming only the VM left the cold
+ * `provisioning-answer?subject_id=…` round-trip on the commit path (~5.7 s dev, measured), which is
+ * why first-use rows lagged while re-visited rows were instant. This closes that gap on the same
+ * anticipatory seam (the URL cache K2's `EntryResource` already consumes via `consumeFreshProvisioning`).
+ */
+function prewarmSubjectDestination(target: string, lens: string | null, subjectId: string): void {
+    const id = subjectId.trim();
+    if (!id || !target) return;
+    void prefetchWorkUnitProvisioning(target, { lens: lens ?? null, subject: id });
+    void prewarmRecordWork(id);
+}
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
 import type { WorkUnitSurfaceModel, WorkUnitSurfaceIntents, QueueRowModel } from "./types";
@@ -127,10 +148,16 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     // NOT in the K2 answer. Warm that exact VM (the one `useRecordWorkRuntime` loads) on hover/focus
     // intent so the row → row click resolves from `cache_hit`/`inflight_join` instead of a cold fetch,
     // collapsing the pending-skeleton window on the destination. Fire-and-forget; the loader dedups.
-    const prefetchRecord = useCallback((row: QueueRowModel) => {
-        if (row.entityType !== "opportunity" || row.entityId == null) return;
-        void prewarmRecordWork(String(row.entityId));
-    }, []);
+    const prefetchRecord = useCallback(
+        (row: QueueRowModel) => {
+            if (row.entityType !== "opportunity" || row.entityId == null) return;
+            const current = kernel.attention.get();
+            // Hover is the strongest first-use signal — warm the COMPLETE commit-critical answer
+            // (provisioning + VM + stage-work) so even a never-visited row commits with zero network.
+            prewarmSubjectDestination(current?.target ?? "", current?.lens ?? null, String(row.entityId));
+        },
+        [kernel],
+    );
 
     // ── PHASE H — SIBLING WORK-VIEW ADJACENCY ──────────────────────────────────────────────────
     // A pill switch pays the full ~2.8 s provisioning round-trip because hover rarely precedes the
@@ -198,7 +225,10 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         if (!adjacentSubjectIds || typeof window === "undefined") return;
         const ids = adjacentSubjectIds.split(",");
         const run = () => {
-            for (const id of ids) void prewarmRecordWork(id);
+            // Read attention at fire time — the committed work unit + lens the neighbours share.
+            const current = kernel.attention.get();
+            for (const id of ids)
+                prewarmSubjectDestination(current?.target ?? "", current?.lens ?? null, id);
         };
         const w = window as Window & {
             requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
@@ -210,7 +240,7 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         }
         const timer = window.setTimeout(run, 400);
         return () => window.clearTimeout(timer);
-    }, [adjacentSubjectIds]);
+    }, [adjacentSubjectIds, kernel]);
 
     const intents = useMemo<WorkUnitSurfaceIntents>(
         () => ({ selectWorkView, prefetchWorkView, openRecord, prefetchRecord }),
