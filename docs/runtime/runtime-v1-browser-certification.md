@@ -11,7 +11,16 @@ Early Learning). Re-run for the freeze. All findings are **measured**, not reaso
 `window.__focusPanelLayoutSource`, `window.__alloyPerf.marks` (`focus_panel_chain_*`), console error
 interception for `Maximum update depth`, and a `fetch` counter.
 
-## Result: PASS — no regressions.
+## Result: PASS — one defect found during re-certification and fixed.
+
+**Defect caught + fixed (why we re-certify):** the freeze re-run surfaced a React dev error — *"The
+result of getSnapshot should be cached to avoid an infinite loop"* — at `useProcessingQueueWarm`.
+`createWarmCache.getState` returned a new object each call, violating `useSyncExternalStore`'s
+referential-stability contract (introduced by the Processing-queue cache migration). Fixed by memoizing
+the per-key state view (`warmCache.ts`); re-verified the error is gone (0), Processing renders, warm
+reopen still 0 fetches. Commit `9658014f2`. No other regressions.
+
+## Certified scenarios
 
 | Scenario | Method | Result |
 |---|---|---|
