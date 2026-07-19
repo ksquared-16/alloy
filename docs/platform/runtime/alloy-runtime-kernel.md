@@ -1,11 +1,18 @@
 ---
 owner: runtime
-status: proposed
-last_reviewed: 2026-07-16
+status: ratified
+last_reviewed: 2026-07-19
 supersedes: []
 ---
 
 # The Alloy Runtime Kernel
+
+> **Runtime V1 freeze (2026-07-19).** This kernel is RATIFIED and realized. Its four systems (K1
+> Attention, K2 Provisioning, K3 Focus, K4 Instrumentation) are the runtime that exists. The Runtime V1
+> freeze re-expresses this same lifecycle in the operator vocabulary **Destination → Preparation →
+> Provisioning → Commit → Settlement**; the mapping to the kernel's K1/K2/K3 names lives in the Runtime
+> Constitution V1 (`docs/runtime/runtime-constitution-v1.md` §2). No architecture changed — only the
+> phase names were made linear for the Constitution. This document remains the authoritative kernel spec.
 
 **Derived from:** [The Alloy Operating System — Constitution](./runtime-realization-architecture.md)
 (frozen) and the [Runtime Realization Engineering Specification](./runtime-realization-engineering-specification.md).

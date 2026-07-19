@@ -135,6 +135,14 @@ terminal outcome.
 **16 requests before Operational. 4 dependent tiers + 1 redundant identity round-trip. The rows request
 alone takes ≈3.9 s.**
 
+> **Realization note (2026-07-19, Runtime V1 freeze).** §1.3 is the *pre-migration baseline* — a record
+> of the "before," retained as such. The realization has since landed: the row at `t=8401`
+> (`entity-layouts/focus-panel-summary`, subject-committed) no longer reflects current code. The
+> published Focus Panel Summary doc is now resolved **server-side inside the one provisioning answer**
+> (`workUnitProvisioningAnswer.ts` `focusPanelSummaryDoc`, `fps:` config-cache, publish/rollback/delete
+> invalidation) and committed WITH the surface — not a post-commit client fetch. See the Runtime
+> Constitution V1 (`docs/runtime/runtime-constitution-v1.md`) §Lifecycle and §Focus Panel.
+
 ## 1.4–1.6 Data / readiness / reveal (as implemented)
 
 ```

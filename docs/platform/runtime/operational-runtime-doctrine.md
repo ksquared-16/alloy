@@ -40,7 +40,16 @@ A fixed-dimension **snapshot/default slot** that patches values in place is **no
 Every visible region has **exactly one canonical owner**. No competing: legacy fallback UI · duplicate drawer owner · duplicate queue owner · duplicate KPI owner · duplicate route shell. Legacy/fallback owners are quarantined behind flag-off or deleted — never reachable on the canonical path.
 
 ### 5. One First-Paint Payload
-Everything required for the first reveal must be **ready together** before commit: workspace context · work-unit context · KPIs · queue rows · lane/section metadata · banner/context data · command/action frame. Secondary fetches are allowed **only** for non-primary / deferred panels (e.g. Focus Panel card body, below-fold rails, right-rail workflow KPIs).
+Everything required for the first reveal must be **ready together** before commit: workspace context · work-unit context · KPIs · queue rows · lane/section metadata · banner/context data · command/action frame. Secondary fetches are allowed **only** for non-primary / deferred panels (below-fold rails, right-rail workflow KPI *values*, deeper record detail).
+
+> **Updated 2026-07-19 (Runtime V1 freeze).** The Focus Panel **Summary** is no longer a deferred
+> fetch — it commits WITH the surface. The provisioning answer carries the commit-critical Focus Panel
+> projections (`focusPanelStageWork`, `focusPanelSubjectSnapshot`, the published `focusPanelSummaryDoc`,
+> and `actionsProjection`), and the commit-critical card registry
+> (`focusPanelCommitCriticalCards.ts`) makes Current Work / Household / Children / Readiness ready at
+> commit. Settlement (the drawer VM) **enriches** the committed summary and fills the workspace/detail
+> drill; it never builds the summary. So "Focus Panel card body" is removed from the deferred example:
+> the Summary is first-paint; only the expanded workspace/detail settles.
 
 ### 6. Continuous Navigation
 Navigation is **continuity, not page replacement**. `/workspace → work-unit` and `work-unit → /workspace` must **not** reveal an intermediate skeleton or loading shell, and must **not** clear the current surface before the next surface is ready. Warm caches and stable chrome carry the operator across the boundary.
