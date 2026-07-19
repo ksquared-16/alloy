@@ -24,6 +24,10 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec";
 import { system5ArchetypeForCard } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
 import {
+    buildReadinessCardEvidence,
+    type ReadinessEvidenceContext,
+} from "@/lib/adminV2/runtime/focusPanel/readiness/buildReadinessCardEvidence";
+import {
     formatFocusPanelChipLabel,
     formatFocusPanelDisplayLabel,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
@@ -283,21 +287,6 @@ function statusIssuesFromVm(displayVm: OpportunityDrawerViewModel): string[] {
     return issues.slice(0, 4);
 }
 
-function readinessIssues(displayVm: OpportunityDrawerViewModel): string[] {
-    const issues: string[] = [];
-    const attention = displayVm.summaries.attention;
-    if (attention?.primary_reason?.trim()) {
-        issues.push(attention.primary_reason.trim());
-    }
-    const blockers = blockerInsight(displayVm);
-    if (blockers.count > 1 && attention?.primary_reason) {
-        issues.push(`${blockers.count - 1} more required item${blockers.count - 1 === 1 ? "" : "s"}`);
-    } else if (blockers.count > 0 && !attention?.primary_reason) {
-        issues.push(blockers.insight);
-    }
-    return issues.slice(0, 4);
-}
-
 function timelineEventsFromRecord(record: Record<string, unknown>, statusLabel: string | null): {
     when: string;
     label: string;
@@ -319,34 +308,47 @@ function timelineEventsFromRecord(record: Record<string, unknown>, statusLabel: 
     return events.slice(0, 5);
 }
 
-function readinessKpiInsight(displayVm: OpportunityDrawerViewModel): {
-    insight: string;
-    supporting: string | null;
-    tone: FocusPanelCardModel["statusTone"];
-    chip: string | null;
-} {
+/**
+ * Canonical Readiness card model — SHARED by both Focus Panel Work-mode producers (see
+ * {@link buildHouseholdCardModel}). Derived from the SAME evidence the ReadinessCard body renders
+ * (`buildReadinessCardEvidence`), so model and card never disagree. Requires only observed truth
+ * (primary contact + `_inquiry_children`) plus the attention signal — all of which the
+ * commit-critical answer context carries, so Readiness is READY at commit; the attention blockers
+ * that arrive with Settlement enrich the same cell in place.
+ */
+export function buildReadinessCardModel(context: ReadinessEvidenceContext): FocusPanelCardModel {
+    const evidence = buildReadinessCardEvidence(context);
+    return card({
+        key: "readiness_kpi",
+        title: "Readiness",
+        insight: evidence.answerLine,
+        secondaryInsight: evidence.supportingLine,
+        tier: "metric",
+        span: 1,
+        density: "compact",
+        statusChip: evidence.statusChip,
+        statusTone: evidence.statusTone,
+        primaryAction: evidence.statusTone === "blocked" ? { label: "Resolve →", variant: "primary" } : null,
+        payload: evidence.blockers.length > 0 ? { statusIssues: evidence.blockers } : undefined,
+    });
+}
+
+/** The enriched path's readiness slice of the context — truth + the settlement attention signal. */
+function readinessContextFromVm(
+    displayVm: OpportunityDrawerViewModel,
+    record: Record<string, unknown>,
+): ReadinessEvidenceContext {
     const attention = displayVm.summaries.attention;
-    const blockers = blockerInsight(displayVm);
-    if (attention?.primary_reason?.trim() && blockers.count > 0) {
-        return {
-            insight: attention.primary_reason.trim(),
-            supporting:
-                blockers.count > 1
-                    ? `${blockers.count} required items before advancing`
-                    : "1 required item before advancing",
-            tone: "blocked",
-            chip: chip("blocked"),
-        };
-    }
-    if (blockers.count > 0) {
-        return {
-            insight: blockers.insight,
-            supporting: `${blockers.count} required item${blockers.count === 1 ? "" : "s"} before advancing`,
-            tone: "blocked",
-            chip: chip("blocked"),
-        };
-    }
-    return { insight: "Ready to advance", supporting: "No blockers detected", tone: "ready", chip: chip("ready") };
+    return {
+        truth: record,
+        signals: {
+            attention: {
+                needsAttention: Boolean(attention?.needs_attention),
+                primaryReason: attention?.primary_reason ?? null,
+                reasonCount: attention?.reason_count ?? 0,
+            },
+        },
+    };
 }
 
 function healthSupportingInsight(displayVm: OpportunityDrawerViewModel): string | null {
@@ -467,7 +469,6 @@ function buildCardModels(input: {
 
     const map = new Map<FocusPanelCardKey, FocusPanelCardModel>();
     const healthIssues = statusIssuesFromVm(displayVm);
-    const readinessIssueList = readinessIssues(displayVm);
     const childCollection = childrenCollectionItems(record);
     const householdFields = householdProfileFields(record);
 
@@ -518,28 +519,12 @@ function buildCardModels(input: {
         }),
     );
 
-    const readiness = readinessKpiInsight(displayVm);
     const health = healthInsight(displayVm);
     const documentsOutstanding =
         displayVm.summaries.attention?.needs_attention && displayVm.summaries.attention.primary_reason
             ? 1
             : 0;
-    map.set(
-        "readiness_kpi",
-        card({
-            key: "readiness_kpi",
-            title: "Readiness",
-            insight: readiness.insight,
-            secondaryInsight: readiness.supporting,
-            tier: "metric",
-            span: 1,
-            density: "compact",
-            statusChip: readiness.chip,
-            statusTone: readiness.tone,
-            primaryAction: readiness.tone === "blocked" ? { label: "Resolve →", variant: "primary" } : null,
-            payload: readinessIssueList.length > 0 ? { statusIssues: readinessIssueList } : undefined,
-        }),
-    );
+    map.set("readiness_kpi", buildReadinessCardModel(readinessContextFromVm(displayVm, record)));
 
     map.set(
         "health",

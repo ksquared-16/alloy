@@ -4,7 +4,10 @@ import {
     focusPanelWorkModeModelFromProvisioningAnswer,
     type FocusPanelWorkModeFromAnswerInput,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
-import { buildCurrentWorkCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import {
+    buildCurrentWorkCardModel,
+    buildReadinessCardModel,
+} from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 
 const stageWork = {
@@ -79,10 +82,20 @@ describe("focusPanelWorkModeModelFromProvisioningAnswer (A — commit-critical p
         expect(model.cardReadiness.get("communications")).toBeUndefined();
     });
 
-    it("reserves Household + Children when the answer carries no subject snapshot (honest, not fabricated)", () => {
+    it("renders Readiness READY at commit — a pure derivation over the same commit-critical truth", () => {
+        const model = focusPanelWorkModeModelFromProvisioningAnswer(input());
+        expect(model.cardReadiness.get("readiness_kpi")).toBe("ready");
+        // Built through the SHARED builder over the SAME context — byte-identical to the enriched card.
+        expect(model.cardModels.get("readiness_kpi")).toEqual(buildReadinessCardModel(model.context));
+        // Honest factor completion: contact + child present, program/schedule/start not yet → "almost".
+        expect(model.cardModels.get("readiness_kpi")?.statusChip).toBe("Almost");
+    });
+
+    it("reserves Household + Children + Readiness when the answer carries no subject snapshot (honest, not fabricated)", () => {
         const model = focusPanelWorkModeModelFromProvisioningAnswer(input({ subjectSnapshot: null }));
         expect(model.cardReadiness.get("household")).toBeUndefined();
         expect(model.cardReadiness.get("children")).toBeUndefined();
+        expect(model.cardReadiness.get("readiness_kpi")).toBeUndefined();
         expect(model.cardReadiness.get("current_work")).toBe("ready");
     });
 

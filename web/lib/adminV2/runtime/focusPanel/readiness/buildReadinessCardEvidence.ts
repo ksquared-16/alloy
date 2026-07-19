@@ -35,6 +35,15 @@ export type ReadinessFactor = {
     shortLabel: string;
 };
 
+/**
+ * The narrow context slice Readiness derives from — observed truth + the attention signal. A full
+ * `OperationalContext` is structurally assignable, so both producers (commit-critical answer and
+ * enriched settlement) can evaluate readiness over whatever context they hold.
+ */
+export type ReadinessEvidenceContext = Pick<OperationalContext, "truth"> & {
+    signals: Pick<OperationalContext["signals"], "attention">;
+};
+
 export type ReadinessCardEvidence = {
     verdict: ReadinessVerdict;
     /** Honest completion percentage (complete ÷ total factors), null when unknown. */
@@ -68,7 +77,7 @@ function resolvePrimaryContactName(truth: Record<string, unknown>): string | nul
     );
 }
 
-export function buildReadinessCardEvidence(context: OperationalContext): ReadinessCardEvidence {
+export function buildReadinessCardEvidence(context: ReadinessEvidenceContext): ReadinessCardEvidence {
     const truth = context.truth;
     const attention = context.signals.attention;
     const childrenEvidence = buildChildrenCardEvidence(context);

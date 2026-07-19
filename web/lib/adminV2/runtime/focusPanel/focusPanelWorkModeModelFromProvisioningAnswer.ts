@@ -8,9 +8,11 @@
  * is left at its honest empty state and the card is marked `reserved` — the drawer VM fills it in
  * place, in reserved geometry, without changing the composition.
  *
- * `current_work` is the one card marked `ready` here, built through the SHARED `buildCurrentWorkCardModel`
- * (so it is byte-identical to the enriched model). Every other configured card defaults to `reserved`
- * in the grid.
+ * Ready-at-commit cards — `current_work` always; `household` / `children` / `readiness_kpi` whenever
+ * the answer's subject snapshot carries their first-operational content — are built through the SHARED
+ * builders (`buildCurrentWorkCardModel`, `buildHouseholdCardModel`, `buildChildrenCardModel`,
+ * `buildReadinessCardModel`), so each is byte-identical to its enriched counterpart. Every other
+ * configured card defaults to `reserved` in the grid.
  */
 
 import { NULL_BILLING_SIGNAL, type OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -18,6 +20,7 @@ import {
     buildCurrentWorkCardModel,
     buildHouseholdCardModel,
     buildChildrenCardModel,
+    buildReadinessCardModel,
 } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import type { FocusPanelSubjectSnapshot } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
@@ -111,8 +114,8 @@ export function focusPanelWorkModeModelFromProvisioningAnswer(
 ): FocusPanelWorkModeModel {
     const context = buildCommitCriticalOperationalContext(input);
 
-    // Only Current Work is READY at commit — the shared model builder guarantees it matches the
-    // enriched card byte-for-byte. Every other configured cell defaults to `reserved` in the grid.
+    // Current Work is ALWAYS ready at commit — the shared model builder guarantees it matches the
+    // enriched card byte-for-byte. Cells not marked ready below default to `reserved` in the grid.
     const cardModels = new Map<FocusPanelCardKey, FocusPanelCardModel>([
         [
             "current_work",
@@ -132,6 +135,11 @@ export function focusPanelWorkModeModelFromProvisioningAnswer(
     if (input.subjectSnapshot?.primaryContact.name || input.subjectSnapshot?.inquiryChildren != null) {
         cardModels.set("household", buildHouseholdCardModel(truth, input.title));
         cardReadiness.set("household", "ready");
+        // READINESS is a pure derivation over the same commit-critical truth (contact + children
+        // completeness), so it is knowable — and READY — the moment the subject snapshot is. The
+        // attention blockers Settlement discovers later enrich the same cell in place.
+        cardModels.set("readiness_kpi", buildReadinessCardModel(context));
+        cardReadiness.set("readiness_kpi", "ready");
     }
     if (input.subjectSnapshot?.inquiryChildren != null) {
         cardModels.set("children", buildChildrenCardModel(truth));

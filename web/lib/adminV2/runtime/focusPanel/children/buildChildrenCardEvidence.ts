@@ -124,7 +124,7 @@ export type BuildChildrenCardEvidenceOptions = {
 };
 
 export function buildChildrenCardEvidence(
-    context: OperationalContext,
+    context: Pick<OperationalContext, "truth">,
     options: BuildChildrenCardEvidenceOptions = {},
 ): ChildrenCardEvidence {
     const { rows, rawRows } = normalizeFocusPanelChildrenRowsFromTruth(context.truth);
