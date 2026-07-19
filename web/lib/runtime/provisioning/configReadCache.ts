@@ -19,8 +19,15 @@
  *  - Explicit `invalidateConfigReadCache(prefix)` for a publish flow to bust immediately if wired.
  */
 
-/** Default freshness — long enough to collapse a navigation burst, short enough that a publish shows. */
-export const CONFIG_READ_TTL_MS = 15_000;
+/**
+ * Default freshness. Published surface/lifecycle config changes ONLY on an admin publish (rare, off
+ * the operational path), so a short TTL bought almost nothing but forced the first navigation after
+ * any read pause (>15 s) to re-pay ~690 ms of work-unit + department + layout reads — exactly the
+ * "first load feels slow" the operator reports. Raised to 5 min so config stays warm across a whole
+ * work session; a publish is made visible immediately by `invalidateConfigReadCache` (wire it into the
+ * publish flow — the correct freshness mechanism is explicit invalidation, not a short guess-TTL).
+ */
+export const CONFIG_READ_TTL_MS = 300_000;
 const MAX_ENTRIES = 512;
 
 type Entry = { value: Promise<unknown>; expiresAt: number };

@@ -381,22 +381,33 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         .filter((h): h is string => Boolean(h))
         .slice(0, 6)
         .join("\n");
+    const warmDestination = useCallback((href: string) => {
+        const answerPromise = prefetchWorkUnitProvisioningFromHref(href);
+        if (!answerPromise) return;
+        // Chain the default subject off the SAME prepared answer — no second fetch, one identity.
+        void answerPromise
+            .then((answer) => {
+                if (answer && answer.terminal === "operational" && answer.recordOfAttention?.id) {
+                    void prewarmRecordWork(String(answer.recordOfAttention.id));
+                }
+            })
+            .catch(() => {});
+    }, []);
     useEffect(() => {
         if (!processEntryHrefs || typeof window === "undefined") return;
         const hrefs = processEntryHrefs.split("\n");
+        // EAGER PRIMARY PREWARM: the operator's most likely first move is into the PRIMARY process's
+        // Work Unit. Warming it on an idle callback (up to 2.5 s, or a 500 ms fallback) lost the race to
+        // a quick click and the entry paid the full cold provisioning + VM chain — the "first load is
+        // slow" the operator reports. Warm the primary destination IMMEDIATELY (provisioning answer +
+        // its default subject's complete VM), so even an instant click consumes warm/in-flight work
+        // instead of starting cold. The remaining destinations stay idle-scheduled so they never
+        // compete with the commit-critical path.
+        warmDestination(hrefs[0]);
+        const rest = hrefs.slice(1);
+        if (!rest.length) return;
         const run = () => {
-            for (const href of hrefs) {
-                const answerPromise = prefetchWorkUnitProvisioningFromHref(href);
-                if (!answerPromise) continue;
-                // Chain the default subject off the SAME prepared answer — no second fetch, one identity.
-                void answerPromise
-                    .then((answer) => {
-                        if (answer && answer.terminal === "operational" && answer.recordOfAttention?.id) {
-                            void prewarmRecordWork(String(answer.recordOfAttention.id));
-                        }
-                    })
-                    .catch(() => {});
-            }
+            for (const href of rest) warmDestination(href);
         };
         const w = window as Window & {
             requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
@@ -408,7 +419,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         }
         const timer = window.setTimeout(run, 500);
         return () => window.clearTimeout(timer);
-    }, [processEntryHrefs]);
+    }, [processEntryHrefs, warmDestination]);
 
     // A retained return is composition-ready the instant the seed paints: the retained snapshot +
     // header are already complete, so we never re-show the skeleton while the background SWR runs.
