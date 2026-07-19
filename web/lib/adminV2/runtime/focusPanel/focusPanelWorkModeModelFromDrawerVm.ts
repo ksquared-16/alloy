@@ -1,0 +1,77 @@
+/**
+ * Producer: settlement/drawer VM → FocusPanelWorkModeModel (the ENRICHED source).
+ *
+ * A behavior-neutral wrap of the two derivations the grid does today — the card models
+ * (`deriveOpportunityFocusPanelPresentation`) and the card-facing context
+ * (`buildOperationalContext`) — projected onto the canonical `FocusPanelWorkModeModel`. This is the
+ * seam that lets the grid stop reading the drawer VM: once the grid consumes the model, THIS is the
+ * only place the enriched path touches `OpportunityDrawerViewModel`.
+ *
+ * Readiness: a card the enriched derivation marks `visible === false` becomes `not_applicable` — the
+ * cell is KEPT (never dropped), matching the configuration-driven-composition invariant. Everything
+ * else is `ready`.
+ */
+
+import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
+import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
+import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
+import type {
+    FocusPanelCardReadiness,
+    FocusPanelWorkModeModel,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
+
+export type FocusPanelWorkModeFromDrawerVmInput = {
+    mode: FocusPanelMode;
+    displayVm: OpportunityDrawerViewModel;
+    record: Record<string, unknown>;
+    title: string;
+    perspective: RuntimePerspective | null;
+    statusLabel: string | null;
+    canMutate: boolean;
+};
+
+export function focusPanelWorkModeModelFromDrawerVm(
+    input: FocusPanelWorkModeFromDrawerVmInput,
+): FocusPanelWorkModeModel {
+    const { mode, displayVm, record, title, perspective, statusLabel, canMutate } = input;
+
+    const { cards } = deriveOpportunityFocusPanelPresentation({
+        mode,
+        displayVm,
+        record,
+        title,
+        perspective,
+        statusLabel,
+    });
+
+    const context = buildOperationalContext({
+        subjectId: displayVm.entity.id,
+        title,
+        subjectVm: displayVm,
+        truth: record,
+        perspective,
+        statusLabel,
+        canMutate,
+    });
+
+    const cardReadiness = new Map<FocusPanelCardKey, FocusPanelCardReadiness>();
+    for (const [key, model] of cards) {
+        cardReadiness.set(key, model.visible ? "ready" : "not_applicable");
+    }
+
+    return {
+        source: "drawer_vm",
+        mode,
+        subject: { id: displayVm.entity.id, type: "opportunity", label: title },
+        context,
+        cardModels: cards,
+        cardReadiness,
+        title,
+        statusLabel,
+        canMutate,
+        perspective,
+    };
+}
