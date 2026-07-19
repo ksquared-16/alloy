@@ -69,11 +69,20 @@ export default function ScheduledWorkspace() {
         setAnnouncements(rows.filter((r) => (r.status ?? "").toLowerCase() === "scheduled"));
     }, [kpiContext?.announcements.rows]);
 
+    // Load the scheduled sends ONCE. Keep this network fetch OFF the announcements-sync effect: that
+    // effect's `syncAnnouncements` changes identity whenever `kpiContext.announcements.rows` gets a new
+    // reference, and coupling the two here re-ran `loadScheduled` on every such change — a runaway
+    // `/inbox/threads?folder=scheduled` fetch loop (~140 requests on open). `loadScheduled` is stable.
     useEffect(() => {
         void loadScheduled();
+    }, [loadScheduled]);
+
+    // Announcements are a cheap, in-memory warm-cache projection — safe to re-sync on identity change
+    // and on warm-cache notifications, with no network.
+    useEffect(() => {
         syncAnnouncements();
         return subscribeCommunicationsWorkspaceWarm(syncAnnouncements);
-    }, [loadScheduled, syncAnnouncements]);
+    }, [syncAnnouncements]);
 
     const selectedSend = useMemo(
         () => scheduledSends.find((s) => s.id === selectedSendId) ?? null,
