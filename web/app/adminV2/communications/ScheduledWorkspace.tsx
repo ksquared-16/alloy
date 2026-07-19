@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
     COMMS_EMPTY_STATE_CLASS,
@@ -66,7 +66,17 @@ export default function ScheduledWorkspace() {
     const syncAnnouncements = useCallback(() => {
         const warm = getCommunicationsWarmAnnouncements();
         const rows = (warm ?? kpiContext?.announcements.rows ?? []) as ScheduledAnnouncementRow[];
-        setAnnouncements(rows.filter((r) => (r.status ?? "").toLowerCase() === "scheduled"));
+        const next = rows.filter((r) => (r.status ?? "").toLowerCase() === "scheduled");
+        // IDEMPOTENT: keep the previous array reference when the scheduled set is unchanged. Without
+        // this, every call produced a new array → a re-render → (if `kpiContext.announcements.rows`
+        // churns) a new `syncAnnouncements` identity → the effect re-ran → setState → a React
+        // max-update-depth render loop (the residual half of the scheduled-workspace loop).
+        setAnnouncements((prev) =>
+            prev.length === next.length &&
+            prev.every((p, i) => p.id === next[i]!.id && p.status === next[i]!.status)
+                ? prev
+                : next,
+        );
     }, [kpiContext?.announcements.rows]);
 
     // Load the scheduled sends ONCE. Keep this network fetch OFF the announcements-sync effect: that
@@ -77,11 +87,18 @@ export default function ScheduledWorkspace() {
         void loadScheduled();
     }, [loadScheduled]);
 
-    // Announcements are a cheap, in-memory warm-cache projection — safe to re-sync on identity change
-    // and on warm-cache notifications, with no network.
+    // Announcements are a cheap, in-memory warm-cache projection. Subscribe ONCE (via a ref to the
+    // latest sync) so the subscription itself never re-runs on `syncAnnouncements` identity churn; a
+    // separate cheap effect re-syncs when the source rows change. With the idempotent setter above, a
+    // re-sync that finds no change is a no-op — no render loop.
+    const syncRef = useRef(syncAnnouncements);
+    syncRef.current = syncAnnouncements;
+    useEffect(() => {
+        syncRef.current();
+        return subscribeCommunicationsWorkspaceWarm(() => syncRef.current());
+    }, []);
     useEffect(() => {
         syncAnnouncements();
-        return subscribeCommunicationsWorkspaceWarm(syncAnnouncements);
     }, [syncAnnouncements]);
 
     const selectedSend = useMemo(
