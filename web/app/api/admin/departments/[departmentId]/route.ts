@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { invalidateTenantConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -171,6 +172,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
         }
         return NextResponse.json({ error: updateErr.message }, { status: 400 });
     }
+
+    // B5 — a department edit changes the lifecycle/config the provisioning answer caches (department
+    // metadata + work-unit resolution + queue/header layout selection). Bust every config kind for
+    // this tenant so the next operator navigation reflects the change immediately, not after the TTL.
+    invalidateTenantConfigReadCache(ctx.orgId);
 
     return NextResponse.json(updated);
 }

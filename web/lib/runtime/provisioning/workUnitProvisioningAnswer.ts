@@ -465,7 +465,7 @@ export async function composeWorkUnitProvisioningAnswer(
                     workViewId: activeView.id,
                 }),
             ),
-            cachedConfigRead(`hdr:${req.orgId}`, () =>
+            cachedConfigRead(`hdr:${req.orgId}:`, () =>
                 listWorkUnitHeaderLayoutRecords(req.supabase, req.orgId),
             ).catch(() => null),
         ]);

@@ -17,6 +17,7 @@ import {
     publishLayout,
     updateDraft,
 } from "@/lib/layout/entityLayoutsRepo";
+import { invalidateConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import {
     DEFAULT_WORK_UNIT_HEADER_SURFACE_CONFIG,
@@ -114,6 +115,9 @@ export async function PUT(request: NextRequest) {
                 )
                 .single();
             if (error) throw new Error(error.message);
+            // B5 — a header publish changes the `hdr:` config the provisioning answer caches. Bust it
+            // now so the next operator navigation reflects the publish without waiting for the TTL.
+            invalidateConfigReadCache(`hdr:${ctx.orgId}:`);
             return NextResponse.json(data, { status: 200 });
         } else {
             const draft = await createDraft(supabase, {
@@ -139,6 +143,8 @@ export async function PUT(request: NextRequest) {
         }
 
         const published = await publishLayout(supabase, draftId);
+        // B5 — see above: a header publish invalidates the cached `hdr:` config for this tenant.
+        invalidateConfigReadCache(`hdr:${ctx.orgId}:`);
         return NextResponse.json(published, { status: 201 });
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });

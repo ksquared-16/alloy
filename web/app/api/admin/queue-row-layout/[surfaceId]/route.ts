@@ -21,6 +21,7 @@ import {
     publishLayout,
     updateDraft,
 } from "@/lib/layout/entityLayoutsRepo";
+import { invalidateConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 import {
     resolveQueueRowLayoutServer,
     resolveQueueRowSurfaceSpec,
@@ -202,6 +203,10 @@ export async function POST(
                 )
                 .single();
             if (error) throw new Error(error.message);
+            // B5 — a queue-row layout publish changes the `qrl:` config the provisioning answer caches
+            // (its dominant ~700ms read). Bust this tenant's `qrl:` entries so the next operator
+            // navigation reflects the publish immediately, not after the TTL.
+            invalidateConfigReadCache(`qrl:${ctx.orgId}:`);
             return NextResponse.json(data, { status: 200 });
         } else {
             const draft = await createDraft(supabase, {
@@ -227,6 +232,8 @@ export async function POST(
         }
 
         const published = await publishLayout(supabase, draftId);
+        // B5 — see above: invalidate this tenant's cached `qrl:` config on publish.
+        invalidateConfigReadCache(`qrl:${ctx.orgId}:`);
         return NextResponse.json(published, { status: latestPublished ? 200 : 201 });
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });

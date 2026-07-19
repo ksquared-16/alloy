@@ -67,6 +67,18 @@ export function invalidateConfigReadCache(prefix?: string): void {
     for (const k of [...store.keys()]) if (k.startsWith(prefix)) store.delete(k);
 }
 
+/**
+ * Bust EVERY cached config kind for one tenant — the work-unit row, department config, queue-row
+ * layout, and header layout. Use for a lifecycle/department config change (a department metadata
+ * publish) whose effect ripples across all four kinds; a single-surface publish should bust only its
+ * own prefix (`hdr:`/`qrl:`) instead. Tenant-scoped: never touches another org's cache.
+ */
+export function invalidateTenantConfigReadCache(orgId: string): void {
+    for (const prefix of [`wu:${orgId}:`, `dept:${orgId}:`, `qrl:${orgId}:`, `hdr:${orgId}:`]) {
+        invalidateConfigReadCache(prefix);
+    }
+}
+
 function evictOldest(): void {
     // Map preserves insertion order; the first key is the oldest inserted. Cheap approximate-LRU.
     const oldest = store.keys().next().value;
