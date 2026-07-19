@@ -79,6 +79,10 @@ import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts"
 import { queueRowSurfaceIdForDepartment } from "@/lib/presentation/runtime/workUnitSurfaceConfigFetch";
 import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
 import { cachedConfigRead } from "./configReadCache";
+import {
+    resolveOpportunityStageWorkSlice,
+    type OpportunityStageWorkSlice,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
 export const PROVISIONING_ROW_PAGE_CAP = 100;
@@ -164,6 +168,16 @@ export type ProvisioningAnswer =
           focusPanelScopeState: FocusPanelScopeStateKind;
           currentBusinessState: CurrentBusinessState;
           primaryAction: TruthfulPrimaryAction;
+          /**
+           * COMMIT-CRITICAL FOCUS PANEL — the default subject's stage-work slice (Current Work
+           * runtime: progress, requirements completion, blocked/status, published stage inputs, work
+           * intent). The answer OWNS this operational projection: the Current Work widget is a renderer
+           * of THIS, so the first meaningful operator action is possible from the provisioning answer
+           * ALONE. The drawer VM only ENRICHES the surrounding cards (household, contacts, activity,
+           * documents) — Settlement — and never creates the operational Current Work. Null only when
+           * unresolved (degrades to the drawer-VM load; never an operational failure).
+           */
+          focusPanelStageWork: OpportunityStageWorkSlice | null;
           /**
            * U-P7 — the RESOLVED operational presentation composition, sufficient to render
            * U-O1…U-O5 in FINAL layout with no further configuration request. Identifiers survive
@@ -586,6 +600,26 @@ export async function composeWorkUnitProvisioningAnswer(
         );
     }
 
+    // ── COMMIT-CRITICAL FOCUS PANEL — the answer OWNS the operational Current Work projection. ──
+    // Progress + requirements + blocked/status are part of Situation→Decision→Action, so the useful
+    // Focus Panel commits WITH Header + Queue from the answer alone; the drawer VM only enriches the
+    // surrounding Settlement cards afterward. Additive and non-fatal: any failure degrades to the
+    // client drawer-VM load, never an operational error. `departmentMetadata` is already in hand.
+    let focusPanelStageWork: OpportunityStageWorkSlice | null = null;
+    try {
+        focusPanelStageWork = await resolveOpportunityStageWorkSlice({
+            supabase: req.supabase,
+            orgId: req.orgId,
+            opportunityId: chosen.entityId,
+            departmentId: wuRow.department_id ? String(wuRow.department_id) : null,
+            stageKey: stage.key,
+            stageLabel: stage.label,
+            departmentMetadata: deptRow?.metadata,
+        });
+    } catch {
+        /* stage-work is additive to the commit — never fail the operational answer on it */
+    }
+
     const answer: ProvisioningAnswer = {
         terminal: "operational",
         orgId: req.orgId,
@@ -613,6 +647,7 @@ export async function composeWorkUnitProvisioningAnswer(
             label: template.primary_action?.override_label ?? template.label,
             workTemplateKey: template.template_key,
         },
+        focusPanelStageWork,
         presentation,
         settlement,
         timings,

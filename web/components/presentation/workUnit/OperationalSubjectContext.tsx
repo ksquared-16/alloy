@@ -18,6 +18,7 @@
  */
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
+import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 
 export type OperationalSubject = {
     /** Record of Attention — the committed subject, from the frozen snapshot. Null = none committed. */
@@ -57,10 +58,19 @@ export type OperationalSubject = {
     } | null;
     /** U-O5 — capability, not decoration. */
     action: { actionRef: string; label: string } | null;
+    /**
+     * COMMIT-CRITICAL CURRENT WORK — the stage-work runtime projection (progress, requirements,
+     * blocked/status, work items) carried by the D1 answer (`focusPanelStageWork.stage_work_runtime`).
+     * The Current Work widget renders from THIS at commit, so the first meaningful operator action is
+     * possible from the provisioning answer ALONE. The drawer VM only ENRICHES the surrounding cards.
+     * Null when the answer did not resolve it (the panel degrades to the drawer-VM load).
+     */
+    stageWorkRuntime: StageWorkRuntimeProjection | null;
 };
 
 const EMPTY: OperationalSubject = {
     subjectId: null, entityType: null, identitySeed: null, situation: null, decision: null, action: null,
+    stageWorkRuntime: null,
 };
 const Ctx = createContext<OperationalSubject>(EMPTY);
 
@@ -71,6 +81,7 @@ export function OperationalSubjectProvider({
     situation,
     decision,
     action,
+    stageWorkRuntime,
     children,
 }: {
     subjectId: string | null;
@@ -78,6 +89,7 @@ export function OperationalSubjectProvider({
     situation?: OperationalSubject["situation"];
     decision?: OperationalSubject["decision"];
     action?: OperationalSubject["action"];
+    stageWorkRuntime?: StageWorkRuntimeProjection | null;
     children: ReactNode;
 }) {
     const value = useMemo<OperationalSubject>(
@@ -88,8 +100,9 @@ export function OperationalSubjectProvider({
             situation: situation ?? null,
             decision: decision ?? null,
             action: action ?? null,
+            stageWorkRuntime: stageWorkRuntime ?? null,
         }),
-        [subjectId, identitySeed, situation, decision, action],
+        [subjectId, identitySeed, situation, decision, action, stageWorkRuntime],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
