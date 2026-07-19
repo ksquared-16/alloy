@@ -34,10 +34,6 @@ export function getProcessingFormsWarmSnapshot(): ProcessingFormsWarmState {
     return warmCache.getState(undefined);
 }
 
-export function subscribeProcessingFormsWarm(listener: () => void): () => void {
-    return warmCache.subscribe(listener);
-}
-
 /**
  * Fetch the forms list once and publish to the shared cache. Concurrent callers share ONE in-flight
  * promise; a fresh cache is reused unless `force`. Returns the list so a caller can `setForms(...)`

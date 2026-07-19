@@ -40,12 +40,6 @@ describe("Focus Panel architecture cutover vocabulary", () => {
         expect(workspace).toContain("data-focus-panel-embedded-workspace");
     });
 
-    it("ActivityWorkspace file is a thin compat re-export", () => {
-        const legacy = readSrc("components/admin/focusPanel/OpportunityFocusPanelActivityWorkspace.tsx");
-        expect(legacy).toContain("OpportunityFocusPanelEmbeddedWorkspace");
-        expect(legacy).not.toContain("export default function");
-    });
-
     it("useFocusPanelDocked aliases runtime split hook", async () => {
         const docked = await import("@/lib/adminV2/runtime/useFocusPanelDocked");
         const split = await import("@/lib/adminV2/runtime/useAlloyOsRuntimeSplitActive");

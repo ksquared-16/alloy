@@ -34,8 +34,6 @@ interface QueueResponse {
     };
 }
 
-const WARM_LOAD_DELAY_MS = 1_800;
-
 const warmCache = createWarmCache<void, ProcessingQueueWarmData>({
     keyOf: () => "queue",
     staleMs: 20_000,
@@ -51,8 +49,6 @@ const warmCache = createWarmCache<void, ProcessingQueueWarmData>({
         };
     },
 });
-
-let warmScheduled = false;
 
 export function getProcessingQueueWarmSnapshot(): ProcessingQueueWarmState {
     return warmCache.getState(undefined);
@@ -70,17 +66,7 @@ export async function warmProcessingQueueCache(opts?: { force?: boolean }): Prom
     await warmCache.warm(undefined, opts);
 }
 
-/** Schedule a single deferred warm pass — safe to call from the AdminV2 shell on idle. */
-export function scheduleProcessingQueueWarm(): void {
-    if (typeof window === "undefined" || warmScheduled) return;
-    warmScheduled = true;
-    window.setTimeout(() => {
-        void warmProcessingQueueCache();
-    }, WARM_LOAD_DELAY_MS);
-}
-
 /** Test-only reset of module cache state. */
 export function resetProcessingQueueWarmForTests(): void {
     warmCache.reset();
-    warmScheduled = false;
 }
