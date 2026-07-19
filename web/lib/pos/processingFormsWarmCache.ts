@@ -3,90 +3,52 @@
 /**
  * Processing → forms-list warm cache.
  *
- * The Processing overview reads two network sources: the queue (already warm — `processingQueueWarmCache`)
- * and the FORMS LIST. Forms had no shared cache, so every `useProcessingFormApi` consumer mounted on the
- * overview (the landing, the KPI strip, the overview-KPI hook) fetched `GET /api/admin/forms`
- * independently — the "/forms ×4" storm on open — and the list painted only after those resolved.
+ * The Processing overview reads two network sources: the queue (`processingQueueWarmCache`) and the
+ * FORMS LIST. Forms had no shared cache, so every `useProcessingFormApi` consumer on the overview
+ * fetched `GET /api/admin/forms` independently — the "/forms ×4" storm on open. This gives forms one
+ * shared, deduped, warm-first cache, warmed on Processing nav intent alongside the queue.
  *
- * This gives forms the SAME treatment the queue already has: one shared client cache + a single
- * in-flight request (all consumers dedupe), warmed on Processing nav intent alongside the queue, so the
- * surface paints from cache with no visible load. No new API, no new payload — it reuses the existing
- * `/api/admin/forms` endpoint and its `{ data }` shape. Stale entries refresh quietly in place.
+ * Built on the shared `createWarmCache` Runtime primitive (see `lib/runtime/warmCache.ts`) — a
+ * singleton scope (one global forms list). The named exports below are a thin, back-compatible facade
+ * so existing consumers are unchanged.
  */
 
 import type { ProcessingFormRow } from "@/app/adminV2/pos/useProcessingFormApi";
+import { createWarmCache, type WarmCacheEntryState } from "@/lib/runtime/warmCache";
 
-export interface ProcessingFormsWarmState {
-    data: ProcessingFormRow[] | null;
-    fetchedAt: number | null;
-    error: string | null;
-}
+export type ProcessingFormsWarmState = WarmCacheEntryState<ProcessingFormRow[]>;
 
-const STALE_MS = 20_000;
-
-let warmState: ProcessingFormsWarmState = { data: null, fetchedAt: null, error: null };
-let warmInflight: Promise<ProcessingFormRow[]> | null = null;
-const listeners = new Set<() => void>();
-
-function notify(): void {
-    listeners.forEach((listener) => listener());
-}
+const warmCache = createWarmCache<void, ProcessingFormRow[]>({
+    keyOf: () => "forms",
+    staleMs: 20_000,
+    errorMessage: "Failed to load forms",
+    fetcher: async () => {
+        const res = await fetch("/api/admin/forms", { credentials: "same-origin" });
+        if (!res.ok) throw new Error(`Request failed (${res.status})`);
+        const body = (await res.json()) as { data?: ProcessingFormRow[] };
+        return body.data ?? [];
+    },
+});
 
 export function getProcessingFormsWarmSnapshot(): ProcessingFormsWarmState {
-    return warmState;
+    return warmCache.getState(undefined);
 }
 
 export function subscribeProcessingFormsWarm(listener: () => void): () => void {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
-}
-
-function isWarmStale(state: ProcessingFormsWarmState): boolean {
-    if (state.fetchedAt == null) return true;
-    return Date.now() - state.fetchedAt > STALE_MS;
+    return warmCache.subscribe(listener);
 }
 
 /**
  * Fetch the forms list once and publish to the shared cache. Concurrent callers share ONE in-flight
- * promise (deduping the mount storm); a fresh cache is reused unless `force` is set. Returns the list
- * so a caller can `setForms(...)` from the resolved value without re-reading the snapshot.
+ * promise; a fresh cache is reused unless `force`. Returns the list so a caller can `setForms(...)`
+ * directly.
  */
 export async function warmProcessingFormsCache(opts?: { force?: boolean }): Promise<ProcessingFormRow[]> {
-    if (typeof window === "undefined") return warmState.data ?? [];
-    if (warmInflight) return warmInflight;
-    if (!opts?.force && warmState.data != null && !isWarmStale(warmState)) return warmState.data;
-
-    warmInflight = (async () => {
-        try {
-            const res = await fetch("/api/admin/forms", { credentials: "same-origin" });
-            if (!res.ok) throw new Error(`Request failed (${res.status})`);
-            const body = (await res.json()) as { data?: ProcessingFormRow[] };
-            const rows = body.data ?? [];
-            warmState = { data: rows, fetchedAt: Date.now(), error: null };
-            notify();
-            return rows;
-        } catch (e) {
-            const message = e instanceof Error ? e.message : "Failed to load forms";
-            // Preserve any previously cached data so a transient refresh failure does not blank an
-            // already-populated surface; only surface the error when there is nothing to show.
-            warmState = {
-                data: warmState.data,
-                fetchedAt: warmState.fetchedAt,
-                error: warmState.data == null ? message : null,
-            };
-            notify();
-            return warmState.data ?? [];
-        }
-    })().finally(() => {
-        warmInflight = null;
-    });
-
-    return warmInflight;
+    const result = await warmCache.warm(undefined, opts);
+    return result.data ?? [];
 }
 
 /** Test-only reset of module cache state. */
 export function resetProcessingFormsWarmForTests(): void {
-    warmState = { data: null, fetchedAt: null, error: null };
-    warmInflight = null;
-    listeners.clear();
+    warmCache.reset();
 }
