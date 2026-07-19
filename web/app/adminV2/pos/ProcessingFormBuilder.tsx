@@ -250,7 +250,7 @@ export default function ProcessingFormBuilder({
                 setFormMetaSnapshot(result.formRow?.metadata ?? patchedMeta);
             }
             setHasPublishedVersion(true);
-            await loadForms();
+            await loadForms({ force: true });
         } catch (e) {
             setBuilderErr(e instanceof Error ? e.message : "Publish failed");
         } finally {

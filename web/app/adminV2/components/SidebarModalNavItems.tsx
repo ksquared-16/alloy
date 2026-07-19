@@ -13,6 +13,7 @@ import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspace
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { warmOipAnalyticsModal } from "@/lib/metrics/oipWorkspaceWarmCache";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
+import { warmProcessingFormsCache } from "@/lib/pos/processingFormsWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import {
     dispatchAdminV2OpenInboxModal,
@@ -247,12 +248,15 @@ export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) 
             dataAttr="processing"
             onMouseEnter={() => {
                 void warmProcessingQueueCache();
+                void warmProcessingFormsCache();
             }}
             onFocus={() => {
                 void warmProcessingQueueCache();
+                void warmProcessingFormsCache();
             }}
             onClick={() => {
                 void warmProcessingQueueCache();
+                void warmProcessingFormsCache();
                 dispatchAdminV2OpenProcessingModal();
             }}
         />

@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
+import { warmProcessingFormsCache } from "@/lib/pos/processingFormsWarmCache";
 import DigitalMailroomShell, {
     type DigitalMailroomMode,
     type DigitalMailroomWorkView,
@@ -26,7 +27,10 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
     const [studioFormName, setStudioFormName] = useState<string | null>(null);
 
     useEffect(() => {
-        if (open) void warmProcessingQueueCache();
+        if (open) {
+            void warmProcessingQueueCache();
+            void warmProcessingFormsCache();
+        }
     }, [open]);
     const handleClose = useCallback(() => {
         setSelectedCaseId(null);

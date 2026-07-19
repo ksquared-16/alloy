@@ -9,6 +9,10 @@ import {
 } from "@/lib/pos/processingPublicLinkMetadata";
 import { resolveProcessingPublicSlug } from "@/lib/pos/processingPublicRuntime";
 import { safeParseFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
+import {
+    getProcessingFormsWarmSnapshot,
+    warmProcessingFormsCache,
+} from "@/lib/pos/processingFormsWarmCache";
 
 export interface ProcessingFormRow {
     id: string;
@@ -53,23 +57,24 @@ async function readJsonError(res: Response, fallback: string): Promise<string> {
 }
 
 export function useProcessingFormApi() {
-    const [forms, setForms] = useState<ProcessingFormRow[]>([]);
+    // Seed from the shared forms warm cache so a warmed surface (Processing nav intent warms it, like
+    // the queue) paints the list with NO fetch and NO visible load. `listLoaded` starts true when the
+    // cache is warm, so the mount `if (!listLoaded) loadForms()` guards in consumers skip the fetch.
+    const warmSeed = getProcessingFormsWarmSnapshot();
+    const [forms, setForms] = useState<ProcessingFormRow[]>(() => warmSeed.data ?? []);
     const [listErr, setListErr] = useState<string | null>(null);
-    const [listLoaded, setListLoaded] = useState(false);
+    const [listLoaded, setListLoaded] = useState(() => warmSeed.data != null);
 
-    const loadForms = useCallback(async () => {
+    // Route through the shared cache: concurrent overview consumers (landing + overview-KPIs + the KPI
+    // strip) dedupe to ONE `/api/admin/forms` request instead of the former per-instance storm. Default
+    // is warm-first (reuse a fresh cache); pass `{ force: true }` after a mutation to refresh in place.
+    const loadForms = useCallback(async (opts?: { force?: boolean }) => {
         setListErr(null);
-        try {
-            const res = await fetch("/api/admin/forms", { credentials: "same-origin" });
-            if (!res.ok) throw new Error(`Request failed (${res.status})`);
-            const body = (await res.json()) as { data?: ProcessingFormRow[] };
-            setForms(body.data ?? []);
-        } catch (e) {
-            setListErr(e instanceof Error ? e.message : "Failed to load forms");
-            setForms([]);
-        } finally {
-            setListLoaded(true);
-        }
+        const rows = await warmProcessingFormsCache(opts);
+        const snapshot = getProcessingFormsWarmSnapshot();
+        setForms(rows);
+        setListErr(snapshot.error);
+        setListLoaded(true);
     }, []);
 
     const loadFormSchema = useCallback(
@@ -215,7 +220,7 @@ export function useProcessingFormApi() {
                 if (!res.ok || !body.data?.form_id) {
                     throw new Error(body.error || `Create failed (${res.status})`);
                 }
-                await loadForms();
+                await loadForms({ force: true });
                 return body.data.form_id;
             } catch (e) {
                 setListErr(e instanceof Error ? e.message : "Failed to create form");
@@ -404,6 +409,8 @@ export function useProcessingFormApi() {
             const body = (await res.json().catch(() => ({}))) as { error?: string };
             if (!res.ok) throw new Error(body.error || `Archive failed (${res.status})`);
             setForms((cur) => cur.filter((f) => f.id !== formId));
+            // Sync the shared cache to server truth so a later warm-first load can't restore the row.
+            void warmProcessingFormsCache({ force: true });
         },
         []
     );
@@ -416,6 +423,8 @@ export function useProcessingFormApi() {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         if (!res.ok) throw new Error(body.error || `Delete failed (${res.status})`);
         setForms((cur) => cur.filter((f) => f.id !== formId));
+        // Sync the shared cache to server truth so a later warm-first load can't restore the row.
+        void warmProcessingFormsCache({ force: true });
     }, []);
 
     return useMemo(
