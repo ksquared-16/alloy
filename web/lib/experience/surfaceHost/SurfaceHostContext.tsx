@@ -34,6 +34,7 @@ import {
 import { surfaceHostShouldRenderWorkUnit } from "@/lib/experience/surfaceHost/surfaceHostRender";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { attentionFromUrl, ATTENTION_SCOPE, WORKSPACE_ATTENTION_TARGET } from "@/lib/runtime/kernel/attention";
+import { surfaceIdFor } from "@/lib/runtime/kernel/focus";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { subscribeWorkspaceReturn } from "@/lib/experience/surfaceHost/workspaceReturnIntent";
 import { ProvisionedWorkUnitSurface } from "@/components/presentation/workUnit/ProvisionedWorkUnitSurface";
@@ -176,10 +177,29 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     // (`desiredIsWorkspace`) is what recedes it — otherwise a stale committed Work Unit would keep the
     // retained Workspace hidden forever, and Home would appear to "never load" (Kelly A2).
     const committed = focus.current;
+
+    // ── ATOMIC OPERATIONAL COMMIT / NO-MIXED-DESTINATION INVARIANT (Kelly) ──
+    // K3 `current` never un-commits, so during a movement to a DIFFERENT surface it still holds the
+    // surface being left (or a leftover retained after a Workspace detour). Rendering it while the
+    // operator has moved to another destination shows a MIXED destination — e.g. the New Leads route
+    // over a retained Registration queue + Focus Panel (New Leads and Registration are distinct Work
+    // Views of one Work Unit; `surfaceIdFor` = `target::lens` distinguishes them). The Host must render
+    // a committed surface ONLY when its identity matches where attention now points; otherwise the
+    // destination has not been committed yet and the single "Thinking…" owner shows until the atomic
+    // commit catches up. A subject/aspect movement inside the same surface keeps the same surfaceId, so
+    // it is unaffected (no false Thinking on row selection).
+    const desired = focus.desired;
+    const committedMatchesDesired =
+        committed != null &&
+        (desired == null ||
+            desired.target === WORKSPACE_ATTENTION_TARGET ||
+            surfaceIdFor(committed.ref) === surfaceIdFor(desired));
+
     const showWorkUnit =
         committed != null &&
         committed.ref.target !== WORKSPACE_ATTENTION_TARGET &&
-        !desiredIsWorkspace;
+        !desiredIsWorkspace &&
+        committedMatchesDesired;
 
     // ── THE OUTGOING YIELD (C-36) — the Workspace visibly recedes the instant the operator commits to
     //    leaving it, and is HELD (mounted, out of the way) once the Work Unit reveals. The kernel models
@@ -200,7 +220,16 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     // the centered Alloy loader as the single owner instead of blank. On a gesture entry FROM the
     // Workspace the route stays `/workspace`, so the retained Workspace recedes and this never fires.
     const routeIsWorkUnit = surfaceHostShouldRenderWorkUnit(surfaceRefFromPath(pathname));
-    const showWorkUnitLoader = routeIsWorkUnit && !showWorkUnit && !desiredIsWorkspace;
+    // A WORK-UNIT → WORK-UNIT surface exchange (e.g. a Work View pill switch, or re-entering a Work
+    // View whose Work Unit still holds a DIFFERENT committed surface). Here the committed surface is a
+    // Work Unit that does not match the desired destination, so it must not render (mixed), and the
+    // retained Workspace must NOT be revealed either (the operator is inside a Work Unit, not returning
+    // Home). The canonical "Thinking…" owner holds the region until the destination commits atomically.
+    // This does not rely on `usePathname` (which does not track the `replaceState` address), so it is
+    // correct even when the route projection has not yet reached Next's router.
+    const committedIsWorkUnit = committed != null && committed.ref.target !== WORKSPACE_ATTENTION_TARGET;
+    const workUnitExchange = committedIsWorkUnit && !committedMatchesDesired && !desiredIsWorkspace;
+    const showWorkUnitLoader = !showWorkUnit && !desiredIsWorkspace && (routeIsWorkUnit || workUnitExchange);
 
     return (
         <SurfaceHostContext.Provider value={value}>
