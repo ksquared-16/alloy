@@ -38,6 +38,12 @@ function resolveBuildSha(): string {
 const BUILD_SHA = resolveBuildSha();
 
 const nextConfig: NextConfig = {
+  /**
+   * Production-cert build isolation: when `ALLOY_PROD_CERT_DIST` is set, build/serve from a SEPARATE
+   * output dir so a `next build` for performance certification never clobbers the running `next dev`
+   * server's `.next` (the one the operator's browser is on). Unset → default `.next` (dev unaffected).
+   */
+  ...(process.env.ALLOY_PROD_CERT_DIST ? { distDir: ".next-prodcert" } : {}),
   /** Build SHA inlined for client + server (see resolveBuildSha) — proves the deployed commit. */
   env: {
     NEXT_PUBLIC_BUILD_SHA: BUILD_SHA,
