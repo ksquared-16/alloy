@@ -45,13 +45,38 @@ The "warm 63 ms adjacent" only ever held for RE-VISITED subjects (completed-answ
 default view slug coincide), which is why the warm paths measure clean. The resolver makes the
 fracture structurally impossible ONCE producers/consumers key on the resolved `DestinationId`.
 
-**Remaining wire (Kelly's directive — runtime consumes DestinationId, never the URL):** K1 AttentionRef
-must carry the resolved `DestinationId`; prewarm, `consumeFreshProvisioning`, K2 `provisioningKey`, and
-the Prepared store must key on `destinationIdKey`; `urlFromAttention` projects it back to a clean URL.
-Open architecture choice: how the resolved identity reaches the client — **server-stamped on Workspace
-links** (matches the server-authored-graph doctrine; the landing builder already resolves
-`(workUnitId, workViewId)`) vs a **client-held catalog** the client resolves against. Recommend
-server-stamped.
+**Delivery mechanism (decided by Kelly): server-stamped on Workspace links.** The landing builder
+already resolves each work-view entry to `host_work_unit_id` + `work_view_id`
+(`buildOperatorLifecycleLanding` → `workViewNavEntriesForDepartment`, via
+`resolveWorkViewCanonicalLocation` — the SAME host precedence the slug resolver uses). So the resolved
+`DestinationId` is stamped onto the link model server-side; direct cold-URL learns identity from the
+provisioning answer (`workUnit.id` + `activeWorkView.id`).
+
+**Remaining wire — exact sequence (K1 foundation LANDED `052dec1da`; AttentionRef now carries
+`destination: DestinationId | null`, inert):**
+1. **Producer stamp** — add `destination: DestinationId | null` to `WorkViewLinkModel` +
+   `ProcessTileModel` (`lib/presentation/runtime/types.ts`); populate from `host_work_unit_id` +
+   `work_view_id` where the link models are assembled from the landing preview.
+2. **Gesture** — `useWorkUnitEntryGesture` accepts the link's `DestinationId` and passes it on
+   `attention.move({ scope: SURFACE, destination })` / `hydrate({ destination })`.
+3. **Canonical provisioning key** — `workUnitProvisioningPrefetch`: add an optional
+   `destinationKey` to `prefetchWorkUnitProvisioning` / `consumeFreshProvisioning`; when present it is
+   `destinationIdKey({ ...ref.destination, subjectId: ref.subject })` and BOTH prewarm and consume key
+   on it (URL only as the fetch address, never the cache identity). K2 `workUnitEntryResourceClient`
+   derives it from `ref.destination` + `ref.subject`.
+4. **Workspace + adjacency prewarm** — supply the same `destinationKey` (workspace entry prewarm from
+   the link's DestinationId; `prewarmSubjectDestination` from the committed `ref.destination`).
+5. **K2 `provisioningKey`** — key on `destinationIdKey` when `ref.destination` present (keep slug key
+   only for un-resolved direct-URL first fetch, which has no anticipatory counterpart to fracture).
+6. **Prepared store** — wire `preparedDestinationStore` as the anticipatory owner keyed by the same id.
+7. **`urlFromAttention`** — unchanged (clean URLs); optionally project from `destination` later.
+8. **Browser cert of the collapse**: prewarm via the tile CTA slug, click a default work-view row (or
+   vice versa) → single prepared HIT (today they would key differently in a tenant where the slugs
+   diverge; here they coincide, so add a synthetic divergent-slug cert or a unit test at the seam).
+
+Guard: the fracture is LATENT in Firefly (CTA slug == default-view slug), so re-cert must construct a
+divergent case; the `resolveOperationalDestination` unit test already proves the collapse at the
+contract level (5 green).
 
 ## Mission summary
 
