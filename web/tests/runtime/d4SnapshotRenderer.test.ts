@@ -25,6 +25,7 @@ const presentation = {
     queue: {
         rowVariant: "crm_compact",
         rowSlots: { subject: {}, status: {}, contact: {}, attention: {}, work: {}, groupCount: {} },
+        rowVariants: [],
         fallbackSlots: [],
         published: true,
     },
@@ -54,6 +55,7 @@ const base = {
     currentBusinessState: { stageKey: "lead", stageLabel: "New Lead", purpose: "p", workTemplateKey: "contact_family", workTemplateLabel: "Contact Family", required: true },
     primaryAction: { actionRef: "quick_message", label: "Contact Family", workTemplateKey: "contact_family" },
     presentation,
+    actionsProjection: { count: 0, actions: [] },
     timings: { authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0, presentation_ms: 0, records_ms: 0, projection_ms: 0, composition_ms: 0, total_ms: 1 },
 };
 
@@ -105,10 +107,28 @@ describe("D4 — snapshot renderer", () => {
         expect(m.header.kpis.every((k) => k.pending === true)).toBe(true);
         expect(m.header.kpis.every((k) => k.formattedValue === "")).toBe(true);
         expect(m.header.kpis[0].label).toBe("Needs attention"); // the slot is laid out NOW
-        // Counts and rail: reserved, not missing.
+        // Counts: reserved, not missing.
         expect(m.queue.totalCount).toBeNull();
         expect(m.workViews.every((v) => v.count === null)).toBe(true);
+        // Rail with NO resolved actions renders empty (reserved) — never a fabricated count.
         expect(m.rightRailActions).toEqual([]);
+    });
+
+    it("B — the resolved Actions projection commits WITH the surface (count at commit, no flash)", () => {
+        const withActions = {
+            ...operational,
+            actionsProjection: {
+                count: 2,
+                actions: [
+                    { key: "send_form", label: "Send Form", description: null, action_type: "workflow", icon: null, style: null, display_style: "button", payload: {}, workflow_id: "wf-1" },
+                    { key: "schedule_tour", label: "Schedule Tour", description: null, action_type: "workflow", icon: null, style: null, display_style: "button", payload: {}, workflow_id: "wf-2" },
+                ],
+            },
+        } as unknown as ProvisioningAnswer;
+        const m = workUnitSurfaceModelFromSnapshot(withActions);
+        // The count + identities are present in the FIRST frame — no Actions(0) flash, no late discovery.
+        expect(m.rightRailActions).toHaveLength(2);
+        expect(m.rightRailActions.map((a) => a.key)).toEqual(["send_form", "schedule_tour"]);
     });
 
     it("authoritative empty: rows [] with NO error — distinct from error by construction", () => {

@@ -79,6 +79,8 @@ import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts"
 import { queueRowSurfaceIdForDepartment } from "@/lib/presentation/runtime/workUnitSurfaceConfigFetch";
 import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
 import { cachedConfigRead } from "./configReadCache";
+import { loadRightRailActionsBundleServer } from "@/lib/workspace/loadRightRailActionsBundleServer";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import {
     resolveOpportunityStageWorkSlice,
     type OpportunityStageWorkSlice,
@@ -138,6 +140,22 @@ export type TruthfulPrimaryAction = {
 
 export type FocusPanelScopeStateKind = "in_scope" | "no_active_view" | "out_of_scope";
 
+/**
+ * COMMIT-CRITICAL ACTIONS PROJECTION (B — Work Unit Actions Runtime). The resolved right-rail action
+ * set for this Work Unit, from the SAME `/process`-published resolver Workspace consumes
+ * (`loadRightRailActionsBundleServer` → `resolveActionsForContext`). Carried in the answer so the
+ * count + identities + availability/order/placement commit WITH the surface — no Actions(0) flash, no
+ * post-commit layout discovery. Each `ResolvedActionForClient` already encodes availability (it is
+ * only present when applicable), order (resolver order), and placement (`display_style`). Degrades to
+ * an empty projection on any resolver error — never fails the operational answer.
+ */
+export type WorkUnitActionsProjection = {
+    count: number;
+    actions: ResolvedActionForClient[];
+};
+
+const EMPTY_ACTIONS_PROJECTION: WorkUnitActionsProjection = { count: 0, actions: [] };
+
 export type ProvisioningAnswer =
     | {
           terminal: "operational";
@@ -190,6 +208,8 @@ export type ProvisioningAnswer =
            * renderer never reads this; a `status: "unavailable"` here never makes the surface non-operational.
            */
           settlement: SettlementLocators;
+          /** B — resolved right-rail Actions, committed WITH the surface (count at commit, no flash). */
+          actionsProjection: WorkUnitActionsProjection;
           timings: ProvisioningTimings;
       }
     | {
@@ -208,6 +228,8 @@ export type ProvisioningAnswer =
           presentation: OperationalPresentation;
           /** D5 — Settlement-only locators (see the operational variant). */
           settlement: SettlementLocators;
+          /** B — resolved right-rail Actions, committed WITH the surface (see the operational variant). */
+          actionsProjection: WorkUnitActionsProjection;
           timings: ProvisioningTimings;
       }
     | {
@@ -488,6 +510,23 @@ export async function composeWorkUnitProvisioningAnswer(
     // await at the assembly join re-sees any rejection so a genuine failure still surfaces 1:1.
     void presentationPromise.catch(() => {});
 
+    // ── B: COMMIT-CRITICAL ACTIONS PROJECTION — resolve the right-rail action set CONCURRENTLY with the
+    // presentation branch (it depends only on org + department + work unit, all known here). The SAME
+    // `/process`-published resolver Workspace uses, config-cached (`act:` prefix, busted on an action
+    // publish), and non-fatal: any resolver error degrades to an empty projection — never fails the answer.
+    const actionsProjectionPromise: Promise<WorkUnitActionsProjection> = wuRow.department_id
+        ? cachedConfigRead(`act:${req.orgId}:${workUnit.id}`, () =>
+              loadRightRailActionsBundleServer({
+                  orgId: req.orgId,
+                  departmentId: String(wuRow.department_id),
+                  workUnitId: workUnit.id,
+              }),
+          )
+              .then((actions) => ({ count: actions.length, actions }))
+              .catch(() => EMPTY_ACTIONS_PROJECTION)
+        : Promise.resolve(EMPTY_ACTIONS_PROJECTION);
+    void actionsProjectionPromise.catch(() => {});
+
     // ── §6: Row Grain explicit, Stage-owned. Grain-ambiguous config is refused honestly. ──
     const grain = resolveLensRowGrain(activeView, stages);
     if (!grain.ok) return fail("grain_ambiguous", `Work View "${activeView.label}": ${grain.reason}`, workUnit);
@@ -540,6 +579,8 @@ export async function composeWorkUnitProvisioningAnswer(
     // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
     const presentation = await presentationPromise;
     timings.presentation_ms = now() - tPres;
+    // B: the actions projection ran concurrently above — join it here (no serial latency added).
+    const actionsProjection = await actionsProjectionPromise;
 
     // ── U-O6 AUTHORITATIVE EMPTY — a workable place, never confused with error. ──
     if (rows.length === 0) {
@@ -559,6 +600,7 @@ export async function composeWorkUnitProvisioningAnswer(
             focusPanelScopeState: resolveFocusPanelScope({ record: null, activeView }).kind,
             presentation,
             settlement,
+            actionsProjection,
             timings,
         };
     }
@@ -650,6 +692,7 @@ export async function composeWorkUnitProvisioningAnswer(
         focusPanelStageWork,
         presentation,
         settlement,
+        actionsProjection,
         timings,
     };
     timings.composition_ms = now() - tComp;
