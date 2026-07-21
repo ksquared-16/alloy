@@ -305,7 +305,10 @@ describe("Configuration Runtime — Locations", () => {
         expect(panels).not.toContain("PlacementPrioritySettingsClient");
         expect(panels).not.toContain("CommunicationsSetupClient");
         expect(panels).not.toContain("UsersRolesSettingsClient");
-        expect(panels).toContain("/api/admin/settings/users-roles/members");
+        expect(panels).toContain("loadLocationAccessMembers");
+        expect(read("lib/locations/locationConcernCache.ts")).toContain(
+            "/api/admin/settings/users-roles/members",
+        );
         expect(panels).toContain("/access-scope");
         expect(panels).toContain("department_scope: member.department_scope");
         expect(panels).toContain("PriorityRuleOrderEditor");
@@ -421,10 +424,34 @@ describe("Configuration Runtime — Locations", () => {
         expect(adapter).toContain("shouldSyncRoute");
         expect(page).toContain("retainedLocationId");
         expect(page).toContain("shouldSyncRoute");
-        expect(page).toContain("router.push(locationWorkspaceHref");
-        expect(page).toContain("router.replace(locationWorkspaceHref(selectedId");
+        expect(page).toContain("router.push(locationConcernHref");
+        expect(page).toContain("router.replace(locationConcernHref(selectedId");
         expect(continuity).toContain("ORGANIZATION_LOCATIONS_PATH");
         expect(routes).toContain('ORGANIZATION_LOCATIONS_PATH = `${CANONICAL_ORGANIZATION_BASE}/locations`');
         expect(nextConfig).toContain('source: "/organization/locations"');
+    });
+
+    it("Checkpoint C — nested concern continuity wiring", () => {
+        const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
+        const contract = read("lib/locations/locationConcernContract.ts");
+        const cache = read("lib/locations/locationConcernCache.ts");
+        const route = read("app/adminV2/settings/locations/page.tsx");
+        const panels = read("components/adminV2/settings/locations/LocationOwnedConcernPanels.tsx");
+        const tabs = read(
+            "components/adminV2/settings/configurationRuntime/workspace/ConfigWorkspaceTabBar.tsx",
+        );
+
+        expect(contract).toContain("LOCATION_CONCERN_REGISTRY");
+        expect(contract).toContain("shouldApplyLocationConcernResponse");
+        expect(cache).toContain("loadLocationAccessMembers");
+        expect(cache).toContain("loadLocationPlacementPolicy");
+        expect(route).toContain("resolveActiveLocationConcern");
+        expect(page).toContain("prefetchConcernIntent");
+        expect(page).toContain("locations-access-keepalive");
+        expect(page).toContain("onSectionIntent={prefetchConcernIntent}");
+        expect(page).toContain("locationConcernHref");
+        expect(panels).toContain("projectLocationConcernTransition");
+        expect(panels).toContain("loadLocationPlacementPolicy");
+        expect(tabs).toContain("onSectionIntent");
     });
 });
