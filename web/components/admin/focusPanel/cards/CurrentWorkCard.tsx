@@ -474,17 +474,8 @@ export default function CurrentWorkCard({
             />
         :   <SummaryBody
                 surface={surface}
-                primaryWorkItem={vm.primaryWorkItem}
-                opportunityId={opportunityId}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
-                onOpenWork={() => openWorkspace({ kind: "drill_in" })}
-                openWorkTriggerRef={openWorkspaceTriggerRef}
-                activityPreviewOpen={activityPreviewOpen}
-                onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
-                onCloseActivityPreview={handleCloseActivityPreview}
-                onViewFullActivity={handleViewFullActivity}
-                activityPreviewItems={activityPreviewItems}
             />;
 
     return (
@@ -516,11 +507,11 @@ export default function CurrentWorkCard({
 }
 
 /**
- * What's Next readiness — the operator-facing replacement for the progress meter. Splits the View
- * Model's existing `readiness.requirements.items` into "Ready to continue" (satisfied) and "Still
- * needed" (outstanding). No percentage, no meter: readiness is a state, not a score. Still-needed
- * items hand off to their owning card via the existing checklist navigation. Derives entirely from
- * the View Model — no new runtime, no new field.
+ * What's Next readiness — a CONCISE summary, not the full field checklist. Shows only the OUTSTANDING
+ * requirements ("Still needed"); the complete/satisfied field inventory is owned by the Required
+ * Information card and is deliberately not reproduced here (that dump is where duplicate labels and
+ * internal identifiers leaked). Deduplicates by label and caps, with a handoff to Required Information
+ * for the rest. Derives entirely from the View Model — no new runtime, no new field.
  */
 export function ReadinessSummary({
     surface,
@@ -530,28 +521,26 @@ export function ReadinessSummary({
     onNavigate: (item: CurrentWorkChecklistItemVM) => void;
 }) {
     const items: CurrentWorkChecklistItemVM[] = surface.readiness.requirements?.items ?? [];
-    if (items.length === 0) {
-        return surface.readiness.reasonLabel ?
-                <div className="alloy-os-currentwork__readiness-block" data-work-readiness="true">
-                    <p className="alloy-os-currentwork__readiness-reason">{surface.readiness.reasonLabel}</p>
-                </div>
-            :   null;
-    }
-    const ready = items.filter((item) => item.status === "complete");
-    const stillNeeded = items.filter((item) => item.status !== "complete");
+    const seen = new Set<string>();
+    const stillNeeded = items.filter((item) => {
+        if (item.status === "complete") return false;
+        const key = item.label.trim().toLowerCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+    if (stillNeeded.length === 0) return null;
+    const CAP = 4;
+    const visible = stillNeeded.slice(0, CAP);
+    const overflow = stillNeeded.length - visible.length;
     return (
-        <div className="alloy-os-currentwork__readiness-block" data-work-readiness="true">
-            {ready.length > 0 ?
-                <div className="alloy-os-currentwork__readiness-group" data-work-readiness-group="ready">
-                    <p className="alloy-os-currentwork__readiness-reason">Ready to continue</p>
-                    <ChecklistStepper items={ready} onNavigate={onNavigate} />
-                </div>
-            :   null}
-            {stillNeeded.length > 0 ?
-                <div className="alloy-os-currentwork__readiness-group" data-work-readiness-group="still-needed">
-                    <p className="alloy-os-currentwork__readiness-reason">Still needed</p>
-                    <ChecklistStepper items={stillNeeded} onNavigate={onNavigate} />
-                </div>
+        <div className="alloy-os-currentwork__readiness-block" data-work-readiness="true" data-work-readiness-group="still-needed">
+            <p className="alloy-os-currentwork__readiness-reason">Still needed</p>
+            <ChecklistStepper items={visible} onNavigate={onNavigate} />
+            {overflow > 0 ?
+                <p className="alloy-os-currentwork__disclosure-overflow">
+                    +{overflow} more in Required information
+                </p>
             :   null}
         </div>
     );
@@ -617,54 +606,14 @@ function ChecklistStepper({
     );
 }
 
-function WorkPrimaryCard({
-    action,
-    onAction,
-}: {
-    action: CurrentWorkActionVM;
-    onAction: (action: CurrentWorkActionVM) => void;
-}) {
-    return (
-        <button
-            type="button"
-            className="alloy-os-currentwork__work-primary"
-            data-work-primary-action={action.key}
-            onClick={() => onAction(action)}
-        >
-            <span className="alloy-os-currentwork__work-primary-label">{action.label}</span>
-            {action.description ?
-                <span className="alloy-os-currentwork__work-primary-desc">{action.description}</span>
-            :   null}
-        </button>
-    );
-}
-
 function SummaryBody({
     surface,
-    primaryWorkItem,
-    opportunityId,
     onChecklistItem,
     onAction,
-    onOpenWork,
-    openWorkTriggerRef,
-    activityPreviewOpen,
-    onToggleActivityPreview,
-    onCloseActivityPreview,
-    onViewFullActivity,
-    activityPreviewItems,
 }: {
     surface: CurrentWorkSurfaceVM;
-    primaryWorkItem: CurrentWorkSurfaceVM["primaryWorkItem"];
-    opportunityId: string;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
-    onOpenWork: () => void;
-    openWorkTriggerRef?: React.RefObject<HTMLButtonElement | null>;
-    activityPreviewOpen: boolean;
-    onToggleActivityPreview: () => void;
-    onCloseActivityPreview: () => void;
-    onViewFullActivity?: () => void;
-    activityPreviewItems: CurrentWorkActivityPreviewItem[];
 }) {
     const primary =
         surface.primaryAction
@@ -676,6 +625,12 @@ function SummaryBody({
         surface.recordOutcomeAction && isCurrentWorkActionExecutable(surface.recordOutcomeAction)
             ? surface.recordOutcomeAction
             : null;
+    // ONE dominant action = the configured command; when work is outcome-led (no command), declaring
+    // the outcome IS the obligation, so it leads. Everything else (helpful actions, outcome access)
+    // stays visually subordinate. Runtime-derived — labels are never invented here.
+    const dominant = primary ?? recordOutcome;
+    const subordinateOutcome = primary ? recordOutcome : null;
+    const helpful = surface.supportingActions.filter(isCurrentWorkActionExecutable).slice(0, 2);
 
     return (
         <div
@@ -685,38 +640,44 @@ function SummaryBody({
             aria-label="What's Next summary"
         >
             <div className="alloy-os-currentwork__summary-controls">
-                <div className="alloy-os-currentwork__primary-row" data-work-primary-row="true">
-                    {primary ? <WorkPrimaryCard action={primary} onAction={onAction} /> : null}
-                    {recordOutcome ?
+                {dominant ?
+                    <div className="alloy-os-currentwork__primary-row" data-work-primary-row="true">
                         <button
                             type="button"
-                            className={clsx(
-                                "alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary",
-                                !primary ? "alloy-os-currentwork__record-outcome--strong" : null,
-                            )}
-                            data-work-action="record-outcome"
-                            onClick={() => onAction(recordOutcome)}
+                            className="alloy-os-currentwork__primary-action"
+                            data-work-primary-action={dominant.key}
+                            data-work-action={dominant === recordOutcome ? "record-outcome" : undefined}
+                            onClick={() => onAction(dominant)}
                         >
-                            {recordOutcome.label}
+                            {dominant.label}
                         </button>
-                    :   null}
-                    <button
-                        ref={openWorkTriggerRef}
-                        type="button"
-                        className="alloy-os-currentwork__open-work"
-                        onClick={onOpenWork}
-                        data-work-action="open-work"
-                    >
-                        Open workspace →
-                    </button>
-                </div>
-                {/* WHAT'S NEXT — obligation-first. The obligation and why sit in the card header
-                    (title + supporting insight); the summary body leads with the action, then presents
-                    readiness as "Ready to continue / Still needed" (ReadinessSummary) derived from the
-                    View Model's requirements — no progress meter or percentage. Workspace-level,
-                    SETTLEMENT-derived affordances (More actions, Other transitions, recent Activity)
-                    remain in the drill-in workspace ("Open workspace →", presentation="workspace");
-                    settlement enriches this summary, it does not rebuild it. */}
+                        {helpful.map((action) => (
+                            <button
+                                key={action.key}
+                                type="button"
+                                className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                                data-work-supporting-action={action.key}
+                                onClick={() => onAction(action)}
+                            >
+                                {action.label}
+                            </button>
+                        ))}
+                        {subordinateOutcome ?
+                            <button
+                                type="button"
+                                className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                                data-work-action="record-outcome"
+                                onClick={() => onAction(subordinateOutcome)}
+                            >
+                                {subordinateOutcome.label}
+                            </button>
+                        :   null}
+                    </div>
+                :   null}
+                {/* WHAT'S NEXT — obligation-first. Obligation + one concise why live in the card header;
+                    the body leads with ONE dominant action, keeps secondary actions and outcome access
+                    visually subordinate, and shows a concise "Still needed" readiness summary. Detailed
+                    completeness is owned by the Required Information card and is not reproduced here. */}
                 <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
             </div>
         </div>

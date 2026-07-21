@@ -197,7 +197,7 @@ describe("Progress bar and density", () => {
     // summary presents progress + Open Workspace only; the workspace-level, settlement-derived
     // affordances (Quick actions / Other transitions / recent activity) are NOT in the summary — they
     // moved to the drill-in workspace (presentation="workspace"). See CurrentWorkCard SummaryBody.
-    it("collapsed summary shows readiness and Open Work, not workspace-level affordances", () => {
+    it("collapsed summary is obligation-first, not workspace-level affordances", () => {
         const published = resolvePublishedStageInputsForCurrentWork({
             departmentMetadata: enrollmentLeadWithFieldRulesPublishedDepartmentMetadata(),
             builderStageKey: "lead",
@@ -214,9 +214,9 @@ describe("Progress bar and density", () => {
                 })}
             />,
         );
-        // Commit-critical operational summary: readiness + the open-workspace affordance.
-        expect(html).toContain('data-work-readiness="true"');
-        expect(html).toContain('data-work-action="open-work"');
+        // Obligation-first summary; no "Open workspace" affordance competing with the action.
+        expect(html).toContain('data-work-summary="true"');
+        expect(html).not.toContain("Open workspace");
         // Workspace-level / settlement-derived affordances are NOT committed in the summary.
         expect(html).not.toContain("Quick actions");
         expect(html).not.toContain("Other transitions");

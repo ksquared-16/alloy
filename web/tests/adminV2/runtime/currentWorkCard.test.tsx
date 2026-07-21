@@ -151,8 +151,9 @@ describe("CurrentWorkCard", () => {
         expect(html).not.toContain("Review Lead");
         expect(html).toContain('data-current-work-surface="true"');
         expect(html).toContain('data-work-card-perspective="summary"');
-        expect(html).toContain('data-work-action="open-work"');
-        expect(html).toContain("Open work");
+        // Obligation-first: no "Open workspace" competing, no progress meter (both removed in M1).
+        expect(html).not.toContain("Open workspace");
+        expect(html).not.toContain("data-work-progress");
     });
 
     it("routes Contact Family through resolveWorkItemHandoff — not dead panel copy", () => {
@@ -261,17 +262,17 @@ describe("CurrentWorkCard", () => {
                 context={context()}
             />,
         );
-        // Obligation + summary preserved.
+        // Obligation preserved; no "Open workspace" competing (removed in M1).
         expect(html).toContain("Contact Family");
         expect(html).toContain('data-work-summary="true"');
-        expect(html).toContain('data-work-action="open-work"');
+        expect(html).not.toContain("Open workspace");
         // No progress meter / percentage / "N of M complete" framing.
         expect(html).not.toContain("data-work-progress");
         expect(html).not.toContain("__progress-bar");
         expect(html).not.toContain("requirements complete");
     });
 
-    it("M1 — ReadinessSummary presents Ready to continue / Still needed from the View Model", () => {
+    it("M1 — ReadinessSummary shows a concise Still needed summary, not the satisfied field checklist", () => {
         const surface = {
             readiness: {
                 state: "in_progress",
@@ -289,13 +290,15 @@ describe("CurrentWorkCard", () => {
             },
         } as unknown as CurrentWorkSurfaceVM;
         const html = renderToStaticMarkup(<ReadinessSummary surface={surface} onNavigate={() => {}} />);
-        expect(html).toContain("Ready to continue");
-        expect(html).toContain("Family contacted");
+        // Only the OUTSTANDING requirement is summarized; the satisfied field is NOT reproduced
+        // (Required Information owns detailed completeness).
         expect(html).toContain("Still needed");
         expect(html).toContain("Classroom");
-        expect(html).toContain('data-work-readiness-group="ready"');
+        expect(html).not.toContain("Ready to continue");
+        expect(html).not.toContain("Family contacted");
         expect(html).toContain('data-work-readiness-group="still-needed"');
-        // Readiness is a state, not a score — no percentage or progress meter.
+        expect(html).not.toContain('data-work-readiness-group="ready"');
+        // A state, not a score — no percentage or progress meter.
         expect(html).not.toContain("%");
         expect(html).not.toContain("Progress");
     });

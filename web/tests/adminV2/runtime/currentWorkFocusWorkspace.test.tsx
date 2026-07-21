@@ -254,8 +254,9 @@ describe("Current Work Focus workspace composition", () => {
             "utf8",
         );
         expect(source).toContain('presentation?: "summary" | "workspace"');
+        // The workspace is still reachable (it hosts the outcome picker) via openCurrentWorkWorkspace,
+        // but M1 removed the standalone "Open workspace" affordance from the obligation-first summary.
         expect(source).toContain("openCurrentWorkWorkspace");
         expect(source).not.toContain("setFocused(true)");
-        expect(source).toContain("Open workspace");
     });
 });
