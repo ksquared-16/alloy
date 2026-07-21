@@ -33,7 +33,6 @@ export type FormFieldRulesCoverageSummary = "complete" | "partial" | "unknown";
 export type EnrollmentProcessFormCoverageRow = {
     form_id: string;
     form_name: string;
-    href: string;
     intake_type_label: string;
     captures: string[];
     requirement_rows: FormRequirementCoverageRow[];
@@ -283,7 +282,6 @@ export function buildEnrollmentProcessFormCoverageRows(input: {
         rows.push({
             form_id: form.id,
             form_name: form.name,
-            href: `/adminV2/forms/${form.id}`,
             intake_type_label,
             captures: capture.labels,
             requirement_rows,

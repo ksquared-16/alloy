@@ -6,7 +6,6 @@ import { act } from "react";
 
 import {
     isCanonicalAiActivityPath,
-    isCanonicalFormsPath,
     isCanonicalSettingsPath,
     isCanonicalWorkflowsPath,
     isCanonicalWorkspacePath,
@@ -92,8 +91,7 @@ describe("Alloy OS performance pass", () => {
             isCanonicalWorkspacePath(path) ||
             isCanonicalAiActivityPath(path) ||
             isCanonicalSettingsPath(path) ||
-            isCanonicalWorkflowsPath(path) ||
-            isCanonicalFormsPath(path);
+            isCanonicalWorkflowsPath(path);
         for (const route of operatorRoutes) {
             expect(inPersistentShellBranch(route)).toBe(true);
         }

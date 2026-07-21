@@ -193,11 +193,6 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.layoutsPresentation,
             },
             {
-                href: "/admin/forms",
-                label: "Forms & packets",
-                description: "Intake forms and enrollment packets.",
-            },
-            {
                 href: settings("analytics"),
                 label: "Operational Intelligence",
                 description: "Performance packs, targets, and where indicators appear.",

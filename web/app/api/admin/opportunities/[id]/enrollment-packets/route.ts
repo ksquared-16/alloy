@@ -6,6 +6,7 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { dbListSubmissionLinkedDocumentsForSubmissionIds } from "@/lib/admin/forms/formsAdminDb";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertExistingOpportunityMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -201,7 +202,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             const subId = it.form_submission_id as string | null;
             const formDefId = subId ? submissionFormDef[subId] : fdid;
             const adminPath =
-                formDefId && subId ? `/admin/forms/${formDefId}/submissions/${subId}` : null;
+                formDefId && subId ? `${ADMIN_FORMS_UI_BASE}/${formDefId}/submissions/${subId}` : null;
             return {
                 sequence_index: it.sequence_index as number,
                 status: it.status as string,
@@ -256,7 +257,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             step_count: enrichedItems.length,
             submitted_step_count: submittedStepCount,
             items: enrichedItems,
-            admin_packet_review_path: `/adminV2/forms/packets/${sid}`,
+            admin_packet_review_path: `${ADMIN_FORMS_UI_BASE}/${sid}`,
         };
     });
 

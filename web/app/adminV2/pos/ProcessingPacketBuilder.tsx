@@ -9,6 +9,7 @@ import { mergeFormListWithPacketItems, type PacketStepFormOption } from "@/lib/a
 import { trimLeadingEmptyStepRows } from "@/lib/admin/forms/packetStepRecentFormPlacement";
 import { countSessionsByPacketDefinition } from "@/lib/forms/packets/packetOrchestrationPresentation";
 import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
+import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
 
 type PacketItem = {
     id: string;
@@ -330,6 +331,9 @@ export default function ProcessingPacketBuilder({
                             onRemoveStep={removeStep}
                             onMintLink={() => void mintLink()}
                             onToggleLink={(link, next) => void toggleLink(link, next)}
+                            onOpenWorkQueue={() =>
+                                dispatchAdminV2OpenProcessingModal({ mode: "work", workView: "work" })
+                            }
                         />
                     </>
                 )}

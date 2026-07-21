@@ -17,8 +17,17 @@ import PosProcessingWorkspace from "@/app/adminV2/pos/PosProcessingWorkspace";
 import ProcessingFormsStudio from "@/app/adminV2/pos/ProcessingFormsStudio";
 import type { ProcessingStudioTab } from "@/app/adminV2/pos/ProcessingStudioShell";
 import { ADMIN_V2_OPEN_PROCESSING_CASE, type OpenProcessingCaseDetail } from "@/lib/workItems/workItemsNavigation";
+import type { ProcessingModalIntent } from "@/lib/adminV2/workspaceModalEvents";
 
-export default function ProcessingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function ProcessingModal({
+    open,
+    onClose,
+    intent,
+}: {
+    open: boolean;
+    onClose: () => void;
+    intent?: ProcessingModalIntent | null;
+}) {
     const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
     const [mode, setMode] = useState<DigitalMailroomMode>("work");
     const [workView, setWorkView] = useState<DigitalMailroomWorkView>("overview");
@@ -66,6 +75,28 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
         window.addEventListener(ADMIN_V2_OPEN_PROCESSING_CASE, onOpenCase as EventListener);
         return () => window.removeEventListener(ADMIN_V2_OPEN_PROCESSING_CASE, onOpenCase as EventListener);
     }, [open, openCase]);
+
+    // Deep-link intent (Studio→Forms/Packets at a resource, or Work at the queue/a case) is applied
+    // once when the modal opens. Former `/admin/forms…` links now route through this so a link that
+    // identified a specific form/packet/case opens the Mailroom AT that resource.
+    useEffect(() => {
+        if (!open || !intent) return;
+        if (intent.mode === "studio") {
+            setMode("studio");
+            setStudioTab(intent.studioTab ?? "forms");
+            setStudioFormId(intent.formId ?? null);
+            setStudioFormName(intent.formName ?? null);
+        } else {
+            setMode("work");
+            const caseId = intent.caseId?.trim() || null;
+            if (caseId) {
+                setSelectedCaseId(caseId);
+                setWorkView("work");
+            } else {
+                setWorkView(intent.workView ?? "overview");
+            }
+        }
+    }, [open, intent]);
 
 
     return (
