@@ -13,22 +13,22 @@ supersedes: []
 
 Operational Planning is **not a new truth-flow layer and not a new product**. Alloy's doctrine already reserves a **Planning *plane*** (Configuration / Planning / Operations / Records / Intelligence) and has frozen the truth-flow axis at five layers ("no sixth layer"). The discovery is that Planning is the **maturation of that plane into a first-class runtime** — a reusable `propose → simulate → optimize → commit` loop that composes primitives Alloy already built (the Expectations **Preview**, the Commercial **simulator**, the `approve_enrollment` **handoff**, **effective-dated supersede**, **registered Calculations**, the **BOS proposal lifecycle**) into one operator experience, with per-domain plugins. Scheduling is its first complete expression; Attendance, Staffing, Capacity, Commercial, and Enrollment Convergence follow with **zero new runtime**.
 
-> **Iteration 3 (what Planning actually is) — current.** Starting from operator behavior, this sprint **reverses Iteration 2**: planning begins with operational **pressure while operating on live reality**, so it lives in **Work**, not Studio (which stays config-authoring only). The deeper discovery: the operator manipulates **reality (proposed)**, not "plans." Read **[operational-planning-runtime.md](./operational-planning-runtime.md)** first — where any earlier doc disagrees, it governs — with **[planning-cross-domain-validation.md](./planning-cross-domain-validation.md)** proving the model across eight domains.
+> **Iteration 4 (what Alloy *is*) — current apex.** The sprint zoomed out past planning: Alloy is not fundamentally a platform that *manages work* — it is a platform that moves operators from **operational pressure to operational truth**: a **Decision Platform**. The missing abstractions: **Pressure = a Gap** (Expectations − Facts, already derived), **Decision** = the episode that closes a gap, **Commit** = the decision→truth boundary. It is **composition, not a new runtime** — the Decision Loop *is* the existing `Resolve→Evaluate→Preview→Commit` execution runtime. Validated across **nine domains including Processing & Communications** (the non-Scheduling certified workspaces). Read **[operational-decision-platform.md](./operational-decision-platform.md)** first; it subsumes (does not discard) Iterations 1–3 — Planning is the Scheduling *decision domain*.
 >
-> *Lineage:* Iteration 1 = the Planning plane→runtime thesis; Iteration 2 = validate-by-inheritance (correctly: Work is the Alloy spine, Alloy commits plans-not-records; **incorrectly: Planning in Studio** — withdrawn here).
+> *Lineage:* I1 Planning plane→runtime · I2 validate-by-inheritance (Work is the spine; **Studio placement later withdrawn**) · I3 Planning-in-Work, operators manipulate reality not plans · **I4 the Decision Platform** (planning is one decision domain).
 
 ## Read in this order
 
-1. **[operational-planning-runtime.md](./operational-planning-runtime.md)** — *(Iteration 3, definitive)* what Planning is: the runtime, the mental model (reality, not plans), Planning-in-Work, the lifecycle, the universal pattern.
-2. **[planning-cross-domain-validation.md](./planning-cross-domain-validation.md)** — *(Iteration 3)* the model across Attendance/Staffing/Commercial/Billing/Capacity/Forecasting/Resource/OI; the platform/Scheduling line.
-3. **[operational-planning-platform.md](./operational-planning-platform.md)** — the plane→runtime thesis, no-sixth-layer, the primitives, the plugin contract (placement corrected to Work).
-4. **[operational-plan-and-commit.md](./operational-plan-and-commit.md)** — Commit and the change lifecycle (the Plan re-cast as the back-of-house change-record).
-5. **[operational-simulation.md](./operational-simulation.md)** — Simulation as a reusable, deterministic, write-free primitive.
-6. **[operational-optimization.md](./operational-optimization.md)** — Optimization as multi-future comparison.
-7. **[scheduling-reference-implementation.md](./scheduling-reference-implementation.md)** — Scheduling as the first plugin (Work sections corrected).
-8. **[planning-focus-panel-evolution.md](./planning-focus-panel-evolution.md)** — the planning card, cross-workspace planning.
-9. **[platform-discoveries-and-roadmap.md](./platform-discoveries-and-roadmap.md)** — the classification ledger and MVP → V2 → V3 roadmap.
-10. **[studio-platform.md](./studio-platform.md)** · **[architecture-validation.md](./architecture-validation.md)** — *(Iteration 2, partially superseded)* retained for the record; Studio survives as config-authoring only.
+1. **[operational-decision-platform.md](./operational-decision-platform.md)** — *(Iteration 4, apex)* Alloy as a Decision Platform: Pressure=Gap, Decision as primitive, the Decision Loop (= existing runtime), the Commit Boundary, BOS, cross-domain — **no new runtime.**
+2. **[operational-pressure-and-decision-loop.md](./operational-pressure-and-decision-loop.md)** — *(Iteration 4)* the pressure taxonomy, the refined loop, Decision vs Action vs Work, the Resolve verb, doctrine additions.
+3. **[decision-cross-domain-validation.md](./decision-cross-domain-validation.md)** — *(Iteration 4)* the loop across nine domains incl. Processing & Communications; the platform/domain line.
+4. **[operational-planning-runtime.md](./operational-planning-runtime.md)** — *(Iteration 3)* the **Scheduling decision domain**: planning-in-Work, reality-not-plans, the lifecycle.
+5. **[planning-cross-domain-validation.md](./planning-cross-domain-validation.md)** — *(Iteration 3)* planning across eight domains (precursor to #3).
+6. **[operational-planning-platform.md](./operational-planning-platform.md)** — the plane→runtime thesis, no-sixth-layer, the primitives, the plugin contract.
+7. **[operational-plan-and-commit.md](./operational-plan-and-commit.md)** · **[operational-simulation.md](./operational-simulation.md)** · **[operational-optimization.md](./operational-optimization.md)** — the primitives (Commit, Simulation=consequence engine, Optimization=candidate generation).
+8. **[scheduling-reference-implementation.md](./scheduling-reference-implementation.md)** · **[planning-focus-panel-evolution.md](./planning-focus-panel-evolution.md)** — Scheduling specifics.
+9. **[platform-discoveries-and-roadmap.md](./platform-discoveries-and-roadmap.md)** — the classification ledger and roadmap.
+10. **[studio-platform.md](./studio-platform.md)** · **[architecture-validation.md](./architecture-validation.md)** — *(Iteration 2, partially superseded)* Studio survives as config-authoring only.
 
 ## Companion mockups
 

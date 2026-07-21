@@ -9,6 +9,8 @@ supersedes: []
 
 **Status:** Proposed — Iteration-3 discovery. This document answers the question the first two iterations circled but never settled: **what *is* Operational Planning?** It begins from operator behavior, not UI, and it **reverses the Iteration-2 conclusion that Planning lives in Studio.** Where this doc and Iterations 1–2 disagree, this doc governs.
 
+> **Elevated by Iteration 4 ([`operational-decision-platform.md`](./operational-decision-platform.md)).** Everything here is now understood as **the Scheduling *decision domain*** of a larger **Decision Platform**. Mapping: operational pressure = a **Gap** (Expectations − Facts); "propose a proposed reality" = **generate a candidate decision**; "Resolve" = open a **Decision** on a gap; "Commit" = the **decision→truth boundary**. This doc is not superseded — it is the first worked example of the platform.
+
 ---
 
 ## 1. Begin with the operator, not the screen

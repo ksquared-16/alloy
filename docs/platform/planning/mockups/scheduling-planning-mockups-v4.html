@@ -1,0 +1,293 @@
+<title>Alloy — the Decision Loop (v4)</title>
+<style>
+  :root{
+    --pine:#00A283;--pine-hover:#009276;--forge:#273F52;--ink:#18273A;--slate:#45506c;--muted:#59678b;
+    --stone:#F4F6F9;--gold:#DBC078;--gold-dark:#d0ad50;--ember:#BC4300;--blue:#00458C;--page:#EEF2F8;
+    --font:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --mid-90:rgba(39,63,82,.90);--mid-70:rgba(39,63,82,.70);--mid-62:rgba(39,63,82,.62);--mid-58:rgba(39,63,82,.58);
+    --mid-45:rgba(39,63,82,.45);--mid-42:rgba(39,63,82,.42);--mid-40:rgba(39,63,82,.40);--mid-35:rgba(39,63,82,.35);--mid-25:rgba(39,63,82,.25);
+    --stone-30:rgba(244,246,249,.30);color-scheme:light;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--page);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.45}
+  .tab{font-variant-numeric:tabular-nums} h1,h2,h3,h4{margin:0} button{font-family:inherit;cursor:default;border:none;background:none}
+  .gallery{max-width:1180px;margin:0 auto;padding:20px 18px 56px}
+  .g-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap;margin-bottom:14px}
+  .g-title{font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--forge)} .g-sub{font-size:12px;color:var(--muted);margin-top:3px;max-width:70ch}
+  .g-badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--gold-dark);background:rgba(219,192,120,.14);border:1px solid rgba(208,173,80,.4);padding:4px 9px;border-radius:999px}
+  .g-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:13px}
+  .g-tab{border:1px solid var(--mid-25);background:#fff;color:var(--slate);font-size:12px;font-weight:500;padding:7px 12px;border-radius:8px;cursor:pointer;transition:all .15s}
+  .g-tab:hover{border-color:var(--pine);color:var(--pine)} .g-tab[aria-selected="true"]{border-color:var(--pine);background:rgba(0,162,131,.08);color:var(--pine);font-weight:600;box-shadow:inset 0 -2px 0 var(--pine)}
+  .g-tab:focus-visible{outline:2px solid var(--pine);outline-offset:2px} .g-note{font-size:11px;color:var(--muted);margin:0 0 12px}
+  .app{display:flex;background:var(--stone);border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(39,63,82,.10);min-height:640px}
+  .rail{width:56px;flex:0 0 56px;background:var(--forge);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px}
+  .rail-logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--pine),#0b7d68);display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;margin-bottom:8px}
+  .rail-i{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:rgba(255,255,255,.6);font-size:15px;position:relative}
+  .rail-i.on{background:rgba(255,255,255,.10);color:#fff} .rail-i.on::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--pine)}
+  .topbar{height:6px;background:var(--blue)} .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .shell{flex:1;display:flex;flex-direction:column;min-width:0;border-radius:16px;border:1px solid rgba(244,246,249,.9);background:#fff;overflow:hidden}
+  .control-band{border-bottom:1px solid var(--stone-30)}
+  .ws-header{display:flex;align-items:center;justify-content:space-between;gap:12px;border-left:2px solid var(--pine);background:#fff;padding:6px 16px 0}
+  .ws-id{display:flex;align-items:center;gap:8px;min-width:0} .ws-ico{width:24px;height:24px;display:grid;place-items:center;color:var(--forge);font-size:15px}
+  .ws-title{font-size:14px;font-weight:600;color:var(--forge);line-height:1.15} .ws-subt{font-size:11px;color:var(--slate)}
+  .ws-acts{display:flex;align-items:center;gap:6px;margin-left:auto}
+  .btn-primary{display:inline-flex;align-items:center;gap:6px;border-radius:6px;background:var(--pine);padding:6px 12px;font-size:12.5px;font-weight:600;color:#fff} .btn-primary:hover{background:var(--pine-hover)}
+  .btn-secondary{display:inline-flex;align-items:center;gap:6px;border-radius:8px;border:1px solid var(--mid-25);background:#fff;padding:6px 12px;font-size:12px;font-weight:500;color:var(--mid-70)}
+  .btn-close{display:inline-flex;align-items:center;gap:4px;border-radius:6px;border:1px solid rgba(244,246,249,.8);padding:4px 8px;font-size:11px;font-weight:600;color:var(--mid-40)}
+  .ws-modenav{background:#fff;padding:4px 16px 12px}
+  .modesplit{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px 16px;align-items:center} @media (max-width:800px){.modesplit{grid-template-columns:1fr}}
+  .modestack{display:flex;flex-direction:column;gap:8px;min-width:0} .modepills{display:flex;gap:4px}
+  .mp{border-radius:6px;border:1px solid var(--mid-25);background:#fff;padding:4px 12px;font-size:11px;font-weight:600;color:var(--mid-70)} .mp.on{border-color:var(--pine);color:var(--pine);box-shadow:inset 0 -2px 0 var(--pine)}
+  .subtabs{display:inline-flex;align-items:center;gap:12px;margin-bottom:-1px;flex-wrap:wrap}
+  .st{padding:2px 2px 6px;font-size:12px;font-weight:600;color:rgba(39,63,82,.5);border-bottom:2px solid transparent} .st.on{color:var(--pine);border-bottom-color:var(--pine)}
+  .ophealth{display:flex;flex-direction:column;gap:6px;min-width:0} .oph-eye{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--slate)} .oph-eye::before{content:"";width:6px;height:6px;transform:rotate(45deg);background:rgba(69,80,108,.5)}
+  .oph-metrics{display:flex;flex-wrap:wrap;gap:8px 24px} .oph-m{min-width:88px}
+  .oph-v{font-size:18px;font-weight:600;line-height:1;color:var(--forge)} .oph-v.pine{color:var(--pine)} .oph-v.gold{color:var(--gold-dark)} .oph-v.ember{color:var(--ember)}
+  .oph-l{margin-left:6px;font-size:11px;font-weight:500;color:var(--slate)} .oph-t{margin-top:2px;font-size:10px;font-weight:500;line-height:1.1} .oph-t.pine{color:var(--pine)} .oph-t.ember{color:var(--ember)}
+  .ws-inset{display:flex;min-height:0;flex:1;flex-direction:column;background:#fff;padding:12px 16px 16px}
+  .ws-canvas{display:flex;min-height:0;flex:1;flex-direction:column;overflow:auto;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(244,246,249,.55);background:rgba(244,246,249,.5)}
+  .ws-canvas.white{background:#fff;box-shadow:none;padding:0}
+  .surface{padding:16px} .surface .wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+  /* decision loop stepper */
+  .stepper{display:flex;align-items:stretch;gap:0;background:#fff;border:1px solid rgba(244,246,249,.9);border-radius:12px;box-shadow:0 2px 8px rgba(24,39,58,.07);overflow:hidden}
+  .step{flex:1;padding:10px 12px;position:relative;display:flex;flex-direction:column;gap:2px;border-right:1px solid rgba(39,63,82,.06)}
+  .step:last-child{border-right:none}
+  .step .sn{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid-35)}
+  .step .sl{font-size:12px;font-weight:600;color:var(--forge)} .step .sd{font-size:10px;color:var(--muted)}
+  .step.done{background:rgba(0,162,131,.05)} .step.done .sn{color:var(--pine)}
+  .step.cur{background:rgba(0,162,131,.10);box-shadow:inset 0 -3px 0 var(--pine)} .step.cur .sl{color:var(--pine)}
+  .step.commit{background:rgba(219,192,120,.10)} .step.commit .sn{color:var(--gold-dark)}
+  @media (max-width:760px){.stepper{flex-wrap:wrap}.step{flex:1 1 30%}}
+  /* pressure gap rows */
+  .gaplist{display:flex;flex-direction:column;gap:8px}
+  .gap{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid rgba(244,246,249,.9);border-left:3px solid var(--mid-25);border-radius:10px;padding:10px 14px;box-shadow:0 1px 3px rgba(39,63,82,.05)}
+  .gap.breach{border-left-color:var(--ember)} .gap.risk{border-left-color:var(--gold)} .gap.ok{border-left-color:var(--pine)}
+  .gap-dom{flex:0 0 auto;width:76px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid-40)}
+  .gap-main{min-width:0;flex:1} .gap-t{font-size:13px;font-weight:600;color:var(--forge)} .gap-s{font-size:11px;color:var(--muted);margin-top:1px}
+  .gap-sev{flex:0 0 auto;font-size:9.5px;font-weight:600;padding:3px 8px;border-radius:999px} .gap-sev.breach{background:rgba(188,67,0,.10);color:var(--ember)} .gap-sev.risk{background:rgba(219,192,120,.18);color:var(--gold-dark)} .gap-sev.ok{background:rgba(0,162,131,.10);color:var(--pine)}
+  .gap-cta{flex:0 0 auto;font-size:11.5px;font-weight:600;color:var(--pine)}
+  .gap-formula{font-size:10px;color:var(--mid-45);margin-top:2px} .gap-formula b{color:var(--forge)}
+  /* work unit / focus panel */
+  .wu{display:grid;grid-template-columns:22rem minmax(0,1fr);gap:0;height:100%} @media (max-width:800px){.wu{grid-template-columns:1fr}}
+  .queue-col{padding:16px;overflow:auto;border-right:1px solid rgba(244,246,249,.9)}
+  .queue-head{display:flex;align-items:baseline;justify-content:space-between;padding:0 2px 6px} .queue-head h3{font-size:13px;font-weight:600;color:var(--forge)} .queue-head .count{font-size:11px;color:var(--mid-45)}
+  .fp-host{padding:16px;overflow:auto;background:rgba(244,246,249,.35)}
+  .fp{display:flex;flex-direction:column;gap:10px}
+  .fp-shell{border-radius:12px;background:#fff;border:1px solid rgba(39,63,82,.20);box-shadow:0 1px 2px rgba(15,23,42,.05);overflow:hidden}
+  .fp-headbar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(39,63,82,.07)}
+  .fp-av{width:30px;height:30px;border-radius:999px;background:rgba(0,162,131,.10);color:var(--pine);display:grid;place-items:center;font-size:11px;font-weight:700} .fp-av.ember{background:rgba(188,67,0,.10);color:var(--ember)}
+  .fp-nm{font-size:13px;font-weight:600;color:var(--forge)} .fp-sb{font-size:10.5px;color:var(--muted)}
+  .fp-modes{margin-left:auto;display:flex;gap:4px} .fp-mode{font-size:10px;font-weight:600;color:var(--mid-45);padding:3px 8px;border-radius:999px;border:1px solid var(--mid-25);background:#fff} .fp-mode.on{background:var(--pine);color:#fff;border-color:var(--pine)}
+  .fp-grid{padding:10px;display:flex;flex-direction:column;gap:8px}
+  .uc{border:1px solid rgba(39,63,82,.20);border-radius:10px;background:#fff;overflow:hidden} .uc.work{border-left:3px solid var(--pine)} .uc.attention{border-left:3px solid var(--ember)} .uc.metric{border-left:2px solid rgba(0,162,131,.45)}
+  .uc-head{display:flex;align-items:flex-start;gap:8px;padding:8px 12px 4px} .uc-ico{color:var(--pine);font-size:13px;margin-top:1px} .uc-ico.ember{color:var(--ember)}
+  .uc-htext{min-width:0;flex:1} .uc-hrow{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .uc-title{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--slate)}
+  .uc-status{flex-shrink:0;font-size:10px;font-weight:600;padding:2px 7px;border-radius:999px;border:1px solid rgba(39,63,82,.12);background:#fff;color:var(--slate)} .uc-status.ready{border-color:rgba(0,162,131,.35);color:var(--pine)} .uc-status.risk{border-color:rgba(194,65,12,.35);color:var(--ember)}
+  .uc-insight{margin-top:3px;font-size:13px;font-weight:600;line-height:1.35;color:var(--forge)}
+  .uc-body{padding:0 12px 8px;font-size:12px} .uc-foot{padding:6px 12px 8px;border-top:1px solid rgba(39,63,82,.08);display:flex;align-items:center;gap:8px} .uc-action{font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--pine)}
+  .kv{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;padding:4px 0;border-bottom:1px solid rgba(39,63,82,.06)} .kv:last-child{border-bottom:none} .kv .k{color:var(--muted)} .kv .v{color:var(--forge);font-weight:500}
+  .reality{display:grid;grid-template-columns:1fr 24px 1fr;gap:8px;align-items:stretch;margin-top:4px} @media (max-width:520px){.reality{grid-template-columns:1fr}}
+  .rside{border-radius:10px;padding:9px;border:1px solid rgba(39,63,82,.10)} .rside.current{background:rgba(188,67,0,.04)} .rside.proposed{background:rgba(0,162,131,.05);border-color:rgba(0,162,131,.28)}
+  .rside .re{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid-40)} .rside .rv{font-size:20px;font-weight:600;letter-spacing:-.03em;margin-top:2px} .rside.current .rv{color:var(--ember)} .rside.proposed .rv{color:var(--pine)} .rside .rd{font-size:10px;color:var(--muted);margin-top:1px}
+  .rarrow{display:grid;place-items:center;color:var(--muted);font-size:16px}
+  .opt{border-radius:8px;border:1px solid rgba(244,246,249,.9);border-left:2px solid var(--mid-25);background:#fff;padding:8px 10px} .opt.pick{border-left-color:var(--pine);background:rgba(0,162,131,.04)}
+  .opt-top{display:flex;align-items:center;gap:8px} .opt-nm{font-size:12px;font-weight:600;color:var(--forge)} .opt-sc{margin-left:auto;font-size:10px;font-weight:600;color:var(--pine)} .opt-rat{margin-top:4px;font-size:10.5px;color:var(--muted)}
+  .bos{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--blue);background:rgba(0,69,140,.08);padding:1px 6px;border-radius:999px}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block} .dot.pine{background:var(--pine)} .dot.ember{background:var(--ember)} .dot.gold{background:var(--gold)} .dot.blue{background:var(--blue)}
+  .lifecycle{display:flex;align-items:center;margin:4px 0} .ls{font-size:8.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--mid-40);padding:3px 7px;border:1px solid var(--mid-25);border-right:none} .ls:first-child{border-radius:6px 0 0 6px} .ls:last-child{border-right:1px solid var(--mid-25);border-radius:0 6px 6px 0} .ls.done{background:rgba(0,162,131,.08);color:var(--pine);border-color:rgba(0,162,131,.3)} .ls.cur{background:var(--pine);color:#fff;border-color:var(--pine)}
+  /* cross-domain triptych */
+  .tri{display:grid;grid-template-columns:repeat(3,1fr);gap:12px} @media (max-width:820px){.tri{grid-template-columns:1fr}}
+  .tcard{background:#fff;border:1px solid rgba(244,246,249,.9);border-radius:12px;box-shadow:0 2px 8px rgba(24,39,58,.07);overflow:hidden}
+  .tcard-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(39,63,82,.07);background:linear-gradient(90deg,rgba(0,162,131,.05),#fff)}
+  .tcard-dom{font-size:12px;font-weight:700;color:var(--forge)} .tcard-path{margin-left:auto;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:999px}
+  .tcard-path.fast{background:rgba(0,162,131,.10);color:var(--pine)} .tcard-path.full{background:rgba(219,192,120,.18);color:var(--gold-dark)}
+  .tcard-b{padding:10px 12px;display:flex;flex-direction:column;gap:7px}
+  .tstep{display:flex;gap:8px;font-size:11.5px} .tstep .tk{flex:0 0 62px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mid-35);padding-top:1px} .tstep .tv{color:var(--slate)} .tstep .tv b{color:var(--forge);font-weight:600}
+  .caption{font-size:11px;color:var(--muted);margin-top:12px;padding:10px 12px;background:rgba(0,162,131,.04);border:1px solid rgba(0,162,131,.14);border-radius:10px;border-left:3px solid var(--pine)} .caption b{color:var(--forge);font-weight:600} .caption.blue{background:rgba(0,69,140,.04);border-color:rgba(0,69,140,.16);border-left-color:var(--blue)}
+  .screen{display:none}.screen.on{display:block} .foot{font-size:11px;color:var(--muted);margin-top:20px;text-align:center;line-height:1.6}
+</style>
+
+<div class="gallery">
+  <div class="g-head">
+    <div>
+      <div class="g-title">Alloy — the Decision Loop</div>
+      <div class="g-sub">Iteration 4. Alloy is not a platform that manages work — it moves operators from <b>operational pressure</b> to <b>operational truth</b>. <b>Pressure = a Gap</b> (Expectations − Facts). <b>Decision</b> closes it. <b>Commit</b> is the boundary. The loop is the same in Processing, Communications and Scheduling — composition of existing capabilities, no new runtime.</div>
+    </div>
+    <span class="g-badge"><span class="dot gold" style="width:7px;height:7px"></span>Proposed · decision platform</span>
+  </div>
+  <div class="g-tabs" role="tablist" aria-label="Screens">
+    <button class="g-tab" role="tab" aria-selected="true" data-s="pressure">Operational Pressure</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="decision">The Decision Loop</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="crossdomain">Same loop · cross-domain</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="bos">BOS-assisted decision</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="forecast">Forecast → Decision</button>
+  </div>
+  <p class="g-note" id="gnote"></p>
+
+  <div class="app">
+    <nav class="rail" aria-hidden="true"><div class="rail-logo">A</div><div class="rail-i">◫</div><div class="rail-i">◷</div><div class="rail-i on">▦</div><div class="rail-i">✉</div><div class="rail-i">◧</div><div class="rail-i">▤</div></nav>
+    <div class="main">
+      <div class="topbar"></div>
+      <div class="shell">
+        <div class="control-band">
+          <div class="ws-header"><div class="ws-id"><span class="ws-ico" id="wico">◎</span><div><div class="ws-title" id="wtitle">Decisions</div><div class="ws-subt" id="subt"></div></div></div>
+            <div class="ws-acts"><button class="btn-secondary">Filter</button><button class="btn-primary" id="act1">Resolve</button><button class="btn-close">✕ Close</button></div></div>
+          <div class="ws-modenav"><div class="modesplit">
+            <div class="modestack"><div class="modepills"><button class="mp on" id="mp-work">Work</button><button class="mp" id="mp-studio">Studio</button></div><div class="subtabs" id="subtabs"></div></div>
+            <div class="ophealth" id="ophealth"></div>
+          </div></div>
+        </div>
+        <div class="ws-inset"><div class="ws-canvas" id="canvas">
+          <section class="screen on" id="s-pressure"></section>
+          <section class="screen" id="s-decision"></section>
+          <section class="screen" id="s-crossdomain"></section>
+          <section class="screen" id="s-bos"></section>
+          <section class="screen" id="s-forecast"></section>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">Faithful Alloy workspace chrome (transcribed classes) · the Decision Loop = the existing Resolve→Evaluate→Preview→Commit runtime, named · <b>docs/platform/planning/</b> · status: proposed.</div>
+</div>
+
+<script>
+(function(){
+  var subtabs={
+    pressure:[["All pressure",1],["Breach",0],["At risk",0],["Projected",0]],
+    decision:[["All pressure",0],["Breach",1],["At risk",0],["Projected",0]],
+    crossdomain:[["All pressure",1],["Breach",0],["At risk",0],["Projected",0]],
+    bos:[["All pressure",0],["Breach",1],["At risk",0],["Projected",0]],
+    forecast:[["All pressure",0],["Breach",0],["At risk",0],["Projected",1]]
+  };
+  var health={
+    pressure:[["6","Open gaps","ember","3 breach · 2 at-risk","ember"],["2","Committed today","pine","",""],["94%","Expectations met","pine","",""]],
+    decision:[["1","Deciding","ember","ratio breach","ember"],["3","Realities","pine","",""],["0","Blocking","pine","",""]],
+    crossdomain:[["3","Domains shown","pine","",""],["1","Loop","pine","shared","pine"],["0","New runtimes","pine","",""]],
+    bos:[["4","BOS assists","blue","surface·gen·sim·explain",""],["0","BOS commits","pine","never","pine"],["1","Human decides","forge","",""]],
+    forecast:[["2","Projected gaps","gold","October","gold"],["18d","Lead time","pine","",""],["0","Committed yet","gold","",""]]
+  };
+  var subt={pressure:"Every gap between what should be and what is",decision:"Sunflower over ratio · Thu — running the loop",crossdomain:"One loop · Processing · Communications · Scheduling",bos:"BOS improves the decision — it never makes it",forecast:"Pressure detected before it happens"};
+  var act1={pressure:"Resolve top gap",decision:"Commit decision",crossdomain:"Open a loop",bos:"Accept & decide",forecast:"Resolve early"};
+  var wtitle={pressure:"Decisions",decision:"Scheduling",crossdomain:"Decisions",bos:"Scheduling",forecast:"Scheduling"};
+  var wico={pressure:"◎",decision:"▦",crossdomain:"◎",bos:"▦",forecast:"▦"};
+  var gnote={
+    pressure:"The operator's real inbox is not work — it is pressure. Each row is a Gap (Expectations − Facts), across every domain.",
+    decision:"The Decision Loop, made explicit: pressure → understand → generate realities → compare → choose → commit. It is the existing mutation runtime, named.",
+    crossdomain:"Processing, Communications and Scheduling run the SAME loop — fast path (one obvious resolution) or full path (real alternatives). This is why it is a platform.",
+    bos:"BOS surfaces, generates, simulates and explains. It never chooses and never commits — that boundary is the human's.",
+    forecast:"A forecast is a Gap against projected facts — pressure, early. It hands off to the same loop, with lead time to decide."
+  };
+
+  function gap(dom,cls,title,sub,formula,sev,sevcls){
+    return '<div class="gap '+cls+'"><div class="gap-dom">'+dom+'</div><div class="gap-main"><div class="gap-t">'+title+'</div><div class="gap-s">'+sub+'</div><div class="gap-formula">'+formula+'</div></div><span class="gap-sev '+sevcls+'">'+sev+'</span><span class="gap-cta">Resolve →</span></div>';
+  }
+  var PRESSURE='<div class="surface"><div class="wrap">'
+    +'<div class="gaplist">'
+    +gap('Scheduling','breach','Sunflower over ratio · Thursday','Toddler room · projected 12 vs tier of 11','<b>Expectation</b> within-ratio &nbsp;−&nbsp; <b>Fact</b> 12 projected','Breach','breach')
+    +gap('Billing','breach','Rivera family · payment failed','Autopay declined · $980 balance','<b>Expectation</b> balance paid &nbsp;−&nbsp; <b>Fact</b> unpaid','Breach','breach')
+    +gap('Processing','breach','Immunization form · unclassified','Inbound 2h ago · no route','<b>Expectation</b> classified & routed &nbsp;−&nbsp; <b>Fact</b> unclassified','Breach','breach')
+    +gap('Comms','risk','Tour request · unanswered 20h','SLA 24h · family waiting','<b>Expectation</b> replied in SLA &nbsp;−&nbsp; <b>Fact</b> no reply','At risk','risk')
+    +gap('Scheduling','risk','Ethan needs a room · Mon','New enrollment · no schedule','<b>Expectation</b> enrolled child scheduled &nbsp;−&nbsp; <b>Fact</b> unplaced','At risk','risk')
+    +gap('Forecasting','risk','October · Sunflower will breach','3 enrollments land wk of Oct 6','<b>Expectation</b> within-ratio &nbsp;−&nbsp; <b>projected Fact</b> +2 over','Projected','risk')
+    +'</div>'
+    +'<div class="caption"><b>Operational Pressure is one primitive.</b> A ratio breach, a failed payment, an unclassified document, an unanswered message, an unplaced child, and a forecast are the <i>same architectural object</i> — a <b>Gap</b> between the Expectations ledger and the Facts ledger, present or projected. This is the operator\'s true inbox, and it already exists (derived, not stored). Every row carries the universal <b>Resolve</b> verb.</div>'
+    +'</div></div>';
+
+  var STEPPER='<div class="stepper">'
+    +'<div class="step done"><div class="sn">1 · Pressure</div><div class="sl">Ratio breach</div><div class="sd">12 / 11 · Thu</div></div>'
+    +'<div class="step done"><div class="sn">2 · Understand</div><div class="sl">Why now</div><div class="sd">enrollment landed</div></div>'
+    +'<div class="step cur"><div class="sn">3 · Generate</div><div class="sl">Realities</div><div class="sd">3 candidates</div></div>'
+    +'<div class="step"><div class="sn">4 · Compare</div><div class="sl">Consequences</div><div class="sd">simulate</div></div>'
+    +'<div class="step"><div class="sn">5 · Choose</div><div class="sl">Operator</div><div class="sd">human only</div></div>'
+    +'<div class="step commit"><div class="sn">6 · Commit</div><div class="sl">Truth</div><div class="sd">the boundary</div></div>'
+    +'</div>';
+  var DECISION='<div class="surface" style="padding-bottom:0"><div class="wrap" style="gap:12px">'+STEPPER+'</div></div>'
+    +'<div class="wu" style="border-top:1px solid rgba(244,246,249,.9);margin-top:8px">'
+    +'<div class="queue-col"><div class="queue-head"><h3>Pressure · Breach</h3><span class="count tab">3</span></div>'
+    +'<div class="gaplist">'
+    +'<div class="gap breach" style="box-shadow:0 0 0 1px rgba(0,162,131,.25)"><div class="gap-dom">Sched</div><div class="gap-main"><div class="gap-t">Sunflower over ratio · Thu</div><div class="gap-s">12 / 11 · deciding now</div></div></div>'
+    +'<div class="gap breach"><div class="gap-dom">Billing</div><div class="gap-main"><div class="gap-t">Rivera · payment failed</div><div class="gap-s">$980 · autopay declined</div></div></div>'
+    +'<div class="gap breach"><div class="gap-dom">Proc</div><div class="gap-main"><div class="gap-t">Immunization form</div><div class="gap-s">unclassified · 2h</div></div></div>'
+    +'</div><div class="caption" style="margin-top:14px"><b>Same queue primitive as Processing.</b> Selecting a gap opens the Focus Panel, where the loop runs.</div></div>'
+    +'<div class="fp-host"><div class="fp"><div class="fp-shell">'
+    +'<div class="fp-headbar"><div class="fp-av ember">▲</div><div><div class="fp-nm">Sunflower · Thursday</div><div class="fp-sb">a decision · reversible until commit</div></div><div class="fp-modes"><span class="fp-mode on">Resolve</span><span class="fp-mode">Activity</span></div></div>'
+    +'<div class="fp-grid">'
+    +'<div class="uc attention"><div class="uc-head"><span class="uc-ico ember">▲</span><div class="uc-htext"><div class="uc-hrow"><span class="uc-title">Understand · the gap</span><span class="uc-status risk">Breach</span></div><p class="uc-insight">12 projected — one over the 2-staff tier</p></div></div><div class="uc-body">'+'<div class="kv"><span class="k">Expectation</span><span class="v">≤ 11 at 2 staff</span></div><div class="kv"><span class="k">Fact (projected)</span><span class="v" style="color:var(--ember)">12</span></div><div class="kv"><span class="k">Cause</span><span class="v">Ava enrolled Thu</span></div></div></div>'
+    +'<div class="uc metric"><div class="uc-head"><span class="uc-ico">◷</span><div class="uc-htext"><div class="uc-hrow"><span class="uc-title">Generate · candidate realities</span><span class="uc-status ready">3</span></div><p class="uc-insight" style="font-size:12.5px">Compare consequences, then choose</p></div></div><div class="uc-body">'
+    +'<div class="opt pick"><div class="opt-top"><span class="dot pine"></span><span class="opt-nm">Move Ethan → Sunshine</span><span class="opt-sc tab">0.91</span></div><div class="opt-rat">in tier · $0 labor · keeps cohort</div></div>'
+    +'<div class="opt" style="margin-top:6px"><div class="opt-top"><span class="dot gold"></span><span class="opt-nm">Add float teacher · Thu</span><span class="opt-sc tab">0.62</span></div><div class="opt-rat">3rd staff · +$180 labor</div></div>'
+    +'<div class="opt" style="margin-top:6px"><div class="opt-top"><span class="dot gold"></span><span class="opt-nm">Shed one Thu drop-in</span><span class="opt-sc tab">0.55</span></div><div class="opt-rat">in tier · −$62 tuition</div></div></div></div>'
+    +'<div class="uc work"><div class="uc-head"><span class="uc-ico">◑</span><div class="uc-htext"><div class="uc-hrow"><span class="uc-title">Compare · two realities</span></div><p class="uc-insight" style="font-size:12.5px">Move Ethan → Sunshine</p></div></div><div class="uc-body">'
+    +'<div class="reality"><div class="rside current"><div class="re">Current</div><div class="rv tab">12/11</div><div class="rd">over tier</div></div><div class="rarrow">→</div><div class="rside proposed"><div class="re">If committed</div><div class="rv tab">11/11</div><div class="rd">in tier</div></div></div></div></div>'
+    +'<div class="uc work"><div class="uc-head"><span class="uc-ico">✓</span><div class="uc-htext"><div class="uc-hrow"><span class="uc-title">Commit · the boundary</span></div><p class="uc-insight" style="font-size:12.5px">Make this reality true</p></div></div>'
+    +'<div class="uc-body"><div class="lifecycle"><span class="ls done">draft</span><span class="ls done">proposed</span><span class="ls cur">reviewed</span><span class="ls">approved</span><span class="ls">commit</span></div><div class="kv"><span class="k">Before commit</span><span class="v" style="color:var(--pine)">reversible</span></div><div class="kv"><span class="k">After commit</span><span class="v">truth · supersede-only</span></div></div>'
+    +'<div class="uc-foot"><button class="btn-primary" style="width:100%;justify-content:center">Commit → operational truth</button></div></div>'
+    +'</div></div>'
+    +'<div class="caption" style="margin:0"><b>The whole loop lives in the Focus Panel.</b> Understand → Generate → Compare → Choose → Commit — the existing Resolve→Evaluate→Preview→Commit runtime, named. Everything above the Commit line is reversible; Commit is the single boundary into truth.</div>'
+    +'</div></div>';
+
+  function tri(dom,ico,path,pathcls,steps){
+    var b=steps.map(function(s){return '<div class="tstep"><div class="tk">'+s[0]+'</div><div class="tv">'+s[1]+'</div></div>';}).join('');
+    return '<div class="tcard"><div class="tcard-h"><span class="uc-ico">'+ico+'</span><span class="tcard-dom">'+dom+'</span><span class="tcard-path '+pathcls+'">'+path+'</span></div><div class="tcard-b">'+b+'</div></div>';
+  }
+  var CROSS='<div class="surface"><div class="wrap">'
+    +'<div class="tri">'
+    +tri('Processing','◫','fast path','fast',[['Pressure','<b>Unclassified</b> immunization form (expected: routed)'],['Generate','classify · route · split · reject'],['Compare','which packet · downstream route'],['Choose','operator picks "Enrollment packet"'],['Commit','<b>document routed</b> → record']])
+    +tri('Communications','✉','fast path','fast',[['Pressure','<b>Tour request</b> unanswered 20h (SLA 24h)'],['Generate','reply · template · route · schedule'],['Compare','SLA impact · owner'],['Choose','operator sends templated reply'],['Commit','<b>message answered</b> → task']])
+    +tri('Scheduling','▦','full path','full',[['Pressure','<b>Sunflower over ratio</b> Thu (12/11)'],['Generate','move · add staff · shed session'],['Compare','occupancy · ratio · labor · tuition'],['Choose','operator picks "Move Ethan"'],['Commit','<b>schedule_assignments</b> superseded']])
+    +'</div>'
+    +'<div class="caption"><b>The decisive proof.</b> Processing and Communications are Alloy\'s <i>already-certified, non-Scheduling</i> workspaces — and they run the <b>same loop</b> as Scheduling. The only difference is depth: a <b>fast path</b> (one obvious resolution, a witnessed action) vs a <b>full path</b> (genuine alternative realities). One loop, one runtime, every domain. Scheduling didn\'t need a new architecture — it revealed the one that was already there.</div>'
+    +'</div></div>';
+
+  var BOS='<div class="surface"><div class="wrap">'+STEPPER
+    +'<div class="tri" style="grid-template-columns:1fr 1fr">'
+    +'<div class="tcard"><div class="tcard-h"><span class="uc-ico" style="color:var(--blue)">◆</span><span class="tcard-dom">Where BOS helps</span><span class="tcard-path fast" style="background:rgba(0,69,140,.08);color:var(--blue)">assists</span></div><div class="tcard-b">'
+    +'<div class="tstep"><div class="tk">Surface</div><div class="tv"><span class="bos">BOS</span> ranks the gap into attention — "Sunflower Thu is your top pressure"</div></div>'
+    +'<div class="tstep"><div class="tk">Understand</div><div class="tv"><span class="bos">BOS</span> explains cause & cost — "Ava\'s Thu enrollment pushes you 1 over"</div></div>'
+    +'<div class="tstep"><div class="tk">Generate</div><div class="tv"><span class="bos">BOS</span> proposes the non-obvious — "swap Noah, or a Thu-only float"</div></div>'
+    +'<div class="tstep"><div class="tk">Compare</div><div class="tv"><span class="bos">BOS</span> simulates & narrates tradeoffs — deterministic Calculations, plain language</div></div>'
+    +'</div></div>'
+    +'<div class="tcard"><div class="tcard-h"><span class="uc-ico">✋</span><span class="tcard-dom">Where BOS never goes</span><span class="tcard-path full" style="background:rgba(188,67,0,.10);color:var(--ember)">human only</span></div><div class="tcard-b">'
+    +'<div class="tstep"><div class="tk">Choose</div><div class="tv"><b>The operator decides.</b> BOS recommends a rank; the human picks the reality.</div></div>'
+    +'<div class="tstep"><div class="tk">Commit</div><div class="tv"><b>The operator commits.</b> BOS never writes truth — the decision→truth boundary is human-held.</div></div>'
+    +'<div class="tstep"><div class="tk">Why</div><div class="tv">BOS <b>improves</b> decisions (better pressure, alternatives, tradeoffs); it does not <b>make</b> them. Ratified: "BOS proposes; humans approve."</div></div>'
+    +'<div class="tstep"><div class="tk">When AI</div><div class="tv">large / non-obvious candidate space → BOS. Enumerable space + clear objective → deterministic search suffices.</div></div>'
+    +'</div></div>'
+    +'</div>'
+    +'<div class="caption blue"><b>BOS is the decision assistant, woven through the loop — never the decider.</b> It surfaces pressure, generates alternatives, simulates consequences, and explains tradeoffs at every step except <b>Choose</b> and <b>Commit</b>, which are the human\'s. This is exactly the ratified "BOS computes; Operational applies" boundary, read in decision terms.</div>'
+    +'</div></div>';
+
+  var FORECAST='<div class="surface"><div class="wrap">'
+    +'<div class="stepper"><div class="step done" style="flex:2"><div class="sn">Forecasting · early pressure</div><div class="sl">Projected gap detected · 18 days out</div><div class="sd">Expectation within-ratio − projected Fact +2 over (wk of Oct 6)</div></div><div class="rarrow" style="flex:0 0 40px;font-size:20px">→</div><div class="step cur" style="flex:3"><div class="sn">Decision Loop · now</div><div class="sl">Understand → Generate → Compare → Choose → Commit</div><div class="sd">resolve early, with lead time</div></div></div>'
+    +'<div class="gaplist">'
+    +'<div class="gap risk"><div class="gap-dom">Forecast</div><div class="gap-main"><div class="gap-t">October · Sunflower will breach ratio</div><div class="gap-s">3 enrollments land wk of Oct 6 · project 13 / 11</div><div class="gap-formula"><b>Expectation</b> within-ratio &nbsp;−&nbsp; <b>projected Fact</b> +2 over</div></div><span class="gap-sev risk">18d lead</span><span class="gap-cta">Resolve early →</span></div>'
+    +'<div class="gap risk"><div class="gap-dom">Forecast</div><div class="gap-main"><div class="gap-t">September · Caterpillar under-fills</div><div class="gap-s">infant demand soft · project 62% fill</div><div class="gap-formula"><b>Expectation</b> fill ≥ target &nbsp;−&nbsp; <b>projected Fact</b> 62%</div></div><span class="gap-sev risk">open waitlist?</span><span class="gap-cta">Resolve early →</span></div>'
+    +'</div>'
+    +'<div class="caption"><b>Forecasting is not a separate capability — it is pressure, early.</b> A forecast is a Gap computed against <i>projected</i> facts. It is the same primitive read forward, and it hands off to the <b>same Decision Loop</b> — the only difference is lead time. Forecasting detects; the loop decides. Operational Intelligence plays the mirror role: it frames pressure (KPIs) and reads the outcome of committed decisions.</div>'
+    +'</div></div>';
+
+  var SCREENS={pressure:PRESSURE,decision:DECISION,crossdomain:CROSS,bos:BOS,forecast:FORECAST};
+  Object.keys(SCREENS).forEach(function(k){document.getElementById('s-'+k).innerHTML=SCREENS[k];});
+  var subEl=document.getElementById('subtabs'),ophEl=document.getElementById('ophealth');
+  function render(key){
+    subEl.innerHTML=subtabs[key].map(function(t){return '<span class="st'+(t[1]?' on':'')+'">'+t[0]+'</span>';}).join('');
+    ophEl.innerHTML='<div class="oph-eye">Pressure</div><div class="oph-metrics">'+health[key].map(function(m){return '<div class="oph-m"><p style="margin:0"><span class="oph-v '+m[2]+' tab">'+m[0]+'</span><span class="oph-l">'+m[1]+'</span></p>'+(m[3]?'<div class="oph-t '+m[4]+'">'+m[3]+'</div>':'<div class="oph-t" style="color:transparent">—</div>')+'</div>';}).join('')+'</div>';
+    document.getElementById('subt').textContent=subt[key];
+    document.getElementById('act1').textContent=act1[key];
+    document.getElementById('gnote').textContent=gnote[key];
+    document.getElementById('wtitle').textContent=wtitle[key];
+    document.getElementById('wico').textContent=wico[key];
+    document.getElementById('canvas').classList.toggle('white',key==='decision');
+  }
+  document.querySelectorAll('.g-tab').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('.g-tab').forEach(function(x){x.setAttribute('aria-selected',x.dataset.s===b.dataset.s?'true':'false');});
+      document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
+      document.getElementById('s-'+b.dataset.s).classList.add('on');
+      render(b.dataset.s);
+    });
+  });
+  render('pressure');
+})();
+</script>
