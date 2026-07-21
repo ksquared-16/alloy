@@ -40,13 +40,40 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
 
     try {
+        if (view === "sites") {
+            const { data, error } = await supabase
+                .from("locations")
+                .select("id, label")
+                .eq("org_id", ctx.orgId)
+                .eq("location_type", "site")
+                .order("label");
+            if (error) {
+                return NextResponse.json({ error: error.message, code: "db_error" }, { status: 500 });
+            }
+            const sites = ((data ?? []) as { id: string; label: string | null }[]).map((s) => ({
+                id: s.id,
+                name: s.label?.trim() || "Site",
+            }));
+            return NextResponse.json({ view, sites });
+        }
+
         if (view === "overview") {
             const siteLocationId = param(request, "site_location_id");
             if (!siteLocationId) {
                 return NextResponse.json({ error: "site_location_id is required", code: "invalid_input" }, { status: 400 });
             }
             const unplaced = await detectUnplacedChildren(supabase, ctx.orgId, siteLocationId);
-            return NextResponse.json({ view, siteLocationId, unplaced });
+            const { data: patternData } = await supabase
+                .from("schedule_patterns")
+                .select("id, label, weekdays")
+                .eq("org_id", ctx.orgId)
+                .eq("site_location_id", siteLocationId)
+                .eq("is_active", true)
+                .order("sort_order");
+            const patterns = ((patternData ?? []) as { id: string; label: string | null; weekdays: number[] }[]).map(
+                (p) => ({ id: p.id, label: p.label?.trim() || "Schedule", weekdays: p.weekdays ?? [] })
+            );
+            return NextResponse.json({ view, siteLocationId, unplaced, patterns });
         }
 
         if (view === "options") {
