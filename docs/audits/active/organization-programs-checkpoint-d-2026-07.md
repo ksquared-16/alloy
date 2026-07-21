@@ -182,24 +182,99 @@ Related workspace chapters remain under a quiet “Related” strip — not Comm
 
 Focused Vitest (landing model + publication UI + collection cache + runtime issue): pass. `npm run typecheck` / `verify:module-imports`: run at handoff.
 
+---
+
+## Checkpoint D2 — Reconciliation, selected Program, chapter Continuity
+
+**Status:** Implemented locally pending operator QA.
+
+### Program source inventory (classification)
+
+| Source | Classification |
+|--------|----------------|
+| `public.programs` + drafts/revisions | Canonical Organization Program |
+| `location_program_categories` | Location-owned availability (reconcile **candidates** via distinct keys) |
+| `program_offerings` / variants | Delivery Options (soft `program_key`) |
+| commercial tuition/products/policies | Pricing relationships |
+| option-set program vocab | Legacy vocabulary — do not seed |
+| OCM / placements `program_category_id` | Enrollment projection → LPC |
+| `discount_programs` | Obsolete name collision |
+
+### Canonical mapping
+
+Distinct `(org_id, btrim(key))` from LPC → `public.programs` + `program_drafts` (earliest LPC label). Link LPC `program_id`. **No publication history manufactured. No `is_active` flips.**
+
+### Backfill artifacts
+
+- Library: `web/lib/programs/publication/reconcileOrganizationProgramsFromLpc.ts` (dry-run + apply, idempotent)
+- CLI: `cd web && DRY_RUN=1 npm run dev:backfill:organization-programs-from-lpc`
+- SQL twin: `supabase/migrations/20260721183000_programs_identity_reconcile_from_lpc.sql`
+
+### Slot 4 apply evidence (org `93667019-…`)
+
+| Metric | Value |
+|--------|-------|
+| Dry-run candidates | 6 |
+| Programs inserted | 6 (infant, toddler, preschool, pre_k, school_age, kindergarten) |
+| Drafts inserted | 6 |
+| LPC rows linked | 16 |
+| Unlinked remaining | 0 |
+| Duplicates | 0 |
+| Publication rows created | 0 |
+
+API after apply: `200` with **6** programs. Landing `data-programs-collection-state="populated"`.
+
+### Selected Program workspace
+
+- Shell: Configuration Object Runtime (`ProgramsPublicationObjectWorkspace`)
+- Overview: `ProgramOverviewSurface` — Delivery Options / Tuition / local offer / assigned glance; publication readiness; attention; concerns
+- Concern routes unchanged; deferred concerns remain adapters
+- Overview labels distinguish **assignment** vs **local offer**
+
+### Commercial chapter Continuity
+
+- Routes remain `/organization/programs?chapter=…`
+- Retention adds `programsChapter`; **chapter navigation no longer wipes `programId`**
+- Warm hrefs include tuition/catalog/policies
+- Chapter surface remembers chapter + prefetches siblings (stable callback — no update-depth loop)
+- Soft-nav eligibility covers chapter query strings
+
+### Tuition before / after
+
+| | Before | After |
+|--|--------|-------|
+| Cause | Chapter URL sync cleared Program retention; felt like cold Commercial load | Soft chapter under Programs Continuity |
+| Agent smoke | N/A | Direct `?chapter=tuition` mounts chapter surface; sibling click ~400–500ms; no max-update-depth; return restores Program or landing |
+
+### Operator QA checklist (D2)
+
+- [ ] Real Programs appear (6 for demo org) without duplicates  
+- [ ] Landing readiness/attention/search/selection with real data  
+- [ ] Selected Program Overview quality vs Locations  
+- [ ] Concern nav stable; Back/Forward/refresh  
+- [ ] Programs → Tuition immediate; Tuition → Programs restores Continuity  
+- [ ] Locations intact; no Commercial shell bounce  
+
 ## 19. Operator QA results
 
-_Pending live operator pass on http://localhost:3014/organization/programs (Checkpoint D1 landing)._
+_Pending live operator pass on http://localhost:3014/organization/programs (Checkpoint D2)._
 
 ## 20. Tests
 
+- `tests/programs/reconcileOrganizationProgramsFromLpc.test.ts`
 - `tests/programs/programsLandingModel.test.ts` (summary, readiness, attention, permissions, empty)
 - `tests/programs/programsSelectionAdapter.test.ts`
 - `tests/programs/programsCollectionCache.test.ts`
 - `tests/configPublication/programsPublicationUi.test.tsx` (landing + object concerns + unavailable)
+- `tests/configRuntime/configurationContinuity.test.ts` (chapter retention + soft-nav)
 - `tests/configRuntime/configurationObjectComposition.test.ts` (Programs mounts object workspace)
 
 ## 21. Files changed (primary)
 
-- `ProgramsPublicationWorkspace.tsx`
-- `programsCollectionCache.ts`, `programsSelectionAdapter.ts`
-- `programsAdoptionSeam.ts`, ContinuityProvider warm
-- `ProgramDomainSections.tsx` (Locations wording + deep links)
+- `reconcileOrganizationProgramsFromLpc.ts` + backfill script + SQL migration
+- `ProgramsLanding.tsx` / `ProgramsPublicationWorkspace.tsx` / `ProgramOverviewSurface.tsx`
+- `ProgramsWorkspaceChapterSurface.tsx`
+- Continuity retention + provider + warm hrefs
 - Checkpoint D audit + tests
 
 ## 22. Remaining risks
