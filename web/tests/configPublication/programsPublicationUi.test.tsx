@@ -30,6 +30,7 @@ vi.mock("@/components/adminV2/settings/configurationRuntime/ConfigurationContinu
         selection: null,
         rememberLocationSelection: vi.fn(),
         rememberProgramSelection: vi.fn(),
+        rememberProgramsChapterSelection: vi.fn(),
         lastInvalidation: null,
     }),
 }));

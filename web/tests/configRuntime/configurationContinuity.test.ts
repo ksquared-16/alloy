@@ -53,6 +53,7 @@ describe("Configuration Continuity — soft-nav eligibility", () => {
         expect(shouldSoftNavigate("/organization")).toBe(true);
         expect(shouldSoftNavigate("/settings/locations")).toBe(true);
         expect(shouldSoftNavigate("/organization/programs")).toBe(true);
+        expect(shouldSoftNavigate("/organization/programs?chapter=tuition")).toBe(true);
         expect(shouldSoftNavigate("/admin/workflows")).toBe(false);
     });
 
@@ -110,6 +111,38 @@ describe("Configuration Continuity — selection retention", () => {
         expect(snap?.locationTab).toBe("rooms");
         expect(snap?.programId).toBe("prog-1");
         expect(snap?.programSection).toBe("overview");
+        expect(snap?.programsChapter).toBeNull();
+    });
+
+    it("retains Program selection when only a sibling chapter is written", () => {
+        const store = new Map<string, string>();
+        vi.stubGlobal("window", {
+            sessionStorage: {
+                getItem: (k: string) => store.get(k) ?? null,
+                setItem: (k: string, v: string) => {
+                    store.set(k, v);
+                },
+                removeItem: (k: string) => {
+                    store.delete(k);
+                },
+                clear: () => store.clear(),
+                key: (i: number) => [...store.keys()][i] ?? null,
+                get length() {
+                    return store.size;
+                },
+            },
+        });
+        writeConfigurationSelection("org-1", {
+            programId: "prog-1",
+            programSection: "overview",
+        });
+        writeConfigurationSelection("org-1", {
+            programsChapter: "tuition",
+        });
+        const snap = readConfigurationSelection("org-1");
+        expect(snap?.programId).toBe("prog-1");
+        expect(snap?.programSection).toBe("overview");
+        expect(snap?.programsChapter).toBe("tuition");
     });
 });
 

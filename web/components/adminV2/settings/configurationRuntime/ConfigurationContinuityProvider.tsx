@@ -61,6 +61,7 @@ type ConfigurationContinuityContextValue = {
         programId: string | null;
         section?: string | null;
     }) => void;
+    rememberProgramsChapterSelection: (args: { chapter: string | null }) => void;
     lastInvalidation: ConfigurationInvalidationEvent | null;
 };
 
@@ -114,6 +115,17 @@ export function ConfigurationContinuityProvider({
             writeConfigurationSelection(orgId, {
                 programId: args.programId,
                 programSection: args.section ?? null,
+                ...(args.programId ? { programsChapter: null } : {}),
+            });
+            setSelectionVersion((v) => v + 1);
+        },
+        [orgId],
+    );
+
+    const rememberProgramsChapterSelection = useCallback(
+        (args: { chapter: string | null }) => {
+            writeConfigurationSelection(orgId, {
+                programsChapter: args.chapter,
             });
             setSelectionVersion((v) => v + 1);
         },
@@ -132,15 +144,29 @@ export function ConfigurationContinuityProvider({
             });
         }
         if (path === CANONICAL_ORGANIZATION_PROGRAMS_HREF) {
-            rememberProgramSelection({
-                programId: readSearchParam("programId"),
-                section: readSearchParam("section"),
-            });
+            const chapter = readSearchParam("chapter");
+            const programId = readSearchParam("programId");
+            const section = readSearchParam("section");
+            if (chapter) {
+                // Sibling chapter navigation must not wipe retained Program selection.
+                rememberProgramsChapterSelection({ chapter });
+            } else if (programId) {
+                rememberProgramSelection({ programId, section });
+            } else {
+                // Collection landing: clear chapter only. Program retention is cleared
+                // explicitly via rememberProgramSelection(null) when the operator exits.
+                rememberProgramsChapterSelection({ chapter: null });
+            }
         }
         if (path === CANONICAL_ORGANIZATION_BASE) {
             markConfigurationContinuity("reveal", { path: CANONICAL_ORGANIZATION_BASE });
         }
-    }, [pathname, rememberLocationSelection, rememberProgramSelection]);
+    }, [
+        pathname,
+        rememberLocationSelection,
+        rememberProgramSelection,
+        rememberProgramsChapterSelection,
+    ]);
 
     // Warm primary Configuration destinations once per settings-shell mount.
     useEffect(() => {
@@ -172,6 +198,7 @@ export function ConfigurationContinuityProvider({
             selection,
             rememberLocationSelection,
             rememberProgramSelection,
+            rememberProgramsChapterSelection,
             lastInvalidation,
         }),
         [
@@ -179,6 +206,7 @@ export function ConfigurationContinuityProvider({
             selection,
             rememberLocationSelection,
             rememberProgramSelection,
+            rememberProgramsChapterSelection,
             lastInvalidation,
         ],
     );

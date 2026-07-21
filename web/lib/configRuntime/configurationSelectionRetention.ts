@@ -15,6 +15,8 @@ export type ConfigurationSelectionSnapshot = {
     locationItemId: string | null;
     programId: string | null;
     programSection: string | null;
+    /** Sibling Commercial chapter under /organization/programs?chapter=… */
+    programsChapter: string | null;
     updatedAtMs: number;
 };
 
@@ -30,6 +32,7 @@ function emptySnapshot(orgId: string): ConfigurationSelectionSnapshot {
         locationItemId: null,
         programId: null,
         programSection: null,
+        programsChapter: null,
         updatedAtMs: Date.now(),
     };
 }
@@ -40,9 +43,15 @@ export function readConfigurationSelection(orgId: string): ConfigurationSelectio
     try {
         const raw = window.sessionStorage.getItem(storageKey(id));
         if (!raw) return null;
-        const parsed = JSON.parse(raw) as ConfigurationSelectionSnapshot;
+        const parsed = JSON.parse(raw) as Partial<ConfigurationSelectionSnapshot>;
         if (!parsed || parsed.orgId !== id) return null;
-        return parsed;
+        return {
+            ...emptySnapshot(id),
+            ...parsed,
+            orgId: id,
+            programsChapter: parsed.programsChapter ?? null,
+            updatedAtMs: typeof parsed.updatedAtMs === "number" ? parsed.updatedAtMs : Date.now(),
+        };
     } catch {
         return null;
     }
