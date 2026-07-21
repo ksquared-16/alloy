@@ -16,6 +16,19 @@ import { shouldRepeatWorkAfterRetryOutcome } from "@/lib/lifecycle/stageWorkComp
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
 import { recordStageWorkContactOutcomeTrace } from "@/lib/lifecycle/recordStageWorkContactOutcomeTrace";
 
+/**
+ * Execution provenance for a discharged Current Work requirement. Distinguishes an
+ * objective platform result (integrated) from an operator-reported external contact
+ * (external_manual). Provenance is an attribute of the fact — never a new fact kind.
+ */
+export type StageWorkOutcomeDeclarationV1 = {
+    provenance: "integrated" | "external_manual";
+    /** Channel the contact used — e.g. "sms", "email", "phone", "in_person", "external_email". */
+    channel?: string | null;
+    /** Optional human-only context; never overwrites objective delivery state. */
+    note?: string | null;
+};
+
 export type CompleteStageWorkWithOutcomeInput = {
     supabase: SupabaseClient;
     orgId: string;
@@ -25,6 +38,8 @@ export type CompleteStageWorkWithOutcomeInput = {
     workId: string;
     outcomeKey: string;
     subject: StageOutcomeExecutionSubject;
+    /** Execution provenance + optional human context. Distinguishes integrated vs external. */
+    declaration?: StageWorkOutcomeDeclarationV1;
 };
 
 export type CompleteStageWorkWithOutcomeResult = {
@@ -114,6 +129,28 @@ export async function completeStageWorkWithOutcome(
         };
     }
 
+    // Execution provenance — stamped on the discharged work regardless of trace
+    // gating, so integrated vs external results remain distinguishable on the fact.
+    if (input.declaration) {
+        const { data: task } = await input.supabase
+            .from("operational_tasks")
+            .select("metadata")
+            .eq("id", input.workId)
+            .eq("org_id", input.orgId)
+            .maybeSingle();
+        const taskMd =
+            task?.metadata != null && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+                ? { ...(task.metadata as Record<string, unknown>) }
+                : {};
+        taskMd.last_contact_provenance = input.declaration.provenance;
+        if (input.declaration.channel) taskMd.last_contact_channel = input.declaration.channel;
+        await input.supabase
+            .from("operational_tasks")
+            .update({ metadata: taskMd })
+            .eq("id", input.workId)
+            .eq("org_id", input.orgId);
+    }
+
     const workTemplateKey = outcome.work_template_key?.trim() ?? plan.work_templates[0]?.template_key ?? "";
     if (workTemplateKey) {
         await recordStageWorkContactOutcomeTrace({
@@ -128,6 +165,7 @@ export async function completeStageWorkWithOutcome(
             outcomeLabel: outcome.label,
             plan,
             departmentMetadata: metadata,
+            declaration: input.declaration,
         });
     }
 

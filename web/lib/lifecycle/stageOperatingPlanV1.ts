@@ -33,12 +33,36 @@ export type StageWorkDuePolicy =
 
 export type StageWorkOwnerStrategy = "record_owner" | "creator" | "unassigned";
 
+/**
+ * Command-result sufficiency (R2). Configuration may declare that a specific
+ * objective result published by a platform capability satisfies a Current Work
+ * requirement — completing it with the mapped authored outcome, with no operator
+ * declaration required. `result` is always an objective capability result
+ * (e.g. "sent"), never an operator judgment. `satisfies_outcome_key` must name an
+ * authored outcome in the same stage. Absent a matching entry, a successful
+ * command never auto-completes the work.
+ */
+export type StageWorkSufficientCommandResultV1 = {
+    /** Platform capability that published the result (e.g. "communications_send"). */
+    capability: string;
+    /** Objective result key the capability published (e.g. "sent"). Never a declaration. */
+    result: string;
+    /** Authored stage outcome this objective result satisfies. */
+    satisfies_outcome_key: string;
+};
+
 export type StageWorkCompletionPolicyV1 = {
     min_attempts?: number;
     max_attempts?: number;
     window_days?: number;
     repeat_until_outcome?: boolean;
     repeat_due_days?: number;
+    /**
+     * Objective capability results configuration declares sufficient to satisfy
+     * this requirement (R2). Empty/absent → a successful command does not
+     * auto-complete the work.
+     */
+    sufficient_command_results?: StageWorkSufficientCommandResultV1[];
 };
 
 export type StageWorkTemplateActionRefV1 = {

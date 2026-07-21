@@ -56,6 +56,18 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 owner_strategy: "record_owner",
                 work_definition_key: "contact_family",
                 execution_mode: "direct_action",
+                // Command-result sufficiency (R2): an objective integrated send is
+                // "contact attempted" (left_message, stays in stage) — configuration,
+                // not code, decides this. The operator is never asked to re-declare it.
+                completion_policy: {
+                    sufficient_command_results: [
+                        {
+                            capability: "communications_send",
+                            result: "sent",
+                            satisfies_outcome_key: "left_message",
+                        },
+                    ],
+                },
                 primary_action: { action_ref: "quick_message", override_label: "Contact Family" },
                 helpful_actions: [
                     { action_ref: "schedule_tour" },
