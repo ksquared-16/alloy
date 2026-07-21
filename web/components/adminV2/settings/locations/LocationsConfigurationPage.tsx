@@ -49,6 +49,7 @@ import {
     locationWorkspaceHref,
     type LocationWorkspaceTab,
 } from "@/lib/locations/locationWorkspaceModel";
+import { invalidateLocationsCollection } from "@/lib/locations/locationsCollectionCache";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 
 export default function LocationsConfigurationPage({
@@ -61,8 +62,10 @@ export default function LocationsConfigurationPage({
     initialItemId?: string | null;
 }) {
     const router = useRouter();
-    const { canMutate } = useAdminAuth();
+    const { canMutate, orgId: authOrgId } = useAdminAuth();
     const continuity = useConfigurationContinuityOptional();
+    const orgId = continuity?.orgId || authOrgId || "";
+    const retainedLocationId = continuity?.selection?.locationId ?? null;
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
     const [creatingRoom, setCreatingRoom] = useState(false);
@@ -86,6 +89,7 @@ export default function LocationsConfigurationPage({
     const {
         selectedId,
         setSelectedId,
+        shouldSyncRoute,
         loading,
         error,
         setError,
@@ -103,7 +107,27 @@ export default function LocationsConfigurationPage({
         programOptionsForSite,
         ageUnitSelectOptions,
         setSchedulePatterns,
-    } = useLocationsConfigurationSettings({ initialLocationId });
+    } = useLocationsConfigurationSettings({
+        initialLocationId,
+        orgId,
+        retainedLocationId,
+    });
+
+    // Retained Continuity restore → replace-sync URL (no history loop).
+    useEffect(() => {
+        if (!shouldSyncRoute || !selectedId) return;
+        router.replace(locationWorkspaceHref(selectedId, activeTab));
+    }, [shouldSyncRoute, selectedId, activeTab, router]);
+
+    // Back/Forward + soft-nav query updates: server props project into local concern state.
+    useEffect(() => {
+        setActiveTab(initialTab);
+        if (initialTab === "tours") setToursKeepAlive(true);
+        if (initialTab === "placement") setPlacementKeepAlive(true);
+        setSelectedRoomId(initialTab === "rooms" ? initialItemId : null);
+        setSelectedProgramId(initialTab === "programs" ? initialItemId : null);
+        setSelectedScheduleId(initialTab === "schedule" ? initialItemId : null);
+    }, [initialTab, initialItemId, initialLocationId]);
 
     const visibleSites = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -259,7 +283,8 @@ export default function LocationsConfigurationPage({
         if (tab === "placement") setPlacementKeepAlive(true);
         setActiveTab(tab);
         continuity?.rememberLocationSelection({ locationId, tab, itemId: null });
-        router.replace(locationWorkspaceHref(locationId, tab));
+        // Explicit operator selection — push so Back/Forward work across locations.
+        router.push(locationWorkspaceHref(locationId, tab));
     };
 
     const returnToLocations = () => {
@@ -269,7 +294,7 @@ export default function LocationsConfigurationPage({
         setCreatingSchedule(false);
         setActiveTab("overview");
         continuity?.rememberLocationSelection({ locationId: null, tab: null, itemId: null });
-        router.replace(locationsLandingHref());
+        router.push(locationsLandingHref());
     };
 
     const navigate = useCallback(
@@ -286,7 +311,8 @@ export default function LocationsConfigurationPage({
                 tab,
                 itemId: itemId ?? null,
             });
-            router.replace(locationWorkspaceHref(selectedSite.id, tab, itemId));
+            // Nested concern navigation — push for Back/Forward between concerns.
+            router.push(locationWorkspaceHref(selectedSite.id, tab, itemId));
         },
         [continuity, router, selectedSite],
     );
@@ -549,6 +575,9 @@ export default function LocationsConfigurationPage({
                                     onCancel={() => setCreatingSchedule(false)}
                                     onCreated={(created) => {
                                         setSchedulePatterns((current) => [...current, created]);
+                                        if (orgId) {
+                                            invalidateLocationsCollection(orgId, "schedule-pattern-created");
+                                        }
                                         setSelectedScheduleId(created.id);
                                         setCreatingSchedule(false);
                                         navigate("schedule", created.id);
@@ -562,6 +591,9 @@ export default function LocationsConfigurationPage({
                                         setSchedulePatterns((prev) =>
                                             prev.map((pattern) => (pattern.id === row.id ? row : pattern)),
                                         );
+                                        if (orgId) {
+                                            invalidateLocationsCollection(orgId, "schedule-pattern-updated");
+                                        }
                                     }}
                                     onError={setError}
                                 />
@@ -712,7 +744,12 @@ export default function LocationsConfigurationPage({
                                 onSelect={(locationId) => {
                                     setSelectedId(locationId);
                                     setEditingSite(false);
-                                    router.replace(locationWorkspaceHref(locationId, activeTab));
+                                    continuity?.rememberLocationSelection({
+                                        locationId,
+                                        tab: activeTab,
+                                        itemId: null,
+                                    });
+                                    router.push(locationWorkspaceHref(locationId, activeTab));
                                 }}
                             />
                         :   null}
@@ -733,7 +770,12 @@ export default function LocationsConfigurationPage({
                                         onChange={(event) => {
                                             setSelectedId(event.target.value);
                                             setEditingSite(false);
-                                            router.replace(locationWorkspaceHref(event.target.value, activeTab));
+                                            continuity?.rememberLocationSelection({
+                                                locationId: event.target.value,
+                                                tab: activeTab,
+                                                itemId: null,
+                                            });
+                                            router.push(locationWorkspaceHref(event.target.value, activeTab));
                                         }}
                                     >
                                         {siteRows.map((site) => (

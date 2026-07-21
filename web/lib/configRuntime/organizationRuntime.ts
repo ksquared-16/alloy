@@ -132,7 +132,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         key: "locations",
         label: "Locations",
         description: "Consumers of organization configuration and owners of local delivery resources.",
-        href: "/settings/locations",
+        href: "/organization/locations",
         icon: "locations",
         publisherLabel: "Organization",
         configurationOwner: "Locations",

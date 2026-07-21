@@ -42,8 +42,8 @@ import {
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
 import {
+    isLocationsConfigurationPath,
     LOCATION_SETTINGS_LOCATION_ID_PARAM,
-    LOCATION_SETTINGS_PATH,
 } from "@/lib/admin/canonicalLocationSettingsRoutes";
 
 type ConfigurationContinuityContextValue = {
@@ -121,7 +121,7 @@ export function ConfigurationContinuityProvider({
     useEffect(() => {
         const path = normalizeToCanonicalAdminPath(pathname ?? "");
         markConfigurationContinuity("shell_retained", { path });
-        if (path === LOCATION_SETTINGS_PATH) {
+        if (isLocationsConfigurationPath(path)) {
             rememberLocationSelection({
                 locationId: readSearchParam(LOCATION_SETTINGS_LOCATION_ID_PARAM),
                 tab: readSearchParam("tab"),

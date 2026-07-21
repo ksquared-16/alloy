@@ -96,7 +96,7 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
         description: "Who uses the system and where.",
         items: [
             {
-                href: settings("locations"),
+                href: "/organization/locations",
                 label: "Locations",
                 description: "Sites, Programs offered, delivery resources, and local schedules.",
             },

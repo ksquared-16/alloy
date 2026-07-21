@@ -15,7 +15,10 @@ import {
     isCanonicalSettingsPath,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
-import { LOCATION_SETTINGS_PATH } from "@/lib/admin/canonicalLocationSettingsRoutes";
+import {
+    LOCATION_SETTINGS_PATH,
+    ORGANIZATION_LOCATIONS_PATH,
+} from "@/lib/admin/canonicalLocationSettingsRoutes";
 import { emitPerf, perfDevDetailEnabled } from "@/lib/perf/perfNamespaceLog";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 
@@ -53,6 +56,7 @@ export function normalizeConfigurationSoftNavPathname(pathname: string): string 
 
 export type ConfigurationPrefetchTarget =
     | typeof CANONICAL_ORGANIZATION_BASE
+    | typeof ORGANIZATION_LOCATIONS_PATH
     | typeof LOCATION_SETTINGS_PATH
     | typeof CANONICAL_ORGANIZATION_PROGRAMS_HREF
     | `${typeof CANONICAL_SETTINGS_BASE}/${string}`;
@@ -110,6 +114,6 @@ export function markConfigurationContinuity(
  */
 export const CONFIGURATION_CONTINUITY_WARM_HREFS = [
     CANONICAL_ORGANIZATION_BASE,
-    LOCATION_SETTINGS_PATH,
+    ORGANIZATION_LOCATIONS_PATH,
     CANONICAL_ORGANIZATION_PROGRAMS_HREF,
 ] as const;

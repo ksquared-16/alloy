@@ -50,7 +50,7 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         description: "Manage the foundation of your organization.",
         items: [
             {
-                href: settings("locations"),
+                href: "/organization/locations",
                 label: "Locations",
                 description: "Sites, Programs offered, delivery resources, and local schedules.",
                 icon: "locations",

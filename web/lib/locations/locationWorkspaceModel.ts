@@ -90,7 +90,7 @@ export function parseLocationWorkspaceTab(raw: string | string[] | null | undefi
 
 /** Organization-level Locations landing — no location selected. */
 export function locationsLandingHref(): string {
-    return "/settings/locations";
+    return "/organization/locations";
 }
 
 export function locationWorkspaceHref(
@@ -105,7 +105,7 @@ export function locationWorkspaceHref(
     if (tab !== "overview") params.set("tab", tab);
     if (normalizedItemId) params.set("itemId", normalizedItemId);
     const search = params.toString();
-    return `/settings/locations${search ? `?${search}` : ""}`;
+    return `/organization/locations${search ? `?${search}` : ""}`;
 }
 
 export type LocationsCollectionLocationSummary = {

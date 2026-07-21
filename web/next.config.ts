@@ -192,6 +192,13 @@ const nextConfig: NextConfig = {
       { source: "/settings/surfaces", destination: "/adminV2/settings/surfaces" },
       { source: "/settings/surfaces/:path*", destination: "/adminV2/settings/surfaces/:path*" },
       /**
+       * Organization Locations — browser URL `/organization/locations`.
+       * Must precede the exact `/organization` rewrite. Compatibility `/settings/locations`
+       * remains via the generic `/settings/:path*` rewrite.
+       */
+      { source: "/organization/locations", destination: "/adminV2/settings/locations" },
+      { source: "/organization/locations/:path*", destination: "/adminV2/settings/locations/:path*" },
+      /**
        * Organization Programs — browser URL `/organization/programs` (and optional
        * `?programId=` selection). Must precede the exact `/organization` rewrite.
        */
