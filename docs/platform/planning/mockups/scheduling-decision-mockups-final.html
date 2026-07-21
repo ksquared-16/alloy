@@ -88,7 +88,7 @@
   .dsev{font-size:9.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(188,67,0,.10);color:var(--ember)}
   .dprob{margin-top:6px;font-size:15px;font-weight:600;color:var(--forge);line-height:1.3}
   .dprob small{display:block;font-size:11.5px;font-weight:500;color:var(--muted);margin-top:2px}
-  .opt{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid rgba(39,63,82,.05)} .opt:last-child{border-bottom:none}
+  .opt{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid rgba(39,63,82,.05);cursor:pointer;border-radius:6px} .opt:last-child{border-bottom:none} .opt:hover{background:rgba(0,162,131,.04)}
   .oradio{width:15px;height:15px;border-radius:50%;border:2px solid var(--mid-25);flex:0 0 auto;position:relative} .opt.on .oradio{border-color:var(--pine)} .opt.on .oradio::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--pine)}
   .onm{font-size:13px;font-weight:600;color:var(--forge)} .opt.off .onm{font-weight:500;color:var(--mid-70)}
   .orec{font-size:9.5px;font-weight:600;color:var(--pine);background:rgba(0,162,131,.10);padding:2px 7px;border-radius:999px;margin-left:auto}
@@ -198,13 +198,13 @@
     +'<div class="dcard">'
     +'<div class="dsec"><div class="dlabel"><span>What needs deciding</span><span class="dsev">Over ratio</span></div><div class="dprob">Thursday has 12 children in a room that holds 11<small>Ava\'s enrollment starts Thursday, putting the room one over its two-teacher limit.</small></div></div>'
     +'<div class="dsec"><div class="dlabel"><span>Options</span></div>'
-    +'<div class="opt on"><span class="oradio"></span><div style="min-width:0;flex:1"><span class="onm">Move Ethan to Sunshine</span><div class="odesc">Sunshine has room every day · keeps Ethan with his cohort</div></div><span class="orec">Recommended</span></div>'
-    +'<div class="opt off"><span class="oradio"></span><div style="min-width:0;flex:1"><span class="onm">Add a teacher Thursday</span><div class="odesc">Allows up to 17 · adds ~$180 in labor</div></div></div>'
-    +'<div class="opt off"><span class="oradio"></span><div style="min-width:0;flex:1"><span class="onm">Drop one Thursday session</span><div class="odesc">Back within ratio · loses $62 in tuition</div></div></div>'
+    +'<div class="opt on" data-after="11 / 11" data-afterlabel="in ratio" data-meta="Labor&nbsp;<b>no change</b> &nbsp;·&nbsp; Tuition&nbsp;<b>no change</b> &nbsp;·&nbsp; Conflicts&nbsp;<b>none</b>"><span class="oradio"></span><div style="min-width:0;flex:1"><span class="onm">Move Ethan to Sunshine</span><div class="odesc">Sunshine has room every day · keeps Ethan with his cohort</div></div><span class="orec">Recommended</span></div>'
+    +'<div class="opt off" data-after="12 / 17" data-afterlabel="in ratio · 3 staff" data-meta="Labor&nbsp;<b>+$180</b> &nbsp;·&nbsp; Tuition&nbsp;<b>no change</b> &nbsp;·&nbsp; Conflicts&nbsp;<b>none</b>"><span class="oradio"></span><div style="min-width:0;flex:1"><span class="onm">Add a teacher Thursday</span><div class="odesc">Allows up to 17 · adds ~$180 in labor</div></div></div>'
+    +'<div class="opt off" data-after="11 / 11" data-afterlabel="in ratio" data-meta="Labor&nbsp;<b>no change</b> &nbsp;·&nbsp; Tuition&nbsp;<b>−$62</b> &nbsp;·&nbsp; Conflicts&nbsp;<b>none</b>"><span class="oradio"></span><div style="min-width:0;flex:1"><span class="onm">Drop one Thursday session</span><div class="odesc">Back within ratio · loses $62 in tuition</div></div></div>'
     +'</div>'
     +'<div class="dsec"><div class="dlabel"><span>What changes</span></div>'
-    +'<div class="trade"><div class="tside now"><div class="te">Now</div><div class="tv tab">12 / 11</div><div class="td">over ratio</div></div><div class="tarrow">→</div><div class="tside then"><div class="te">After</div><div class="tv tab">11 / 11</div><div class="td">in ratio</div></div></div>'
-    +'<div class="tmeta"><span>Labor <b>no change</b></span><span>Tuition <b>no change</b></span><span>Conflicts <b>none</b></span></div></div>'
+    +'<div class="trade"><div class="tside now"><div class="te">Now</div><div class="tv tab">12 / 11</div><div class="td">over ratio</div></div><div class="tarrow">→</div><div class="tside then"><div class="te">After</div><div class="tv tab" id="v1-after">11 / 11</div><div class="td" id="v1-afterlabel">in ratio</div></div></div>'
+    +'<div class="tmeta" id="v1-meta">Labor&nbsp;<b>no change</b> &nbsp;·&nbsp; Tuition&nbsp;<b>no change</b> &nbsp;·&nbsp; Conflicts&nbsp;<b>none</b></div></div>'
     +'<div class="dfoot"><span class="note">Nothing changes until you commit.</span><button class="dcommit">Commit</button></div>'
     +'</div></div></div>'
     +'</div>';
@@ -222,6 +222,17 @@
 
   var S={overview:OVERVIEW,decision:DECISION,roster:ROSTER};
   Object.keys(S).forEach(function(k){document.getElementById('s-'+k).innerHTML=S[k];});
+  // interactive compare: selecting an option updates "What changes"
+  (function(){
+    var opts=document.querySelectorAll('#s-decision .opt');
+    opts.forEach(function(o){o.addEventListener('click',function(){
+      opts.forEach(function(x){x.classList.add('off');x.classList.remove('on');});
+      o.classList.remove('off');o.classList.add('on');
+      document.getElementById('v1-after').textContent=o.getAttribute('data-after');
+      document.getElementById('v1-afterlabel').textContent=o.getAttribute('data-afterlabel');
+      document.getElementById('v1-meta').innerHTML=o.getAttribute('data-meta');
+    });});
+  })();
   var subEl=document.getElementById('subtabs'),ophEl=document.getElementById('oph');
   function render(key){
     subEl.innerHTML=subtabs[key].map(function(t){return '<span class="st'+(t[1]?' on':'')+'">'+t[0]+'</span>';}).join('');

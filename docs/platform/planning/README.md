@@ -15,6 +15,11 @@ This folder holds one architecture and the trail that discovered it. If you read
 
 - **[alloy-decision-architecture.md](./alloy-decision-architecture.md)** — the single, final architecture. Operator model, platform model, engineering composition, the fixed vocabulary, BOS doctrine, and the one reusable Focus Panel card. Two minutes for an operator; fifteen for an engineer. Everything else here is provenance.
 
+## Build V1 (from architecture to product)
+
+- **[mvp-product-definition.md](./mvp-product-definition.md)** — the smallest shippable-today product: three scheduling problems (over-ratio · unplaced child · start-date conflict), the resolve→compare→commit experience, a read-only roster, minimal BOS. V1 / V2 / deferred, ruthlessly scoped.
+- **[engineering-handoff.md](./engineering-handoff.md)** — implementation-ready: per-screen spec (purpose · workflow · data · capabilities · dependencies · priority), a 7-step build sequence, and acceptance criteria — all on the existing substrate, no new runtime.
+
 ## The other final artifacts
 
 - **[decision-rfc-recommendations.md](./decision-rfc-recommendations.md)** — what becomes platform doctrine, one RFC, implementation work, future research, and what was discarded. Assumes implementation begins next.
