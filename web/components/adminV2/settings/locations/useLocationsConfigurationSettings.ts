@@ -377,7 +377,17 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
     );
 
     const patchProgramCategory = useCallback(
-        async (categoryId: string, patch: { label?: string; is_active?: boolean; sort_order?: number; metadata?: Record<string, unknown> }) => {
+        async (
+            categoryId: string,
+            patch: {
+                label?: string;
+                is_active?: boolean;
+                sort_order?: number;
+                metadata?: Record<string, unknown>;
+                local_description_override?: string | null;
+                local_authorization_evidence?: string | null;
+            },
+        ) => {
             const res = await fetch("/api/admin/location-program-categories", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },

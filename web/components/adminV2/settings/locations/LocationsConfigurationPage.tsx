@@ -14,6 +14,7 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
     ConfigChildObjectMasterDetail,
+    ConfigDetailRuntime,
     ConfigObjectHeader,
     ConfigScopeContextBar,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
@@ -29,7 +30,6 @@ import {
     LocationPlacementPanel,
     LocationToursPanel,
 } from "@/components/adminV2/settings/locations/LocationOwnedConcernPanels";
-import LocationProgramCreatePanel from "@/components/adminV2/settings/locations/LocationProgramCreatePanel";
 import { LocationIdentityFactsRow } from "@/components/adminV2/settings/locations/LocationIdentityFactsRow";
 import { LocationOverviewSurface } from "@/components/adminV2/settings/locations/LocationOverviewSurface";
 import { LocationsCommandRailActions } from "@/components/adminV2/settings/locations/LocationsCommandRailActions";
@@ -63,7 +63,6 @@ export default function LocationsConfigurationPage({
     const { canMutate } = useAdminAuth();
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
-    const [creatingProgram, setCreatingProgram] = useState(false);
     const [creatingRoom, setCreatingRoom] = useState(false);
     const [creatingSchedule, setCreatingSchedule] = useState(false);
     const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
@@ -96,7 +95,6 @@ export default function LocationsConfigurationPage({
         selectedSite,
         createSiteLocation,
         createRoomUnit,
-        createProgramCategory,
         patchLocation,
         patchProgramCategory,
         roomCapacitySummaryForSite,
@@ -253,7 +251,6 @@ export default function LocationsConfigurationPage({
         setSelectedId(locationId);
         setEditingSite(false);
         setCreatingSite(false);
-        setCreatingProgram(false);
         setCreatingRoom(false);
         setCreatingSchedule(false);
         if (tab === "tours") setToursKeepAlive(true);
@@ -265,7 +262,6 @@ export default function LocationsConfigurationPage({
     const returnToLocations = () => {
         setSelectedId(null);
         setEditingSite(false);
-        setCreatingProgram(false);
         setCreatingRoom(false);
         setCreatingSchedule(false);
         setActiveTab("overview");
@@ -277,7 +273,6 @@ export default function LocationsConfigurationPage({
             if (!selectedSite) return;
             setActiveTab(tab);
             setEditingSite(false);
-            setCreatingProgram(false);
             setCreatingRoom(false);
             setCreatingSchedule(false);
             if (tab === "tours") setToursKeepAlive(true);
@@ -305,7 +300,6 @@ export default function LocationsConfigurationPage({
         if (!selectedSite || !canMutate) return;
         setActiveTab("rooms");
         setEditingSite(false);
-        setCreatingProgram(false);
         setCreatingSchedule(false);
         setCreatingRoom(true);
         setError(null);
@@ -314,14 +308,8 @@ export default function LocationsConfigurationPage({
 
     const addProgram = useCallback(() => {
         if (!selectedSite || !canMutate) return;
-        setActiveTab("programs");
-        setEditingSite(false);
-        setCreatingRoom(false);
-        setCreatingSchedule(false);
-        setCreatingProgram(true);
-        setError(null);
-        router.replace(locationWorkspaceHref(selectedSite.id, "programs"));
-    }, [canMutate, router, selectedSite, setError]);
+        router.push("/organization/programs");
+    }, [canMutate, router, selectedSite]);
 
     const firstRoomNeedingCapacityId = useMemo(() => {
         const match = selectedRooms.find((room) => !readLocationMetadataPresentation(room.metadata).capacity);
@@ -442,29 +430,13 @@ export default function LocationsConfigurationPage({
                     canMutate={canMutate}
                     onSave={patchProgramCategory}
                     programs={selectedPrograms}
-                    selectedProgramId={creatingProgram ? null : effectiveProgramId}
+                    selectedProgramId={effectiveProgramId}
                     onSelectProgram={(programId) => {
                         setSelectedProgramId(programId);
                         navigate("programs", programId);
                     }}
                     onAddProgram={canMutate ? addProgram : undefined}
                     ageUnitSelectOptions={ageUnitSelectOptions}
-                    createDetail={
-                        creatingProgram ?
-                            <LocationProgramCreatePanel
-                                siteLabel={model?.displayName ?? ""}
-                                ageUnitSelectOptions={ageUnitSelectOptions}
-                                scheduleSummary={scheduleSummary}
-                                onCancel={() => setCreatingProgram(false)}
-                                onCreate={async (input) => {
-                                    const newId = await createProgramCategory(selectedSite.id, input);
-                                    setCreatingProgram(false);
-                                    setSelectedProgramId(newId);
-                                    navigate("programs", newId);
-                                }}
-                            />
-                        :   undefined
-                    }
                 />
             );
         }
@@ -777,11 +749,8 @@ export default function LocationsConfigurationPage({
                                     onAddLocation={beginAddLocation}
                                     canMutate={canMutate}
                                 />
-                            :   <>
-                                    <section
-                                        className="process-config-setup-card px-5 pb-0 pt-4"
-                                        data-testid="locations-hero"
-                                    >
+                            :   <ConfigDetailRuntime<LocationWorkspaceTab>
+                                    header={
                                         <ConfigObjectHeader
                                             size="hero"
                                             name={model?.displayName ?? "Location"}
@@ -829,32 +798,15 @@ export default function LocationsConfigurationPage({
                                             }
                                             testId="locations-object-header"
                                         />
-
-                                        <div
-                                            className="mt-3.5 flex overflow-x-auto border-t border-alloy-stone/25"
-                                            role="tablist"
-                                            aria-label="Location configuration"
-                                        >
-                                            {LOCATION_WORKSPACE_TABS.map((tab) => (
-                                                <button
-                                                    key={tab.key}
-                                                    type="button"
-                                                    role="tab"
-                                                    aria-selected={activeTab === tab.key && !editingSite}
-                                                    className={`shrink-0 border-b-2 px-3 py-2 text-xs font-semibold ${
-                                                        activeTab === tab.key && !editingSite ?
-                                                            "border-[#00a283] text-[#007d68]"
-                                                        :   "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/75"
-                                                    }`}
-                                                    onClick={() => navigate(tab.key)}
-                                                    data-testid={`locations-tab-${tab.key}`}
-                                                >
-                                                    {tab.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </section>
-
+                                    }
+                                    tabs={LOCATION_WORKSPACE_TABS}
+                                    activeSection={activeTab}
+                                    onSectionChange={navigate}
+                                    testId="locations-detail-runtime"
+                                    headerTestId="locations-hero"
+                                    tabAriaLabel="Location configuration"
+                                    tabTestIdPrefix="locations-tab"
+                                >
                                     {tabBody}
                                     {toursKeepAlive && !editingSite ?
                                         <div
@@ -880,7 +832,7 @@ export default function LocationsConfigurationPage({
                                             />
                                         </div>
                                     :   null}
-                                </>
+                                </ConfigDetailRuntime>
                             }
                         </main>
                     </div>

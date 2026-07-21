@@ -36,8 +36,18 @@ function todayYmd(): string {
     return new Date().toISOString().slice(0, 10);
 }
 
-export default function CommercialSimulatorPanel({ programs, cadences }: { programs: ProgramLite[]; cadences: CadenceLite[] }) {
-    const [programKey, setProgramKey] = useState("");
+export default function CommercialSimulatorPanel({
+    programs,
+    cadences,
+    focusProgramKey,
+    embedded = false,
+}: {
+    programs: ProgramLite[];
+    cadences: CadenceLite[];
+    focusProgramKey?: string;
+    embedded?: boolean;
+}) {
+    const [programKey, setProgramKey] = useState(focusProgramKey ?? "");
     const [offerings, setOfferings] = useState<OfferingLite[]>([]);
     const [variants, setVariants] = useState<VariantLite[]>([]);
     const [offeringId, setOfferingId] = useState("");
@@ -48,6 +58,10 @@ export default function CommercialSimulatorPanel({ programs, cadences }: { progr
     const [running, setRunning] = useState(false);
     const [preview, setPreview] = useState<CommercialExecutionPreview | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (focusProgramKey) setProgramKey(focusProgramKey);
+    }, [focusProgramKey]);
 
     useEffect(() => {
         if (!programKey) { setOfferings([]); setOfferingId(""); return; }
@@ -87,27 +101,38 @@ export default function CommercialSimulatorPanel({ programs, cadences }: { progr
     const canRun = programKey && variantId && asOf;
 
     return (
-        <div className="flex min-h-0 flex-1 overflow-auto">
+        <div
+            className="flex min-h-0 flex-1 overflow-auto"
+            data-testid={embedded ? "program-pricing-preview" : "commercial-simulator-panel"}
+        >
             {/* Inputs */}
             <div className="w-80 shrink-0 border-r border-alloy-stone/20 bg-white/70 p-5 overflow-auto">
                 <h2 className="text-base font-semibold text-alloy-midnight">Simulator</h2>
                 <p className="mt-0.5 text-sm text-alloy-midnight/55">See exactly what a family will pay, using your current configuration.</p>
 
                 <div className="mt-4 space-y-3">
-                    <div><label className={labelCls}>Program</label>
-                        <select value={programKey} onChange={(e) => setProgramKey(e.target.value)} className={inputCls}>
-                            <option value="">Select a program…</option>
-                            {programs.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-                        </select>
-                    </div>
+                    {focusProgramKey ?
+                        <div>
+                            <label className={labelCls}>Program</label>
+                            <p className="mt-1 text-sm font-semibold text-alloy-midnight">
+                                {programs.find((program) => program.key === focusProgramKey)?.label ?? "Selected Program"}
+                            </p>
+                        </div>
+                    :   <div><label className={labelCls}>Program</label>
+                            <select value={programKey} onChange={(e) => setProgramKey(e.target.value)} className={inputCls}>
+                                <option value="">Select a program…</option>
+                                {programs.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+                            </select>
+                        </div>
+                    }
                     <div><label className={labelCls}>Offering</label>
-                        <select value={offeringId} onChange={(e) => setOfferingId(e.target.value)} disabled={!programKey} className={inputCls}>
+                        <select data-testid="commercial-simulator-offering" value={offeringId} onChange={(e) => setOfferingId(e.target.value)} disabled={!programKey} className={inputCls}>
                             <option value="">{programKey ? "Select an offering…" : "Select a program first"}</option>
                             {offerings.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                         </select>
                     </div>
                     <div><label className={labelCls}>Schedule</label>
-                        <select value={variantId} onChange={(e) => setVariantId(e.target.value)} disabled={!offeringId} className={inputCls}>
+                        <select data-testid="commercial-simulator-variant" value={variantId} onChange={(e) => setVariantId(e.target.value)} disabled={!offeringId} className={inputCls}>
                             <option value="">{offeringId ? "Select a schedule…" : "Select an offering first"}</option>
                             {variants.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
                         </select>

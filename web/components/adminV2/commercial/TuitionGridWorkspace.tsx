@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { ConfigScopeSelector, type ScopedLocation } from "@/components/configRuntime/ConfigScopeSelector";
 import { ConfigReadinessCard } from "@/components/configRuntime/ConfigReadinessCard";
 import OwnershipBadge from "@/components/configRuntime/OwnershipBadge";
@@ -35,9 +35,15 @@ type CellProps = {
     onSave: (
         variantId: string,
         cadenceKey: string,
-        payload: { rate_cents?: number; not_offered?: boolean },
+        payload: {
+            rate_cents?: number;
+            not_offered?: boolean;
+            effective_start?: string | null;
+            effective_end?: string | null;
+        },
     ) => Promise<void>;
     onClear: (rateId: string) => Promise<void>;
+    canManage: boolean;
 };
 
 function TuitionCell({
@@ -48,9 +54,13 @@ function TuitionCell({
     locationId,
     onSave,
     onClear,
+    canManage,
 }: CellProps) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState("");
+    const [effectiveStart, setEffectiveStart] = useState("");
+    const [effectiveEnd, setEffectiveEnd] = useState("");
+    const [dateError, setDateError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -62,17 +72,31 @@ function TuitionCell({
     const inheritedRate = isInherited ? orgDefaultRow?.rate_cents : null;
 
     function startEdit() {
-        if (isNotOffered) return;
+        if (!canManage || isNotOffered) return;
         setDraft(displayRate != null ? String(displayRate / 100) : "");
+        setEffectiveStart(rateRow?.effective_start ?? "");
+        setEffectiveEnd(rateRow?.effective_end ?? "");
+        setDateError(null);
         setEditing(true);
         setTimeout(() => inputRef.current?.select(), 0);
     }
 
     async function commitEdit() {
         const cents = parseDollarsToCents(draft);
-        if (cents === null) { setEditing(false); return; }
+        if (cents === null) {
+            setDateError("Enter a valid non-negative rate.");
+            return;
+        }
+        if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+            setDateError("Effective end must be on or after effective start.");
+            return;
+        }
         setSaving(true);
-        await onSave(variantId, cadenceKey, { rate_cents: cents });
+        await onSave(variantId, cadenceKey, {
+            rate_cents: cents,
+            effective_start: effectiveStart || null,
+            effective_end: effectiveEnd || null,
+        });
         setSaving(false);
         setEditing(false);
     }
@@ -92,20 +116,71 @@ function TuitionCell({
 
     if (editing) {
         return (
-            <td className="px-3 py-1">
-                <input
-                    ref={inputRef}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onBlur={commitEdit}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter") void commitEdit();
-                        if (e.key === "Escape") setEditing(false);
-                    }}
-                    className="w-full border border-pine-400 rounded px-2 py-0.5 text-sm text-right focus:outline-none"
-                    placeholder="0.00"
-                    autoFocus
-                />
+            <td className="min-w-56 px-3 py-2" data-testid={`tuition-rate-editor-${variantId}-${cadenceKey}`}>
+                <div className="space-y-2">
+                    <label className="block">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Rate</span>
+                        <input
+                            ref={inputRef}
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") void commitEdit();
+                                if (e.key === "Escape") setEditing(false);
+                            }}
+                            className="mt-0.5 w-full rounded border border-pine-400 px-2 py-1 text-right text-sm focus:outline-none"
+                            placeholder="0.00"
+                            autoFocus
+                        />
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <label>
+                            <span className="text-[10px] font-semibold text-gray-500">Effective from</span>
+                            <input
+                                type="date"
+                                value={effectiveStart}
+                                onChange={(event) => {
+                                    setEffectiveStart(event.target.value);
+                                    setDateError(null);
+                                }}
+                                className="mt-0.5 w-full rounded border border-gray-200 px-1.5 py-1 text-[11px]"
+                                data-testid="tuition-rate-effective-start"
+                            />
+                        </label>
+                        <label>
+                            <span className="text-[10px] font-semibold text-gray-500">Effective until</span>
+                            <input
+                                type="date"
+                                value={effectiveEnd}
+                                min={effectiveStart || undefined}
+                                onChange={(event) => {
+                                    setEffectiveEnd(event.target.value);
+                                    setDateError(null);
+                                }}
+                                className="mt-0.5 w-full rounded border border-gray-200 px-1.5 py-1 text-[11px]"
+                                data-testid="tuition-rate-effective-end"
+                            />
+                        </label>
+                    </div>
+                    {dateError ? <p className="text-[10px] text-red-600">{dateError}</p> : null}
+                    <div className="flex justify-end gap-2">
+                        <button
+                            type="button"
+                            className="text-[11px] font-medium text-gray-500"
+                            onClick={() => setEditing(false)}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            className="rounded bg-pine-600 px-2 py-1 text-[11px] font-semibold text-white"
+                            onClick={() => void commitEdit()}
+                            disabled={saving}
+                        >
+                            {saving ? "Saving…" : "Save rate"}
+                        </button>
+                    </div>
+                </div>
             </td>
         );
     }
@@ -115,7 +190,7 @@ function TuitionCell({
             className={[
                 "px-3 py-2 text-right text-sm group relative select-none",
                 isNotOffered ? "text-gray-300" : isInherited ? "text-gray-400 italic" : "text-gray-800",
-                saving ? "opacity-50" : "cursor-pointer hover:bg-gray-50",
+                saving || !canManage ? "opacity-70" : "cursor-pointer hover:bg-gray-50",
             ].join(" ")}
             onClick={isNotOffered ? undefined : startEdit}
             title={isInherited ? "Inherited from org default — click to override" : undefined}
@@ -138,7 +213,7 @@ function TuitionCell({
                         <span className="w-1.5 h-1.5 rounded-full bg-pine-500 flex-shrink-0" />
                     )}
                     <span>{formatRateCents(displayRate)}</span>
-                    {isLocOverride && rateRow?.id && (
+                    {canManage && isLocOverride && rateRow?.id && (
                         <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); void clearOverride(); }}
@@ -154,8 +229,14 @@ function TuitionCell({
             ) : (
                 <span className="text-gray-200">—</span>
             )}
+            {rateRow?.effective_start || rateRow?.effective_end ?
+                <span className="mt-0.5 block text-[10px] not-italic text-gray-400">
+                    {rateRow.effective_start ? `From ${rateRow.effective_start}` : "Current"}
+                    {rateRow.effective_end ? ` through ${rateRow.effective_end}` : ""}
+                </span>
+            :   null}
 
-            {!isNotOffered && (
+            {canManage && !isNotOffered && (
                 <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }}
@@ -217,7 +298,21 @@ function CompareCell({ orgRow, locRow, locationLabel }: CompareCellProps) {
 
 type WorkspaceMode = "edit" | "compare";
 
-export function TuitionGridWorkspace() {
+export function TuitionGridWorkspace({
+    programKey,
+    embedded = false,
+    canManage = true,
+    scopedRates,
+    scopedLocations,
+    onReload,
+}: {
+    programKey?: string;
+    embedded?: boolean;
+    canManage?: boolean;
+    scopedRates?: TuitionRateRow[];
+    scopedLocations?: ScopedLocation[];
+    onReload?: () => Promise<void>;
+} = {}) {
     const [locations, setLocations] = useState<ScopedLocation[]>([]);
     const [scope, setScope] = useState<ConfigScope | null>(null);
 
@@ -244,7 +339,11 @@ export function TuitionGridWorkspace() {
             try {
                 const [locRes, offeringRes, cadenceRes] = await Promise.all([
                     fetch("/api/admin/locations"),
-                    fetch("/api/admin/programs/offerings?active_only=true"),
+                    fetch(
+                        `/api/admin/programs/offerings?active_only=true${
+                            programKey ? `&program_key=${encodeURIComponent(programKey)}` : ""
+                        }`,
+                    ),
                     fetch("/api/admin/commercial/billing-cadences"),
                 ]);
 
@@ -253,7 +352,7 @@ export function TuitionGridWorkspace() {
                 const oid: string = String(rawLocs[0]?.org_id ?? "org");
                 setScope({ kind: "org", orgId: oid });
 
-                const locs: ScopedLocation[] = rawLocs.map((l) => ({
+                const locs: ScopedLocation[] = scopedLocations ?? rawLocs.map((l) => ({
                     id: String(l.id ?? ""),
                     name: String(l.name ?? ""),
                 }));
@@ -288,15 +387,25 @@ export function TuitionGridWorkspace() {
             }
         }
         void boot();
-    }, []);
+    }, [programKey, scopedLocations]);
 
     // ── Rates ──────────────────────────────────────────────────────────────────
 
     const loadRates = useCallback(async () => {
         if (!scope) return;
+        const locationId = scope.kind === "location" ? scope.locationId : null;
+        if (scopedRates) {
+            setAllRates(scopedRates);
+            setRates(
+                scopedRates.filter(
+                    (rate) => rate.location_id === null || rate.location_id === locationId,
+                ),
+            );
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
-            const locationId = scope.kind === "location" ? scope.locationId : null;
             const params = new URLSearchParams();
             if (locationId) params.set("location_id", locationId);
             const res = await fetch(`/api/admin/commercial/tuition-rates?${params}`);
@@ -309,7 +418,7 @@ export function TuitionGridWorkspace() {
         } finally {
             setLoading(false);
         }
-    }, [scope]);
+    }, [scope, scopedRates]);
 
     useEffect(() => { void loadRates(); }, [loadRates]);
 
@@ -336,7 +445,12 @@ export function TuitionGridWorkspace() {
     async function saveCell(
         variantId: string,
         cadenceKey: string,
-        payload: { rate_cents?: number; not_offered?: boolean },
+        payload: {
+            rate_cents?: number;
+            not_offered?: boolean;
+            effective_start?: string | null;
+            effective_end?: string | null;
+        },
     ) {
         setSaving(true);
         try {
@@ -356,7 +470,8 @@ export function TuitionGridWorkspace() {
                 const j = await res.json();
                 setError((j as { error?: string }).error ?? "Save failed");
             } else {
-                await loadRates();
+                if (onReload) await onReload();
+                else await loadRates();
             }
         } finally {
             setSaving(false);
@@ -367,7 +482,8 @@ export function TuitionGridWorkspace() {
         setSaving(true);
         try {
             await fetch(`/api/admin/commercial/tuition-rates/${rateId}`, { method: "DELETE" });
-            await loadRates();
+            if (onReload) await onReload();
+            else await loadRates();
         } finally {
             setSaving(false);
         }
@@ -392,11 +508,14 @@ export function TuitionGridWorkspace() {
                             location_id: locationId,
                             rate_cents: r.rate_cents,
                             not_offered: r.not_offered,
+                            effective_start: r.effective_start,
+                            effective_end: r.effective_end,
                         }),
                     }),
                 ),
             );
-            await loadRates();
+            if (onReload) await onReload();
+            else await loadRates();
         } finally {
             setBulkCopying(false);
         }
@@ -427,13 +546,15 @@ export function TuitionGridWorkspace() {
     }));
 
     return (
-        <div className="space-y-5">
+        <div className="space-y-5" data-testid={embedded ? "program-pricing-matrix" : "tuition-grid-workspace"}>
             {/* Header */}
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h1 className="text-xl font-semibold text-gray-900">Tuition Grid</h1>
+                    <h1 className={`${embedded ? "text-base" : "text-xl"} font-semibold text-gray-900`}>
+                        {embedded ? "Pricing matrix" : "Tuition Grid"}
+                    </h1>
                     <p className="text-sm text-gray-500 mt-0.5">
-                        Variant × billing cadence rates. Org defaults inherit to all sites.
+                        Variant × billing cadence rates. Organization defaults inherit to all Locations.
                     </p>
                 </div>
                 <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm flex-shrink-0">
@@ -462,6 +583,9 @@ export function TuitionGridWorkspace() {
                     </button>
                 </div>
             )}
+            {saving ?
+                <p className="text-xs font-medium text-alloy-bend-pine">Saving pricing…</p>
+            :   null}
 
             {variants.length > 0 && (
                 <ConfigReadinessCard readiness={readiness} scopeLabel="Org Default" />
@@ -482,6 +606,7 @@ export function TuitionGridWorkspace() {
                             <span className="text-pine-700">
                                 Viewing <strong>{scopeLabel}</strong> — green dot = local override, italic = inherited.
                             </span>
+                            {canManage ?
                             <button
                                 type="button"
                                 onClick={() => void bulkCopyOrgToLocation()}
@@ -490,6 +615,7 @@ export function TuitionGridWorkspace() {
                             >
                                 {bulkCopying ? "Copying…" : "Copy org defaults → this location"}
                             </button>
+                            : null}
                         </div>
                     )}
 
@@ -518,7 +644,7 @@ export function TuitionGridWorkspace() {
                                 </thead>
                                 <tbody>
                                     {offeringRows.map(({ offering, variants: offeringVariants }) => (
-                                        <>
+                                        <Fragment key={offering.id}>
                                             {/* Offering group header row */}
                                             <tr key={`offering-${offering.id}`} className="border-t border-gray-100 bg-gray-50/60">
                                                 <td
@@ -553,12 +679,13 @@ export function TuitionGridWorkspace() {
                                                                 locationId={locationId}
                                                                 onSave={saveCell}
                                                                 onClear={clearCell}
+                                                                canManage={canManage}
                                                             />
                                                         );
                                                     })}
                                                 </tr>
                                             ))}
-                                        </>
+                                        </Fragment>
                                     ))}
                                 </tbody>
                             </table>
@@ -624,7 +751,7 @@ export function TuitionGridWorkspace() {
                                 </thead>
                                 <tbody>
                                     {offeringRows.map(({ offering, variants: offeringVariants }) => (
-                                        <>
+                                        <Fragment key={offering.id}>
                                             <tr key={`offering-${offering.id}`} className="border-t border-gray-100 bg-gray-50/60">
                                                 <td
                                                     colSpan={cadences.length + 1}
@@ -658,7 +785,7 @@ export function TuitionGridWorkspace() {
                                                     })}
                                                 </tr>
                                             ))}
-                                        </>
+                                        </Fragment>
                                     ))}
                                 </tbody>
                             </table>

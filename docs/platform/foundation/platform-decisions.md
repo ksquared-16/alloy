@@ -51,6 +51,78 @@ Future Configuration domains use the Configuration Domain Card and publisher/con
 
 ---
 
+## 2026-07 — Configuration Platform Expansion Constitution
+
+**Decision:**
+After Programs proves Publication Runtime (assignment), remaining Organization domains are governed by the Configuration Platform Expansion Constitution. Domains are classified as Organization-only, publishable, assignable, Location-consumed, override-capable, and/or effective-value resolved. Operational Calculations is the recommended Product Consumer #2 because it proves value inheritance and Controlled Difference complementary to Programs’ availability assignment. Fields and Statuses remain Organization-only vocabulary.
+
+**Why:**
+Expansion must reuse frozen runtimes without making every domain behave like Programs or inventing sibling infrastructure.
+
+**Consequences:**
+Future Configuration domain initiatives cite
+`docs/platform/foundation/configuration-platform-expansion-constitution.md`
+and do not reopen Programs, Assignment, Locations Runtime, or Configuration visual language.
+
+**Canonical owners:** [`configuration-platform-expansion-constitution.md`](configuration-platform-expansion-constitution.md), [`../modules/configuration-platform.md`](../modules/configuration-platform.md).
+
+**Status:** Active
+
+---
+
+## 2026-07 — Organization Programs route is `/organization/programs`
+
+**Decision:**
+Programs is an Organization-owned Configuration domain. The canonical operator
+route is `/organization/programs` with optional `?programId=` selection.
+`/settings/commercial/programs` and related Commercial entry points are
+compatibility redirects only and must not render a competing page.
+
+**Why:**
+Product certification rejected Commercial/Settings hierarchy as Programs
+identity. Organization is the place; Programs, Locations, and Processes are its
+domains. Publication is behavior inside Programs, not the page’s parent identity.
+
+**Consequences:**
+Organization landing and domain cards link to `/organization/programs`.
+Locations and Processes remain on `/settings/locations` and `/settings/processes`
+until separately converged to `/organization/locations` and
+`/organization/processes`.
+
+**Canonical owners:** [`../modules/configuration-platform.md`](../modules/configuration-platform.md), [`../../system/organization-configuration-runtime-v2.md`](../../system/organization-configuration-runtime-v2.md).
+
+**Status:** Active
+
+---
+
+## 2026-07 — Program publication delivery is assignment, not Apply
+
+**Decision:**
+Configuration Publication Runtime V1 is a subsystem of Configuration Runtime.
+Publishing makes an immutable Organization Program revision authoritative.
+Distribution assigns that revision to selected Locations and advances their
+consumption pointers. Each Location independently owns whether it offers the
+Program.
+
+**Why:**
+Frozen ownership doctrine classifies a Program offered at a site as
+availability/assignment. Apply is reserved for copying published patterns into
+Location-owned truth. Program revision delivery preserves offer state,
+evidence, metadata, resources, schedules, and other operational facts, so
+calling it Apply would collapse two distinct contracts.
+
+**Consequences:**
+Programs registers `distributionMode: "assignment"` and does not register an
+Apply provider. Delivery statuses are `delivered`, `unchanged`, or `failed`.
+Future domains must declare independently whether publication delivery is
+inheritance, assignment, Apply, or none.
+
+**Canonical owners:** [`../modules/configuration-platform.md`](../modules/configuration-platform.md), [`../core/configuration-ownership-and-inheritance.md`](../core/configuration-ownership-and-inheritance.md), [`../../system/organization-configuration-runtime-v2.md`](../../system/organization-configuration-runtime-v2.md).
+
+**Status:** Active
+
+---
+
 ## 2026-07 — Operational Expectations Authority represented by a governed catalog + assignments
 
 **Decision:**

@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
+import { organizationProgramsHref } from "@/lib/admin/canonicalAdminRoutes";
 
 export const dynamic = "force-dynamic";
 
-// Consolidated: Commercial has one operator home — the tabbed workspace at
-// /settings/commercial (Programs & tuition is its first tab).
-export default function SettingsCommercialProgramsPage() {
-    redirect("/settings/commercial");
+/** Compatibility stub — next.config redirects; this never remains a competing page. */
+export default function LegacySettingsCommercialProgramsPage() {
+    redirect(organizationProgramsHref());
 }

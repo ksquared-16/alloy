@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-13 · **RLS policy count:** 709
+**Generated:** 2026-07-17 · **RLS policy count:** 733
 
 ## Posture
 
@@ -495,6 +495,41 @@
 | `config_layout_assist_proposals_select_org` | SELECT | {authenticated} | — |
 | `config_layout_assist_proposals_service_all` | ALL | {service_role} | — |
 | `config_layout_assist_proposals_update_admin` | UPDATE | {authenticated} | — |
+
+### `configuration_consumptions`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `configuration_consumptions_select_org` | SELECT | {authenticated} | — |
+| `configuration_consumptions_service_role_all` | ALL | {service_role} | — |
+
+### `configuration_delivery_attempts`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `configuration_delivery_attempts_select_org` | SELECT | {authenticated} | — |
+| `configuration_delivery_attempts_service_role_all` | ALL | {service_role} | — |
+
+### `configuration_distribution_runs`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `configuration_distribution_runs_select_org` | SELECT | {authenticated} | — |
+| `configuration_distribution_runs_service_role_all` | ALL | {service_role} | — |
+
+### `configuration_distribution_targets`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `configuration_distribution_targets_select_org` | SELECT | {authenticated} | — |
+| `configuration_distribution_targets_service_role_all` | ALL | {service_role} | — |
+
+### `configuration_publications`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `configuration_publications_select_org` | SELECT | {authenticated} | — |
+| `configuration_publications_service_role_all` | ALL | {service_role} | — |
 
 ### `consumption_event_types`
 
@@ -1103,6 +1138,34 @@
 |--------|---------|-------|--------------------------------|
 | `mutation_events_service_role_only` | ALL | {public} | — |
 
+### `operational_authorities`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `operational_authorities_select_org` | SELECT | {authenticated} | — |
+| `operational_authorities_service_all` | ALL | {authenticated} | — |
+
+### `operational_authority_assignments`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `operational_authority_assignments_select_org` | SELECT | {authenticated} | — |
+| `operational_authority_assignments_service_all` | ALL | {authenticated} | — |
+
+### `operational_expectation_ratifications`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `oe_ratifications_select_org` | SELECT | {authenticated} | — |
+| `oe_ratifications_service_all` | ALL | {authenticated} | — |
+
+### `operational_expectations`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `operational_expectations_select_org` | SELECT | {authenticated} | — |
+| `operational_expectations_service_all` | ALL | {authenticated} | — |
+
 ### `operational_tasks`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
@@ -1498,6 +1561,13 @@
 | `processing_resolutions_select_org` | SELECT | {authenticated} | — |
 | `processing_resolutions_update_org` | UPDATE | {authenticated} | — |
 
+### `program_drafts`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `program_drafts_select_org` | SELECT | {authenticated} | — |
+| `program_drafts_service_role_all` | ALL | {service_role} | — |
+
 ### `program_offering_variants`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
@@ -1517,6 +1587,20 @@
 | `program_offerings_insert_org` | INSERT | {authenticated} | — |
 | `program_offerings_select_org` | SELECT | {authenticated} | — |
 | `program_offerings_update_org` | UPDATE | {authenticated} | — |
+
+### `program_revisions`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `program_revisions_select_org` | SELECT | {authenticated} | — |
+| `program_revisions_service_role_all` | ALL | {service_role} | — |
+
+### `programs`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `programs_select_org` | SELECT | {authenticated} | — |
+| `programs_service_role_all` | ALL | {service_role} | — |
 
 ### `quotes`
 

@@ -6,6 +6,8 @@
  * distribution behavior here; they keep their own authoritative storage.
  */
 
+import { CANONICAL_ORGANIZATION_PROGRAMS_HREF } from "@/lib/admin/canonicalAdminRoutes";
+
 export type ConfigurationAuthority = "platform" | "organization" | "location";
 export type ConfigurationInheritanceKind = "value" | "availability" | "none";
 export type ConfigurationPublicationMode = "immediate" | "explicit";
@@ -91,13 +93,16 @@ export type OrganizationDistributionPlan = {
 
 export type OrganizationDistributionTargetResult = {
     locationId: string;
-    status: "applied" | "unchanged";
+    status: "applied" | "unchanged" | "failed";
+    errorCode?: string;
+    errorMessage?: string;
 };
 
 export type OrganizationDistributionResult = {
     auditId: string;
     authoritativeRevision: string;
     targets: OrganizationDistributionTargetResult[];
+    status?: "completed" | "partial_failure" | "failed";
 };
 
 export type OrganizationConfigurationApplyProvider = {
@@ -153,7 +158,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         internalRuntimeKey: "commercial",
         label: "Programs",
         description: "Reusable service catalog published by the organization for every business vertical.",
-        href: "/settings/commercial",
+        href: CANONICAL_ORGANIZATION_PROGRAMS_HREF,
         icon: "programs",
         publisherLabel: "Organization",
         configurationOwner: "Programs",
@@ -171,7 +176,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             label: "Not assessed",
             detail: "Programs will report health from its authoritative catalog.",
         },
-        distributionMode: "apply",
+        distributionMode: "assignment",
         ownedConfiguration: [
             "Catalog & categories",
             "Eligibility & licensing",

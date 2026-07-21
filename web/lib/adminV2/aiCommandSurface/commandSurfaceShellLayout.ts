@@ -60,12 +60,35 @@ export const COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS: readonly CommandSurfaceRa
     },
 ];
 
+export const CONFIGURATION_RAIL_STARTER_SUGGESTIONS: readonly CommandSurfaceRailStarterSuggestion[] = [
+    {
+        title: "Explain this configuration",
+        description: "Summarize the active state and working changes",
+        prompt: "Explain this configuration",
+        icon: "summarize",
+    },
+    {
+        title: "Review configuration attention",
+        description: "Identify setup, publication, or assignment issues",
+        prompt: "What configuration needs attention?",
+        icon: "missing",
+    },
+    {
+        title: "Review unpublished changes",
+        description: "Explain what remains private to Organization",
+        prompt: "Review unpublished configuration changes",
+        icon: "insight",
+    },
+];
+
 /** Context-aware first starter title (presentation only — prompts unchanged). */
 export function resolveCommandSurfaceRailStarterSuggestions(args: {
     hasWorkUnitScope: boolean;
     hasOpportunityContext: boolean;
     opportunitySingular: string;
+    isConfigurationContext?: boolean;
 }): readonly CommandSurfaceRailStarterSuggestion[] {
+    if (args.isConfigurationContext) return CONFIGURATION_RAIL_STARTER_SUGGESTIONS;
     const leadLabel =
         args.opportunitySingular === "Inquiry" || args.opportunitySingular === "Opportunity" ?
             "Lead"

@@ -89,6 +89,13 @@ Organization Runtime V2 ratifies **Program identity as organization-owned** (one
 
 Programs do not own Rooms/Delivery Resources, capacity, or schedules. A Location chooses what it offers; its resources deliver those Programs; resource and operational runtimes own capacity and scheduling truth.
 
+Publication is a lifecycle axis, not a replacement for availability. An
+Organization may publish an immutable Program revision and assign that revision
+to selected Locations. Assignment makes the revision consumable; the Location's
+separate offered/unavailable choice remains Location-owned. This is not Apply,
+because no Organization publication copies over Location-owned operational
+truth.
+
 ---
 
 ## 4. Inheritance doctrine
@@ -273,7 +280,7 @@ The same three pieces — **system-of-record rule** (§3), **scope ladder + reso
 |---|---|---|---|---|
 | **Locations / Sites** | — | itself | Locations · org | enrollment, scheduling |
 | **Rooms** | — | itself (capacity/ratio) | Locations · site | placement, attendance |
-| **Programs** | the commercial unit | Site/Room | Programs catalog (today Locations) · org→site (availability) | enrollment, pricing, scheduling |
+| **Programs** | the commercial unit | Site/Room | Organization Programs catalog · org→site (availability/assignment) | enrollment, pricing, scheduling |
 | **Services / Offerings** | Program/Org | — | Commercial Config · org→site | billing |
 | **Pricing / Tuition** | Program | — | Commercial Config · org→site→program→(room) | Consumption Resolver / billing |
 | **Funding** | Payer/Program | — | Commercial Config · org→site | resolver (responsibility split) |

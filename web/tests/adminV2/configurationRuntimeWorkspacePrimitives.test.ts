@@ -23,6 +23,12 @@ describe("Configuration Runtime workspace primitives", () => {
             "ConfigApplyToDialog",
             "ConfigChildObjectMasterDetail",
             "ConfigConsequenceLine",
+            "ConfigCollectionRail",
+            "ConfigDetailRuntime",
+            "ConfigPublicationOverview",
+            "ConfigAssignmentRuntime",
+            "ConfigDistributionRuntime",
+            "ConfigHistoryTimeline",
             "CONFIG_OBJECT_CELL",
             "ConfigWorkspaceCard",
         ]) {

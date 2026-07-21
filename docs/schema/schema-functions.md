@@ -2,16 +2,19 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-13 · **Function count:** 91
+**Generated:** 2026-07-17 · **Function count:** 108
 
 | Schema | Function | Return type | Security |
 |--------|----------|-------------|----------|
 | `public` | `agent_v0_commit_queue_definition_apply` | jsonb | true |
 | `public` | `agent_v1_commit_record_overview_layout_apply` | jsonb | true |
 | `public` | `agent_v2_commit_field_visibility_apply` | jsonb | true |
+| `public` | `assign_program_publication_target_v1` | jsonb | true |
 | `public` | `audit_cleaning_quote_pricing_matrix_legacy_parity` | record | true |
+| `public` | `author_operational_expectation` | jsonb | true |
 | `public` | `bump_communication_thread_last_message_at` | trigger | false |
 | `public` | `claim_due_communication_scheduled_sends` | communication_scheduled_sends | false |
+| `public` | `configuration_publication_immutable_guard` | trigger | false |
 | `public` | `current_org_id` | uuid | true |
 | `public` | `discounted_cents` | integer | false |
 | `public` | `enforce_childcare_charge_immutability` | trigger | false |
@@ -26,9 +29,11 @@
 | `public` | `execute_enrollment_status_mutation` | jsonb | true |
 | `public` | `execute_lead_status_mutation` | jsonb | true |
 | `public` | `execute_processing_identity_group` | jsonb | true |
+| `public` | `finalize_configuration_distribution_run_v1` | jsonb | true |
 | `public` | `fn_job_split_bps` | record | false |
 | `public` | `form_submission_canonical_capture` | jsonb | false |
 | `public` | `get_quote_pricing` | record | true |
+| `public` | `grant_operational_authority_assignment` | uuid | true |
 | `public` | `handle_new_user` | trigger | false |
 | `public` | `has_org_role` | boolean | true |
 | `public` | `is_admin` | boolean | false |
@@ -39,12 +44,20 @@
 | `public` | `post_payment_to_ledger` | void | true |
 | `public` | `prevent_child_attendance_events_mutation` | trigger | false |
 | `public` | `prevent_completed_schedule_history_rewrite` | trigger | false |
+| `public` | `prevent_oe_authority_assignments_mutation` | trigger | false |
+| `public` | `prevent_oe_ratifications_mutation` | trigger | false |
+| `public` | `prevent_operational_expectations_mutation` | trigger | false |
 | `public` | `processing_commit_attempts_append_only_guard` | trigger | false |
 | `public` | `processing_commit_plans_immutable_guard` | trigger | false |
 | `public` | `processing_facts_immutable_guard` | trigger | false |
 | `public` | `processing_plan_operations_immutable_guard` | trigger | false |
 | `public` | `processing_resolve_ref` | text | false |
+| `public` | `publish_program_revision_v1` | jsonb | true |
+| `public` | `ratify_operational_expectation` | jsonb | true |
 | `public` | `reconcile_consumption_correction` | jsonb | true |
+| `public` | `record_configuration_delivery_failure_v1` | jsonb | true |
+| `public` | `resolve_held_operational_authority` | uuid | true |
+| `public` | `revoke_operational_authority_assignment` | uuid | true |
 | `public` | `round_to_nearest_5_cents` | integer | false |
 | `public` | `scaled_base_cents` | integer | false |
 | `public` | `seed_default_rbac` | void | true |
@@ -66,6 +79,7 @@
 | `public` | `trg_jobs_assign_pricing_tier` | trigger | false |
 | `public` | `trg_jobs_increment_completed_counter` | trigger | false |
 | `public` | `trg_post_payment_to_ledger` | trigger | false |
+| `public` | `upsert_operational_authority` | uuid | true |
 | `public` | `user_belongs_to_org` | boolean | true |
 | `public` | `validate_child_attendance_events_consistency` | trigger | false |
 | `public` | `validate_child_enrollment_agreements_consistency` | trigger | false |
@@ -80,6 +94,9 @@
 | `public` | `validate_form_public_links_consistency` | trigger | false |
 | `public` | `validate_form_submission_documents_org_matches_document` | trigger | false |
 | `public` | `validate_form_submission_signatures_drawn_asset_org` | trigger | false |
+| `public` | `validate_oe_authority_assignment` | trigger | false |
+| `public` | `validate_oe_ratification` | trigger | false |
+| `public` | `validate_operational_expectations_lineage` | trigger | false |
 | `public` | `validate_opportunity_customer_members_consistency` | trigger | false |
 | `public` | `validate_opportunity_persons_consistency` | trigger | false |
 | `public` | `validate_person_child_relationship_roles_consistency` | trigger | false |

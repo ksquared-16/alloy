@@ -87,6 +87,17 @@ const nextConfig: NextConfig = {
       { source: "/settings", destination: "/organization", permanent: false },
       { source: "/settings/organization", destination: "/organization", permanent: false },
       /**
+       * Organization Programs — canonical under `/organization/programs`.
+       * Legacy Commercial compatibility entry points redirect; they must not remain product IA.
+       */
+      { source: "/settings/commercial/programs", destination: "/organization/programs", permanent: false },
+      { source: "/settings/commercial/programs/:path*", destination: "/organization/programs", permanent: false },
+      { source: "/admin/commercial/programs", destination: "/organization/programs", permanent: false },
+      { source: "/admin/commercial/programs/:path*", destination: "/organization/programs", permanent: false },
+      { source: "/adminV2/commercial/programs", destination: "/organization/programs", permanent: false },
+      { source: "/adminV2/settings/commercial/programs", destination: "/organization/programs", permanent: false },
+      { source: "/adminV2/settings/commercial/programs/:path*", destination: "/organization/programs", permanent: false },
+      /**
        * Surfaces rename — `/settings/layouts` is no longer product IA. Canonical
        * user-facing route is `/settings/surfaces`. Storage terms (entity_layouts,
        * LayoutDoc, surface, layout_key) are unchanged implementation details.
@@ -180,6 +191,12 @@ const nextConfig: NextConfig = {
        */
       { source: "/settings/surfaces", destination: "/adminV2/settings/surfaces" },
       { source: "/settings/surfaces/:path*", destination: "/adminV2/settings/surfaces/:path*" },
+      /**
+       * Organization Programs — browser URL `/organization/programs` (and optional
+       * `?programId=` selection). Must precede the exact `/organization` rewrite.
+       */
+      { source: "/organization/programs", destination: "/adminV2/settings/organization/programs" },
+      { source: "/organization/programs/:path*", destination: "/adminV2/settings/organization/programs/:path*" },
       { source: "/organization", destination: "/adminV2/settings/organization" },
       { source: "/settings/:path*", destination: "/adminV2/settings/:path*" },
       /**

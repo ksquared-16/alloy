@@ -172,7 +172,12 @@ The object is legible at rest — its state and health readable without clicking
 Changing an existing thing happens inline on the object, or in a focused editor for that one concern. Dialogs are for **creating** and **confirming destructive acts** only. There is no large CRUD form, no edit drawer over a data grid, as the primary experience.
 
 ### 6. Save is immediate and reversible
-Saving applies now and is undoable. When the substrate is effective-dated, that is carried by one quiet line ("Effective from Today"), never by exposing versioning. A future date yields a "Scheduled · Undo" affordance.
+For `live_on_save` domains, saving applies now and is undoable. In an
+explicit-publication domain, saving updates only the editable draft; consumers
+remain on the current published revision until the operator separately
+publishes. When the substrate is effective-dated, that is carried by one quiet
+line ("Effective from Today"), never by exposing versioning. A future date
+yields a "Scheduled · Undo" affordance.
 
 ### 7. Two status systems, never three
 An object answers exactly two questions, kept separate: **Attention** (is anything wrong right now?) and **Setup** (am I finished configuring?). Never a third "health" surface that competes with or contradicts them.
@@ -371,6 +376,20 @@ The following rules from the superseded and adjacent configuration doctrine rema
 ## Reference implementation
 
 **Locations is the reference implementation for Configuration Runtime V1** — the way Operational Runtime has its reference surfaces and the Focus Panel has its reference subjects. Every future configuration domain **references Locations**; it does not invent its own experience.
+
+### Reference-inheritance law
+
+**Locations is not merely a feature. It is the canonical Configuration Runtime
+reference implementation.** Every Organization Configuration Collection inherits
+its composition unless Product records a compelling domain exception. The
+Collection rail, object header, horizontal concern tabs, two-row Overview
+composition, Attention/Setup distinction, command ownership, and responsive
+behavior are Runtime—not domain design.
+
+Programs is the first publishable proof of this law. It consumes the same Detail,
+Header, Tab, and Overview Runtime as Locations; only its domain concerns and
+publishable lifecycle evidence differ. Publication adds concerns to the inherited
+workspace. It never becomes the workspace identity.
 
 Locations demonstrates the whole platform: an **organization landing** (configuration health across locations — never auto-opening a single object), an object list, an object workspace with owned-concern tabs (Programs offered, Rooms/Delivery Resources, Schedule, Tours, Placement, Access), a nested child-object workspace (Room / Program offering) that answers what is configured / needs attention / next action before editing, the two-status model (**Needs attention** + **Operational readiness**) **in the page body**, contextual commands on the **platform Actions rail** (not a page-local Actions card), **Scope** (Organization vs Location), quiet inheritance language, business-language timezone/locality identity (never raw IANA ids), and honest unknowns (unknown readiness areas are never counted incomplete). **Apply To… stays hidden in a domain until an authoritative copy provider exists; a confirmation dialog may never imply that a deferred copy was applied.** Communications is intentionally absent until ownership is ready.
 

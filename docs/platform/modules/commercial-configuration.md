@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
@@ -46,9 +46,13 @@ Implemented via `lib/configRuntime/scope.ts` — `ConfigScope`, `ConfigOwner`, `
 
 ## Domain: Programs
 
-**Route:** `/admin/commercial/programs`
+**Route:** `/organization/programs` (canonical). Legacy
+`/settings/commercial/programs` and `/admin/commercial/programs` redirect here.
 
-**Storage:** `location_program_categories` (existing table, per-site).
+**Storage:** Organization identity now uses `programs` → editable
+`program_drafts` → immutable `program_revisions`.
+`location_program_categories` remains the stable compatibility representation
+of a Location Program offering and carries its consumed revision link.
 
 **Ownership:** Organization. Programs define a reusable service catalog. Locations choose which Programs they offer.
 
@@ -56,7 +60,14 @@ Implemented via `lib/configRuntime/scope.ts` — `ConfigScope`, `ConfigOwner`, `
 
 **Operator model:** "Which programs does this location offer?" Not "which settings does this location have."
 
-**Compatibility backend:** `location_program_categories` + `/api/admin/location-program-categories` (GET, POST, PATCH) currently represent per-Location availability. Organization Configuration Runtime V2 does not migrate this storage or implement the downstream Programs module.
+**Publication backend:** `/api/admin/configuration/programs` owns draft,
+validation, publication, impact preview, Location assignment, history, and
+retry.
+`/api/admin/location-program-categories` remains the Location offering read and
+local-mutation path; direct creation of Program identity there is rejected.
+Assignment creates or links the stable row and advances its consumed revision
+without changing Location-owned offer state, evidence, metadata, resource
+relationships, or schedules.
 
 ---
 
@@ -108,7 +119,14 @@ These are scoped out of V1. Program-owned commercial, funding, and billing **def
 
 ## Backend gaps
 
-Commercial V1 is complete on its frozen substrate. The Programs target has one explicit compatibility gap: `location_program_categories` still carries per-Location identity and availability together. A future Programs migration must introduce authoritative organization catalog identity without changing the V2 ownership model. This sprint does not perform that migration. The tuition grid remains in `commercial_tuition_rates`.
+Commercial V1 remains complete on its frozen substrate. Programs now has
+authoritative Organization identity, immutable publication, and revision-linked
+Location consumption. `location_program_categories` still carries cached
+identity columns for compatibility because enrollment, placement, rules, and
+resource relationships reference its stable id. Effective Program identity
+resolves from the consumed revision; the compatibility row owns availability
+and permitted local values, not Program identity. Deleting or renaming this
+storage is deferred. The tuition grid remains in `commercial_tuition_rates`.
 
 The schedule type vocabulary (`childcare_schedule_type` option set) is an org option set today. Future work: per-location schedule offerings. This is deferred.
 

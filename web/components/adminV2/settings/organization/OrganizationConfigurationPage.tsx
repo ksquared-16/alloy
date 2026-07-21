@@ -132,6 +132,9 @@ export default function OrganizationConfigurationPage({
                             {locations.length === 0 ?
                                 <div className="py-1">
                                     <p className="text-sm font-semibold text-alloy-midnight">No Locations yet</p>
+                                    <p className="mt-1 max-w-lg text-xs leading-5 text-alloy-midnight/55">
+                                        Locations consume published Organization configuration. Add a Location before assigning Programs or other publishable configuration.
+                                    </p>
                                     <Link
                                         href="/settings/locations"
                                         className="mt-1.5 inline-block text-[11px] font-semibold text-[#007d68]"

@@ -27,11 +27,25 @@ The Canvas is the quiet Stone field behind the selected object's detail. A Regio
 ### Configuration Sidebar (Object List)
 The persistent selector for objects of the current type. Responsibilities: search, filter, "Add", and an unmistakable **selected** state. Swaps to a child object's siblings when the operator drills into a nested object. It is a selector, never a page.
 
+### Publishable Configuration Collection
+The complete catalog runtime for publishable objects. It composes the Configuration Sidebar with publication posture, durable assignment posture, Attention, Setup/Readiness, lifecycle filtering, and responsive object selection. Domains supply object nouns and authoritative evidence; the runtime owns the grammar. A transient workflow result is never collection posture.
+
+### Configuration Domain Empty State
+The first-use explanation for an empty Configuration Collection. It teaches what the domain is, why the Organization owns it, common examples, how setup flows, and the recommended next action. It is not a generic "no data" placeholder. The Runtime owns the composition; each domain supplies its operator nouns, examples, ownership consequence, and setup steps.
+
+### Configuration Runtime Notice
+The operator-safe presentation of unavailable Configuration. It distinguishes uninitialized domains, pending platform updates, denied access, temporary service unavailability, and failed actions. The operator sees consequence and next step, never table names, SQL, PostgREST codes, schema-cache language, or provider internals. Engineering receives the raw diagnostic in server logs under a short reference shown to the operator.
+
 ### Configuration Object Header
 Names the object being operated: object name (dominant), status badge, one row of identifying facts, and the object's primary action + overflow. The answer to "what am I configuring?" Every object workspace has exactly one.
 
 ### Workspace Tab Bar
-The object's **owned concerns** as tabs, led by Overview. Route-addressable. Tabs name concerns in business language, never features or subsystems.
+The object's **owned concerns** as one horizontal tab row, led by Overview. Route-addressable. Tabs name concerns in business language, never features or subsystems. Programs reuses the exact Tab Runtime established by Locations; a domain may change tab nouns, not invent a parallel concern map.
+
+### Publishable Configuration Detail Runtime
+The read-first object runtime for domains using immutable publication. It always opens on **Overview**, then registers the business concerns supplied by the domain adapter. Publication, Assignments, History, and Attention retain shared Runtime grammar; richer domains may add Definition, Requirements, Resources, Availability, child objects such as Offerings, related-authority projections such as Pricing, and directly named governance concerns such as Policies and Relationships. Active Revision and Working Draft are separate evidence; Impact belongs to assignment preparation. Distribution is reusable evidence nested under Publication or Assignments rather than the object's product identity. Domains provide payload-specific summaries and editors but do not rebuild revision posture, Attention, or history.
+
+The Overview begins with domain orientation: purpose and ownership. It then summarizes the complete domain posture—including its primary definition, child objects, related authority, publication, assignment, Attention, and readiness—before any editor. Publication is one concern in that picture, not the identity of the object.
 
 ### Workspace Section
 A calm, self-contained block for one concern: a plain headline, quiet supporting detail, and one clear affordance. Sections are structured rows within a card, not a mosaic of boxes. Sections are where inline editing happens.
@@ -44,6 +58,9 @@ The object-scoped rail holding Quick Actions and (where useful) the object's Att
 ---
 
 ## Operational-summary primitives
+
+### Configuration Overview Runtime
+The canonical two-row object summary established by Locations. Row one is a two-thirds **At a glance** region beside a one-third explained readiness region. Row two is Attention beside the object's owned or connected capability posture; when Attention is empty, it disappears and the capability region remains calm. Programs uses the same composition with Program metrics, publication readiness, and lifecycle capabilities. Domains provide evidence and labels; they do not rearrange the Overview grammar.
 
 ### Operational Summary (Glance)
 The read-only "is this object healthy?" surface. Presents derived state (capacity, availability, counts) with **utilization first, inventory second**, each number a link to where it is configured. Shows honest unknowns, never fabricated zeros.
@@ -62,6 +79,12 @@ Organization (global) vs the selected configuration object. Switches the operato
 
 ### Apply To Dialog
 Multi-select targets + confirm for a domain with an authoritative copy/apply provider. Domains supply targets and the durable mutation. The primitive remains hidden when no provider exists; confirmation may never imply a copy occurred when only a proposal was produced.
+
+### Assignment Runtime
+The durable identity of where a published object is consumed. It shows current Location assignments, consumed revision, update/drift posture, and latest assignment health separately from pending target selection. Assignment workflows may preview Impact and confirm distribution, but their checkboxes never replace the durable posture.
+
+### Distribution Runtime
+The cross-revision presentation of deterministic assignment/delivery runs. It shows per-target outcomes, partial failure, safe retry, and the latest result under the same run identity. Failures project into Attention; successful targets are not visually or operationally replayed.
 
 ### Configuration Health Banner
 A per-object or per-section rollup of substrate resolution status into a single calm statement ("All good" / "Needs setup"). A compact form of Attention for tight spaces (e.g. a nested object's rail). Never a "last checked" heartbeat. **Do not introduce a third status system named Health** — Attention remains the live health model; this banner is Attention in compact form.
@@ -112,7 +135,7 @@ A centered modal for exactly two jobs: **create** an object, or **confirm** a de
 ## Contextual primitives
 
 ### Configuration Timeline (Change History)
-An on-demand, plain-language history of what changed and when ("Capacity was 12, changed to 14 on May 20 by Sarah J."), lives behind an "Advanced / History" disclosure. Never exposes `effective_start`, `supersedes`, or version ids.
+An on-demand, plain-language history of what changed and when ("Capacity was 12, changed to 14 on May 20 by Sarah J."). For publishable domains it includes immutable revisions, assignments, retries, and failures across all revisions. A successful retry updates current distribution posture but never removes the original failed attempt from History. Never exposes `effective_start`, `supersedes`, checksums, provider keys, or raw version ids.
 
 ### Configuration Activity Feed
 The object's recent changes as a short list — actor · plain summary · relative time · deep-link. A read surface, not an audit console.

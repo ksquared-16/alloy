@@ -3,7 +3,7 @@ import { SETTINGS_PAGE_SHELL_CLASS, SETTINGS_PAGE_INTRO_CLASS } from "@/lib/admi
 
 const HUB_CARDS = [
     {
-        href: "/settings/commercial/programs",
+        href: "/organization/programs",
         title: "Programs",
         description:
             "Define what programs your centers offer — Infant, Toddler, Preschool, and more. Configure which programs are available at each location.",

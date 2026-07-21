@@ -7,6 +7,9 @@ const ICON_PATH: Record<NonNullable<ConfigGlanceMetric["icon"]>, string> = {
     rooms: "M4 10l8-6 8 6v9a1 1 0 01-1 1h-5v-6H10v6H5a1 1 0 01-1-1v-9z",
     programs: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
     schedule: "M8 2v3M16 2v3M4 9h16M6 13h4m-4 4h7M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z",
+    pricing: "M12 2v20m5-16.5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H7",
+    availability: "M5 12l4 4L19 6",
+    policies: "M12 3l7 3v5c0 4.5-2.7 8-7 10-4.3-2-7-5.5-7-10V6l7-3z",
 };
 
 function MetricIcon({ icon }: { icon: NonNullable<ConfigGlanceMetric["icon"]> }) {

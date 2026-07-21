@@ -80,7 +80,19 @@ function valuesFromRow(row: CommercialPolicyApiRow): Record<string, string> {
     return out;
 }
 
-export default function CommercialPoliciesPanel({ programs, locations }: { programs: ProgramLite[]; locations: LocationLite[] }) {
+export default function CommercialPoliciesPanel({
+    programs,
+    locations,
+    focusProgramKey,
+    embedded = false,
+    canManage = true,
+}: {
+    programs: ProgramLite[];
+    locations: LocationLite[];
+    focusProgramKey?: string;
+    embedded?: boolean;
+    canManage?: boolean;
+}) {
     const [policies, setPolicies] = useState<CommercialPolicyApiRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -104,6 +116,29 @@ export default function CommercialPoliciesPanel({ programs, locations }: { progr
 
     useEffect(() => { void load(); }, [load]);
 
+    useEffect(() => {
+        if (!focusProgramKey) return;
+        void fetch(`/api/admin/programs/offerings?program_key=${encodeURIComponent(focusProgramKey)}`)
+            .then((response) => response.json() as Promise<{ offerings?: OfferingLite[] }>)
+            .then(async (json) => {
+                const loadedOfferings = json.offerings ?? [];
+                setOfferings(loadedOfferings);
+                const variantGroups = await Promise.all(
+                    loadedOfferings.map((offering) =>
+                        fetch(`/api/admin/programs/offerings/${offering.id}/variants`)
+                            .then((response) => response.json() as Promise<{ variants?: VariantLite[] }>)
+                            .then((result) => result.variants ?? [])
+                            .catch(() => [] as VariantLite[]),
+                    ),
+                );
+                setVariants(variantGroups.flat());
+            })
+            .catch(() => {
+                setOfferings([]);
+                setVariants([]);
+            });
+    }, [focusProgramKey]);
+
     // Load offerings for a program (scope=offering/variant), variants for an offering.
     useEffect(() => {
         const pk = form?.program_key;
@@ -123,13 +158,37 @@ export default function CommercialPoliciesPanel({ programs, locations }: { progr
             .catch(() => setVariants([]));
     }, [form?.offering_id, form?.scope_type]);
 
+    const visiblePolicies = useMemo(() => {
+        if (!focusProgramKey) return policies;
+        const offeringIds = new Set(offerings.map((offering) => offering.id));
+        const variantIds = new Set(variants.map((variant) => variant.id));
+        return policies.filter(
+            (policy) =>
+                policy.scope_type === "org"
+                || (policy.scope_type === "program" && policy.program_key === focusProgramKey)
+                || (policy.scope_type === "offering"
+                    && policy.offering_id != null
+                    && offeringIds.has(policy.offering_id))
+                || (policy.scope_type === "variant"
+                    && policy.variant_id != null
+                    && variantIds.has(policy.variant_id)),
+        );
+    }, [focusProgramKey, offerings, policies, variants]);
+
     const grouped = useMemo(() => {
         const m = new Map<CommercialPolicyType, CommercialPolicyApiRow[]>();
-        for (const p of policies) { if (!m.has(p.policy_type)) m.set(p.policy_type, []); m.get(p.policy_type)!.push(p); }
+        for (const p of visiblePolicies) { if (!m.has(p.policy_type)) m.set(p.policy_type, []); m.get(p.policy_type)!.push(p); }
         return m;
-    }, [policies]);
+    }, [visiblePolicies]);
 
-    function startCreate() { setForm(emptyForm()); setError(null); }
+    function startCreate() {
+        setForm(
+            focusProgramKey
+                ? { ...emptyForm(), scope_type: "program", program_key: focusProgramKey }
+                : emptyForm(),
+        );
+        setError(null);
+    }
     function startEdit(p: CommercialPolicyApiRow) {
         setForm({
             id: p.id, policy_type: p.policy_type, label: p.label ?? "", values: valuesFromRow(p),
@@ -189,7 +248,10 @@ export default function CommercialPoliciesPanel({ programs, locations }: { progr
     }
 
     return (
-        <div className="flex flex-col min-h-0 flex-1 overflow-auto p-6">
+        <div
+            className={`flex min-h-0 flex-1 flex-col overflow-auto ${embedded ? "" : "p-6"}`}
+            data-testid={embedded ? "program-policy-configuration" : "commercial-policies-panel"}
+        >
             <div className="flex items-start justify-between gap-3 mb-4">
                 <div>
                     <h2 className="text-base font-semibold text-alloy-midnight">Policies</h2>
@@ -198,7 +260,7 @@ export default function CommercialPoliciesPanel({ programs, locations }: { progr
                         Policies change prices in the Simulator and in billing; they never create new charges.
                     </p>
                 </div>
-                {!form && (
+                {!form && canManage && (
                     <button type="button" onClick={startCreate} className="shrink-0 rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-medium text-white hover:bg-alloy-bend-pine/90">
                         + Add policy
                     </button>
@@ -216,17 +278,20 @@ export default function CommercialPoliciesPanel({ programs, locations }: { progr
                 <PolicyForm
                     form={form} setForm={setForm} programs={programs} locations={locations} offerings={offerings} variants={variants}
                     onSave={save} onCancel={() => setForm(null)} saving={saving}
+                    focusProgramKey={focusProgramKey}
                 />
             ) : loading ? (
                 <p className="text-sm text-alloy-midnight/40">Loading policies…</p>
-            ) : policies.length === 0 ? (
+            ) : visiblePolicies.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-alloy-stone/40 bg-white/60 px-6 py-10 text-center">
                     <p className="text-sm font-medium text-alloy-midnight/70">No policies yet</p>
                     <p className="mt-1 text-sm text-alloy-midnight/45 max-w-md mx-auto">
                         Add a policy to offer discounts, waive fees, prorate partial periods, or require review.
                         Without policies, prices are charged exactly as configured.
                     </p>
-                    <button type="button" onClick={startCreate} className="mt-4 rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-medium text-white hover:bg-alloy-bend-pine/90">+ Add your first policy</button>
+                    {canManage ?
+                        <button type="button" onClick={startCreate} className="mt-4 rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-medium text-white hover:bg-alloy-bend-pine/90">+ Add your first policy</button>
+                    :   null}
                 </div>
             ) : (
                 <div className="space-y-5">
@@ -245,9 +310,13 @@ export default function CommercialPoliciesPanel({ programs, locations }: { progr
                                             </p>
                                         </div>
                                         {!p.is_active && <span className="shrink-0 rounded-full bg-alloy-stone/25 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/50">Disabled</span>}
-                                        <button type="button" onClick={() => void toggleActive(p)} className="shrink-0 text-xs text-alloy-midnight/55 hover:text-alloy-bend-pine">{p.is_active ? "Disable" : "Enable"}</button>
-                                        <button type="button" onClick={() => startEdit(p)} className="shrink-0 text-xs text-alloy-midnight/55 hover:text-alloy-bend-pine">Edit</button>
-                                        <button type="button" onClick={() => void remove(p)} className="shrink-0 text-xs text-alloy-midnight/40 hover:text-red-500">Remove</button>
+                                        {canManage ?
+                                            <>
+                                                <button type="button" onClick={() => void toggleActive(p)} className="shrink-0 text-xs text-alloy-midnight/55 hover:text-alloy-bend-pine">{p.is_active ? "Disable" : "Enable"}</button>
+                                                <button type="button" onClick={() => startEdit(p)} className="shrink-0 text-xs text-alloy-midnight/55 hover:text-alloy-bend-pine">Edit</button>
+                                                <button type="button" onClick={() => void remove(p)} className="shrink-0 text-xs text-alloy-midnight/40 hover:text-red-500">Remove</button>
+                                            </>
+                                        :   null}
                                     </div>
                                 ))}
                             </div>
@@ -261,7 +330,7 @@ export default function CommercialPoliciesPanel({ programs, locations }: { progr
 
 // ── Registry-driven form ─────────────────────────────────────────────────────
 
-function PolicyForm({ form, setForm, programs, locations, offerings, variants, onSave, onCancel, saving }: {
+function PolicyForm({ form, setForm, programs, locations, offerings, variants, onSave, onCancel, saving, focusProgramKey }: {
     form: FormState;
     setForm: (f: FormState | null) => void;
     programs: ProgramLite[];
@@ -271,6 +340,7 @@ function PolicyForm({ form, setForm, programs, locations, offerings, variants, o
     onSave: () => void;
     onCancel: () => void;
     saving: boolean;
+    focusProgramKey?: string;
 }) {
     const def = COMMERCIAL_POLICY_REGISTRY[form.policy_type];
     const setVal = (k: string, v: string) => setForm({ ...form, values: { ...form.values, [k]: v } });
@@ -287,7 +357,14 @@ function PolicyForm({ form, setForm, programs, locations, offerings, variants, o
                     <span className={labelCls}>Policy type</span>
                     <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {COMMERCIAL_POLICY_TYPES.map((t) => (
-                            <button key={t} type="button" onClick={() => setForm({ ...emptyForm(t), scope_type: form.scope_type })}
+                            <button key={t} type="button" onClick={() => setForm({
+                                ...emptyForm(t),
+                                scope_type: form.scope_type,
+                                location_id: form.location_id,
+                                program_key: form.program_key,
+                                offering_id: form.offering_id,
+                                variant_id: form.variant_id,
+                            })}
                                 className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${form.policy_type === t ? "border-alloy-bend-pine bg-alloy-bend-pine/5 text-alloy-midnight" : "border-alloy-stone/25 text-alloy-midnight/70 hover:border-alloy-bend-pine/40"}`}>
                                 <span className="block font-medium">{COMMERCIAL_POLICY_REGISTRY[t].label}</span>
                             </button>
@@ -313,8 +390,22 @@ function PolicyForm({ form, setForm, programs, locations, offerings, variants, o
             {/* Scope */}
             <div className="mt-4 border-t border-alloy-stone/15 pt-3">
                 <label className={labelCls}>Where does it apply?</label>
-                <select value={form.scope_type} onChange={(e) => setForm({ ...form, scope_type: e.target.value as ScopeType, location_id: "", program_key: "", offering_id: "", variant_id: "" })} className={inputCls}>
-                    {SCOPE_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                <select value={form.scope_type} onChange={(e) => setForm({
+                    ...form,
+                    scope_type: e.target.value as ScopeType,
+                    location_id: "",
+                    program_key: focusProgramKey ?? "",
+                    offering_id: "",
+                    variant_id: "",
+                })} className={inputCls}>
+                    {SCOPE_OPTIONS
+                        .filter((scope) =>
+                            !focusProgramKey
+                            || scope.value === "program"
+                            || scope.value === "offering"
+                            || scope.value === "variant",
+                        )
+                        .map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
                 {form.scope_type === "location" && (
                     <select value={form.location_id} onChange={(e) => setForm({ ...form, location_id: e.target.value })} className={`${inputCls} mt-2`}>
@@ -322,12 +413,19 @@ function PolicyForm({ form, setForm, programs, locations, offerings, variants, o
                         {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select>
                 )}
-                {(form.scope_type === "program" || form.scope_type === "offering" || form.scope_type === "variant") && (
+                {(form.scope_type === "program" || form.scope_type === "offering" || form.scope_type === "variant")
+                    && !focusProgramKey && (
                     <select value={form.program_key} onChange={(e) => setForm({ ...form, program_key: e.target.value, offering_id: "", variant_id: "" })} className={`${inputCls} mt-2`}>
                         <option value="">Select a program…</option>
                         {programs.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
                     </select>
                 )}
+                {focusProgramKey
+                    && (form.scope_type === "program" || form.scope_type === "offering" || form.scope_type === "variant") ?
+                    <p className="mt-2 text-xs font-medium text-alloy-midnight/60">
+                        {programs.find((program) => program.key === focusProgramKey)?.label ?? "Selected Program"}
+                    </p>
+                :   null}
                 {(form.scope_type === "offering" || form.scope_type === "variant") && form.program_key && (
                     <select value={form.offering_id} onChange={(e) => setForm({ ...form, offering_id: e.target.value, variant_id: "" })} className={`${inputCls} mt-2`}>
                         <option value="">Select an offering…</option>

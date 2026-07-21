@@ -1,0 +1,241 @@
+/** @vitest-environment jsdom */
+
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import ProgramsPublicationWorkspace from "@/components/adminV2/settings/programs/ProgramsPublicationWorkspace";
+
+vi.mock("next/navigation", () => ({
+    useRouter: () => ({
+        replace: vi.fn(),
+        push: vi.fn(),
+    }),
+}));
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const snapshot = {
+    capabilities: { canManage: true },
+    programs: [
+        {
+            id: "program-1",
+            key: "preschool",
+            lifecycleStatus: "active",
+            draft: {
+                id: "draft-1",
+                programId: "program-1",
+                status: "validated",
+                baseRevisionId: "revision-1",
+                validationErrors: [],
+                updatedAt: "2026-07-17T00:00:00.000Z",
+                programKey: "preschool",
+                label: "Preschool",
+                description: "A reusable service",
+                category: "Early learning",
+                eligibility: {},
+                audience: {},
+                requiredResourceType: "classroom",
+                qualificationRequirements: [],
+                defaultPolicyRefs: {},
+                defaultCommercialPosture: {},
+            },
+            revisions: [
+                {
+                    id: "revision-1",
+                    programId: "program-1",
+                    revisionNumber: 1,
+                    payloadChecksum: "checksum",
+                    publishedAt: "2026-07-17T00:00:00.000Z",
+                    programKey: "preschool",
+                    label: "Preschool",
+                    description: "A reusable service",
+                    category: "Early learning",
+                    eligibility: {},
+                    audience: {},
+                    requiredResourceType: "classroom",
+                    qualificationRequirements: [],
+                    defaultPolicyRefs: {},
+                    defaultCommercialPosture: {},
+                },
+            ],
+            publications: [
+                {
+                    id: "publication-1",
+                    orgId: "org-1",
+                    domainKey: "programs",
+                    subjectId: "program-1",
+                    revision: { id: "revision-1", number: 1, checksum: "checksum" },
+                    publishedAt: "2026-07-17T00:00:00.000Z",
+                },
+            ],
+            latestPublication: {
+                id: "publication-1",
+                orgId: "org-1",
+                domainKey: "programs",
+                subjectId: "program-1",
+                revision: { id: "revision-1", number: 1, checksum: "checksum" },
+                publishedAt: "2026-07-17T00:00:00.000Z",
+            },
+        },
+    ],
+    locations: [{ id: "location-1", label: "Downtown" }],
+    runs: [],
+    attempts: [],
+    assignments: [],
+    availability: [],
+    offerings: [],
+    variants: [],
+    tuitionRates: [],
+    policies: [],
+    products: [],
+};
+
+let container: HTMLDivElement | null = null;
+let root: ReturnType<typeof createRoot> | null = null;
+
+afterEach(() => {
+    if (root) act(() => root!.unmount());
+    container?.remove();
+    root = null;
+    container = null;
+    vi.restoreAllMocks();
+});
+
+describe("Programs Publication workspace", () => {
+    it("defaults to Overview and exposes reusable publication concerns intentionally", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => snapshot,
+            }),
+        );
+        container = document.createElement("div");
+        document.body.appendChild(container);
+        root = createRoot(container);
+        await act(async () => {
+            root!.render(<ProgramsPublicationWorkspace />);
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(container.querySelector('[data-testid="programs-publication-runtime"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-overview"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-overview-concerns"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-overview-attention"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-save-draft"]')).toBeNull();
+        expect(container.querySelector('[data-testid="program-detail-runtime-tab-configuration"]')).toBeNull();
+        expect(container.querySelector('[data-testid="program-detail-runtime-tab-attention"]')).toBeNull();
+        expect(container.textContent).toContain("At a glance");
+        expect(container.textContent).toContain("Publication readiness");
+        expect(
+            Array.from(container.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent?.trim()),
+        ).toEqual([
+            "Overview",
+            "Offerings",
+            "Pricing",
+            "Availability",
+            "Policies",
+            "Relationships",
+            "Publication",
+            "Assignments",
+            "History",
+        ]);
+        expect(container.textContent).toContain("1 published · 1 draft or changed · 0 assigned");
+
+        await act(async () => {
+            (container!.querySelector('[data-testid="program-edit-draft"]') as HTMLButtonElement).click();
+        });
+        expect(container.querySelector('[data-testid="program-save-draft"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-validate-draft"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-publish"]')).not.toBeNull();
+
+        for (const [section, testId] of [
+            ["availability", "program-availability-runtime"],
+            ["offerings", "program-offerings-runtime"],
+            ["pricing", "program-pricing-runtime"],
+            ["policies", "program-policies-runtime"],
+            ["relationships", "program-relationships-runtime"],
+        ] as const) {
+            await act(async () => {
+                (
+                    container!.querySelector(
+                        `[data-testid="program-detail-runtime-tab-${section}"]`,
+                    ) as HTMLButtonElement
+                ).click();
+            });
+            expect(container.querySelector(`[data-testid="${testId}"]`)).not.toBeNull();
+        }
+
+        await act(async () => {
+            (container!.querySelector('[data-testid="program-detail-runtime-tab-assignment"]') as HTMLButtonElement).click();
+        });
+        expect(container.querySelector('[data-testid="program-preview-delivery"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-assign-delivery"]')).not.toBeNull();
+
+        await act(async () => {
+            (container!.querySelector('[data-testid="program-detail-runtime-tab-publication"]') as HTMLButtonElement).click();
+        });
+        expect(container.querySelector('[data-testid="program-distribution-runtime"]')).not.toBeNull();
+
+        await act(async () => {
+            (container!.querySelector('[data-testid="program-detail-runtime-tab-history"]') as HTMLButtonElement).click();
+        });
+        expect(container.querySelector('[data-testid="program-history-runtime"]')).not.toBeNull();
+        expect(container.textContent).toContain("Configuration history");
+    });
+
+    it("keeps mutation controls out of the read-only runtime", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    ...snapshot,
+                    capabilities: { canManage: false },
+                }),
+            }),
+        );
+        container = document.createElement("div");
+        document.body.appendChild(container);
+        root = createRoot(container);
+        await act(async () => {
+            root!.render(<ProgramsPublicationWorkspace />);
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(container.querySelector('[data-testid="programs-collection-add"]')).toBeNull();
+        expect(container.querySelector('[data-testid="program-edit-draft"]')).toBeNull();
+        expect(container.querySelector('[data-testid="program-save-draft"]')).toBeNull();
+    });
+
+    it("explains an empty domain and never renders raw database diagnostics", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: false,
+                status: 503,
+                json: async () => ({
+                    error: "Could not find the table 'public.programs' in the schema cache",
+                }),
+            }),
+        );
+        container = document.createElement("div");
+        document.body.appendChild(container);
+        root = createRoot(container);
+        await act(async () => {
+            root!.render(<ProgramsPublicationWorkspace />);
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(container.textContent).toContain("Programs are not ready in this environment");
+        expect(container.textContent).toContain("Programs are reusable service definitions");
+        expect(container.textContent).toContain("Common examples");
+        expect(container.textContent).toContain("How it works");
+        expect(container.textContent).toContain("Programs setup is not complete");
+        expect(container.textContent).not.toMatch(/public\.programs|schema cache/i);
+        expect(container.querySelector('[data-testid="programs-empty-state-issue"]')).not.toBeNull();
+    });
+});

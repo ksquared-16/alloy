@@ -80,7 +80,10 @@ Forms, Documents, Branding, Billing, Scheduling, and AI configuration may become
 
 ## Programs ownership
 
-**Programs** is the operator language. The existing `/settings/commercial` route and Commercial Runtime names may remain compatibility details until a downstream migration is authorized.
+**Programs** is the operator language. The canonical Programs surface is
+`/organization/programs`. Legacy `/settings/commercial/programs` redirects to
+that route. The `/settings/commercial` Commercial hub may remain a compatibility
+detail until a broader Commercial migration is authorized.
 
 A Program is a reusable service:
 
@@ -93,7 +96,11 @@ Programs own catalog identity, categories, eligibility, licensing requirements, 
 
 Programs do **not** own Rooms, delivery resources, capacity, or schedules. Locations choose which Programs they offer. Rooms or future Delivery Resources deliver them. Capacity and scheduling remain owned by resources and operational runtimes.
 
-Existing `location_program_categories` rows are a compatibility representation of **Programs offered at a Location**, not the target system of record for Program identity. This sprint does not migrate that storage or implement the Programs module.
+Existing `location_program_categories` rows remain the compatibility representation
+of **Programs offered at a Location**, not the system of record for Program
+identity. Configuration Publication Runtime V1 now links those stable rows to
+immutable Organization Program revisions while preserving their Location-owned
+availability and downstream relationships.
 
 ## Distribution contract
 
@@ -121,13 +128,15 @@ There is no generic configuration-payload table. Configuration steers; code and 
 
 ## Freeze
 
-V2 freezes the Organization Runtime model, nine-domain registry, Programs terminology, and publisher/consumer relationship. V2.2 freezes the compact landing presentation, final density, and progressive-disclosure boundary. Future domains inherit this model. Downstream module implementation, schema migration, and authoritative health/apply providers are separate work.
+V2 freezes the Organization Runtime model, nine-domain registry, Programs terminology, and publisher/consumer relationship. V2.2 freezes the compact landing presentation, final density, and progressive-disclosure boundary. Future domains inherit this model. Configuration Publication Runtime V1 extends this runtime with the Programs publication-assignment adapter without changing the landing contract. Program publication delivery is assignment, not Apply: it advances a Location consumption pointer while the Location continues to own whether the Program is offered. Other domain adapters remain separate work.
 
 Locations remains the experiential reference implementation and is not redesigned by V2.
 
 ## Implementation
 
 - Registry and distribution contracts: `web/lib/configRuntime/organizationRuntime.ts`
+- Publication and delivery substrate: `web/lib/configPublication/`
+- Programs publication-assignment adapter: `web/lib/programs/publication/`
 - Reusable card: `web/components/adminV2/settings/configurationRuntime/workspace/ConfigDomainCard.tsx`
 - Landing: `web/components/adminV2/settings/organization/OrganizationConfigurationPage.tsx`
 - Settings IA: `web/lib/adminV2/configurationModeNav.ts`

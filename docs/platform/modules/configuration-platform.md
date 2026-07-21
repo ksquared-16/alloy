@@ -89,6 +89,14 @@ The Configuration Runtime is the platform-owned layer that sits beneath all conf
 | Config workspace layout | `lib/adminV2/settingsPageLayout.ts` | All configuration surfaces |
 | Configuration workspace domains | `lib/adminV2/configurationWorkspaceDomains.ts` | Configuration landing and nav |
 | Configuration Domain Card | `components/adminV2/settings/configurationRuntime/workspace/ConfigDomainCard.tsx` | Organization and future publisher surfaces |
+| Publishable Collection Runtime | `ConfigCollectionRail.tsx` | Programs and future publishable catalogs |
+| Publishable Detail Runtime | `ConfigDetailRuntime.tsx` | Programs and future publishable objects |
+| Revision / Attention / Readiness | `ConfigPublicationOverview.tsx` + `lib/configPublication/runtimeModel.ts` | Publishable objects |
+| Durable Assignment Runtime | `ConfigAssignmentRuntime.tsx` | Assignable published objects |
+| Distribution Runtime | `ConfigDistributionRuntime.tsx` | Per-target outcomes and retry |
+| Configuration History | `ConfigHistoryTimeline.tsx` | Revisions, assignment, retry, failure |
+| Publication evidence loader | `lib/configPublication/evidenceService.ts` | Cross-revision publications, runs, attempts, consumption |
+| Configuration command rail | `ConfigurationCommandRailActions.tsx` | Locations, Programs, future Configuration objects |
 
 **Extraction rule:** Only proven primitives move here. A primitive is proven when it appears in two or more independent configuration domains. Do not move Commercial-specific patterns here prematurely.
 
@@ -126,25 +134,176 @@ Domains keep their authoritative tables, validation, mutation paths, and runtime
 
 The frozen registry contains Locations, Programs, Access, Communications, Data Model, Business Processes, Surfaces, Automation, and Operational Intelligence. Automation and Operational Intelligence remain first-class because the ownership matrix already gives each a distinct owner.
 
-**Programs** is operator language for the reusable service catalog. The `/settings/commercial` route and Commercial Runtime names may remain internal compatibility details. Locations choose Programs offered and own Rooms/Delivery Resources and local schedules; resource/runtime systems own capacity. Organization Runtime V2 does not implement or migrate those downstream domains.
+**Programs** is operator language for the reusable service catalog. The
+canonical Programs route is `/organization/programs` (selection via
+`?programId=`). Legacy `/settings/commercial/programs` redirects there and must
+not remain product IA. `/settings/commercial` may remain a Commercial module
+compatibility hub until separately migrated. Locations choose Programs offered
+and own Rooms/Delivery Resources and local schedules; resource/runtime systems
+own capacity. Organization Runtime V2 does not implement or migrate those
+downstream domains.
+
+Programs now consumes the completed publishable Configuration Runtime rather
+than owning a page-specific publication console. The default detail posture is
+Overview; draft editing is intentional; active revision and working-draft state
+are distinct; durable consumption pointers project current assignment and
+revision drift; distribution failures project into Configuration Attention;
+and History spans publication, assignment, retry, and failure evidence across
+revisions. Recovered targets retain their original failed attempt in History;
+current distribution status never rewrites historical evidence. The Collection
+Runtime owns search, publication/Attention filtering, Add,
+publication posture, assignment posture, readiness, and attention signals.
+Publication evidence honors the reader's allowed Location scope. Capability
+posture is explicit: read-only operators inherit the runtime without mutation
+controls, and publication must reject a draft equivalent to the active revision.
+
+Configuration comprehension is Runtime-owned. Empty Collections teach domain
+purpose, examples, ownership, setup flow, and next action instead of rendering a
+"no data" placeholder. Collections summarize published, draft/changed, assigned,
+and Attention posture. Overview orients the operator to domain purpose and
+ownership before presenting revision, draft, assignment, summary, Attention, and
+readiness. Configuration errors are classified as uninitialized, platform update
+required, access denied, temporarily unavailable, or action failed; raw database,
+PostgREST, schema-cache, and provider diagnostics remain server-side under an
+operator-visible engineering reference.
+
+Future publishable domains supply only their domain adapter: payload summary and
+editor, validation/publish mutations, setup evidence, target labels, and
+assignment impact language. They do not rebuild Collection, Detail, Attention,
+Assignment, Distribution, History, or shell command ownership.
+
+A rich Configuration domain registers its business concerns inside the same
+Detail Runtime established by Locations. Programs is the first publishable
+Configuration domain and inherits the Locations composition directly: Collection
+rail, object header, horizontal concern tabs, and the two-row Overview Runtime.
+Its visible tabs are Overview, Offerings, Pricing, Availability, Policies,
+Relationships, Publication, Assignments, and History. Program definition,
+requirements, and resource requirements are summarized in Overview and edited
+through the object-level Edit Program mode; they do not create a second navigation
+system. Attention is composed into Overview.
+
+Domain adapters project related authority without moving it: Location-owned offer
+state, evidence, resources, capacity, and schedules are read-only in Organization
+Programs and deep-link to Locations; Commercial-owned rates, Program-scoped fees
+and add-ons, policies, and pricing simulation use the existing Commercial mutation
+and execution paths. Accounting account administration and payer responsibility
+remain explicit Financial/Commercial and Processing handoffs. Distribution
+evidence is composed within Publication rather than presented as the identity of
+the Program.
+
+### Pricing Runtime composition
+
+Programs consumes one canonical Commercial pricing workspace rather than owning a
+second rate editor. Pricing exposes three directly visible subconcerns: tuition
+rates, Program-scoped fees and add-ons, and read-only pricing preview. Tuition rate
+amount, scope, inheritance, not-offered state, comparison, and effective start/end
+dates are edited in `TuitionGridWorkspace`; other Program surfaces summarize and
+deep-link to that workspace.
+
+Effective dating is a Pricing Runtime concern. The shared Commercial rate editor
+persists the existing `effective_start` and `effective_end` contract, so Programs
+does not introduce Program-specific date storage, mutation paths, or resolution.
+Generic cross-domain scheduled-change extraction remains deferred until a second
+independent pricing domain proves the primitive.
 
 Locations remains frozen. Organization Runtime reuses its object-workspace grammar and references Location identity; it does not move Location-owned mutations into the organization landing.
 
+### Configuration Publication Runtime V1
+
+The Configuration Publication Runtime is a subsystem of the existing
+Configuration Runtime for domains that require explicit Organization
+publication and durable Location delivery.
+Programs is the first and only reference consumer in V1.
+
+The runtime owns:
+
+- immutable publication identity over a domain-owned revision;
+- deterministic, target-set-aware distribution plans;
+- one persisted result per selected Location;
+- append-only delivery attempts under the same retry identity;
+- honest completed, partial-failure, and failed run projections;
+- Location consumption pointers to published revisions;
+- field-policy evaluation (`organization_locked`,
+  `location_may_override`, `location_must_supply`, `runtime_derived`);
+- server-authoritative effective-value resolution with explicit value presence;
+- generic publication and delivery history records.
+
+Domains own:
+
+- editable draft payloads and validation;
+- immutable revision payloads;
+- the adapter that previews and performs each authoritative consumer write;
+- domain-specific eligibility, conflicts, required inputs, and operator language;
+- local override storage and validation;
+- downstream runtime consumption.
+
+There is no generic configuration-payload table. The generic runtime references
+the immutable domain revision by identity and checksum. A retry reuses the
+original distribution run and executes failed targets only; successful targets
+remain authoritative and are not duplicated.
+
+Programs proves the boundary through:
+
+- `programs`, `program_drafts`, and immutable `program_revisions`;
+- generic `configuration_publications`, distribution runs/targets, append-only
+  attempts, and consumption pointers;
+- the `programs.v1` publication-assignment adapter;
+- server-side impact preview and effective-value resolution;
+- Location Program offerings linked to a consumed revision while preserving
+  Location-owned availability, evidence, metadata, resource relationships, and
+  stable compatibility ids.
+
+For Programs, publication delivery is **assignment**, not Apply. Assignment
+makes a published revision available to a selected Location and advances its
+consumption pointer. The Location independently owns whether it offers that
+Program. Programs does not register an Apply provider because delivery does not
+copy Organization configuration into Location-owned operational truth.
+
+Only Programs supports this runtime in V1. Other Configuration domains do not
+gain publication behavior by inference; adoption requires a domain-owned
+revision model and a registered durable adapter.
+
+**Registry ownership:** Organization Configuration Runtime owns the domain
+registry and distribution-mode declarations. Programs is the V1 consumer that
+registers `distributionMode: "assignment"` and supplies the `programs.v1`
+adapter. Domains that need Apply continue to use the existing Apply plan/provider
+contract; Programs does not.
+
+**Expansion constitution (Product):** how remaining Organization domains
+participate — including Consumer #2 recommendation — is governed by
+`../foundation/configuration-platform-expansion-constitution.md` (ratified).
+That document does not reopen this runtime.
+
 ### Primitives NOT yet extracted (deferred)
 
-These belong to the Configuration Runtime eventually but are only Commercial-specific today:
+These may belong to the Configuration Runtime eventually but are only proven in one domain today:
 
-- Effective dating / scheduled changes
+- Generic effective-date and scheduled-change orchestration beyond the shared Commercial Pricing Runtime
 - Bulk rate operations
 - Compare locations
-- Impact analysis
-- Domain-specific change preview / publish authoring
+- Cross-domain impact analysis
+- Scheduled or future-dated publication
+- Approval, branching, and rollback orchestration
 
 ---
 
 ## Platform Configuration navigation
 
-**Configuration** is the operator-facing product language. `/organization` is the Configuration landing. Existing `/settings/*` URLs remain compatibility routes for domain surfaces; internal filenames and identifiers may retain `settings` where changing them would create migration risk.
+**Configuration** is the operator-facing product language. `/organization` is the
+Configuration landing for Organization-owned domains.
+
+Canonical Organization hierarchy (product IA):
+
+| Route | Status |
+|-------|--------|
+| `/organization` | Canonical landing |
+| `/organization/programs` | Canonical Programs (this sprint) |
+| `/organization/locations` | Planned convergence; today `/settings/locations` remains the frozen Locations surface with compatibility status |
+| `/organization/processes` | Planned convergence; today `/settings/processes` remains the Business Processes surface |
+
+Existing `/settings/*` URLs remain compatibility or domain routes until each domain
+is migrated beneath `/organization`. Compatibility redirects must not render a
+second canonical page.
 
 **Information architecture:**
 

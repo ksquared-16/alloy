@@ -1,7 +1,9 @@
-import ProgramsConfigWorkspace from "@/components/adminV2/commercial/ProgramsConfigWorkspace";
+import { redirect } from "next/navigation";
+import { organizationProgramsHref } from "@/lib/admin/canonicalAdminRoutes";
 
 export const dynamic = "force-dynamic";
 
-export default function ProgramsPage() {
-    return <ProgramsConfigWorkspace />;
+/** Compatibility stub — next.config redirects; this never remains a competing page. */
+export default function LegacyCommercialProgramsPage() {
+    redirect(organizationProgramsHref());
 }

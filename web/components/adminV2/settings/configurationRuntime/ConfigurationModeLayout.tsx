@@ -1,6 +1,7 @@
 "use client";
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ConfigurationRuntimeIssue } from "@/lib/configPublication/runtimeIssue";
 import {
     QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
     QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
@@ -292,24 +293,108 @@ export function ConfigurationInlineButton({
 export function ConfigurationEmptyState({
     title,
     description,
+    purpose,
+    examples,
+    setupSteps,
+    issue,
     actions,
     testId = "configuration-empty-state",
 }: {
     title: string;
     description: string;
+    purpose?: string;
+    examples?: readonly string[];
+    setupSteps?: readonly { label: string; description: string }[];
+    issue?: ConfigurationRuntimeIssue | null;
     actions?: ReactNode;
     testId?: string;
 }) {
     return (
         <ConfigurationDetailCard testId={testId}>
-            <div className="px-2 py-8 text-center">
-                <p className="config-typo-workspace-title">{title}</p>
-                <p className="config-typo-sublabel mx-auto mt-2 max-w-md">{description}</p>
+            <div className="px-2 py-6">
+                {issue ?
+                    <ConfigurationRuntimeNotice issue={issue} testId={`${testId}-issue`} />
+                :   null}
+                <div className={issue ? "mt-6 text-center" : "text-center"}>
+                    <p className="config-typo-workspace-title">{title}</p>
+                    <p className="config-typo-sublabel mx-auto mt-2 max-w-2xl">{description}</p>
+                    {purpose ?
+                        <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-alloy-midnight/70">
+                            {purpose}
+                        </p>
+                    :   null}
+                </div>
+                {examples?.length || setupSteps?.length ?
+                    <div className="mx-auto mt-6 grid max-w-3xl gap-6 border-t border-alloy-stone/25 pt-5 text-left md:grid-cols-2">
+                        {examples?.length ?
+                            <section>
+                                <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">
+                                    Common examples
+                                </h3>
+                                <ul className="mt-2 space-y-1.5 text-sm text-alloy-midnight/70">
+                                    {examples.map((example) => (
+                                        <li key={example} className="flex gap-2">
+                                            <span className="text-alloy-bend-pine" aria-hidden>•</span>
+                                            <span>{example}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        :   null}
+                        {setupSteps?.length ?
+                            <section>
+                                <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">
+                                    How it works
+                                </h3>
+                                <ol className="mt-2 space-y-2.5">
+                                    {setupSteps.map((step, index) => (
+                                        <li key={step.label} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-2">
+                                            <span className="text-xs font-semibold text-alloy-bend-pine">{index + 1}</span>
+                                            <span>
+                                                <span className="block text-sm font-semibold text-alloy-midnight/80">
+                                                    {step.label}
+                                                </span>
+                                                <span className="mt-0.5 block text-xs leading-5 text-alloy-midnight/55">
+                                                    {step.description}
+                                                </span>
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ol>
+                            </section>
+                        :   null}
+                    </div>
+                :   null}
                 {actions ?
                     <div className="mt-4 flex justify-center">{actions}</div>
                 :   null}
             </div>
         </ConfigurationDetailCard>
+    );
+}
+
+export function ConfigurationRuntimeNotice({
+    issue,
+    testId = "configuration-runtime-notice",
+}: {
+    issue: ConfigurationRuntimeIssue;
+    testId?: string;
+}) {
+    return (
+        <aside
+            className="rounded-lg border border-alloy-ember/25 bg-alloy-ember/[0.045] px-4 py-3 text-left"
+            role="alert"
+            data-testid={testId}
+        >
+            <p className="text-sm font-semibold text-alloy-midnight">{issue.title}</p>
+            <p className="mt-1 text-sm leading-5 text-alloy-midnight/70">{issue.message}</p>
+            <p className="mt-1 text-xs leading-5 text-alloy-midnight/55">{issue.nextStep}</p>
+            {issue.reference ?
+                <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
+                    Engineering reference · {issue.reference}
+                </p>
+            :   null}
+        </aside>
     );
 }
 

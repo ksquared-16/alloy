@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-13 · **Column count:** 3098
+**Generated:** 2026-07-17 · **Column count:** 3276
 
 Columns for `public` schema tables, grouped alphabetically by table.
 
@@ -1177,6 +1177,87 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `rejected_at` | timestamp with time zone | YES | — |
 | `failed_at` | timestamp with time zone | YES | — |
 | `rolled_back_at` | timestamp with time zone | YES | — |
+
+## `configuration_consumptions`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `domain_key` | text | NO | — |
+| `subject_id` | uuid | NO | — |
+| `location_id` | uuid | NO | — |
+| `publication_id` | uuid | NO | — |
+| `revision_id` | uuid | NO | — |
+| `consumed_at` | timestamp with time zone | NO | now() |
+| `delivered_by_run_id` | uuid | NO | — |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `configuration_delivery_attempts`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `run_id` | uuid | NO | — |
+| `target_id` | uuid | NO | — |
+| `location_id` | uuid | NO | — |
+| `attempt_number` | integer | NO | — |
+| `status` | text | NO | — |
+| `result` | jsonb | NO | '{}'::jsonb |
+| `error_code` | text | YES | — |
+| `error_message` | text | YES | — |
+| `audit_event_id` | uuid | YES | — |
+| `attempted_by` | uuid | YES | — |
+| `attempted_at` | timestamp with time zone | NO | now() |
+
+## `configuration_distribution_runs`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `publication_id` | uuid | NO | — |
+| `domain_key` | text | NO | — |
+| `provider_key` | text | NO | — |
+| `provider_version` | integer | NO | 1 |
+| `idempotency_key` | text | NO | — |
+| `target_set_checksum` | text | NO | — |
+| `status` | text | NO | 'planned'::text |
+| `created_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `started_at` | timestamp with time zone | YES | — |
+| `completed_at` | timestamp with time zone | YES | — |
+
+## `configuration_distribution_targets`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `run_id` | uuid | NO | — |
+| `location_id` | uuid | NO | — |
+| `status` | text | NO | 'pending'::text |
+| `attempt_count` | integer | NO | 0 |
+| `result` | jsonb | NO | '{}'::jsonb |
+| `error_code` | text | YES | — |
+| `error_message` | text | YES | — |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `configuration_publications`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `domain_key` | text | NO | — |
+| `subject_id` | uuid | NO | — |
+| `revision_id` | uuid | NO | — |
+| `revision_number` | integer | NO | — |
+| `payload_checksum` | text | NO | — |
+| `published_by` | uuid | YES | — |
+| `published_at` | timestamp with time zone | NO | now() |
+| `audit_event_id` | uuid | YES | — |
 
 ## `consumption_event_types`
 
@@ -2398,6 +2479,11 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | YES | — |
+| `program_id` | uuid | YES | — |
+| `program_revision_id` | uuid | YES | — |
+| `configuration_consumption_id` | uuid | YES | — |
+| `local_description_override` | text | YES | — |
+| `local_authorization_evidence` | text | YES | — |
 
 ## `location_tags`
 
@@ -2647,6 +2733,96 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `context_payload` | jsonb | YES | — |
 | `committed_at` | timestamp with time zone | NO | now() |
 | `effective_at` | timestamp with time zone | NO | now() |
+
+## `operational_authorities`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `authority_key` | text | NO | — |
+| `label` | text | NO | — |
+| `description` | text | YES | — |
+| `authority_kind` | text | NO | 'operational'::text |
+| `is_active` | boolean | NO | true |
+| `effective_start` | timestamp with time zone | NO | now() |
+| `effective_end` | timestamp with time zone | YES | — |
+| `config_version_ref` | jsonb | YES | — |
+| `created_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `operational_authority_assignments`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `authority_key` | text | NO | — |
+| `holder_type` | text | NO | — |
+| `holder_id` | text | NO | — |
+| `scope_type` | text | NO | 'organization'::text |
+| `scope_id` | text | YES | — |
+| `status` | text | NO | 'granted'::text |
+| `effective_start` | timestamp with time zone | NO | now() |
+| `effective_end` | timestamp with time zone | YES | — |
+| `supersedes_assignment_id` | uuid | YES | — |
+| `source` | text | NO | 'operator'::text |
+| `granted_by` | uuid | YES | — |
+| `recorded_at` | timestamp with time zone | NO | now() |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+
+## `operational_expectation_ratifications`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `expectation_id` | uuid | NO | — |
+| `lineage_root_id` | uuid | YES | — |
+| `prior_standing` | text | NO | — |
+| `new_standing` | text | NO | 'binding'::text |
+| `ratifier_authority_key` | text | NO | — |
+| `ratified_by_user_id` | uuid | YES | — |
+| `ratified_by_label` | text | YES | — |
+| `rationale` | text | YES | — |
+| `idempotency_key` | text | YES | — |
+| `payload_fingerprint` | text | YES | — |
+| `ratified_at` | timestamp with time zone | NO | now() |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+
+## `operational_expectations`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `authority_key` | text | NO | — |
+| `author_class` | text | NO | — |
+| `modality` | text | NO | — |
+| `subject_kind` | text | NO | — |
+| `subject_ref` | jsonb | NO | — |
+| `condition` | jsonb | NO | — |
+| `temporal_frame` | jsonb | NO | — |
+| `beneficiary` | jsonb | YES | — |
+| `verb` | text | NO | — |
+| `transition_type` | text | YES | — |
+| `supersedes_expectation_id` | uuid | YES | — |
+| `lineage_root_id` | uuid | YES | — |
+| `standing` | text | NO | — |
+| `footprint` | jsonb | NO | '{}'::jsonb |
+| `valid_from` | timestamp with time zone | NO | — |
+| `valid_to` | timestamp with time zone | YES | — |
+| `authored_at` | timestamp with time zone | NO | now() |
+| `config_version_ref` | jsonb | YES | — |
+| `authored_by_user_id` | uuid | YES | — |
+| `authored_by_label` | text | YES | — |
+| `schema_version` | integer | NO | 1 |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `idempotency_key` | text | YES | — |
+| `payload_fingerprint` | text | YES | — |
+| `authority_assignment_id` | uuid | YES | — |
+| `authority_matched_scope` | text | YES | — |
 
 ## `operational_tasks`
 
@@ -3475,6 +3651,32 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `retention_class` | text | NO | 'uncommitted_submission'::text |
 | `created_at` | timestamp with time zone | NO | now() |
 
+## `program_drafts`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `program_id` | uuid | NO | — |
+| `base_revision_id` | uuid | YES | — |
+| `draft_status` | text | NO | 'draft'::text |
+| `label` | text | NO | — |
+| `description` | text | YES | — |
+| `category` | text | YES | — |
+| `eligibility` | jsonb | NO | '{}'::jsonb |
+| `audience` | jsonb | NO | '{}'::jsonb |
+| `required_resource_type` | text | YES | — |
+| `qualification_requirements` | jsonb | NO | '[]'::jsonb |
+| `default_policy_refs` | jsonb | NO | '{}'::jsonb |
+| `default_commercial_posture` | jsonb | NO | '{}'::jsonb |
+| `validation_errors` | jsonb | NO | '[]'::jsonb |
+| `validated_at` | timestamp with time zone | YES | — |
+| `validated_by` | uuid | YES | — |
+| `created_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_by` | uuid | YES | — |
+| `updated_at` | timestamp with time zone | NO | now() |
+
 ## `program_offering_variants`
 
 | Column | Type | Nullable | Default |
@@ -3509,6 +3711,42 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | YES | — |
+
+## `program_revisions`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `program_id` | uuid | NO | — |
+| `revision_number` | integer | NO | — |
+| `program_key` | text | NO | — |
+| `label` | text | NO | — |
+| `description` | text | YES | — |
+| `category` | text | YES | — |
+| `eligibility` | jsonb | NO | '{}'::jsonb |
+| `audience` | jsonb | NO | '{}'::jsonb |
+| `required_resource_type` | text | YES | — |
+| `qualification_requirements` | jsonb | NO | '[]'::jsonb |
+| `default_policy_refs` | jsonb | NO | '{}'::jsonb |
+| `default_commercial_posture` | jsonb | NO | '{}'::jsonb |
+| `payload_checksum` | text | NO | — |
+| `published_by` | uuid | YES | — |
+| `published_at` | timestamp with time zone | NO | now() |
+| `source_draft_id` | uuid | NO | — |
+
+## `programs`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `program_key` | text | NO | — |
+| `lifecycle_status` | text | NO | 'active'::text |
+| `created_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `retired_by` | uuid | YES | — |
+| `retired_at` | timestamp with time zone | YES | — |
 
 ## `quotes`
 

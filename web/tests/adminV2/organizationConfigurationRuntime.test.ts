@@ -45,6 +45,8 @@ describe("Organization Configuration Runtime", () => {
         expect(page).toContain("Publish Required");
         expect(page).toContain("Health");
         expect(page).toContain("Consumers");
+        expect(page).toContain("Locations consume published Organization configuration");
+        expect(page).toContain("Add a Location before assigning Programs");
         expect(page).toContain("Distribution");
         expect(page).toContain("ConfigDomainCard");
         expect(page).toContain("ConfigWorkspaceCard");
