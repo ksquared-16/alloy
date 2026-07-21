@@ -12,7 +12,7 @@ import {
 } from "@/lib/programs/programConfigurationSections";
 import { CANONICAL_ORGANIZATION_PROGRAMS_HREF } from "@/lib/admin/canonicalAdminRoutes";
 import {
-    organizationProgramsChapterHref,
+    organizationFinancialsChapterHref,
     type ProgramsWorkspaceChapter,
 } from "@/lib/commercial/commercialChapterRoutes";
 
@@ -82,43 +82,43 @@ export function buildProgramsConfigurationObjectDescriptor(args?: {
 }
 
 /**
- * Programs workspace chapters (former Commercial tools) — stay on /organization/programs.
+ * Programs workspace related links — former Commercial tools now owned by Financials.
  */
 export const PROGRAMS_WORKSPACE_SIBLING_CHAPTERS = [
     {
         id: "tuition" as const satisfies ProgramsWorkspaceChapter,
         label: "Tuition",
         objectRuntimeEligible: true,
-        href: organizationProgramsChapterHref("tuition"),
+        href: organizationFinancialsChapterHref("tuition"),
     },
     {
         id: "catalog" as const satisfies ProgramsWorkspaceChapter,
         label: "Catalog",
         objectRuntimeEligible: true,
-        href: organizationProgramsChapterHref("catalog"),
+        href: organizationFinancialsChapterHref("catalog"),
     },
     {
         id: "policies" as const satisfies ProgramsWorkspaceChapter,
         label: "Policies",
         objectRuntimeEligible: true,
-        href: organizationProgramsChapterHref("policies"),
+        href: organizationFinancialsChapterHref("policies"),
     },
     {
         id: "accounting" as const satisfies ProgramsWorkspaceChapter,
         label: "Accounting",
         objectRuntimeEligible: false,
-        href: organizationProgramsChapterHref("accounting"),
+        href: organizationFinancialsChapterHref("accounting"),
     },
     {
         id: "simulator" as const satisfies ProgramsWorkspaceChapter,
         label: "Simulator",
         objectRuntimeEligible: false,
-        href: organizationProgramsChapterHref("simulator"),
+        href: organizationFinancialsChapterHref("simulator"),
     },
     {
         id: "funding" as const satisfies ProgramsWorkspaceChapter,
         label: "Funding",
         objectRuntimeEligible: false,
-        href: organizationProgramsChapterHref("funding"),
+        href: organizationFinancialsChapterHref("funding"),
     },
 ] as const;

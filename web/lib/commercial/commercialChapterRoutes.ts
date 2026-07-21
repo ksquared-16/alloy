@@ -1,13 +1,17 @@
 /**
- * Programs workspace chapters — former Commercial tools, now owned by
- * `/organization/programs?chapter=…`.
+ * Financials workspace sections — former Commercial tools.
  *
+ * Canonical owner: `/organization/financials?chapter=…`
+ * Programs stays Programs-only (`/organization/programs`).
  * `/settings/commercial` remains compatibility only (redirects here).
  */
 
-import { CANONICAL_ORGANIZATION_PROGRAMS_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    CANONICAL_ORGANIZATION_FINANCIALS_HREF,
+    CANONICAL_ORGANIZATION_PROGRAMS_HREF,
+} from "@/lib/admin/canonicalAdminRoutes";
 
-export const PROGRAMS_WORKSPACE_CHAPTERS = [
+export const FINANCIALS_WORKSPACE_CHAPTERS = [
     "tuition",
     "catalog",
     "policies",
@@ -16,10 +20,16 @@ export const PROGRAMS_WORKSPACE_CHAPTERS = [
     "funding",
 ] as const;
 
-export type ProgramsWorkspaceChapter = (typeof PROGRAMS_WORKSPACE_CHAPTERS)[number];
+/** @deprecated Prefer FINANCIALS_WORKSPACE_CHAPTERS — same section keys. */
+export const PROGRAMS_WORKSPACE_CHAPTERS = FINANCIALS_WORKSPACE_CHAPTERS;
 
-/** Legacy Commercial query aliases that resolve to a Programs chapter. */
-const LEGACY_CHAPTER_ALIASES: Record<string, ProgramsWorkspaceChapter | "programs"> = {
+export type FinancialsWorkspaceChapter = (typeof FINANCIALS_WORKSPACE_CHAPTERS)[number];
+
+/** @deprecated Prefer FinancialsWorkspaceChapter */
+export type ProgramsWorkspaceChapter = FinancialsWorkspaceChapter;
+
+/** Legacy Commercial query aliases that resolve to a Financials chapter. */
+const LEGACY_CHAPTER_ALIASES: Record<string, FinancialsWorkspaceChapter | "programs"> = {
     tuition: "tuition",
     fees: "catalog",
     catalog: "catalog",
@@ -32,8 +42,8 @@ const LEGACY_CHAPTER_ALIASES: Record<string, ProgramsWorkspaceChapter | "program
     "programs-tuition": "programs",
 };
 
-export const PROGRAMS_WORKSPACE_CHAPTER_META: Record<
-    ProgramsWorkspaceChapter,
+export const FINANCIALS_WORKSPACE_CHAPTER_META: Record<
+    FinancialsWorkspaceChapter,
     { label: string; description: string }
 > = {
     tuition: {
@@ -62,69 +72,102 @@ export const PROGRAMS_WORKSPACE_CHAPTER_META: Record<
     },
 };
 
-export function normalizeProgramsWorkspaceChapter(
+/** @deprecated Prefer FINANCIALS_WORKSPACE_CHAPTER_META */
+export const PROGRAMS_WORKSPACE_CHAPTER_META = FINANCIALS_WORKSPACE_CHAPTER_META;
+
+export function normalizeFinancialsWorkspaceChapter(
     value: string | null | undefined,
-): ProgramsWorkspaceChapter | "programs" | null {
+): FinancialsWorkspaceChapter | "programs" | null {
     const raw = value?.trim().toLowerCase() ?? "";
     if (!raw) return null;
     return LEGACY_CHAPTER_ALIASES[raw] ?? null;
 }
 
-export function organizationProgramsChapterHref(
-    chapter: ProgramsWorkspaceChapter | null | undefined,
-): string {
-    if (!chapter) return CANONICAL_ORGANIZATION_PROGRAMS_HREF;
-    return `${CANONICAL_ORGANIZATION_PROGRAMS_HREF}?chapter=${encodeURIComponent(chapter)}`;
+/** @deprecated Prefer normalizeFinancialsWorkspaceChapter */
+export function normalizeProgramsWorkspaceChapter(
+    value: string | null | undefined,
+): FinancialsWorkspaceChapter | "programs" | null {
+    return normalizeFinancialsWorkspaceChapter(value);
 }
 
-/** @deprecated Use organizationProgramsChapterHref — Commercial is no longer product IA. */
+export function organizationFinancialsChapterHref(
+    chapter: FinancialsWorkspaceChapter | null | undefined,
+): string {
+    if (!chapter) return CANONICAL_ORGANIZATION_FINANCIALS_HREF;
+    return `${CANONICAL_ORGANIZATION_FINANCIALS_HREF}?chapter=${encodeURIComponent(chapter)}`;
+}
+
+/**
+ * @deprecated Chapters no longer live under Programs — returns Financials href for tool chapters.
+ * Bare Programs collection still uses CANONICAL_ORGANIZATION_PROGRAMS_HREF via commercialEntryToProgramsHref.
+ */
+export function organizationProgramsChapterHref(
+    chapter: FinancialsWorkspaceChapter | null | undefined,
+): string {
+    return organizationFinancialsChapterHref(chapter);
+}
+
+/** @deprecated Use organizationFinancialsChapterHref — Commercial is no longer product IA. */
 export function commercialSettingsHref(
-    chapter?: ProgramsWorkspaceChapter | "fees" | "catalog" | null,
+    chapter?: FinancialsWorkspaceChapter | "fees" | "catalog" | null,
 ): string {
     const normalized =
         chapter === "fees" || chapter === "catalog" ? "catalog"
-        : chapter && (PROGRAMS_WORKSPACE_CHAPTERS as readonly string[]).includes(chapter)
-          ? (chapter as ProgramsWorkspaceChapter)
+        : chapter && (FINANCIALS_WORKSPACE_CHAPTERS as readonly string[]).includes(chapter)
+          ? (chapter as FinancialsWorkspaceChapter)
           : null;
-    return organizationProgramsChapterHref(normalized);
+    return organizationFinancialsChapterHref(normalized);
 }
 
 export const COMMERCIAL_SETTINGS_PATH = "/settings/commercial" as const;
 
-export const COMMERCIAL_COMPAT_CHAPTERS = PROGRAMS_WORKSPACE_CHAPTERS;
+export const COMMERCIAL_COMPAT_CHAPTERS = FINANCIALS_WORKSPACE_CHAPTERS;
 
-export type CommercialCompatChapter = ProgramsWorkspaceChapter;
+export type CommercialCompatChapter = FinancialsWorkspaceChapter;
 
-export type CommercialWorkspaceSection = ProgramsWorkspaceChapter;
+export type CommercialWorkspaceSection = FinancialsWorkspaceChapter;
 
 export function normalizeCommercialCompatChapter(
     value: string | null | undefined,
-): ProgramsWorkspaceChapter | "programs" | null {
-    return normalizeProgramsWorkspaceChapter(value);
+): FinancialsWorkspaceChapter | "programs" | null {
+    return normalizeFinancialsWorkspaceChapter(value);
 }
 
 export function commercialCompatChapterToSection(
-    chapter: ProgramsWorkspaceChapter | "programs" | null,
-): ProgramsWorkspaceChapter {
+    chapter: FinancialsWorkspaceChapter | "programs" | null,
+): FinancialsWorkspaceChapter {
     if (!chapter || chapter === "programs") return "catalog";
     return chapter;
 }
 
-export const COMMERCIAL_DEFAULT_SECTION: ProgramsWorkspaceChapter = "catalog";
+export const COMMERCIAL_DEFAULT_SECTION: FinancialsWorkspaceChapter = "catalog";
+
+/** @deprecated Landing has no default chapter — bare `/organization/financials` is the product entry. */
+export const FINANCIALS_DEFAULT_CHAPTER: FinancialsWorkspaceChapter = "tuition";
+
 
 export function isProgramsOwnedCommercialChapter(
     chapter: string | null | undefined,
 ): boolean {
-    return normalizeProgramsWorkspaceChapter(chapter) === "programs";
+    return normalizeFinancialsWorkspaceChapter(chapter) === "programs";
 }
 
-/** Every Commercial entry maps to a Programs chapter (or Programs collection). */
+/**
+ * Every Commercial entry maps to Financials (tool chapters) or Programs (catalog identity).
+ */
 export function commercialEntryToProgramsHref(
     chapter: string | null | undefined,
 ): string {
-    const normalized = normalizeProgramsWorkspaceChapter(chapter);
+    const normalized = normalizeFinancialsWorkspaceChapter(chapter);
     if (!normalized || normalized === "programs") {
         return CANONICAL_ORGANIZATION_PROGRAMS_HREF;
     }
-    return organizationProgramsChapterHref(normalized);
+    return organizationFinancialsChapterHref(normalized);
+}
+
+/** Compatibility alias — same destinations as commercialEntryToProgramsHref for tool chapters. */
+export function commercialEntryToFinancialsHref(
+    chapter: string | null | undefined,
+): string {
+    return commercialEntryToProgramsHref(chapter);
 }

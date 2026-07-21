@@ -10,6 +10,7 @@
 
 import {
     CANONICAL_ORGANIZATION_BASE,
+    CANONICAL_ORGANIZATION_FINANCIALS_HREF,
     CANONICAL_ORGANIZATION_PROGRAMS_HREF,
     CANONICAL_SETTINGS_BASE,
     isCanonicalSettingsPath,
@@ -59,6 +60,7 @@ export type ConfigurationPrefetchTarget =
     | typeof ORGANIZATION_LOCATIONS_PATH
     | typeof LOCATION_SETTINGS_PATH
     | typeof CANONICAL_ORGANIZATION_PROGRAMS_HREF
+    | typeof CANONICAL_ORGANIZATION_FINANCIALS_HREF
     | `${typeof CANONICAL_SETTINGS_BASE}/${string}`;
 
 /**
@@ -109,14 +111,14 @@ export function markConfigurationContinuity(
 
 /**
  * Primary Configuration Continuity destinations operators warm most often.
- * Checkpoint A seeds Organization landing + Locations + Programs route shells
- * (no Programs product redesign — prefetch only).
+ * Seeds Organization + Locations + Programs + Financials landing (+ common sections).
  */
 export const CONFIGURATION_CONTINUITY_WARM_HREFS = [
     CANONICAL_ORGANIZATION_BASE,
     ORGANIZATION_LOCATIONS_PATH,
     CANONICAL_ORGANIZATION_PROGRAMS_HREF,
-    `${CANONICAL_ORGANIZATION_PROGRAMS_HREF}?chapter=tuition`,
-    `${CANONICAL_ORGANIZATION_PROGRAMS_HREF}?chapter=catalog`,
-    `${CANONICAL_ORGANIZATION_PROGRAMS_HREF}?chapter=policies`,
+    CANONICAL_ORGANIZATION_FINANCIALS_HREF,
+    `${CANONICAL_ORGANIZATION_FINANCIALS_HREF}?chapter=tuition`,
+    `${CANONICAL_ORGANIZATION_FINANCIALS_HREF}?chapter=catalog`,
+    `${CANONICAL_ORGANIZATION_FINANCIALS_HREF}?chapter=policies`,
 ] as const;

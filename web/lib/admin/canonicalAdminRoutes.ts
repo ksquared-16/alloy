@@ -35,6 +35,12 @@ export const CANONICAL_ORGANIZATION_BASE = "/organization" as const;
  */
 export const CANONICAL_ORGANIZATION_PROGRAMS_HREF = `${CANONICAL_ORGANIZATION_BASE}/programs` as const;
 
+/**
+ * Canonical Organization Financials surface (Tuition, Catalog, Policies, Accounting, Simulator, Funding).
+ * Former Commercial / Programs `?chapter=` tools live here; Programs stays Programs-only.
+ */
+export const CANONICAL_ORGANIZATION_FINANCIALS_HREF = `${CANONICAL_ORGANIZATION_BASE}/financials` as const;
+
 /** Legacy admin implementation base (financials, old list pages, unmigrated system). */
 export const LEGACY_ADMIN_BASE = "/legacy-admin" as const;
 

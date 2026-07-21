@@ -9,7 +9,7 @@ type PageProps = {
 
 /**
  * Compatibility only — Commercial is no longer product IA.
- * Every entry soft-lands on Organization Programs (+ optional chapter).
+ * Tool chapters soft-land on Organization Financials; Programs catalog stays on Programs.
  */
 export default async function SettingsCommercialPage({ searchParams }: PageProps) {
     const resolved = searchParams ? await searchParams : {};

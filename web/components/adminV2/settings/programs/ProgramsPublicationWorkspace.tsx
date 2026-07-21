@@ -68,7 +68,6 @@ import {
     PROGRAMS_WORKSPACE_SIBLING_CHAPTERS,
 } from "@/lib/configRuntime/configurationObject/programsAdoptionSeam";
 import type { ProgramsWorkspaceChapter } from "@/lib/commercial/commercialChapterRoutes";
-import ProgramsWorkspaceChapterSurface from "@/components/adminV2/settings/programs/ProgramsWorkspaceChapterSurface";
 import { buildProgramsLandingViewModel } from "@/lib/programs/publication/programsLandingModel";
 import { visibleConfigurationObjectConcerns } from "@/lib/configRuntime/configurationObject/concernRegistry";
 import {
@@ -212,16 +211,12 @@ function programSectionForRuntime(section: ConfigurationDetailSection): ProgramC
 export default function ProgramsPublicationWorkspace(props: {
     initialProgramId?: string | null;
     initialSection?: ProgramConfigurationSection;
+    /** @deprecated Chapters redirect to Financials at the route layer — ignored. */
     initialChapter?: ProgramsWorkspaceChapter | null;
 }) {
-    const router = useRouter();
     const { orgId: authOrgId } = useAdminAuth();
     const continuity = useConfigurationContinuityOptional();
     const orgId = continuity?.orgId || authOrgId || "";
-
-    if (props.initialChapter) {
-        return <ProgramsWorkspaceChapterSurface chapter={props.initialChapter} orgId={orgId} />;
-    }
 
     return <ProgramsPublicationObjectWorkspace {...props} orgId={orgId} />;
 }
