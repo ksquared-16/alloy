@@ -141,7 +141,7 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         description: "Configure business modules and rules.",
         items: [
             {
-                href: settings("commercial"),
+                href: "/organization/programs",
                 label: "Programs",
                 description: "Reusable service catalog, eligibility, requirements, and defaults.",
                 icon: "commercial",
@@ -177,6 +177,9 @@ export function configurationModeNavItemActive(href: string, path: string): bool
     const h = href.replace(/\/$/, "");
     const p = path.replace(/\/$/, "");
     if (h === "/admin/workflows") return p === h || p.startsWith(`${h}/`);
+    if (h === "/organization/programs") {
+        return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/commercial");
+    }
     if (h === settings("processes")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/business-processes");
     if (h === settings("surfaces")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/layouts");
     if (h === settings("entities")) {

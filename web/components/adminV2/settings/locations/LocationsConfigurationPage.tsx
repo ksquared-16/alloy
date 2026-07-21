@@ -36,6 +36,7 @@ import { LocationsCommandRailActions } from "@/components/adminV2/settings/locat
 import { LocationsObjectSelector } from "@/components/adminV2/settings/locations/LocationsObjectSelector";
 import { useLocationsConfigurationSettings } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
 import LocationsLanding from "@/components/adminV2/settings/locations/LocationsLanding";
+import { useConfigurationContinuityOptional } from "@/components/adminV2/settings/configurationRuntime/ConfigurationContinuityProvider";
 import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
 import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
 import { buildLocationsRailActions } from "@/lib/locations/buildLocationsRailActions";
@@ -61,6 +62,7 @@ export default function LocationsConfigurationPage({
 }) {
     const router = useRouter();
     const { canMutate } = useAdminAuth();
+    const continuity = useConfigurationContinuityOptional();
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
     const [creatingRoom, setCreatingRoom] = useState(false);
@@ -256,6 +258,7 @@ export default function LocationsConfigurationPage({
         if (tab === "tours") setToursKeepAlive(true);
         if (tab === "placement") setPlacementKeepAlive(true);
         setActiveTab(tab);
+        continuity?.rememberLocationSelection({ locationId, tab, itemId: null });
         router.replace(locationWorkspaceHref(locationId, tab));
     };
 
@@ -265,6 +268,7 @@ export default function LocationsConfigurationPage({
         setCreatingRoom(false);
         setCreatingSchedule(false);
         setActiveTab("overview");
+        continuity?.rememberLocationSelection({ locationId: null, tab: null, itemId: null });
         router.replace(locationsLandingHref());
     };
 
@@ -277,9 +281,14 @@ export default function LocationsConfigurationPage({
             setCreatingSchedule(false);
             if (tab === "tours") setToursKeepAlive(true);
             if (tab === "placement") setPlacementKeepAlive(true);
+            continuity?.rememberLocationSelection({
+                locationId: selectedSite.id,
+                tab,
+                itemId: itemId ?? null,
+            });
             router.replace(locationWorkspaceHref(selectedSite.id, tab, itemId));
         },
-        [router, selectedSite],
+        [continuity, router, selectedSite],
     );
 
     const showSetupDestination = (tab: LocationWorkspaceTab | "general") => {

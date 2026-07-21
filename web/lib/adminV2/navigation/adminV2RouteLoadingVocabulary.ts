@@ -3,7 +3,13 @@
  * Used by `AdminV2RouteLoadingState` and navigation transition orchestration.
  */
 
-export type AdminV2RouteLoadingVariant = "workspace" | "department" | "work_unit" | "queue";
+export type AdminV2RouteLoadingVariant =
+    | "workspace"
+    | "department"
+    | "work_unit"
+    | "queue"
+    | "organization"
+    | "configuration";
 
 export type AdminV2RouteLoadingVocabulary = {
     title: string;
@@ -31,6 +37,16 @@ export const ADMIN_V2_ROUTE_LOADING_VOCABULARY: Record<AdminV2RouteLoadingVarian
         title: "Preparing queue",
         description: "Loading records for the selected lane…",
         ribbon: "Loading queue",
+    },
+    organization: {
+        title: "Opening Organization",
+        description: "Continuing into Organization configuration…",
+        ribbon: "Opening Organization",
+    },
+    configuration: {
+        title: "Opening configuration",
+        description: "Continuing within Organization configuration…",
+        ribbon: "Opening configuration",
     },
 };
 

@@ -17,6 +17,12 @@ import {
     normalizeAdminV2Path,
     readStickyWorkspaceSiteIdForNavigation,
 } from "@/lib/adminV2/workspaceSiteFilterClient";
+import {
+    isConfigurationSoftNavEligibleHref,
+    markConfigurationContinuity,
+    prepareConfigurationSoftNavTarget,
+    resolveConfigurationSoftNavVariant,
+} from "@/lib/configRuntime/configurationContinuity";
 
 /**
  * Soft sidebar/workspace navigation — opt-in via `NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV=1`.
@@ -30,13 +36,13 @@ export function adminV2SoftSidebarNavEnabled(): boolean {
 }
 
 /**
- * Operator Workspace <-> Work Unit soft navigation (NAV-1 (A) / Surface Host, Phase 2A). Eligible
- * operator paths (workspace / work-unit / dept — see `isAdminV2SoftNavEligibleHref`) soft-navigate
- * BY DEFAULT so the shell (left nav / header / right rail / BOS) stays mounted instead of the hard
- * `window.location.assign` reload that clears it. `NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV=0` is the
- * kill switch (forces the hard reload everywhere — instant rollback, no deploy). Non-eligible paths
- * (settings / workflows / forms) are unchanged; the hard reload is retained as the recovery floor
- * via the soft-nav reload-floor watchdog.
+ * Soft navigation kill switch. When `NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV=0`, every shell
+ * link hard-reloads (`window.location.assign`). Default ON for:
+ * - Operator Workspace ↔ Work Unit (NAV-1 / Surface Host)
+ * - Organization / Settings Configuration Continuity (Checkpoint A)
+ *
+ * Workflows / forms remain hard-nav only (not soft-eligible).
+ * Hard reload remains the recovery floor via the soft-nav reload-floor watchdog.
  */
 export function adminV2OperatorSoftNavEnabled(): boolean {
     return !(
@@ -51,8 +57,15 @@ function normalizeShellNavPath(href: string): string {
     return normalizeOperatorPathname(withSlash);
 }
 
-/** Workspace operator routes safe for orchestrated soft nav (not settings/workflows/forms). */
+/**
+ * Routes safe for orchestrated soft nav (shell stays mounted):
+ * - Operator: `/workspace`, work-unit, dept
+ * - Configuration Continuity: `/organization`, `/settings/*`
+ *
+ * Not eligible: workflows, forms, legacy-admin (hard reload retained).
+ */
 export function isAdminV2SoftNavEligibleHref(href: string): boolean {
+    if (isConfigurationSoftNavEligibleHref(href)) return true;
     const normalized = normalizeShellNavPath(href);
     if (!isOperatorWorkspacePath(normalized)) return false;
     if (normalized === CANONICAL_OPERATOR_BASE) return true;
@@ -62,6 +75,9 @@ export function isAdminV2SoftNavEligibleHref(href: string): boolean {
 }
 
 export function resolveAdminV2SoftNavVariant(href: string): AdminV2RouteLoadingVariant {
+    if (isConfigurationSoftNavEligibleHref(href)) {
+        return resolveConfigurationSoftNavVariant(href);
+    }
     const normalized = normalizeShellNavPath(href);
     if (parseOperatorWorkUnitPath(normalized).workUnitSlug) return "work_unit";
     if (/^\/workspace\/dept\/[^/]+/.test(normalized)) return "department";
@@ -72,8 +88,21 @@ export function adminV2SoftNavClickedKey(href: string): string {
     return `nav:${normalizeShellNavPath(href)}`;
 }
 
+/**
+ * Soft-nav for Configuration Continuity commits immediately (acknowledge first), then warms.
+ * Work Unit paths keep prepare-before-commit for provisioning warm-up.
+ */
+export function adminV2SoftNavShouldCommitFirst(href: string): boolean {
+    return isConfigurationSoftNavEligibleHref(href);
+}
+
 /** Optional warm-up before soft route commit — mirrors workspace tile / sidebar hover intent. */
 export function prepareAdminV2SoftNavTarget(href: string): void | Promise<void> {
+    if (isConfigurationSoftNavEligibleHref(href)) {
+        markConfigurationContinuity("intent", { href });
+        markConfigurationContinuity("acknowledge", { href });
+        return prepareConfigurationSoftNavTarget(href);
+    }
     const normalized = normalizeShellNavPath(href);
     if (parseOperatorWorkUnitPath(normalized).workUnitSlug) {
         warmOperatorWorkUnitNavEntry(href, null, "soft_nav_prepare");
