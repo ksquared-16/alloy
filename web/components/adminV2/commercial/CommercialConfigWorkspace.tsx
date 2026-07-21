@@ -96,7 +96,7 @@ type OnSave = (variantId: string, cadenceKey: string, payload: RatePayload) => P
 
 const SECTION_TABS = [
     { key: "tuition" as const, label: "Tuition", available: true },
-    { key: "fees" as const, label: "Catalog", available: true },
+    { key: "catalog" as const, label: "Catalog", available: true },
     { key: "policies" as const, label: "Policies", available: true },
     { key: "accounting" as const, label: "Accounting", available: true },
     { key: "simulator" as const, label: "Simulator", available: true },
@@ -1009,7 +1009,7 @@ const GL_ACCOUNT_TYPES: { key: string; label: string }[] = [
     { key: "equity", label: "Equity" },
 ];
 
-function AccountingReferencePanel({ products, loading }: {
+export function AccountingReferencePanel({ products, loading }: {
     products: CommercialProduct[];
     loading: boolean;
 }) {
@@ -2043,7 +2043,7 @@ export function CommercialConfigWorkspace() {
     }, [selectedProgramKey, reloadOfferingsAndVariants]);
 
     useEffect(() => {
-        if (activeSection === "fees" || activeSection === "accounting") void loadFeesData();
+        if (activeSection === "catalog" || activeSection === "accounting") void loadFeesData();
     }, [activeSection, loadFeesData]);
 
     useEffect(() => {
@@ -2174,7 +2174,7 @@ export function CommercialConfigWorkspace() {
                             if (!tab.available) return;
                             setActiveSection(tab.key);
                             const href =
-                                tab.key === "fees"
+                                tab.key === "catalog"
                                     ? "/settings/commercial?chapter=catalog"
                                     : `/settings/commercial?chapter=${tab.key}`;
                             router.replace(href, { scroll: false });
@@ -2224,7 +2224,7 @@ export function CommercialConfigWorkspace() {
                 </div>
             ) : activeSection === "accounting" ? (
                 <AccountingReferencePanel products={products} loading={feesLoading} />
-            ) : activeSection === "fees" ? (
+            ) : activeSection === "catalog" ? (
                 <CommercialCatalogPanel
                     products={products}
                     categories={commercialCategories}

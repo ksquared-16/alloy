@@ -66,6 +66,8 @@ import {
     buildProgramsConfigurationObjectDescriptor,
     PROGRAMS_WORKSPACE_SIBLING_CHAPTERS,
 } from "@/lib/configRuntime/configurationObject/programsAdoptionSeam";
+import type { ProgramsWorkspaceChapter } from "@/lib/commercial/commercialChapterRoutes";
+import ProgramsWorkspaceChapterSurface from "@/components/adminV2/settings/programs/ProgramsWorkspaceChapterSurface";
 import { visibleConfigurationObjectConcerns } from "@/lib/configRuntime/configurationObject/concernRegistry";
 import {
     beginConfigurationObjectEdit,
@@ -208,11 +210,28 @@ function programSectionForRuntime(section: ConfigurationDetailSection): ProgramC
 export default function ProgramsPublicationWorkspace(props: {
     initialProgramId?: string | null;
     initialSection?: ProgramConfigurationSection;
+    initialChapter?: ProgramsWorkspaceChapter | null;
 }) {
     const router = useRouter();
     const { orgId: authOrgId } = useAdminAuth();
     const continuity = useConfigurationContinuityOptional();
     const orgId = continuity?.orgId || authOrgId || "";
+
+    if (props.initialChapter) {
+        return <ProgramsWorkspaceChapterSurface chapter={props.initialChapter} orgId={orgId} />;
+    }
+
+    return <ProgramsPublicationObjectWorkspace {...props} orgId={orgId} />;
+}
+
+function ProgramsPublicationObjectWorkspace(props: {
+    initialProgramId?: string | null;
+    initialSection?: ProgramConfigurationSection;
+    orgId: string;
+}) {
+    const router = useRouter();
+    const continuity = useConfigurationContinuityOptional();
+    const orgId = props.orgId;
     const retainedProgramId = continuity?.selection?.programId ?? null;
     const retainedSection = continuity?.selection?.programSection ?? null;
     const [snapshot, setSnapshot] = useState<ProgramPublicationSnapshot | null>(() =>
@@ -611,7 +630,7 @@ export default function ProgramsPublicationWorkspace(props: {
                     data-testid="programs-sibling-chapters"
                 >
                     <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                        Related commercial tools
+                        Workspace chapters
                     </span>
                     {PROGRAMS_WORKSPACE_SIBLING_CHAPTERS.map((chapter) => (
                         <Link

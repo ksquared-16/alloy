@@ -38,6 +38,7 @@ import {
 } from "@/lib/configRuntime/configurationInvalidation";
 import { loadLocationsCollection } from "@/lib/locations/locationsCollectionCache";
 import { loadProgramsCollection } from "@/lib/programs/programsCollectionCache";
+import { loadProgramsChapterContext } from "@/lib/programs/programsChapterContextCache";
 import {
     CANONICAL_ORGANIZATION_BASE,
     CANONICAL_ORGANIZATION_PROGRAMS_HREF,
@@ -156,6 +157,7 @@ export function ConfigurationContinuityProvider({
         if (!id) return;
         void loadLocationsCollection(id).catch(() => undefined);
         void loadProgramsCollection(id).catch(() => undefined);
+        void loadProgramsChapterContext(id).catch(() => undefined);
     }, [orgId]);
 
     useEffect(() => {

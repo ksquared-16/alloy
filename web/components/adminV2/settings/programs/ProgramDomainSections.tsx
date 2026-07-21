@@ -697,7 +697,7 @@ export function ProgramRelationshipsSection({
                     :   null}
                 </div>
                 <Link
-                    href="/settings/commercial?chapter=accounting"
+                    href="/organization/programs?chapter=accounting"
                     className="mt-3 inline-block text-sm font-semibold text-alloy-bend-pine"
                 >
                     Open accounting configuration →
