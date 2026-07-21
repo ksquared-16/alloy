@@ -19,10 +19,12 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import { ConfigMutationScopeSelector } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigMutationScopeSelector";
 import { ConfigOwnershipSourceBadge } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigOwnershipSourceBadge";
+import { ProgramOwnershipEditPrototype } from "@/components/adminV2/settings/programs/ProgramOwnershipEditPrototype";
 import {
     resolveProgramOfferingOwnership,
     type ConfigurationMutationScope,
 } from "@/lib/configRuntime/organizationLocationScope";
+import { isProgramLocationAvailabilityPrototype } from "@/lib/configRuntime/programLocationAvailabilityPrototypeModel";
 
 function readMeta(metadata: LocationProgramCategoryRow["metadata"], key: string): string {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return "";
@@ -123,6 +125,7 @@ export default function LocationProgramDetailPanel({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
+    const [ownershipPrototypeOpen, setOwnershipPrototypeOpen] = useState(false);
     const [mutationScope, setMutationScope] = useState<ConfigurationMutationScope>("location_only");
 
     useEffect(() => {
@@ -490,16 +493,35 @@ export default function LocationProgramDetailPanel({
                     ].filter(Boolean)}
                     actions={
                         canMutate ?
-                            <ConfigurationSecondaryButton
-                                onClick={beginEdit}
-                                data-testid={`locations-program-edit-${program.id}`}
-                            >
-                                Edit program
-                            </ConfigurationSecondaryButton>
+                            isProgramLocationAvailabilityPrototype() ?
+                                <ConfigurationSecondaryButton
+                                    onClick={() => setOwnershipPrototypeOpen(true)}
+                                    data-testid={`locations-program-ownership-edit-${program.id}`}
+                                >
+                                    Edit configuration
+                                </ConfigurationSecondaryButton>
+                            :   <ConfigurationSecondaryButton
+                                    onClick={beginEdit}
+                                    data-testid={`locations-program-edit-${program.id}`}
+                                >
+                                    Edit program
+                                </ConfigurationSecondaryButton>
                         :   null
                     }
                     testId="locations-program-header"
                 />
+
+                {ownershipPrototypeOpen ?
+                    <ProgramOwnershipEditPrototype
+                        programId={String(program.program_id ?? program.id)}
+                        programLabel={summary?.label ?? program.label}
+                        locationId={program.location_id}
+                        locationLabel={siteLabel}
+                        hasLocalDescription={Boolean(program.local_description_override?.trim())}
+                        organizationDescription=""
+                        onClose={() => setOwnershipPrototypeOpen(false)}
+                    />
+                :   null}
 
                 <div className="flex flex-wrap gap-2" data-testid="locations-program-summary-ownership">
                     <ConfigOwnershipSourceBadge source={ownershipSource} locationLabel={siteLabel} />

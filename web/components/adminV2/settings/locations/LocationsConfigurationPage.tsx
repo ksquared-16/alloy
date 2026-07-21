@@ -603,6 +603,14 @@ export default function LocationsConfigurationPage({
                                 }
                                 onCancel={() => setCreatingProgram(false)}
                                 onComplete={async ({ programId }) => {
+                                    setCreatingProgram(false);
+                                    // Stage 1 prototype IDs are session fixtures — do not invalidate live projections.
+                                    if (
+                                        programId.startsWith("prototype-")
+                                        || programId.startsWith("__draft__")
+                                    ) {
+                                        return;
+                                    }
                                     if (orgId) {
                                         invalidateProgramsCollection(orgId, "program-assigned-from-location", {
                                             publishBus: true,
@@ -611,7 +619,6 @@ export default function LocationsConfigurationPage({
                                             publishBus: true,
                                         });
                                     }
-                                    setCreatingProgram(false);
                                     setPendingAssociatedProgramId(programId);
                                     await refreshPrograms();
                                 }}

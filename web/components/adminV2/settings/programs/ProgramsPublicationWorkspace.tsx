@@ -18,6 +18,9 @@ import {
     ConfigWorkspaceCard,
     type ConfigDetailTab,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import { ProgramLocationAvailabilityFlow } from "@/components/adminV2/settings/programs/ProgramLocationAvailabilityFlow";
+import { ProgramOwnershipEditPrototype } from "@/components/adminV2/settings/programs/ProgramOwnershipEditPrototype";
+import { isProgramLocationAvailabilityPrototype } from "@/lib/configRuntime/programLocationAvailabilityPrototypeModel";
 import {
     ConfigurationObjectEditGate,
     ConfigurationObjectWorkspace,
@@ -245,6 +248,7 @@ function ProgramsPublicationObjectWorkspace(props: {
     const [editSession, setEditSession] = useState(() => createConfigurationObjectEditSession<DraftForm>());
     const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
     const [preview, setPreview] = useState<ConfigurationTargetPreview[] | null>(null);
+    const [ownershipEditOpen, setOwnershipEditOpen] = useState(false);
     const [loading, setLoading] = useState(!snapshot);
     const [working, setWorking] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -531,7 +535,7 @@ function ProgramsPublicationObjectWorkspace(props: {
                 onClick: () => navigateSection("definition"),
             }, {
                 id: "manage-configuration-assignment",
-                label: "Manage Location assignment",
+                label: "Add to Locations",
                 group: "manage",
                 onClick: () => navigateSection("assignment"),
             });
@@ -1374,7 +1378,7 @@ function ProgramsPublicationObjectWorkspace(props: {
                                                     Review working draft
                                                 </ConfigurationSecondaryButton>
                                                 <ConfigurationSecondaryButton onClick={() => navigateSection("assignment")}>
-                                                    Open Distribution
+                                                    Add to Locations
                                                 </ConfigurationSecondaryButton>
                                             </div>
                                         </ConfigWorkspaceCard>
@@ -1407,8 +1411,30 @@ function ProgramsPublicationObjectWorkspace(props: {
                                     </div>
                                 : activeSection === "assignment" ?
                                     <div className="space-y-4" data-testid="program-distribution-concern">
+                                        {isProgramLocationAvailabilityPrototype() && selectedProgram ?
+                                            <ProgramLocationAvailabilityFlow
+                                                entry={{
+                                                    direction: "organization_program",
+                                                    programId: selectedProgram.id,
+                                                    programLabel:
+                                                        selectedProgram.latestPublication?.revision.label
+                                                        ?? selectedProgram.draft?.label
+                                                        ?? selectedProgram.key,
+                                                    publicationReady:
+                                                        Boolean(selectedProgram.latestPublication)
+                                                        || isProgramLocationAvailabilityPrototype(),
+                                                }}
+                                                locations={snapshot?.locations ?? []}
+                                                alreadyAssociatedLocationIds={activeAssignmentLocationIds}
+                                                onCancel={() => navigateSection("overview")}
+                                                onDone={() => {
+                                                    setOwnershipEditOpen(false);
+                                                    navigateSection("overview");
+                                                }}
+                                            />
+                                        :   <>
                                         <p className="text-sm text-alloy-midnight/60">
-                                            Organization assigns a published revision to Locations. That is separate from
+                                            Make a published Organization Program available at Locations. That is separate from
                                             each Location enabling local availability.
                                         </p>
                                         <ConfigAssignmentRuntime
@@ -1421,11 +1447,11 @@ function ProgramsPublicationObjectWorkspace(props: {
                                                 !canManage ? undefined
                                                 : !selectedProgram.latestPublication ?
                                                     <p className="py-4 text-sm text-alloy-midnight/50">
-                                                        Publish this Program before assigning it to Locations.
+                                                        Publish this Program before making it available at Locations.
                                                     </p>
                                                 : availableAssignmentLocations.length === 0 ?
                                                     <p className="py-4 text-sm text-alloy-midnight/50">
-                                                        Every eligible Location is already consuming the active revision.
+                                                        Every eligible Location already has this Program available.
                                                     </p>
                                                 :   <>
                                                         <div className="grid gap-2 sm:grid-cols-2">
@@ -1507,7 +1533,7 @@ function ProgramsPublicationObjectWorkspace(props: {
                                                                     )
                                                                 }
                                                             >
-                                                                {working === "assign" ? "Assigning…" : "Confirm assignment"}
+                                                                {working === "assign" ? "Applying…" : "Make available"}
                                                             </ConfigurationPrimaryButton>
                                                         </div>
                                                         {preview ?
@@ -1544,6 +1570,45 @@ function ProgramsPublicationObjectWorkspace(props: {
                                                     </>
                                             }
                                         />
+                                        </>}
+                                        {isProgramLocationAvailabilityPrototype() && selectedProgram && canManage ?
+                                            <div className="rounded-lg border border-alloy-forge/10 bg-white px-3 py-3">
+                                                <p className="text-sm font-semibold text-alloy-midnight">
+                                                    After availability — editing ownership
+                                                </p>
+                                                <p className="mt-1 text-[11px] text-alloy-midnight/55">
+                                                    Choose Organization definition vs Location configuration before editing.
+                                                </p>
+                                                <div className="mt-2">
+                                                    <ConfigurationSecondaryButton
+                                                        onClick={() => setOwnershipEditOpen(true)}
+                                                        data-testid="programs-open-ownership-edit-prototype"
+                                                    >
+                                                        Open ownership edit prototype
+                                                    </ConfigurationSecondaryButton>
+                                                </div>
+                                                {ownershipEditOpen ?
+                                                    <div className="mt-3">
+                                                        <ProgramOwnershipEditPrototype
+                                                            programId={selectedProgram.id}
+                                                            programLabel={
+                                                                selectedProgram.latestPublication?.revision.label
+                                                                ?? selectedProgram.draft?.label
+                                                                ?? selectedProgram.key
+                                                            }
+                                                            locationId={snapshot?.locations[0]?.id ?? "location"}
+                                                            locationLabel={snapshot?.locations[0]?.label ?? "Location"}
+                                                            hasLocalDescription={false}
+                                                            organizationDescription={
+                                                                selectedProgram.draft?.label
+                                                                ?? selectedProgram.key
+                                                            }
+                                                            onClose={() => setOwnershipEditOpen(false)}
+                                                        />
+                                                    </div>
+                                                :   null}
+                                            </div>
+                                        :   null}
                                         <ConfigDistributionRuntime
                                             runs={viewModel.runs}
                                             revisionLabelByPublicationId={revisionLabelByPublicationId}

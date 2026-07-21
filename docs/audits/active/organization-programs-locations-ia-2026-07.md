@@ -61,3 +61,9 @@ Financials consumes Programs (via Delivery Options → Tuition / fees). Financia
 ## Non-goals for this change
 
 No Programs, Locations, Financials, or Tuition redesign. No authority changes. Local commits only.
+
+## Superseding freeze
+
+Full ownership / assignment / inheritance / override / execution contract:
+
+`docs/audits/active/organization-configuration-relationship-model-2026-07.md`
