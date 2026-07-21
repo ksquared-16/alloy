@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-17
+last_reviewed: 2026-07-21
 supersedes: []
 ---
 
@@ -297,8 +297,8 @@ Canonical Organization hierarchy (product IA):
 | Route | Status |
 |-------|--------|
 | `/organization` | Canonical landing |
+| `/organization/locations` | Canonical Locations (Settings path remains compatible) |
 | `/organization/programs` | Canonical Programs (this sprint) |
-| `/organization/locations` | Planned convergence; today `/settings/locations` remains the frozen Locations surface with compatibility status |
 | `/organization/processes` | Planned convergence; today `/settings/processes` remains the Business Processes surface |
 
 Existing `/settings/*` URLs remain compatibility or domain routes until each domain
@@ -322,9 +322,31 @@ second canonical page.
 
 ---
 
+## Configuration Object Runtime (Checkpoint C.5)
+
+Reusable **collection/detail product composition** for Organization-authored objects (Programs first consumer in Checkpoint D).
+
+| Layer | Owns |
+|-------|------|
+| **Configuration Continuity** | Soft-nav, shell lifetime, retention, prefetch, invalidation bus |
+| **Configuration Object Runtime** | Object identity/collection/selection contracts, concern registry helpers, read-first Overview regions, intentional editing lifecycle, workspace composition shell |
+| **Domain implementations** | Schema, APIs, mutations, permissions, publication/distribution semantics |
+
+Code:
+
+- Contracts: `web/lib/configRuntime/configurationObject/`
+- Composition: `web/components/adminV2/settings/configurationRuntime/object/`
+- Evidence: `docs/audits/active/configuration-object-runtime-checkpoint-c5-2026-07.md`
+
+Locations remains a **hierarchical workspace** (Checkpoints B–C) and is not migrated onto the generic object shell. Nested Location concerns stay Location-owned.
+
+---
+
 ## Related
 
 - `../../system/configuration-system.md` (transitional expanded reference)
 - `../core/business-process-system.md`
 - `../../system/configuration-ownership-doctrine.md`
+- `../operator/configuration-workspace-platform-doctrine.md`
 - `commercial-configuration.md` — first runtime consumer
+- `../../audits/active/configuration-object-runtime-checkpoint-c5-2026-07.md`
