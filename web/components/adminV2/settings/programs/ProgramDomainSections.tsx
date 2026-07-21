@@ -137,7 +137,7 @@ export function ProgramResourcesSection({
                 <p className="mt-4 text-xs leading-5 text-alloy-midnight/55">
                     Room participation, capacity, and schedule availability remain authoritative in each Location workspace.
                 </p>
-                <Link href="/settings/locations" className="mt-3 inline-block text-sm font-semibold text-alloy-bend-pine">
+                <Link href="/organization/locations" className="mt-3 inline-block text-sm font-semibold text-alloy-bend-pine">
                     Review Location resources →
                 </Link>
             </ConfigWorkspaceCard>
@@ -164,8 +164,8 @@ export function ProgramAvailabilitySection({
     );
     return (
         <ConfigWorkspaceCard
-            title="Location availability"
-            description="Assignment makes a revision available. Each Location independently owns whether it offers the Program."
+            title="Locations · assignment vs local availability"
+            description="Organization assignment and Location-owned local availability are independent. Assignment does not enable offering; local availability does not publish."
             testId="program-availability-runtime"
         >
             <div className="divide-y divide-alloy-stone/20">
@@ -185,7 +185,7 @@ export function ProgramAvailabilitySection({
                                 {availability?.offered ? "Offered locally" : "Not offered locally"}
                             </span>
                             <Link
-                                href={`/settings/locations?locationId=${encodeURIComponent(location.id)}&section=programs`}
+                                href={`/organization/locations?locationId=${encodeURIComponent(location.id)}&tab=programs`}
                                 className="text-xs font-semibold text-alloy-bend-pine"
                             >
                                 Open Location →

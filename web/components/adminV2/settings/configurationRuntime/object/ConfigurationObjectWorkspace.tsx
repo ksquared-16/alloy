@@ -57,7 +57,7 @@ export function ConfigurationObjectWorkspace({
     headerFactsContent?: ReactNode;
     headerBreadcrumb?: ReactNode;
     headerActions?: ReactNode;
-    concernTabs: readonly ConfigDetailTab[];
+    concernTabs: readonly ConfigDetailTab<string>[];
     activeConcern: string;
     onConcernChange: (concern: string) => void;
     onConcernIntent?: (concern: string) => void;

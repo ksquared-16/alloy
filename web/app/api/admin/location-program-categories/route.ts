@@ -109,7 +109,7 @@ async function listProgramCategoryRows(
     for (const select of LOCATION_PROGRAM_CATEGORY_SELECT_ATTEMPTS) {
         let q = supabase
             .from("location_program_categories")
-            .select(select)
+            .select(select as string)
             .eq("org_id", orgId)
             .order("sort_order", { ascending: true })
             .order("label", { ascending: true });
@@ -118,7 +118,7 @@ async function listProgramCategoryRows(
         const { data, error } = await q;
         if (!error) {
             return {
-                rows: (data ?? []).map((r) => mapCategoryRow(r as Record<string, unknown>)),
+                rows: (data ?? []).map((r) => mapCategoryRow(r as unknown as Record<string, unknown>)),
             };
         }
         lastError = error.message;
@@ -138,12 +138,12 @@ async function readProgramIdentityRevisionId(
     for (const select of LOCATION_PROGRAM_CATEGORY_IDENTITY_SELECT_ATTEMPTS) {
         const { data, error } = await supabase
             .from("location_program_categories")
-            .select(select)
+            .select(select as string)
             .eq("id", categoryId)
             .eq("org_id", orgId)
             .maybeSingle();
         if (!error) {
-            return { revisionId: resolveProgramRevisionIdFromRow((data as Record<string, unknown> | null) ?? null) };
+            return { revisionId: resolveProgramRevisionIdFromRow((data as unknown as Record<string, unknown> | null) ?? null) };
         }
         lastError = error.message;
         if (!isMissingColumnError(error)) {
@@ -169,11 +169,11 @@ async function updateProgramCategoryRow(
                 .update(workingPatch)
                 .eq("id", categoryId)
                 .eq("org_id", orgId)
-                .select(select)
+                .select(select as string)
                 .maybeSingle();
             if (!error) {
                 if (!data) return { error: "Program category was not found after save." };
-                return { row: mapCategoryRow(data as Record<string, unknown>) };
+                return { row: mapCategoryRow(data as unknown as Record<string, unknown>) };
             }
             lastError = error.message;
             if (isMissingColumnError(error)) {

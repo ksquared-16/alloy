@@ -1,10 +1,8 @@
 /**
- * Programs → Configuration Object Runtime adoption seams (Checkpoint C.5).
+ * Programs → Configuration Object Runtime adoption seams (Checkpoint C.5 / D).
  *
- * Compilation-safe mapping only. Does not wire ProgramsPublicationWorkspace
- * or alter Program assignment / publication / distribution contracts.
- *
- * Checkpoint D consumes this descriptor to adopt ConfigurationObjectWorkspace.
+ * Descriptor consumed by ProgramsPublicationWorkspace via ConfigurationObjectWorkspace.
+ * Does not alter Program assignment / publication / distribution contracts.
  */
 
 import type { ConfigurationObjectWorkspaceDescriptor } from "@/lib/configRuntime/configurationObject/types";
@@ -82,9 +80,9 @@ export function buildProgramsConfigurationObjectDescriptor(args?: {
 /** Workspace chapters that remain outside a selected Program object. */
 export const PROGRAMS_WORKSPACE_SIBLING_CHAPTERS = [
     { id: "tuition", label: "Tuition", objectRuntimeEligible: true },
-    { id: "catalog", label: "Catalog", objectRuntimeEligible: false },
+    { id: "catalog", label: "Catalog", objectRuntimeEligible: true },
     { id: "policies", label: "Policies", objectRuntimeEligible: true },
     { id: "accounting", label: "Accounting", objectRuntimeEligible: false },
     { id: "simulator", label: "Simulator", objectRuntimeEligible: false },
-    { id: "funding", label: "Funding", objectRuntimeEligible: true },
+    { id: "funding", label: "Funding", objectRuntimeEligible: false },
 ] as const;

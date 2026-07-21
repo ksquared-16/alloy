@@ -228,9 +228,22 @@ export function ConfigurationObjectRuntimeHarness({
             <ConfigurationObjectWorkspace
                 collectionTitle={descriptor.collectionLabel}
                 objectLabel={descriptor.objectTypeLabel}
-                items={items.map((item) =>
-                    labels[item.id] ? { ...item, label: labels[item.id]! } : item,
-                )}
+                items={items.map((item) => ({
+                    id: item.id,
+                    label: labels[item.id] ?? item.label,
+                    supportingLabel: item.supportingLabel ?? undefined,
+                    lifecycleStatus: item.lifecycleStatus,
+                    publicationLabel: item.publicationLabel ?? "Not published",
+                    publicationState:
+                        item.publicationState === "published"
+                            ? ("published" as const)
+                        : item.publicationState === "changes_ready"
+                            ? ("changes_ready" as const)
+                        : ("draft_only" as const),
+                    assignmentLabel: item.assignmentLabel ?? undefined,
+                    isAssigned: item.isAssigned,
+                    hasAttention: false,
+                }))}
                 selectedId={selectedId}
                 canAdd={false}
                 onAdd={() => undefined}

@@ -37,6 +37,7 @@ import {
     type ConfigurationInvalidationEvent,
 } from "@/lib/configRuntime/configurationInvalidation";
 import { loadLocationsCollection } from "@/lib/locations/locationsCollectionCache";
+import { loadProgramsCollection } from "@/lib/programs/programsCollectionCache";
 import {
     CANONICAL_ORGANIZATION_BASE,
     CANONICAL_ORGANIZATION_PROGRAMS_HREF,
@@ -149,11 +150,12 @@ export function ConfigurationContinuityProvider({
         }
     }, [router]);
 
-    // Data warm for Locations collection — peek must be ready before soft-nav reveal.
+    // Data warm for Locations + Programs collections — peek ready before soft-nav reveal.
     useEffect(() => {
         const id = orgId.trim();
         if (!id) return;
         void loadLocationsCollection(id).catch(() => undefined);
+        void loadProgramsCollection(id).catch(() => undefined);
     }, [orgId]);
 
     useEffect(() => {
