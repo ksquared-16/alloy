@@ -55,6 +55,8 @@ Assignment {
 
 Everything a child's schedule can be is a set of assignments over time. **Never assume one.**
 
+> **V1 implementation note (times).** The slice-1 schema stores `weekdays` on `schedule_patterns` but **no per-assignment times**. In V1, `arriveTime`/`departTime` resolve to **`null`** (the card renders weekdays · room · effective dates). Per-day arrival/departure is a **small extension** (a times column on the assignment or pattern metadata) delivered with the Phase-2 pattern editor — engineering must **not** synthesize a time source. See [`SCHEDULING-IMPLEMENTATION-VALIDATION.md`](./SCHEDULING-IMPLEMENTATION-VALIDATION.md) §1/§14.
+
 ---
 
 ## 2. Schedule = a lifecycle grouping of assignments (operator-facing)
