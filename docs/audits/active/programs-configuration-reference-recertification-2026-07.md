@@ -18,10 +18,6 @@ supersedes:
 Overview comprehension were independently completed in
 [`configuration-experience-comprehension-completion-2026-07.md`](configuration-experience-comprehension-completion-2026-07.md).
 
-**Domain-realization closeout:** Legacy Commercial Program richness was audited,
-translated, and re-certified in
-[`programs-product-certification-realization-alignment-2026-07.md`](programs-product-certification-realization-alignment-2026-07.md).
-
 ## Certification basis
 
 This is a fresh Product evaluation of the realized experience. It does not infer
