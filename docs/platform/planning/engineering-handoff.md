@@ -7,7 +7,7 @@ supersedes: []
 
 # Scheduling V1 — engineering handoff
 
-**Status:** Proposed — implementation-ready. Companion to [`mvp-product-definition.md`](./mvp-product-definition.md). Nothing here is conceptual: every screen maps to existing Alloy tables, calculations, and capabilities. **No new runtime; no new data model.** Where a name is uncertain in current code, it is marked *(confirm)*.
+**Status:** Proposed — implementation detail (per-screen data/capability mapping). **The authoritative build order is [`SCHEDULING-IMPLEMENTATION-READINESS.md`](./SCHEDULING-IMPLEMENTATION-READINESS.md) §D**, which reconciles this doc with the later contracts (projection, calculation map, binding matrix, Billing rate resolution). Use §D for sequencing; use the tables here for the table/calculation/capability mapping. **No new runtime; no new data model.** Where a name is uncertain in current code, it is marked *(confirm)*.
 
 ---
 

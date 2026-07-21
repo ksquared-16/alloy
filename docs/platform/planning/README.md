@@ -5,13 +5,17 @@ last_reviewed: 2026-07-21
 supersedes: []
 ---
 
-# The Alloy Decision Architecture
+# Scheduling — Product Definition (frozen) & the Decision Architecture
 
 **Alloy turns operational pressure into operational truth — one decision at a time.**
 
-This folder holds one architecture and the trail that discovered it. If you read one thing, read the architecture.
+Scheduling Product Discovery is **closed**. This folder holds the frozen product definition, the contracts engineering builds from, and the discovery trail that produced them.
 
-## Start here
+## ▶ Implementation handoff — start here
+
+- **[SCHEDULING-IMPLEMENTATION-READINESS.md](./SCHEDULING-IMPLEMENTATION-READINESS.md)** — the frozen handoff: **(A)** must-fix before implementation (no real blockers; a few small decisions), **(B)** safe to defer, **(C)** the frozen product decisions engineering treats as authoritative, **(D)** the exact build order — plus the canonical document map. **Read this first.**
+
+## The architecture (why the product is shaped this way)
 
 - **[alloy-decision-architecture.md](./alloy-decision-architecture.md)** — the single, final architecture. Operator model, platform model, engineering composition, the fixed vocabulary, BOS doctrine, and the one reusable Focus Panel card. Two minutes for an operator; fifteen for an engineer. Everything else here is provenance.
 
@@ -24,7 +28,7 @@ This folder holds one architecture and the trail that discovered it. If you read
 - **[billing-rate-resolution-contract.md](./billing-rate-resolution-contract.md)** — *(final correction)* the `BillingScheduleProjection` contract (recommended + eligible rates · selected/override · numeric discounts · numeric funding · totals + family responsibility), mapped onto the **existing** commercial pricing/attribution pipeline, plus the **implementation gap report** and the **blocker statement**.
 - **[scheduling-billing-boundary.md](./scheduling-billing-boundary.md)** — *(final)* the Scheduling ↔ Billing seam: Scheduling commits **schedule intent** and **displays** a read-only Billing projection; **Billing owns** rate, discounts, funding, tuition, and the entire ledger. Scheduling never selects a rate or computes money. (Projection shape refined by the rate-resolution contract above.)
 - **[children-scheduling-boundary.md](./children-scheduling-boundary.md)** — *(final)* the configuration boundary: the **Children card is a configurable business surface** (Surface Builder); the **Scheduling card is a platform-owned operational surface**. Peer cards composed by **navigation, not embedding**, with a one-owner-per-capability ownership table.
-- **[schedule-lifecycle-and-object.md](./schedule-lifecycle-and-object.md)** — *(final)* a child has **many** schedules over time (current · future(s) · temporary · seasonal · proposed · history), the full **schedule object**, the **pattern editor** (days + default hours + per-day/room overrides + effective dates + temporary), **rates & projected tuition** (Scheduling shows; Billing owns the ledger), and the **effective-dating** model.
+- **[schedule-lifecycle-and-object.md](./schedule-lifecycle-and-object.md)** — *(final)* a child has **many** schedules over time (current · **upcoming** · temporary · seasonal · proposed · history), the full **schedule object**, the **pattern editor** (days + default hours + per-day/room overrides + effective dates + temporary), and the **effective-dating** model. *(Rate/tuition are Billing-determined and merely displayed — see the Billing contract.)*
 - **[scheduling-focus-panel-composition.md](./scheduling-focus-panel-composition.md)** — the Focus Panel separated into **Identity · Work · Commands**: the Summary card is pure identity; operational work moves to a **Work card**; siblings become quiet **Household** context; commands stay configured.
 - **[scheduling-focus-panel-spec.md](./scheduling-focus-panel-spec.md)** — the Focus Panel card system detail (fixed label↔value patterns, transitions, create/change/end, configured commands). Its Summary-card section is refined by the composition doc above.
 - **[scheduling-card-projection.md](./scheduling-card-projection.md)** — the one composed read model both card layers render; identity, effective-date/current-vs-future/proposed-vs-committed semantics, sibling resolution, freshness, provenance, error states, and which calculation appears where.

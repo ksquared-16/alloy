@@ -9,6 +9,8 @@ supersedes: []
 
 **Status:** Proposed — the canonical schedule model the platform-owned Scheduling card presents. Companion to [`children-scheduling-boundary.md`](./children-scheduling-boundary.md). Built on the effective-dated `schedule_assignments` / `child_placements` foundation; **never overwrites committed schedules — every change is a new effective-dated version.**
 
+> **Terminology + contract note.** The implementation contract is [`scheduling-projection-contract.md`](./scheduling-projection-contract.md) (subject-scoped, assignment-based). Two frozen terms this doc predates: the lifecycle bucket is **Upcoming** (not "Future" as written below); and rate/tuition are **determined by Billing** and merely displayed here (see [`billing-rate-resolution-contract.md`](./billing-rate-resolution-contract.md)). Where wording differs, those two docs govern.
+
 ---
 
 ## 1. A child has *many* schedules, over time

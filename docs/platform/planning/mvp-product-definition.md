@@ -7,7 +7,9 @@ supersedes: []
 
 # Scheduling V1 — MVP product definition
 
-**Status:** Proposed — product definition, not discovery. The architecture ([`alloy-decision-architecture.md`](./alloy-decision-architecture.md)) is accepted. This defines the **smallest complete product we could ship to a first customer today**, built entirely on Alloy's existing substrate. Engineering handoff: [`engineering-handoff.md`](./engineering-handoff.md).
+**Status:** Proposed — **superseded for product content by [`scheduling-product-spec.md`](./scheduling-product-spec.md)** (and the daily-ops refinements after it). Retained for the original MVP scope framing and the three-problem V1 boundary. Read the product spec and [`SCHEDULING-IMPLEMENTATION-READINESS.md`](./SCHEDULING-IMPLEMENTATION-READINESS.md) for the authoritative, current definition.
+
+This defines the **smallest complete product we could ship to a first customer today**, built entirely on Alloy's existing substrate. Engineering handoff: [`engineering-handoff.md`](./engineering-handoff.md).
 
 ---
 

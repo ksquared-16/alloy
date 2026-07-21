@@ -84,14 +84,13 @@ The explicit table — no responsibility appears twice:
 | Child custom fields | **Children card** |
 | Child display configuration (fields, order, sections, badges, layout) | **Children card** (Surface Builder) |
 | Child-level configured actions | **Children card** |
-| Current schedules | **Scheduling card** |
-| Future schedules | **Scheduling card** |
+| Current / upcoming schedules | **Scheduling card** |
 | Proposed schedules | **Scheduling card** |
 | Schedule patterns · daily times | **Scheduling card** |
 | Room assignment (operational) | **Scheduling card** |
 | Effective dates · schedule lifecycle | **Scheduling card** |
-| Schedule rate | **Scheduling** (projection) |
-| Projected recurring tuition | **Scheduling** (projection) |
+| Rate **determination** · **recurring tuition calculation** · discounts · funding | **Billing** |
+| Rate/tuition **display** (a read-only Billing projection) + selected-rate **reference** | **Scheduling** (consumes; computes no amount) |
 | Attendance expectation | **Scheduling** (derived from schedule) |
 | Billing ledger (invoices · balances · credits · payments) | **Billing** |
 | Attendance history (actuals) | **Attendance** |
@@ -100,7 +99,7 @@ The explicit table — no responsibility appears twice:
 | Schedule commands (create/change/end/move…) | **Configured Action Runtime** |
 | Family notification on a change | **Communications** |
 
-**Read the seams:** Scheduling owns the *rate* and *projected tuition* (they are consequences of the schedule); **Billing** owns the *ledger* (invoices, balances, payments). Scheduling owns the *expected* attendance; **Attendance** owns the *actual*. The Children card owns *configured identity*; Scheduling owns *operational schedule truth*. No capability has two owners.
+**Read the seams:** **Billing determines** the rate and computes recurring tuition/discounts/funding; **Scheduling displays** the resulting projection and persists only the selected-rate *reference* (it computes no amount — see [`billing-rate-resolution-contract.md`](./billing-rate-resolution-contract.md)). **Billing** owns the *ledger* (invoices, balances, payments). Scheduling owns the *expected* attendance; **Attendance** owns the *actual*. The Children card owns *configured identity*; Scheduling owns *operational schedule truth*. No capability has two owners.
 
 ---
 
