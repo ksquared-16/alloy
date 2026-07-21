@@ -41,9 +41,11 @@ Checkpoint D makes **Programs** the first production Configuration Object consum
 
 | Entry | Behavior |
 |-------|----------|
-| `/organization/programs` | Canonical |
+| `/organization/programs` | Canonical Programs ownership |
 | `/settings/commercial/programs` (+ admin variants) | Redirect → canonical (`next.config.ts`) |
-| Commercial sibling chapters | Linked from Programs chrome → `/settings/commercial` (not migrated) |
+| `/settings/commercial?chapter=programs` | Soft-replace → `/organization/programs` |
+| Commercial sibling chapters | Intentional leave paths only: `/settings/commercial?chapter=…` (Tuition/Catalog/Policies/Accounting/Simulator/Funding). Bare `/settings/commercial` defaults to Catalog — never Programs IA. |
+| Config-mode Programs active | `/organization/programs` only (Commercial no longer highlights Programs) |
 
 ## 5. Collection contract
 
