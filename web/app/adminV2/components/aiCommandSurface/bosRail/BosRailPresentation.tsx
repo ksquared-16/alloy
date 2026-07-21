@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type RefObject } from "react";
+import { useState, useRef, type RefObject, type PointerEvent as ReactPointerEvent } from "react";
 import { AlertTriangle, ChevronRight, Send } from "lucide-react";
 
 import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
 import { BosRailActionIcon } from "@/app/adminV2/components/bos/identity/BosRailActionIcon";
 import type { BosRailAttentionPresentation } from "@/lib/bos/bosRailAttentionPresentation";
-import { parseBosRailContextChips } from "@/lib/bos/bosRailContextChips";
+import { parseBosRailContextChips, type BosRailContextChip } from "@/lib/bos/bosRailContextChips";
+import { useBosPresentationControllerOptional } from "@/contexts/BosPresentationControllerContext";
 import type { CommandSurfaceRailStarterSuggestion } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
 import { derived, neutral, palette } from "@/styles/tokens/colors";
 
@@ -16,23 +17,128 @@ const CMD = {
     textLabel: "rgba(39, 63, 82, 0.52)",
 } as const;
 
-export function BosRailHeader(props: { contextDisplayLine: string | null; statusLabel?: string | null }) {
-    const chips = parseBosRailContextChips(props.contextDisplayLine);
+const chromeBtnClass =
+    "rounded-md border border-alloy-stone/30 bg-white px-2.5 py-1 text-[11px] font-semibold text-alloy-midnight/80 shadow-sm hover:bg-alloy-stone/5";
+
+export function BosRailHeader(props: {
+    contextDisplayLine: string | null;
+    statusLabel?: string | null;
+    /** Optional structured pills; when provided, replace parse-from-line chips. */
+    contextPills?: BosRailContextChip[];
+}) {
+    const chips =
+        props.contextPills && props.contextPills.length > 0
+            ? props.contextPills
+            : parseBosRailContextChips(props.contextDisplayLine);
+    const bos = useBosPresentationControllerOptional();
+    const effective = bos?.derivation.effective;
+    const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(
+        null,
+    );
+
+    const onFloatDragStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (effective !== "floating" || !bos) return;
+        if ((event.target as HTMLElement).closest("button")) return;
+        event.preventDefault();
+        dragRef.current = {
+            startX: event.clientX,
+            startY: event.clientY,
+            origX: bos.floatingGeometry.x,
+            origY: bos.floatingGeometry.y,
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+    };
+
+    const onFloatDragMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (!dragRef.current || effective !== "floating" || !bos) return;
+        bos.setFloatingGeometry(
+            {
+                ...bos.floatingGeometry,
+                x: dragRef.current.origX + (event.clientX - dragRef.current.startX),
+                y: dragRef.current.origY + (event.clientY - dragRef.current.startY),
+            },
+            { persist: false },
+        );
+    };
+
+    const onFloatDragEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (!dragRef.current || !bos) return;
+        const final = {
+            ...bos.floatingGeometry,
+            x: dragRef.current.origX + (event.clientX - dragRef.current.startX),
+            y: dragRef.current.origY + (event.clientY - dragRef.current.startY),
+        };
+        dragRef.current = null;
+        try {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        } catch {
+            /* ignore */
+        }
+        bos.setFloatingGeometry(final, { persist: true });
+    };
 
     return (
-        <div className="bos-rail-header px-2 pb-2.5 pt-2" data-command-surface-rail-header="true">
+        <div
+            className={`bos-rail-header px-2 pb-2.5 pt-2${
+                effective === "floating" ? " cursor-grab active:cursor-grabbing" : ""
+            }`}
+            data-command-surface-rail-header="true"
+            data-bos-float-drag-surface={effective === "floating" ? "true" : undefined}
+            onPointerDown={onFloatDragStart}
+            onPointerMove={onFloatDragMove}
+            onPointerUp={onFloatDragEnd}
+            onPointerCancel={onFloatDragEnd}
+        >
             <div className="flex items-center justify-between gap-2">
                 <BosHeader size="sm" className="min-w-0 flex-1" />
-                {props.statusLabel ?
-                    <span
-                        className="shrink-0 text-[10px] font-medium tabular-nums"
-                        style={{ color: CMD.textSupporting }}
-                        data-command-surface-thread-status="true"
-                        aria-live="polite"
-                    >
-                        {props.statusLabel}
-                    </span>
-                :   null}
+                <div className="flex shrink-0 items-center gap-1">
+                    {props.statusLabel ?
+                        <span
+                            className="mr-1 text-[10px] font-medium tabular-nums"
+                            style={{ color: CMD.textSupporting }}
+                            data-command-surface-thread-status="true"
+                            aria-live="polite"
+                        >
+                            {props.statusLabel}
+                        </span>
+                    :   null}
+                    {bos && effective === "floating" ? (
+                        <button
+                            type="button"
+                            data-bos-reset-float
+                            title="Reset size and position"
+                            onClick={() => bos.resetFloatingGeometry()}
+                            className={chromeBtnClass}
+                        >
+                            Reset
+                        </button>
+                    ) : null}
+                    {bos && effective === "floating" ? (
+                        <button type="button" data-bos-pin onClick={() => bos.pin()} className={chromeBtnClass}>
+                            Pin
+                        </button>
+                    ) : null}
+                    {bos && effective === "pinned" ? (
+                        <button
+                            type="button"
+                            data-bos-unpin
+                            onClick={() => bos.unpinToFloating()}
+                            className={chromeBtnClass}
+                        >
+                            Unpin
+                        </button>
+                    ) : null}
+                    {bos && (effective === "floating" || effective === "pinned") ? (
+                        <button
+                            type="button"
+                            data-bos-close
+                            onClick={() => bos.closeToLauncher()}
+                            className={chromeBtnClass}
+                        >
+                            Close
+                        </button>
+                    ) : null}
+                </div>
             </div>
             {chips.length > 0 ?
                 <div className="mt-2.5" data-command-surface-rail-context="true">
@@ -63,6 +169,82 @@ export function BosRailHeader(props: { contextDisplayLine: string | null; status
                 </div>
             :   null}
         </div>
+    );
+}
+
+/** Quiet corner resize for floating BOS — not a general window manager. */
+export function BosFloatingResizeHandle() {
+    const bos = useBosPresentationControllerOptional();
+    const dragRef = useRef<{
+        startX: number;
+        startY: number;
+        origW: number;
+        origH: number;
+    } | null>(null);
+
+    if (!bos || bos.derivation.effective !== "floating") return null;
+
+    const onDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dragRef.current = {
+            startX: event.clientX,
+            startY: event.clientY,
+            origW: bos.floatingGeometry.width,
+            origH: bos.floatingGeometry.height,
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+    };
+
+    const onMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+        if (!dragRef.current) return;
+        bos.setFloatingGeometry(
+            {
+                ...bos.floatingGeometry,
+                width: dragRef.current.origW + (event.clientX - dragRef.current.startX),
+                height: dragRef.current.origH + (event.clientY - dragRef.current.startY),
+            },
+            { persist: false },
+        );
+    };
+
+    const onUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+        if (!dragRef.current) return;
+        const final = {
+            ...bos.floatingGeometry,
+            width: dragRef.current.origW + (event.clientX - dragRef.current.startX),
+            height: dragRef.current.origH + (event.clientY - dragRef.current.startY),
+        };
+        dragRef.current = null;
+        try {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        } catch {
+            /* ignore */
+        }
+        bos.setFloatingGeometry(final, { persist: true });
+    };
+
+    return (
+        <button
+            type="button"
+            data-bos-float-resize-handle
+            aria-label="Resize BOS"
+            title="Drag to resize"
+            className="absolute bottom-1 right-1 z-[2] h-4 w-4 cursor-nwse-resize border-0 bg-transparent p-0"
+            onPointerDown={onDown}
+            onPointerMove={onMove}
+            onPointerUp={onUp}
+            onPointerCancel={onUp}
+        >
+            <span
+                aria-hidden
+                className="block h-full w-full rounded-sm opacity-40"
+                style={{
+                    background:
+                        "linear-gradient(135deg, transparent 50%, rgba(39,63,82,0.45) 50%)",
+                }}
+            />
+        </button>
     );
 }
 

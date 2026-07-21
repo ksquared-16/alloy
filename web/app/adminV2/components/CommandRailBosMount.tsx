@@ -5,14 +5,18 @@ import {
     useCallback,
     useContext,
     useEffect,
+    useMemo,
     useState,
+    type CSSProperties,
     type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 
 import AICommandBar from "./AICommandBar";
 import AICommandSurfaceShell from "./aiCommandSurface/AICommandSurfaceShell";
+import { BosFloatingResizeHandle } from "./aiCommandSurface/bosRail/BosRailPresentation";
 import { ADMINV2_COMMAND_SURFACE_Z } from "@/components/admin/Drawer";
+import { useBosPresentationControllerOptional } from "@/contexts/BosPresentationControllerContext";
 import { isWorkspaceCommandRailBosHost } from "@/lib/bos/bosRailOverlayAnchor";
 import { useBosRailOverlayAnchorStyle } from "@/lib/bos/useBosRailOverlayAnchorStyle";
 import { useBosRailOverlayDrawerDocumentFlag } from "@/lib/bos/useBosRailOverlayDrawerDocumentFlag";
@@ -26,7 +30,7 @@ export function useCommandRailBosHostRef() {
         (el: HTMLElement | null) => {
             register?.(el);
         },
-        [register]
+        [register],
     );
 }
 
@@ -36,10 +40,11 @@ function adminV2AiCommandSurfaceEnabled(): boolean {
 
 function CommandRailBosDockContent() {
     return (
-        <div className="adminv2-ws-command-rail-bos-dock flex min-h-0 flex-1 flex-col">
+        <div className="adminv2-ws-command-rail-bos-dock relative flex min-h-0 flex-1 flex-col">
             {adminV2AiCommandSurfaceEnabled() ?
                 <AICommandSurfaceShell presentation="rail" />
             :   <AICommandBar />}
+            <BosFloatingResizeHandle />
         </div>
     );
 }
@@ -47,11 +52,14 @@ function CommandRailBosDockContent() {
 /**
  * Keeps BOS mounted in the shell while portaling UI into the workspace Actions rail.
  * Workspace routes use a fixed body overlay aligned to the rail anchor so BOS stays above drawers.
+ * Floating mode uses operator-controlled absolute geometry (not the assistant column).
  */
 export function CommandRailBosMount({ children }: { children: ReactNode }) {
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
     const [bodyOverlay, setBodyOverlay] = useState(false);
     const [portalReady, setPortalReady] = useState(false);
+    const bos = useBosPresentationControllerOptional();
+    const effective = bos?.derivation.effective;
 
     const registerHost = useCallback((el: HTMLElement | null) => {
         setAnchorEl(el);
@@ -62,26 +70,55 @@ export function CommandRailBosMount({ children }: { children: ReactNode }) {
         setPortalReady(true);
     }, []);
 
-    useBosRailOverlayDrawerDocumentFlag(bodyOverlay);
+    useBosRailOverlayDrawerDocumentFlag(bodyOverlay && effective !== "closed");
 
-    const overlayStyle = useBosRailOverlayAnchorStyle(anchorEl, bodyOverlay);
+    const pinnedOverlayStyle = useBosRailOverlayAnchorStyle(
+        anchorEl,
+        bodyOverlay && effective === "pinned",
+    );
+
+    const overlayStyle = useMemo((): CSSProperties => {
+        if (effective === "closed") {
+            return { visibility: "hidden", position: "fixed", pointerEvents: "none" };
+        }
+        if (effective === "floating" && bos) {
+            const g = bos.floatingGeometry;
+            return {
+                position: "fixed",
+                left: g.x,
+                top: g.y,
+                width: g.width,
+                maxWidth: g.width,
+                height: g.height,
+                maxHeight: g.height,
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 0,
+                visibility: "visible",
+                right: "auto",
+                bottom: "auto",
+            };
+        }
+        return pinnedOverlayStyle;
+    }, [effective, bos, pinnedOverlayStyle]);
 
     const dockContent = <CommandRailBosDockContent />;
 
     return (
         <CommandRailBosHostContext.Provider value={registerHost}>
             {children}
-            {portalReady && anchorEl && bodyOverlay ?
+            {portalReady && anchorEl && bodyOverlay && effective !== "closed" ?
                 createPortal(
                     <div
                         data-adminv2-bos-rail-overlay="true"
-                        className="adminv2-bos-rail-overlay pointer-events-auto flex min-h-0 flex-col"
+                        data-bos-overlay-mode={effective ?? undefined}
+                        className="adminv2-bos-rail-overlay pointer-events-auto relative flex min-h-0 flex-col"
                         style={{ ...overlayStyle, zIndex: ADMINV2_COMMAND_SURFACE_Z }}
                         {...alloySectionDomAttrs("WU-14")}
                     >
                         {dockContent}
                     </div>,
-                    document.body
+                    document.body,
                 )
             : portalReady && anchorEl && !bodyOverlay ?
                 createPortal(dockContent, anchorEl)
