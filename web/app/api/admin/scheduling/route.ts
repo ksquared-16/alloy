@@ -8,6 +8,7 @@ import {
 import { detectUnplacedChildren } from "@/lib/scheduling/problems/detectUnplaced";
 import { generatePlacementOptions } from "@/lib/scheduling/options/generatePlacementOptions";
 import { loadSchedulingProjectionForChild } from "@/lib/scheduling/projection/buildSchedulingProjection";
+import { getOperationalAgreementForMemberSite } from "@/lib/childcareOperational/enrollmentAgreementService";
 import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
 import { validateScheduleCreatePayload } from "@/lib/scheduling/commands/scheduleCreateInputs";
 
@@ -142,8 +143,34 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const customerMemberId = String(body.customer_member_id ?? "").trim();
+    const siteLocationId = String(body.site_location_id ?? "").trim();
     if (!customerMemberId) {
         return NextResponse.json({ error: "customer_member_id is required", code: "invalid_input" }, { status: 400 });
+    }
+
+    const supabase = createAdminClient();
+
+    // Resolve the operational enrollment agreement for this child + site. Scheduling
+    // operates over the enrolled foundation; a pre-enrolled child has no agreement yet,
+    // so we return an honest state (enrollment/Registration creates the schedulable
+    // record) rather than fabricating one.
+    if (!body.enrollment_agreement_id && siteLocationId) {
+        const agreement = await getOperationalAgreementForMemberSite(
+            supabase,
+            ctx.orgId,
+            customerMemberId,
+            siteLocationId
+        );
+        if (!agreement) {
+            return NextResponse.json(
+                {
+                    error: "This child isn't enrolled yet — enrollment (Registration) creates the schedulable record. Complete enrollment, then schedule.",
+                    code: "not_enrolled",
+                },
+                { status: 409 }
+            );
+        }
+        body.enrollment_agreement_id = agreement.id;
     }
 
     const validated = validateScheduleCreatePayload(body);
@@ -156,7 +183,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "schedule.create is not registered", code: "server_error" }, { status: 500 });
     }
 
-    const supabase = createAdminClient();
     const result = await action.execute({
         supabase,
         ctx: { orgId: ctx.orgId, userId: ctx.userId, accessScope: null },

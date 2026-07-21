@@ -5,6 +5,7 @@ import clsx from "clsx";
 import ArchetypeCardBody from "@/components/admin/focusPanel/ArchetypeCardBody";
 import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
 import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
+import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 import ReadinessCard from "@/components/admin/focusPanel/cards/ReadinessCard";
 import TourCard from "@/components/admin/focusPanel/cards/TourCard";
@@ -122,6 +123,11 @@ export default function FocusPanelCardRenderer({
                 coordination={coordination}
                 mutation={mutation}
             />
+        );
+    }
+    if (model.key === "scheduling") {
+        return (
+            <SchedulingCard model={model} context={context} receded={receded} coordination={coordination} />
         );
     }
     if (model.key === "current_work") {
