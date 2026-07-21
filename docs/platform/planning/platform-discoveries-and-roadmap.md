@@ -9,6 +9,8 @@ supersedes: []
 
 **Status:** Proposed — companion to [`operational-planning-platform.md`](./operational-planning-platform.md). The running classification of every discovery (Scheduling-specific vs reusable platform), the doctrine updates this proposes, and the MVP → V2 → V3 roadmap.
 
+> **Iteration-2 discovery buckets.** The mission's named extraction buckets (Operational Planning Platform · Studio Platform · Planning Runtime · Simulation Runtime · Optimization Runtime · Operational Commit · Focus Panel Evolution · Workspace Evolution · BOS Evolution · Future Platform Doctrine) are consolidated in [`architecture-validation.md`](./architecture-validation.md) §6. The ledger below is the full per-item classification.
+
 ---
 
 ## 1. The classification ledger

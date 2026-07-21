@@ -1,0 +1,733 @@
+<title>Scheduling · Operational Planning — v2 (inherits Alloy)</title>
+<style>
+  /* =========================================================================
+     Alloy workspace — faithful transcription of the certified shell.
+     Every value below is the resolved literal from the clone kit
+     (WorkspaceShell / OperationalModalHeader / WorkspaceModeNav /
+     WorkspaceOperationalHealth / ProcessingOverviewLanding / WorkspaceQueueRow).
+     Light-only, as the product is. Tailwind scale: 1u = 4px.
+     ========================================================================= */
+  :root{
+    --pine:#00A283; --pine-hover:#009276;
+    --forge:#273F52;         /* alloy-midnight / midnight-forge */
+    --ink:#18273A;           /* deep text */
+    --slate:#45506c;         /* alloy-slate */
+    --muted:#59678b;
+    --stone:#F4F6F9;         /* River Stone */
+    --gold:#DBC078; --gold-dark:#d0ad50;
+    --ember:#BC4300; --blue:#00458C;
+    --page:#EEF2F8;
+    --font:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    /* midnight alpha helpers */
+    --mid-90:rgba(39,63,82,.90); --mid-70:rgba(39,63,82,.70); --mid-62:rgba(39,63,82,.62);
+    --mid-58:rgba(39,63,82,.58); --mid-45:rgba(39,63,82,.45); --mid-42:rgba(39,63,82,.42);
+    --mid-40:rgba(39,63,82,.40); --mid-35:rgba(39,63,82,.35); --mid-25:rgba(39,63,82,.25);
+    --stone-30:rgba(244,246,249,.30); --stone-25:rgba(244,246,249,.55);
+    color-scheme: light;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--page);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.45}
+  .tab{font-variant-numeric:tabular-nums}
+  h1,h2,h3,h4{margin:0}
+  button{font-family:inherit;cursor:default;border:none;background:none}
+
+  /* gallery frame */
+  .gallery{max-width:1180px;margin:0 auto;padding:20px 18px 56px}
+  .g-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap;margin-bottom:14px}
+  .g-title{font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--forge)}
+  .g-sub{font-size:12px;color:var(--muted);margin-top:3px;max-width:66ch}
+  .g-badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--gold-dark);background:rgba(219,192,120,.14);border:1px solid rgba(208,173,80,.4);padding:4px 9px;border-radius:999px}
+  .g-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:13px}
+  .g-tab{border:1px solid var(--mid-25);background:#fff;color:var(--slate);font-size:12px;font-weight:500;padding:7px 12px;border-radius:8px;cursor:pointer;transition:all .15s}
+  .g-tab:hover{border-color:var(--pine);color:var(--pine)}
+  .g-tab[aria-selected="true"]{border-color:var(--pine);background:rgba(0,162,131,.08);color:var(--pine);font-weight:600;box-shadow:inset 0 -2px 0 var(--pine)}
+  .g-tab:focus-visible{outline:2px solid var(--pine);outline-offset:2px}
+  .g-note{font-size:11px;color:var(--muted);margin:0 0 12px}
+
+  /* ---- app shell (rail + main) ---- */
+  .app{display:flex;background:var(--stone);border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(39,63,82,.10);min-height:640px}
+  .rail{width:56px;flex:0 0 56px;background:var(--forge);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px}
+  .rail-logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--pine),#0b7d68);display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;margin-bottom:8px}
+  .rail-i{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:rgba(255,255,255,.6);font-size:15px;position:relative}
+  .rail-i.on{background:rgba(255,255,255,.10);color:#fff}
+  .rail-i.on::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--pine)}
+  .topbar{height:6px;background:var(--blue)}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+
+  /* ---- WorkspaceShell: rounded-2xl border bg-white ---- */
+  .shell{flex:1;display:flex;flex-direction:column;min-width:0;border-radius:16px;border:1px solid rgba(244,246,249,.9);background:#fff;overflow:hidden}
+  .control-band{border-bottom:1px solid var(--stone-30)}
+  /* header: border-l-2 pine, px-4 pt-1.5 */
+  .ws-header{display:flex;align-items:center;justify-content:space-between;gap:12px;border-left:2px solid var(--pine);background:#fff;padding:6px 16px 0}
+  .ws-id{display:flex;align-items:center;gap:8px;min-width:0}
+  .ws-ico{width:24px;height:24px;display:grid;place-items:center;color:var(--forge);font-size:15px}
+  .ws-title{font-size:14px;font-weight:600;color:var(--forge);line-height:1.15}
+  .ws-subt{font-size:11px;color:var(--slate)}
+  .ws-acts{display:flex;align-items:center;gap:6px;margin-left:auto}
+  .btn-primary{display:inline-flex;align-items:center;gap:6px;border-radius:6px;background:var(--pine);padding:6px 12px;font-size:12.5px;font-weight:600;color:#fff}
+  .btn-primary:hover{background:var(--pine-hover)}
+  .btn-secondary{display:inline-flex;align-items:center;gap:6px;border-radius:8px;border:1px solid var(--mid-25);background:#fff;padding:6px 12px;font-size:12px;font-weight:500;color:var(--mid-70)}
+  .btn-close{display:inline-flex;align-items:center;gap:4px;border-radius:6px;border:1px solid rgba(244,246,249,.8);padding:4px 8px;font-size:11px;font-weight:600;color:var(--mid-40)}
+
+  /* mode nav: bg-white px-4 pb-3 pt-1 */
+  .ws-modenav{background:#fff;padding:4px 16px 12px}
+  .modesplit{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px 16px;align-items:center}
+  @media (max-width:800px){.modesplit{grid-template-columns:1fr}}
+  .modestack{display:flex;flex-direction:column;gap:8px;min-width:0}
+  .modepills{display:flex;gap:4px}
+  .mp{border-radius:6px;border:1px solid var(--mid-25);background:#fff;padding:4px 12px;font-size:11px;font-weight:600;color:var(--mid-70)}
+  .mp.on{border-color:var(--pine);color:var(--pine);box-shadow:inset 0 -2px 0 var(--pine)}
+  .subtabs{display:inline-flex;align-items:center;gap:12px;margin-bottom:-1px;flex-wrap:wrap}
+  .st{padding:2px 2px 6px;font-size:12px;font-weight:600;color:rgba(39,63,82,.5);border-bottom:2px solid transparent}
+  .st.on{color:var(--pine);border-bottom-color:var(--pine)}
+  /* operational health */
+  .ophealth{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .oph-eye{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--slate)}
+  .oph-eye::before{content:"";width:6px;height:6px;transform:rotate(45deg);background:rgba(69,80,108,.5)}
+  .oph-metrics{display:flex;flex-wrap:wrap;gap:8px 24px}
+  .oph-m{min-width:88px}
+  .oph-v{font-size:18px;font-weight:600;line-height:1;color:var(--forge)}
+  .oph-v.pine{color:var(--pine)} .oph-v.gold{color:var(--gold-dark)} .oph-v.ember{color:var(--ember)}
+  .oph-l{margin-left:6px;font-size:11px;font-weight:500;color:var(--slate)}
+  .oph-t{margin-top:2px;font-size:10px;font-weight:500;line-height:1.1}
+  .oph-t.pine{color:var(--pine)} .oph-t.ember{color:var(--ember)} .oph-t.slate{color:var(--slate)} .oph-t.gold{color:var(--gold-dark)}
+
+  /* shell inset → stone canvas */
+  .ws-inset{display:flex;min-height:0;flex:1;flex-direction:column;background:#fff;padding:12px 16px 16px}
+  .ws-canvas{display:flex;min-height:0;flex:1;flex-direction:column;overflow:auto;border-radius:12px;box-shadow:inset 0 0 0 1px var(--stone-25);background:rgba(244,246,249,.5)}
+  /* queue canvas variant = white full-bleed */
+  .ws-canvas.white{background:#fff;box-shadow:none;padding:0}
+  .surface{padding:16px}
+  .surface .wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+
+  /* ---- Overview: action cards ---- */
+  .actioncards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media (max-width:760px){.actioncards{grid-template-columns:1fr}}
+  .accard{position:relative;overflow:hidden;border-radius:16px;background:#fff;padding:20px 20px 20px 24px}
+  .accard.primary{box-shadow:0 4px 24px rgba(24,39,58,.10);outline:1px solid rgba(0,162,131,.20)}
+  .accard.secondary{box-shadow:0 3px 14px rgba(24,39,58,.09);outline:1px solid rgba(0,162,131,.16)}
+  .accard.tertiary{box-shadow:0 2px 10px rgba(24,39,58,.07);outline:1px solid rgba(39,63,82,.16)}
+  .accard .rail3{position:absolute;top:12px;bottom:12px;left:0;width:4px;border-radius:999px;background:var(--pine)}
+  .ac-well{margin-bottom:14px;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:18px}
+  .ac-well.pine{background:rgba(0,162,131,.11);color:var(--pine);outline:1px solid rgba(0,162,131,.28)}
+  .ac-well.forge{background:rgba(39,63,82,.06);color:var(--forge);outline:1px solid rgba(39,63,82,.22)}
+  .ac-h{font-size:15px;font-weight:600;color:var(--forge)}
+  .ac-p{margin:6px 0 0;min-height:40px;font-size:12px;line-height:1.4;color:var(--slate)}
+  .ac-cta{margin-top:16px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--pine)}
+  .ac-cta.forge{color:var(--forge)}
+
+  /* ---- Today's activity KPI tiles ---- */
+  .kpi-eye{margin:0 0 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--mid-35)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  @media (max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{display:flex;align-items:center;gap:8px;min-width:112px;padding:8px 10px;border-radius:12px;border:1px solid rgba(244,246,249,.9);background:#fff;box-shadow:0 2px 8px rgba(24,39,58,.07)}
+  .kpi-well{flex:0 0 auto;width:36px;height:36px;border-radius:8px;display:grid;place-items:center;font-size:15px}
+  .kpi-well.pine{background:rgba(0,162,131,.08);color:var(--pine)}
+  .kpi-well.gold{background:rgba(219,192,120,.20);color:var(--gold-dark)}
+  .kpi-well.ember{background:rgba(188,67,0,.08);color:var(--ember)}
+  .kpi-v{font-size:18px;font-weight:700;letter-spacing:-.03em;line-height:1;color:var(--forge)}
+  .kpi-lrow{display:flex;align-items:center;gap:6px;margin-top:6px}
+  .kpi-gem{width:8px;height:8px;transform:rotate(45deg)}
+  .kpi-gem.pine{background:var(--pine)} .kpi-gem.gold{background:var(--gold)} .kpi-gem.ember{background:var(--ember)}
+  .kpi-l{font-size:10px;font-weight:500;color:var(--mid-42)}
+
+  /* ---- info zones ---- */
+  .zones{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media (max-width:760px){.zones{grid-template-columns:1fr}}
+  .zone{border-radius:12px;border:1px solid rgba(244,246,249,.9);background:#fff;box-shadow:0 2px 10px rgba(24,39,58,.07);padding:12px 16px}
+  .zone-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+  .zone-h h2{font-size:13px;font-weight:600;color:var(--forge)}
+  .zone-h button{font-size:11px;font-weight:600;color:var(--pine)}
+  .recent{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .recent li{display:flex;align-items:flex-start;gap:12px;border-radius:8px;padding:8px 8px 10px}
+  .recent .bar{margin-top:2px;width:2px;height:32px;flex:0 0 auto;border-radius:999px;background:var(--pine)}
+  .recent .bar.ember{background:var(--ember)} .recent .bar.slate{background:var(--mid-25)}
+  .recent .lbl{font-size:13px;font-weight:600;color:var(--forge)}
+  .recent .sub{margin-top:2px;font-size:11px;font-weight:500;color:var(--slate)}
+  .recent .sub.pine{color:var(--pine)} .recent .sub.ember{color:var(--ember)}
+
+  /* ---- Work Views: queue rail + row ---- */
+  .queue-layout{display:grid;grid-template-columns:24rem minmax(0,1fr);gap:0;height:100%}
+  @media (max-width:800px){.queue-layout{grid-template-columns:1fr}}
+  .queue-col{padding:16px;overflow:auto;border-right:1px solid rgba(244,246,249,.9)}
+  .queue-head{display:flex;align-items:baseline;justify-content:space-between;padding:0 2px 6px}
+  .queue-head h3{font-size:13px;font-weight:600;color:var(--forge)}
+  .queue-head .count{font-size:11px;color:var(--mid-45)}
+  .qlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .qrow{display:block;width:100%;text-align:left;border-radius:8px;border:1px solid rgba(244,246,249,.9);border-left:2px solid rgba(244,246,249,.9);padding:8px 10px;box-shadow:0 1px 2px rgba(39,63,82,.05);cursor:pointer}
+  .qrow:hover{background:rgba(244,246,249,.5)}
+  .qrow.sel{border-color:rgba(0,162,131,.45);border-left-color:var(--pine);background:rgba(0,162,131,.06);box-shadow:0 0 0 1px rgba(0,162,131,.18)}
+  .qrow.overdue{border-left-color:rgba(248,113,113,.85)}
+  .qrow-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .qrow-id{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+  .qrow-ico{width:14px;height:14px;color:var(--mid-40);flex:0 0 auto}
+  .qrow-title{font-size:12.5px;font-weight:600;color:var(--mid-90)}
+  .qrow-pill{border-radius:999px;padding:2px 6px;font-size:9px;font-weight:600;white-space:nowrap}
+  .qrow-pill.wait{border:1px solid rgba(253,230,138,.8);background:#fef3c7;color:#451a03}
+  .qrow-pill.badge{border:1px solid var(--mid-25);background:#fff;color:var(--mid-62)}
+  .qrow-crumb{margin-top:2px;font-size:10px;color:var(--mid-45)}
+  .qrow-snip{margin-top:2px;font-size:11px;line-height:1.4;color:var(--mid-58)}
+  .qrow-right{display:flex;align-items:flex-start;gap:6px;flex:0 0 auto}
+  .qrow-assignee{margin-top:2px;display:inline-flex;height:20px;min-width:20px;align-items:center;justify-content:center;border-radius:999px;background:rgba(0,162,131,.10);padding:0 4px;font-size:9px;font-weight:700;color:var(--pine)}
+  .qrow-meta{text-align:right;font-size:10px;line-height:1.3;color:var(--mid-45)}
+  /* inspector (Focus Panel host, right of queue) */
+  .fp-host{padding:16px;overflow:auto;background:rgba(244,246,249,.35)}
+
+  /* ---- Focus Panel ---- */
+  .fp{display:flex;flex-direction:column;gap:10px}
+  .fp-shell{border-radius:12px;background:#fff;border:1px solid rgba(244,246,249,.9);box-shadow:0 1px 6px rgba(24,39,58,.06);overflow:hidden}
+  .fp-headbar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(39,63,82,.07)}
+  .fp-av{width:30px;height:30px;border-radius:999px;background:rgba(0,162,131,.10);color:var(--pine);display:grid;place-items:center;font-size:11px;font-weight:700}
+  .fp-nm{font-size:13px;font-weight:600;color:var(--forge)}
+  .fp-sb{font-size:10.5px;color:var(--muted)}
+  .fp-modes{margin-left:auto;display:flex;gap:4px}
+  .fp-mode{font-size:10px;font-weight:600;color:var(--mid-45);padding:3px 8px;border-radius:999px;border:1px solid var(--mid-25);background:#fff}
+  .fp-mode.on{background:var(--pine);color:#fff;border-color:var(--pine)}
+  .fp-grid{padding:10px;display:flex;flex-direction:column;gap:8px}
+  .fpcard{border-radius:11px;border:1px solid rgba(39,63,82,.10);background:#fff;box-shadow:0 1px 5px rgba(24,39,58,.05);overflow:hidden}
+  .fpcard.plan{border-left:3px solid var(--pine)}
+  .fpc-h{display:flex;align-items:center;gap:8px;padding:9px 12px 2px}
+  .fpc-q{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--mid-45)}
+  .fpc-chip{margin-left:auto;border-radius:999px;padding:2px 8px;font-size:9.5px;font-weight:600}
+  .fpc-chip.pine{background:rgba(0,162,131,.10);color:var(--pine)}
+  .fpc-chip.ember{background:rgba(188,67,0,.10);color:var(--ember)}
+  .fpc-chip.gold{background:rgba(219,192,120,.18);color:var(--gold-dark)}
+  .fpc-insight{padding:0 12px 8px;font-size:13px;font-weight:600;color:var(--forge)}
+  .fpc-body{padding:0 12px 10px}
+  .kv{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;padding:4px 0;border-bottom:1px solid rgba(39,63,82,.06)}
+  .kv:last-child{border-bottom:none}
+  .kv .k{color:var(--muted)} .kv .v{color:var(--forge);font-weight:500}
+  .fpc-foot{display:flex;align-items:center;gap:8px;border-top:1px solid rgba(39,63,82,.06);padding:8px 12px}
+  .fpc-cta{font-size:11.5px;font-weight:600;color:var(--pine)}
+
+  /* lifecycle chip strip */
+  .lifecycle{display:flex;align-items:center;margin:4px 0}
+  .ls{font-size:8.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--mid-40);padding:3px 7px;border:1px solid var(--mid-25);border-right:none}
+  .ls:first-child{border-radius:6px 0 0 6px} .ls:last-child{border-right:1px solid var(--mid-25);border-radius:0 6px 6px 0}
+  .ls.done{background:rgba(0,162,131,.08);color:var(--pine);border-color:rgba(0,162,131,.3)}
+  .ls.cur{background:var(--pine);color:#fff;border-color:var(--pine)}
+
+  /* ---- Studio: list+detail, canvas, futures ---- */
+  .studio{display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px}
+  @media (max-width:820px){.studio{grid-template-columns:1fr}}
+  .plans-rail{border-radius:12px;border:1px solid rgba(244,246,249,.9);background:#fff;box-shadow:0 2px 10px rgba(24,39,58,.07);padding:10px}
+  .plans-rail h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--mid-35);margin:2px 4px 8px}
+  .plan-item{display:block;width:100%;text-align:left;border-radius:8px;padding:8px 10px;border:1px solid transparent;cursor:pointer}
+  .plan-item:hover{background:rgba(244,246,249,.5)}
+  .plan-item.on{border-color:rgba(0,162,131,.45);background:rgba(0,162,131,.06)}
+  .plan-item .pt{font-size:12.5px;font-weight:600;color:var(--forge)}
+  .plan-item .pm{font-size:10.5px;color:var(--muted);margin-top:1px}
+  .studio-detail{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+  /* Studio design canvas (Experience-Builder-class: canvas + inspector) */
+  .canvas-wrap{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px}
+  @media (max-width:900px){.canvas-wrap{grid-template-columns:1fr}}
+  .design-canvas{border-radius:12px;border:1px solid rgba(244,246,249,.9);background:#fff;box-shadow:0 2px 10px rgba(24,39,58,.07);overflow:hidden}
+  .dc-head{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid rgba(39,63,82,.07);background:rgba(244,246,249,.4)}
+  .dc-title{font-size:12px;font-weight:600;color:var(--forge)}
+  .dc-note{margin-left:auto;font-size:10.5px;color:var(--muted)}
+  .board{overflow:auto;padding:2px}
+  .board table{border-collapse:collapse;width:100%}
+  .board th,.board td{border:1px solid rgba(39,63,82,.07);padding:0;text-align:left}
+  .board thead th{background:rgba(244,246,249,.7);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);padding:7px 9px}
+  .board thead th.now{background:rgba(0,162,131,.08);color:var(--pine)}
+  .rc{padding:9px;min-width:112px}
+  .rc .rn{font-size:11.5px;font-weight:600;color:var(--forge)}
+  .rc .rm{font-size:9.5px;color:var(--muted)}
+  .cell{padding:7px 8px;min-width:96px;position:relative}
+  .cell .occ{font-size:13px;font-weight:600;color:var(--forge)}
+  .cell .cap{font-size:9.5px;color:var(--muted)}
+  .cell .bar{height:3px;border-radius:2px;background:rgba(39,63,82,.10);margin-top:5px;overflow:hidden}
+  .cell .bar>i{display:block;height:100%;background:var(--pine);border-radius:2px}
+  .cell .rr{display:flex;align-items:center;gap:4px;margin-top:5px;font-size:9px;color:var(--muted)}
+  .cell.breach{background:rgba(188,67,0,.06)} .cell.breach .bar>i{background:var(--ember)} .cell.breach .rr{color:var(--ember);font-weight:600}
+  .cell.plan{background:rgba(0,162,131,.09);box-shadow:inset 0 0 0 2px rgba(0,162,131,.45)}
+  .cell.plan::after{content:"PLAN";position:absolute;top:3px;right:4px;font-size:7px;font-weight:700;color:var(--pine)}
+  .cell.closed{background:repeating-linear-gradient(45deg,#fff,#fff 6px,rgba(39,63,82,.03) 6px,rgba(39,63,82,.03) 12px)}
+  .cell.closed .occ{color:var(--mid-25)}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .dot.pine{background:var(--pine)} .dot.ember{background:var(--ember)} .dot.gold{background:var(--gold)}
+
+  /* futures (Work View of candidate plans) */
+  .futures{display:flex;flex-direction:column;gap:8px}
+  .future{border-radius:8px;border:1px solid rgba(244,246,249,.9);border-left:2px solid var(--mid-25);background:#fff;padding:10px 12px;box-shadow:0 1px 2px rgba(39,63,82,.05)}
+  .future.best{border-left-color:var(--pine);box-shadow:0 3px 12px rgba(0,162,131,.09)}
+  .future-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .future-nm{font-size:12.5px;font-weight:600;color:var(--forge)}
+  .future-score{margin-left:auto;font-size:10.5px;font-weight:600;color:var(--pine);background:rgba(0,162,131,.08);padding:2px 8px;border-radius:999px}
+  .deltas{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  @media (max-width:700px){.deltas{grid-template-columns:repeat(3,1fr)}}
+  .delta{background:rgba(244,246,249,.6);border-radius:6px;padding:6px 7px}
+  .delta .dl{font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--mid-45)}
+  .delta .dv{font-size:12px;font-weight:600;color:var(--forge);margin-top:2px}
+  .delta .dv.up{color:var(--pine)} .delta .dv.dn{color:var(--ember)}
+  .future-rat{margin-top:8px;font-size:10.5px;color:var(--muted);display:flex;gap:6px;align-items:center}
+
+  /* Studio design-time editor frame (ProcessingFormBuilder-class) */
+  .builder{display:flex;flex-direction:column;background:var(--stone);border-radius:12px;overflow:hidden;border:1px solid rgba(244,246,249,.9)}
+  .pub-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-bottom:1px solid rgba(39,63,82,.06);background:#fff;padding:8px 14px}
+  .pub-back{font-size:12px;color:var(--mid-45)}
+  .pub-name{font-size:14px;font-weight:600;color:var(--forge)}
+  .pub-status{font-size:10px;font-weight:600;color:var(--mid-58)}
+  .seg{display:flex;border:1px solid var(--mid-25);background:rgba(244,246,249,.5);border-radius:8px;padding:2px}
+  .seg button{border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;color:var(--mid-45)}
+  .seg button.on{background:#fff;color:var(--forge);box-shadow:0 1px 2px rgba(39,63,82,.08)}
+  .seg button.on.sim{color:var(--pine)}
+  .sim-banner{display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(0,162,131,.20);background:rgba(0,162,131,.05);padding:6px 14px;font-size:11px;font-weight:600;color:var(--pine)}
+  .builder-body{display:flex;min-height:0}
+  @media (max-width:820px){.builder-body{flex-direction:column}}
+  .builder-canvas{flex:8;min-width:0;overflow:auto;padding:16px;background:var(--stone)}
+  .builder-inspector{flex:2;min-width:250px;max-width:300px;border-left:1px solid rgba(39,63,82,.06);background:#fff;padding:12px 14px;overflow:auto}
+  .insp-eye{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--mid-40);margin-bottom:8px}
+  /* Studio plans card grid (Forms-library-class) */
+  .plans-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
+  .plans-search{flex:1;min-width:180px;max-width:420px;border-radius:8px;border:1px solid rgba(39,63,82,.20);background:#fff;padding:7px 11px;font-size:12.5px;color:var(--mid-90);box-shadow:0 1px 2px rgba(39,63,82,.05)}
+  .plangrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+  .plantile{position:relative;overflow:hidden;border-radius:12px;border:1px solid rgba(244,246,249,.9);background:#fff;box-shadow:0 2px 12px rgba(15,23,42,.05);padding:14px 14px 14px 18px}
+  .plantile .accent{position:absolute;inset-block:0;left:0;width:4px}
+  .plantile.proposed .accent{background:var(--pine)} .plantile.approved .accent{background:var(--pine)} .plantile.draft .accent{background:var(--mid-25)} .plantile.committed .accent{background:var(--gold)}
+  .plantile h4{font-size:14px;font-weight:600;color:var(--forge)}
+  .plantile p{margin:5px 0 0;font-size:11px;line-height:1.4;color:var(--mid-45)}
+  .plantile .tags{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
+  .ptag{border-radius:999px;padding:2px 8px;font-size:10px;font-weight:600}
+  .ptag.pine{background:rgba(0,162,131,.10);color:var(--pine)} .ptag.gold{background:rgba(219,192,120,.18);color:var(--gold-dark)} .ptag.slate{background:rgba(69,80,108,.10);color:var(--slate)}
+  .plantile .meta{margin-top:10px;display:flex;justify-content:space-between;font-size:10px;color:var(--mid-40)}
+  .plantile.new{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:150px;border:2px dashed var(--mid-25);box-shadow:none;color:var(--mid-45);font-size:12px;font-weight:500}
+
+  .caption{font-size:11px;color:var(--muted);margin-top:12px;padding:10px 12px;background:rgba(0,162,131,.04);border:1px solid rgba(0,162,131,.14);border-radius:10px;border-left:3px solid var(--pine)}
+  .caption b{color:var(--forge);font-weight:600}
+  .screen{display:none}.screen.on{display:block}
+  .foot{font-size:11px;color:var(--muted);margin-top:20px;text-align:center;line-height:1.6}
+</style>
+
+<div class="gallery">
+  <div class="g-head">
+    <div>
+      <div class="g-title">Scheduling · Operational Planning — second generation</div>
+      <div class="g-sub">Composed <b>only</b> from certified Alloy primitives (WorkspaceShell · Work&nbsp;|&nbsp;Studio · Operational Health · Overview landing · Work Views/Queue · Focus Panel · Studio design canvas). Every class is transcribed from the real components. <b>Work</b> is the Alloy spine; <b>Planning lives in Studio.</b> Place it beside Processing — same operating system.</div>
+    </div>
+    <span class="g-badge"><span class="kpi-gem gold" style="width:7px;height:7px"></span>Proposed · validated by inheritance</span>
+  </div>
+
+  <div class="g-tabs" role="tablist" aria-label="Screens">
+    <button class="g-tab" role="tab" aria-selected="true" data-s="overview">Work · Overview</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="workviews">Work · Views (Queue + Focus Panel)</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="studio">Studio · Plans</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="canvas">Studio · Plan canvas (Room × Day)</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="optimize">Studio · Optimization (futures)</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="commit">Studio · Simulation &amp; Commit</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="focus">Focus Panel · planning card</button>
+  </div>
+  <p class="g-note" id="gnote">Same shell as Processing / Communications / Work Items — only the title, nav items, and operational content differ.</p>
+
+  <div class="app">
+    <nav class="rail" aria-hidden="true">
+      <div class="rail-logo">A</div>
+      <div class="rail-i">◫</div><div class="rail-i">◷</div><div class="rail-i on">▦</div>
+      <div class="rail-i">✉</div><div class="rail-i">◧</div><div class="rail-i">▤</div>
+    </nav>
+    <div class="main">
+      <div class="topbar"></div>
+      <div class="shell">
+        <div class="control-band">
+          <div class="ws-header">
+            <div class="ws-id">
+              <span class="ws-ico">▦</span>
+              <div>
+                <div class="ws-title">Scheduling</div>
+                <div class="ws-subt" id="subt">Where the operating schedule stays true.</div>
+              </div>
+            </div>
+            <div class="ws-acts">
+              <button class="btn-secondary" id="act2">Studio</button>
+              <button class="btn-primary" id="act1">+ New plan</button>
+              <button class="btn-close">✕ Close</button>
+            </div>
+          </div>
+          <div class="ws-modenav">
+            <div class="modesplit">
+              <div class="modestack">
+                <div class="modepills">
+                  <button class="mp on" id="mp-work">Work</button>
+                  <button class="mp" id="mp-studio">Studio</button>
+                </div>
+                <div class="subtabs" id="subtabs"></div>
+              </div>
+              <div class="ophealth" id="ophealth"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ws-inset" id="inset">
+          <div class="ws-canvas" id="canvas">
+
+            <!-- ============ WORK · OVERVIEW ============ -->
+            <section class="screen on" id="s-overview">
+              <div class="surface"><div class="wrap">
+                <section class="actioncards">
+                  <div class="accard primary">
+                    <div class="rail3"></div>
+                    <div class="ac-well pine">◑</div>
+                    <h3 class="ac-h">Plan a child</h3>
+                    <p class="ac-p">3 enrolled children have no committed schedule. Open Studio to build and commit their plan.</p>
+                    <span class="ac-cta">Open Studio →</span>
+                  </div>
+                  <div class="accard secondary">
+                    <div class="ac-well pine">▲</div>
+                    <h3 class="ac-h">Clear a ratio risk</h3>
+                    <p class="ac-p">Sunflower is projected out of tier Thursday. Resolve it against today's committed schedule.</p>
+                    <span class="ac-cta">Review ratio risk →</span>
+                  </div>
+                  <div class="accard tertiary">
+                    <div class="ac-well forge">✓</div>
+                    <h3 class="ac-h">Commit approved plans</h3>
+                    <p class="ac-p">2 plans are approved with no blocking conflicts. Committing writes effective-dated schedule intent.</p>
+                    <span class="ac-cta forge">Go to Awaiting commit →</span>
+                  </div>
+                </section>
+
+                <section>
+                  <p class="kpi-eye">Today's activity</p>
+                  <div class="kpis">
+                    <div class="kpi"><div class="kpi-well pine">◱</div><div><div class="kpi-v tab">7/8</div><div class="kpi-lrow"><span class="kpi-gem pine"></span><span class="kpi-l">Rooms in ratio</span></div></div></div>
+                    <div class="kpi"><div class="kpi-well pine">▦</div><div><div class="kpi-v tab">86%</div><div class="kpi-lrow"><span class="kpi-gem pine"></span><span class="kpi-l">Projected fill</span></div></div></div>
+                    <div class="kpi"><div class="kpi-well gold">◔</div><div><div class="kpi-v tab">3</div><div class="kpi-lrow"><span class="kpi-gem gold"></span><span class="kpi-l">Unplaced enrolled</span></div></div></div>
+                    <div class="kpi"><div class="kpi-well ember">▲</div><div><div class="kpi-v tab">2</div><div class="kpi-lrow"><span class="kpi-gem ember"></span><span class="kpi-l">Awaiting commit</span></div></div></div>
+                  </div>
+                </section>
+
+                <div class="zones">
+                  <div class="zone">
+                    <div class="zone-h"><h2>Needs a plan</h2><button>Open queue →</button></div>
+                    <ul class="recent">
+                      <li><span class="bar ember"></span><span><span class="lbl">Ava Rodriguez</span><span class="sub ember">Blocked · enrollment incomplete</span></span></li>
+                      <li><span class="bar"></span><span><span class="lbl">Noah Park</span><span class="sub">Needs plan · Preschool · full week</span></span></li>
+                      <li><span class="bar"></span><span><span class="lbl">Lila Moore</span><span class="sub">Needs plan · Infant · Tue/Thu</span></span></li>
+                    </ul>
+                  </div>
+                  <div class="zone">
+                    <div class="zone-h"><h2>Awaiting commit</h2><button>View all →</button></div>
+                    <ul class="recent">
+                      <li><span class="bar"></span><span><span class="lbl">Move Ethan → Sunshine</span><span class="sub pine">Approved · clears Thu breach · $0 labor</span></span></li>
+                      <li><span class="bar"></span><span><span class="lbl">Drop-in · Rainbow · Wed</span><span class="sub pine">Approved · in ratio · +$62 tuition</span></span></li>
+                      <li><span class="bar slate"></span><span><span class="lbl">Delay Lila start → Jul 28</span><span class="sub">Reviewed · avoids infant ratio cliff</span></span></li>
+                    </ul>
+                  </div>
+                  <div class="zone">
+                    <div class="zone-h"><h2>Jump to</h2><button>All views →</button></div>
+                    <ul class="recent">
+                      <li><span class="bar slate"></span><span><span class="lbl">Ratio risk</span><span class="sub">1 room this week</span></span></li>
+                      <li><span class="bar slate"></span><span><span class="lbl">Schedule ↔ Attendance</span><span class="sub">4 mismatches yesterday</span></span></li>
+                      <li><span class="bar slate"></span><span><span class="lbl">Roster · today</span><span class="sub">142 children across 8 rooms</span></span></li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="caption"><b>Work · Overview</b> is a structural clone of Processing's Overview: primary action cards → "Today's activity" KPI tiles → three information zones. Nothing here is a board. Planning happens in Studio; Work operates the committed result.</div>
+              </div></div>
+            </section>
+
+            <!-- ============ WORK · VIEWS (QUEUE + FOCUS PANEL) ============ -->
+            <section class="screen" id="s-workviews">
+              <div class="queue-layout">
+                <div class="queue-col">
+                  <div class="queue-head"><h3>Unplaced</h3><span class="count tab">3</span></div>
+                  <ul class="qlist">
+                    <li><button class="qrow overdue">
+                      <div class="qrow-top">
+                        <div style="min-width:0;flex:1">
+                          <div class="qrow-id"><span class="qrow-ico">◔</span><span class="qrow-title">Ava Rodriguez</span><span class="qrow-pill wait">Blocked</span></div>
+                          <p class="qrow-crumb">Toddler · Maple Street · needs Mon–Thu</p>
+                          <p class="qrow-snip">Enrolled, placed, no committed schedule. Enrollment agreement not executed.</p>
+                        </div>
+                        <div class="qrow-right"><span class="qrow-assignee">KP</span><div class="qrow-meta"><p>overdue 2d</p><p>Term start</p></div></div>
+                      </div>
+                    </button></li>
+                    <li><button class="qrow sel">
+                      <div class="qrow-top">
+                        <div style="min-width:0;flex:1">
+                          <div class="qrow-id"><span class="qrow-ico">◔</span><span class="qrow-title">Noah Park</span><span class="qrow-pill badge">Preschool</span></div>
+                          <p class="qrow-crumb">Maple Street · full week · Room Rainbow candidate</p>
+                          <p class="qrow-snip">Ready to plan. No blocking conflicts projected.</p>
+                        </div>
+                        <div class="qrow-right"><span class="qrow-assignee">KP</span><div class="qrow-meta"><p>due Fri</p><p>this week</p></div></div>
+                      </div>
+                    </button></li>
+                    <li><button class="qrow">
+                      <div class="qrow-top">
+                        <div style="min-width:0;flex:1">
+                          <div class="qrow-id"><span class="qrow-ico">◔</span><span class="qrow-title">Lila Moore</span><span class="qrow-pill badge">Infant</span></div>
+                          <p class="qrow-crumb">Maple Street · Tue/Thu · Room Caterpillar candidate</p>
+                          <p class="qrow-snip">Infant ratio tight on Tue/Thu — optimization suggests a delayed start.</p>
+                        </div>
+                        <div class="qrow-right"><span class="qrow-assignee">DM</span><div class="qrow-meta"><p>due Mon</p><p>next week</p></div></div>
+                      </div>
+                    </button></li>
+                  </ul>
+                  <div class="caption" style="margin-top:14px"><b>Work Views are queues.</b> Unplaced · Ratio risk · Schedule ↔ Attendance · Awaiting commit — each a perspective, each row opening the Focus Panel. Identical mechanics to Processing's queue; only the rows are Scheduling.</div>
+                </div>
+                <div class="fp-host">
+                  <div class="fp">
+                    <div class="fp-shell">
+                      <div class="fp-headbar">
+                        <div class="fp-av">NP</div>
+                        <div><div class="fp-nm">Noah Park</div><div class="fp-sb">Preschool · Maple Street</div></div>
+                        <div class="fp-modes"><span class="fp-mode on">Work</span><span class="fp-mode">Activity</span></div>
+                      </div>
+                      <div class="fp-grid">
+                        <div class="fpcard plan">
+                          <div class="fpc-h"><span class="fpc-q">What is this child's plan?</span><span class="fpc-chip gold">No plan yet</span></div>
+                          <div class="fpc-insight">No committed schedule — startable</div>
+                          <div class="fpc-body">
+                            <div class="kv"><span class="k">Placement</span><span class="v">Rainbow (candidate)</span></div>
+                            <div class="kv"><span class="k">Enrollment</span><span class="v" style="color:var(--pine)">agreement executed</span></div>
+                            <div class="kv"><span class="k">Projected fit</span><span class="v" style="color:var(--pine)">in ratio, full week</span></div>
+                          </div>
+                          <div class="fpc-foot"><span class="fpc-cta">Build plan in Studio →</span><span style="margin-left:auto;font-size:10px;color:var(--muted)">then commit</span></div>
+                        </div>
+                        <div class="fpcard">
+                          <div class="fpc-h"><span class="fpc-q">Enrollment</span></div>
+                          <div class="fpc-insight" style="font-size:12.5px">Agreement executed · placement Rainbow</div>
+                          <div class="fpc-body" style="font-size:11.5px;color:var(--slate);padding-bottom:10px">Ready for scheduling — no blockers.</div>
+                        </div>
+                        <div class="fpcard">
+                          <div class="fpc-h"><span class="fpc-q">Attendance</span><span class="fpc-chip pine" style="margin-left:auto">Startable</span></div>
+                          <div class="fpc-insight" style="font-size:12.5px">No history yet</div>
+                          <div class="fpc-body" style="font-size:11.5px;color:var(--slate);padding-bottom:10px">Attendance facts begin once the schedule is committed.</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="caption" style="margin:0"><b>Focus Panel</b> is the real one — header identity, Summary/Work/Activity modes, the card grid. The <b>planning card</b> follows the read-only <span class="tab">billing_preview</span> template; "Build plan in Studio" is the handoff into the design environment.</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- studio / canvas / optimize / commit / focus screens injected below -->
+            <section class="screen" id="s-studio"></section>
+            <section class="screen" id="s-canvas"></section>
+            <section class="screen" id="s-optimize"></section>
+            <section class="screen" id="s-commit"></section>
+            <section class="screen" id="s-focus"></section>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    Faithful reproduction of the certified Alloy workspace · classes transcribed from WorkspaceShell / Overview / Queue / Focus Panel · light-only, as the product is.<br>
+    Companion to <b>docs/platform/planning/</b> — status: proposed · not a shipped product.
+  </div>
+</div>
+
+<script>
+  (function(){
+    var subtabs = {
+      overview:[["Overview",1,"work"],["Unplaced",0,"work"],["Ratio risk",0,"work"],["Schedule ↔ Attendance",0,"work"],["Awaiting commit",0,"work"],["Roster",0,"work"]],
+      workviews:[["Overview",0,"work"],["Unplaced",1,"work"],["Ratio risk",0,"work"],["Schedule ↔ Attendance",0,"work"],["Awaiting commit",0,"work"],["Roster",0,"work"]],
+      studio:[["Plans",1,"studio"],["Plan canvas",0,"studio"],["Optimization",0,"studio"],["Simulation",0,"studio"],["Commit",0,"studio"],["Rooms",0,"studio"],["Rules",0,"studio"]],
+      canvas:[["Plans",0,"studio"],["Plan canvas",1,"studio"],["Optimization",0,"studio"],["Simulation",0,"studio"],["Commit",0,"studio"],["Rooms",0,"studio"],["Rules",0,"studio"]],
+      optimize:[["Plans",0,"studio"],["Plan canvas",0,"studio"],["Optimization",1,"studio"],["Simulation",0,"studio"],["Commit",0,"studio"],["Rooms",0,"studio"],["Rules",0,"studio"]],
+      commit:[["Plans",0,"studio"],["Plan canvas",0,"studio"],["Optimization",0,"studio"],["Simulation",1,"studio"],["Commit",0,"studio"],["Rooms",0,"studio"],["Rules",0,"studio"]],
+      focus:[["Overview",0,"work"],["Unplaced",1,"work"],["Ratio risk",0,"work"],["Schedule ↔ Attendance",0,"work"],["Awaiting commit",0,"work"],["Roster",0,"work"]]
+    };
+    var health = {
+      overview:[["7/8","Rooms in ratio","pine","",""],["86%","Fill","pine","",""],["3","Unplaced","gold","↓ from 5","pine"]],
+      workviews:[["3","Unplaced","gold","",""],["1","Ratio risk","ember","Thu · Sunflower","ember"],["2","Awaiting commit","gold","",""]],
+      studio:[["5","Plans","pine","2 approved","pine"],["0","Committed today","midnight","",""],["1","Blocked","ember","enrollment","ember"]],
+      canvas:[["12/11","Sunflower Thu","ember","over tier","ember"],["1","Conflicts","ember","",""],["1","Proposed edit","gold","",""]],
+      optimize:[["5","Futures","pine","",""],["0.91","Top score","pine","",""],["0","Blocking","pine","",""]],
+      commit:[["approved","Standing","pine","",""],["0","Blocking","pine","",""],["✓","Authority","pine","",""]],
+      focus:[["1","Plan","gold","proposed","gold"],["ok","Ratio","pine","",""],["Studio","Design in","pine","",""]]
+    };
+    var subt = {
+      overview:"Where the operating schedule stays true.",
+      workviews:"Work · live operational attention.",
+      studio:"Studio · design tomorrow's schedule.",
+      canvas:"Studio · Room × Day plan canvas.",
+      optimize:"Studio · compare candidate futures.",
+      commit:"Studio · simulate the alternative reality, then commit.",
+      focus:"Noah Park · child subject."
+    };
+    var act1 = {overview:"+ New plan",workviews:"+ New plan",studio:"Simulate",canvas:"Simulate plan",optimize:"Draft from best",commit:"Commit plan",focus:"Build plan in Studio"};
+    var gnote = {
+      overview:"Same shell as Processing / Communications / Work Items — only title, nav items, and operational content differ.",
+      workviews:"Work is the Alloy spine: Work Views (queues) + Focus Panel. No board in Work.",
+      studio:"Studio is the operational design environment — the planning loop lives here, not in Work.",
+      canvas:"The plan board is the Studio design canvas (Experience-Builder-class), matrix content only — inherited chrome.",
+      optimize:"Optimization = generate → compare → rank futures. The operator decides; BOS proposes futures.",
+      commit:"Simulation constructs an alternative reality; Commit makes it the current reality (writes L2 Intent via supersede).",
+      focus:"The planning card is a reusable Focus Panel card type — a subject's plan and futures."
+    };
+
+    function plantile(cls,name,desc,tags,meta){
+      var t = tags.map(function(x){return '<span class="ptag '+x[1]+'">'+x[0]+'</span>';}).join('');
+      return '<div class="plantile '+cls+'"><span class="accent"></span><h4>'+name+'</h4><p>'+desc+'</p><div class="tags">'+t+'</div><div class="meta"><span>'+meta[0]+'</span><span>'+meta[1]+'</span></div></div>';
+    }
+    var STUDIO = ''
+      + '<div class="surface"><div class="wrap">'
+      + '<div class="plans-toolbar">'
+      + '  <input class="plans-search" type="search" placeholder="Search plans…">'
+      + '  <div class="seg"><button class="on">Grid</button><button>List</button></div>'
+      + '  <button class="btn-primary" style="margin-left:auto">+ New plan</button>'
+      + '</div>'
+      + '<p class="kpi-eye">Proposed · this week</p>'
+      + '<div class="plangrid">'
+      + plantile('proposed','Week of Jul 20','Place 3 unplaced children across Sunflower, Sunshine and Rainbow; clears the Thursday ratio cliff.',[['Proposed','pine'],['3 edits','slate']],['Room × Day','2h ago'])
+      + plantile('approved','Move Ethan → Sunshine','Single move that resolves Sunflower Thursday breach with no labor change.',[['Approved','pine'],['0 blocking','slate']],['1 edit','1h ago'])
+      + plantile('approved','Drop-in · Rainbow Wed','Add a Wednesday drop-in; within ratio; +$62 projected tuition.',[['Approved','pine'],['+$62','slate']],['1 edit','3h ago'])
+      + plantile('draft','Term plan · August','Full-term schedule across all rooms; simulating fill and labor before review.',[['Draft','gold'],['14 edits','slate']],['Room × Term','yesterday'])
+      + plantile('committed','Delay Lila start → Jul 28','Committed last week — retained as provenance for the schedule ledger.',[['Committed','gold'],['replayable','slate']],['1 edit','Jul 18'])
+      + '<button class="plantile new">+ Start a new plan</button>'
+      + '</div>'
+      + '<div class="caption"><b>Studio · Plans</b> inherits the Processing Studio asset-library shape (search + view toggle + card grid). A Plan tile is the design object; opening one enters the plan canvas. A Plan is a <b>versioned, approvable, replayable bundle of proposed edits</b> in <span class="tab">proposed</span> standing — not saved rows. <b>Alloy commits plans, not records.</b></div>'
+      + '</div></div>';
+
+    function boardTable(){
+      function cell(o,c,pct,rr,dot,cls){return '<td class="cell '+(cls||'')+'"><div class="occ tab">'+o+'</div><div class="cap">'+c+'</div><div class="bar"><i style="width:'+pct+'%"></i></div><div class="rr"><span class="dot '+dot+'"></span>'+rr+'</div></td>';}
+      return '<div class="board"><table><thead><tr><th>Room</th><th>Mon 20</th><th>Tue 21</th><th>Wed 22</th><th class="now">Thu 23</th><th>Fri 24</th></tr></thead><tbody>'
+      + '<tr><td class="rc"><div class="rn">Sunflower</div><div class="rm">Toddler · cap 11</div></td>'+cell(9,'/ 11',82,'2 staff','pine')+cell(10,'/ 11',91,'2 staff','pine')+cell(10,'/ 11',91,'2 staff','pine')+cell(12,'/ 11',100,'needs 3','ember','breach')+cell(9,'/ 11',82,'2 staff','pine')+'</tr>'
+      + '<tr><td class="rc"><div class="rn">Sunshine</div><div class="rm">Toddler · cap 11</div></td>'+cell(7,'/ 11',64,'2 staff','pine')+cell(8,'/ 11',73,'2 staff','pine')+cell(8,'/ 11',73,'2 staff','pine')+cell(9,'/ 11',82,'2 staff','pine','plan')+cell(8,'/ 11',73,'2 staff','pine')+'</tr>'
+      + '<tr><td class="rc"><div class="rn">Rainbow</div><div class="rm">Preschool · cap 20</div></td>'+cell(16,'/ 20',80,'2 staff','pine')+cell(17,'/ 20',85,'2 staff','pine')+cell(18,'/ 20',90,'2 staff','pine')+cell(17,'/ 20',85,'2 staff','pine')+cell(15,'/ 20',75,'2 staff','pine')+'</tr>'
+      + '<tr><td class="rc"><div class="rn">Caterpillar</div><div class="rm">Infant · cap 8</div></td>'+cell(6,'/ 8',75,'2 staff','pine')+cell(7,'/ 8',88,'tight','gold')+cell(6,'/ 8',75,'2 staff','pine')+cell(7,'/ 8',88,'tight','gold')+'<td class="cell closed"><div class="occ tab">—</div><div class="cap">closed</div></td></tr>'
+      + '</tbody></table></div>';
+    }
+    var CANVAS = '<div class="surface" style="padding:12px"><div class="wrap" style="max-width:none">'
+      + '<div class="builder">'
+      + '  <div class="pub-toolbar">'
+      + '    <button class="pub-back">← Plans</button>'
+      + '    <span class="pub-name">Week of Jul 20 · plan</span>'
+      + '    <span class="pub-status"><span style="color:var(--gold-dark)">Proposed</span> · unsaved edits</span>'
+      + '    <span style="flex:1"></span>'
+      + '    <div class="seg"><button>Edit</button><button class="on sim">Simulate</button><button>Committed</button></div>'
+      + '    <button class="btn-secondary">Save draft</button>'
+      + '    <button class="btn-primary">Commit plan</button>'
+      + '  </div>'
+      + '  <div class="sim-banner"><span class="dot pine"></span>Simulate — projected alternative reality · computed by the same registered Calculations as execution</div>'
+      + '  <div class="builder-body">'
+      + '    <div class="builder-canvas">'+boardTable()+'</div>'
+      + '    <aside class="builder-inspector">'
+      + '      <div class="insp-eye">Selected cell · Sunflower Thu 23</div>'
+      + '      <div class="fpcard plan"><div class="fpc-h"><span class="fpc-q">Cell projection</span><span class="fpc-chip ember" style="margin-left:auto">Breach</span></div><div class="fpc-insight" style="font-size:12.5px">12 / 11 · needs 3 staff</div>'
+      + '        <div class="fpc-body"><div class="kv"><span class="k">Occupancy</span><span class="v tab">12</span></div><div class="kv"><span class="k">Ratio tier</span><span class="v">≤11 at 2 staff</span></div><div class="kv"><span class="k">availableNow</span><span class="v tab">−1</span></div></div>'
+      + '        <div class="fpc-foot"><span class="fpc-cta">Optimize this cell →</span></div></div>'
+      + '      <div class="fpcard" style="margin-top:8px"><div class="fpc-h"><span class="fpc-q">Proposed edit</span><span class="fpc-chip pine" style="margin-left:auto">in plan</span></div><div class="fpc-insight" style="font-size:12.5px">Move Ethan → Sunshine Thu</div><div class="fpc-body" style="font-size:11.5px;color:var(--slate);padding-bottom:10px">Projected: Sunflower 12→11 (in tier), Sunshine 8→9.</div></div>'
+      + '    </aside>'
+      + '  </div>'
+      + '</div>'
+      + '<div class="caption"><b>The board is not a new primitive.</b> It is the certified Studio design-time editor frame (<span class="tab">ProcessingFormBuilder</span>: publish toolbar → segmented mode → canvas + inspector) with a Room × Day matrix as canvas content. <b>Simulate ⟷ Preview, Commit ⟷ Publish</b> — the same design→runtime door, so publish-parity and simulate-fidelity are one law. Only the cell renderer is Scheduling.</div>'
+      + '</div></div>';
+
+    function future(best,name,score,d,rat,ratdot){
+      var cells = d.map(function(x){return '<div class="delta"><div class="dl">'+x[0]+'</div><div class="dv '+(x[2]||'')+'">'+x[1]+'</div></div>';}).join('');
+      return '<div class="future'+(best?' best':'')+'"><div class="future-top"><span class="dot '+(best?'pine':(ratdot||'gold'))+'"></span><span class="future-nm">'+name+'</span>'+(best?'<span class="fpc-chip pine">Recommended</span>':'')+'<span class="future-score tab">score '+score+'</span></div><div class="deltas">'+cells+'</div><div class="future-rat"><span class="dot '+(ratdot||'pine')+'"></span>'+rat+'</div></div>';
+    }
+    var OPT = '<div class="surface"><div class="wrap">'
+      + '<div style="display:flex;align-items:center;gap:10px">'
+      + '  <div class="fp-av" style="width:34px;height:34px;font-size:12px">AR</div>'
+      + '  <div><div style="font-size:14px;font-weight:600;color:var(--forge)">Generate futures · placing Ava Rodriguez</div><div style="font-size:11.5px;color:var(--muted)">Current reality → futures → compare → rank → decide → commit</div></div>'
+      + '  <span class="fpc-chip" style="margin-left:auto;background:rgba(69,80,108,.10);color:var(--slate)">objective: ratio + fill + continuity</span>'
+      + '</div>'
+      + '<div class="futures">'
+      + future(true,'Room Sunshine · Mon–Thu','0.91',[['Occupancy','+4','up'],['Ratio','in tier','up'],['Labor','$0'],['Tuition','+$980','up'],['Conflicts','0','up']],'Fits every day within ratio, no labor change, keeps sibling cohort.','pine')
+      + future(false,'Room Rainbow · Mon–Thu','0.78',[['Occupancy','+4'],['Ratio','in tier','up'],['Labor','$0'],['Tuition','+$980','up'],['Conflicts','0','up']],'Valid; mixed-age most_restrictive lowers Rainbow headroom later.','gold')
+      + future(false,'Delay start → Tue–Thu','0.64',[['Occupancy','+3'],['Ratio','in tier','up'],['Labor','$0'],['Tuition','+$740','dn'],['Conflicts','0','up']],'Avoids Monday pressure; lower attendance product → lower tuition.','gold')
+      + future(false,'Sunflower + float teacher (Thu)','0.52',[['Occupancy','+4'],['Ratio','3rd staff','up'],['Labor','+$180','dn'],['Tuition','+$980','up'],['Conflicts','0','up']],'BOS-proposed future · needs staffing supply (G3) to commit.','gold')
+      + '</div>'
+      + '<div class="caption"><b>Optimization is futures, not recommendation.</b> Deterministic search + BOS both <i>generate futures</i>; each future is an alternative reality via Simulation; ranking orders them by a configurable objective; the <b>operator decides</b>. "Recommended" is just the top-ranked future.</div>'
+      + '</div></div>';
+
+    var COMMIT = '<div class="surface"><div class="wrap">'
+      + '<div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.9fr);gap:16px">'
+      + '  <div class="design-canvas"><div class="dc-head"><span class="dc-title">Two realities · compare</span><span class="dc-note">write-free</span></div>'
+      + '    <div class="surface" style="padding:14px">'
+      + '      <div style="display:flex;gap:16px;align-items:center">'
+      + '        <div style="flex:1"><div class="kpi-eye">Current reality</div><div style="font-size:24px;font-weight:600;letter-spacing:-.03em;color:var(--ember)" class="tab">12 / 11</div><div style="font-size:11.5px;color:var(--muted)">Sunflower Thu · over tier</div></div>'
+      + '        <div style="font-size:20px;color:var(--muted)">→</div>'
+      + '        <div style="flex:1"><div class="kpi-eye">Alternative reality</div><div style="font-size:24px;font-weight:600;letter-spacing:-.03em;color:var(--pine)" class="tab">11 / 11</div><div style="font-size:11.5px;color:var(--muted)">in tier · Ethan → Sunshine</div></div>'
+      + '      </div>'
+      + '      <div style="height:1px;background:rgba(39,63,82,.08);margin:14px 0"></div>'
+      + '      <div class="kpi-eye">Projected calculations (same engine as execution)</div>'
+      + '      <div class="kpis" style="grid-template-columns:repeat(4,1fr)">'
+      + '        <div class="kpi"><div class="kpi-well pine">◱</div><div><div class="kpi-v tab">11</div><div class="kpi-lrow"><span class="kpi-gem pine"></span><span class="kpi-l">Occupancy · was 12</span></div></div></div>'
+      + '        <div class="kpi"><div class="kpi-well pine">◷</div><div><div class="kpi-v tab">2</div><div class="kpi-lrow"><span class="kpi-gem pine"></span><span class="kpi-l">Staff · was 3</span></div></div></div>'
+      + '        <div class="kpi"><div class="kpi-well gold">▦</div><div><div class="kpi-v tab">0</div><div class="kpi-lrow"><span class="kpi-gem gold"></span><span class="kpi-l">availableNow</span></div></div></div>'
+      + '        <div class="kpi"><div class="kpi-well pine">$</div><div><div class="kpi-v tab">$0</div><div class="kpi-lrow"><span class="kpi-gem pine"></span><span class="kpi-l">Tuition Δ</span></div></div></div>'
+      + '      </div>'
+      + '    </div>'
+      + '  </div>'
+      + '  <div class="fp"><div class="fp-shell"><div class="fp-headbar"><div class="fp-av">✓</div><div><div class="fp-nm">Operational commit</div><div class="fp-sb">Move Ethan → Sunshine</div></div></div>'
+      + '    <div class="fp-grid"><div class="fpcard plan"><div class="fpc-h"><span class="fpc-q">Commit the plan</span></div>'
+      + '      <div class="fpc-body"><div class="lifecycle"><span class="ls done">draft</span><span class="ls done">proposed</span><span class="ls done">reviewed</span><span class="ls cur">approved</span><span class="ls">commit</span></div>'
+      + '        <div class="kv"><span class="k">Writes</span><span class="v">L2 Intent</span></div><div class="kv"><span class="k">Target</span><span class="v tab">schedule_assignments</span></div>'
+      + '        <div class="kv"><span class="k">Method</span><span class="v">effective-dated supersede</span></div><div class="kv"><span class="k">Reversible</span><span class="v">by supersede</span></div>'
+      + '        <div class="kv"><span class="k">Conflicts</span><span class="v" style="color:var(--pine)">0 blocking</span></div></div>'
+      + '      <div class="fpc-foot"><button class="btn-primary" style="width:100%;justify-content:center">Commit plan → write schedule intent</button></div>'
+      + '    </div></div>'
+      + '    <div class="caption" style="margin:0"><b>Commit is the door</b> from Studio (design) to Execution (truth). It generalizes <span class="tab">approve_enrollment</span> on the BPR Preview→Commit engine. Before it: disposable. After it: history.</div>'
+      + '  </div></div>'
+      + '</div>'
+      + '<div class="caption"><b>Simulation = current reality → alternative reality → projection → comparison → commit.</b> Both realities are computed by the same registered Calculations; the operator reads the delta, then commits.</div>'
+      + '</div></div>';
+
+    var FOCUS = '<div class="surface"><div class="wrap">'
+      + '<div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px">'
+      + '  <div>'
+      + '    <div class="caption" style="margin:0 0 12px"><b>Workspace ↔ Focus Panel symmetry.</b> The workspace plans <b>across</b> subjects (Studio canvas); the Focus Panel plans <b>one</b> subject. Same loop, one level down. The planning card is a reusable card type.</div>'
+      + '    <div class="zone"><div class="zone-h"><h2>Cross-workspace planning · decision ladder</h2></div>'
+      + '      <ul class="recent">'
+      + '        <li><span class="bar"></span><span><span class="lbl">1 · Focus Panel card handoff</span><span class="sub">"Enrollment incomplete" → focus the Enrollment card, resolve, return · <b>default</b></span></span></li>'
+      + '        <li><span class="bar"></span><span><span class="lbl">2 · Embedded work surface</span><span class="sub">resolve enrollment inline in Activity mode — plan intact</span></span></li>'
+      + '        <li><span class="bar slate"></span><span><span class="lbl">3 · Cross-workspace navigation</span><span class="sub">full other workspace; plan preserved as <span class="tab">proposed</span> · platform gap</span></span></li>'
+      + '        <li><span class="bar slate"></span><span><span class="lbl">4 · Create operational work</span><span class="sub">block becomes an attention item; plan waits</span></span></li>'
+      + '        <li><span class="bar slate"></span><span><span class="lbl">5 · Recommend / launch BOS</span><span class="sub">offer a future that avoids the block entirely</span></span></li>'
+      + '      </ul>'
+      + '      <div style="margin-top:10px;padding:10px 12px;background:rgba(0,162,131,.06);border-radius:10px;font-size:11.5px;color:var(--slate)"><b style="color:var(--forge)">Invariant:</b> a Plan in <span class="tab">proposed</span> standing survives every cross-workspace excursion. Planning never dead-ends.</div>'
+      + '    </div>'
+      + '  </div>'
+      + '  <div class="fp"><div class="fp-shell"><div class="fp-headbar"><div class="fp-av">AR</div><div><div class="fp-nm">Ava Rodriguez</div><div class="fp-sb">Toddler · Maple Street</div></div><div class="fp-modes"><span class="fp-mode on">Work</span><span class="fp-mode">Activity</span></div></div>'
+      + '    <div class="fp-grid">'
+      + '      <div class="fpcard plan"><div class="fpc-h"><span class="fpc-q">What is this child\'s plan?</span><span class="fpc-chip ember">Conflict</span></div><div class="fpc-insight">Proposed · Sunshine · Mon–Thu · blocked on enrollment</div>'
+      + '        <div class="fpc-body"><div class="kv"><span class="k">Room</span><span class="v">Sunshine (toddler)</span></div><div class="kv"><span class="k">Pattern</span><span class="v">Mon–Thu</span></div><div class="kv"><span class="k">Ratio impact</span><span class="v" style="color:var(--pine)">in tier all days</span></div><div class="kv"><span class="k">Commercial</span><span class="v tab">+$980/mo</span></div><div class="kv"><span class="k">Risk</span><span class="v" style="color:var(--ember)">agreement not executed</span></div></div>'
+      + '        <div class="fpc-foot"><span class="fpc-cta">Resolve enrollment →</span><span style="margin-left:auto;font-size:10px;color:var(--muted)">then commit</span></div></div>'
+      + '      <div class="fpcard"><div class="fpc-h"><span class="fpc-q">Enrollment</span></div><div class="fpc-insight" style="color:var(--ember);font-size:12.5px">Agreement awaiting countersignature</div><div class="fpc-body" style="font-size:11.5px;color:var(--slate);padding-bottom:10px">Placement done; schedule blocked until executed.</div><div class="fpc-foot"><span class="fpc-cta">Send agreement →</span></div></div>'
+      + '      <div class="fpcard"><div class="fpc-h"><span class="fpc-q">Billing preview</span></div><div class="fpc-insight tab" style="font-size:12.5px">$980 / mo projected</div><div class="fpc-body" style="font-size:11.5px;color:var(--slate);padding-bottom:10px">Consumption preview over the plan · no charge posted.</div></div>'
+      + '    </div></div>'
+      + '  </div>'
+      + '</div>'
+      + '</div></div>';
+
+    document.getElementById('s-studio').innerHTML = STUDIO;
+    document.getElementById('s-canvas').innerHTML = CANVAS;
+    document.getElementById('s-optimize').innerHTML = OPT;
+    document.getElementById('s-commit').innerHTML = COMMIT;
+    document.getElementById('s-focus').innerHTML = FOCUS;
+
+    var subEl=document.getElementById('subtabs'), ophEl=document.getElementById('ophealth');
+    function render(key){
+      subEl.innerHTML = subtabs[key].map(function(t){return '<span class="st'+(t[1]?' on':'')+'">'+t[0]+'</span>';}).join('');
+      ophEl.innerHTML = '<div class="oph-eye">'+(subtabs[key][0][2]==='studio'?'Studio':'Queue')+'</div><div class="oph-metrics">'+
+        health[key].map(function(m){return '<div class="oph-m"><p style="margin:0"><span class="oph-v '+m[2]+' tab">'+m[0]+'</span><span class="oph-l">'+m[1]+'</span></p>'+(m[3]?'<div class="oph-t '+m[4]+'">↓ '+m[3].replace('↓ ','')+'</div>':'<div class="oph-t" style="color:transparent">—</div>')+'</div>';}).join('')+'</div>';
+      document.getElementById('subt').textContent = subt[key];
+      document.getElementById('act1').textContent = act1[key];
+      document.getElementById('gnote').textContent = gnote[key];
+      var isStudio = subtabs[key][0][2]==='studio';
+      document.getElementById('mp-studio').classList.toggle('on', isStudio);
+      document.getElementById('mp-work').classList.toggle('on', !isStudio);
+      var canvasEl = document.getElementById('canvas');
+      canvasEl.classList.toggle('white', key==='workviews'||key==='focus');
+    }
+    document.querySelectorAll('.g-tab').forEach(function(b){
+      b.addEventListener('click',function(){
+        document.querySelectorAll('.g-tab').forEach(function(x){x.setAttribute('aria-selected',x.dataset.s===b.dataset.s?'true':'false');});
+        document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
+        var id = {overview:'s-overview',workviews:'s-workviews',studio:'s-studio',canvas:'s-canvas',optimize:'s-optimize',commit:'s-commit',focus:'s-focus'}[b.dataset.s];
+        document.getElementById(id).classList.add('on');
+        render(b.dataset.s);
+      });
+    });
+    render('overview');
+  })();
+</script>

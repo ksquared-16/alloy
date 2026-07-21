@@ -11,6 +11,8 @@ supersedes: []
 
 **One-sentence thesis.** Operational Planning is **not a new truth-flow layer and not a new product** — it is the maturation of Alloy's already-ratified **Planning *plane*** into a first-class **Planning *runtime***: a reusable `propose → simulate → optimize → commit` loop that composes primitives Alloy has already built, and that every future operational domain plugs into. Scheduling is its first complete expression.
 
+> **Iteration-2 refinement (validated by inheritance).** Forcing this architecture to live inside the frozen Alloy workspace refined it in three ways, without breaking the thesis: (1) the loop is **design-time**, so it lives in **Studio, not Work** — and Studio itself is a reusable platform capability ([`studio-platform.md`](./studio-platform.md)); (2) the operator-facing identity is that **Alloy commits *plans*, not records** ([`architecture-validation.md`](./architecture-validation.md) §4); (3) Optimization is **futures generation + comparison**, not recommendation. Work reverts to the Alloy spine (Overview + Work Views + Focus Panel), so Scheduling is indistinguishable from Processing.
+
 ---
 
 ## 0. How to read this document

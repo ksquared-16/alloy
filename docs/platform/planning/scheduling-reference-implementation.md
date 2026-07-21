@@ -76,34 +76,37 @@ Filling the plugin contract from the platform doc §7:
 
 Scheduling inherits the **Family A operational workspace shell** — `WorkspaceShell` with the **Work | Studio** model — which already **names Scheduling as an intended inheritor** (`web/components/workspace/WorkspaceShell.tsx`, `doctrine.ts`, `navigation-and-workspace-doctrine.md`). No new shell; no new aesthetic. It mounts inside `AdminV2WorkspaceBosModalShell` exactly like Processing/Communications/Work Items.
 
+> **Iteration-2 correction (load-bearing).** The planning loop is **design-time**, so it lives in **Studio, not Work** — see [`studio-platform.md`](./studio-platform.md) and [`architecture-validation.md`](./architecture-validation.md). Work reverts to the Alloy spine (Overview + Work Views + Focus Panel); the Room × Day board is a **Studio** canvas perspective, not a Work screen. This is what makes Scheduling indistinguishable from Processing.
+
 ### 5.1 Work vs Studio
 
-- **Work** answers *"How do I operate today?"* — live planning against real enrollment: the Room × Day board, the placement/optimization flows, today's conflicts, commit.
-- **Studio** answers *"How do I design tomorrow?"* — the reusable design-time assets that power Work: schedule patterns, ratio/capacity/schedule rules, operating windows, room setup, optimization objectives.
+- **Work** answers *"How do I operate today?"* — it operates **today's committed schedule reality**, expressed exactly like Processing: an **Overview**, **Work Views (queues)** of live operational attention, and the **Focus Panel**. There is **no board in Work**.
+- **Studio** answers *"How do I design tomorrow?"* — it is the **operational design environment** ([`studio-platform.md`](./studio-platform.md)) hosting the planning loop: **build a Plan → Simulate → Optimize (compare futures) → Commit**, plus the design assets that power Work.
 
-This maps cleanly onto the truth-flow axis: **Work operates over L2 Intent + L3 Projections; Studio authors L1 Configuration.** Configuration belongs to Studio, per the frozen shell doctrine.
+This maps onto the truth-flow axis: **Work operates over committed L2 Intent + L3 Projections; Studio authors *proposed* L2 Intent (plans) and L1 Configuration (assets), committing across the seam.** Configuration and Planning are the two expressions of Studio.
 
 ### 5.2 Sections
 
-| Mode | Sections |
-|------|----------|
-| **Work** | **Overview** · **Planning Board** (Room × Day) · **Optimization** · **Simulation / Commit** · **Conflicts** · **Roster**† |
-| **Studio** | **Patterns** · **Rules** (ratio / capacity / schedule) · **Operating Windows** · **Rooms** · **Objectives** |
+| Mode | Sections | Composed from |
+|------|----------|---------------|
+| **Work** | **Overview** · **Unplaced** · **Ratio risk** · **Schedule ↔ Attendance** · **Awaiting commit** · **Roster** | Overview landing · Work Views (`WorkspaceQueueRow`) · Focus Panel |
+| **Studio** | **Plans** · **Plan canvas** (Room × Day) · **Optimization** · **Simulation** · **Commit** · **Rooms** · **Rules** · **Calendar** · **Patterns** · **Objectives** | Studio list+detail · design canvas + inspector · Focus Panel |
 
-- **Overview** follows the Family-A pattern: primary action cards → "Today's activity" tiles → information zones. It answers *what needs planning attention right now* — unplanned children, ratio cliffs this week, rooms over capacity, pending commits.
-- **Planning Board** is the Room × Day grid — the heart of the workspace (mockups).
-- **Conflicts** is a *view onto Simulation output*, not a separate engine (validates the sprint hypothesis).
-- **Optimization** and **Simulation / Commit** host the loop's ③ and ④ stages.
+- **Overview (Work)** follows the Family-A pattern: primary action cards → "Today's activity" tiles → information zones. It answers *what needs operating attention right now* — the same shape as Processing's Overview.
+- **Work Views (Work)** are queues — *Unplaced* (enrolled, no committed schedule), *Ratio risk* (rooms projected out of tier this week), *Schedule ↔ Attendance* (committed schedule vs actual facts), *Awaiting commit* (plans approved, not yet committed). Each row opens a **Focus Panel**. Pure Processing DNA.
+- **Plan canvas (Studio)** is the Room × Day grid — rendered on the inherited **Studio design canvas** (Experience-Builder-class canvas + Focus-Panel inspector), the matrix being operational *content*, not new chrome.
+- **Optimization / Simulation (Studio)** host futures generation/comparison and alternative-reality projection ([`architecture-validation.md`](./architecture-validation.md) §2–3).
+- **Conflicts** are an *output of Simulation*, surfaced as a Work View (Ratio risk) in Work and inline on the canvas in Studio — never a separate engine.
 
 ### 5.3 What is Scheduling-specific vs reusable
 
 | Reusable platform (extract) | Scheduling-specific (keep) |
 |-----------------------------|----------------------------|
-| The Work\|Studio shell, Overview pattern, operational-health strip | Room × Day board rendering |
-| The `propose→simulate→optimize→commit` loop | The seven plugin artifacts (§4) |
+| The Work\|Studio shell, Overview pattern, operational-health strip, Work Views, Focus Panel | Room × Day matrix cell renderer (canvas content) |
+| **Studio Platform** (author→preview→compare→commit) | The seven plugin artifacts (§4) |
 | The Plan object, Simulation, Optimization, Commit primitives | Schedule patterns, ratio tiers, operating windows |
 | The planning Focus Panel card | The room/child/day domain vocabulary |
-| The plan-diff / compare surface | Placement cascade School→Program→Room→Schedule |
+| The plan-diff / compare surface (a Work View of futures) | Placement cascade School→Program→Room→Schedule |
 
 ---
 
@@ -117,14 +120,15 @@ This is the reusable **cross-workspace planning** behavior, discovered here and 
 
 ---
 
-## 7. The operator story (Work mode)
+## 7. The operator story (Work → Studio → Work)
 
-1. **Overview** shows *3 children unplaced, Room Sunflower over ratio Thu, 2 commits pending*.
-2. Operator opens the **Planning Board** for the week; Room × Day cells show projected occupancy/ratio/fill; the ratio cliff on Thursday is flagged (a Simulation conflict).
-3. Operator picks an unplaced child → **Optimization** generates ranked options (Room A / Room B / delay one day / add float†), each with projected impacts.
-4. Operator selects "Room B" → a **Plan** is drafted (`proposed`); the board previews the projected state; Simulation shows Thursday now within ratio.
-5. Operator reviews conflicts (none blocking) → **Commit**; the Plan writes effective-dated `schedule_assignments`/`child_placements`; the outbox notifies queues; the board reflects committed truth.
-6. If Enrollment is incomplete, step 3 surfaces the block and offers to resolve it in place (§6).
+1. **Work · Overview** shows *3 children unplaced, Room Sunflower at ratio risk Thu, 2 plans awaiting commit* — action cards + Today's-activity tiles, exactly like Processing.
+2. Operator opens the **Unplaced** Work View (a queue); a row → **Focus Panel** for the child, whose **planning card** says "no committed schedule."
+3. From the card, operator enters **Studio** to design — the child is dropped onto the **Plan canvas** (Room × Day); **Simulation** projects the alternative reality; the Thursday ratio cliff shows as an inline conflict.
+4. **Optimization** generates candidate **futures** (Room A / Room B / delay one day / add float†) as a Work View of futures; each carries its projected delta; operator **compares and decides** — never BOS.
+5. Operator picks a future → the **Plan** moves `proposed → reviewed → approved`; **Commit** writes effective-dated `schedule_assignments`/`child_placements` via supersede; the outbox notifies queues.
+6. Back in **Work**, the child leaves the *Unplaced* queue and the *Ratio risk* view clears — the committed reality now reflects the plan.
+7. If Enrollment is incomplete, step 3 surfaces the block and offers to resolve it **in place** (Focus Panel card handoff / embedded surface), plan intact (§6).
 
 ---
 
