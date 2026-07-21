@@ -9,6 +9,8 @@ supersedes: []
 
 **Status:** Proposed — the authoritative specification for the Scheduling experience inside the Focus Panel. Architecture is frozen; this composes existing primitives (Focus Panel, `decision`/card runtime, Command Surface, Operational Calculations) — **no new card runtime, no second child source of truth, no household-level authority, no in-place edits to committed rows.** Companions: [`scheduling-card-projection.md`](./scheduling-card-projection.md) (the read model), [`scheduling-binding-matrix.md`](./scheduling-binding-matrix.md) (every value's owner + the configured-command matrix + the gap report).
 
+> **Refined by [`scheduling-focus-panel-composition.md`](./scheduling-focus-panel-composition.md) (final).** The card model below (§1–3) is superseded on one point: the **Summary card is pure identity** — the situation line, health, ratio talk, and recommendations move out to a separate **Work card** (Current Work / Needs Attention), and siblings become quiet **Household** context. This doc's label↔value patterns (§4), proposed-vs-committed (§6), transitions (§9), and configured-command model (§7–8) remain valid. Read the composition doc first.
+
 ---
 
 ## 1. The two-layer card model
