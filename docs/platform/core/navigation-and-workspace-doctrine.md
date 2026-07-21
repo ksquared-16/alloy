@@ -515,6 +515,73 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 
 ---
 
+## Adaptive Workspace Presentation Contract (July 2026)
+
+**Status:** Canonical. **Adaptive Workspace System** is a permanent Presentation Runtime capability — not a per-module responsive fork.
+
+Measured on `[data-adminv2-workspace-ambient-root]`:
+
+| Canvas | Ambient width |
+|--------|---------------|
+| **Expanded** | ≥ 1320px |
+| **Compact** | 980–1319px |
+| **Constrained** | &lt; 980px |
+
+### Adaptive Workspace Region Contract
+
+| Role | Purpose |
+|------|---------|
+| **selection** | Queue / topic / case list |
+| **primary** | Focus Panel / thread+composer / artifact / work detail |
+| **supporting** | Inspector, metadata, secondary panes |
+| **assistant** | BOS |
+
+**Priority:** primary → selection → supporting → assistant. Assistant presentation changes before primary work loses usability.
+
+Public module: `web/lib/presentation/adaptiveWorkspaceSystem.ts`.
+
+### Focus Panel priority (Business Process Work Units)
+
+- Normal: `[ condensed queue rail | Focus Panel primary ]` side by side through laptop widths.
+- Never permanently stack queue above Focus at Tailwind `xl` (1280px).
+- True two-pane floor (~700px primary): temporary slide-over selection; Focus remains main.
+- Metrics remain one coherent row (compact density before overflow).
+
+### BOS — persistent assistant (not a permanent rail)
+
+| State | Behavior |
+|-------|----------|
+| **closed** | Floating launcher only — full canvas restored |
+| **floating** | Operator-controlled window (drag header, resize, persist x/y/width/height) — **default**; does not reserve width |
+| **pinned** | Optional right rail; workspace reflows; horizontally resizable in a bounded range; preference persists |
+
+Pinned is optional productivity. Floating is the natural operating mode. Passive context updates as quiet chrome pills; passive “Switched active record…” must not appear as chat.
+
+**Floating geometry:** lower-right default; min ~320×420; default ~400×620; max ~60% canvas width and usable height minus safe margins. Viewport clamp is temporary and does not overwrite preferred geometry until the operator moves/resizes. Unpin restores last floating geometry; Reset restores defaults; Close returns to launcher.
+
+### Actions — operational chrome (not assistant ownership)
+
+Actions belong to the surface they affect — **not** the BOS assistant region:
+
+| Owner | Placement |
+|-------|-----------|
+| Workspace | Workspace header / control band |
+| Business Process / Work Unit | Work Unit header / control band |
+| Focused record | Focus Panel Manage |
+| Module | Module WorkspaceHeader (e.g. Communications Compose) |
+
+Closing, floating, or pinning BOS must not hide or relocate these Actions. BOS may recommend or invoke the same Operational Command Runtime; it does not own action chrome.
+
+**Operational module workspaces** (Communications, Processing, Work Items, Operational Intelligence, and future peers) inherit the same Adaptive Workspace BOS contract via Operational Workspace Geometry:
+
+- **Pinned** — workspace band ends at the BOS rail (current reserved form)
+- **Floating / closed** — workspace expands the full operational band (sidebar → viewport)
+- Horizontal fill inset is ~2.5% each side (`--operational-workspace-fill: 0.95`)
+
+Architecture: `../../sprints/active/adaptive-workspace-presentation/adaptive-workspace-system-architecture.md`.
+
+---
+
 ## Alloy Workspace Doctrine V1 / V2 (superseded)
 
 - **V1** established the component barrel and Processing reference (July 2026).

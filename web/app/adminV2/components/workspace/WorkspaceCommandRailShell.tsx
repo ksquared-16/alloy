@@ -13,14 +13,14 @@ type Props = {
     children: ReactNode;
     ariaLabel: string;
     className?: string;
-    /** Work-unit command rail: Workflow Telemetry card between Actions and BOS. */
+    /** Legacy telemetry slot (unused on Adaptive Workspace). */
     telemetrySlot?: ReactNode;
 };
 
 /**
- * Workspace right command column — Actions, optional telemetry, BOS dock host at bottom.
- * Page-owned workspace placements (work_unit / department / company) always win over drawer
- * Focus Panel actions. Manage-menu actions stay in the Focus Panel header, not this rail.
+ * Assistant column chrome — optional registered Actions (settings/legacy) + BOS dock host.
+ * Workspace / Work Unit Actions live in the primary header band, not here.
+ * Manage-menu actions stay in the Focus Panel header.
  */
 export function WorkspaceCommandRailShell({
     children,
@@ -36,8 +36,15 @@ export function WorkspaceCommandRailShell({
         drawerRegistrationPresent: Boolean(drawerRailActions),
     });
 
+    // Page-owned WU/workspace Actions live in the header band (registrar passes null).
+    // Settings/configuration may still register Actions into this column.
+    const pageOwnsHeaderActions =
+        actionsPlacementSurface === "work_unit" ||
+        actionsPlacementSurface === "company" ||
+        actionsPlacementSurface === "department";
+
     const actionsContent =
-        useDrawerActions && drawerRailActions ?
+        !pageOwnsHeaderActions && useDrawerActions && drawerRailActions ?
             <CommandRailCollapsibleActionsSection
                 actionCount={drawerRailActions.actionCount}
                 loading={false}
@@ -65,9 +72,11 @@ export function WorkspaceCommandRailShell({
             data-ws-command-rail-placement-surface={actionsPlacementSurface ?? undefined}
             aria-label={ariaLabel}
         >
-            <div className="adminv2-ws-command-rail-actions min-h-0 shrink-0 overflow-y-auto overscroll-contain">
-                {actionsContent}
-            </div>
+            {actionsContent ?
+                <div className="adminv2-ws-command-rail-actions min-h-0 shrink-0 overflow-y-auto overscroll-contain">
+                    {actionsContent}
+                </div>
+            :   null}
             {telemetrySlot ?
                 <div
                     className="adminv2-ws-command-rail-telemetry min-h-0 shrink-0"

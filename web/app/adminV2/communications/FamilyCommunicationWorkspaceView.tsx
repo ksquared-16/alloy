@@ -25,6 +25,10 @@ import {
     resolveThreadRecipients,
     threadsForActivityTopicRail,
 } from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
+import {
+    deriveActivityCommsCompositionState,
+    shouldShowActivityTopicRail,
+} from "@/lib/presentation/adaptiveWorkspacePresentation";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 import {
@@ -894,9 +898,21 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         const activeThread = selectedThread ?? activityThreadList.find((t) => t.id === selectedThreadId) ?? null;
         const activeParticipants = activeThread ? resolveThreadRecipients(activeThread, timelineMessages, allLiveRecipients) : [];
         const activeParticipantSummary = formatThreadParticipantNames(activeParticipants);
+        const activityComposition = deriveActivityCommsCompositionState({
+            conversationCount: activityThreadList.length,
+            selectedThreadId,
+            isNewMessageMode,
+            replyComposerExpanded,
+        });
+        const showTopicRail = shouldShowActivityTopicRail(activityComposition);
         return (
-            <div data-cc-surface-variant={surfaceVariant} className="flex h-full min-h-0 flex-1 overflow-hidden">
-                {/* TOPIC RAIL — compact conversation browser (~190–220px) */}
+            <div
+                data-cc-surface-variant={surfaceVariant}
+                data-cc-activity-composition={activityComposition}
+                className="flex h-full min-h-0 flex-1 overflow-hidden"
+            >
+                {/* TOPIC RAIL — reading state only (hidden when empty or composing). */}
+                {showTopicRail ? (
                 <div
                     data-cc-ws-column="threadlist"
                     data-cc-thread-strip
@@ -964,10 +980,12 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         )}
                     </div>
                 </div>
+                ) : null}
 
                 {/* READ / COMPOSE PANE */}
                 <div data-cc-ws-column="conversation" className="flex min-h-0 flex-1 flex-col bg-white">
-                    <div data-cc-thread-header className="shrink-0 border-b border-alloy-stone/20 bg-white px-3 py-2">
+                    <div data-cc-thread-header className="flex shrink-0 items-start justify-between gap-2 border-b border-alloy-stone/20 bg-white px-3 py-2">
+                        <div className="min-w-0 flex-1">
                         {isNewMessageMode ? (
                             <div className="text-[12px] font-semibold text-alloy-juniper">New Message</div>
                         ) : activeThread ? (
@@ -1002,8 +1020,24 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 );
                             })()
                         ) : (
-                            <p className="text-[11px] text-alloy-midnight/55">Select a topic on the left to read messages.</p>
+                            <p className="text-[11px] text-alloy-midnight/55">
+                                {activityThreadList.length === 0
+                                    ? "No conversations yet. Start a new message to begin."
+                                    : "Select a topic to read messages."}
+                            </p>
                         )}
+                        </div>
+                        {!showTopicRail ? (
+                            <button
+                                type="button"
+                                data-cc-new-message
+                                aria-pressed={isNewMessageMode}
+                                onClick={() => onNewMessage?.()}
+                                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${isNewMessageMode ? "bg-alloy-juniper/15 text-alloy-juniper ring-1 ring-alloy-juniper/50" : "text-alloy-juniper hover:bg-alloy-juniper/10"}`}
+                            >
+                                <Plus className="h-3 w-3" /> New
+                            </button>
+                        ) : null}
                     </div>
 
                     {isNewMessageMode ? (

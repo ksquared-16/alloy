@@ -13,6 +13,7 @@
 import Image from "next/image";
 import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
 import { AlloyIdentityLoader } from "@/app/adminV2/components/bos/identity/AlloyIdentityLoader";
+import { AlloyThinkingLabel } from "@/components/admin/workspace/AlloyThinkingLabel";
 import { WsRouteLoadingRibbon } from "@/components/admin/workspace/workspaceRouteSkeletons";
 import {
     ADMIN_V2_ROUTE_LOADING_VOCABULARY,
@@ -152,7 +153,7 @@ export function AlloyOperationalBootShell({
                     <div className="flex h-44 w-44 items-center justify-center">
                         <AlloyIdentityLoader markSize="lg" showMessage={false} className="scale-[2]" />
                     </div>
-                    <p className="text-lg font-semibold text-alloy-midnight">Thinking…</p>
+                    <AlloyThinkingLabel size="lg" />
                 </div>
             </div>
         );

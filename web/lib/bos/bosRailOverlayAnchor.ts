@@ -16,6 +16,7 @@ function readEffectiveBosOverlayWidthPx(): number | null {
     return match ? Math.round(Number(match[1])) : null;
 }
 
+/** Pinned BOS overlay: align to the in-layout assistant host. Floating uses absolute geometry instead. */
 export function measureBosRailOverlayAnchorStyle(anchorEl: HTMLElement): CSSProperties {
     const rect = anchorEl.getBoundingClientRect();
     const right = Math.max(0, Math.round(window.innerWidth - rect.right));

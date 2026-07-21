@@ -51,18 +51,18 @@ export function WorkspaceSurface() {
                 <AlloyOperationalBootShell variant="workspace" chrome="content" />
             ) : (
                 <>
-                    {/* Workspace Header (title / subtitle / org KPIs) + one ProcessSummaryCard
-                        per configured business process. */}
-                    <WorkspaceHeader model={model.header} />
-                    <ProcessGrid processes={model.processes} config={model.processConfig} />
-                    {/* Registers the configured Workspace actions into the persistent command
-                        rail's "Actions (N)" section — same path as the Work Unit. Renders null. */}
-                    <WorkspaceRightRailActions
-                        actions={model.rightRailActions}
-                        defaultDepartmentId={model.defaultDepartmentId}
+                    {/* Workspace Header (title / subtitle / org KPIs) + Actions control band. */}
+                    <WorkspaceHeader
+                        model={model.header}
+                        actionsSlot={
+                            <WorkspaceRightRailActions
+                                actions={model.rightRailActions}
+                                defaultDepartmentId={model.defaultDepartmentId}
+                            />
+                        }
                     />
-                    {/* Page-level Create Lead modal host — stable, outside the command-rail
-                        floating menu, so its outside-click dismissal can't unmount the modal. */}
+                    <ProcessGrid processes={model.processes} config={model.processConfig} />
+                    {/* Page-level Create Lead modal host — stable, outside the actions floating menu. */}
                     <CreateLeadEventHost />
                 </>
             )}

@@ -46,6 +46,7 @@ import { MOTION_SETTLE } from "@/lib/motion/motionTokens";
 import { markPerceived } from "@/lib/perf/perceivedPerf";
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
 import { AlloyIdentityLoader } from "@/app/adminV2/components/bos/identity/AlloyIdentityLoader";
+import { AlloyThinkingLabel } from "@/components/admin/workspace/AlloyThinkingLabel";
 import OpportunityFocusPanelHeader from "@/components/admin/focusPanel/OpportunityFocusPanelHeader";
 import OpportunityFocusPanelBody from "@/components/admin/focusPanel/OpportunityFocusPanelBody";
 import OpportunityDrawerBodySaveBar from "@/components/admin/vmDrawer/OpportunityDrawerBodySaveBar";
@@ -518,7 +519,7 @@ export function InlineOpportunityFocusPanel() {
                             aria-busy="true"
                         >
                             <AlloyIdentityLoader markSize="md" showMessage={false} />
-                            <p className="text-sm font-medium text-alloy-midnight/60">Thinking…</p>
+                            <AlloyThinkingLabel size="sm" />
                         </div>}
                     </div>
                 </div>

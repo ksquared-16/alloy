@@ -131,16 +131,111 @@ html[data-adminv2-workspace-shell="v2"] {
     max-height: 100%;
     min-height: 0;
   }
+
+  /*
+   * Adaptive Workspace System — BOS: closed | floating | pinned.
+   * Floating is default; pinned optionally reserves --ws-rail; closed → launcher only.
+   */
+  html[data-adminv2-workspace-shell="v2"]
+    [data-adminv2-workspace-ambient-root][data-bos-presentation="pinned"]
+    [data-adminv2-persistent-command-rail="true"],
+  html[data-adminv2-workspace-shell="v2"]
+    [data-adminv2-workspace-ambient-root][data-bos-presentation="docked"]
+    [data-adminv2-persistent-command-rail="true"],
+  html[data-adminv2-workspace-shell="v2"]
+    [data-adminv2-workspace-ambient-root][data-bos-presentation="compact-docked"]
+    [data-adminv2-persistent-command-rail="true"] {
+    position: relative;
+    width: var(--ws-rail, 400px);
+    max-width: var(--ws-rail, 400px);
+    transform: none;
+    pointer-events: auto;
+    box-shadow: none;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+    height: 100%;
+    max-height: 100%;
+    opacity: 1;
+  }
+
+  html[data-adminv2-workspace-shell="v2"]
+    [data-adminv2-workspace-ambient-root][data-bos-presentation="floating"]
+    [data-adminv2-persistent-command-rail="true"] {
+    /* Floating BOS is a body-portaled window — assistant column does not reserve or float. */
+    position: fixed;
+    width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    opacity: 0;
+    transform: none;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+  }
+
+  html[data-adminv2-workspace-shell="v2"]
+    [data-adminv2-workspace-ambient-root][data-bos-presentation="closed"]
+    [data-adminv2-persistent-command-rail="true"],
+  html[data-adminv2-workspace-shell="v2"]
+    [data-adminv2-workspace-ambient-root][data-bos-presentation="hidden"]
+    [data-adminv2-persistent-command-rail="true"] {
+    position: fixed;
+    width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    opacity: 0;
+  }
 }
 
-@media (max-width: 1000px) {
-  html[data-adminv2-workspace-shell="v2"] [data-adminv2-persistent-command-rail="true"] {
-    width: 100%;
-    max-width: none;
-    border-left: none;
-    border-top: 1px solid rgba(39, 63, 82, 0.08);
-    max-height: min(42vh, 520px);
-  }
+/* Body-portaled BOS: hide when closed. Floating geometry is applied inline (left/top/width/height). */
+html[data-bos-presentation="closed"] .adminv2-bos-rail-overlay,
+html[data-bos-presentation="hidden"] .adminv2-bos-rail-overlay {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+html[data-bos-presentation="floating"] .adminv2-bos-rail-overlay {
+  transform: none;
+  border-radius: 12px;
+  box-shadow:
+    0 12px 40px rgba(15, 23, 42, 0.16),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+/* Header-band Actions — independent of assistant presentation state. */
+[data-workspace-actions-chrome] .adminv2-ws-command-rail-actions-section {
+  margin: 0;
+}
+[data-workspace-header-control-band="true"] .adminv2-ws-command-rail-actions-trigger {
+  min-height: 2rem;
+}
+
+/* Adaptive queue width clamps — side-by-side rail (no viewport xl stack). */
+[data-work-unit-selection-mode="rail"] [data-adaptive-queue-column] {
+  width: 24rem;
+  flex: 0 0 24rem;
+  max-width: 40%;
+}
+[data-adminv2-workspace-ambient-root][data-workspace-presentation="compact"]
+  [data-work-unit-selection-mode="rail"]
+  [data-adaptive-queue-column] {
+  width: 18rem;
+  flex: 0 0 18rem;
+}
+[data-adminv2-workspace-ambient-root][data-workspace-presentation="constrained"]
+  [data-work-unit-selection-mode="rail"]
+  [data-adaptive-queue-column] {
+  width: 16rem;
+  flex: 0 0 16rem;
 }
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-with-bos {
@@ -568,13 +663,14 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail:no
  * Classification is by workspace type (the operational marker), never by feature name.
  * Geometry vars are measured in `web/lib/bos/operationalWorkspaceGeometry.ts`.
  *
- * The panel occupies ~90% of the band (`--operational-workspace-fill`), inset evenly so a
+ * The panel occupies ~95% of the band (`--operational-workspace-fill`), inset evenly so a
  * clickable backdrop margin remains on every side to dismiss the surface.
+ * (July 2026 Adaptive Workspace: half the prior 10% horizontal gutter → 5% total / ~2.5% each side.)
  */
 html[data-adminv2-workspace-shell="v2"] .operational-workspace-surface[data-operational-workspace="true"],
 html[data-adminv2-workspace-shell="v2"][data-alloy-os-runtime-split="true"]
   .operational-workspace-surface[data-operational-workspace="true"] {
-  --operational-workspace-fill: 0.9;
+  --operational-workspace-fill: 0.95;
   --operational-workspace-inset-x: calc(
     var(--operational-workspace-width, 0px) * (1 - var(--operational-workspace-fill)) / 2
   );

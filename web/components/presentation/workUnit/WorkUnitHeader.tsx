@@ -7,6 +7,7 @@
  * `WorkspaceHeader` with variant="work-unit" for grammar parity.
  */
 
+import type { ReactNode } from "react";
 import {
     WorkspaceHeader,
     type WorkspaceHeaderBuilderProps,
@@ -22,9 +23,13 @@ export type WorkUnitHeaderBuilderProps = WorkspaceHeaderBuilderProps;
 export function WorkUnitHeader({
     model,
     builder,
+    actionsSlot = null,
 }: {
     model: WorkUnitHeaderPresentationModel;
     builder?: WorkUnitHeaderBuilderProps;
+    actionsSlot?: ReactNode;
 }) {
-    return <WorkspaceHeader model={model} builder={builder} variant="work-unit" />;
+    return (
+        <WorkspaceHeader model={model} builder={builder} variant="work-unit" actionsSlot={actionsSlot} />
+    );
 }

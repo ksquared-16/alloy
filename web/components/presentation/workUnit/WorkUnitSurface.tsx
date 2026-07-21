@@ -60,7 +60,16 @@ export function WorkUnitSurfaceBodyFromModel({
         <>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1">
                 <div className="shrink-0 space-y-1">
-                    <WorkUnitHeader model={model.header} />
+                    <WorkUnitHeader
+                        model={model.header}
+                        actionsSlot={
+                            <WorkUnitRightRailActions
+                                actions={model.rightRailActions}
+                                departmentId={model.departmentId}
+                                workUnitId={model.workUnitId}
+                            />
+                        }
+                    />
                     <WorkViewPillStrip
                         workViews={model.workViews}
                         onSelect={intents.selectWorkView}
@@ -80,18 +89,10 @@ export function WorkUnitSurfaceBodyFromModel({
                     />
                 </FocusPanelSurface>
             </div>
-            {/* RR.SURFACE stays as the label anchor (single-ownership); the operator's
-                actual right rail is the persistent shell command rail. The resolved actions
-                register INTO that rail via WorkUnitRightRailActions (renders null) — one
-                action presentation path, no center duplicate. */}
+            {/* RR.SURFACE stays as the label anchor (single-ownership). Actions live in the
+                Work Unit header control band — independent of BOS closed/floating/pinned. */}
             <RightRailSurface />
-            <WorkUnitRightRailActions
-                actions={model.rightRailActions}
-                departmentId={model.departmentId}
-                workUnitId={model.workUnitId}
-            />
-            {/* Page-level Create Lead modal host — stable, outside the command-rail
-                floating menu, so its outside-click dismissal can't unmount the modal. */}
+            {/* Page-level Create Lead modal host — stable, outside the actions floating menu. */}
             <CreateLeadEventHost />
         </>
         </>

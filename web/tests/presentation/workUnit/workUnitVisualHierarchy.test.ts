@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
  *  - floating (non-tiled) Work Unit KPIs
  *  - queue title / record-count badges
  *  - inactive pills without an outline
- *  - Actions dropdown in the work-unit header
+ *  - Actions incorrectly owned by the BOS assistant column
  */
 
 const read = (rel: string) =>
@@ -20,7 +20,8 @@ describe("Work Unit KPIs — shared workspace KPI card grammar", () => {
         expect(src).toMatch(/variant === "work-unit"/);
         expect(src).toMatch(/WS_KPI_CARD_CHROME/);
         expect(src).toMatch(/data-work-unit-header-kpi-icon-well/);
-        expect(src).toMatch(/flex flex-wrap items-stretch justify-start gap-4/);
+        expect(src).toMatch(/data-adaptive-metric-row/);
+        expect(src).toMatch(/flex flex-nowrap items-stretch/);
     });
 });
 
@@ -96,18 +97,18 @@ describe("Work Unit header — title hierarchy vs workspace", () => {
     });
 });
 
-describe("Work Unit header — no global Actions dropdown", () => {
+describe("Work Unit header — Actions control band (independent of BOS)", () => {
     const header = read("workUnit/WorkUnitHeader.tsx");
     const surface = read("workUnit/WorkUnitSurface.tsx");
 
-    it("does not place an Actions control in the work-unit header", () => {
-        expect(header).not.toMatch(/Actions/);
+    it("accepts an actionsSlot on the work-unit header", () => {
+        expect(header).toMatch(/actionsSlot/);
         expect(header).toMatch(/WorkspaceHeader/);
     });
 
-    it("registers actions into the right rail, not the header", () => {
+    it("places Work Unit Actions in the header control band", () => {
         expect(surface).toMatch(/WorkUnitRightRailActions/);
-        expect(surface).not.toMatch(/<Actions/);
+        expect(surface).toMatch(/actionsSlot/);
     });
 });
 

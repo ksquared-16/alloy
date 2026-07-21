@@ -33,6 +33,22 @@ BOS (Business Orchestration System) — assistive, human-in-the-loop intelligenc
 - Org `ai_policy` + RBAC permission keys gate features
 - Visual identity frozen: `../../system/bos-identity-doctrine.md`
 
+### BOS presentation states (Adaptive Workspace System — July 2026)
+
+**BOS is not a permanent right rail.** It is a persistent assistant: always available, not always consuming width.
+
+| State | Behavior |
+|-------|----------|
+| **closed** | Floating launcher only; full operational canvas |
+| **floating** | Operator-movable/resizable window — **default**; conversation + context persist; not modal; geometry persists in session preference |
+| **pinned** | Optional right rail; workspace reflows; horizontally resizable; preference persists |
+
+One BOS runtime/conversation across states. Unpin → restores last floating geometry; close → launcher; Reset → default floating size/position. **Context pills** show live Business Process / Work View / Subject; `context_boundary` chat notices are suppressed at render.
+
+BOS presentation does **not** own workspace/Work Unit action chrome — Actions remain on their operational surfaces regardless of assistant state.
+
+Layout ownership: `../core/navigation-and-workspace-doctrine.md` § Adaptive Workspace Presentation Contract. Code: `web/lib/presentation/adaptiveWorkspaceSystem.ts`, `web/lib/bos/bosFloatingGeometry.ts`.
+
 ---
 
 ## Action execution path

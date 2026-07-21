@@ -1,25 +1,14 @@
 "use client";
 
 /**
- * Presentation Runtime V2 — Work Unit configured actions → the PERSISTENT operator command rail.
+ * Presentation Runtime V2 — Work Unit configured actions → workspace header control band.
  *
- * The operator's right rail is the shell-level command rail (`AdminV2PersistentCommandRail`), not
- * a per-surface column. So the resolved `right_rail_actions` are REGISTERED into that rail via
- * `WorkspaceCommandRailRegistrar` (placement surface `work_unit`) — they render inside the shell's
- * "Actions (N)" collapsible, the SINGLE action presentation path. No second rail, no standalone
- * center buttons, no new renderer/resolver/runtime.
- *
- * Because the registered node renders inside the shell (ABOVE the work-unit route context), the
- * execution scope (`departmentId`/`workUnitId`) is BAKED IN as props; router + drawer come from
- * shell-level providers. Execution stays on the existing runtime (`applyRegistryResolvedActionClient`,
- * `work_unit` surface): `create_lead` → dispatches `adminv2:open-create-lead`, handled by the
- * page-level CreateLeadEventHost (NOT hosted here — the command-rail floating menu unmounts its
- * children on outside-click, which would kill an inline modal); `schedule_tour`/record-scoped →
- * the currently-open Focus Panel record. Empty payload → register nothing → the rail's own default
- * empty state (`Actions (0)`), so the empty state shows ONLY when the payload is actually empty.
+ * Actions are operational chrome owned by the Work Unit header — not the BOS assistant column.
+ * Resolution/execution unchanged (`applyRegistryResolvedActionClient`, work_unit surface).
+ * Placement surface is still registered so drawer override rules know the page owns Actions.
  */
 
-import { useCallback } from "react";
+import { useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
 import { WorkspaceCommandRailRegistrar } from "@/app/adminV2/components/workspace/WorkspaceCommandRailRegistrar";
@@ -29,50 +18,39 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 type Props = {
     actions: ResolvedActionForClient[];
-    /** Baked scope — the shell command rail cannot read the work-unit route context. */
     departmentId: string | null;
     workUnitId: string | null;
 };
 
-/**
- * Renders null; registers the resolved actions into the shell command rail. Non-empty payload →
- * an "Actions (N)" section body; empty → register null so the rail shows its own default.
- */
+/** Header-band Actions chrome + placement registration (registrar renders null). */
 export function WorkUnitRightRailActions({ actions, departmentId, workUnitId }: Props) {
-    const railContent =
-        actions.length > 0 ? (
-            <CommandRailCollapsibleActionsSection actionCount={actions.length}>
-                <WorkUnitCommandRailActionsBody
-                    actions={actions}
-                    departmentId={departmentId}
-                    workUnitId={workUnitId}
-                />
-            </CommandRailCollapsibleActionsSection>
-        ) : null;
-
     return (
-        <WorkspaceCommandRailRegistrar actions={railContent} actionsPlacementSurface="work_unit" />
+        <>
+            <WorkspaceCommandRailRegistrar actions={null} actionsPlacementSurface="work_unit" />
+            {actions.length > 0 ? (
+                <div data-workspace-actions-chrome="work_unit" className="shrink-0">
+                    <CommandRailCollapsibleActionsSection actionCount={actions.length}>
+                        <WorkUnitCommandRailActionsBody
+                            actions={actions}
+                            departmentId={departmentId}
+                            workUnitId={workUnitId}
+                        />
+                    </CommandRailCollapsibleActionsSection>
+                </div>
+            ) : null}
+        </>
     );
 }
 
-/**
- * The action rows + execution, rendered INSIDE the shell command rail (via the registrar). Uses
- * the command rail's native executable-action styling so the configured actions read as part of
- * the rail. Scope is prop-baked; router/drawer resolve from shell providers.
- */
 export function WorkUnitCommandRailActionsBody({ actions, departmentId, workUnitId }: Props) {
     const router = useRouter();
     const { drawer, openDrawer } = useAdminDrawer();
 
-    // Record currently open in the inline Focus Panel — target for record-scoped actions.
     const selectedRecordId =
         drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
 
     const runAction = useCallback(
         (action: ResolvedActionForClient) => {
-            // No local `openCreateLead` — the runtime dispatches `adminv2:open-create-lead`, which
-            // CreateLeadEventHost (mounted at the stable surface level, OUTSIDE this floating menu)
-            // handles. Hosting the modal here would let the menu's outside-click unmount it.
             void applyRegistryResolvedActionClient(action, {
                 router,
                 openDrawer,
@@ -114,4 +92,9 @@ export function WorkUnitCommandRailActionsBody({ actions, departmentId, workUnit
             </ul>
         </section>
     );
+}
+
+/** Optional wrapper when composing into WorkspaceHeader actionsSlot. */
+export function WorkUnitHeaderActionsSlot(props: Props): ReactNode {
+    return <WorkUnitRightRailActions {...props} />;
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
     computeOperationalWorkspaceBounds,
     OPERATIONAL_WORKSPACE_LEFT_CLEARANCE_PX,
+    resolveOperationalBosRailLeft,
 } from "@/lib/bos/operationalWorkspaceGeometry";
 
 const GUTTER = 16;
@@ -54,6 +55,21 @@ describe("computeOperationalWorkspaceBounds", () => {
         expect(bounds.left).toBe(280 + OPERATIONAL_WORKSPACE_LEFT_CLEARANCE_PX);
     });
 
+    it("floating/closed presentation expands full band (bosRailLeft ignored via null)", () => {
+        const floating = computeOperationalWorkspaceBounds({
+            sidebarRight: 56,
+            bosRailLeft: null,
+            viewportWidth: 1440,
+        });
+        const pinned = computeOperationalWorkspaceBounds({
+            sidebarRight: 56,
+            bosRailLeft: 1100,
+            viewportWidth: 1440,
+        });
+        expect(floating.width).toBeGreaterThan(pinned.width);
+        expect(floating.right).toBe(1440 - GUTTER);
+    });
+
     it("honors explicit gutter and clearance overrides", () => {
         const bounds = computeOperationalWorkspaceBounds({
             sidebarRight: 200,
@@ -73,5 +89,38 @@ describe("computeOperationalWorkspaceBounds", () => {
             viewportWidth: 1100,
         });
         expect(bounds.width).toBeGreaterThanOrEqual(0);
+    });
+});
+
+describe("resolveOperationalBosRailLeft", () => {
+    it("only pinned presentation reserves rail width", () => {
+        expect(
+            resolveOperationalBosRailLeft({
+                bosPresentation: "floating",
+                overlayLeft: 1200,
+                columnLeft: 1200,
+            }),
+        ).toBeNull();
+        expect(
+            resolveOperationalBosRailLeft({
+                bosPresentation: "closed",
+                overlayLeft: 1200,
+                columnLeft: 1200,
+            }),
+        ).toBeNull();
+        expect(
+            resolveOperationalBosRailLeft({
+                bosPresentation: "pinned",
+                overlayLeft: 1200,
+                columnLeft: 1100,
+            }),
+        ).toBe(1200);
+        expect(
+            resolveOperationalBosRailLeft({
+                bosPresentation: "pinned",
+                overlayLeft: null,
+                columnLeft: 1100,
+            }),
+        ).toBe(1100);
     });
 });

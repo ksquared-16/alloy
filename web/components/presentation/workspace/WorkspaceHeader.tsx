@@ -6,6 +6,8 @@
  * Builder and runtime share this component for parity.
  */
 
+"use client";
+
 import type { ReactNode } from "react";
 import {
     PRESENTATION_RUNTIME_LABELS,
@@ -23,6 +25,7 @@ import type {
     WorkspaceHeaderPresentationModel,
 } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import { WORKSPACE_HEADER_NO_DATA_VALUE } from "@/lib/presentation/runtime/workspaceHeaderCards";
+import { useAdaptiveMetricDensity } from "@/lib/presentation/useAmbientWorkspacePresentation";
 import { ProcessCardGlyph } from "./ProcessCardGlyph";
 import { WS_KPI_CARD_CHROME } from "@/components/workspace/workspaceTokens";
 
@@ -230,21 +233,30 @@ export function WorkspaceHeader({
     model,
     builder,
     variant = "workspace",
+    actionsSlot = null,
 }: {
     model: WorkspaceHeaderPresentationModel;
     builder?: WorkspaceHeaderBuilderProps;
     variant?: SurfaceHeaderVariant;
+    /** Operational Actions chrome — workspace / Work Unit control band (not BOS). */
+    actionsSlot?: ReactNode;
 }) {
     const meta = VARIANT_META[variant];
     const titleAttr = variant === "work-unit" ? "data-work-unit-header-title" : "data-workspace-header-title";
     const subtitleAttr = variant === "work-unit" ? "data-work-unit-header-subtitle" : "data-workspace-header-subtitle";
     const kpisAttr = variant === "work-unit" ? "data-work-unit-header-kpis" : "data-workspace-header-kpis";
+    const metricDensity = useAdaptiveMetricDensity();
+    const kpiRowClass =
+        metricDensity === "compact"
+            ? "flex flex-nowrap items-stretch justify-start gap-2 overflow-x-auto"
+            : "flex flex-nowrap items-stretch justify-start gap-4";
 
     return (
         <header
             {...runtimeLabelProps(meta.headerLabel)}
             data-alloy-section={meta.section}
             {...{ [meta.dataAttr]: true }}
+            data-adaptive-metric-density={metricDensity}
             className={
                 variant === "work-unit"
                     ? "flex flex-wrap items-start justify-between gap-x-6 gap-y-2"
@@ -297,35 +309,40 @@ export function WorkspaceHeader({
                 </div>
             </div>
 
-            {model.kpis.length > 0 ? (
-                <div
-                    {...runtimeLabelProps(meta.calculationsLabel)}
-                    data-alloy-section={meta.calculationsSection}
-                    {...{ [kpisAttr]: true }}
-                    className={
-                        variant === "work-unit"
-                            ? "flex flex-wrap items-stretch justify-start gap-4"
-                            : // Cards flow from the center anchor rightward, left-aligned, wrapping
-                              // as needed — never stretched across the full row.
-                              "flex flex-wrap items-stretch justify-start gap-4"
-                    }
-                    role="list"
-                    aria-label={meta.kpiAria}
-                >
-                    {model.kpis.map((kpi) => (
-                        <BuilderHit
-                            key={kpi.slot}
-                            field={`kpi-${kpi.slot as 1 | 2 | 3 | 4 | 5}`}
-                            builder={builder}
-                            className="block h-full min-w-0"
-                        >
-                            <div role="listitem" className="h-full min-w-0">
-                                <HeaderKpiCard kpi={kpi} variant={variant} />
-                            </div>
-                        </BuilderHit>
-                    ))}
-                </div>
-            ) : null}
+            <div
+                className={
+                    variant === "work-unit"
+                        ? "flex min-w-0 flex-wrap items-start justify-end gap-3"
+                        : "flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-end"
+                }
+                data-workspace-header-control-band="true"
+            >
+                {model.kpis.length > 0 ? (
+                    <div
+                        {...runtimeLabelProps(meta.calculationsLabel)}
+                        data-alloy-section={meta.calculationsSection}
+                        {...{ [kpisAttr]: true }}
+                        data-adaptive-metric-row
+                        className={kpiRowClass}
+                        role="list"
+                        aria-label={meta.kpiAria}
+                    >
+                        {model.kpis.map((kpi) => (
+                            <BuilderHit
+                                key={kpi.slot}
+                                field={`kpi-${kpi.slot as 1 | 2 | 3 | 4 | 5}`}
+                                builder={builder}
+                                className="block h-full min-w-0 shrink-0"
+                            >
+                                <div role="listitem" className="h-full min-w-0">
+                                    <HeaderKpiCard kpi={kpi} variant={variant} density={metricDensity} />
+                                </div>
+                            </BuilderHit>
+                        ))}
+                    </div>
+                ) : null}
+                {actionsSlot}
+            </div>
         </header>
     );
 }
