@@ -51,8 +51,10 @@ import {
 import {
     getLocationConcernDefinition,
     locationConcernHref,
+    parseLocationConcernTab,
     resolveActiveLocationConcern,
 } from "@/lib/locations/locationConcernContract";
+import { resolveLocationsConcernState } from "@/lib/locations/locationsSelectionAdapter";
 import {
     invalidateLocationConcernCaches,
     loadLocationOwnedSetup,
@@ -77,6 +79,8 @@ export default function LocationsConfigurationPage({
     const continuity = useConfigurationContinuityOptional();
     const orgId = continuity?.orgId || authOrgId || "";
     const retainedLocationId = continuity?.selection?.locationId ?? null;
+    const retainedConcernTab = continuity?.selection?.locationTab ?? null;
+    const retainedConcernItemId = continuity?.selection?.locationItemId ?? null;
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
     const [creatingRoom, setCreatingRoom] = useState(false);
@@ -125,26 +129,61 @@ export default function LocationsConfigurationPage({
         retainedLocationId,
     });
 
-    // Retained Continuity restore → replace-sync URL (no history loop).
+    // Retained Continuity restore → replace-sync URL (location + concern, no history loop).
     useEffect(() => {
         if (!shouldSyncRoute || !selectedId) return;
-        router.replace(locationConcernHref(selectedId, activeTab));
-    }, [shouldSyncRoute, selectedId, activeTab, router]);
+        const retainedTab = parseLocationConcernTab(retainedConcernTab);
+        const item =
+            retainedTab === "rooms" || retainedTab === "programs" || retainedTab === "schedule"
+                ? retainedConcernItemId
+                : null;
+        setActiveTab(retainedTab);
+        if (retainedTab === "tours") setToursKeepAlive(true);
+        if (retainedTab === "placement") setPlacementKeepAlive(true);
+        if (retainedTab === "access") setAccessKeepAlive(true);
+        if (retainedTab === "rooms") setSelectedRoomId(item);
+        else if (retainedTab === "programs") setSelectedProgramId(item);
+        else if (retainedTab === "schedule") setSelectedScheduleId(item);
+        router.replace(locationConcernHref(selectedId, retainedTab, item));
+    }, [
+        shouldSyncRoute,
+        selectedId,
+        retainedConcernTab,
+        retainedConcernItemId,
+        router,
+    ]);
 
-    // Back/Forward + soft-nav query updates: server props project into local concern state.
+    // Back/Forward + soft-nav query updates: URL props win via concern adapter.
+    // Skip while retained Continuity restore is still projecting into the URL.
     useEffect(() => {
-        const resolved = resolveActiveLocationConcern(initialTab);
-        setActiveTab(resolved.concern);
-        if (resolved.concern === "tours") setToursKeepAlive(true);
-        if (resolved.concern === "placement") setPlacementKeepAlive(true);
-        if (resolved.concern === "access") setAccessKeepAlive(true);
-        setSelectedRoomId(resolved.concern === "rooms" ? initialItemId : null);
-        setSelectedProgramId(resolved.concern === "programs" ? initialItemId : null);
-        setSelectedScheduleId(resolved.concern === "schedule" ? initialItemId : null);
-        if (resolved.normalized && selectedId) {
-            router.replace(locationConcernHref(selectedId, resolved.concern, initialItemId));
+        if (shouldSyncRoute) return;
+        const active = resolveActiveLocationConcern(initialTab);
+        const localItemId =
+            activeTab === "rooms" ? selectedRoomId
+            : activeTab === "programs" ? selectedProgramId
+            : activeTab === "schedule" ? selectedScheduleId
+            : null;
+        const projected = resolveLocationsConcernState({
+            routeTab: active.concern,
+            routeItemId: initialItemId,
+            localTab: activeTab,
+            localItemId,
+            routeLocationId: initialLocationId,
+            localLocationId: selectedId,
+        });
+        setActiveTab(projected.tab);
+        if (projected.tab === "tours") setToursKeepAlive(true);
+        if (projected.tab === "placement") setPlacementKeepAlive(true);
+        if (projected.tab === "access") setAccessKeepAlive(true);
+        setSelectedRoomId(projected.tab === "rooms" ? projected.itemId : null);
+        setSelectedProgramId(projected.tab === "programs" ? projected.itemId : null);
+        setSelectedScheduleId(projected.tab === "schedule" ? projected.itemId : null);
+        if (active.normalized && selectedId) {
+            router.replace(locationConcernHref(selectedId, projected.tab, projected.itemId));
         }
-    }, [initialTab, initialItemId, initialLocationId, router, selectedId]);
+        // Route props are authoritative; omit local tab/item from deps to avoid loops.
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- Checkpoint C history projection
+    }, [initialTab, initialItemId, initialLocationId, router, selectedId, shouldSyncRoute]);
 
     const visibleSites = useMemo(() => {
         const query = search.trim().toLowerCase();

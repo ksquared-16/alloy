@@ -210,13 +210,14 @@ npm run verify:module-imports: PASS after commit of new modules
 - `app/adminV2/settings/locations/page.tsx`
 - `configurationRuntimeLocations.test.ts`
 
-## 16. Remaining risks
+16. Remaining risks
 
 1. Live authenticated filmstrip still deferred.  
-2. Tours embedded client internal loading not fully instrumented with Continuity marks.  
+2. Tours embedded client now syncs `locFilter` on `locationId` change and retains rules during refresh; deeper Continuity marks inside Tours still optional.  
 3. Placement policy is org-scoped — intentional; Location switch does not clear ranking UI (rooms strip updates).  
 4. Intent prefetch may warm caches the operator never opens (bounded to intent concerns only).  
 5. Mutation double-refresh (bus + local force) still possible; coalescing deferred to C.5.
+6. Inventory follow-up applied: Continuity retained tab/item restore; `resolveLocationsConcernState` wired for Back/Forward projection.
 
 ## 17. Product issues intentionally deferred
 

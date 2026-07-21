@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
@@ -41,13 +41,24 @@ export default function TourAvailabilitySettingsClient({
     const [locFilter, setLocFilter] = useState(locationId ?? "");
     const [rules, setRules] = useState<RuleRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [err, setErr] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [adding, setAdding] = useState(false);
     const [editingRule, setEditingRule] = useState<RuleRow | null>(null);
+    const hasRulesRef = useRef(false);
+
+    // Embedded Locations keepalive may remount via key, but also sync when locationId changes
+    // without remount — stale locFilter caused false empties after Location switches.
+    useEffect(() => {
+        const next = String(locationId ?? "").trim();
+        setLocFilter(next);
+    }, [locationId]);
 
     const loadRules = useCallback(async () => {
-        setLoading(true);
+        const hadRules = hasRulesRef.current;
+        if (hadRules) setRefreshing(true);
+        else setLoading(true);
         setErr(null);
         try {
             const qs = locFilter.trim() ? `?location_id=${encodeURIComponent(locFilter.trim())}` : "";
@@ -57,11 +68,20 @@ export default function TourAvailabilitySettingsClient({
             const j = (await res.json()) as { rules?: RuleRow[]; error?: string };
             if (!res.ok) throw new Error(j.error ?? res.statusText);
             const loadedRules = j.rules ?? [];
-            setRules(locationId ? loadedRules.filter((rule) => rule.location_id === locationId) : loadedRules);
+            const nextRules = locationId
+                ? loadedRules.filter((rule) => rule.location_id === locationId)
+                : loadedRules;
+            setRules(nextRules);
+            hasRulesRef.current = nextRules.length > 0;
         } catch (e) {
             setErr(e instanceof Error ? e.message : String(e));
+            if (!hadRules) {
+                setRules([]);
+                hasRulesRef.current = false;
+            }
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     }, [locFilter, locationId]);
 
@@ -158,10 +178,15 @@ export default function TourAvailabilitySettingsClient({
                     </label>
                 </div>
             :   null}
-            {loading ?
+            {loading && !refreshing ?
                 <p className="text-sm text-alloy-midnight/55">Loading…</p>
             :   null}
-            {!loading && rules.length === 0 ?
+            {refreshing ?
+                <p className="text-sm text-alloy-midnight/45" data-testid="tours-availability-refreshing">
+                    Refreshing…
+                </p>
+            :   null}
+            {!loading && !refreshing && rules.length === 0 ?
                 <div className="rounded-xl border border-dashed border-alloy-forge/15 p-4">
                     <p className="text-sm font-medium text-alloy-midnight/80">No tour availability set</p>
                     <p className="config-typo-sublabel mt-1">

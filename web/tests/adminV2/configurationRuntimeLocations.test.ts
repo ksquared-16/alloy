@@ -452,6 +452,11 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("locationConcernHref");
         expect(panels).toContain("projectLocationConcernTransition");
         expect(panels).toContain("loadLocationPlacementPolicy");
+        expect(page).toContain("resolveLocationsConcernState");
+        expect(page).toContain("retainedConcernTab");
+        expect(read("app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient.tsx")).toContain(
+            "stale locFilter caused false empties",
+        );
         expect(tabs).toContain("onSectionIntent");
     });
 });
