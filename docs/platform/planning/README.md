@@ -19,12 +19,16 @@ This folder holds one architecture and the trail that discovered it. If you read
 
 **The authoritative product + contracts (read these to build):**
 - **[scheduling-product-spec.md](./scheduling-product-spec.md)** — the single authoritative product definition, refined for daily operation: Overview at zero/normal/high volume, operator language, Place a Child (four option states + no-valid-room), Over Ratio (cause-first, generated options), the Roster with drill-down to children, commit/undo-as-supersede/history, motion & degraded states, narrow BOS, cross-product handoffs, and V1/V2/Future scope + implementation readiness.
+- **[scheduling-focus-panel-spec.md](./scheduling-focus-panel-spec.md)** — the Focus Panel card system: the two-layer Summary + Detail cards (anatomy, states, the fixed label↔value patterns), quiet sibling context, proposed-vs-committed language, summary→detail→command transitions, create/change/end workflows, and **configured (never hardcoded) commands** via the Command Surface.
+- **[scheduling-card-projection.md](./scheduling-card-projection.md)** — the one composed read model both card layers render; identity, effective-date/current-vs-future/proposed-vs-committed semantics, sibling resolution, freshness, provenance, error states, and which calculation appears where.
+- **[scheduling-binding-matrix.md](./scheduling-binding-matrix.md)** — proves every value has a canonical owner: the config/facts/intent/calc/projection **binding matrix**, the **Configured Command Binding Matrix**, and the **Implementation Gap Report** (required-before / during / V2 / future).
 - **[scheduling-calculation-map.md](./scheduling-calculation-map.md)** — every calculation (inputs · output · grain · mode · blocks/warns/ranks/informs · where · maturity). Scheduling invents nothing.
 - **[roster-projection-contract.md](./roster-projection-contract.md)** — the Room×Day read model: grid summary · cell drill-down (who's included) · a print-compatible superset (printing stays Studio config, never a source of truth).
 - **[temporary-move-policy-model.md](./temporary-move-policy-model.md)** — the anti-shuffle guardrail: platform capability / tenant policy / calculation input / operator decision, kept separate; stable schedules preferred by default; moves never preselected or BOS-suggested unless configured.
 - **[engineering-handoff.md](./engineering-handoff.md)** — per-screen build spec, 7-step sequence, acceptance criteria; existing substrate, no new runtime.
 
 **Mockups (production, no annotations):**
+- **[mockups/scheduling-focus-panel.html](./mockups/scheduling-focus-panel.html)** — the child Focus Panel card system: seven Summary states, the Detail card (grouped rows), sibling context, the label↔value fix shown side-by-side, proposed-vs-current, the Change command flow, and the full composed panel.
 - **[mockups/scheduling-product-states.html](./mockups/scheduling-product-states.html)** — the daily states: Overview all-clear & high-volume, Place (four option states), no-valid-room, Over Ratio with temporary-move shapes + continuity, **Roster drill-down to children**, child Focus Panel, commit review→success→undo, and degraded (staffing/stale) states.
 - **[mockups/scheduling-product-final.html](./mockups/scheduling-product-final.html)** — the core four surfaces (Overview · Place · Over ratio · Roster), interactive.
 
