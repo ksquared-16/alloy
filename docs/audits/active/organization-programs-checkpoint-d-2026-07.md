@@ -168,15 +168,23 @@ Related workspace chapters remain under a quiet “Related” strip — not Comm
 
 ---
 
+### Runtime evidence (agent smoke, 2026-07-21)
+
+- Route stays on `http://127.0.0.1:3014/organization/programs` (no Commercial bounce).
+- This slot DB surfaces `programs-unavailable-state` (bounded + Retry) — not the legacy educational “Common examples” page.
+- Locations landing still loads; Programs → Locations → Programs continuity holds.
+- Focused Vitest (landing model + publication UI): pass. `npm run typecheck`: pass. `verify:module-imports`: pass.
+
 ## 19. Operator QA results
 
 _Pending live operator pass on http://localhost:3014/organization/programs (Checkpoint D1 landing)._
 
 ## 20. Tests
 
+- `tests/programs/programsLandingModel.test.ts` (summary, readiness, attention, permissions, empty)
 - `tests/programs/programsSelectionAdapter.test.ts`
 - `tests/programs/programsCollectionCache.test.ts`
-- `tests/configPublication/programsPublicationUi.test.tsx` (landing + object concerns)
+- `tests/configPublication/programsPublicationUi.test.tsx` (landing + object concerns + unavailable)
 - `tests/configRuntime/configurationObjectComposition.test.ts` (Programs mounts object workspace)
 
 ## 21. Files changed (primary)
