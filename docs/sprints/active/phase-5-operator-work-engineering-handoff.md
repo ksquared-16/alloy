@@ -97,8 +97,10 @@ Every visible element → its source, fallback, and whether any hardcoding is al
 - *canonical record truth:* subject names (Digan/Sofia/Mateo/Aisha), contact, ages, dispositions.
 - *universal platform copy:* "Current Work", "Ready to continue", "Still needed", "Next", "Nothing needs your
   attention", "Message".
-- *configuration gap:* the **decision-stage** label and the **waitlist-action** label are configured but **prohibited**
-  ("Placement / Decision", "Offer spot") → must be renamed (§9). "Enroll" terminal command label — **not configured**.
+- *configuration-language follow-up (not a code blocker):* the **decision-stage** and **waitlist-action** labels are
+  configured but **prohibited** ("Placement / Decision", "Offer spot") → corrected in **configuration** (§9-bis), not in
+  the card. The card renders whatever config supplies, so no presentation code depends on the fix. Terminal enrollment is
+  a frozen **capability** (§6) with configurable copy — not a hardcoded "Enroll" label.
 - *runtime gap (G-AUTO):* automation timing copy ("A reminder sends Monday morning") has no confirmed runtime source —
   either wire the scheduled-comms state or drop the specific timing to universal copy. **Do not invent it.**
 - *remove from target:* the `%` progress meter and "N of M requirements complete" (present today) — remove from the
@@ -164,6 +166,23 @@ work, move stage membership, write durable state, spawn next work. After recompo
 single settled line (`vm.lastActivity`), not a permanent panel. `direct_action` work may be discharged by a sufficient
 command result without re-declaration; `outcome_led` work always requires a declared outcome.
 
+**Terminal enrollment — frozen capability, configurable copy.** The completion of an enrollment is this fixed capability
+pipeline (Engineering builds the pipeline; configuration supplies the labels — no hardcoded command/outcome copy):
+
+```text
+configured completion work/outcome
+  → readiness preflight            (required-information gate)
+  → human confirmation             (operator declares/confirms)
+  → durable child enrollment state transition   (Outcome Runtime consequence)
+  → terminal stage movement        (configured move_to_stage → enrolled)
+  → Current Work recomposition     (§8)
+```
+
+Today the `enrolling` stage completes only with the outcome "Packet sent", which does **not** advance — so this pipeline
+needs the configured completion outcome + readiness-gated transition seeded (§9-bis item 2) before enrollment can
+complete from the card. The capability shape above is frozen; the operator-facing command and outcome **labels remain
+configurable**.
+
 ## 7. Readiness and Required Information contract
 
 Current Work shows a **concise readiness summary**; the **Required Information card remains the authoritative, complete
@@ -205,20 +224,50 @@ authoritative**; **stale responses cannot overwrite newer state.**
   consumed. **Add** a per-subject latest-response guard keyed on `correlationId` so an out-of-order response for the same
   subject cannot overwrite newer state.
 
-## 9. Configuration defects and required decisions
+## 9. Configuration defects and follow-up
 
-Do not use "Placement" or "Offer" in any proposed operator copy. Renames marked `⟨APPROVAL⟩` need Product Office sign-off.
+**None of these block the process-agnostic implementation slices** — every label is runtime-derived, so the card renders
+whatever configuration supplies (§2). They are a **configuration-language + capability follow-up** that must land before
+**final Enrollment QA** and before any decision/waitlist surface ships. **The replacement copy is a Product Office
+configuration decision, not a code constant.** Any label shown in the "Proposed" column below is **illustrative only —
+not frozen, never hardcoded**; do not use "Placement" or "Offer" in operator copy. The seeding/migration mechanics are in
+**§9-bis**.
 
-| # | Current key / label | Proposed correction | Config-only or Engineering | When | Approval? |
+| # | Current key / label | Proposed correction (illustrative — configuration decision) | Config-only or Engineering | Gate | Copy frozen? |
 |---|---|---|---|---|---|
-| C1 | stage `decision` = "Placement / Decision" | operator label **"Decision"** `⟨APPROVAL⟩` | config-only | **before** | **yes** |
-| C2 | work `offer_spot` = "Offer spot" (stage `waitlist`) | **"Invite to enroll"** `⟨APPROVAL⟩` | config-only | **before** | **yes** |
-| C3 | outcome `spot_offered` = "Spot offered" | **"Invited"** `⟨APPROVAL⟩` | config-only | **before** | **yes** |
-| C4 | `send_confirmation`, `send_reminder` (no label) | **"Send confirmation"**, **"Send reminder"** `⟨APPROVAL⟩` | config-only (add catalog labels) | during | minor |
-| C5 | `reschedule` (bare) ≠ catalog `reschedule_tour` | use **"Reschedule tour"**; fix key ref | config-only | during | no |
-| C6 | Enrolling completion = outcome "Packet sent" only; **no terminal enroll** | add configured **"Enroll"** command `⟨APPROVAL⟩` + gated `move_to_stage: enrolled` transition | **Engineering + config** | before (for enroll-complete QA) | **yes** |
-| C7 | three stage vocabularies + dangling `qualification` (`defaultEnrollmentStageOperatingPlans.ts:611`) | converge to canonical 8-stage set; remove `qualification` ref | config + light Engineering | during | no |
-| C8 | missing outcomes/placements mismatches (helpful actions unlabeled) | align template `action_ref`s to labeled catalog entries | config-only | during | no |
+| C1 | stage `decision` = "Placement / Decision" | a non-prohibited stage label (e.g. *"Decision"*) | config-only | before final Enrollment QA | **No — proposal only** |
+| C2 | work `offer_spot` = "Offer spot" (stage `waitlist`) | a non-prohibited action label (e.g. *"Invite to enroll"*) | config-only | before final Enrollment QA | **No — proposal only** |
+| C3 | outcome `spot_offered` = "Spot offered" | a non-prohibited outcome label (e.g. *"Invited"*) | config-only | before final Enrollment QA | **No — proposal only** |
+| C4 | `send_confirmation`, `send_reminder` (no label) | add catalog labels (copy = config decision) | config-only | during | **No** |
+| C5 | `reschedule` (bare) ≠ catalog `reschedule_tour` | fix key ref; use the catalog's labeled action | config-only | during | n/a |
+| C6 | Enrolling completion = outcome "Packet sent" only; **no terminal enrollment behavior** | **freeze the capability** (§6 pipeline); command/outcome **labels stay configurable** | **Engineering (capability) + config (labels)** | capability before final Enrollment QA | **No — capability frozen, copy configurable** |
+| C7 | three stage vocabularies + dangling `qualification` (`defaultEnrollmentStageOperatingPlans.ts:611`) | converge to canonical 8-stage set; remove `qualification` ref | config + light Engineering | during | n/a |
+| C8 | missing outcomes/placements mismatches (helpful actions unlabeled) | align template `action_ref`s to labeled catalog entries | config-only | during | n/a |
+
+### 9-bis. Configuration migration / seeding required before final Enrollment QA
+
+This is the exact configuration work — separate from the code slices — that must occur before the Enrollment-specific
+acceptance scenarios (§13.11-13) and any decision/waitlist surface. It is configuration/seeding, not presentation code.
+
+1. **Label corrections (C1-C3).** Update the seeded operator labels in the default stage operating plans /
+   template — stage `decision` label, `waitlist` work template `offer_spot` label, outcome `spot_offered` label — in
+   `web/lib/lifecycle/defaultEnrollmentStageOperatingPlans.ts` and `web/lib/businessProcessTemplates/enrollmentProcessTemplate.ts`.
+   Because live tenants persist their lifecycle config in `departments.metadata` (and any published Focus-Panel
+   `LayoutDoc`), a **re-seed/migration** must update those persisted records too, not only the code defaults. The copy
+   values come from the Product Office configuration decision (C1-C3), applied at seed time — no presentation-code change.
+2. **Terminal-enrollment capability seeding (C6).** Seed into the `enrolling` stage operating plan a configured
+   completion work/outcome plus a **readiness-gated** `move_to_stage: enrolled` transition, and register the executable
+   completion capability (the runtime handler) so the §6 pipeline resolves. Labels for the command/outcome are seeded
+   from configuration (not hardcoded). This is the one item with a runtime (handler) component; the pipeline shape is
+   frozen (§6), the words are configurable.
+3. **Vocabulary convergence (C7).** Converge the seed to the canonical 8-stage set and remove the dangling
+   `qualification` transition reference (`defaultEnrollmentStageOperatingPlans.ts:611`) so readiness (keyed to
+   progression stages) maps cleanly to the template stages. Migration must reconcile any tenant already on granular keys.
+4. **Catalog label/key fixes (C4/C5/C8).** Add the missing helpful-action catalog labels and fix the `reschedule` →
+   `reschedule_tour` key reference in the action catalog / templates.
+
+Deliverable of 9-bis: a config/seed migration (and one registered handler for C6) — reviewed as configuration, run
+before final Enrollment QA. The presentation slices do not wait on it.
 
 ## 10. Existing-code impact map
 
@@ -258,47 +307,54 @@ re-projects after a `stage_work_outcome` event (the recomposition gap) — add i
 
 ## 11. Implementation slices (smallest safe sequence)
 
-Order validated against the code: the presentation model largely exists, so the derivation/tests slice is light; the
-recomposition wiring is the highest-risk correctness slice and gets its own step.
+Order validated against the code and **preserved** as approved: the presentation model largely exists, so the
+derivation/tests slice is light; the recomposition wiring is the highest-risk correctness slice and gets its own step.
+**Slices 1-8 are READY — process-agnostic, no dependency on any Enrollment label; start immediately.** Slice 9
+(configuration follow-up, §9-bis) is a separate track; slice 10's Enrollment-specific scenarios are gated on it, while
+its process-agnostic scenarios can run against the existing configured process now.
 
-1. **Presentation model + traceability tests.** Scope: assert every visible field resolves from the VM; lock "no
+1. **[READY] Presentation model + traceability tests.** Scope: assert every visible field resolves from the VM; lock "no
    business literals in the card / no stage-status branches" as a test. Files: `currentWork/*`, new
    `operatorWorkTraceability.test.ts`. Behavior: none visible. Tests: traceability + a second BP (billing) renders
    through the same model. Stop: green + a non-enrollment BP passes. Non-goal: UI change.
-2. **Evolve card presentation (no execution change).** Scope: obligation-first hierarchy; remove `%` meter; conditional
+2. **[READY] Evolve card presentation (no execution change).** Scope: obligation-first hierarchy; remove `%` meter; conditional
    sections. Files: `CurrentWorkCard.tsx`. Behavior: the target look. Tests: `currentWorkCard.test.tsx` updated; empty
    sections don't render. QA: New inquiry renders obligation+why+primary, no meter. Stop: visual parity with the target.
    Non-goal: recomposition, grain.
-3. **Grain-correct subject naming + multi-work prioritization.** Scope: carry child id (R1) in `buildExecutionSubject`;
+3. **[READY] Grain-correct subject naming + multi-work prioritization.** Scope: carry child id (R1) in `buildExecutionSubject`;
    child-named items; Priority/Also active/Completed from configured order+recommendation+due+eligibility. Files:
    `projectStageWorkRuntime.ts`, `buildCurrentWorkSurfaceVM.ts`, card. Tests: child-grain completes without error;
    ordering rules. QA: multi-child household. Stop: child-grain outcome commits in-panel. Non-goal: readiness summary.
-4. **Readiness summary + owning-card handoff.** Scope: Ready/Still-needed summary; blocker copy; deep-link. Files: card,
+4. **[READY] Readiness summary + owning-card handoff.** Scope: Ready/Still-needed summary; blocker copy; deep-link. Files: card,
    `resolveWorkItemHandoff`. Tests: summary qualifies required-only; handoff focuses owner. QA: blocked child work.
    Stop: blocker names the fact + handoff works. Non-goal: duplicate the Required Information card.
-5. **Converge primary command launch + inline return.** Scope: primary action = contextual placement of the registered
+5. **[READY] Converge primary command launch + inline return.** Scope: primary action = contextual placement of the registered
    command; inline preview/confirm. Files: card, `CurrentWorkActionPanel`, `runRegisteredAction` call site. Tests:
    same-capability-everywhere; command keys never shown. QA: command preview+confirm. Stop: one command path. Non-goal:
    new command.
-6. **Outcome declaration behavior.** Scope: outcomes visible only when declaring; confirm → commit. Files: card,
+6. **[READY] Outcome declaration behavior.** Scope: outcomes visible only when declaring; confirm → commit. Files: card,
    `useWorkIntentOutcomeCompletion`, `StageWorkOutcomePicker`. Tests: outcomes gated; commit applies consequences. QA:
    tour outcome. Stop: declaring changes work/stage. Non-goal: permanent outcome UI.
-7. **Exact recomposition (highest-value correctness).** Scope: re-apply stage-work on `stage_work_outcome` in
+7. **[READY] Exact recomposition (highest-value correctness).** Scope: re-apply stage-work on `stage_work_outcome` in
    `useRecordWorkRuntime`; correlation-id staleness guard; stable unrelated cards. Files:
    `useRecordWorkRuntime.ts`, `useWorkIntentOutcomeCompletion.ts`. Tests: **new** inline-recompose test; stale response
    dropped. QA: send packet → settles + next appears, no reload. Stop: acceptance §13.9. Non-goal: new refresh system.
-8. **Retire/narrow the expanded workspace.** Scope: fold unique value into summary/inline; remove "Open workspace →" if
+8. **[READY] Retire/narrow the expanded workspace.** Scope: fold unique value into summary/inline; remove "Open workspace →" if
    redundant. Files: `CurrentWorkWorkspace.tsx`, coordination model, ModeGrid host, card workspace branch. Tests: update
    `currentWorkFocusWorkspace.test.tsx`. QA: no dead affordance. Stop: no capability lost. Non-goal: delete before value
    folded in.
-9. **Configuration corrections.** Scope: apply C1-C8 (approved). Files: `defaultEnrollmentStageOperatingPlans.ts`,
-   action catalog, template. Tests: label change reflects with no code change. QA: §13.11/13. Stop: no prohibited label
-   renders. Non-goal: runtime change beyond C6.
-10. **Authenticated operator QA.** Scope: run §13 end-to-end on seeded Digan records. Stop: all pass. Non-goal: new
-    features.
+9. **[CONFIG FOLLOW-UP] Configuration migration/seeding (§9-bis).** Scope: apply C1-C8 as a config/seed migration + the
+   one C6 completion handler; **labels come from the Product Office configuration decision, not code.** Files:
+   `defaultEnrollmentStageOperatingPlans.ts`, `enrollmentProcessTemplate.ts`, action catalog, tenant re-seed migration.
+   Tests: label change reflects with no presentation-code change. QA: §13.11/13. Stop: no prohibited label renders;
+   enrollment can complete via the §6 pipeline. Non-goal: any presentation-code branch on a label.
+10. **Authenticated operator QA.** Scope: run §13 on seeded Digan records — the process-agnostic scenarios (§13.1-10, 12,
+    14) run against the **existing** configured process now; the Enrollment-specific scenarios (§13.11-13) run after
+    slice 9. Stop: all pass. Non-goal: new features.
 
-*Dependency note:* slices 1-2 and 7 are **process-agnostic** and can start immediately (no dependency on the C1-C3/C6
-label/decision approvals). Slice 9 and enroll-complete QA depend on those approvals.
+*Dependency note (sequence preserved):* slices **1-8 are READY now** — process-agnostic, no dependency on any Enrollment
+label. Slice 9 is the configuration-language + capability follow-up (§9-bis); only the Enrollment-specific QA and the
+decision/waitlist surfaces depend on it. Do not let unresolved Enrollment labels block slices 1-8.
 
 ## 12. Test plan
 
@@ -343,8 +399,10 @@ label/decision approvals). Slice 9 and enroll-complete QA depend on those approv
   truth better; it is behind the card presentation slice (2) and revertible independently.
 - **R3 · Workspace narrowing loses a capability.** Mitigation: fold-before-remove (slice 8); gate on "no capability
   lost". Rollback: keep the workspace seam until parity proven.
-- **R4 · Prohibited labels render before C1-C3 land.** Mitigation: the process-agnostic slices don't touch those stages;
-  do not ship enrollment decision/waitlist surfaces until C1-C3 applied. Rollback: config-only revert.
+- **R4 · Prohibited labels render before the §9-bis config follow-up lands.** Mitigation: the process-agnostic slices
+  (1-8) don't touch those stages; do not ship the decision/waitlist surfaces or final Enrollment QA until §9-bis is
+  applied. Because labels are runtime-derived, this is a config-migration gate, not a code dependency. Rollback:
+  config/seed revert.
 - **R5 · Correlation-id guard regressions.** Mitigation: additive guard; feature-flag if needed; covered by the new
   stale-response test.
 - **Overall rollback:** every slice is independently revertible; presentation (2,4), wiring (7), config (9) are
@@ -364,26 +422,44 @@ label/decision approvals). Slice 9 and enroll-complete QA depend on those approv
 
 ## 16. Final readiness decision
 
-### BLOCKED ON PRODUCT DECISIONS
+### READY FOR ENGINEERING — CONFIGURATION LANGUAGE FOLLOW-UP REQUIRED
 
-The presentation, composition, and runtime work is **fully specified and buildable** — the card is already
-presentation-only, the derived VM exists, the recomposition seam and staleness fix are located, and the derivation/state/
-grain/command/outcome/readiness/recomposition contracts above leave Engineering nothing to invent in those areas. The
-**process-agnostic slices (1, 2, 7) can start immediately.**
+The Operator Work architecture, presentation direction, derivation contract, runtime seams, state model, and
+implementation slices are **approved**. The card is already presentation-only, the derived VM exists, and the
+recomposition seam and staleness fix are located — Engineering has nothing to invent in the presentation, composition, or
+runtime.
 
-It is **not** `READY FOR ENGINEERING` because Engineering would still have to **invent visible language and one behavior**
-for the enrollment surfaces that touch prohibited/absent configuration — which the derivation rule forbids. A **bounded,
-enumerated** set of Product Office decisions unblocks it:
+**Begin immediately — all process-agnostic slices are READY (no dependency on any Enrollment label):**
+- derived presentation model + traceability tests (slice 1)
+- obligation-first Current Work presentation + removal of the percentage/progress-meter framing (slice 2)
+- family/child-grain subject propagation + prioritization (slice 3)
+- readiness summary + owner-card handoff (slice 4)
+- command return + inline recomposition, and stale-response/correlation protection (slices 5, 7)
+- outcome declaration behavior (slice 6)
+- retire/narrow the expanded workspace (slice 8)
+- authenticated QA of the **existing configured process** (the process-agnostic subset of §13)
 
-1. **Approve C1-C3 operator labels** — the decision-stage label (**"Decision"**), the waitlist-action label (**"Invite
-   to enroll"**), and its outcome (**"Invited"**). Until approved, those stages have no non-prohibited operator words.
-2. **Decide C6** — add a configured **"Enroll"** completion command + a Required-Information-gated `enrolled` transition.
-   Without it, no operator can complete an enrollment from the card (today's completion is only "Packet sent", which does
-   not advance).
-3. **Confirm C7 scope** — converge to the canonical 8-stage vocabulary and remove the dangling `qualification` reference.
+**Unresolved Enrollment labels do NOT block those slices.** Because every stage, work, command, outcome, requirement,
+and status label is runtime-derived (§2, §3), the card renders whatever configuration supplies. No implementation may
+depend on a specific Enrollment label.
 
-Each has a proposed answer above awaiting yes/no; none is open-ended design. On sign-off, the config corrections (§9) are
-mechanical and this handoff becomes **READY FOR ENGINEERING** with no further product input. G-AUTO (automation-timing
-source) is a minor runtime confirmation, not a blocker — if unavailable, the waiting copy drops specific timing.
+**Configuration-language follow-up (separate track — a configuration decision, not an implementation blocker):** the
+prohibited configured labels ("Placement / Decision", "Offer spot", "Spot offered") must be corrected in configuration
+before **final Enrollment QA** (§13.11/12/13 and any decision/waitlist surface). The replacement copy is a **Product
+Office configuration decision made against the running config** — the labels floated earlier in this document
+(*Decision*, *Invite to enroll*, *Invited*) are **illustrative proposals only; they are NOT frozen and must NOT be
+implemented as literals.** Engineering seeds whatever label the configuration decision lands on. The exact seeding/
+migration work is in **§9-bis**.
 
-No implementation begun. No code written. This document is the Phase 5 Product Office → Engineering handoff.
+**Terminal enrollment — capability frozen, copy configurable.** The capability pipeline in §6 is frozen:
+`configured completion work/outcome → readiness preflight → human confirmation → durable child enrollment state
+transition → terminal stage movement → Current Work recomposition`. The operator-facing command and outcome labels for
+it remain configurable and must not be hardcoded. Engineering builds the pipeline; configuration supplies the words.
+
+**Gate for final Enrollment QA (not for starting):** the §9-bis configuration migration/seeding (label corrections +
+terminal-enrollment capability seeding + vocabulary convergence) must be applied before the Enrollment-specific
+acceptance scenarios (§13.11-13) and any decision/waitlist surface ship. G-AUTO (automation-timing source) is a minor
+runtime confirmation — if unavailable, the waiting copy drops specific timing (universal copy only).
+
+No implementation begun in this session. This document is the Phase 5 Product Office → Engineering handoff; the branch is
+prepared for an Engineering implementation session.
