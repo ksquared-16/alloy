@@ -5,9 +5,13 @@ last_reviewed: 2026-07-21
 supersedes: []
 ---
 
-# Scheduling Card Projection — the canonical composed read model
+# Scheduling Card Projection — the child index of the canonical projection
 
-**Status:** Proposed — the single composed read model behind the child Scheduling Summary & Detail cards, the placement/change workflows, sibling context, the Roster child drill-down, BOS explanation, and future export. It is a **derived, non-authoritative projection** over canonical entities + registered calculations — it **duplicates no source of truth**. Companion to [`scheduling-focus-panel-spec.md`](./scheduling-focus-panel-spec.md); every field's owner is in [`scheduling-binding-matrix.md`](./scheduling-binding-matrix.md).
+**Status:** Proposed — the **child index** of the canonical projection.
+
+> **Reconciled by [`scheduling-projection-contract.md`](./scheduling-projection-contract.md) (final).** This is not a separate model — it is the **by-child view** of the one subject-scoped, assignment-based Scheduling projection (`SchedulingProjection` with `children[]` of length 1). Read the canonical contract first; the fields below are its `ChildScheduling` shape expressed for the Summary/Detail cards.
+
+The child read model behind the Scheduling Summary & Detail cards, placement/change workflows, household context, the Roster child drill-down, BOS explanation, and future export. It is a **derived, non-authoritative projection** over canonical entities + registered calculations — it **duplicates no source of truth**. Companion to [`scheduling-focus-panel-spec.md`](./scheduling-focus-panel-spec.md); every field's owner is in [`scheduling-binding-matrix.md`](./scheduling-binding-matrix.md).
 
 ---
 

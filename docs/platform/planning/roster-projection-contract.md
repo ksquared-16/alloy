@@ -7,7 +7,11 @@ supersedes: []
 
 # Roster Projection Contract
 
-**Status:** Proposed — the read model behind the Roster's grid, cell drill-down, child inclusion, and future printing. Companion to [`scheduling-product-spec.md`](./scheduling-product-spec.md) §6. The Roster **visualizes** reality; this projection is a **derived, non-authoritative, recomputable read model** — never a second source of truth.
+**Status:** Proposed — the **room × day index** of the canonical projection.
+
+> **Reconciled by [`scheduling-projection-contract.md`](./scheduling-projection-contract.md) (final).** The roster is the **by-room×day view** of the same **Assignment** atoms the child card reads by-child. `RoomDayInspection.children[]` and the card projection's `assignments[]` are the *same underlying assignments*, indexed differently. This doc defines the room×day shape + the print superset; it is not a separate source of truth.
+
+The read model behind the Roster's grid, cell drill-down, child inclusion, and future printing. Companion to [`scheduling-product-spec.md`](./scheduling-product-spec.md) §6. The Roster **visualizes** reality; this projection is a **derived, non-authoritative, recomputable read model** — never a second source of truth.
 
 **Design rule that makes printing free later:** the V1 drill-down and a future print renderer consume the **same projection**. Build the read model once; render it two ways.
 
