@@ -184,13 +184,14 @@ export default function CommandSurfaceThread({
                         return <UserBubble key={turn.id} text={turn.text} />;
                     case "assistant_notice": {
                         const isContextBoundary = turn.noticeRole === "context_boundary";
+                        // Passive record-selection sync stays in thread/session for telemetry,
+                        // but must not render as chat (Adaptive Workspace corrective pass).
+                        if (isContextBoundary) return null;
                         const isRouting = turn.noticeRole === "routing";
                         const isSearching = turn.noticeRole === "searching";
                         return (
                             <div
                                 key={turn.id}
-                                className={isContextBoundary ? "border-t border-alloy-stone/20 pt-2 mt-1" : undefined}
-                                data-command-surface-context-boundary={isContextBoundary ? "true" : undefined}
                                 data-command-surface-routing-notice={turn.noticeRole === "routing" ? "true" : undefined}
                                 data-command-surface-searching-notice={turn.noticeRole === "searching" ? "true" : undefined}
                             >
@@ -198,7 +199,7 @@ export default function CommandSurfaceThread({
                                     <span
                                         data-command-surface-assistant-notice="true"
                                         className={
-                                            isContextBoundary || isRouting || isSearching ?
+                                            isRouting || isSearching ?
                                                 "font-medium text-alloy-midnight/80"
                                             :   undefined
                                         }

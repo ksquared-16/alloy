@@ -3,22 +3,21 @@
 /**
  * Presentation Runtime V2 — FP.SURFACE.
  *
- * The SINGLE owner of "where does the Focus Panel open". On the Work Unit surface the
- * selected record renders INLINE — `InlineOpportunityFocusPanel` in the right column of
- * this region — never as the drawer/modal overlay (AdminEntityDrawer suppresses the modal
- * for opportunity subjects on work-unit paths). Selection state stays in
- * AdminDrawerContext; this component:
- *   (a) stamps the FP.SURFACE runtime label on the region root,
- *   (b) provides `useFocusPanelOpen()` so queue rows open records through one seam,
- *   (c) mirrors drawer state as `data-focus-panel-open` for acceptance/choreography, and
- *   (d) owns the queue↔panel two-column layout as a PERMANENT structure: the queue is
- *       always the FIXED-width left column and the Focus Panel is always the right region,
- *       so the operational model never collapses to a bare canvas. With a record selected
- *       the inline panel renders; otherwise a calm "Select a record to begin" placeholder
- *       holds the structure. Layout-only — no animated widths, no section that disappears.
+ * Adaptive Workspace corrective pass: queue stays a condensed selection rail beside the
+ * Focus Panel through common laptop widths. Below the true two-pane floor the queue becomes
+ * a temporary slide-over selector — never a permanent full-width stack above Focus.
  */
 
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
 import { useOperationalSubject } from "./OperationalSubjectContext";
 import type { QueueRowModel } from "@/lib/presentation/runtime";
 import {
@@ -27,17 +26,19 @@ import {
 } from "@/components/presentation/runtimeLabels";
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import { InlineOpportunityFocusPanel } from "./InlineOpportunityFocusPanel";
+import {
+    deriveWorkUnitSelectionMode,
+    type WorkUnitSelectionMode,
+} from "@/lib/presentation/adaptiveWorkspacePresentation";
+import { adaptiveRegionDomAttrs } from "@/lib/presentation/adaptiveWorkspaceRegions";
 
 type FocusPanelOpenContextValue = {
-    /** Open the Focus Panel for a queue row — the runtime's `intents.openRecord`. */
     openRecord: (row: QueueRowModel) => void;
-    /** Warm a row's Focus Panel record VM on hover/focus — the runtime's `intents.prefetchRecord`. */
     prefetchRecord: (row: QueueRowModel) => void;
 };
 
 const FocusPanelOpenContext = createContext<FocusPanelOpenContextValue | null>(null);
 
-/** Record-open seam for descendants of FocusPanelSurface (QueueRegion → CondensedQueueRow). */
 export function useFocusPanelOpen(): FocusPanelOpenContextValue {
     const ctx = useContext(FocusPanelOpenContext);
     if (!ctx) {
@@ -46,19 +47,11 @@ export function useFocusPanelOpen(): FocusPanelOpenContextValue {
     return ctx;
 }
 
-/**
- * Stable Focus Panel empty state — holds the right column of the permanent structure when no
- * record is selected (queue empty, or the operator has not opened a record). Reserves height so
- * the layout does not jump when a record opens into it.
- */
 function FocusPanelPlaceholder() {
     return (
         <section
             data-inline-focus-panel="empty"
             aria-label="Focus Panel"
-            // Borderless: the FocusPanelSurface boundary owns the outer panel border in every state.
-            // Fills the boundary (flex-1) so the empty shell occupies the SAME height as an open
-            // record — height comes from the stretched parent row, never a viewport calc.
             className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 px-6 py-10 text-center"
         >
             <p className="text-sm font-medium text-alloy-midnight/55">Select a record to begin</p>
@@ -72,53 +65,90 @@ export function FocusPanelSurface({
     prefetchRecord,
     children,
 }: {
-    /** `intents.openRecord` from the Work Unit surface runtime. */
     openRecord: (row: QueueRowModel) => void;
-    /** `intents.prefetchRecord` — hover/focus warm of the row's Focus Panel record VM. */
     prefetchRecord: (row: QueueRowModel) => void;
     children: ReactNode;
 }) {
-    // ONE subject owner: committed Focus. The drawer used to answer this, which made it a second
-    // owner of Record of Attention — the panel showed "Select a record to begin" while the queue and
-    // the snapshot both knew the subject. That read is deleted, not reconciled.
     const { subjectId } = useOperationalSubject();
     const isOpen = subjectId != null;
     const inlineRecordSelected = subjectId != null;
 
+    const rootRef = useRef<HTMLDivElement | null>(null);
+    const [selectionMode, setSelectionMode] = useState<WorkUnitSelectionMode>("rail");
+    const [temporaryOpen, setTemporaryOpen] = useState(false);
+
+    useEffect(() => {
+        const el = rootRef.current;
+        if (!el) return;
+        const measure = () => {
+            const next = deriveWorkUnitSelectionMode(el.getBoundingClientRect().width);
+            setSelectionMode((prev) => (prev === next ? prev : next));
+            if (next === "rail") setTemporaryOpen(false);
+        };
+        measure();
+        const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+        ro?.observe(el);
+        return () => ro?.disconnect();
+    }, []);
+
+    const closeTemporary = useCallback(() => setTemporaryOpen(false), []);
+
     const value = useMemo<FocusPanelOpenContextValue>(
-        () => ({ openRecord, prefetchRecord }),
+        () => ({
+            openRecord: (row) => {
+                openRecord(row);
+                setTemporaryOpen(false);
+            },
+            prefetchRecord,
+        }),
         [openRecord, prefetchRecord],
     );
 
+    const railMode = selectionMode === "rail";
+
     return (
         <div
+            ref={rootRef}
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.focusPanelSurface)}
-            className="flex min-h-0 flex-1 flex-col"
+            className="relative flex min-h-0 flex-1 flex-col"
             data-alloy-section="FP.SURFACE"
             data-focus-panel-open={isOpen ? "true" : "false"}
+            data-work-unit-selection-mode={selectionMode}
         >
             <FocusPanelOpenContext.Provider value={value}>
-                {/* Permanent two-column structure: fixed-width queue column on the left, the
-                    Focus Panel region always on the right. Engages at xl; below that the queue
-                    stacks above the panel so the composition never renders in a squeezed column.
-                    The right column shows the inline record when selected, else the stable
-                    placeholder — the structure itself never disappears. */}
-                {/* items-stretch: the queue column and the Focus Panel boundary stretch to the SAME
-                    row height, so both panels share one structural shell regardless of content —
-                    the empty state fills the same height as an open record with NO viewport math. */}
-                <div className="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row xl:items-stretch">
-                    {/* Queue column: full-width while stacked (below xl), then a FIXED-width rail
-                        at xl. `xl:flex-none` cancels the stacked `flex-1` grow so `xl:w-[24rem]`
-                        actually pins the width — without it the column stretches and the queue pane
-                        grows too wide, unbalancing the split. */}
-                    <div className="flex min-h-0 min-w-0 flex-1 flex-col xl:w-[24rem] xl:flex-none xl:shrink-0">
-                        {children}
+                {!railMode ? (
+                    <div className="mb-2 flex shrink-0 items-center gap-2">
+                        <button
+                            type="button"
+                            data-work-unit-queue-toggle
+                            aria-expanded={temporaryOpen}
+                            onClick={() => setTemporaryOpen((v) => !v)}
+                            className="inline-flex items-center rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-alloy-midnight/80 shadow-sm hover:bg-alloy-stone/5"
+                        >
+                            {temporaryOpen ? "Hide records" : "Show records"}
+                        </button>
                     </div>
-                    {/* The active Focus Panel render boundary OWNS the outer panel border — a single
-                        unmistakable container in both the selected and empty states, never dependent
-                        on a nested card's border. It is a flex column so its child (record or empty
-                        placeholder) fills the stretched height. */}
+                ) : null}
+
+                <div
+                    className={
+                        railMode
+                            ? "flex min-h-0 flex-1 flex-row items-stretch gap-4"
+                            : "flex min-h-0 flex-1 flex-row items-stretch"
+                    }
+                >
+                    {railMode ? (
+                        <div
+                            data-adaptive-queue-column
+                            {...adaptiveRegionDomAttrs("selection")}
+                            className="flex min-h-0 min-w-0 shrink-0 flex-col"
+                        >
+                            {children}
+                        </div>
+                    ) : null}
+
                     <div
+                        {...adaptiveRegionDomAttrs("primary")}
                         className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-midnight/20 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                         data-focus-panel-boundary
                         data-component="FocusPanelSurface.boundary"
@@ -132,6 +162,25 @@ export function FocusPanelSurface({
                         )}
                     </div>
                 </div>
+
+                {!railMode && temporaryOpen ? (
+                    <>
+                        <button
+                            type="button"
+                            aria-label="Dismiss record list"
+                            className="absolute inset-0 z-[40] cursor-default bg-alloy-midnight/10"
+                            onClick={closeTemporary}
+                        />
+                        <div
+                            data-adaptive-queue-column
+                            data-work-unit-queue-temporary="true"
+                            {...adaptiveRegionDomAttrs("selection")}
+                            className="absolute bottom-0 left-0 top-0 z-[41] flex w-[min(18rem,85%)] min-w-[14rem] flex-col border-r border-alloy-stone/25 bg-white shadow-[8px_0_24px_rgba(15,23,42,0.12)]"
+                        >
+                            {children}
+                        </div>
+                    </>
+                ) : null}
             </FocusPanelOpenContext.Provider>
         </div>
     );

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback, type CSSProperties } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
 import {
     readAdminV2SidebarCollapsed,
     writeAdminV2SidebarCollapsed,
@@ -45,6 +45,8 @@ import BosDrawerGeometryDiagnostics from "./BosDrawerGeometryDiagnostics";
 import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDrawerOffset";
 import { DrawerCommandRailActionsProvider } from "@/contexts/DrawerCommandRailActionsContext";
 import { WorkspaceCommandRailRegistryProvider } from "@/contexts/WorkspaceCommandRailRegistryContext";
+import { BosPresentationControls } from "@/components/presentation/BosPresentationControls";
+import { BosPresentationControllerProvider } from "@/contexts/BosPresentationControllerContext";
 import {
   isExperienceBuilderStudioActive,
   isExperienceBuilderStudioPath,
@@ -152,6 +154,8 @@ function AdminV2ShellInner({
   useAdminV2WorkspaceShellDocumentFlag();
   useWorkspaceCommandRailDrawerOffset(pathname);
 
+  const ambientRootRef = useRef<HTMLDivElement | null>(null);
+
   if (experienceBuilderStudio) {
     return (
       <GlobalAssistantProvider>
@@ -181,6 +185,12 @@ function AdminV2ShellInner({
   if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute) {
     return (
       <GlobalAssistantProvider>
+        {/*
+          Provider must wrap CommandRailBosMount: the BOS dock portals to document.body as a
+          sibling of shell children. If the provider is nested inside the mount's children,
+          BosRailHeader cannot read pin/close context.
+        */}
+        <BosPresentationControllerProvider ambientRef={ambientRootRef}>
         <CommandRailBosMount>
         <WorkspaceCommandRailRegistryProvider>
         <DrawerCommandRailActionsProvider>
@@ -205,11 +215,15 @@ function AdminV2ShellInner({
               </div>
               <AdminV2ShellDrawerScope>
                 <div
+                  ref={ambientRootRef}
                   data-adminv2-workspace-ambient-root
                   className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden lg:flex-row"
                   style={workspaceContentAmbientStyle}
                 >
-                  <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate">
+                  <div
+                    className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate"
+                    data-adaptive-region="primary"
+                  >
                     <AdminV2NavigationTransitionRibbon />
                     {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ?
                       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -217,7 +231,10 @@ function AdminV2ShellInner({
                       </main>
                     : children}
                   </div>
-                  <AdminV2PersistentCommandRail />
+                  <div data-adaptive-region="assistant" className="relative flex min-h-0 shrink-0 flex-col">
+                    <AdminV2PersistentCommandRail />
+                    <BosPresentationControls />
+                  </div>
                 </div>
               </AdminV2ShellDrawerScope>
             </div>
@@ -226,6 +243,7 @@ function AdminV2ShellInner({
         </DrawerCommandRailActionsProvider>
         </WorkspaceCommandRailRegistryProvider>
         </CommandRailBosMount>
+        </BosPresentationControllerProvider>
       </GlobalAssistantProvider>
     );
   }

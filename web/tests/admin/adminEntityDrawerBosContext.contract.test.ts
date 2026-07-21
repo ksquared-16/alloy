@@ -35,13 +35,18 @@ describe("AdminEntityDrawer BOS context contract (Loop 1)", () => {
         expect(src).toContain("opportunityBootstrapAppliedId");
     });
 
-    it("AICommandSurfaceShell shows active record chip and context switch notice", () => {
+    it("AICommandSurfaceShell shows active record chip; context switches stay silent in chat", () => {
         const shellSrc = readFileSync(shellPath, "utf8");
         const chipPath = join(
             dirname(fileURLToPath(import.meta.url)),
             "../../app/adminV2/components/bos/OperationalActiveRecordChip.tsx"
         );
         const chipSrc = readFileSync(chipPath, "utf8");
+        const threadPath = join(
+            dirname(fileURLToPath(import.meta.url)),
+            "../../app/adminV2/components/aiCommandSurface/CommandSurfaceThread.tsx"
+        );
+        const threadSrc = readFileSync(threadPath, "utf8");
         expect(shellSrc).toContain("OperationalActiveRecordChip");
         expect(shellSrc).toContain("operationalContextSwitchNoticeText");
         expect(shellSrc).toContain("noticeRole: \"context_boundary\"");
@@ -51,6 +56,8 @@ describe("AdminEntityDrawer BOS context contract (Loop 1)", () => {
         expect(shellSrc).not.toContain("Context: {globalAssistant.currentContext.label}");
         expect(chipSrc).toContain("data-command-surface-active-record-chip");
         expect(chipSrc).toContain("Active record");
+        // Visible conversation must not render passive context-boundary notices.
+        expect(threadSrc).toMatch(/if \(isContextBoundary\) return null/);
     });
 
     it("CommandSurfaceThread blocks stale task assist proposals", () => {

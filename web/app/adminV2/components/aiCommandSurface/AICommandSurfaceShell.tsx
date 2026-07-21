@@ -56,6 +56,7 @@ import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferB
 import { useEntityLabelsOptional } from "@/contexts/EntityLabelsContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { resolveBosCommandSurfaceContextLabel } from "@/lib/adminV2/bos/bosCommandSurfaceContextPresentation";
+import { buildBosContextPills } from "@/lib/bos/buildBosContextPills";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
   buildTaskAssistCommandBootstrap,
@@ -2176,6 +2177,22 @@ export default function AICommandSurfaceShell({
     ]
   );
 
+  const bosContextPills = useMemo(
+    () =>
+      buildBosContextPills({
+        currentContext: globalAssistant?.currentContext ?? null,
+        workspaceScope: globalAssistant?.workspaceScope ?? null,
+        surfaceOperationalLabel: globalAssistant?.surfaceOperationalLabel ?? null,
+        opportunitySingular,
+      }),
+    [
+      globalAssistant?.currentContext,
+      globalAssistant?.workspaceScope,
+      globalAssistant?.surfaceOperationalLabel,
+      opportunitySingular,
+    ]
+  );
+
   const bosRailStarterSuggestions = useMemo(
     () =>
       resolveCommandSurfaceRailStarterSuggestions({
@@ -2211,7 +2228,11 @@ export default function AICommandSurfaceShell({
     <SurfaceCard expanded={surfaceExpanded} presentation={presentation} rootRef={shellRootRef}>
       {presentation === "rail" ?
         <>
-          <BosRailHeader contextDisplayLine={bosContextDisplayLine} statusLabel={threadStatusLabel} />
+          <BosRailHeader
+            contextDisplayLine={bosContextDisplayLine}
+            contextPills={bosContextPills}
+            statusLabel={threadStatusLabel}
+          />
           <div className="bos-rail-upper shrink-0">
             <BosRailAttentionSection attention={bosRailAttention} onCta={onBosRailAttentionCta} />
             {hasThread ? null : (
