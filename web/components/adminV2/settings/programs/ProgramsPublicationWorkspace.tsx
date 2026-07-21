@@ -62,12 +62,14 @@ import {
     ProgramRelationshipsSection,
 } from "@/components/adminV2/settings/programs/ProgramDomainSections";
 import { ProgramOverviewSurface } from "@/components/adminV2/settings/programs/ProgramOverviewSurface";
+import ProgramsLanding from "@/components/adminV2/settings/programs/ProgramsLanding";
 import {
     buildProgramsConfigurationObjectDescriptor,
     PROGRAMS_WORKSPACE_SIBLING_CHAPTERS,
 } from "@/lib/configRuntime/configurationObject/programsAdoptionSeam";
 import type { ProgramsWorkspaceChapter } from "@/lib/commercial/commercialChapterRoutes";
 import ProgramsWorkspaceChapterSurface from "@/components/adminV2/settings/programs/ProgramsWorkspaceChapterSurface";
+import { buildProgramsLandingViewModel } from "@/lib/programs/publication/programsLandingModel";
 import { visibleConfigurationObjectConcerns } from "@/lib/configRuntime/configurationObject/concernRegistry";
 import {
     beginConfigurationObjectEdit,
@@ -255,6 +257,8 @@ function ProgramsPublicationObjectWorkspace(props: {
     const [createOpen, setCreateOpen] = useState(false);
     const [createName, setCreateName] = useState("");
     const [createKey, setCreateKey] = useState("");
+    const [landingSearch, setLandingSearch] = useState("");
+    const [showRetired, setShowRetired] = useState(false);
     const skipHistorySyncRef = useRef(false);
     const objectDescriptor = useMemo(() => buildProgramsConfigurationObjectDescriptor(), []);
 
@@ -348,7 +352,12 @@ function ProgramsPublicationObjectWorkspace(props: {
                     stale_reuse: meta.staleReuse,
                 });
             } catch (nextError) {
-                setLoadIssue(readConfigurationRuntimeIssue(nextError, "Programs"));
+                const issue =
+                    nextError instanceof ConfigurationRuntimeIssueError
+                        ? nextError.issue
+                        : readConfigurationRuntimeIssue(nextError, "Programs");
+                setLoadIssue(issue);
+                setError(null);
                 if (!peeked) {
                     setSnapshot(null);
                     setSelectedProgramId(null);
@@ -438,6 +447,10 @@ function ProgramsPublicationObjectWorkspace(props: {
                 ...buildProgramCollectionItem(program, snapshot),
                 leading: <BookOpen className="h-4 w-4" strokeWidth={2} />,
             })) ?? [],
+        [snapshot],
+    );
+    const landing = useMemo(
+        () => (snapshot ? buildProgramsLandingViewModel(snapshot) : null),
         [snapshot],
     );
     const canManage = snapshot?.capabilities.canManage ?? false;
@@ -538,7 +551,226 @@ function ProgramsPublicationObjectWorkspace(props: {
     }, [canManage, navigateSection, selectedProgram, viewModel]);
 
     if (loading) {
-        return <p className="p-6 text-sm text-alloy-midnight/55">Loading Programs…</p>;
+        return (
+            <p className="p-6 text-sm text-alloy-midnight/55" data-testid="programs-loading">
+                Loading Programs…
+            </p>
+        );
+    }
+
+    const showLanding = !selectedProgramId;
+
+    if (showLanding) {
+        return (
+            <div
+                className="config-runtime-shell process-config-page min-h-0 flex-1"
+                data-testid="programs-publication-runtime"
+                data-programs-mode="landing"
+            >
+                <ConfigurationCommandRailActions
+                    actions={
+                        canManage ?
+                            [{
+                                id: "add-configuration-object",
+                                label: "Add Program",
+                                reason: "Create an Organization-owned working draft.",
+                                group: "manage",
+                                onClick: () => setCreateOpen(true),
+                            }]
+                        :   []
+                    }
+                    testIdPrefix="programs-rail"
+                />
+                <ConfigurationContext
+                    title="Programs"
+                    subtitle="Reusable Organization services published for Locations to offer."
+                    titleIcon={<BookOpen className="h-5 w-5" strokeWidth={2} />}
+                    testId="programs-configuration-context"
+                    actions={
+                        canManage ?
+                            <ConfigurationPrimaryButton
+                                className="xl:hidden"
+                                onClick={() => setCreateOpen(true)}
+                                data-testid="programs-mobile-add"
+                            >
+                                <Plus className="mr-1 h-3.5 w-3.5" aria-hidden />
+                                Add Program
+                            </ConfigurationPrimaryButton>
+                        :   undefined
+                    }
+                >
+                    <ul
+                        className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-alloy-stone/25 pt-2 text-[11px] text-alloy-midnight/52"
+                        aria-label="Programs posture"
+                        data-testid="programs-collection-posture"
+                    >
+                        <li>
+                            <Link href="/organization" className="font-medium hover:text-alloy-bend-pine">
+                                Organization
+                            </Link>
+                            <span className="mx-1.5 text-alloy-midnight/35" aria-hidden>
+                                ›
+                            </span>
+                            <span className="font-semibold text-alloy-midnight/70">Programs</span>
+                        </li>
+                        {landing ?
+                            <>
+                                <li>
+                                    <strong className="font-semibold text-alloy-midnight">
+                                        {landing.summary.activePrograms}
+                                    </strong>{" "}
+                                    Active
+                                </li>
+                                <li>
+                                    <strong className="font-semibold text-alloy-midnight">
+                                        {landing.summary.averageReadinessPercent}%
+                                    </strong>{" "}
+                                    Average readiness
+                                </li>
+                                <li>
+                                    <strong className="font-semibold text-alloy-midnight">
+                                        {landing.summary.attentionPrograms}
+                                    </strong>{" "}
+                                    Need attention
+                                </li>
+                            </>
+                        :   null}
+                    </ul>
+                    <div
+                        className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-alloy-midnight/40"
+                        data-testid="programs-sibling-chapters"
+                    >
+                        <span className="font-semibold uppercase tracking-[0.08em]">Related</span>
+                        {PROGRAMS_WORKSPACE_SIBLING_CHAPTERS.map((chapter) => (
+                            <Link
+                                key={chapter.id}
+                                href={chapter.href}
+                                className="hover:text-alloy-midnight/65 hover:underline"
+                                data-testid={`programs-sibling-${chapter.id}`}
+                            >
+                                {chapter.label}
+                            </Link>
+                        ))}
+                    </div>
+                </ConfigurationContext>
+
+                <ConfigurationShell testId="programs-configuration-shell">
+                    {loadIssue ?
+                        <div
+                            className="mx-auto max-w-xl rounded-xl border border-alloy-forge/10 bg-white px-5 py-6 shadow-[0_1px_2px_rgba(19,33,43,0.04)]"
+                            data-testid="programs-unavailable-state"
+                            data-issue-code={loadIssue.code}
+                        >
+                            <p className="text-base font-semibold text-alloy-midnight">{loadIssue.title}</p>
+                            <p className="mt-1.5 text-sm text-alloy-midnight/65">{loadIssue.message}</p>
+                            <p className="mt-1 text-xs text-alloy-midnight/50">{loadIssue.nextStep}</p>
+                            {loadIssue.reference ?
+                                <p className="mt-3 text-[11px] text-alloy-midnight/40">
+                                    Engineering reference · {loadIssue.reference}
+                                </p>
+                            :   null}
+                            <ConfigurationSecondaryButton
+                                className="mt-4"
+                                onClick={() => void reload({ force: true })}
+                                data-testid="programs-unavailable-retry"
+                            >
+                                Retry
+                            </ConfigurationSecondaryButton>
+                        </div>
+                    : landing && landing.summary.totalPrograms === 0 ?
+                        <div
+                            className="mx-auto max-w-xl rounded-xl border border-alloy-forge/10 bg-white px-5 py-8 text-center shadow-[0_1px_2px_rgba(19,33,43,0.04)]"
+                            data-testid="programs-first-use-empty"
+                        >
+                            <p className="text-base font-semibold text-alloy-midnight">Add your first Program</p>
+                            <p className="mt-2 text-sm text-alloy-midnight/60">
+                                Programs are reusable Organization services such as Preschool or After-school care.
+                                Define once, publish a revision, then assign that revision to Locations.
+                            </p>
+                            <p className="mt-3 text-xs text-alloy-midnight/45">
+                                Examples: Preschool · After-school care · Summer camp
+                            </p>
+                            {canManage ?
+                                <ConfigurationPrimaryButton
+                                    className="mt-5"
+                                    onClick={() => setCreateOpen(true)}
+                                    data-testid="programs-first-use-add"
+                                >
+                                    Add Program
+                                </ConfigurationPrimaryButton>
+                            :   null}
+                        </div>
+                    : landing ?
+                        <ProgramsLanding
+                            landing={landing}
+                            showRetired={showRetired}
+                            onShowRetiredChange={setShowRetired}
+                            search={landingSearch}
+                            onSearchChange={setLandingSearch}
+                            onOpenProgram={(programId, section) =>
+                                selectProgram(programId, section ?? "overview")
+                            }
+                            onAddProgram={() => setCreateOpen(true)}
+                        />
+                    :   null}
+                </ConfigurationShell>
+
+                {createOpen ?
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-alloy-midnight/30 p-4">
+                        <div
+                            className="w-full max-w-md rounded-xl border border-alloy-stone/25 bg-white p-4 shadow-lg"
+                            data-testid="programs-create-dialog"
+                        >
+                            <p className="text-sm font-semibold text-alloy-midnight">Add Program</p>
+                            <label className="mt-3 block text-xs font-medium text-alloy-midnight/70">
+                                Name
+                                <input
+                                    className="mt-1 w-full rounded border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                    value={createName}
+                                    onChange={(event) => setCreateName(event.target.value)}
+                                    data-testid="programs-create-name"
+                                />
+                            </label>
+                            <label className="mt-3 block text-xs font-medium text-alloy-midnight/70">
+                                Key
+                                <input
+                                    className="mt-1 w-full rounded border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                    value={createKey}
+                                    onChange={(event) => setCreateKey(event.target.value)}
+                                    data-testid="programs-create-key"
+                                />
+                            </label>
+                            <div className="mt-4 flex justify-end gap-2">
+                                <ConfigurationSecondaryButton onClick={() => setCreateOpen(false)}>
+                                    Cancel
+                                </ConfigurationSecondaryButton>
+                                <ConfigurationPrimaryButton
+                                    disabled={!createName.trim() || !createKey.trim() || working === "create"}
+                                    onClick={() =>
+                                        void run("create", async () => {
+                                            const result = await postAction({
+                                                action: "create",
+                                                label: createName.trim(),
+                                                key: createKey.trim(),
+                                            });
+                                            const createdId =
+                                                typeof result.programId === "string" ? result.programId : null;
+                                            setCreateOpen(false);
+                                            setCreateName("");
+                                            setCreateKey("");
+                                            if (createdId) selectProgram(createdId, "overview");
+                                        })
+                                    }
+                                    data-testid="programs-create-submit"
+                                >
+                                    Create
+                                </ConfigurationPrimaryButton>
+                            </div>
+                        </div>
+                    </div>
+                :   null}
+            </div>
+        );
     }
 
     const activeRevision: ProgramRevision | null =

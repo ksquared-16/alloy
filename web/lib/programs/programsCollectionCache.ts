@@ -8,6 +8,11 @@
 
 import type { ProgramPublicationSnapshot } from "@/lib/programs/publication/programPublicationService";
 import { publishConfigurationInvalidation } from "@/lib/configRuntime/configurationInvalidation";
+import {
+    ConfigurationRuntimeIssueError,
+    readConfigurationRuntimeIssue,
+    type ConfigurationRuntimeIssue,
+} from "@/lib/configPublication/runtimeIssue";
 
 export const PROGRAMS_COLLECTION_TTL_MS = 60_000;
 
@@ -46,10 +51,12 @@ export function isProgramsCollectionFresh(
 async function fetchProgramsCollectionNetwork(orgId: string): Promise<ProgramsCollectionSnapshot> {
     const response = await fetch("/api/admin/configuration/programs", { credentials: "include" });
     const payload = (await response.json().catch(() => ({}))) as ProgramPublicationSnapshot & {
-        error?: string;
+        error?: ConfigurationRuntimeIssue | string;
     };
     if (!response.ok) {
-        throw new Error(payload.error ?? `Failed to load Programs (${response.status})`);
+        throw new ConfigurationRuntimeIssueError(
+            readConfigurationRuntimeIssue(payload.error, "Programs"),
+        );
     }
     return {
         ...payload,

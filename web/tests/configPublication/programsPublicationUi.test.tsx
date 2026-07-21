@@ -148,9 +148,12 @@ describe("Programs Publication workspace", () => {
         });
 
         expect(container.querySelector('[data-testid="programs-publication-runtime"]')).not.toBeNull();
-        expect(container.querySelector('[data-testid="programs-object-workspace"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="programs-landing"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="programs-readiness"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="programs-list"]')).not.toBeNull();
         // No auto-select — collection landing.
         expect(container.querySelector('[data-testid="program-overview"]')).toBeNull();
+        expect(container.querySelector('[data-testid="programs-object-workspace"]')).toBeNull();
 
         await act(async () => {
             root!.render(
@@ -271,14 +274,20 @@ describe("Programs Publication workspace", () => {
         expect(container.querySelector('[data-testid="program-definition-edit-gate-save"]')).toBeNull();
     });
 
-    it("explains an empty domain and never renders raw database diagnostics", async () => {
+    it("shows a bounded unavailable state and never renders raw database diagnostics", async () => {
         vi.stubGlobal(
             "fetch",
             vi.fn().mockResolvedValue({
                 ok: false,
                 status: 503,
                 json: async () => ({
-                    error: "Could not find the table 'public.programs' in the schema cache",
+                    error: {
+                        code: "not_initialized",
+                        title: "Programs setup is not complete",
+                        message: "This Configuration area has not been initialized in this environment.",
+                        nextStep: "An administrator needs to complete platform setup before this configuration can be used.",
+                        reference: "cfg-test",
+                    },
                 }),
             }),
         );
@@ -291,12 +300,11 @@ describe("Programs Publication workspace", () => {
             await Promise.resolve();
         });
 
-        expect(container.textContent).toContain("Programs are not ready in this environment");
-        expect(container.textContent).toContain("Programs are reusable service definitions");
-        expect(container.textContent).toContain("Common examples");
-        expect(container.textContent).toContain("How it works");
+        expect(container.querySelector('[data-testid="programs-unavailable-state"]')).not.toBeNull();
         expect(container.textContent).toContain("Programs setup is not complete");
+        expect(container.textContent).toContain("cfg-test");
         expect(container.textContent).not.toMatch(/public\.programs|schema cache/i);
-        expect(container.querySelector('[data-testid="programs-empty-state-issue"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="programs-empty-state-issue"]')).toBeNull();
+        expect(container.querySelector('[data-testid="programs-landing"]')).toBeNull();
     });
 });

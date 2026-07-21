@@ -107,9 +107,70 @@ Unchanged: `settings.read` / `settings.manage` (+ role fallbacks) on configurati
 - Object workspace reuses Locations-grade composition
 - Operator QA checklist: `organization-runtime-qa-certification-2026-07.md` (+ Programs section below)
 
+## Checkpoint D1 — Programs Landing Page
+
+**Status:** Implemented locally pending operator QA.  
+**Scope:** Landing only — selected Program concerns unchanged.
+
+### Landing ownership
+
+| Concern | Owner |
+|---------|--------|
+| Route | `/organization/programs` (no `programId`) |
+| Composition | `ProgramsLanding.tsx` via `ProgramsPublicationWorkspace` landing branch |
+| View model | `buildProgramsLandingViewModel` in `programsLandingModel.ts` |
+| Collection cache | `programsCollectionCache.ts` (unchanged owner) |
+| Continuity | Retained selection restore preserved; no first-Program auto-select |
+
+### View-model contract
+
+`ProgramsLandingViewModel` provides `summary`, `programs[]`, `attention[]`, and `permissions`.
+
+### Readiness definition (deterministic)
+
+A Program is **ready for Location use** iff:
+
+1. Identity present (`key` + draft label)
+2. Published revision exists (`latestPublication != null`)
+3. Assigned to ≥1 Location (`assignment.assignedCount > 0`)
+
+Average readiness % continues to use known setup areas from `deriveConfigurationRuntimeModel` (unknown areas excluded).
+
+### Attention definition
+
+Uses existing `ConfigurationRuntimeAttentionItem` grades (`fix` / `improve`) from `buildProgramPublicationViewModel` — publication missing, unpublished changes, distribution failure, assignment drift, setup gaps. Reason codes are stable keys; panel entries open the Program + mapped concern.
+
+### Collection composition
+
+Locations-grammar landing: readiness / attention / inventory cards + searchable list + Needs attention panel. Rows show name, audience/description, lifecycle, publication, assignment, delivery options, readiness %.
+
+### Loading / error / empty
+
+| State | UI |
+|-------|-----|
+| Loading | Bounded “Loading Programs…” |
+| Unavailable (`not_initialized` / migration) | Compact unavailable card + Retry + engineering reference |
+| Valid empty | First-use empty with Add Program |
+| Request failed with prior peek | Retains warm snapshot; loadIssue set |
+| Permission | `canManage` gates Add Program |
+
+Related workspace chapters remain under a quiet “Related” strip — not Commercial shell ownership.
+
+### Operator QA checklist (D1)
+
+- [ ] Landing clarity vs Locations rhythm  
+- [ ] Readiness / attention usefulness  
+- [ ] Collection readability + Add Program  
+- [ ] Empty / unavailable / error distinct  
+- [ ] Programs ↔ Locations continuity  
+- [ ] Perceived speed / no Commercial bounce  
+- [ ] Console / network cleanliness  
+
+---
+
 ## 19. Operator QA results
 
-_Pending live operator pass on http://localhost:3014/organization/programs._
+_Pending live operator pass on http://localhost:3014/organization/programs (Checkpoint D1 landing)._
 
 ## 20. Tests
 
