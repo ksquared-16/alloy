@@ -40,7 +40,9 @@ export async function fetchLocationProgramCategories(
         categories?: Array<Record<string, unknown>>;
         error?: string;
     };
-    if (!res.ok) return [];
+    if (!res.ok) {
+        throw new Error(json.error ?? `Failed to load location programs (${res.status})`);
+    }
     return (json.categories ?? [])
         .map((r) => mapCategoryRow(r))
         .filter((r): r is LocationProgramCategoryRow => r != null);

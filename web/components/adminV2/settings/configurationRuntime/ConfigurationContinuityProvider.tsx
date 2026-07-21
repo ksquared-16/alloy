@@ -36,6 +36,7 @@ import {
     subscribeConfigurationInvalidation,
     type ConfigurationInvalidationEvent,
 } from "@/lib/configRuntime/configurationInvalidation";
+import { loadLocationsCollection } from "@/lib/locations/locationsCollectionCache";
 import {
     CANONICAL_ORGANIZATION_BASE,
     CANONICAL_ORGANIZATION_PROGRAMS_HREF,
@@ -147,6 +148,13 @@ export function ConfigurationContinuityProvider({
             void prepareConfigurationSoftNavTarget(href, (h) => router.prefetch(h));
         }
     }, [router]);
+
+    // Data warm for Locations collection — peek must be ready before soft-nav reveal.
+    useEffect(() => {
+        const id = orgId.trim();
+        if (!id) return;
+        void loadLocationsCollection(id).catch(() => undefined);
+    }, [orgId]);
 
     useEffect(() => {
         return subscribeConfigurationInvalidation((event) => {

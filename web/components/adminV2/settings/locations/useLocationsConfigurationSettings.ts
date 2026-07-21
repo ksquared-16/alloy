@@ -165,8 +165,15 @@ export function useLocationsConfigurationSettings(options?: {
     }, [refresh]);
 
     useEffect(() => {
+        if (!orgId) return;
+        // Re-hydrate from Continuity collection cache when org context arrives / remounts.
+        const peeked = peekLocationsCollection(orgId);
+        if (peeked) {
+            applySnapshot(peeked);
+            setLoading(false);
+        }
         void refresh();
-    }, [refresh]);
+    }, [applySnapshot, orgId, refresh]);
 
     useEffect(() => {
         let cancelled = false;

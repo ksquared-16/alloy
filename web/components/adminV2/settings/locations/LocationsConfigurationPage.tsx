@@ -765,7 +765,7 @@ export default function LocationsConfigurationPage({
             :   null}
 
             <ConfigurationShell testId="locations-configuration-shell">
-                {loading ?
+                {loading && siteRows.length === 0 && !error ?
                     <ConfigurationEmptyState
                         testId="locations-loading"
                         title="Loading locations"
