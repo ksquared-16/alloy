@@ -13,6 +13,22 @@ supersedes: []
 **implementation contract and configuration appendix** that must never appear in the UI. Vocabulary sources are derived
 in [phase-5-enrollment-vocabulary-derivation.md](phase-5-enrollment-vocabulary-derivation.md).
 
+> **The build target** is [phase-5-enrollment-focus-panel-target.html](phase-5-enrollment-focus-panel-target.html) —
+> one polished Current Work screen on the real Focus Panel shell (Digan Family header, Open / North Campus chips, BOS,
+> Manage, Work / Activity tabs) plus six behavior states. It converges the runtime-first baseline and the task-list
+> concept: **obligation-first, but the runtime's readiness is kept** and rendered as **"Ready to continue ✓ / Still
+> needed •"** — no meters, no percentages, no `n/m complete`, no giant requirements/outcome sections, no "Open
+> Workspace". The Current Work information hierarchy Engineering implements: **(1)** one-sentence obligation → **(2)**
+> one primary action (secondaries subordinate) → **(3)** one-line why → **(4)** readiness/blockers *only if relevant*,
+> as Ready-to-continue / Still-needed (blockers name the missing fact + a resolve link, primary shown-but-disabled) →
+> **(5)** previous activity *only if it helps* (a single settled line, not a feed) → **(6)** waiting = calm
+> ("Nothing needs your attention" + what Alloy awaits + the automatic next step) → **(7)** completion = quiet settle
+> ("Done." then the next obligation; no reload, toast, or celebration). Multi-child groups as **Priority / Also active
+> / Completed**, each item naming its child; Children still owns identities/ages/statuses and is never duplicated. The
+> readiness summary in Current Work is the distilled view of the Required Information runtime (same source, not a second
+> list). Everything else in this contract — components, runtime inputs, state model, prioritization, grain, command,
+> outcome, recomposition, and the Appendix A/B/C — stands unchanged and governs the build.
+
 **Language rule honored:** the prohibited configured labels ("Placement / Decision", "Offer spot", and the invented
 "Offer"/"Extend Offer"/"Enrollment Offer"/"Placement") are treated as **naming defects**. They are **not rendered** in
 the mock, and none of the ten states requires the decision stage or the waitlist action. Where the specification must
