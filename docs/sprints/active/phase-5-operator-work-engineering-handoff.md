@@ -8,6 +8,11 @@ supersedes: []
 # Phase 5 — Operator Work: Engineering Handoff
 
 **Mission:** `alloy-phase-5-product-realization` (slot 1) · **Baseline:** `origin/staging @ 2129149e9`
+**Canonical reference diagram (front of this handoff):**
+[phase-5-current-work-derivation-architecture.html](phase-5-current-work-derivation-architecture.html) — the one-page
+derivation architecture (Business Process configuration + runtime evaluation + canonical record truth → Current Work
+View Model → Focus Panel, with the recomposition loop). Read it first; §2 is its written form.
+
 **This is the single handoff** from Phase 5 Product Office to Engineering. It consolidates the approved direction; it is
 not a mockup and introduces no new product. Supporting references (do not re-litigate): the build-target screen
 [phase-5-enrollment-focus-panel-target.html](phase-5-enrollment-focus-panel-target.html); vocabulary sources
@@ -44,6 +49,9 @@ action** — the same registered capability, one contextual placement, not a dup
 Also active / Completed**. Household and Children remain authoritative and are never duplicated.
 
 ## 2. Derivation contract (non-negotiable)
+
+> Diagrammed in [phase-5-current-work-derivation-architecture.html](phase-5-current-work-derivation-architecture.html)
+> — the canonical one-page reference for this section.
 
 Visual anatomy may be code-owned. **All business content is runtime-derived.** No visible business noun, verb,
 requirement, outcome, command, status, or automation fact may be hardcoded in `CurrentWorkCard` or in any
