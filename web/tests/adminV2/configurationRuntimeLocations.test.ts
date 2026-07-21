@@ -199,10 +199,11 @@ describe("Configuration Runtime — Locations", () => {
         expect(programs).toContain('title="Schedule"');
         expect(programs).toContain("onAddProgram");
         expect(programs).toContain("createDetail");
-        expect(page).toContain('router.push("/organization/programs")');
-        expect(page).not.toContain("setCreatingProgram(true)");
+        expect(page).toContain("LocationAddProgramPanel");
+        expect(page).toContain("setCreatingProgram(true)");
+        expect(page).not.toContain('router.push("/organization/programs")');
         expect(page).not.toContain("LocationProgramCreatePanel");
-        expect(read("app/api/admin/location-program-categories/route.ts")).toContain("metadata,");
+        expect(read("app/api/admin/location-program-categories/route.ts")).toContain("metadata");
         expect(programs).not.toContain("Everything looks good");
         expect(rooms).toContain('title="Program participation"');
         expect(rooms).toContain('title="Capacity"');

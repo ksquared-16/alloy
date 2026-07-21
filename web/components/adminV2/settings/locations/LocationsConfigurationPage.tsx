@@ -18,6 +18,7 @@ import {
     ConfigObjectHeader,
     ConfigScopeContextBar,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import LocationAddProgramPanel from "@/components/adminV2/settings/locations/LocationAddProgramPanel";
 import LocationProgramDetailPanel from "@/components/adminV2/settings/locations/LocationProgramDetailPanel";
 import LocationRoomCreatePanel from "@/components/adminV2/settings/locations/LocationRoomCreatePanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
@@ -63,6 +64,7 @@ import {
     peekLocationOwnedSetup,
 } from "@/lib/locations/locationConcernCache";
 import { invalidateLocationsCollection } from "@/lib/locations/locationsCollectionCache";
+import { invalidateProgramsCollection } from "@/lib/programs/programsCollectionCache";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 
 export default function LocationsConfigurationPage({
@@ -84,6 +86,8 @@ export default function LocationsConfigurationPage({
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
     const [creatingRoom, setCreatingRoom] = useState(false);
+    const [creatingProgram, setCreatingProgram] = useState(false);
+    const [pendingAssociatedProgramId, setPendingAssociatedProgramId] = useState<string | null>(null);
     const [creatingSchedule, setCreatingSchedule] = useState(false);
     const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
         Record<string, Partial<Record<"tours" | "placement" | "access", boolean>>>
@@ -119,6 +123,7 @@ export default function LocationsConfigurationPage({
         createRoomUnit,
         patchLocation,
         patchProgramCategory,
+        refreshPrograms,
         roomCapacitySummaryForSite,
         programOptionsForSite,
         ageUnitSelectOptions,
@@ -250,6 +255,23 @@ export default function LocationsConfigurationPage({
         [selectedPrograms, selectedRooms],
     );
 
+    // After in-context assign/create, select the Location LPC tied to the Organization program.
+    useEffect(() => {
+        if (!pendingAssociatedProgramId || !selectedSite) return;
+        const match = selectedPrograms.find(
+            (row) => String(row.program_id ?? "").trim() === pendingAssociatedProgramId,
+        );
+        if (!match) return;
+        setPendingAssociatedProgramId(null);
+        setSelectedProgramId(match.id);
+        continuity?.rememberLocationSelection({
+            locationId: selectedSite.id,
+            tab: "programs",
+            itemId: match.id,
+        });
+        router.replace(locationConcernHref(selectedSite.id, "programs", match.id));
+    }, [continuity, pendingAssociatedProgramId, router, selectedPrograms, selectedSite]);
+
     const refreshOwnedConcernSetup = useCallback(
         async (locationId: string) => {
             if (!orgId) return;
@@ -321,6 +343,7 @@ export default function LocationsConfigurationPage({
         setEditingSite(false);
         setCreatingSite(false);
         setCreatingRoom(false);
+        setCreatingProgram(false);
         setCreatingSchedule(false);
         if (tab === "tours") setToursKeepAlive(true);
         if (tab === "placement") setPlacementKeepAlive(true);
@@ -335,6 +358,7 @@ export default function LocationsConfigurationPage({
         setSelectedId(null);
         setEditingSite(false);
         setCreatingRoom(false);
+        setCreatingProgram(false);
         setCreatingSchedule(false);
         setActiveTab("overview");
         continuity?.rememberLocationSelection({ locationId: null, tab: null, itemId: null });
@@ -347,6 +371,7 @@ export default function LocationsConfigurationPage({
             setActiveTab(tab);
             setEditingSite(false);
             setCreatingRoom(false);
+            setCreatingProgram(false);
             setCreatingSchedule(false);
             if (tab === "tours") setToursKeepAlive(true);
             if (tab === "placement") setPlacementKeepAlive(true);
@@ -401,6 +426,7 @@ export default function LocationsConfigurationPage({
         setActiveTab("rooms");
         setEditingSite(false);
         setCreatingSchedule(false);
+        setCreatingProgram(false);
         setCreatingRoom(true);
         setError(null);
         router.replace(locationConcernHref(selectedSite.id, "rooms"));
@@ -408,8 +434,15 @@ export default function LocationsConfigurationPage({
 
     const addProgram = useCallback(() => {
         if (!selectedSite || !canMutate) return;
-        router.push("/organization/programs");
-    }, [canMutate, router, selectedSite]);
+        setActiveTab("programs");
+        setEditingSite(false);
+        setCreatingRoom(false);
+        setCreatingSchedule(false);
+        setCreatingProgram(true);
+        setSelectedProgramId(null);
+        setError(null);
+        router.replace(locationConcernHref(selectedSite.id, "programs"));
+    }, [canMutate, router, selectedSite, setError]);
 
     const firstRoomNeedingCapacityId = useMemo(() => {
         const match = selectedRooms.find((room) => !readLocationMetadataPresentation(room.metadata).capacity);
@@ -521,8 +554,12 @@ export default function LocationsConfigurationPage({
         if (activeTab === "programs") {
             return (
                 <LocationProgramDetailPanel
-                    program={selectedProgram}
-                    summary={programSummaries.find((summary) => summary.id === effectiveProgramId) ?? null}
+                    program={creatingProgram ? null : selectedProgram}
+                    summary={
+                        creatingProgram ? null : (
+                            programSummaries.find((summary) => summary.id === effectiveProgramId) ?? null
+                        )
+                    }
                     summaries={programSummaries}
                     siteLabel={model?.displayName ?? ""}
                     locationHasSchedule={selectedSchedules.length > 0}
@@ -530,13 +567,56 @@ export default function LocationsConfigurationPage({
                     canMutate={canMutate}
                     onSave={patchProgramCategory}
                     programs={selectedPrograms}
-                    selectedProgramId={effectiveProgramId}
+                    selectedProgramId={creatingProgram ? null : effectiveProgramId}
                     onSelectProgram={(programId) => {
+                        setCreatingProgram(false);
                         setSelectedProgramId(programId);
                         navigate("programs", programId);
                     }}
                     onAddProgram={canMutate ? addProgram : undefined}
                     ageUnitSelectOptions={ageUnitSelectOptions}
+                    createDetail={
+                        creatingProgram && selectedSite ?
+                            <LocationAddProgramPanel
+                                activeLocationId={selectedSite.id}
+                                activeLocationLabel={model?.displayName ?? selectedSite.label ?? ""}
+                                locations={siteRows
+                                    .filter((site) => site.is_active !== false)
+                                    .map((site) => ({
+                                        id: site.id,
+                                        label: site.label?.trim() || siteLabelById.get(site.id) || "Location",
+                                    }))}
+                                associatedProgramIds={
+                                    new Set(
+                                        selectedPrograms
+                                            .map((row) => String(row.program_id ?? "").trim())
+                                            .filter(Boolean),
+                                    )
+                                }
+                                associatedProgramKeys={
+                                    new Set(
+                                        selectedPrograms
+                                            .map((row) => String(row.key ?? "").trim())
+                                            .filter(Boolean),
+                                    )
+                                }
+                                onCancel={() => setCreatingProgram(false)}
+                                onComplete={async ({ programId }) => {
+                                    if (orgId) {
+                                        invalidateProgramsCollection(orgId, "program-assigned-from-location", {
+                                            publishBus: true,
+                                        });
+                                        invalidateLocationsCollection(orgId, "program-assigned-from-location", {
+                                            publishBus: true,
+                                        });
+                                    }
+                                    setCreatingProgram(false);
+                                    setPendingAssociatedProgramId(programId);
+                                    await refreshPrograms();
+                                }}
+                            />
+                        :   undefined
+                    }
                 />
             );
         }
