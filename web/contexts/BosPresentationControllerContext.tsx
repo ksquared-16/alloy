@@ -213,7 +213,11 @@ export function BosPresentationControllerProvider({
         writeBosFloatingGeometry(next);
     }, []);
 
-    const openFloating = useCallback(() => setPreferred("floating"), [setPreferred]);
+    const openFloating = useCallback(() => {
+        const restored = clampBosFloatingGeometry(preferredFloatingGeometry, viewportBounds());
+        setFloatingGeometryState(restored);
+        setPreferred("floating");
+    }, [preferredFloatingGeometry, setPreferred]);
     const closeToLauncher = useCallback(() => setPreferred("closed"), [setPreferred]);
     const pin = useCallback(() => {
         // Persist last floating geometry before entering pinned.

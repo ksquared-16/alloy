@@ -572,6 +572,12 @@ Actions belong to the surface they affect — **not** the BOS assistant region:
 
 Closing, floating, or pinning BOS must not hide or relocate these Actions. BOS may recommend or invoke the same Operational Command Runtime; it does not own action chrome.
 
+**Operational module workspaces** (Communications, Processing, Work Items, Operational Intelligence, and future peers) inherit the same Adaptive Workspace BOS contract via Operational Workspace Geometry:
+
+- **Pinned** — workspace band ends at the BOS rail (current reserved form)
+- **Floating / closed** — workspace expands the full operational band (sidebar → viewport)
+- Horizontal fill inset is ~2.5% each side (`--operational-workspace-fill: 0.95`)
+
 Architecture: `../../sprints/active/adaptive-workspace-presentation/adaptive-workspace-system-architecture.md`.
 
 ---

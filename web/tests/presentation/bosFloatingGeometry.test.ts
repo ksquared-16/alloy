@@ -30,8 +30,8 @@ describe("bosFloatingGeometry", () => {
         );
         expect(geo.width).toBe(BOS_FLOAT_MIN_WIDTH_PX);
         expect(geo.height).toBe(BOS_FLOAT_MIN_HEIGHT_PX);
-        expect(geo.x).toBeGreaterThanOrEqual(16);
-        expect(geo.y).toBeGreaterThanOrEqual(56 + 16);
+        expect(geo.x).toBeGreaterThanOrEqual(24);
+        expect(geo.y).toBeGreaterThanOrEqual(56 + 24);
     });
 
     it("clamps oversized panels to max canvas fractions", () => {
@@ -50,6 +50,6 @@ describe("bosFloatingGeometry", () => {
         const corrected = clampBosFloatingGeometry(preferred, { width: 1280, height: 800 });
         expect(corrected.width).toBeLessThanOrEqual(maxBosFloatingWidthPx(1280));
         expect(corrected.height).toBeLessThanOrEqual(maxBosFloatingHeightPx(800));
-        expect(corrected.x).toBeGreaterThanOrEqual(16);
+        expect(corrected.x).toBeGreaterThanOrEqual(24);
     });
 });

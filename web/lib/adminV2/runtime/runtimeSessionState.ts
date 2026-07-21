@@ -7,6 +7,7 @@ import {
     BOS_PRESENTATION_STATE_KEY,
     BOS_PRESENTATION_WIDTH_KEY,
 } from "@/lib/bos/bosPresentationPreference";
+import { BOS_STARTERS_EXPANDED_KEY } from "@/lib/bos/bosFloatingGeometry";
 import { clearAllResumeSessions } from "@/lib/adminV2/runtime/resumeSession";
 
 /**
@@ -20,6 +21,7 @@ export const DURABLE_SESSION_PREF_KEYS: readonly string[] = [
     BOS_PRESENTATION_WIDTH_KEY,
     BOS_FLOATING_GEOMETRY_KEY,
     BOS_FLOATING_POSITION_KEY,
+    BOS_STARTERS_EXPANDED_KEY,
 ];
 
 /**

@@ -1,4 +1,5 @@
 import { BOS_RAIL_OVERLAY_GUTTER_PX } from "@/lib/bos/bosOverlayGeometry";
+import { BOS_PRESENTATION_ATTR } from "@/lib/bos/bosPresentationState";
 
 /**
  * Operational Workspace Geometry — platform-level layout for Operational Workspaces.
@@ -12,7 +13,7 @@ import { BOS_RAIL_OVERLAY_GUTTER_PX } from "@/lib/bos/bosOverlayGeometry";
  * operational band:
  *
  *   left   = global sidebar right edge + clearance
- *   right  = Command Rail / BOS rail left edge − gutter (or viewport right − gutter)
+ *   right  = pinned BOS rail left − gutter (floating/closed → viewport right − gutter)
  *   top    = below the application header (CSS: `--adminv2-drawer-inset-top`)
  *   bottom = viewport bottom with standard workspace padding (CSS: `--ws-shell-bottom-safe`)
  *
@@ -62,7 +63,10 @@ export type OperationalWorkspaceBounds = {
 
 export type ComputeOperationalWorkspaceBoundsParams = {
     sidebarRight: number;
-    /** BOS rail / command rail left edge, or null when the rail is not yet measured. */
+    /**
+     * Pinned BOS rail left edge. Pass null when BOS is floating/closed so the workspace
+     * expands to the full operational band (same as no rail).
+     */
     bosRailLeft: number | null;
     viewportWidth: number;
     gutterPx?: number;
@@ -113,11 +117,33 @@ export function clearOperationalWorkspaceGeometryVars(
 }
 
 /**
- * Measure the live workspace band (sidebar → BOS rail) and publish operational CSS vars.
+ * Pure helper: floating/closed BOS must not shrink the operational band.
+ * Only pinned reserves horizontal width against the BOS rail.
+ */
+export function resolveOperationalBosRailLeft(input: {
+    bosPresentation: string | null;
+    overlayLeft: number | null;
+    columnLeft: number | null;
+}): number | null {
+    if (input.bosPresentation !== "pinned") return null;
+    if (input.overlayLeft != null) return input.overlayLeft;
+    return input.columnLeft;
+}
+
+function readBosPresentationEffective(): string | null {
+    if (typeof document === "undefined") return null;
+    const fromHtml = document.documentElement.getAttribute(BOS_PRESENTATION_ATTR);
+    if (fromHtml) return fromHtml;
+    const ambient = document.querySelector("[data-adminv2-workspace-ambient-root]");
+    return ambient?.getAttribute(BOS_PRESENTATION_ATTR) ?? null;
+}
+
+/**
+ * Measure the live workspace band (sidebar → pinned BOS, or full viewport when floating/closed)
+ * and publish operational CSS vars.
  *
  * Self-clearing: when no Operational Workspace is open, removes the vars and returns null.
- * Reuses the BOS rail overlay anchor (falling back to the command column, then viewport)
- * without modifying rail anchoring.
+ * Floating BOS must not steal horizontal band — only pinned reserves width.
  */
 export function measureAndApplyOperationalWorkspaceGeometry(
     root: HTMLElement = document.documentElement,
@@ -137,14 +163,25 @@ export function measureAndApplyOperationalWorkspaceGeometry(
             SIDEBAR_RIGHT_COLLAPSED_PX
         :   SIDEBAR_RIGHT_EXPANDED_PX;
 
-    const overlay = document.querySelector(BOS_OVERLAY_SELECTOR);
-    const column = document.querySelector(COMMAND_COLUMN_SELECTOR);
-
+    const bosPresentation = readBosPresentationEffective();
     let bosRailLeft: number | null = null;
-    if (overlay && overlay.getBoundingClientRect().width > 0) {
-        bosRailLeft = Math.round(overlay.getBoundingClientRect().left);
-    } else if (column && column.getBoundingClientRect().width > 0) {
-        bosRailLeft = Math.round(column.getBoundingClientRect().left);
+    // Only pinned BOS reserves horizontal band. Floating is an overlay window; closed has no rail.
+    if (bosPresentation === "pinned") {
+        const overlay = document.querySelector(BOS_OVERLAY_SELECTOR);
+        const column = document.querySelector(COMMAND_COLUMN_SELECTOR);
+        const overlayLeft =
+            overlay && overlay.getBoundingClientRect().width > 0 ?
+                Math.round(overlay.getBoundingClientRect().left)
+            :   null;
+        const columnLeft =
+            column && column.getBoundingClientRect().width > 0 ?
+                Math.round(column.getBoundingClientRect().left)
+            :   null;
+        bosRailLeft = resolveOperationalBosRailLeft({
+            bosPresentation,
+            overlayLeft,
+            columnLeft,
+        });
     }
 
     const bounds = computeOperationalWorkspaceBounds({

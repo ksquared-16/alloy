@@ -8,6 +8,10 @@ import { BosRailActionIcon } from "@/app/adminV2/components/bos/identity/BosRail
 import type { BosRailAttentionPresentation } from "@/lib/bos/bosRailAttentionPresentation";
 import { parseBosRailContextChips, type BosRailContextChip } from "@/lib/bos/bosRailContextChips";
 import { useBosPresentationControllerOptional } from "@/contexts/BosPresentationControllerContext";
+import {
+    readBosStartersExpanded,
+    writeBosStartersExpanded,
+} from "@/lib/bos/bosFloatingGeometry";
 import type { CommandSurfaceRailStarterSuggestion } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
 import { derived, neutral, palette } from "@/styles/tokens/colors";
 
@@ -319,6 +323,7 @@ export function BosRailStarterCards(props: {
     suggestions: readonly CommandSurfaceRailStarterSuggestion[];
     onPick: (prompt: string) => void;
 }) {
+    const [sectionExpanded, setSectionExpanded] = useState(() => readBosStartersExpanded());
     const [showAll, setShowAll] = useState(false);
     const hasOverflow = props.suggestions.length > BOS_RAIL_MAX_VISIBLE_STARTERS;
     const visibleSuggestions =
@@ -326,16 +331,35 @@ export function BosRailStarterCards(props: {
             props.suggestions.slice(0, BOS_RAIL_MAX_VISIBLE_STARTERS)
         :   props.suggestions;
 
+    const toggleSection = () => {
+        setSectionExpanded((prev) => {
+            const next = !prev;
+            writeBosStartersExpanded(next);
+            return next;
+        });
+    };
+
     return (
         <div className="bos-rail-starters px-2 pb-2" data-command-surface-rail-starters="true">
             <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[11px] font-medium" style={{ color: CMD.textSupporting }}>
-                    Here are some ways I can help
-                </p>
-                {hasOverflow ?
+                <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                    data-command-surface-rail-starters-collapse="true"
+                    aria-expanded={sectionExpanded}
+                    onClick={toggleSection}
+                >
+                    <span className="text-[11px] font-medium" style={{ color: CMD.textSupporting }}>
+                        Here are some ways I can help
+                    </span>
+                    <span className="text-[10px]" style={{ color: CMD.textLabel }} aria-hidden>
+                        {sectionExpanded ? "▾" : "▸"}
+                    </span>
+                </button>
+                {sectionExpanded && hasOverflow ?
                     <button
                         type="button"
-                        className="text-[10px] font-medium underline-offset-2 hover:underline"
+                        className="shrink-0 text-[10px] font-medium underline-offset-2 hover:underline"
                         style={{ color: palette.bendPine }}
                         data-command-surface-rail-starters-toggle="true"
                         onClick={() => setShowAll((prev) => !prev)}
@@ -344,44 +368,46 @@ export function BosRailStarterCards(props: {
                     </button>
                 :   null}
             </div>
-            <div className="flex flex-col gap-1.5">
-                {visibleSuggestions.map((suggestion) => (
-                    <button
-                        key={suggestion.prompt}
-                        type="button"
-                        className="bos-rail-starter-card group flex items-center gap-2.5 rounded-lg border px-2.5 py-2.5 text-left transition-colors hover:border-[rgba(0,162,131,0.35)] hover:shadow-sm"
-                        style={{
-                            borderColor: derived.border,
-                            backgroundColor: neutral.surface,
-                        }}
-                        onClick={() => props.onPick(suggestion.prompt)}
-                    >
-                        <span className="flex shrink-0 items-start pt-0.5">
-                            <BosRailActionIcon icon={suggestion.icon} />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                            <span
-                                className="block text-[12px] font-semibold leading-snug"
-                                style={{ color: CMD.textBody }}
-                            >
-                                {suggestion.title}
+            {sectionExpanded ?
+                <div className="flex flex-col gap-1.5">
+                    {visibleSuggestions.map((suggestion) => (
+                        <button
+                            key={suggestion.prompt}
+                            type="button"
+                            className="bos-rail-starter-card group flex items-center gap-2.5 rounded-lg border px-2.5 py-2.5 text-left transition-colors hover:border-[rgba(0,162,131,0.35)] hover:shadow-sm"
+                            style={{
+                                borderColor: derived.border,
+                                backgroundColor: neutral.surface,
+                            }}
+                            onClick={() => props.onPick(suggestion.prompt)}
+                        >
+                            <span className="flex shrink-0 items-start pt-0.5">
+                                <BosRailActionIcon icon={suggestion.icon} />
                             </span>
-                            <span
-                                className="mt-0.5 block text-[11px] leading-snug"
-                                style={{ color: CMD.textSupporting }}
-                            >
-                                {suggestion.description}
+                            <span className="min-w-0 flex-1">
+                                <span
+                                    className="block text-[12px] font-semibold leading-snug"
+                                    style={{ color: CMD.textBody }}
+                                >
+                                    {suggestion.title}
+                                </span>
+                                <span
+                                    className="mt-0.5 block text-[11px] leading-snug"
+                                    style={{ color: CMD.textSupporting }}
+                                >
+                                    {suggestion.description}
+                                </span>
                             </span>
-                        </span>
-                        <ChevronRight
-                            className="h-4 w-4 shrink-0 opacity-40 transition-opacity group-hover:opacity-70"
-                            stroke={CMD.textLabel}
-                            strokeWidth={1.75}
-                            aria-hidden
-                        />
-                    </button>
-                ))}
-            </div>
+                            <ChevronRight
+                                className="h-4 w-4 shrink-0 opacity-40 transition-opacity group-hover:opacity-70"
+                                stroke={CMD.textLabel}
+                                strokeWidth={1.75}
+                                aria-hidden
+                            />
+                        </button>
+                    ))}
+                </div>
+            :   null}
         </div>
     );
 }

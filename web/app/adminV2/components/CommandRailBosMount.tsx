@@ -15,7 +15,7 @@ import { createPortal } from "react-dom";
 import AICommandBar from "./AICommandBar";
 import AICommandSurfaceShell from "./aiCommandSurface/AICommandSurfaceShell";
 import { BosFloatingResizeHandle } from "./aiCommandSurface/bosRail/BosRailPresentation";
-import { ADMINV2_COMMAND_SURFACE_Z } from "@/components/admin/Drawer";
+import { ADMINV2_COMMAND_SURFACE_Z, ADMINV2_RAIL_MENU_Z } from "@/components/admin/Drawer";
 import { useBosPresentationControllerOptional } from "@/contexts/BosPresentationControllerContext";
 import { isWorkspaceCommandRailBosHost } from "@/lib/bos/bosRailOverlayAnchor";
 import { useBosRailOverlayAnchorStyle } from "@/lib/bos/useBosRailOverlayAnchorStyle";
@@ -97,10 +97,16 @@ export function CommandRailBosMount({ children }: { children: ReactNode }) {
                 visibility: "visible",
                 right: "auto",
                 bottom: "auto",
+                boxSizing: "border-box",
+                overflow: "hidden",
             };
         }
         return pinnedOverlayStyle;
     }, [effective, bos, pinnedOverlayStyle]);
+
+    // Floating must sit above Operational Workspace modals (z≈70) without trapping as modal.
+    const overlayZ =
+        effective === "floating" ? Math.max(ADMINV2_COMMAND_SURFACE_Z, ADMINV2_RAIL_MENU_Z) : ADMINV2_COMMAND_SURFACE_Z;
 
     const dockContent = <CommandRailBosDockContent />;
 
@@ -113,7 +119,7 @@ export function CommandRailBosMount({ children }: { children: ReactNode }) {
                         data-adminv2-bos-rail-overlay="true"
                         data-bos-overlay-mode={effective ?? undefined}
                         className="adminv2-bos-rail-overlay pointer-events-auto relative flex min-h-0 flex-col"
-                        style={{ ...overlayStyle, zIndex: ADMINV2_COMMAND_SURFACE_Z }}
+                        style={{ ...overlayStyle, zIndex: overlayZ }}
                         {...alloySectionDomAttrs("WU-14")}
                     >
                         {dockContent}

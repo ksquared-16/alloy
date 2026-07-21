@@ -663,13 +663,14 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail:no
  * Classification is by workspace type (the operational marker), never by feature name.
  * Geometry vars are measured in `web/lib/bos/operationalWorkspaceGeometry.ts`.
  *
- * The panel occupies ~90% of the band (`--operational-workspace-fill`), inset evenly so a
+ * The panel occupies ~95% of the band (`--operational-workspace-fill`), inset evenly so a
  * clickable backdrop margin remains on every side to dismiss the surface.
+ * (July 2026 Adaptive Workspace: half the prior 10% horizontal gutter → 5% total / ~2.5% each side.)
  */
 html[data-adminv2-workspace-shell="v2"] .operational-workspace-surface[data-operational-workspace="true"],
 html[data-adminv2-workspace-shell="v2"][data-alloy-os-runtime-split="true"]
   .operational-workspace-surface[data-operational-workspace="true"] {
-  --operational-workspace-fill: 0.9;
+  --operational-workspace-fill: 0.95;
   --operational-workspace-inset-x: calc(
     var(--operational-workspace-width, 0px) * (1 - var(--operational-workspace-fill)) / 2
   );

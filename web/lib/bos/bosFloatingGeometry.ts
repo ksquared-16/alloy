@@ -7,12 +7,13 @@
 export const BOS_FLOATING_GEOMETRY_KEY = "alloy:v1:admV2:shell:bosFloatingGeometry";
 /** @deprecated Offset-only key from earlier pass; migrated into full geometry. */
 export const BOS_FLOATING_POSITION_KEY = "alloy:v1:admV2:shell:bosFloatingPosition";
+export const BOS_STARTERS_EXPANDED_KEY = "alloy:v1:admV2:shell:bosStartersExpanded";
 
 export const BOS_FLOAT_DEFAULT_WIDTH_PX = 400;
 export const BOS_FLOAT_DEFAULT_HEIGHT_PX = 620;
 export const BOS_FLOAT_MIN_WIDTH_PX = 320;
 export const BOS_FLOAT_MIN_HEIGHT_PX = 420;
-export const BOS_FLOAT_MARGIN_PX = 16;
+export const BOS_FLOAT_MARGIN_PX = 24;
 /** Keep clear of persistent shell header. */
 export const BOS_FLOAT_TOP_SAFE_PX = 56;
 export const BOS_FLOAT_BOTTOM_SAFE_PX = 24;
@@ -136,4 +137,24 @@ export function writeBosFloatingGeometry(geo: BosFloatingGeometry): void {
 
 export function geometriesEqual(a: BosFloatingGeometry, b: BosFloatingGeometry): boolean {
     return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+export function readBosStartersExpanded(): boolean {
+    if (typeof window === "undefined") return true;
+    try {
+        const raw = sessionStorage.getItem(BOS_STARTERS_EXPANDED_KEY);
+        if (raw === null) return true;
+        return raw !== "0" && raw !== "false";
+    } catch {
+        return true;
+    }
+}
+
+export function writeBosStartersExpanded(expanded: boolean): void {
+    if (typeof window === "undefined") return;
+    try {
+        sessionStorage.setItem(BOS_STARTERS_EXPANDED_KEY, expanded ? "1" : "0");
+    } catch {
+        /* ignore */
+    }
 }

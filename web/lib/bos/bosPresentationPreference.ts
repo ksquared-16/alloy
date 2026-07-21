@@ -8,15 +8,17 @@ export type BosPresentationState = "closed" | "floating" | "pinned";
 
 export const BOS_PRESENTATION_STATE_KEY = "alloy:v1:admV2:shell:bosPresentationState";
 export const BOS_PRESENTATION_WIDTH_KEY = "alloy:v1:admV2:shell:bosDockedWidthPx";
-/** @deprecated Prefer bosFloatingGeometry — re-exported for durable session key list. */
 export {
     BOS_FLOATING_GEOMETRY_KEY,
     BOS_FLOATING_POSITION_KEY,
+    BOS_STARTERS_EXPANDED_KEY,
     type BosFloatingGeometry,
     clampBosFloatingGeometry,
     defaultBosFloatingGeometry,
     readBosFloatingGeometry,
+    readBosStartersExpanded,
     writeBosFloatingGeometry,
+    writeBosStartersExpanded,
 } from "@/lib/bos/bosFloatingGeometry";
 
 /** Pinned rail bounds (px). */
