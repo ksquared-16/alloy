@@ -45,7 +45,7 @@ const FOCUS_PANEL_DEPTH_MS = 240;
 
 /** Operator-facing identity for a configured card, shown while its settlement detail prepares. */
 const FOCUS_PANEL_CARD_TITLES: Partial<Record<FocusPanelCardKey, string>> = {
-    current_work: "Current Work",
+    current_work: "What's Next",
     household: "Household",
     children: "Children",
     readiness_kpi: "Readiness",

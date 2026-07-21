@@ -820,7 +820,7 @@ function OutcomeCompleteBody({
 
     return (
         <div className="alloy-os-currentwork__complete" data-work-completion="complete">
-            <p className="alloy-os-currentwork__complete-eyebrow">Current Work</p>
+            <p className="alloy-os-currentwork__complete-eyebrow">What's Next</p>
             <span className="alloy-os-card-pill alloy-os-card-pill--complete">Completed</span>
             <h3 className="alloy-os-currentwork__complete-title">{surface.title}</h3>
             <p className="alloy-os-currentwork__complete-outcome">{summary.outcomeLabel}</p>

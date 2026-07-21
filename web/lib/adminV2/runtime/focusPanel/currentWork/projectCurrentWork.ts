@@ -116,7 +116,7 @@ export function projectCurrentWork(context: OperationalContext): CurrentWorkView
         .filter((action): action is ResolvedActionForClient => action != null);
 
     return {
-        microLabel: "Current Work",
+        microLabel: "What's Next",
         title: surface.title,
         purpose: surface.description ?? null,
         progressLabel,
