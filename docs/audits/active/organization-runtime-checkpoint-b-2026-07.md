@@ -247,10 +247,6 @@ npm run verify:module-imports: PASS after new modules are committed
 
 ## 14. Recommended Checkpoint C scope
 
-1. Programs Continuity inheritance (selection + collection cache pattern), **without** product redesign.  
-2. Concern-scoped cache for Tours availability / Access membership under Continuity invalidation.  
-3. Coalesce mutation invalidation (single refresh flight).  
-4. Attach live browser baseline numbers to Checkpoint A+B audits.  
-5. Optional: hover prefetch of owned-concern setup for selected Location.
+**Delivered** — see `organization-runtime-checkpoint-c-2026-07.md`.
 
-**Out of scope for C (still):** Work Unit kernel on Organization, Configuration Object Runtime redesign, Commercial migration, Operational Planning, Assignment/Publication/Distribution contract changes.
+Follow-on (**C.5**): coalesced invalidation refresh, live filmstrip attachment, optional Tours rules cache seam, Programs Continuity inheritance without product redesign.
