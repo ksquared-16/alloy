@@ -1,14 +1,10 @@
 "use client";
 
 /**
- * Presentation Runtime V2 — configured Workspace actions → the PERSISTENT operator command rail.
+ * Presentation Runtime V2 — configured Workspace actions → workspace header control band.
  *
- * Symmetric to WorkUnitRightRailActions, for the /workspace surface: registers the resolved
- * `surface=workspace` actions into the shell command rail's "Actions (N)" section via
- * WorkspaceCommandRailRegistrar (placement surface `company`). Execution stays on the existing
- * runtime (`applyRegistryResolvedActionClient`, `workspace` surface). Org-level actions like
- * Create Lead have no route department, so the workspace's default department (first process) is
- * baked in. Renders null; empty payload → register nothing → the rail's own default.
+ * Actions are operational chrome owned by the Workspace header — not the BOS assistant column.
+ * Execution stays on `applyRegistryResolvedActionClient` (workspace surface).
  */
 
 import { useCallback } from "react";
@@ -21,23 +17,24 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 type Props = {
     actions: ResolvedActionForClient[];
-    /** Default department for org-level workspace actions (Create Lead). */
     defaultDepartmentId: string | null;
 };
 
 export function WorkspaceRightRailActions({ actions, defaultDepartmentId }: Props) {
-    const railContent =
-        actions.length > 0 ? (
-            <CommandRailCollapsibleActionsSection actionCount={actions.length}>
-                <WorkspaceCommandRailActionsBody
-                    actions={actions}
-                    defaultDepartmentId={defaultDepartmentId}
-                />
-            </CommandRailCollapsibleActionsSection>
-        ) : null;
-
     return (
-        <WorkspaceCommandRailRegistrar actions={railContent} actionsPlacementSurface="company" />
+        <>
+            <WorkspaceCommandRailRegistrar actions={null} actionsPlacementSurface="company" />
+            {actions.length > 0 ? (
+                <div data-workspace-actions-chrome="company" className="shrink-0">
+                    <CommandRailCollapsibleActionsSection actionCount={actions.length}>
+                        <WorkspaceCommandRailActionsBody
+                            actions={actions}
+                            defaultDepartmentId={defaultDepartmentId}
+                        />
+                    </CommandRailCollapsibleActionsSection>
+                </div>
+            ) : null}
+        </>
     );
 }
 
@@ -47,8 +44,6 @@ function WorkspaceCommandRailActionsBody({ actions, defaultDepartmentId }: Props
 
     const runAction = useCallback(
         (action: ResolvedActionForClient) => {
-            // No local `openCreateLead` — the runtime dispatches `adminv2:open-create-lead`, handled
-            // by CreateLeadEventHost at the stable surface level (outside this floating menu).
             void applyRegistryResolvedActionClient(action, {
                 router,
                 openDrawer,
