@@ -41,14 +41,29 @@ export default function ProgramsLanding({
     const attentionPreview = showAllAttention ? landing.attention : landing.attention.slice(0, 5);
     const hasMoreAttention = landing.attention.length > 5;
     const attentionHeadline =
-        landing.summary.totalPrograms === 0 ? "No Programs yet"
-        : landing.summary.attentionPrograms === 0 ? "None"
+        landing.summary.attentionPrograms === 0 ? "None"
         : `${landing.summary.attentionPrograms} ${
               landing.summary.attentionPrograms === 1 ? "Program needs" : "Programs need"
           } follow-up`;
 
+    const readinessHeadline =
+        landing.summary.totalPrograms === 0 ? "0 ready"
+        : `${landing.summary.averageReadinessPercent}%`;
+
+    const readinessSublabel =
+        landing.summary.totalPrograms === 0 ? "No Programs have been created yet"
+        : `${landing.summary.readyPrograms} of ${landing.summary.totalPrograms} ${
+              landing.summary.totalPrograms === 1 ? "Program" : "Programs"
+          } ready for Location use`;
+
     return (
-        <div className="flex w-full flex-col gap-3" data-testid="programs-landing">
+        <div
+            className="flex w-full flex-col gap-3"
+            data-testid="programs-landing"
+            data-programs-collection-state={
+                landing.summary.totalPrograms === 0 ? "valid_empty" : "populated"
+            }
+        >
             <div className="grid gap-3 md:grid-cols-3" data-testid="programs-operational-summary">
                 <ConfigWorkspaceCard compact className="h-full min-h-[7.5rem]" testId="programs-readiness">
                     <section>
@@ -56,12 +71,9 @@ export default function ProgramsLanding({
                             Program readiness
                         </p>
                         <p className="mt-1 text-xl font-semibold tracking-tight text-alloy-midnight">
-                            {landing.summary.averageReadinessPercent}%
+                            {readinessHeadline}
                         </p>
-                        <p className="config-typo-sublabel mt-1">
-                            {landing.summary.readyPrograms} of {landing.summary.totalPrograms}{" "}
-                            {landing.summary.totalPrograms === 1 ? "Program" : "Programs"} ready for Location use
-                        </p>
+                        <p className="config-typo-sublabel mt-1">{readinessSublabel}</p>
                         <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-alloy-stone/25">
                             <div
                                 className="h-full rounded-full bg-alloy-bend-pine"
@@ -86,10 +98,11 @@ export default function ProgramsLanding({
                             {attentionHeadline}
                         </p>
                         <p className="config-typo-sublabel mt-1">
-                            {landing.attention.filter((item) => item.item.grade === "fix").length}{" "}
-                            blocking ·{" "}
-                            {landing.attention.filter((item) => item.item.grade === "improve").length}{" "}
-                            improvements
+                            {landing.summary.totalPrograms === 0 ?
+                                "0 Programs need follow-up"
+                            :   `${landing.attention.filter((item) => item.item.grade === "fix").length} blocking · ${
+                                    landing.attention.filter((item) => item.item.grade === "improve").length
+                                } improvements`}
                         </p>
                     </section>
                 </ConfigWorkspaceCard>
@@ -180,17 +193,19 @@ export default function ProgramsLanding({
                     {visible.length === 0 ?
                         <div className="px-1 py-8 text-center" data-testid="programs-landing-empty">
                             <p className="text-sm font-medium text-alloy-midnight">
-                                {landing.summary.totalPrograms === 0 ?
-                                    "Add your first Program"
-                                :   "No Programs match"}
+                                {landing.summary.totalPrograms === 0 ? "No Programs yet" : "No Programs match"}
                             </p>
                             <p className="config-typo-sublabel mt-1">
                                 {landing.summary.totalPrograms === 0 ?
-                                    "Programs are reusable Organization services — define once, publish, then assign to Locations."
+                                    "Create the first reusable Organization service for Locations to offer."
                                 :   "Try a different search or include retired Programs."}
                             </p>
                             {canCreate && landing.summary.totalPrograms === 0 ?
-                                <ConfigurationPrimaryButton className="mt-4" onClick={onAddProgram}>
+                                <ConfigurationPrimaryButton
+                                    className="mt-4"
+                                    onClick={onAddProgram}
+                                    data-testid="programs-landing-empty-add"
+                                >
                                     Add Program
                                 </ConfigurationPrimaryButton>
                             :   null}

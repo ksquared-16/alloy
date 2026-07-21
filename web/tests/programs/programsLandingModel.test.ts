@@ -218,7 +218,13 @@ describe("Programs landing view model", () => {
         );
         expect(landing.summary.totalPrograms).toBe(0);
         expect(landing.summary.readyPrograms).toBe(0);
+        expect(landing.summary.attentionPrograms).toBe(0);
+        expect(landing.summary.publishedPrograms).toBe(0);
+        expect(landing.summary.assignedPrograms).toBe(0);
+        expect(landing.summary.deliveryOptionCount).toBe(0);
+        expect(landing.summary.activePrograms).toBe(0);
         expect(landing.programs).toEqual([]);
         expect(landing.attention).toEqual([]);
+        expect(landing.permissions.canCreateProgram).toBe(true);
     });
 });

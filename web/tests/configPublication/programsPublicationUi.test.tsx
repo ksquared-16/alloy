@@ -306,5 +306,50 @@ describe("Programs Publication workspace", () => {
         expect(container.textContent).not.toMatch(/public\.programs|schema cache/i);
         expect(container.querySelector('[data-testid="programs-empty-state-issue"]')).toBeNull();
         expect(container.querySelector('[data-testid="programs-landing"]')).toBeNull();
+        expect(container.querySelector('[data-testid="programs-first-use-empty"]')).toBeNull();
+    });
+
+    it("renders the full landing for a valid empty Programs collection", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    ...snapshot,
+                    programs: [],
+                    assignments: [],
+                    offerings: [],
+                    variants: [],
+                    runs: [],
+                    attempts: [],
+                    availability: [],
+                }),
+            }),
+        );
+        container = document.createElement("div");
+        document.body.appendChild(container);
+        root = createRoot(container);
+        await act(async () => {
+            root!.render(<ProgramsPublicationWorkspace />);
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        const landing = container.querySelector('[data-testid="programs-landing"]');
+        expect(landing).not.toBeNull();
+        expect(landing?.getAttribute("data-programs-collection-state")).toBe("valid_empty");
+        expect(container.querySelector('[data-testid="programs-unavailable-state"]')).toBeNull();
+        expect(container.querySelector('[data-testid="programs-first-use-empty"]')).toBeNull();
+        expect(container.querySelector('[data-testid="programs-readiness"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="programs-attention-summary"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="programs-inventory"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="programs-list-card"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="programs-landing-empty"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="programs-landing-add"]')).not.toBeNull();
+        expect(container.textContent).toContain("No Programs yet");
+        expect(container.textContent).toContain("0 ready");
+        expect(container.textContent).toContain("No Programs have been created yet");
+        expect(container.textContent).not.toMatch(/setup is not complete|not been initialized/i);
     });
 });

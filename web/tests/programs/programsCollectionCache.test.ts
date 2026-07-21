@@ -59,10 +59,78 @@ describe("Programs collection cache", () => {
         expect(peekProgramsCollection(orgA)?.programs[0]?.id).toBe("program-1");
     });
 
-    it("invalidates on demand", async () => {
-        mockProgramsApi();
-        await loadProgramsCollection(orgA);
-        invalidateProgramsCollection(orgA, "test", { publishBus: false });
+    it("caches a valid empty collection without treating it as unavailable", async () => {
+        const fetchMock = vi.fn(async () => {
+            return new Response(
+                JSON.stringify({
+                    capabilities: { canManage: true },
+                    programs: [],
+                    locations: [],
+                    runs: [],
+                    attempts: [],
+                    assignments: [],
+                    availability: [],
+                    offerings: [],
+                    variants: [],
+                    tuitionRates: [],
+                    policies: [],
+                    products: [],
+                }),
+                { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        const first = await loadProgramsCollection(orgA);
+        expect(first.snapshot.programs).toEqual([]);
+        const second = await loadProgramsCollection(orgA);
+        expect(second.meta.cacheHit).toBe(true);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(peekProgramsCollection(orgA)?.programs).toEqual([]);
+    });
+
+    it("does not classify request failures as an empty collection", async () => {
+        const fetchMock = vi.fn(async () => {
+            return new Response(
+                JSON.stringify({
+                    error: {
+                        code: "action_failed",
+                        title: "The Configuration action could not be completed",
+                        message: "Your changes were not applied.",
+                        nextStep: "Review the requested change and try again.",
+                        reference: "cfg-fail",
+                    },
+                }),
+                { status: 500, headers: { "Content-Type": "application/json" } },
+            );
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        await expect(loadProgramsCollection(orgA)).rejects.toMatchObject({
+            name: "ConfigurationRuntimeIssueError",
+            issue: { code: "action_failed" },
+        });
+        expect(peekProgramsCollection(orgA)).toBeNull();
+    });
+
+    it("does not classify missing-table failures as an empty collection", async () => {
+        const fetchMock = vi.fn(async () => {
+            return new Response(
+                JSON.stringify({
+                    error: {
+                        code: "not_initialized",
+                        title: "Programs setup is not complete",
+                        message: "This Configuration area has not been initialized in this environment.",
+                        nextStep: "An administrator needs to complete platform setup before this configuration can be used.",
+                        reference: "cfg-missing",
+                    },
+                }),
+                { status: 503, headers: { "Content-Type": "application/json" } },
+            );
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        await expect(loadProgramsCollection(orgA)).rejects.toMatchObject({
+            name: "ConfigurationRuntimeIssueError",
+            issue: { code: "not_initialized" },
+        });
         expect(peekProgramsCollection(orgA)).toBeNull();
     });
 });

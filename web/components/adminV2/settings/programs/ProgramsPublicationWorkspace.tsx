@@ -655,7 +655,7 @@ function ProgramsPublicationObjectWorkspace(props: {
                 </ConfigurationContext>
 
                 <ConfigurationShell testId="programs-configuration-shell">
-                    {loadIssue ?
+                    {loadIssue && !landing ?
                         <div
                             className="mx-auto max-w-xl rounded-xl border border-alloy-forge/10 bg-white px-5 py-6 shadow-[0_1px_2px_rgba(19,33,43,0.04)]"
                             data-testid="programs-unavailable-state"
@@ -677,41 +677,37 @@ function ProgramsPublicationObjectWorkspace(props: {
                                 Retry
                             </ConfigurationSecondaryButton>
                         </div>
-                    : landing && landing.summary.totalPrograms === 0 ?
-                        <div
-                            className="mx-auto max-w-xl rounded-xl border border-alloy-forge/10 bg-white px-5 py-8 text-center shadow-[0_1px_2px_rgba(19,33,43,0.04)]"
-                            data-testid="programs-first-use-empty"
-                        >
-                            <p className="text-base font-semibold text-alloy-midnight">Add your first Program</p>
-                            <p className="mt-2 text-sm text-alloy-midnight/60">
-                                Programs are reusable Organization services such as Preschool or After-school care.
-                                Define once, publish a revision, then assign that revision to Locations.
-                            </p>
-                            <p className="mt-3 text-xs text-alloy-midnight/45">
-                                Examples: Preschool · After-school care · Summer camp
-                            </p>
-                            {canManage ?
-                                <ConfigurationPrimaryButton
-                                    className="mt-5"
-                                    onClick={() => setCreateOpen(true)}
-                                    data-testid="programs-first-use-add"
-                                >
-                                    Add Program
-                                </ConfigurationPrimaryButton>
-                            :   null}
-                        </div>
                     : landing ?
-                        <ProgramsLanding
-                            landing={landing}
-                            showRetired={showRetired}
-                            onShowRetiredChange={setShowRetired}
-                            search={landingSearch}
-                            onSearchChange={setLandingSearch}
-                            onOpenProgram={(programId, section) =>
-                                selectProgram(programId, section ?? "overview")
-                            }
-                            onAddProgram={() => setCreateOpen(true)}
-                        />
+                        <>
+                            {loadIssue ?
+                                <div
+                                    className="mb-3 rounded-lg border border-alloy-forge/15 bg-alloy-sand/40 px-3 py-2 text-sm text-alloy-midnight/75"
+                                    data-testid="programs-landing-soft-error"
+                                    data-issue-code={loadIssue.code}
+                                >
+                                    <p className="font-medium text-alloy-midnight">{loadIssue.title}</p>
+                                    <p className="mt-0.5 text-xs text-alloy-midnight/60">{loadIssue.message}</p>
+                                    <ConfigurationSecondaryButton
+                                        className="mt-2"
+                                        onClick={() => void reload({ force: true })}
+                                        data-testid="programs-landing-soft-error-retry"
+                                    >
+                                        Retry
+                                    </ConfigurationSecondaryButton>
+                                </div>
+                            :   null}
+                            <ProgramsLanding
+                                landing={landing}
+                                showRetired={showRetired}
+                                onShowRetiredChange={setShowRetired}
+                                search={landingSearch}
+                                onSearchChange={setLandingSearch}
+                                onOpenProgram={(programId, section) =>
+                                    selectProgram(programId, section ?? "overview")
+                                }
+                                onAddProgram={() => setCreateOpen(true)}
+                            />
+                        </>
                     :   null}
                 </ConfigurationShell>
 

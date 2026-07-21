@@ -170,10 +170,17 @@ Related workspace chapters remain under a quiet “Related” strip — not Comm
 
 ### Runtime evidence (agent smoke, 2026-07-21)
 
-- Route stays on `http://127.0.0.1:3014/organization/programs` (no Commercial bounce).
-- This slot DB surfaces `programs-unavailable-state` (bounded + Retry) — not the legacy educational “Common examples” page.
-- Locations landing still loads; Programs → Locations → Programs continuity holds.
-- Focused Vitest (landing model + publication UI): pass. `npm run typecheck`: pass. `verify:module-imports`: pass.
+**Root cause (zero-state QA fail):** `GET /api/admin/configuration/programs` → `loadProgramPublicationSnapshot` → `.from("programs")` returned PostgREST schema-cache miss (`Could not find the table 'public.programs'`). `classifyConfigurationRuntimeIssue` mapped that to `not_initialized` (503). Slot 4 trusted env targets Supabase staging branch project `ikaxilmwmrmbagoidedu` (parent Alloy `vslwnntzzgpnmrpjipat`). Authority is canonical `public.programs` via `/api/admin/configuration/programs` — not legacy offerings.
+
+**Environment correction:** Applied `20260722020000_configuration_publication_runtime_v1` Programs identity/publication tables to the connected staging DB (and local Docker `alloy-runtime-realization`). Deferred LPC auto-seed so valid-empty QA remains zero rows. Pre-existing differently shaped `configuration_distribution_*` tables on staging were left in place; Programs landing read path does not require them for empty collection.
+
+**After correction:**
+- API `200` with `programs: []`
+- Full landing renders (`data-programs-collection-state="valid_empty"`)
+- No setup/unavailable card for zero rows
+- Locations continuity retained
+
+Focused Vitest (landing model + publication UI + collection cache + runtime issue): pass. `npm run typecheck` / `verify:module-imports`: run at handoff.
 
 ## 19. Operator QA results
 
