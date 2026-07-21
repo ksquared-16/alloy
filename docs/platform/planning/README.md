@@ -17,8 +17,10 @@ This folder holds one architecture and the trail that discovered it. If you read
 
 ## Build V1 (from architecture to product)
 
-- **[mvp-product-definition.md](./mvp-product-definition.md)** — the smallest shippable-today product: three scheduling problems (over-ratio · unplaced child · start-date conflict), the resolve→compare→commit experience, a read-only roster, minimal BOS. V1 / V2 / deferred, ruthlessly scoped.
-- **[engineering-handoff.md](./engineering-handoff.md)** — implementation-ready: per-screen spec (purpose · workflow · data · capabilities · dependencies · priority), a 7-step build sequence, and acceptance criteria — all on the existing substrate, no new runtime.
+- **[scheduling-product-v1.md](./scheduling-product-v1.md)** — the refined, director's-eye Scheduling product: the full workflow (enrollment → placement → committed), the sharpened Resolve experience (preselected recommendation, ≤3 options, "no new staff" markers, instant compare), the Roster (room health + hover detail), the Attendance seam, Insights (V2 smallest), the finalized Focus Panel, and per-capability V1/V2/never verdicts. Read this for the product.
+- **[mvp-product-definition.md](./mvp-product-definition.md)** — the MVP scope it refines (three problems, screens, journey).
+- **[engineering-handoff.md](./engineering-handoff.md)** — implementation-ready: per-screen spec (purpose · workflow · data · capabilities · dependencies · priority), a 7-step build sequence, acceptance criteria — all on the existing substrate, no new runtime.
+- **[mockups/scheduling-product-final.html](./mockups/scheduling-product-final.html)** — the final Scheduling mockups: Overview · Place a child (rooms ranked by health, "no new staff") · Over ratio (fixes marked by staff cost) · Roster (room health + click-to-inspect). Interactive; production quality; this is what engineering builds.
 
 ## The other final artifacts
 
