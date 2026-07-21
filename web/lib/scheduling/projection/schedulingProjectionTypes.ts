@@ -1,0 +1,131 @@
+/**
+ * The canonical Scheduling projection — subject-scoped, assignment-based.
+ *
+ * Implements `docs/platform/planning/scheduling-projection-contract.md`:
+ * one projection powers the Focus Panel, the Scheduling workspace, the Roster
+ * drill-down, the Command Surface, print, and BOS. The **Assignment** is the
+ * shared atom; every surface is an index over it. `children[]` has N for a
+ * household and 1 for a child — the same shape.
+ *
+ * This module is the READ MODEL only. It derives from canonical entities
+ * (`child_enrollment_agreements` → `child_placements` → `schedule_assignments`
+ * + `schedule_patterns`) and registered calculations; it authors nothing and
+ * duplicates no source row. Rate / projected tuition are `pending` here and
+ * enriched from the Billing projection (Billing owns money).
+ */
+
+/** Lifecycle bucket an assignment resolves into for a given `asOf` date. */
+export type SchedulingLifecycleBucket = "current" | "upcoming" | "temporary";
+
+/** Money shape displayed by Scheduling (never computed here). */
+export type SchedulingMoney = { amount: number; unit: string };
+
+/** Room reference on an assignment. */
+export type AssignmentRoom = {
+    id: string | null;
+    name: string | null;
+    program: string | null;
+};
+
+/**
+ * The atomic, effective-dated unit of scheduled reality — maps to a
+ * `schedule_assignment` row over the committed `child_placements` foundation.
+ * `arriveTime` / `departTime` are null in V1 (the slice-1 schema carries no
+ * per-assignment times; per-day time overrides are the Phase-2 pattern editor).
+ */
+export type Assignment = {
+    id: string;
+    childId: string;
+    room: AssignmentRoom;
+    weekdays: number[]; // 0=Sun .. 6=Sat
+    arriveTime: string | null;
+    departTime: string | null;
+    effectiveFrom: string; // YYYY-MM-DD
+    effectiveTo: string | null; // null => open-ended
+    openEnded: boolean;
+    kind: "base" | "temporary";
+    supersedes?: string;
+};
+
+/**
+ * A lifecycle grouping of a child's assignments plus its consequences — the
+ * operator-facing "schedule". Resolved from atoms, not stored.
+ */
+export type ScheduleView = {
+    bucket: SchedulingLifecycleBucket;
+    effectiveFrom: string;
+    effectiveTo: string | null;
+    openEnded: boolean;
+    temporary: boolean;
+    assignments: Assignment[]; // 1+ (split-week = several)
+    rate: SchedulingMoney | "pending";
+    projectedTuition: SchedulingMoney | null;
+    fundingApplies?: boolean;
+};
+
+/** A single point on the read-only effective-dated history chain. */
+export type ScheduleHistoryEntry = {
+    effectiveFrom: string;
+    effectiveTo: string | null;
+    summary: string;
+};
+
+export type ChildSchedulingStatus =
+    | "scheduled"
+    | "needs-placement"
+    | "upcoming-only"
+    | "ended";
+
+/**
+ * A configured command resolved from the Action Runtime (never hardcoded).
+ * The pure read model leaves this empty; the API composition layer attaches
+ * eligibility-/permission-filtered commands via `resolveActionsForContext`.
+ */
+export type ConfiguredCommandRef = {
+    key: string;
+    label: string;
+    state: "Recommended" | "Ready" | "Warning" | "Blocked" | "Unavailable";
+    reason?: string;
+};
+
+export type ChildSchedulingSubject = {
+    id: string; // customer_member_id
+    name: string;
+    program: string | null;
+    ageGroup: string | null;
+    siteId: string | null;
+    siteName: string | null;
+};
+
+/** Freshness / completeness carried so every consumer guards identically. */
+export type SchedulingCalculationMeta = {
+    computedAt: string; // ISO instant, injected (never Date.now in pure code)
+    freshness: "fresh" | "stale";
+    inputVersions: Record<string, string>;
+    completeness: "complete" | "partial";
+    partialReasons: string[];
+};
+
+export type ChildScheduling = {
+    child: ChildSchedulingSubject;
+    status: ChildSchedulingStatus;
+    current: ScheduleView | null;
+    upcoming: ScheduleView[];
+    temporary: ScheduleView[];
+    history: ScheduleHistoryEntry[];
+    availableCommands: ConfiguredCommandRef[];
+};
+
+export type SchedulingProjectionSubject = {
+    type: "household" | "child";
+    id: string;
+    name: string;
+};
+
+/** The canonical projection. `children[]` is N (household) or 1 (child). */
+export type SchedulingProjection = {
+    subject: SchedulingProjectionSubject;
+    asOf: string; // resolution date, YYYY-MM-DD (default today)
+    children: ChildScheduling[];
+    calculationMeta: SchedulingCalculationMeta;
+};
