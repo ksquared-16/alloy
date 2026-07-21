@@ -9,7 +9,9 @@ supersedes: []
 
 **Status:** Proposed — companion to [`operational-planning-platform.md`](./operational-planning-platform.md). The running classification of every discovery (Scheduling-specific vs reusable platform), the doctrine updates this proposes, and the MVP → V2 → V3 roadmap.
 
-> **Iteration-2 discovery buckets.** The mission's named extraction buckets (Operational Planning Platform · Studio Platform · Planning Runtime · Simulation Runtime · Optimization Runtime · Operational Commit · Focus Panel Evolution · Workspace Evolution · BOS Evolution · Future Platform Doctrine) are consolidated in [`architecture-validation.md`](./architecture-validation.md) §6. The ledger below is the full per-item classification.
+> **Iteration-3 discoveries (current).** From [`operational-planning-runtime.md`](./operational-planning-runtime.md): **(1) Reality-as-object** — the operator manipulates *proposed reality*, not plans (Plan = the back-of-house change-record). **(2) Planning ⊂ Work, woven** — the *Resolve* verb on any operational pressure; Studio is config-only. **(3) The Planning Runtime is composed of Reality + Change + Simulation + Commit**, not of Plans. **(4) The calendar is a visualization**, not the product; grain is per-domain visualization. **(5) Cross-domain-validated** across eight domains ([`planning-cross-domain-validation.md`](./planning-cross-domain-validation.md)). **(6) Planning (Commit) and Authoring (Publish) are siblings** under one "propose→project→cross a door" pattern — not nested.
+>
+> **Iteration-2 buckets** (Studio Platform now = config-authoring only; the rest stand) are consolidated in [`architecture-validation.md`](./architecture-validation.md) §6. The ledger below is the full per-item classification.
 
 ---
 

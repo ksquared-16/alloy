@@ -76,37 +76,35 @@ Filling the plugin contract from the platform doc §7:
 
 Scheduling inherits the **Family A operational workspace shell** — `WorkspaceShell` with the **Work | Studio** model — which already **names Scheduling as an intended inheritor** (`web/components/workspace/WorkspaceShell.tsx`, `doctrine.ts`, `navigation-and-workspace-doctrine.md`). No new shell; no new aesthetic. It mounts inside `AdminV2WorkspaceBosModalShell` exactly like Processing/Communications/Work Items.
 
-> **Iteration-2 correction (load-bearing).** The planning loop is **design-time**, so it lives in **Studio, not Work** — see [`studio-platform.md`](./studio-platform.md) and [`architecture-validation.md`](./architecture-validation.md). Work reverts to the Alloy spine (Overview + Work Views + Focus Panel); the Room × Day board is a **Studio** canvas perspective, not a Work screen. This is what makes Scheduling indistinguishable from Processing.
+> **Iteration-3 correction (load-bearing, supersedes the Iteration-2 note).** Planning is **not** design-time and does **not** live in Studio. It begins with operational **pressure while operating on live reality**, so it lives in **Work** — woven into the queues and Focus Panel as the way an operator *resolves* pressure, plus a proactive **Planning** Work View. **Studio is config assets only** (patterns, rules, rooms, objectives). The Room × Day board is the **Roster** — one visualization of reality, that planning is *invoked from*. See [`operational-planning-runtime.md`](./operational-planning-runtime.md). The Iteration-2 "planning in Studio" framing below is retained struck-through for the record.
 
-### 5.1 Work vs Studio
+### 5.1 Work vs Studio (Iteration 3)
 
-- **Work** answers *"How do I operate today?"* — it operates **today's committed schedule reality**, expressed exactly like Processing: an **Overview**, **Work Views (queues)** of live operational attention, and the **Focus Panel**. There is **no board in Work**.
-- **Studio** answers *"How do I design tomorrow?"* — it is the **operational design environment** ([`studio-platform.md`](./studio-platform.md)) hosting the planning loop: **build a Plan → Simulate → Optimize (compare futures) → Commit**, plus the design assets that power Work.
+- **Work** answers *"How do I operate today?"* — Overview, operational **Work Views (queues)**, the **Roster** visualization, and the **Focus Panel**. **Planning is woven here**: from any point of pressure (a queue row, a roster cell, a forecast alert) the operator can **Resolve** — propose a change to reality → simulate → compare → commit — in place. A proactive **Planning** Work View handles deliberate forward work (the unplaced backlog, next term).
+- **Studio** answers *"How do I design the rules?"* — the design-time environment for reusable **configuration assets** only: schedule **Patterns**, ratio/capacity/schedule **Rules**, **Rooms**, optimization **Objectives**. **No plans, no simulation, no board in Studio.**
 
-This maps onto the truth-flow axis: **Work operates over committed L2 Intent + L3 Projections; Studio authors *proposed* L2 Intent (plans) and L1 Configuration (assets), committing across the seam.** Configuration and Planning are the two expressions of Studio.
+Truth-flow mapping: **Work** both explores futures (Planning plane, read-only) and **commits** the chosen change (Operations-plane action → effective-dated L2 Intent). **Studio** authors L1 Configuration (Publish). Planning (Commit) and Authoring (Publish) are *siblings*, not nested — [`operational-planning-runtime.md`](./operational-planning-runtime.md) §8.
 
 ### 5.2 Sections
 
 | Mode | Sections | Composed from |
 |------|----------|---------------|
-| **Work** | **Overview** · **Unplaced** · **Ratio risk** · **Schedule ↔ Attendance** · **Awaiting commit** · **Roster** | Overview landing · Work Views (`WorkspaceQueueRow`) · Focus Panel |
-| **Studio** | **Plans** · **Plan canvas** (Room × Day) · **Optimization** · **Simulation** · **Commit** · **Rooms** · **Rules** · **Calendar** · **Patterns** · **Objectives** | Studio list+detail · design canvas + inspector · Focus Panel |
+| **Work** | **Overview** · **Planning** · **Roster** (Room × Day) · **Attendance** · **Insights** | Overview landing · Work Views (`WorkspaceQueueRow`) · Focus Panel · **woven "Resolve"** on every surface |
+| **Studio** | **Patterns** · **Rules** · **Rooms** · **Objectives** | config asset authoring (Publish) — no plans |
 
-- **Overview (Work)** follows the Family-A pattern: primary action cards → "Today's activity" tiles → information zones. It answers *what needs operating attention right now* — the same shape as Processing's Overview.
-- **Work Views (Work)** are queues — *Unplaced* (enrolled, no committed schedule), *Ratio risk* (rooms projected out of tier this week), *Schedule ↔ Attendance* (committed schedule vs actual facts), *Awaiting commit* (plans approved, not yet committed). Each row opens a **Focus Panel**. Pure Processing DNA.
-- **Plan canvas (Studio)** is the Room × Day grid — rendered on the inherited **Studio design canvas** (Experience-Builder-class canvas + Focus-Panel inspector), the matrix being operational *content*, not new chrome.
-- **Optimization / Simulation (Studio)** host futures generation/comparison and alternative-reality projection ([`architecture-validation.md`](./architecture-validation.md) §2–3).
-- **Conflicts** are an *output of Simulation*, surfaced as a Work View (Ratio risk) in Work and inline on the canvas in Studio — never a separate engine.
+- **Overview (Work)** — action cards + Today's-activity tiles + info zones; answers *what needs resolving right now* (operational pressure). Same shape as Processing's Overview.
+- **Planning (Work)** — the proactive doorway: current reality + the unplaced/forecast backlog; propose → simulate → compare → commit. The *dominant* planning expression is **woven** (the **Resolve** verb) into every other surface, not confined here.
+- **Roster (Work)** — the Room × Day grid as **one visualization of reality**; planning is *invoked from* a cell, not built around the board.
+- **Attendance / Insights (Work)** — the fact roster and the forecasting/OI surfaces that **surface pressure** feeding planning.
 
-### 5.3 What is Scheduling-specific vs reusable
+### 5.3 What is Scheduling-specific vs reusable — see [`planning-cross-domain-validation.md`](./planning-cross-domain-validation.md) §3
 
 | Reusable platform (extract) | Scheduling-specific (keep) |
 |-----------------------------|----------------------------|
-| The Work\|Studio shell, Overview pattern, operational-health strip, Work Views, Focus Panel | Room × Day matrix cell renderer (canvas content) |
-| **Studio Platform** (author→preview→compare→commit) | The seven plugin artifacts (§4) |
-| The Plan object, Simulation, Optimization, Commit primitives | Schedule patterns, ratio tiers, operating windows |
-| The planning Focus Panel card | The room/child/day domain vocabulary |
-| The plan-diff / compare surface (a Work View of futures) | Placement cascade School→Program→Room→Schedule |
+| The Work shell, Overview, Work Views, Focus Panel, **woven Resolve** | Room × Day roster visualization (cell renderer) |
+| The **pressure→propose→simulate→compare→decide→commit runtime**; **reality-as-object** | Placement cascade School→Program→Room→Schedule |
+| Simulation, multi-future comparison, Commit (supersede) | Schedule patterns, ratio tiers, operating windows |
+| The planning Focus Panel card; the proactive **Planning** Work View | The room/child/day domain vocabulary |
 
 ---
 

@@ -7,7 +7,11 @@ supersedes: []
 
 # Architecture validation — Iteration 2
 
-**Status:** Proposed — the record of forcing the Operational Planning architecture to live inside the frozen Alloy workspace, challenging every Iteration-1 assumption, and converging the model with mockups that inherit Processing / Communications / Work Items.
+**Status:** Proposed — Iteration-2 record, **its central placement conclusion reversed by Iteration 3.**
+
+> **⚠️ Reversed (Iteration 3, [`operational-planning-runtime.md`](./operational-planning-runtime.md)).** This doc concluded *"Planning lives in Studio."* Iteration 3 disproves that from operator behavior: planning begins with **pressure while operating on live reality**, so it lives in **Work** (woven as the *Resolve* verb), and **Studio stays config-only.** What survives from this doc: Work is the Alloy spine; **Alloy commits changes, not records** (§4, sharpened in Iteration 3 to *the operator manipulates reality, not plans*); Optimization = futures comparison (§3). Read the Iteration-3 doc for the corrected placement and mental model; treat this doc as the reasoning trail that got there.
+
+**Status (original):** the record of forcing the Operational Planning architecture to live inside the frozen Alloy workspace, challenging every Iteration-1 assumption, and converging the model with mockups that inherit Processing / Communications / Work Items.
 
 **Method.** For each surface: compose it *only* from existing Alloy primitives; where a deviation appears, decide **(A) the mockup is wrong** or **(B) the architecture is wrong**; if (B), revise the architecture, then rebuild. Repeat to convergence. The per-surface results are in §5.
 

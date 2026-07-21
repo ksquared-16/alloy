@@ -7,7 +7,9 @@ supersedes: []
 
 # The Studio Platform — the operational design environment
 
-**Status:** Proposed — Iteration-2 discovery. Companion to [`operational-planning-platform.md`](./operational-planning-platform.md). This is the sprint's central new discovery: **Planning does not need its own workspace paradigm — it is what Studio *is*, generalized.**
+**Status:** Proposed — Iteration-2 discovery, **partially superseded by Iteration 3.**
+
+> **⚠️ Correction (Iteration 3, [`operational-planning-runtime.md`](./operational-planning-runtime.md)).** This doc's central claim — *"Planning is what Studio is, generalized" (Planning ⊂ Studio)* — is **WITHDRAWN.** Reasoning from operator behavior, planning begins with operational **pressure while operating on live reality**, so it lives in **Work**, not Studio; sending operators to a studio to resolve live pressure violates the continuity law and contradicts the plane doctrine. **What survives:** Studio is the design-time environment for reusable **configuration assets** (forms, patterns, rules, workflows), and **Authoring (Publish) is the *sibling* of Planning (Commit)** under one universal pattern — *propose → project → cross a door into the runtime* — with two non-merged instances (assets-in-Studio / reality-in-Work). Read §8 of the runtime doc for the corrected relationship. Everything below about Studio-as-config-design-environment stands; every claim that plans/simulation/optimization live *in Studio* does not.
 
 ---
 

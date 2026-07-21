@@ -1,0 +1,404 @@
+<title>Scheduling · Planning in Work — v3</title>
+<style>
+  /* Alloy workspace — faithful transcription (see v2 clone kit). Light-only. */
+  :root{
+    --pine:#00A283; --pine-hover:#009276; --forge:#273F52; --ink:#18273A; --slate:#45506c; --muted:#59678b;
+    --stone:#F4F6F9; --gold:#DBC078; --gold-dark:#d0ad50; --ember:#BC4300; --blue:#00458C; --page:#EEF2F8;
+    --font:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --mid-90:rgba(39,63,82,.90);--mid-70:rgba(39,63,82,.70);--mid-62:rgba(39,63,82,.62);--mid-58:rgba(39,63,82,.58);
+    --mid-45:rgba(39,63,82,.45);--mid-42:rgba(39,63,82,.42);--mid-40:rgba(39,63,82,.40);--mid-35:rgba(39,63,82,.35);--mid-25:rgba(39,63,82,.25);
+    --stone-30:rgba(244,246,249,.30); color-scheme:light;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--page);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.45}
+  .tab{font-variant-numeric:tabular-nums} h1,h2,h3,h4{margin:0} button{font-family:inherit;cursor:default;border:none;background:none}
+  .gallery{max-width:1180px;margin:0 auto;padding:20px 18px 56px}
+  .g-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap;margin-bottom:14px}
+  .g-title{font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--forge)}
+  .g-sub{font-size:12px;color:var(--muted);margin-top:3px;max-width:66ch}
+  .g-badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--gold-dark);background:rgba(219,192,120,.14);border:1px solid rgba(208,173,80,.4);padding:4px 9px;border-radius:999px}
+  .g-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:13px}
+  .g-tab{border:1px solid var(--mid-25);background:#fff;color:var(--slate);font-size:12px;font-weight:500;padding:7px 12px;border-radius:8px;cursor:pointer;transition:all .15s}
+  .g-tab:hover{border-color:var(--pine);color:var(--pine)}
+  .g-tab[aria-selected="true"]{border-color:var(--pine);background:rgba(0,162,131,.08);color:var(--pine);font-weight:600;box-shadow:inset 0 -2px 0 var(--pine)}
+  .g-tab:focus-visible{outline:2px solid var(--pine);outline-offset:2px}
+  .g-note{font-size:11px;color:var(--muted);margin:0 0 12px}
+  .app{display:flex;background:var(--stone);border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(39,63,82,.10);min-height:640px}
+  .rail{width:56px;flex:0 0 56px;background:var(--forge);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px}
+  .rail-logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--pine),#0b7d68);display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;margin-bottom:8px}
+  .rail-i{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:rgba(255,255,255,.6);font-size:15px;position:relative}
+  .rail-i.on{background:rgba(255,255,255,.10);color:#fff}
+  .rail-i.on::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--pine)}
+  .topbar{height:6px;background:var(--blue)} .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .shell{flex:1;display:flex;flex-direction:column;min-width:0;border-radius:16px;border:1px solid rgba(244,246,249,.9);background:#fff;overflow:hidden}
+  .control-band{border-bottom:1px solid var(--stone-30)}
+  .ws-header{display:flex;align-items:center;justify-content:space-between;gap:12px;border-left:2px solid var(--pine);background:#fff;padding:6px 16px 0}
+  .ws-id{display:flex;align-items:center;gap:8px;min-width:0} .ws-ico{width:24px;height:24px;display:grid;place-items:center;color:var(--forge);font-size:15px}
+  .ws-title{font-size:14px;font-weight:600;color:var(--forge);line-height:1.15} .ws-subt{font-size:11px;color:var(--slate)}
+  .ws-acts{display:flex;align-items:center;gap:6px;margin-left:auto}
+  .btn-primary{display:inline-flex;align-items:center;gap:6px;border-radius:6px;background:var(--pine);padding:6px 12px;font-size:12.5px;font-weight:600;color:#fff} .btn-primary:hover{background:var(--pine-hover)}
+  .btn-secondary{display:inline-flex;align-items:center;gap:6px;border-radius:8px;border:1px solid var(--mid-25);background:#fff;padding:6px 12px;font-size:12px;font-weight:500;color:var(--mid-70)}
+  .btn-close{display:inline-flex;align-items:center;gap:4px;border-radius:6px;border:1px solid rgba(244,246,249,.8);padding:4px 8px;font-size:11px;font-weight:600;color:var(--mid-40)}
+  .ws-modenav{background:#fff;padding:4px 16px 12px}
+  .modesplit{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px 16px;align-items:center}
+  @media (max-width:800px){.modesplit{grid-template-columns:1fr}}
+  .modestack{display:flex;flex-direction:column;gap:8px;min-width:0} .modepills{display:flex;gap:4px}
+  .mp{border-radius:6px;border:1px solid var(--mid-25);background:#fff;padding:4px 12px;font-size:11px;font-weight:600;color:var(--mid-70)}
+  .mp.on{border-color:var(--pine);color:var(--pine);box-shadow:inset 0 -2px 0 var(--pine)}
+  .subtabs{display:inline-flex;align-items:center;gap:12px;margin-bottom:-1px;flex-wrap:wrap}
+  .st{padding:2px 2px 6px;font-size:12px;font-weight:600;color:rgba(39,63,82,.5);border-bottom:2px solid transparent}
+  .st.on{color:var(--pine);border-bottom-color:var(--pine)}
+  .ophealth{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .oph-eye{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--slate)}
+  .oph-eye::before{content:"";width:6px;height:6px;transform:rotate(45deg);background:rgba(69,80,108,.5)}
+  .oph-metrics{display:flex;flex-wrap:wrap;gap:8px 24px} .oph-m{min-width:88px}
+  .oph-v{font-size:18px;font-weight:600;line-height:1;color:var(--forge)} .oph-v.pine{color:var(--pine)} .oph-v.gold{color:var(--gold-dark)} .oph-v.ember{color:var(--ember)}
+  .oph-l{margin-left:6px;font-size:11px;font-weight:500;color:var(--slate)} .oph-t{margin-top:2px;font-size:10px;font-weight:500;line-height:1.1}
+  .oph-t.pine{color:var(--pine)} .oph-t.ember{color:var(--ember)} .oph-t.slate{color:var(--slate)}
+  .ws-inset{display:flex;min-height:0;flex:1;flex-direction:column;background:#fff;padding:12px 16px 16px}
+  .ws-canvas{display:flex;min-height:0;flex:1;flex-direction:column;overflow:auto;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(244,246,249,.55);background:rgba(244,246,249,.5)}
+  .ws-canvas.white{background:#fff;box-shadow:none;padding:0}
+  .surface{padding:16px} .surface .wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+  /* overview */
+  .actioncards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px} @media (max-width:760px){.actioncards{grid-template-columns:1fr}}
+  .accard{position:relative;overflow:hidden;border-radius:16px;background:#fff;padding:20px 20px 20px 24px}
+  .accard.primary{box-shadow:0 4px 24px rgba(24,39,58,.10);outline:1px solid rgba(0,162,131,.20)}
+  .accard.secondary{box-shadow:0 3px 14px rgba(24,39,58,.09);outline:1px solid rgba(188,67,0,.18)}
+  .accard.tertiary{box-shadow:0 2px 10px rgba(24,39,58,.07);outline:1px solid rgba(39,63,82,.16)}
+  .accard .rail3{position:absolute;top:12px;bottom:12px;left:0;width:4px;border-radius:999px;background:var(--pine)}
+  .accard.secondary .rail3{background:var(--ember)}
+  .ac-well{margin-bottom:14px;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:18px}
+  .ac-well.pine{background:rgba(0,162,131,.11);color:var(--pine);outline:1px solid rgba(0,162,131,.28)}
+  .ac-well.ember{background:rgba(188,67,0,.10);color:var(--ember);outline:1px solid rgba(188,67,0,.24)}
+  .ac-well.forge{background:rgba(39,63,82,.06);color:var(--forge);outline:1px solid rgba(39,63,82,.22)}
+  .ac-h{font-size:15px;font-weight:600;color:var(--forge)} .ac-p{margin:6px 0 0;min-height:40px;font-size:12px;line-height:1.4;color:var(--slate)}
+  .ac-cta{margin-top:16px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--pine)} .ac-cta.ember{color:var(--ember)} .ac-cta.forge{color:var(--forge)}
+  .kpi-eye{margin:0 0 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--mid-35)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px} @media (max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{display:flex;align-items:center;gap:8px;min-width:112px;padding:8px 10px;border-radius:12px;border:1px solid rgba(244,246,249,.9);background:#fff;box-shadow:0 2px 8px rgba(24,39,58,.07)}
+  .kpi-well{flex:0 0 auto;width:36px;height:36px;border-radius:8px;display:grid;place-items:center;font-size:15px}
+  .kpi-well.pine{background:rgba(0,162,131,.08);color:var(--pine)} .kpi-well.gold{background:rgba(219,192,120,.20);color:var(--gold-dark)} .kpi-well.ember{background:rgba(188,67,0,.08);color:var(--ember)}
+  .kpi-v{font-size:18px;font-weight:700;letter-spacing:-.03em;line-height:1;color:var(--forge)}
+  .kpi-lrow{display:flex;align-items:center;gap:6px;margin-top:6px} .kpi-gem{width:8px;height:8px;transform:rotate(45deg)}
+  .kpi-gem.pine{background:var(--pine)} .kpi-gem.gold{background:var(--gold)} .kpi-gem.ember{background:var(--ember)} .kpi-l{font-size:10px;font-weight:500;color:var(--mid-42)}
+  .zones{display:grid;grid-template-columns:repeat(3,1fr);gap:16px} @media (max-width:760px){.zones{grid-template-columns:1fr}}
+  .zone{border-radius:12px;border:1px solid rgba(244,246,249,.9);background:#fff;box-shadow:0 2px 10px rgba(24,39,58,.07);padding:12px 16px}
+  .zone-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px} .zone-h h2{font-size:13px;font-weight:600;color:var(--forge)} .zone-h button{font-size:11px;font-weight:600;color:var(--pine)}
+  .recent{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .recent li{display:flex;align-items:flex-start;gap:12px;border-radius:8px;padding:8px 8px 10px}
+  .recent .bar{margin-top:2px;width:2px;height:32px;flex:0 0 auto;border-radius:999px;background:var(--pine)} .recent .bar.ember{background:var(--ember)} .recent .bar.slate{background:var(--mid-25)} .recent .bar.gold{background:var(--gold)}
+  .recent .lbl{font-size:13px;font-weight:600;color:var(--forge)} .recent .sub{margin-top:2px;font-size:11px;font-weight:500;color:var(--slate)} .recent .sub.pine{color:var(--pine)} .recent .sub.ember{color:var(--ember)}
+  /* work unit: queue + focus panel */
+  .wu{display:grid;grid-template-columns:24rem minmax(0,1fr);gap:0;height:100%} @media (max-width:800px){.wu{grid-template-columns:1fr}}
+  .queue-col{padding:16px;overflow:auto;border-right:1px solid rgba(244,246,249,.9)}
+  .queue-head{display:flex;align-items:baseline;justify-content:space-between;padding:0 2px 6px} .queue-head h3{font-size:13px;font-weight:600;color:var(--forge)} .queue-head .count{font-size:11px;color:var(--mid-45)}
+  .qlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .qrow{display:block;width:100%;text-align:left;border-radius:8px;border:1px solid rgba(244,246,249,.9);border-left:2px solid rgba(244,246,249,.9);padding:8px 10px;box-shadow:0 1px 2px rgba(39,63,82,.05);cursor:pointer}
+  .qrow:hover{background:rgba(244,246,249,.5)}
+  .qrow.sel{border-color:rgba(0,162,131,.45);border-left-color:var(--pine);background:rgba(0,162,131,.06);box-shadow:0 0 0 1px rgba(0,162,131,.18)}
+  .qrow.overdue{border-left-color:rgba(248,113,113,.85)} .qrow.warn{border-left-color:var(--ember)}
+  .qrow-id{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap} .qrow-ico{width:14px;height:14px;color:var(--mid-40);flex:0 0 auto}
+  .qrow-title{font-size:12.5px;font-weight:600;color:var(--mid-90)} .qrow-pill{border-radius:999px;padding:2px 6px;font-size:9px;font-weight:600;white-space:nowrap}
+  .qrow-pill.wait{border:1px solid rgba(253,230,138,.8);background:#fef3c7;color:#451a03} .qrow-pill.ember{border:1px solid rgba(188,67,0,.3);background:rgba(188,67,0,.08);color:var(--ember)} .qrow-pill.badge{border:1px solid var(--mid-25);background:#fff;color:var(--mid-62)}
+  .qrow-crumb{margin-top:2px;font-size:10px;color:var(--mid-45)} .qrow-snip{margin-top:2px;font-size:11px;line-height:1.4;color:var(--mid-58)}
+  .fp-host{padding:16px;overflow:auto;background:rgba(244,246,249,.35)}
+  .fp{display:flex;flex-direction:column;gap:10px}
+  .fp-shell{border-radius:12px;background:#fff;border:1px solid rgba(39,63,82,.20);box-shadow:0 1px 2px rgba(15,23,42,.05);overflow:hidden}
+  .fp-headbar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(39,63,82,.07)}
+  .fp-av{width:30px;height:30px;border-radius:999px;background:rgba(0,162,131,.10);color:var(--pine);display:grid;place-items:center;font-size:11px;font-weight:700}
+  .fp-av.ember{background:rgba(188,67,0,.10);color:var(--ember)}
+  .fp-nm{font-size:13px;font-weight:600;color:var(--forge)} .fp-sb{font-size:10.5px;color:var(--muted)}
+  .fp-modes{margin-left:auto;display:flex;gap:4px} .fp-mode{font-size:10px;font-weight:600;color:var(--mid-45);padding:3px 8px;border-radius:999px;border:1px solid var(--mid-25);background:#fff} .fp-mode.on{background:var(--pine);color:#fff;border-color:var(--pine)}
+  .fp-grid{padding:10px;display:flex;flex-direction:column;gap:8px}
+  /* universal card (alloy-os-ucard transcription) */
+  .uc{border:1px solid rgba(39,63,82,.20);border-radius:10px;background:#fff;overflow:hidden}
+  .uc.work{border-left:3px solid var(--pine)} .uc.attention{border-left:3px solid var(--ember)} .uc.metric{border-left:2px solid rgba(0,162,131,.45)}
+  .uc-head{display:flex;align-items:flex-start;gap:8px;padding:8px 12px 4px}
+  .uc-ico{color:var(--pine);font-size:13px;margin-top:1px} .uc-ico.ember{color:var(--ember)}
+  .uc-htext{min-width:0;flex:1} .uc-hrow{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .uc-title{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--slate)}
+  .uc-status{flex-shrink:0;font-size:10px;font-weight:600;padding:2px 7px;border-radius:999px;border:1px solid rgba(39,63,82,.12);background:#fff;color:var(--slate)}
+  .uc-status.ready{border-color:rgba(0,162,131,.35);color:var(--pine)} .uc-status.blocked{border-color:rgba(180,83,9,.35);color:#b45309} .uc-status.risk{border-color:rgba(194,65,12,.35);color:var(--ember)} .uc-status.due{border-color:rgba(39,63,82,.25);color:var(--forge)}
+  .uc-insight{margin-top:3px;font-size:13px;font-weight:600;line-height:1.35;color:var(--forge)} .uc-insight.metric{font-size:18px}
+  .uc-support{margin-top:2px;font-size:12px;color:var(--slate)}
+  .uc-body{padding:0 12px 8px;font-size:12px} .uc-foot{padding:6px 12px 8px;border-top:1px solid rgba(39,63,82,.08);display:flex;align-items:center;gap:8px}
+  .uc-action{font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--pine)}
+  .kv{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;padding:4px 0;border-bottom:1px solid rgba(39,63,82,.06)} .kv:last-child{border-bottom:none} .kv .k{color:var(--muted)} .kv .v{color:var(--forge);font-weight:500}
+  /* reality compare (the mental model, made visible) */
+  .reality{display:grid;grid-template-columns:1fr 26px 1fr;gap:10px;align-items:stretch;margin-top:6px}
+  @media (max-width:520px){.reality{grid-template-columns:1fr}}
+  .rside{border-radius:10px;padding:10px;border:1px solid rgba(39,63,82,.10)}
+  .rside.current{background:rgba(188,67,0,.04)} .rside.proposed{background:rgba(0,162,131,.05);border-color:rgba(0,162,131,.28)}
+  .rside .re{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid-40)}
+  .rside .rv{font-size:22px;font-weight:600;letter-spacing:-.03em;margin-top:2px} .rside.current .rv{color:var(--ember)} .rside.proposed .rv{color:var(--pine)}
+  .rside .rd{font-size:10.5px;color:var(--muted);margin-top:1px}
+  .rarrow{display:grid;place-items:center;color:var(--muted);font-size:18px}
+  /* futures / options */
+  .opt{border-radius:8px;border:1px solid rgba(244,246,249,.9);border-left:2px solid var(--mid-25);background:#fff;padding:8px 10px}
+  .opt.pick{border-left-color:var(--pine);background:rgba(0,162,131,.04)}
+  .opt-top{display:flex;align-items:center;gap:8px} .opt-nm{font-size:12px;font-weight:600;color:var(--forge)} .opt-sc{margin-left:auto;font-size:10px;font-weight:600;color:var(--pine)}
+  .opt-rat{margin-top:4px;font-size:10.5px;color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block} .dot.pine{background:var(--pine)} .dot.ember{background:var(--ember)} .dot.gold{background:var(--gold)}
+  .lifecycle{display:flex;align-items:center;margin:4px 0}
+  .ls{font-size:8.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--mid-40);padding:3px 7px;border:1px solid var(--mid-25);border-right:none}
+  .ls:first-child{border-radius:6px 0 0 6px} .ls:last-child{border-right:1px solid var(--mid-25);border-radius:0 6px 6px 0}
+  .ls.done{background:rgba(0,162,131,.08);color:var(--pine);border-color:rgba(0,162,131,.3)} .ls.cur{background:var(--pine);color:#fff;border-color:var(--pine)}
+  /* roster board */
+  .board{overflow:auto;border-radius:10px;border:1px solid rgba(39,63,82,.10);background:#fff}
+  .board table{border-collapse:collapse;width:100%} .board th,.board td{border:1px solid rgba(39,63,82,.07);padding:0;text-align:left}
+  .board thead th{background:rgba(244,246,249,.7);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);padding:7px 9px} .board thead th.now{background:rgba(0,162,131,.08);color:var(--pine)}
+  .rc{padding:9px;min-width:112px} .rc .rn{font-size:11.5px;font-weight:600;color:var(--forge)} .rc .rm{font-size:9.5px;color:var(--muted)}
+  .cell{padding:7px 8px;min-width:96px;position:relative} .cell .occ{font-size:13px;font-weight:600;color:var(--forge)} .cell .cap{font-size:9.5px;color:var(--muted)}
+  .cell .bar{height:3px;border-radius:2px;background:rgba(39,63,82,.10);margin-top:5px;overflow:hidden} .cell .bar>i{display:block;height:100%;background:var(--pine);border-radius:2px}
+  .cell .rr{display:flex;align-items:center;gap:4px;margin-top:5px;font-size:9px;color:var(--muted)}
+  .cell.breach{background:rgba(188,67,0,.06)} .cell.breach .bar>i{background:var(--ember)} .cell.breach .rr{color:var(--ember);font-weight:600}
+  .cell.breach::after{content:"Resolve →";position:absolute;top:4px;right:5px;font-size:7.5px;font-weight:700;color:var(--ember)}
+  .cell.closed{background:repeating-linear-gradient(45deg,#fff,#fff 6px,rgba(39,63,82,.03) 6px,rgba(39,63,82,.03) 12px)} .cell.closed .occ{color:var(--mid-25)}
+  /* studio config */
+  .cfg{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} @media (max-width:700px){.cfg{grid-template-columns:1fr}}
+  .panel{background:#fff;border:1px solid rgba(244,246,249,.9);border-left:3px solid rgba(0,162,131,.75);border-radius:11px;box-shadow:0 2px 8px rgba(24,39,58,.07);overflow:hidden}
+  .panel-h{display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid rgba(39,63,82,.07);background:linear-gradient(90deg,rgba(0,162,131,.06),rgba(0,162,131,.02) 60%,#fff)}
+  .panel-b{padding:11px 13px} .panel-t{font-size:12px;font-weight:600;color:var(--forge)} .panel-n{margin-left:auto;font-size:10.5px;color:var(--muted)}
+  .tiers{width:100%;border-collapse:collapse} .tiers th,.tiers td{text-align:left;font-size:11.5px;padding:6px 8px;border-bottom:1px solid rgba(39,63,82,.07)} .tiers th{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+  .prow{display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid rgba(39,63,82,.06)} .wd{display:flex;gap:4px;margin-left:auto} .wds{width:19px;height:19px;border-radius:6px;display:grid;place-items:center;font-size:9px;font-weight:600;color:var(--muted);background:var(--stone);border:1px solid var(--mid-25)} .wds.on{background:rgba(0,162,131,.10);color:var(--pine);border-color:rgba(0,162,131,.3)}
+  .caption{font-size:11px;color:var(--muted);margin-top:12px;padding:10px 12px;background:rgba(0,162,131,.04);border:1px solid rgba(0,162,131,.14);border-radius:10px;border-left:3px solid var(--pine)} .caption b{color:var(--forge);font-weight:600}
+  .caption.ember{background:rgba(188,67,0,.04);border-color:rgba(188,67,0,.16);border-left-color:var(--ember)}
+  .screen{display:none}.screen.on{display:block}
+  .foot{font-size:11px;color:var(--muted);margin-top:20px;text-align:center;line-height:1.6}
+</style>
+
+<div class="gallery">
+  <div class="g-head">
+    <div>
+      <div class="g-title">Scheduling — Planning is what you do <i>in Work</i></div>
+      <div class="g-sub">Iteration 3. The operator never edits a plan — they hit <b>operational pressure</b> and need to <b>change reality, safely first</b>. So Planning is <b>woven into Work</b> as the <b>Resolve</b> verb (propose → simulate → compare → commit), not a Studio. The object is <b>reality (proposed)</b>, not a document. Studio shrinks to config assets.</div>
+    </div>
+    <span class="g-badge"><span class="kpi-gem gold" style="width:7px;height:7px"></span>Proposed · iteration 3</span>
+  </div>
+  <div class="g-tabs" role="tablist" aria-label="Screens">
+    <button class="g-tab" role="tab" aria-selected="true" data-s="overview">Work · Overview</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="resolve">Resolve (planning, woven)</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="planning">Work · Planning</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="roster">Work · Roster</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="insights">Work · Insights</button>
+    <button class="g-tab" role="tab" aria-selected="false" data-s="studio">Studio · config only</button>
+  </div>
+  <p class="g-note" id="gnote"></p>
+
+  <div class="app">
+    <nav class="rail" aria-hidden="true">
+      <div class="rail-logo">A</div>
+      <div class="rail-i">◫</div><div class="rail-i">◷</div><div class="rail-i on">▦</div><div class="rail-i">✉</div><div class="rail-i">◧</div><div class="rail-i">▤</div>
+    </nav>
+    <div class="main">
+      <div class="topbar"></div>
+      <div class="shell">
+        <div class="control-band">
+          <div class="ws-header">
+            <div class="ws-id"><span class="ws-ico">▦</span><div><div class="ws-title">Scheduling</div><div class="ws-subt" id="subt"></div></div></div>
+            <div class="ws-acts"><button class="btn-secondary" id="act2">Studio</button><button class="btn-primary" id="act1">Resolve a problem</button><button class="btn-close">✕ Close</button></div>
+          </div>
+          <div class="ws-modenav"><div class="modesplit">
+            <div class="modestack">
+              <div class="modepills"><button class="mp on" id="mp-work">Work</button><button class="mp" id="mp-studio">Studio</button></div>
+              <div class="subtabs" id="subtabs"></div>
+            </div>
+            <div class="ophealth" id="ophealth"></div>
+          </div></div>
+        </div>
+        <div class="ws-inset" id="inset"><div class="ws-canvas" id="canvas">
+          <section class="screen on" id="s-overview"></section>
+          <section class="screen" id="s-resolve"></section>
+          <section class="screen" id="s-planning"></section>
+          <section class="screen" id="s-roster"></section>
+          <section class="screen" id="s-insights"></section>
+          <section class="screen" id="s-studio"></section>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">Faithful reproduction of the certified Alloy workspace (transcribed classes) · light-only · <b>docs/platform/planning/</b> · status: proposed · not a shipped product.</div>
+</div>
+
+<script>
+(function(){
+  var subtabs={
+    overview:[["Overview",1],["Planning",0],["Roster",0],["Attendance",0],["Insights",0]],
+    resolve:[["Overview",0],["Planning",1],["Roster",0],["Attendance",0],["Insights",0]],
+    planning:[["Overview",0],["Planning",1],["Roster",0],["Attendance",0],["Insights",0]],
+    roster:[["Overview",0],["Planning",0],["Roster",1],["Attendance",0],["Insights",0]],
+    insights:[["Overview",0],["Planning",0],["Roster",0],["Attendance",0],["Insights",1]],
+    studio:[["Patterns",1],["Rules",0],["Rooms",0],["Objectives",0]]
+  };
+  var isStudio={studio:true};
+  var health={
+    overview:[["2","Need resolving","ember","Thu ratio · unplaced","ember"],["86%","Fill","pine","",""],["1","Awaiting commit","gold","",""]],
+    resolve:[["1","Problem","ember","Sunflower Thu","ember"],["3","Futures","pine","",""],["0","Blocking","pine","",""]],
+    planning:[["3","Unplaced","gold","",""],["2","Forecast alerts","ember","Oct","ember"],["1","In progress","pine","",""]],
+    roster:[["7/8","Rooms in ratio","pine","",""],["1","At risk","ember","Sunflower Thu","ember"],["86%","Fill","pine","",""]],
+    insights:[["2","Forecast alerts","ember","",""],["94%","Ratio compliance","pine","30d",""],["+4%","Fill trend","pine","",""]],
+    studio:[["6","Patterns","pine","",""],["4","Rule sets","pine","",""],["published","Status","gold","",""]]
+  };
+  var subt={
+    overview:"Maple Street · what needs resolving today",
+    resolve:"Resolving · Sunflower over ratio · Thursday",
+    planning:"Planning · current reality + what needs a decision",
+    roster:"Roster · one visualization of operational reality",
+    insights:"Insights · forecasting surfaces pressure",
+    studio:"Studio · authoring the rules (config assets)"
+  };
+  var act1={overview:"Resolve a problem",resolve:"Commit change",planning:"Resolve next",roster:"Resolve from cell",insights:"Resolve forecast",studio:"Publish assets"};
+  var gnote={
+    overview:"Work opens on operational pressure — not a plan. \"Resolve\" is woven into every item.",
+    resolve:"Planning, woven into Work: a problem → propose a change to reality → simulate → compare → commit. No Studio, no page-swap.",
+    planning:"The proactive doorway. Most planning is woven; this is where deliberate forward work starts.",
+    roster:"The calendar is one visualization of reality — not the product. Resolve is invoked from a cell.",
+    insights:"Forecasting reveals pressure before it happens, then hands it to Resolve. It is planning's neighbor, not planning.",
+    studio:"Studio authors the rules (patterns, ratios). No plans, no simulation here — planning happens in Work."
+  };
+
+  function uc(cls,ico,title,status,statusCls,insight,insightCls,bodyHtml,foot){
+    return '<div class="uc '+cls+'"><div class="uc-head"><span class="uc-ico '+(ico[1]||'')+'">'+ico[0]+'</span><div class="uc-htext">'
+      +'<div class="uc-hrow"><span class="uc-title">'+title+'</span>'+(status?'<span class="uc-status '+statusCls+'">'+status+'</span>':'')+'</div>'
+      +'<p class="uc-insight '+(insightCls||'')+'">'+insight+'</p></div></div>'
+      +(bodyHtml?'<div class="uc-body">'+bodyHtml+'</div>':'')
+      +(foot?'<div class="uc-foot"><span class="uc-action">'+foot+'</span></div>':'')+'</div>';
+  }
+  function kv(k,v,vc){return '<div class="kv"><span class="k">'+k+'</span><span class="v"'+(vc?' style="color:'+vc+'"':'')+'>'+v+'</span></div>';}
+
+  var OVERVIEW='<div class="surface"><div class="wrap">'
+    +'<section class="actioncards">'
+    +'<div class="accard primary"><div class="rail3"></div><div class="ac-well pine">◑</div><h3 class="ac-h">Somewhere for Ethan</h3><p class="ac-p">New enrollment starts Monday. No room committed yet. Resolve his placement.</p><span class="ac-cta">Resolve →</span></div>'
+    +'<div class="accard secondary"><div class="rail3"></div><div class="ac-well ember">▲</div><h3 class="ac-h">Sunflower over ratio · Thu</h3><p class="ac-p">Projected 12 vs the 2-staff tier of 11. Something has to change before Thursday.</p><span class="ac-cta ember">Resolve →</span></div>'
+    +'<div class="accard tertiary"><div class="ac-well forge">✓</div><h3 class="ac-h">One change awaiting commit</h3><p class="ac-p">"Move Ethan → Sunshine" is approved, no blocking conflicts. Commit to make it real.</p><span class="ac-cta forge">Review & commit →</span></div>'
+    +'</section>'
+    +'<section><p class="kpi-eye">Today\'s activity</p><div class="kpis">'
+    +'<div class="kpi"><div class="kpi-well ember">▲</div><div><div class="kpi-v tab">2</div><div class="kpi-lrow"><span class="kpi-gem ember"></span><span class="kpi-l">Need resolving</span></div></div></div>'
+    +'<div class="kpi"><div class="kpi-well pine">◱</div><div><div class="kpi-v tab">7/8</div><div class="kpi-lrow"><span class="kpi-gem pine"></span><span class="kpi-l">Rooms in ratio</span></div></div></div>'
+    +'<div class="kpi"><div class="kpi-well pine">▦</div><div><div class="kpi-v tab">86%</div><div class="kpi-lrow"><span class="kpi-gem pine"></span><span class="kpi-l">Projected fill</span></div></div></div>'
+    +'<div class="kpi"><div class="kpi-well gold">✓</div><div><div class="kpi-v tab">1</div><div class="kpi-lrow"><span class="kpi-gem gold"></span><span class="kpi-l">Awaiting commit</span></div></div></div>'
+    +'</div></section>'
+    +'<div class="zones">'
+    +'<div class="zone"><div class="zone-h"><h2>Needs resolving</h2><button>Planning →</button></div><ul class="recent">'
+    +'<li><span class="bar ember"></span><span><span class="lbl">Sunflower over ratio · Thu</span><span class="sub ember">12 / 11 · move a child or add staff</span></span></li>'
+    +'<li><span class="bar"></span><span><span class="lbl">Ethan needs a room</span><span class="sub">starts Mon · Sunshine or Rainbow</span></span></li>'
+    +'<li><span class="bar slate"></span><span><span class="lbl">Lila infant ratio tight</span><span class="sub">Tue/Thu · delay start one day?</span></span></li>'
+    +'</ul></div>'
+    +'<div class="zone"><div class="zone-h"><h2>Recently resolved</h2><button>History →</button></div><ul class="recent">'
+    +'<li><span class="bar gold"></span><span><span class="lbl">Noah → Rainbow · full week</span><span class="sub pine">committed 1h ago · in ratio</span></span></li>'
+    +'<li><span class="bar gold"></span><span><span class="lbl">Drop-in · Rainbow Wed</span><span class="sub pine">committed yesterday · +$62</span></span></li>'
+    +'</ul></div>'
+    +'<div class="zone"><div class="zone-h"><h2>Jump to</h2><button>All →</button></div><ul class="recent">'
+    +'<li><span class="bar slate"></span><span><span class="lbl">Roster · today</span><span class="sub">142 children · 8 rooms</span></span></li>'
+    +'<li><span class="bar slate"></span><span><span class="lbl">Attendance</span><span class="sub">4 mismatches yesterday</span></span></li>'
+    +'<li><span class="bar slate"></span><span><span class="lbl">Insights</span><span class="sub">2 forecast alerts · October</span></span></li>'
+    +'</ul></div>'
+    +'</div>'
+    +'<div class="caption"><b>Work opens on pressure, not a plan.</b> Every "Needs resolving" item is a problem pushing on reality; each carries the woven <b>Resolve</b> verb. The operator never navigates to "Planning" to begin — planning comes to the problem. Same Overview shape as Processing.</div>'
+    +'</div></div>';
+
+  var RESOLVE='<div class="wu">'
+    +'<div class="queue-col"><div class="queue-head"><h3>Needs resolving</h3><span class="count tab">2</span></div><ul class="qlist">'
+    +'<li><button class="qrow sel warn"><div class="qrow-id"><span class="qrow-ico">▲</span><span class="qrow-title">Sunflower over ratio · Thu</span><span class="qrow-pill ember">Ratio</span></div><p class="qrow-crumb">Toddler · Thu Jul 23 · projected 12 / 11</p><p class="qrow-snip">Two-staff tier ceiling is 11. A child moves, a teacher is added, or Thursday sheds one.</p></button></li>'
+    +'<li><button class="qrow"><div class="qrow-id"><span class="qrow-ico">◔</span><span class="qrow-title">Ethan needs a room</span><span class="qrow-pill badge">Placement</span></div><p class="qrow-crumb">Toddler · starts Mon · Maple Street</p><p class="qrow-snip">New enrollment; no committed schedule.</p></button></li>'
+    +'</ul><div class="caption ember" style="margin-top:14px"><b>Pressure surfaces in Work.</b> This is an ordinary attention queue — the same primitive as Processing. Selecting an item opens the Focus Panel, where planning is <i>done</i>.</div></div>'
+    +'<div class="fp-host"><div class="fp"><div class="fp-shell">'
+    +'<div class="fp-headbar"><div class="fp-av ember">▲</div><div><div class="fp-nm">Sunflower · Thursday</div><div class="fp-sb">operational problem · resolve in place</div></div><div class="fp-modes"><span class="fp-mode on">Resolve</span><span class="fp-mode">Activity</span></div></div>'
+    +'<div class="fp-grid">'
+    +uc('attention',['▲','ember'],'The problem','Ratio breach','risk','Thursday projects 12 children — one over the 2-staff tier','',kv('Current','12 / 11 · needs 3 staff','#BC4300')+kv('Grain','Room × Day')+kv('Options','move · add staff · reduce demand'),'')
+    +uc('work',['◑'],'Try a change — proposed reality','Simulating','ready','Move Ethan → Sunshine (Thu)','',
+        '<div class="reality"><div class="rside current"><div class="re">Current reality</div><div class="rv tab">12/11</div><div class="rd">over tier</div></div><div class="rarrow">→</div><div class="rside proposed"><div class="re">Proposed reality</div><div class="rv tab">11/11</div><div class="rd">in tier · Sunshine 8→9</div></div></div>'
+        +'<div style="margin-top:8px">'+kv('Labor Δ','$0')+kv('Tuition Δ','$0')+kv('New conflicts','0 blocking','#00A283')+'</div>','Compare other changes →')
+    +uc('metric',['◷'],'Other futures','3 valid','ready','Compare and decide','',
+        '<div class="opt pick"><div class="opt-top"><span class="dot pine"></span><span class="opt-nm">Move Ethan → Sunshine</span><span class="opt-sc tab">0.91</span></div><div class="opt-rat">in tier all days · $0 labor · keeps cohort</div></div>'
+        +'<div class="opt" style="margin-top:6px"><div class="opt-top"><span class="dot gold"></span><span class="opt-nm">Add float teacher · Thu</span><span class="opt-sc tab">0.62</span></div><div class="opt-rat">3rd staff · +$180 labor · needs staffing (G3)</div></div>'
+        +'<div class="opt" style="margin-top:6px"><div class="opt-top"><span class="dot gold"></span><span class="opt-nm">Shed one Thursday drop-in</span><span class="opt-sc tab">0.55</span></div><div class="opt-rat">in tier · −$62 tuition</div></div>','')
+    +'<div class="uc work"><div class="uc-head"><span class="uc-ico">✓</span><div class="uc-htext"><div class="uc-hrow"><span class="uc-title">Commit the change</span></div><p class="uc-insight">Make the proposed reality real</p></div></div>'
+    +'<div class="uc-body"><div class="lifecycle"><span class="ls done">draft</span><span class="ls done">proposed</span><span class="ls cur">reviewed</span><span class="ls">approved</span><span class="ls">commit</span></div>'
+    +kv('Writes','L2 Intent · schedule_assignments')+kv('Method','effective-dated supersede')+kv('Reversible','by a later change')+'</div>'
+    +'<div class="uc-foot"><button class="btn-primary" style="width:100%;justify-content:center">Commit → change reality</button></div></div>'
+    +'</div></div>'
+    +'<div class="caption" style="margin:0"><b>This is Planning.</b> A problem → a <b>proposed reality</b> → simulate (same Calculations as execution) → compare futures → <b>commit</b> — entirely inside the Focus Panel, in Work. The operator manipulates <b>reality</b>, not a document. No Studio, no page-swap.</div>'
+    +'</div></div>';
+
+  var PLANNING='<div class="surface"><div class="wrap">'
+    +'<div class="uc metric" style="border-left-color:rgba(0,162,131,.45)"><div class="uc-head"><span class="uc-ico">◱</span><div class="uc-htext"><div class="uc-hrow"><span class="uc-title">Current reality · this week</span></div><p class="uc-insight metric">86% projected fill · 7 of 8 rooms in ratio</p><p class="uc-support">142 committed children · 1 room at risk (Sunflower Thu) · 3 enrolled children not yet placed</p></div></div></div>'
+    +'<div class="zones"><div class="zone" style="grid-column:span 2"><div class="zone-h"><h2>Decisions waiting (proactive planning)</h2><button>Resolve all →</button></div><ul class="recent">'
+    +'<li><span class="bar ember"></span><span><span class="lbl">Sunflower over ratio · Thursday</span><span class="sub ember">reactive · propose a change → simulate → commit</span></span></li>'
+    +'<li><span class="bar"></span><span><span class="lbl">Place 3 enrolled children</span><span class="sub">Ethan · Priya · Sam — before term start</span></span></li>'
+    +'<li><span class="bar gold"></span><span><span class="lbl">Model the fall term</span><span class="sub gold">forward work · project fill & labor before enrolling more</span></span></li>'
+    +'</ul></div>'
+    +'<div class="zone"><div class="zone-h"><h2>How planning works here</h2></div><ul class="recent">'
+    +'<li><span class="bar"></span><span><span class="lbl">1 · A problem</span><span class="sub">pressure, from anywhere in Work</span></span></li>'
+    +'<li><span class="bar"></span><span><span class="lbl">2 · Propose reality</span><span class="sub">a safe, uncommitted change</span></span></li>'
+    +'<li><span class="bar"></span><span><span class="lbl">3 · Simulate & compare</span><span class="sub">same Calculations as execution</span></span></li>'
+    +'<li><span class="bar gold"></span><span><span class="lbl">4 · Commit</span><span class="sub pine">reality changes</span></span></li>'
+    +'</ul></div></div>'
+    +'<div class="caption"><b>Planning is a Work View — the proactive doorway.</b> It shows current reality and the decisions waiting on it. But it is not where <i>most</i> planning happens: the dominant expression is the woven <b>Resolve</b> verb on every queue, roster cell, and forecast alert. This section is for deliberate forward work (place the backlog, model the term).</div>'
+    +'</div></div>';
+
+  function boardTable(){
+    function cell(o,c,pct,rr,dot,cls){return '<td class="cell '+(cls||'')+'"><div class="occ tab">'+o+'</div><div class="cap">'+c+'</div><div class="bar"><i style="width:'+pct+'%"></i></div><div class="rr"><span class="dot '+dot+'"></span>'+rr+'</div></td>';}
+    return '<div class="board"><table><thead><tr><th>Room</th><th>Mon 20</th><th>Tue 21</th><th>Wed 22</th><th class="now">Thu 23</th><th>Fri 24</th></tr></thead><tbody>'
+    +'<tr><td class="rc"><div class="rn">Sunflower</div><div class="rm">Toddler · cap 11</div></td>'+cell(9,'/ 11',82,'2 staff','pine')+cell(10,'/ 11',91,'2 staff','pine')+cell(10,'/ 11',91,'2 staff','pine')+cell(12,'/ 11',100,'needs 3','ember','breach')+cell(9,'/ 11',82,'2 staff','pine')+'</tr>'
+    +'<tr><td class="rc"><div class="rn">Sunshine</div><div class="rm">Toddler · cap 11</div></td>'+cell(7,'/ 11',64,'2 staff','pine')+cell(8,'/ 11',73,'2 staff','pine')+cell(8,'/ 11',73,'2 staff','pine')+cell(8,'/ 11',73,'2 staff','pine')+cell(8,'/ 11',73,'2 staff','pine')+'</tr>'
+    +'<tr><td class="rc"><div class="rn">Rainbow</div><div class="rm">Preschool · cap 20</div></td>'+cell(16,'/ 20',80,'2 staff','pine')+cell(17,'/ 20',85,'2 staff','pine')+cell(18,'/ 20',90,'2 staff','pine')+cell(17,'/ 20',85,'2 staff','pine')+cell(15,'/ 20',75,'2 staff','pine')+'</tr>'
+    +'<tr><td class="rc"><div class="rn">Caterpillar</div><div class="rm">Infant · cap 8</div></td>'+cell(6,'/ 8',75,'2 staff','pine')+cell(7,'/ 8',88,'tight','gold')+cell(6,'/ 8',75,'2 staff','pine')+cell(7,'/ 8',88,'tight','gold')+'<td class="cell closed"><div class="occ tab">—</div><div class="cap">closed</div></td></tr>'
+    +'</tbody></table></div>';
+  }
+  var ROSTER='<div class="surface"><div class="wrap">'+boardTable()
+    +'<div class="caption"><b>The calendar is a visualization of reality — not the product.</b> This is the <b>Roster</b>: one way to see committed operational reality (Room × Day is Scheduling\'s projection view). The breaching cell carries the woven <b>Resolve →</b> affordance; clicking it opens the same Focus Panel resolve flow. Planning is invoked <i>from</i> the visualization, never built around it.</div>'
+    +'</div></div>';
+
+  var INSIGHTS='<div class="surface"><div class="wrap">'
+    +'<section><p class="kpi-eye">Operational intelligence · 30 days</p><div class="kpis">'
+    +'<div class="kpi"><div class="kpi-well pine">◷</div><div><div class="kpi-v tab">94%</div><div class="kpi-lrow"><span class="kpi-gem pine"></span><span class="kpi-l">Ratio compliance</span></div></div></div>'
+    +'<div class="kpi"><div class="kpi-well pine">▦</div><div><div class="kpi-v tab">+4%</div><div class="kpi-lrow"><span class="kpi-gem pine"></span><span class="kpi-l">Fill trend</span></div></div></div>'
+    +'<div class="kpi"><div class="kpi-well ember">▲</div><div><div class="kpi-v tab">2</div><div class="kpi-lrow"><span class="kpi-gem ember"></span><span class="kpi-l">Forecast alerts</span></div></div></div>'
+    +'<div class="kpi"><div class="kpi-well gold">$</div><div><div class="kpi-v tab">$1.2k</div><div class="kpi-lrow"><span class="kpi-gem gold"></span><span class="kpi-l">Tuition at risk</span></div></div></div>'
+    +'</div></section>'
+    +'<div class="zone"><div class="zone-h"><h2>Forecast surfaces tomorrow\'s pressure</h2><button>Resolve →</button></div><ul class="recent">'
+    +'<li><span class="bar ember"></span><span><span class="lbl">October · Sunflower will breach ratio</span><span class="sub ember">3 enrollments land wk of Oct 6 · project +2 over tier → Resolve now</span></span></li>'
+    +'<li><span class="bar gold"></span><span><span class="lbl">September · Caterpillar under-fills</span><span class="sub gold">infant demand soft · 62% projected fill → open waitlist?</span></span></li>'
+    +'</ul></div>'
+    +'<div class="caption"><b>Insights is planning\'s neighbor, not planning.</b> Forecasting reads reality forward to <b>reveal pressure before it happens</b>; Operational Intelligence frames it (KPIs) and later reads the outcome of committed changes. Each alert hands off to the woven <b>Resolve</b> flow. Forecasting surfaces the problem; planning changes reality.</div>'
+    +'</div></div>';
+
+  var STUDIO='<div class="surface"><div class="wrap">'
+    +'<div class="cfg">'
+    +'<div class="panel"><div class="panel-h"><span class="panel-t">Ratio rules · toddler</span><span class="panel-n">config asset · Publish</span></div><div class="panel-b"><table class="tiers"><thead><tr><th>Max children</th><th>Required staff</th></tr></thead><tbody><tr><td class="tab">≤ 5</td><td class="tab">1</td></tr><tr><td class="tab">≤ 11</td><td class="tab">2</td></tr><tr><td class="tab">≤ 17</td><td class="tab">3</td></tr></tbody></table><p style="margin:8px 0 0;font-size:10.5px;color:var(--muted)">Mixed-age: <span class="tab" style="color:var(--forge)">most_restrictive</span> · licensing is a binding ceiling.</p></div></div>'
+    +'<div class="panel"><div class="panel-h"><span class="panel-t">Schedule patterns</span><span class="panel-n">config asset · Publish</span></div><div class="panel-b">'
+    +'<div class="prow"><div style="font-size:12px;font-weight:600;color:var(--forge)">Full week</div><div class="wd"><span class="wds on">M</span><span class="wds on">T</span><span class="wds on">W</span><span class="wds on">T</span><span class="wds on">F</span></div></div>'
+    +'<div class="prow"><div style="font-size:12px;font-weight:600;color:var(--forge)">Mon–Thu</div><div class="wd"><span class="wds on">M</span><span class="wds on">T</span><span class="wds on">W</span><span class="wds on">T</span><span class="wds">F</span></div></div>'
+    +'<div class="prow"><div style="font-size:12px;font-weight:600;color:var(--forge)">Tue / Thu</div><div class="wd"><span class="wds">M</span><span class="wds on">T</span><span class="wds">W</span><span class="wds on">T</span><span class="wds">F</span></div></div>'
+    +'</div></div>'
+    +'</div>'
+    +'<div class="caption"><b>Studio authors the rules — not plans.</b> Ratio tiers, schedule patterns, rooms, objectives: reusable, context-free <b>configuration assets</b> the operator <b>Publishes</b>. There is no board, no simulation, no plan here. Planning (changing live reality) happens in <b>Work</b>. Publish (assets) and Commit (reality) are siblings — same "cross a door into the runtime" pattern, two different homes.</div>'
+    +'</div></div>';
+
+  var SCREENS={overview:OVERVIEW,resolve:RESOLVE,planning:PLANNING,roster:ROSTER,insights:INSIGHTS,studio:STUDIO};
+  Object.keys(SCREENS).forEach(function(k){document.getElementById('s-'+k).innerHTML=SCREENS[k];});
+
+  var subEl=document.getElementById('subtabs'),ophEl=document.getElementById('ophealth');
+  function render(key){
+    subEl.innerHTML=subtabs[key].map(function(t){return '<span class="st'+(t[1]?' on':'')+'">'+t[0]+'</span>';}).join('');
+    ophEl.innerHTML='<div class="oph-eye">'+(isStudio[key]?'Studio':'Work')+'</div><div class="oph-metrics">'+health[key].map(function(m){return '<div class="oph-m"><p style="margin:0"><span class="oph-v '+m[2]+' tab">'+m[0]+'</span><span class="oph-l">'+m[1]+'</span></p>'+(m[3]?'<div class="oph-t '+m[4]+'">'+m[3]+'</div>':'<div class="oph-t" style="color:transparent">—</div>')+'</div>';}).join('')+'</div>';
+    document.getElementById('subt').textContent=subt[key];
+    document.getElementById('act1').textContent=act1[key];
+    document.getElementById('gnote').textContent=gnote[key];
+    document.getElementById('mp-studio').classList.toggle('on',!!isStudio[key]);
+    document.getElementById('mp-work').classList.toggle('on',!isStudio[key]);
+    document.getElementById('canvas').classList.toggle('white',key==='resolve'||key==='roster');
+  }
+  document.querySelectorAll('.g-tab').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('.g-tab').forEach(function(x){x.setAttribute('aria-selected',x.dataset.s===b.dataset.s?'true':'false');});
+      document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
+      document.getElementById('s-'+b.dataset.s).classList.add('on');
+      render(b.dataset.s);
+    });
+  });
+  render('overview');
+})();
+</script>
