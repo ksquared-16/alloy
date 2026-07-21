@@ -32,15 +32,20 @@ describe("Configuration Object Runtime — composition wiring", () => {
         // Harness must not enter operator Configuration Mode nav.
         expect(nav).not.toContain("configuration-object-harness");
         expect(nav).not.toContain("/dev/configuration-object-harness");
-        // Programs not adopted yet — still mounts ProgramsPublicationWorkspace.
+        // Programs adopts ConfigurationObjectWorkspace inside ProgramsPublicationWorkspace.
         expect(programsPage).toContain("ProgramsPublicationWorkspace");
-        expect(programsPage).not.toContain("ConfigurationObjectWorkspace");
+        const programsWorkspace = read(
+            "components/adminV2/settings/programs/ProgramsPublicationWorkspace.tsx",
+        );
+        expect(programsWorkspace).toContain("ConfigurationObjectWorkspace");
+        expect(programsWorkspace).toContain("resolveProgramsSelection");
+        expect(programsWorkspace).toContain("loadProgramsCollection");
     });
 
-    it("keeps Programs adoption as a seam only", () => {
+    it("keeps Programs adoption descriptor for Configuration Object Runtime", () => {
         const seam = read("lib/configRuntime/configurationObject/programsAdoptionSeam.ts");
         expect(seam).toContain("buildProgramsConfigurationObjectDescriptor");
-        expect(seam).toContain("Does not wire ProgramsPublicationWorkspace");
         expect(seam).toContain("PROGRAMS_WORKSPACE_SIBLING_CHAPTERS");
+        expect(seam).not.toContain("Does not wire ProgramsPublicationWorkspace");
     });
 });
