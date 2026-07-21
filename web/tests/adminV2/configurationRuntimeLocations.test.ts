@@ -400,4 +400,31 @@ describe("Configuration Runtime — Locations", () => {
             "configuration-runtime-locations",
         );
     });
+
+    it("Checkpoint B — inherits Configuration Continuity collection and selection", () => {
+        const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
+        const hook = read("components/adminV2/settings/locations/useLocationsConfigurationSettings.ts");
+        const cache = read("lib/locations/locationsCollectionCache.ts");
+        const adapter = read("lib/locations/locationsSelectionAdapter.ts");
+        const continuity = read("lib/configRuntime/configurationContinuity.ts");
+        const routes = read("lib/admin/canonicalLocationSettingsRoutes.ts");
+        const nextConfig = read("next.config.ts");
+
+        expect(hook).toContain("loadLocationsCollection");
+        expect(hook).toContain("resolveLocationsSelection");
+        expect(hook).toContain("subscribeConfigurationInvalidation");
+        expect(hook).toContain("invalidateLocationsCollection");
+        expect(hook).not.toContain("fetchSchedulePatternsForSite");
+        expect(cache).toContain("fetchSchedulePatternsForOrg");
+        expect(cache).toContain("locations-collection:v1:");
+        expect(adapter).toContain('source: "retained"');
+        expect(adapter).toContain("shouldSyncRoute");
+        expect(page).toContain("retainedLocationId");
+        expect(page).toContain("shouldSyncRoute");
+        expect(page).toContain("router.push(locationWorkspaceHref");
+        expect(page).toContain("router.replace(locationWorkspaceHref(selectedId");
+        expect(continuity).toContain("ORGANIZATION_LOCATIONS_PATH");
+        expect(routes).toContain('ORGANIZATION_LOCATIONS_PATH = `${CANONICAL_ORGANIZATION_BASE}/locations`');
+        expect(nextConfig).toContain('source: "/organization/locations"');
+    });
 });

@@ -31,6 +31,7 @@ describe("Configuration Continuity — soft-nav eligibility", () => {
     it("treats Organization and Settings as soft-nav eligible", () => {
         expect(isConfigurationSoftNavEligibleHref("/organization")).toBe(true);
         expect(isConfigurationSoftNavEligibleHref("/organization/programs")).toBe(true);
+        expect(isConfigurationSoftNavEligibleHref("/organization/locations")).toBe(true);
         expect(isConfigurationSoftNavEligibleHref("/settings/locations")).toBe(true);
         expect(isConfigurationSoftNavEligibleHref("/settings/fields")).toBe(true);
         expect(isConfigurationSoftNavEligibleHref("/adminV2/settings/locations")).toBe(true);
@@ -134,5 +135,11 @@ describe("Configuration Continuity — Programs nav IA", () => {
         const programs = business?.items.find((i) => i.testId === "config-mode-nav-programs");
         expect(programs?.href).toBe("/organization/programs");
         expect(programs?.href).not.toBe("/settings/commercial");
+    });
+
+    it("config-mode Locations points at canonical /organization/locations", () => {
+        const organization = CONFIGURATION_MODE_NAV_GROUPS.find((g) => g.id === "organization");
+        const locations = organization?.items.find((i) => i.testId === "config-mode-nav-locations");
+        expect(locations?.href).toBe("/organization/locations");
     });
 });

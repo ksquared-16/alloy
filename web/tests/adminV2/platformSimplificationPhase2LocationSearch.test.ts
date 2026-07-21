@@ -33,14 +33,14 @@ function campusHit(id: string): GlobalRecordSearchHit {
 
 describe("platform simplification phase 2 — search campus navigation", () => {
     it("builds canonical settings location deep links", () => {
-        expect(canonicalLocationSettingsHref("site-abc")).toBe("/settings/locations?locationId=site-abc");
+        expect(canonicalLocationSettingsHref("site-abc")).toBe("/organization/locations?locationId=site-abc");
         expect(parseLocationSettingsLocationId("site-abc")).toBe("site-abc");
         expect(parseLocationSettingsLocationId("")).toBeNull();
     });
 
     it("resolves campus search hits to settings locations href", () => {
         expect(resolveGlobalSearchLocationSettingsHref(campusHit("site-1"))).toBe(
-            "/settings/locations?locationId=site-1",
+            "/organization/locations?locationId=site-1",
         );
         expect(
             resolveGlobalSearchLocationSettingsHref({
@@ -71,7 +71,10 @@ describe("platform simplification phase 2 — search campus navigation", () => {
         expect(page).toContain("parseLocationSettingsLocationId");
         expect(page).toContain("initialLocationId");
         expect(hook).toContain("initialLocationId");
-        expect(hook).toContain("Location not found or unavailable.");
+        expect(hook).toContain("resolveLocationsSelection");
+        expect(read("lib/locations/locationsSelectionAdapter.ts")).toContain(
+            "Location not found or unavailable.",
+        );
         expect(configPage).toContain("canonicalLocationSettingsHref");
     });
 });
