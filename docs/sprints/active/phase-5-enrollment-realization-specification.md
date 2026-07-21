@@ -7,6 +7,16 @@ supersedes: []
 
 # Phase 5 — Enrollment Realization Specification
 
+> ⚠️ **VOCABULARY CORRECTED — read first.** This document's stage-by-stage walk used **deprecated/granular stage keys**
+> (`new_lead`, `contacting`, `tour_scheduled`, `offered_spot`, `future_start`) and **invented terms** ("Enrollment
+> Offer", "Extend Offer", "Assign Room", "Assign Schedule", "Enroll Child", a Documents/Medical/Placement/Funding
+> checklist) that are **not** the current configured operator-facing labels. The authoritative configured vocabulary,
+> the canonical 8-stage set (New Lead · Tour · Placement / Decision · Closed · Waitlist · Enrolling · Enrolled · Closed /
+> Withdrawn), and every gap are derived in
+> [phase-5-enrollment-vocabulary-derivation.md](phase-5-enrollment-vocabulary-derivation.md). The corrected mockups are
+> [phase-5-enrollment-realization-mockups.html](phase-5-enrollment-realization-mockups.html). **The composition
+> conclusions below stand; the stage words and colors were wrong — use the derivation for language.**
+
 **Mission:** `alloy-phase-5-product-realization` (slot 1) · **Baseline:** `origin/staging @ 2129149e9`
 **Stance:** Product Office, freezing the real Enrollment experience — the product Alloy intends to ship, optimized for
 what Alloy should be in five years, not for today's easiest implementation. Grounded in the actual stage operating

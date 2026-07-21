@@ -1,353 +1,332 @@
-<title>Enrollment Realization — Focus Panel Mockups</title>
+<title>Enrollment Operator Work — Configured Composition</title>
 <style>
+  /* Canonical Alloy visual language — committed to the light River Stone workspace (the real operator surface).
+     Bend Pine #00A283 is the one operational green. No teal/jade/mint/blue accents. */
   :root {
-    --ground: #f6f7f9; --surface: #ffffff; --surface-sunk: #f0f2f5;
-    --ink: #1b2230; --ink-muted: #59616f; --ink-faint: #8b93a1;
-    --hairline: #e3e7ec; --hairline-strong: #cfd5de;
-    --accent: #1f7a6d; --accent-soft: #e4f1ee; --accent-ink: #145c52;
-    --ready: #3f8f5b; --ready-soft: #e6f2ea;
-    --blocked: #b1544a; --blocked-soft: #f6e7e4;
-    --waiting: #7b8494; --waiting-soft: #eceef2;
-    --warn: #b07d2e; --warn-soft: #f4ecdc;
+    --forge: #273F52;     /* Midnight Forge — structure */
+    --ink: #18273A;       /* deep ink — primary text */
+    --slate: #45506c;     /* Alloy Slate — secondary copy / metadata / waiting */
+    --pine: #00A283;      /* Bend Pine — primary action, selection, active state, progress */
+    --pine-ink: #00745e;
+    --pine-soft: #e4f4f0;
+    --pine-line: #b9e0d7;
+    --gold: #DBC078;      /* Alloy Gold — completed / finalized */
+    --gold-dark: #a8842f;
+    --gold-soft: #f6eecf;
+    --gold-line: #e6d59a;
+    --ember: #BC4300;     /* Alloy Ember — blocked / needs-attention only */
+    --ember-soft: #f7e6db;
+    --ember-line: #e6b79c;
+    --river: #F4F6F9;     /* River Stone — background field */
+    --white: #ffffff;     /* card surfaces */
+    --hairline: #e1e5ec;
+    --hairline-strong: #cdd3dd;
     --radius: 10px; --radius-sm: 7px;
     --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, "Cascadia Mono", "Roboto Mono", monospace;
     --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --ground: #0f141b; --surface: #161d27; --surface-sunk: #10161e;
-      --ink: #e7ebf1; --ink-muted: #a3acbb; --ink-faint: #6c7686;
-      --hairline: #263040; --hairline-strong: #33404f;
-      --accent: #4fb3a4; --accent-soft: #14312d; --accent-ink: #7fd2c5;
-      --ready: #5cb079; --ready-soft: #16281d; --blocked: #d67d70; --blocked-soft: #2e1c19;
-      --waiting: #8791a1; --waiting-soft: #1b232e; --warn: #d2a45c; --warn-soft: #2b2416;
-    }
-  }
-  :root[data-theme="dark"] {
-    --ground: #0f141b; --surface: #161d27; --surface-sunk: #10161e;
-    --ink: #e7ebf1; --ink-muted: #a3acbb; --ink-faint: #6c7686;
-    --hairline: #263040; --hairline-strong: #33404f;
-    --accent: #4fb3a4; --accent-soft: #14312d; --accent-ink: #7fd2c5;
-    --ready: #5cb079; --ready-soft: #16281d; --blocked: #d67d70; --blocked-soft: #2e1c19;
-    --waiting: #8791a1; --waiting-soft: #1b232e; --warn: #d2a45c; --warn-soft: #2b2416;
-  }
-  :root[data-theme="light"] {
-    --ground: #f6f7f9; --surface: #ffffff; --surface-sunk: #f0f2f5;
-    --ink: #1b2230; --ink-muted: #59616f; --ink-faint: #8b93a1;
-    --hairline: #e3e7ec; --hairline-strong: #cfd5de;
-    --accent: #1f7a6d; --accent-soft: #e4f1ee; --accent-ink: #145c52;
-    --ready: #3f8f5b; --ready-soft: #e6f2ea; --blocked: #b1544a; --blocked-soft: #f6e7e4;
-    --waiting: #7b8494; --waiting-soft: #eceef2; --warn: #b07d2e; --warn-soft: #f4ecdc;
-  }
-
   * { box-sizing: border-box; }
   body { margin: 0; }
   .page {
-    background: var(--ground); color: var(--ink); font-family: var(--sans); line-height: 1.5;
+    background: var(--river); color: var(--ink); font-family: var(--sans); line-height: 1.5;
     padding: clamp(20px,4vw,56px) clamp(16px,4vw,56px) 72px; max-width: 1180px; margin: 0 auto;
     -webkit-font-smoothing: antialiased;
   }
-  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-ink); margin: 0 0 14px; }
-  h1 { font-size: clamp(28px,4.4vw,44px); line-height: 1.08; letter-spacing: -0.02em; font-weight: 680; margin: 0 0 14px; text-wrap: balance; max-width: 24ch; }
-  .lede { font-size: clamp(15px,1.6vw,17px); color: var(--ink-muted); max-width: 64ch; margin: 0; }
-  .masthead { border-bottom: 1px solid var(--hairline); padding-bottom: 30px; margin-bottom: 8px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pine-ink); margin: 0 0 14px; }
+  h1 { font-size: clamp(27px,4.2vw,42px); line-height: 1.09; letter-spacing: -0.02em; font-weight: 680; margin: 0 0 14px; color: var(--forge); text-wrap: balance; max-width: 22ch; }
+  .lede { font-size: clamp(15px,1.6vw,17px); color: var(--slate); max-width: 66ch; margin: 0; }
+  .lede b { color: var(--forge); font-weight: 640; }
+  .masthead { border-bottom: 1px solid var(--hairline); padding-bottom: 28px; margin-bottom: 8px; }
 
-  /* journey rail */
+  /* source-tag legend */
+  .srckey { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 22px; }
+  .srckey .src { cursor: default; }
+  .src { font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--slate);
+    border: 1px solid var(--hairline-strong); border-radius: 4px; padding: 1px 5px; white-space: nowrap; background: var(--white); vertical-align: 1px; }
+  .src.stage { color: var(--forge); border-color: var(--forge); }
+  .src.work { color: var(--pine-ink); border-color: var(--pine-line); }
+  .src.cmd { color: var(--pine-ink); border-color: var(--pine-line); border-style: dashed; }
+  .src.outcome { color: var(--gold-dark); border-color: var(--gold-line); }
+  .src.req { color: var(--slate); border-color: var(--hairline-strong); }
+  .src.record { color: var(--slate); border-style: dashed; }
+  .src.copy { color: var(--slate); border-style: dotted; opacity: 0.85; }
+  .src.gap { color: var(--ember); border-color: var(--ember-line); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 20px; font-family: var(--mono); font-size: 11.5px; color: var(--slate); margin-top: 18px; }
+  .legend b { color: var(--forge); font-weight: 600; }
+  .swatch { display: inline-flex; align-items: center; gap: 7px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .dot.pine { background: var(--pine); } .dot.gold { background: var(--gold); } .dot.ember { background: var(--ember); }
+  .dot.slate { background: var(--slate); } .dot.forge { background: var(--forge); }
+
+  /* derivation equation */
+  .deriv { margin-top: 30px; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--white); padding: 20px; }
+  .deriv h3 { margin: 0 0 4px; font-size: 15px; color: var(--forge); }
+  .deriv .sub { font-size: 13px; color: var(--slate); margin: 0 0 16px; }
+  .eq { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .eq .term { font-family: var(--mono); font-size: 11.5px; color: var(--ink); background: var(--river); border: 1px solid var(--hairline); border-radius: 6px; padding: 6px 10px; }
+  .eq .op { color: var(--slate); font-weight: 700; }
+  .eq .result { font-family: var(--mono); font-size: 11.5px; color: var(--white); background: var(--pine); border-color: var(--pine); border-radius: 6px; padding: 6px 11px; font-weight: 600; }
+
   .rail { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 24px; font-family: var(--mono); font-size: 11px; }
-  .rail .step { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border: 1px solid var(--hairline); border-radius: 20px; background: var(--surface); color: var(--ink-muted); }
-  .rail .step .n { color: var(--accent-ink); font-weight: 600; }
-  .rail .step.split { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
-  .rail .arm { align-self: center; color: var(--ink-faint); }
+  .rail .step { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--white); color: var(--slate); }
+  .rail .step.child { border-color: var(--hairline-strong); }
+  .rail .step.split { border-color: var(--pine); color: var(--pine-ink); background: var(--pine-soft); }
+  .rail .grain-h { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--slate); align-self: center; }
+  .rail .arm { align-self: center; color: var(--slate); }
 
-  .legend { display: flex; flex-wrap: wrap; gap: 10px 22px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-muted); margin-top: 20px; }
-  .legend b { color: var(--ink); font-weight: 600; }
-  .legend .swatch { display: inline-flex; align-items: center; gap: 7px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-  .dot.evolves { background: var(--accent); } .dot.frozen { background: var(--hairline-strong); }
-  .dot.ready { background: var(--ready); } .dot.blocked { background: var(--blocked); }
-  .dot.waiting { background: var(--waiting); } .dot.warn { background: var(--warn); }
+  .section-label { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pine-ink); margin: 54px 0 0; padding-top: 22px; border-top: 2px solid var(--hairline); }
 
-  .plate { margin-top: 40px; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
-  .plate.wide { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft); }
-  .plate-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 16px 20px; border-bottom: 1px solid var(--hairline);
-    background: linear-gradient(0deg, transparent, color-mix(in srgb, var(--accent-soft) 40%, transparent)); }
-  .plate-no { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--accent-ink); letter-spacing: 0.08em;
-    border: 1px solid var(--hairline-strong); border-radius: 5px; padding: 2px 8px; background: var(--surface); }
-  .plate-grain { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-faint);
-    border: 1px dashed var(--hairline-strong); border-radius: 5px; padding: 2px 7px; }
-  .plate-title { font-size: 17px; font-weight: 640; letter-spacing: -0.01em; margin: 0; }
-  .plate-cap { font-size: 13.5px; color: var(--ink-muted); margin: 0; flex-basis: 100%; }
+  .plate { margin-top: 36px; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--white); overflow: hidden; }
+  .plate.wide { border-color: var(--pine); box-shadow: 0 0 0 1px var(--pine-soft); }
+  .plate-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 15px 20px; border-bottom: 1px solid var(--hairline); background: var(--pine-soft); }
+  .plate-no { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--pine-ink); border: 1px solid var(--pine-line); border-radius: 5px; padding: 2px 8px; background: var(--white); }
+  .grain-chip { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 8px; border-radius: 20px; }
+  .grain-chip.family { color: var(--forge); background: var(--white); border: 1px solid var(--forge); }
+  .grain-chip.child { color: var(--slate); background: var(--white); border: 1px solid var(--slate); }
+  .grain-chip.mixed { color: var(--pine-ink); background: var(--white); border: 1px solid var(--pine); }
+  .plate-title { font-size: 17px; font-weight: 650; color: var(--forge); margin: 0; letter-spacing: -0.01em; }
+  .plate-cap { font-size: 13px; color: var(--slate); margin: 0; flex-basis: 100%; }
 
-  .focus { padding: 20px; background: var(--surface-sunk); }
-  .frame { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px dashed var(--hairline-strong); border-radius: var(--radius-sm); padding: 11px 14px; margin-bottom: 16px; }
-  .frame .frame-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; padding-top: 2px; }
+  .focus { padding: 20px; background: var(--river); }
+  .frame { display: flex; gap: 12px; align-items: flex-start; background: var(--white); border: 1px solid var(--hairline); border-left: 3px solid var(--forge); border-radius: var(--radius-sm); padding: 11px 14px; margin-bottom: 16px; }
+  .frame .frame-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--slate); white-space: nowrap; padding-top: 2px; }
   .frame .frame-text { font-size: 14px; color: var(--ink); }
-  .frame .frame-text b { color: var(--accent-ink); font-weight: 640; }
+  .frame .frame-text b { color: var(--forge); font-weight: 640; }
 
-  .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+  .grid { display: grid; grid-template-columns: 1.42fr 1fr; gap: 16px; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
   .col { display: flex; flex-direction: column; gap: 16px; }
 
-  .card { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 14px 15px; }
-  .card.frozen { opacity: 0.94; } .card.frozen .card-name { color: var(--ink-muted); }
-  .card.owner { border-color: color-mix(in srgb, var(--accent) 45%, var(--hairline)); box-shadow: inset 3px 0 0 var(--accent); padding-left: 17px; }
+  .card { background: var(--white); border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 14px 15px; }
+  .card.frozen { background: #fbfcfd; } .card.frozen .card-name { color: var(--slate); }
+  .card.owner { border-color: var(--pine-line); box-shadow: inset 3px 0 0 var(--pine); padding-left: 17px; }
   .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
-  .card-name { font-size: 13px; font-weight: 650; }
-  .tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
-  .tag.evolves { color: var(--accent-ink); background: var(--accent-soft); }
-  .tag.frozen { color: var(--ink-faint); background: var(--surface-sunk); border: 1px solid var(--hairline); }
+  .card-name { font-size: 13px; font-weight: 650; color: var(--forge); }
+  .tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
+  .tag.evolves { color: var(--pine-ink); background: var(--pine-soft); }
+  .tag.frozen { color: var(--slate); background: var(--river); border: 1px solid var(--hairline); }
 
-  .wire { height: 8px; border-radius: 4px; background: var(--hairline); }
-  .wire.s { width: 45%; } .wire.m { width: 68%; }
   .person-row { display: flex; align-items: center; gap: 10px; }
-  .avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--surface-sunk); border: 1px solid var(--hairline-strong); flex: none; }
-  .person-meta { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--river); border: 1px solid var(--hairline-strong); flex: none; }
+  .person-meta { display: flex; flex-direction: column; gap: 4px; flex: 1; }
   .parents { font-size: 12.5px; color: var(--ink); font-weight: 600; }
-  .sub { font-size: 11.5px; color: var(--ink-faint); }
+  .sub { font-size: 11.5px; color: var(--slate); }
   .roster { display: flex; flex-direction: column; gap: 9px; }
   .kid-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .kid-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
-  .kid-sub { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); }
+  .kid-sub { font-family: var(--mono); font-size: 10.5px; color: var(--slate); }
 
-  .work-item { border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 12px 13px; background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
+  .work-item { border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 12px 13px; background: var(--white); display: flex; flex-direction: column; gap: 10px; }
   .work-item + .work-item { margin-top: 10px; }
-  .work-item.primary { border-color: color-mix(in srgb, var(--accent) 40%, var(--hairline)); background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface)); }
-  .work-item.secondary { background: var(--surface-sunk); }
-  .work-item.settled { border-style: dashed; opacity: 0.92; }
+  .work-item.primary { border-color: var(--pine-line); background: var(--pine-soft); }
+  .work-item.secondary { background: #fbfcfd; }
+  .work-item.settled { border-style: dashed; background: var(--gold-soft); border-color: var(--gold-line); }
   .wi-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-  .wi-obl { font-size: 14.5px; font-weight: 640; letter-spacing: -0.01em; line-height: 1.3; }
-  .child-name { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); padding: 1px 6px; border-radius: 5px; margin-left: 2px; vertical-align: 1px; }
-  .pill { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; white-space: nowrap; font-weight: 600; }
-  .pill.ready { color: var(--ready); background: var(--ready-soft); } .pill.blocked { color: var(--blocked); background: var(--blocked-soft); }
-  .pill.waiting { color: var(--waiting); background: var(--waiting-soft); } .pill.primary { color: var(--accent-ink); background: var(--accent-soft); }
-  .pill.done { color: var(--ready); background: var(--ready-soft); } .pill.warn { color: var(--warn); background: var(--warn-soft); }
+  .wi-obl { font-size: 14.5px; font-weight: 640; color: var(--forge); letter-spacing: -0.01em; line-height: 1.3; }
+  .child-name { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--pine-ink); background: var(--white); border: 1px solid var(--pine-line); padding: 1px 6px; border-radius: 5px; margin-left: 3px; vertical-align: 1px; }
+  .pill { font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; white-space: nowrap; font-weight: 600; }
+  .pill.active { color: var(--pine-ink); background: var(--pine-soft); }
+  .pill.done { color: var(--gold-dark); background: var(--gold-soft); }
+  .pill.blocked { color: var(--ember); background: var(--ember-soft); }
+  .pill.waiting { color: var(--slate); background: var(--river); border: 1px solid var(--hairline); }
 
-  .micro { font-size: 11.5px; color: var(--ink-faint); }
+  .micro { font-size: 11.5px; color: var(--slate); }
   .cmd-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
   .btn { font-size: 12.5px; font-weight: 600; padding: 7px 13px; border-radius: 7px; border: 1px solid transparent; }
-  .btn.primary { background: var(--accent); color: #fff; }
-  @media (prefers-color-scheme: dark) { .btn.primary { color: #08110f; } }
-  :root[data-theme="dark"] .btn.primary { color: #08110f; }
-  .btn.ghost { background: var(--surface); color: var(--ink-muted); border-color: var(--hairline-strong); }
-  .btn.disabled { background: var(--surface-sunk); color: var(--ink-faint); border-color: var(--hairline); }
-  .handoff { font-family: var(--mono); font-size: 11px; color: var(--accent-ink); display: inline-flex; align-items: center; gap: 5px; }
+  .btn.primary { background: var(--pine); color: var(--white); }
+  .btn.ghost { background: var(--white); color: var(--forge); border-color: var(--hairline-strong); }
+  .btn.disabled { background: var(--river); color: var(--slate); border-color: var(--hairline); }
+  .handoff { font-family: var(--mono); font-size: 11px; color: var(--pine-ink); display: inline-flex; align-items: center; gap: 4px; }
   .handoff::after { content: "›"; font-size: 14px; line-height: 1; }
-  .outcomes { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
-  .outcome { font-size: 11.5px; color: var(--ink-muted); border: 1px solid var(--hairline-strong); border-radius: 20px; padding: 3px 10px; background: var(--surface); }
-  .outcome.chosen { color: var(--ready); border-color: var(--ready); background: var(--ready-soft); font-weight: 600; }
-  .blocker-reason { display: flex; gap: 9px; align-items: flex-start; background: var(--blocked-soft); border: 1px solid color-mix(in srgb, var(--blocked) 30%, var(--hairline)); border-radius: 7px; padding: 9px 11px; font-size: 12.5px; color: var(--ink); }
-  .blocker-reason .b-ic { color: var(--blocked); font-weight: 700; font-family: var(--mono); }
+  .lbl { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 
-  /* enrollment checklist (state + command/handoff) */
-  .enroll-checklist { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--hairline); border-radius: 7px; overflow: hidden; }
-  .ec-row { display: flex; align-items: center; gap: 10px; padding: 8px 11px; background: var(--surface); border-bottom: 1px solid var(--hairline); }
-  .ec-row:last-child { border-bottom: none; }
-  .ec-ic { width: 16px; height: 16px; border-radius: 5px; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; font-family: var(--mono); }
-  .ec-ic.done { background: var(--ready); color: #fff; } .ec-ic.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
-  @media (prefers-color-scheme: dark) { .ec-ic.done { color: #0f141b; } }
-  :root[data-theme="dark"] .ec-ic.done { color: #0f141b; }
-  .ec-label { font-size: 12.5px; color: var(--ink); flex: 1; }
-  .ec-label b { font-weight: 600; }
-  .ec-action { font-size: 11.5px; font-weight: 600; }
-  .ec-action.cmd { color: var(--accent-ink); }
-  .ec-action.hand { color: var(--accent-ink); font-family: var(--mono); font-size: 11px; }
-  .ec-action.hand::after { content: " ›"; }
-  .ec-action.ok { color: var(--ready); font-family: var(--mono); font-size: 11px; }
+  .outcomes { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; padding-top: 2px; }
+  .outcome { font-size: 11.5px; color: var(--slate); border: 1px solid var(--hairline-strong); border-radius: 20px; padding: 3px 10px; background: var(--white); }
+  .outcome.chosen { color: var(--gold-dark); border-color: var(--gold-line); background: var(--gold-soft); font-weight: 600; }
 
-  .header-band { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; padding: 8px 11px; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-sm); }
-  .header-band .hb-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-faint); margin-right: 4px; }
-  .chip-cmd { font-size: 11.5px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--hairline-strong); background: var(--surface-sunk); color: var(--ink-muted); }
-  .chip-cmd.active { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); font-weight: 600; }
+  .blocker-reason { display: flex; gap: 9px; align-items: flex-start; background: var(--ember-soft); border: 1px solid var(--ember-line); border-radius: 7px; padding: 9px 11px; font-size: 12.5px; color: var(--ink); }
+  .blocker-reason .b-ic { color: var(--ember); font-weight: 700; font-family: var(--mono); }
+
+  /* required-information card (configured factors) */
+  .reqinfo { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--hairline); border-radius: 7px; overflow: hidden; }
+  .ri-row { display: flex; align-items: center; gap: 10px; padding: 7px 11px; background: var(--white); border-bottom: 1px solid var(--hairline); }
+  .ri-row:last-child { border-bottom: none; }
+  .ri-ic { width: 15px; height: 15px; border-radius: 4px; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; font-family: var(--mono); }
+  .ri-ic.met { background: var(--gold); color: var(--forge); } .ri-ic.unmet { background: var(--white); color: var(--ember); border: 1px solid var(--ember-line); }
+  .ri-ic.rec { background: var(--white); color: var(--slate); border: 1px dashed var(--hairline-strong); }
+  .ri-label { font-size: 12.5px; color: var(--ink); flex: 1; }
+  .ri-state { font-family: var(--mono); font-size: 10.5px; }
+  .ri-state.met { color: var(--gold-dark); } .ri-state.unmet { color: var(--ember); } .ri-state.rec { color: var(--slate); }
+
+  .header-band { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; padding: 8px 11px; background: var(--white); border: 1px solid var(--hairline); border-radius: var(--radius-sm); }
+  .header-band .hb-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--slate); margin-right: 4px; }
+  .chip-cmd { font-size: 11.5px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--hairline-strong); background: var(--river); color: var(--slate); }
+  .chip-cmd.active { border-color: var(--pine); color: var(--pine-ink); background: var(--pine-soft); font-weight: 600; }
 
   .empty { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 8px 2px; }
-  .empty .e-head { font-size: 14px; font-weight: 600; } .empty .e-wait { font-size: 13px; color: var(--ink-muted); } .empty .e-wait b { color: var(--accent-ink); font-weight: 640; }
-  .enrolled-badge { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 650; color: var(--ready); }
-  .enrolled-badge .chk { width: 20px; height: 20px; border-radius: 50%; background: var(--ready); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
-  @media (prefers-color-scheme: dark) { .enrolled-badge .chk { color: #0f141b; } }
-  :root[data-theme="dark"] .enrolled-badge .chk { color: #0f141b; }
+  .settled-badge { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 650; color: var(--gold-dark); }
+  .settled-badge .chk { width: 20px; height: 20px; border-radius: 50%; background: var(--gold); color: var(--forge); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
+  .waiting-badge { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--slate); }
+  .waiting-badge .chk { width: 20px; height: 20px; border-radius: 50%; background: var(--slate); color: var(--white); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
+  .e-wait { font-size: 13px; color: var(--slate); } .e-wait b { color: var(--forge); font-weight: 640; }
 
-  .preview { border: 1px solid var(--hairline-strong); border-radius: 7px; background: var(--surface); padding: 11px 12px; display: flex; flex-direction: column; gap: 9px; }
-  .preview .pv-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-faint); }
+  .preview { border: 1px solid var(--hairline-strong); border-radius: 7px; background: var(--white); padding: 11px 12px; display: flex; flex-direction: column; gap: 9px; }
+  .preview .pv-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--slate); }
   .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; }
-  .field .f-key { color: var(--ink-muted); } .field .f-val { font-weight: 600; color: var(--ink); font-family: var(--mono); font-size: 12px; }
-  .pv-preview-line { font-size: 12px; color: var(--ink-muted); border-top: 1px dashed var(--hairline); padding-top: 8px; } .pv-preview-line b { color: var(--ink); font-weight: 600; }
+  .field .f-key { color: var(--slate); } .field .f-val { font-weight: 600; color: var(--ink); font-family: var(--mono); font-size: 12px; }
+  .pv-preview-line { font-size: 12px; color: var(--slate); border-top: 1px dashed var(--hairline); padding-top: 8px; } .pv-preview-line b { color: var(--forge); font-weight: 600; }
 
-  .note { display: grid; grid-template-columns: auto 1fr; gap: 12px 16px; padding: 15px 20px; border-top: 1px solid var(--hairline); background: var(--surface); font-size: 12.5px; }
-  .note dt { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); padding-top: 2px; white-space: nowrap; }
-  .note dd { margin: 0; color: var(--ink-muted); } .note dd b { color: var(--ink); font-weight: 600; } .note dd .own { color: var(--accent-ink); font-weight: 600; }
+  .note { display: grid; grid-template-columns: auto 1fr; gap: 11px 16px; padding: 15px 20px; border-top: 1px solid var(--hairline); background: var(--white); font-size: 12.5px; }
+  .note dt { font-family: var(--mono); font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--slate); padding-top: 2px; white-space: nowrap; }
+  .note dd { margin: 0; color: var(--slate); } .note dd b { color: var(--ink); font-weight: 600; } .note dd .own { color: var(--pine-ink); font-weight: 600; }
+  .gapnote { margin: 12px 20px 4px; padding: 10px 12px; border: 1px dashed var(--ember-line); background: var(--ember-soft); border-radius: 7px; font-size: 12px; color: var(--ink); }
+  .gapnote b { color: var(--ember); }
 
-  .section-label { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-ink); margin: 56px 0 0; padding-top: 22px; border-top: 2px solid var(--hairline); }
-
-  footer { margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--hairline); font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer { margin-top: 46px; padding-top: 22px; border-top: 1px solid var(--hairline); font-family: var(--mono); font-size: 11.5px; color: var(--slate); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 </style>
 
 <div class="page">
   <header class="masthead">
-    <p class="eyebrow">Phase 5 · Product Office · Enrollment Realization</p>
-    <h1>The enrollment day, on the Focus Panel</h1>
-    <p class="lede">A Center Director works enrollment end to end — lead to enrolled child. Each state below is the real
-      Alloy journey drawn on the existing Focus Panel: only <b>Operator Work</b> evolves; <b>Household</b> and
-      <b>Children</b> ship unchanged. The journey is <b>family-grain until the Decision, child-grain after it</b>.</p>
-    <div class="rail" aria-label="enrollment journey">
-      <span class="step"><span class="n">1</span> New Lead</span>
-      <span class="step"><span class="n">2</span> Contacting</span>
-      <span class="step"><span class="n">3</span> Tour Scheduled</span>
-      <span class="step"><span class="n">4</span> Tour Complete</span>
-      <span class="step split"><span class="n">5</span> Decision · splits ⑂</span>
-      <span class="arm">→</span>
-      <span class="step"><span class="n">6</span> Offer</span>
-      <span class="step"><span class="n">7</span> Enrolling</span>
-      <span class="step"><span class="n">8</span> Ready</span>
-      <span class="step"><span class="n">9</span> Enrolled</span>
+    <p class="eyebrow">Phase 5 · Product Office · Enrollment · configured composition</p>
+    <h1>Operator Work, derived from the Enrollment configuration</h1>
+    <p class="lede">Every operator-facing word below is the <b>current configured label</b> — stage, work template,
+      command, outcome, or required-information factor — not authored by the mockup. The card is shown as a
+      <b>derivation</b>, not a hardcoded journey. Canonical Alloy colors; <b>Bend Pine</b> is the one operational green.
+      Only <b>Operator Work</b> evolves — Household and Children are unchanged.</p>
+
+    <div class="srckey" aria-label="source tags">
+      <span class="lbl"><span class="src stage">stage</span> configured stage label</span>
+      <span class="lbl"><span class="src work">work</span> work template label</span>
+      <span class="lbl"><span class="src cmd">cmd</span> registered command</span>
+      <span class="lbl"><span class="src outcome">outcome</span> configured outcome</span>
+      <span class="lbl"><span class="src req">req</span> required information</span>
+      <span class="lbl"><span class="src record">record</span> fixture record truth</span>
+      <span class="lbl"><span class="src copy">copy</span> explanatory copy</span>
+      <span class="lbl"><span class="src gap">gap</span> configuration gap</span>
     </div>
     <div class="legend">
-      <span class="swatch"><span class="dot evolves"></span><b>Operator Work</b> — evolves</span>
-      <span class="swatch"><span class="dot frozen"></span><b>Household / Children</b> — unchanged</span>
-      <span class="swatch"><span class="dot ready"></span>ready</span>
-      <span class="swatch"><span class="dot warn"></span>needs input</span>
-      <span class="swatch"><span class="dot blocked"></span>blocked</span>
-      <span class="swatch"><span class="dot waiting"></span>waiting</span>
+      <span class="swatch"><span class="dot pine"></span><b>Bend Pine</b> — active / primary / progress</span>
+      <span class="swatch"><span class="dot gold"></span><b>Alloy Gold</b> — completed / finalized</span>
+      <span class="swatch"><span class="dot ember"></span><b>Alloy Ember</b> — blocked / attention</span>
+      <span class="swatch"><span class="dot slate"></span><b>Alloy Slate</b> — waiting / metadata</span>
+      <span class="swatch"><span class="dot forge"></span><b>Midnight Forge</b> — structure / text</span>
     </div>
   </header>
 
-  <p class="section-label">The journey · one family, start to enrolled</p>
+  <!-- DERIVATION -->
+  <div class="deriv">
+    <h3>How the card is derived</h3>
+    <p class="sub">The Operator Work card is a composition of configured runtime inputs — never a bespoke screen per stage.</p>
+    <div class="eq">
+      <span class="term">selected subject</span><span class="op">+</span>
+      <span class="term">Business Process</span><span class="op">+</span>
+      <span class="term">configured Stage</span><span class="op">+</span>
+      <span class="term">Current Work items</span><span class="op">+</span>
+      <span class="term">readiness</span><span class="op">+</span>
+      <span class="term">eligible Commands</span><span class="op">+</span>
+      <span class="term">configured Outcomes</span><span class="op">+</span>
+      <span class="term">record truth</span>
+      <span class="op">=</span>
+      <span class="result">Operator Work card</span>
+    </div>
+    <div class="rail" aria-label="canonical enrollment stages">
+      <span class="grain-h">Family Track</span>
+      <span class="step">New Lead</span><span class="step">Tour</span><span class="step split">Placement / Decision ⑂</span><span class="step">Closed</span>
+      <span class="arm">→</span>
+      <span class="grain-h">Child Track</span>
+      <span class="step child">Waitlist</span><span class="step child">Enrolling</span><span class="step child">Enrolled</span><span class="step child">Closed / Withdrawn</span>
+    </div>
+    <p class="sub" style="margin:14px 0 0">The 8 stages the Enrollment template actually seeds. The journey is <b>Family Track</b> until <b>Placement / Decision</b>, where it splits into a per-child <b>Child Track</b>.</p>
+  </div>
 
-  <!-- 1 NEW LEAD -->
+  <p class="section-label">The journey · configured stages</p>
+
+  <!-- NEW LEAD -->
   <section class="plate">
-    <div class="plate-head"><span class="plate-no">01</span><span class="plate-grain">family</span><h2 class="plate-title">New Lead</h2>
-      <p class="plate-cap">A parent submits an inquiry. Before anything, the operator understands who this is and that it's real.</p></div>
+    <div class="plate-head"><span class="plate-no">01</span><span class="grain-chip family">Family Track</span><h2 class="plate-title">New Lead</h2>
+      <p class="plate-cap">Stage <span class="src stage">stage: "New Lead"</span> · work template <span class="src work">work: "Contact Family"</span>.</p></div>
     <div class="focus">
-      <div class="frame"><span class="frame-tag">Frame · why</span><span class="frame-text">New inquiry — the <b>Riveras</b> asked about fall care for 1 child, 6 minutes ago, via the website.</span></div>
+      <div class="frame"><span class="frame-tag">Frame · why <span class="src copy">copy</span></span><span class="frame-text">A new inquiry entered the <b>Enrollment Process</b> — reach the Rivera family and determine next steps.</span></div>
       <div class="grid">
         <div class="col"><div class="card owner">
           <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
           <div class="work-item primary">
-            <div class="wi-top"><span class="wi-obl">Review this new inquiry</span><span class="pill primary">Do now</span></div>
-            <div class="micro">Is it a real family? Who is it for? Same-day.</div>
-            <div class="cmd-row"><span class="btn primary">Contact Family</span><span class="btn ghost">Schedule Tour</span></div>
-            <div class="outcomes"><span class="micro">closes as →</span><span class="outcome">Ready to contact</span></div>
+            <div class="wi-top"><span class="wi-obl"><span class="lbl">Contact Family <span class="src work">work template</span></span></span><span class="pill active">Do now</span></div>
+            <div class="micro">Reach the family, understand their needs, determine the next step. <span class="src copy">description (configured)</span></div>
+            <div class="cmd-row">
+              <span class="btn primary">Contact Family</span><span class="src cmd">cmd: quick_message → "Contact Family"</span>
+              <span class="btn ghost">Schedule tour</span><span class="btn ghost">Send form</span>
+            </div>
+            <div class="outcomes"><span class="micro">closes as →</span>
+              <span class="outcome">Reached Family</span><span class="outcome">Left Message</span><span class="outcome">Needs Follow-up</span><span class="outcome">Interested</span><span class="outcome">Not Interested</span>
+              <span class="src outcome">configured outcomes</span>
+            </div>
           </div>
         </div></div>
         <div class="col">
           <div class="card frozen"><div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
-            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">website inquiry · phone on file</span></div></div></div>
+            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera <span class="src record">record</span></span><span class="sub">website inquiry · phone on file</span></div></div></div>
           <div class="card frozen"><div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
-            <div class="kid-line"><span class="kid-name">1 child on the inquiry</span><span class="kid-sub">age 3 · desired Sep</span></div></div>
+            <div class="kid-line"><span class="kid-name">Sofia Rivera <span class="src record">record</span></span><span class="kid-sub">age 3</span></div></div>
         </div>
       </div>
     </div>
-    <dl class="note"><dt>Owns</dt><dd><span class="own">Operator Work</span> owns the orientation — is this real, who for.</dd>
-      <dt>Contributes</dt><dd>Household names the family; Children names the child. Neither is worked yet.</dd>
-      <dt>Next</dt><dd>On review, the case moves to Contacting and the first outreach becomes primary.</dd></dl>
+    <dl class="note"><dt>Owns</dt><dd><span class="own">Operator Work</span> composes the stage's work template "Contact Family" + its command + its configured outcomes.</dd>
+      <dt>Required info</dt><dd>the "Required information" card asks for <b>Person</b> (required), <b>Child</b> (recommended) <span class="src req">progression req</span>.</dd>
+      <dt>On outcome</dt><dd>"Reached Family" / "Interested" advance toward Tour; "Left Message" / "Needs Follow-up" hold the stage (configured).</dd></dl>
   </section>
 
-  <!-- 2 CONTACTING -->
+  <!-- TOUR -->
   <section class="plate">
-    <div class="plate-head"><span class="plate-no">02</span><span class="plate-grain">family</span><h2 class="plate-title">Contacting</h2>
-      <p class="plate-cap">The loop a director lives in — call, email, voicemail, callback — until the family is reached.</p></div>
+    <div class="plate-head"><span class="plate-no">02</span><span class="grain-chip family">Family Track</span><h2 class="plate-title">Tour</h2>
+      <p class="plate-cap">Stage <span class="src stage">stage: "Tour"</span> · work template <span class="src work">work: "Conduct Tour"</span> · outcome-led.</p></div>
     <div class="focus">
-      <div class="frame"><span class="frame-tag">Frame · why</span><span class="frame-text">Reach the <b>Riveras</b> and confirm interest — attempt 2 of 3.</span></div>
+      <div class="frame"><span class="frame-tag">Frame · why <span class="src copy">copy</span></span><span class="frame-text">The <b>Riveras</b> are in <b>Tour</b> — conduct the tour, then record what happened.</span></div>
       <div class="grid">
         <div class="col"><div class="card owner">
           <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
           <div class="work-item primary">
-            <div class="wi-top"><span class="wi-obl">Contact attempt #2</span><span class="pill primary">Do now</span></div>
-            <div class="cmd-row"><span class="btn primary">Contact Family</span><span class="handoff">Bad number? Fix in Household</span></div>
-            <div class="outcomes">
-              <span class="outcome">Reached</span><span class="outcome">Left voicemail</span><span class="outcome">Sent text</span>
-              <span class="outcome">No answer</span><span class="outcome">Bad number</span><span class="outcome">Not interested</span>
+            <div class="wi-top"><span class="wi-obl"><span class="lbl">Conduct Tour <span class="src work">work template</span></span></span><span class="pill active">Do now</span></div>
+            <div class="micro">Guide the family through the tour, then record the outcome. <span class="src copy">description (configured)</span></div>
+            <div class="cmd-row"><span class="btn ghost">Schedule tour</span><span class="btn ghost">Message</span><span class="src cmd">cmd: schedule_tour · quick_message</span></div>
+            <div class="outcomes"><span class="micro">record →</span>
+              <span class="outcome">Tour Scheduled</span><span class="outcome chosen">Tour Completed</span><span class="outcome">No Show</span><span class="outcome">Needs Follow-up</span><span class="outcome">Family Declined</span><span class="outcome">No Availability</span>
+              <span class="src outcome">configured outcomes</span>
             </div>
-          </div>
-          <div class="work-item settled">
-            <div class="wi-top"><span class="wi-obl">Contact attempt #1</span><span class="pill done">✓ Done</span></div>
-            <div class="outcomes"><span class="outcome chosen">Left voicemail</span><span class="micro">yesterday · stayed in stage</span></div>
           </div>
         </div></div>
         <div class="col">
-          <div class="card frozen"><div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged · owns contact</span></div>
-            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">(505) 555‑0142 · maria@…</span></div></div></div>
+          <div class="card frozen"><div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
+            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">tour Tue 10:00</span></div></div></div>
           <div class="card frozen"><div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
             <div class="kid-line"><span class="kid-name">Sofia Rivera</span><span class="kid-sub">age 3</span></div></div>
         </div>
       </div>
     </div>
-    <dl class="note"><dt>Owns</dt><dd><span class="own">Operator Work</span> owns each attempt and its declared result; "left voicemail" holds the stage — the card says so.</dd>
-      <dt>Household</dt><dd>owns the number; a <b>bad number</b> hands off to Household to fix, then returns.</dd>
-      <dt>Next</dt><dd>Reached → the tour-scheduling move; otherwise the next dated attempt. Never a dead end.</dd></dl>
+    <dl class="note"><dt>Owns</dt><dd><span class="own">Operator Work</span> owns the outcome declaration — the operator reports the tour result; the runtime decides the move.</dd>
+      <dt>Required info</dt><dd><b>Child</b>, <b>Program</b>, <b>Tour Date and Time</b> (required); <b>Tour Outcome</b> (recommended) <span class="src req">progression req</span>.</dd>
+      <dt>On outcome</dt><dd>"Tour Completed" advances to Placement / Decision.</dd></dl>
+    <div class="gapnote"><b>Config gap:</b> the helpful actions <span class="src gap">send_confirmation</span> <span class="src gap">send_reminder</span> <span class="src gap">reschedule</span> have <b>no configured labels</b> (humanized fallbacks only) — omitted here rather than invented.</div>
   </section>
 
-  <!-- 3 TOUR SCHEDULED -->
+  <!-- PLACEMENT / DECISION — SPLIT -->
   <section class="plate">
-    <div class="plate-head"><span class="plate-no">03</span><span class="plate-grain">family</span><h2 class="plate-title">Tour Scheduled</h2>
-      <p class="plate-cap">On the calendar. Confirmations and reminders are automated — Operator Work stays calm and aware, not busy.</p></div>
+    <div class="plate-head"><span class="plate-no">03</span><span class="grain-chip mixed">Family → Child ⑂</span><h2 class="plate-title">Placement / Decision</h2>
+      <p class="plate-cap">Stage <span class="src stage">stage: "Placement / Decision"</span> · work template <span class="src work">work: "Support Enrollment Decision"</span>. The split.</p></div>
     <div class="focus">
-      <div class="frame"><span class="frame-tag">Frame · why</span><span class="frame-text">The <b>Riveras</b> tour Tue 10:00 — reminders are automated; nothing needs you until then.</span></div>
-      <div class="grid">
-        <div class="col"><div class="card owner">
-          <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
-          <div class="empty">
-            <span class="enrolled-badge" style="color:var(--waiting)"><span class="chk" style="background:var(--waiting)">◷</span> Nothing to do now.</span>
-            <span class="e-wait">Tour booked <b>Tue 10:00</b>, confirmed. Reminder sends <b>Mon 9:00</b> automatically.</span>
-            <div class="cmd-row" style="margin-top:4px"><span class="btn ghost">Confirm Tour</span><span class="btn ghost">Reschedule</span><span class="btn ghost">Cancel Tour</span></div>
-          </div>
-        </div></div>
-        <div class="col">
-          <div class="card frozen"><div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
-            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">confirmed by text</span></div></div></div>
-          <div class="card frozen"><div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
-            <div class="kid-line"><span class="kid-name">Sofia Rivera</span><span class="kid-sub">attending tour</span></div></div>
-        </div>
-      </div>
-    </div>
-    <dl class="note"><dt>Calm, not idle</dt><dd><span class="own">Operator Work</span> names the <b>next automated beat</b> so "no work" reads as handled, not neglected.</dd>
-      <dt>Moves</dt><dd>Confirm / Reschedule / Cancel are available if plans change; a cancel raises a follow-up obligation.</dd></dl>
-  </section>
-
-  <!-- 4 TOUR COMPLETE -->
-  <section class="plate">
-    <div class="plate-head"><span class="plate-no">04</span><span class="plate-grain">family</span><h2 class="plate-title">Tour Complete</h2>
-      <p class="plate-cap">The tour happened. The operator reports what happened; the system decides the move.</p></div>
-    <div class="focus">
-      <div class="frame"><span class="frame-tag">Frame · why</span><span class="frame-text">The <b>Riveras</b> toured this morning — record how it went.</span></div>
+      <div class="frame"><span class="frame-tag">Frame · why <span class="src copy">copy</span></span><span class="frame-text">At <b>Placement / Decision</b> the family case splits — from here each child follows the <b>Child Track</b> individually.</span></div>
       <div class="grid">
         <div class="col"><div class="card owner">
           <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
           <div class="work-item primary">
-            <div class="wi-top"><span class="wi-obl">Record the tour outcome</span><span class="pill primary">Do now</span></div>
-            <div class="micro">Report the result — this is a business judgment, not a status flip.</div>
-            <div class="outcomes"><span class="outcome chosen">Tour completed</span><span class="outcome">No show</span><span class="outcome">Not interested</span></div>
-            <div class="cmd-row"><span class="btn primary">Record outcome</span></div>
-          </div>
-        </div></div>
-        <div class="col">
-          <div class="card frozen"><div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
-            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">toured 10:00–10:40</span></div></div></div>
-          <div class="card frozen"><div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
-            <div class="kid-line"><span class="kid-name">Sofia Rivera</span><span class="kid-sub">age 3</span></div></div>
-        </div>
-      </div>
-    </div>
-    <dl class="note"><dt>Owns</dt><dd><span class="own">Operator Work</span> owns the outcome declaration; "Tour completed" moves the case to Decision.</dd>
-      <dt>Next</dt><dd>the Decision obligation — choose a path per child.</dd></dl>
-  </section>
-
-  <!-- 5 DECISION / SPLIT -->
-  <section class="plate">
-    <div class="plate-head"><span class="plate-no">05</span><span class="plate-grain">family → child ⑂</span><h2 class="plate-title">Decision — the split</h2>
-      <p class="plate-cap">The pivot of the whole journey. The outcome is declared per child, and the family fans into child tracks.</p></div>
-    <div class="focus">
-      <div class="frame"><span class="frame-tag">Frame · why</span><span class="frame-text">From here you're enrolling <b>each child individually</b> — land the Riveras' decision per child.</span></div>
-      <div class="grid">
-        <div class="col"><div class="card owner">
-          <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves · per-child</span></div>
-          <div class="work-item primary">
-            <div class="wi-top"><span class="wi-obl">Land the enrollment decision</span><span class="pill primary">Do now</span></div>
-            <div class="micro">One conversation, a path chosen for each child:</div>
-            <div class="enroll-checklist">
-              <div class="ec-row"><span class="ec-ic warn">?</span><span class="ec-label"><b>Sofia</b> — which path?</span><span class="ec-action cmd">Enrolling ▾</span></div>
-              <div class="ec-row"><span class="ec-ic warn">?</span><span class="ec-label"><b>Diego</b> — which path?</span><span class="ec-action cmd">Waitlist ▾</span></div>
+            <div class="wi-top"><span class="wi-obl"><span class="lbl">Support Enrollment Decision <span class="src work">work template</span></span></span><span class="pill active">Do now</span></div>
+            <div class="micro">Help the family choose a path, then record the decision outcome. <span class="src copy">description (configured)</span></div>
+            <div class="outcomes"><span class="micro">record →</span>
+              <span class="outcome">Family Enrolling</span><span class="outcome">Needs Time</span><span class="outcome">Wants Waitlist</span><span class="outcome">Declined</span>
+              <span class="src outcome">configured outcomes</span>
             </div>
-            <div class="outcomes"><span class="micro">per child →</span><span class="outcome">Enrolling</span><span class="outcome">Waitlist</span><span class="outcome">Declined</span></div>
+            <div class="micro" style="padding-top:2px">Split routes each child to a Child-Track path: <b>Waitlist</b> · <b>Enrolling</b> · <b>Closed / Withdrawn</b> · <b>No action — keep with family</b>. <span class="src outcome">split labels (configured)</span></div>
           </div>
         </div></div>
         <div class="col">
@@ -355,226 +334,197 @@
             <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">both deciding</span></div></div></div>
           <div class="card frozen"><div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged · paths become real here</span></div>
             <div class="roster">
-              <div class="kid-line"><span class="kid-name">Sofia Rivera · 3</span><span class="pill primary">→ enrolling</span></div>
-              <div class="kid-line"><span class="kid-name">Diego Rivera · 1</span><span class="pill warn">→ waitlist</span></div>
+              <div class="kid-line"><span class="kid-name">Sofia · 3</span><span class="pill active">→ Enrolling</span></div>
+              <div class="kid-line"><span class="kid-name">Diego · 1</span><span class="pill waiting">→ Waitlist</span></div>
             </div></div>
         </div>
       </div>
     </div>
-    <dl class="note"><dt>The split</dt><dd><span class="own">Operator Work</span> declares an outcome <b>per child</b>; the Frame narrates that the family is now enrolled child-by-child.</dd>
-      <dt>Children</dt><dd>is where each child's chosen path becomes their disposition. Household stays the one shared family.</dd>
-      <dt>Next</dt><dd>each child gets its own track — Sofia → Enrolling, Diego → Waitlist/Offer.</dd></dl>
+    <dl class="note"><dt>The split</dt><dd><span class="own">Operator Work</span> records the decision; the configured split outcome sets each child's path. The Frame narrates that the family is now enrolled child-by-child.</dd>
+      <dt>Children</dt><dd>is where each child's chosen Child-Track path becomes their durable status (<b>Waitlisted</b> / <b>Enrolling</b>).</dd></dl>
   </section>
 
-  <!-- 6 OFFER -->
+  <!-- WAITLIST -->
   <section class="plate">
-    <div class="plate-head"><span class="plate-no">06</span><span class="plate-grain">child</span><h2 class="plate-title">Enrollment Offer</h2>
-      <p class="plate-cap">A spot opened for a waitlisted child. Confirm the family's response — for that named child.</p></div>
+    <div class="plate-head"><span class="plate-no">04</span><span class="grain-chip child">Child Track</span><h2 class="plate-title">Waitlist</h2>
+      <p class="plate-cap">Stage <span class="src stage">stage: "Waitlist"</span> · work templates <span class="src work">work: "Review waitlist position"</span> <span class="src work">work: "Offer spot"</span>.</p></div>
     <div class="focus">
-      <div class="frame"><span class="frame-tag">Frame · why</span><span class="frame-text">A spot opened for <b>Diego</b> — you offered it Tuesday; confirm the family's response.</span></div>
+      <div class="frame"><span class="frame-tag">Frame · why <span class="src copy">copy</span></span><span class="frame-text"><b>Diego</b> is on the <b>Waitlist</b> — a spot opened, so offer it and track the response.</span></div>
       <div class="grid">
         <div class="col"><div class="card owner">
           <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
           <div class="work-item primary">
-            <div class="wi-top"><span class="wi-obl">Confirm the offer response <span class="child-name">Diego</span></span><span class="pill waiting">Awaiting family</span></div>
-            <div class="cmd-row"><span class="btn primary">Extend Offer</span><span class="btn ghost">Quick message</span></div>
-            <div class="outcomes"><span class="outcome">Accepted</span><span class="outcome">Declined</span><span class="outcome">No response</span></div>
+            <div class="wi-top"><span class="wi-obl"><span class="lbl">Offer spot <span class="child-name">Diego</span> <span class="src work">work template</span></span></span><span class="pill waiting">Awaiting family</span></div>
+            <div class="outcomes"><span class="micro">record →</span>
+              <span class="outcome">Spot offered</span><span class="outcome">Candidate paused</span><span class="outcome">No response to offer</span>
+              <span class="src outcome">configured outcomes</span>
+            </div>
+          </div>
+          <div class="work-item secondary">
+            <div class="wi-top"><span class="wi-obl"><span class="lbl">Review waitlist position <span class="child-name">Diego</span> <span class="src work">work template</span></span></span><span class="pill waiting">Optional</span></div>
           </div>
         </div></div>
         <div class="col">
           <div class="card frozen"><div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
-            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">funding: private pay</span></div></div></div>
+            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">one contact</span></div></div></div>
           <div class="card frozen"><div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
             <div class="roster">
-              <div class="kid-line"><span class="kid-name">Sofia · 3</span><span class="pill primary">enrolling</span></div>
-              <div class="kid-line"><span class="kid-name">Diego · 1</span><span class="pill warn">offered</span></div>
+              <div class="kid-line"><span class="kid-name">Sofia · 3</span><span class="pill active">Enrolling</span></div>
+              <div class="kid-line"><span class="kid-name">Diego · 1</span><span class="pill waiting">Waitlisted</span></div>
             </div></div>
         </div>
       </div>
     </div>
-    <dl class="note"><dt>Owns</dt><dd><span class="own">Operator Work</span> owns the offer obligation, named to <b>Diego</b>; accepted → Enrolling.</dd>
-      <dt>Children</dt><dd>shows Diego's disposition (offered); Household owns funding responsibility, referenced not restated.</dd></dl>
+    <dl class="note"><dt>Owns</dt><dd><span class="own">Operator Work</span> owns "Offer spot" named to <b>Diego</b>; "Spot offered" advances his track.</dd>
+      <dt>Required info</dt><dd><b>Child</b>, <b>Program</b>, <b>Desired Schedule</b>, <b>Desired Start Date</b> <span class="src req">progression req</span>.</dd>
+      <dt>Children</dt><dd>shows Diego's durable status <b>Waitlisted</b>. "Offer spot" is a configured work template — <b>not</b> a stage, and there is no "Extend Offer" command.</dd></dl>
   </section>
 
-  <!-- 7 ENROLLING -->
+  <!-- ENROLLING -->
   <section class="plate">
-    <div class="plate-head"><span class="plate-no">07</span><span class="plate-grain">child</span><h2 class="plate-title">Enrollment In Progress</h2>
-      <p class="plate-cap">Many required things — organized as <b>one obligation with a satisfiable checklist</b>, not a pile of tasks. State plus a command or hand-off per row.</p></div>
+    <div class="plate-head"><span class="plate-no">05</span><span class="grain-chip child">Child Track</span><h2 class="plate-title">Enrolling</h2>
+      <p class="plate-cap">Stage <span class="src stage">stage: "Enrolling"</span> · work template <span class="src work">work: "Send Enrollment Packet"</span> + the separate <b>Required information</b> card.</p></div>
     <div class="focus">
-      <div class="frame"><span class="frame-tag">Frame · why</span><span class="frame-text">Finish enrollment for <b>Sofia</b> — 3 of 5 requirements done; two need you.</span></div>
+      <div class="frame"><span class="frame-tag">Frame · why <span class="src copy">copy</span></span><span class="frame-text"><b>Sofia</b> is <b>Enrolling</b> — send the packet, and the record shows what still must be completed.</span></div>
       <div class="grid">
         <div class="col"><div class="card owner">
           <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
           <div class="work-item primary">
-            <div class="wi-top"><span class="wi-obl">Finish enrollment <span class="child-name">Sofia</span></span><span class="pill warn">3 / 5</span></div>
-            <div class="enroll-checklist">
-              <div class="ec-row"><span class="ec-ic done">✓</span><span class="ec-label"><b>Documents</b> — packet returned</span><span class="ec-action ok">satisfied</span></div>
-              <div class="ec-row"><span class="ec-ic done">✓</span><span class="ec-label"><b>Medical</b> — immunizations on file</span><span class="ec-action hand">Children</span></div>
-              <div class="ec-row"><span class="ec-ic warn">!</span><span class="ec-label"><b>Placement</b> — no room assigned</span><span class="ec-action cmd">Assign Room</span></div>
-              <div class="ec-row"><span class="ec-ic warn">!</span><span class="ec-label"><b>Schedule</b> — days not set</span><span class="ec-action cmd">Assign Schedule</span></div>
-              <div class="ec-row"><span class="ec-ic done">✓</span><span class="ec-label"><b>Funding</b> — private pay confirmed</span><span class="ec-action hand">Billing</span></div>
-            </div>
-            <div class="cmd-row"><span class="btn disabled">Enroll Sofia</span><span class="micro">available once all five are satisfied</span></div>
+            <div class="wi-top"><span class="wi-obl"><span class="lbl">Send Enrollment Packet <span class="child-name">Sofia</span> <span class="src work">work template</span></span></span><span class="pill active">Do now</span></div>
+            <div class="cmd-row"><span class="btn primary">Send Enrollment Packet</span><span class="src cmd">cmd: send_form → "Send Enrollment Packet"</span></div>
+            <div class="outcomes"><span class="micro">closes as →</span><span class="outcome">Packet sent</span><span class="outcome">Packet still pending</span><span class="src outcome">configured outcomes</span></div>
           </div>
         </div></div>
         <div class="col">
-          <div class="card frozen"><div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged · owns funding</span></div>
-            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">private pay · signer: Maria</span></div></div></div>
-          <div class="card frozen"><div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged · owns medical</span></div>
-            <div class="kid-line"><span class="kid-name">Sofia Rivera · 3</span><span class="pill primary">enrolling</span></div>
-            <div class="micro" style="margin-top:8px">Immunizations &amp; medical live on Sofia's record.</div></div>
-        </div>
-      </div>
-    </div>
-    <dl class="note"><dt>Owns</dt><dd><span class="own">Operator Work</span> owns the obligation + the commands (Assign Room/Schedule). It shows <b>state + hand-off</b> — never the document, the amount, or a room-management screen.</dd>
-      <dt>Hands off</dt><dd>Medical → Children · Funding → Billing · Documents → Documents. The artifacts live in their owner cards.</dd>
-      <dt>Next</dt><dd>each satisfied row ticks; when whole, readiness turns green and <b>Enroll Sofia</b> lights up.</dd></dl>
-  </section>
-
-  <!-- 8 READY -->
-  <section class="plate">
-    <div class="plate-head"><span class="plate-no">08</span><span class="plate-grain">child</span><h2 class="plate-title">Ready to Enroll</h2>
-      <p class="plate-cap">Everything's in place. One green obligation and the final command.</p></div>
-    <div class="focus">
-      <div class="frame"><span class="frame-tag">Frame · why</span><span class="frame-text"><b>Sofia</b> is fully prepared — confirm her start and enroll her.</span></div>
-      <div class="grid">
-        <div class="col"><div class="card owner">
-          <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
-          <div class="work-item primary">
-            <div class="wi-top"><span class="wi-obl">Confirm start &amp; enroll <span class="child-name">Sofia</span></span><span class="pill ready">Ready</span></div>
-            <div class="enroll-checklist">
-              <div class="ec-row"><span class="ec-ic done">✓</span><span class="ec-label">Documents · Medical · Placement · Schedule · Funding</span><span class="ec-action ok">all satisfied</span></div>
-              <div class="ec-row"><span class="ec-ic done">✓</span><span class="ec-label"><b>Start date</b> — Sep 3, confirmed with family</span><span class="ec-action ok">confirmed</span></div>
+          <div class="card frozen"><div class="card-head"><span class="card-name">Required information <span class="src req">configured card</span></span><span class="tag frozen">Unchanged</span></div>
+            <div class="micro" style="margin-bottom:9px">What must be completed? <span class="src copy">card question (configured)</span></div>
+            <div class="reqinfo">
+              <div class="ri-row"><span class="ri-ic met">✓</span><span class="ri-label">Child</span><span class="ri-state met">on file</span></div>
+              <div class="ri-row"><span class="ri-ic unmet">!</span><span class="ri-label">Classroom</span><span class="ri-state unmet">needed</span></div>
+              <div class="ri-row"><span class="ri-ic unmet">!</span><span class="ri-label">Schedule</span><span class="ri-state unmet">needed</span></div>
+              <div class="ri-row"><span class="ri-ic unmet">!</span><span class="ri-label">Enrollment Start Date</span><span class="ri-state unmet">needed</span></div>
+              <div class="ri-row"><span class="ri-ic rec">◦</span><span class="ri-label">Enrollment Packet Reviewed</span><span class="ri-state rec">recommended</span></div>
             </div>
-            <div class="cmd-row"><span class="btn primary">Enroll Sofia</span><span class="micro">the final command</span></div>
           </div>
-        </div></div>
-        <div class="col">
-          <div class="card frozen"><div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
-            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">start confirmed</span></div></div></div>
           <div class="card frozen"><div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
-            <div class="kid-line"><span class="kid-name">Sofia Rivera · 3</span><span class="pill ready">room 2 · M–F</span></div></div>
+            <div class="kid-line"><span class="kid-name">Sofia Rivera · 3</span><span class="pill active">Enrolling</span></div></div>
         </div>
       </div>
     </div>
-    <dl class="note"><dt>Owns</dt><dd><span class="own">Operator Work</span> owns the final <b>Enroll</b> command; the outcome sets Sofia's disposition to enrolled.</dd>
-      <dt>Next</dt><dd>on enroll, the card recomposes to the household's other open work — or the complete state.</dd></dl>
+    <dl class="note"><dt>Owns</dt><dd><span class="own">Operator Work</span> owns the one configured enrolling work — <b>Send Enrollment Packet</b>. Completion readiness lives in the <b>Required information</b> card, not as invented work items.</dd>
+      <dt>Required info</dt><dd><b>Child</b>, <b>Classroom</b>, <b>Schedule</b>, <b>Enrollment Start Date</b>; <b>Enrollment Packet Reviewed</b> (recommended) <span class="src req">progression req</span>. The word is <b>Classroom</b> — not "Room" or "Placement".</dd></dl>
+    <div class="gapnote"><b>Config gap:</b> there are <b>no</b> configured "Documents", "Medical", or "Funding" items, and <b>no</b> configured terminal "Enroll" command in the Enrolling plan (<span class="src gap">enroll_child is catalog-only</span>). Whether Enrolling needs richer work or an "Enroll" command is a <b>configuration decision</b> — not filled in here.</div>
   </section>
 
-  <!-- 9 ENROLLED -->
+  <!-- ENROLLED -->
   <section class="plate">
-    <div class="plate-head"><span class="plate-no">09</span><span class="plate-grain">child · terminal</span><h2 class="plate-title">Enrolled — no active work</h2>
-      <p class="plate-cap">For an enrolled child there is no obligation. Operator Work is replaced by a quiet, settled record of the win.</p></div>
+    <div class="plate-head"><span class="plate-no">06</span><span class="grain-chip child">Child Track · terminal</span><h2 class="plate-title">Enrolled</h2>
+      <p class="plate-cap">Stage <span class="src stage">stage: "Enrolled"</span> · no work templates configured. Operator Work settles.</p></div>
     <div class="focus">
-      <div class="frame"><span class="frame-tag">Frame · why</span><span class="frame-text"><b>Sofia</b> is enrolled — starts Sep 3. Attendance &amp; Billing take it from here.</span></div>
+      <div class="frame"><span class="frame-tag">Frame · why <span class="src copy">copy</span></span><span class="frame-text"><b>Sofia</b> is <b>Enrolled</b> — no enrollment work remains.</span></div>
       <div class="grid">
         <div class="col"><div class="card owner">
           <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
           <div class="empty">
-            <span class="enrolled-badge"><span class="chk">✓</span> Enrolled — Sofia starts Sep 3.</span>
-            <span class="e-wait">No enrollment work remains. This is a record, not a task — Alloy doesn't invent post-enrollment busywork.</span>
-            <div class="cmd-row" style="margin-top:2px"><span class="micro">Diego is still on the waitlist — his work is one click away.</span></div>
+            <span class="settled-badge"><span class="chk">✓</span> Enrolled <span class="src outcome" style="align-self:center">status: "Enrolled"</span></span>
+            <span class="e-wait">No enrollment work remains — this is a settled record, not a task. Alloy invents no post-enrollment busywork.</span>
+            <span class="micro">Diego is still Waitlisted — his work is one click away. <span class="src copy">copy</span></span>
           </div>
         </div></div>
         <div class="col">
-          <div class="card frozen"><div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged · ongoing family</span></div>
+          <div class="card frozen"><div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
             <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">1 enrolled · 1 waitlisted</span></div></div></div>
           <div class="card frozen"><div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
             <div class="roster">
-              <div class="kid-line"><span class="kid-name">Sofia · 3</span><span class="pill done">enrolled</span></div>
-              <div class="kid-line"><span class="kid-name">Diego · 1</span><span class="pill warn">waitlist</span></div>
+              <div class="kid-line"><span class="kid-name">Sofia · 3</span><span class="pill done">Enrolled</span></div>
+              <div class="kid-line"><span class="kid-name">Diego · 1</span><span class="pill waiting">Waitlisted</span></div>
             </div></div>
         </div>
       </div>
     </div>
-    <dl class="note"><dt>Replaces work</dt><dd>a <b>settled record</b>, not a task — the win is shown, no busywork invented.</dd>
-      <dt>Continuous day</dt><dd>the director's attention returns to Diego, or to the next family in queue.</dd></dl>
+    <dl class="note"><dt>Replaces work</dt><dd>a settled record in <b>Alloy Gold</b> (finalized), not a task. Durable status <b>Enrolled</b> <span class="src outcome">status vocabulary</span>.</dd>
+      <dt>Continuous day</dt><dd>attention returns to Diego (Waitlist) or the next family.</dd></dl>
   </section>
 
-  <!-- ================= MULTI-CHILD ================= -->
-  <p class="section-label">The load-bearing case · one household, three children, three points</p>
-
+  <!-- MULTI-CHILD -->
+  <p class="section-label">The load-bearing case · one household, both grains at once</p>
   <section class="plate wide">
-    <div class="plate-head"><span class="plate-no">D3</span><span class="plate-grain">mixed grain</span><h2 class="plate-title">Multi-child enrollment — the Rivera household</h2>
-      <p class="plate-cap">Aisha enrolled · Ben touring next week · Chloe enrolling with paperwork incomplete. Three surfaces, zero duplication.</p></div>
+    <div class="plate-head"><span class="plate-no">D3</span><span class="grain-chip mixed">Family + Child</span><h2 class="plate-title">Multi-child — the Rivera household</h2>
+      <p class="plate-cap">Aisha <b>Enrolled</b> (child) · Sofia <b>Enrolling</b> (child) · a fresh inquiry for baby Mateo in <b>Tour</b> (family). Both grains, zero duplication.</p></div>
     <div class="focus">
-      <div class="frame"><span class="frame-tag">Frame · why</span><span class="frame-text">The <b>Riveras</b> have work across three children — <b>Chloe's</b> paperwork is overdue and needs you first.</span></div>
+      <div class="frame"><span class="frame-tag">Frame · why <span class="src copy">copy</span></span><span class="frame-text">The <b>Riveras</b> have work on two grains — <b>Sofia's</b> Enrolling packet, and a family-grain <b>Tour</b> for Mateo.</span></div>
       <div class="grid">
         <div class="col"><div class="card owner">
-          <div class="card-head"><span class="card-name">Operator Work — verbs, across children</span><span class="tag evolves">Evolves</span></div>
+          <div class="card-head"><span class="card-name">Operator Work — work items, tagged by grain</span><span class="tag evolves">Evolves</span></div>
           <div class="work-item primary">
-            <div class="wi-top"><span class="wi-obl">Finish enrollment <span class="child-name">Chloe</span></span><span class="pill warn">2 / 5 · overdue</span></div>
-            <div class="enroll-checklist">
-              <div class="ec-row"><span class="ec-ic done">✓</span><span class="ec-label">Documents</span><span class="ec-action ok">satisfied</span></div>
-              <div class="ec-row"><span class="ec-ic warn">!</span><span class="ec-label"><b>Medical</b> — immunization record missing</span><span class="ec-action hand">Children</span></div>
-              <div class="ec-row"><span class="ec-ic warn">!</span><span class="ec-label"><b>Placement</b> — no room</span><span class="ec-action cmd">Assign Room</span></div>
-            </div>
+            <div class="wi-top"><span class="wi-obl"><span class="lbl"><span class="grain-chip child" style="margin-right:4px">Child</span>Send Enrollment Packet <span class="child-name">Sofia</span> <span class="src work">work template</span></span></span><span class="pill active">Do now</span></div>
+            <div class="cmd-row"><span class="btn primary">Send Enrollment Packet</span></div>
+            <div class="outcomes"><span class="outcome">Packet sent</span><span class="outcome">Packet still pending</span><span class="src outcome">outcomes</span></div>
           </div>
           <div class="work-item secondary">
-            <div class="wi-top"><span class="wi-obl">Confirm the tour <span class="child-name">Ben</span></span><span class="pill waiting">Next week</span></div>
-            <div class="micro">Tue 9:30 · reminder automated</div>
+            <div class="wi-top"><span class="wi-obl"><span class="lbl"><span class="grain-chip family" style="margin-right:4px">Family</span>Conduct Tour <span class="child-name">Mateo inquiry</span> <span class="src work">work template</span></span></span><span class="pill waiting">Tue 9:30</span></div>
+            <div class="micro">A new inquiry for the youngest — family-grain, on the Family Track.</div>
           </div>
-          <div class="micro" style="padding:2px 2px 0">Aisha has no work item — she's enrolled. Presence here means "has an obligation."</div>
+          <div class="micro" style="padding:2px 2px 0">Aisha has no work item — she's <b>Enrolled</b>. Presence here means "has an obligation." <span class="src copy">copy</span></div>
         </div></div>
         <div class="col">
           <div class="card frozen"><div class="card-head"><span class="card-name">Household — the shared family (once)</span><span class="tag frozen">Unchanged</span></div>
-            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">one address · one primary contact · one funding source</span></div></div>
+            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="parents">Maria &amp; Luis Rivera</span><span class="sub">one address · one primary contact</span></div></div>
             <div class="micro" style="margin-top:9px">Parents named <b>once</b> — never re-listed per child.</div></div>
           <div class="card frozen"><div class="card-head"><span class="card-name">Children — each child (once)</span><span class="tag frozen">Unchanged</span></div>
             <div class="roster">
-              <div class="kid-line"><span class="kid-name">Aisha Rivera · 5</span><span class="pill done">enrolled</span></div>
-              <div class="kid-line"><span class="kid-name">Ben Rivera · 3</span><span class="pill waiting">touring</span></div>
-              <div class="kid-line"><span class="kid-name">Chloe Rivera · 2</span><span class="pill warn">enrolling</span></div>
+              <div class="kid-line"><span class="kid-name">Aisha Rivera · 5</span><span class="pill done">Enrolled</span></div>
+              <div class="kid-line"><span class="kid-name">Sofia Rivera · 3</span><span class="pill active">Enrolling</span></div>
+              <div class="kid-line"><span class="kid-name">Mateo Rivera · 0</span><span class="pill waiting">inquiry · Tour</span></div>
             </div>
-            <div class="micro" style="margin-top:9px">Status shown, never worked. Identity &amp; medical live here.</div></div>
+            <div class="micro" style="margin-top:9px">Durable status shown, never worked. <span class="src outcome">status vocabulary</span></div></div>
         </div>
       </div>
     </div>
     <dl class="note">
-      <dt>Household</dt><dd><span class="own">The shared family</span> — parents, address, funding: named <b>once</b>, referenced by every child's work.</dd>
-      <dt>Children</dt><dd><span class="own">The three children as people</span> — names, ages, dispositions, medical: each named <b>once</b>. No work here.</dd>
-      <dt>Operator Work</dt><dd><span class="own">The work (verbs)</span> — one item per child <b>with an obligation</b>, each naming its child. Aisha (no work) is absent by design.</dd>
-      <dt>No duplication</dt><dd>Parents once · each child once · work once. A child's <b>presence</b> in Operator Work is itself information.</dd>
+      <dt>Household</dt><dd><span class="own">The shared family</span> — named <b>once</b>, referenced by every child's work and the family-grain inquiry.</dd>
+      <dt>Children</dt><dd><span class="own">Each child once</span>, with durable status (<b>Enrolled</b> / <b>Enrolling</b> / inquiry). No work here.</dd>
+      <dt>Operator Work</dt><dd><span class="own">The work (verbs)</span> — each item <b>tagged by grain</b> and naming its child. Aisha (no obligation) is absent by design.</dd>
+      <dt>Grains</dt><dd>a <b>Child-Track</b> item (Sofia · Enrolling) and a <b>Family-Track</b> item (Mateo · Tour) coexist without confusion — the grain chip says which.</dd>
     </dl>
   </section>
 
-  <!-- ================= COMMAND FLOW ================= -->
-  <p class="section-label">Commands · where they appear, launch, and return</p>
-
+  <!-- COMMAND -->
+  <p class="section-label">Commands · configured, and how they return</p>
   <section class="plate">
-    <div class="plate-head"><span class="plate-no">D4</span><h2 class="plate-title">Command execution — Assign Room</h2>
-      <p class="plate-cap">Where commands appear, how they launch, how they return, and how Operator Work changes afterward.</p></div>
+    <div class="plate-head"><span class="plate-no">D4</span><span class="grain-chip child">Child Track</span><h2 class="plate-title">Command — Send Enrollment Packet</h2>
+      <p class="plate-cap">A configured command <span class="src cmd">cmd: send_form → "Send Enrollment Packet"</span>: where it appears, launches, and returns.</p></div>
     <div class="focus">
-      <div class="header-band"><span class="hb-label">Header band · full set</span>
-        <span class="chip-cmd active">Assign Room</span><span class="chip-cmd">Assign Schedule</span><span class="chip-cmd">Review Documents</span><span class="chip-cmd">Send Packet</span>
+      <div class="header-band"><span class="hb-label">Header band · configured commands</span>
+        <span class="chip-cmd active">Send Enrollment Packet</span><span class="chip-cmd">Schedule tour</span><span class="chip-cmd">Message</span>
         <span class="micro" style="margin-left:auto">one Command Runtime · same meaning everywhere</span></div>
       <div class="grid">
         <div class="col"><div class="card owner">
           <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves · mid-command</span></div>
           <div class="work-item primary">
-            <div class="wi-top"><span class="wi-obl">Assign a room <span class="child-name">Sofia</span></span><span class="pill primary">In progress</span></div>
+            <div class="wi-top"><span class="wi-obl"><span class="lbl">Send Enrollment Packet <span class="child-name">Sofia</span></span></span><span class="pill active">In progress</span></div>
             <div class="preview">
               <span class="pv-label">Preview · confirm</span>
-              <div class="field"><span class="f-key">Room</span><span class="f-val">Room 2 · Toddlers</span></div>
-              <div class="field"><span class="f-key">Capacity</span><span class="f-val">1 of 3 open</span></div>
-              <div class="pv-preview-line">On confirm: placement is recorded and the <b>Placement</b> checklist row is satisfied — one intent.</div>
+              <div class="field"><span class="f-key">Packet</span><span class="f-val">Enrollment forms</span></div>
+              <div class="field"><span class="f-key">To</span><span class="f-val">Maria Rivera</span></div>
+              <div class="pv-preview-line">On confirm: the packet sends and this work closes as <b>Packet sent</b> — one intent.</div>
             </div>
             <div class="cmd-row"><span class="btn primary">Confirm</span><span class="btn ghost">Cancel</span></div>
           </div>
         </div></div>
         <div class="col"><div class="card frozen"><div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
-          <div class="kid-line"><span class="kid-name">Sofia Rivera · 3</span><span class="pill primary">enrolling</span></div></div></div>
+          <div class="kid-line"><span class="kid-name">Sofia Rivera · 3</span><span class="pill active">Enrolling</span></div></div></div>
       </div>
     </div>
     <dl class="note">
-      <dt>Appears</dt><dd>in the <b>header band</b> (full set) and the checklist row's <b>command</b> (the relevant one). Two places, never more.</dd>
-      <dt>Launches</dt><dd>inline preview → confirm (the Command Runtime's own resolve → preview → confirm → execute flow).</dd>
-      <dt>Returns</dt><dd>the result flows through the <b>recomposition contract</b>: the Placement row ticks, readiness recalculates, and if that was the last row, <b>Enroll</b> lights up — same action, no reload.</dd>
+      <dt>Appears</dt><dd>in the <b>header band</b> (configured command set) and the work item's <b>primary action</b>. Two places, never more.</dd>
+      <dt>Launches</dt><dd>inline preview → confirm (the Command Runtime's resolve → preview → confirm → execute flow).</dd>
+      <dt>Returns</dt><dd>the result flows through the recomposition contract: the work settles as the configured outcome <b>Packet sent</b>, readiness in "Required information" updates — same action, no reload.</dd>
     </dl>
   </section>
 
   <footer>
-    <span>Phase 5 · Enrollment Realization · low-fidelity Focus Panel mockups</span>
-    <span>Reuses the Focus Panel layout · Household &amp; Children unchanged</span>
+    <span>Phase 5 · Enrollment · configured composition · canonical Alloy colors</span>
+    <span>Every operator label is configured · Household &amp; Children unchanged</span>
   </footer>
 </div>
