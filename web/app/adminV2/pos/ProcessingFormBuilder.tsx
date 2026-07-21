@@ -34,9 +34,16 @@ import ProcessingFormQuestionInspector from "./ProcessingFormQuestionInspector";
 import ProcessingInspectorCard from "./ProcessingInspectorCard";
 import ProcessingCollapsibleInspectorSection from "./ProcessingCollapsibleInspectorSection";
 import ProcessingSectionNameDialog from "./ProcessingSectionNameDialog";
-import type { ProcessingFormRow } from "./useProcessingFormApi";
+import type { ProcessingFormRow, ProcessingFormPublicLinkRow } from "./useProcessingFormApi";
 import { useProcessingFormApi } from "./useProcessingFormApi";
 import { DEFAULT_FORM_ACCENT, parseFormBranding, type ProcessingFormBranding } from "@/lib/forms/processingFormBranding";
+import { FormOperationalIntentPicker } from "@/components/forms/admin/FormOperationalIntentPicker";
+import { FormOutcomeConfigPanel } from "@/components/forms/admin/FormOutcomeConfigPanel";
+import { FormLifecycleUsagePanel } from "@/components/forms/admin/FormLifecycleUsagePanel";
+import { FormLocationShareLinksPanel } from "@/components/forms/admin/FormLocationShareLinksPanel";
+import { FormExistingRecordSendPanel } from "@/components/forms/admin/FormExistingRecordSendPanel";
+import { distributionIsPreviewLink, type DistributionLinkRow } from "@/lib/forms/distributionPresentation";
+import type { FormPublicLinkRow } from "@/components/forms/workspace/FormDistributionPanel";
 
 const QUESTION_TYPES: Array<{ type: BuilderFieldType; label: string; meta: string; category: string }> = [
     { type: "short_text", label: "Short text", meta: "Single line answer", category: "basic" },
@@ -100,6 +107,7 @@ export default function ProcessingFormBuilder({
         parseFormBranding(formMeta)
     );
     const [formMetaSnapshot, setFormMetaSnapshot] = useState<Record<string, unknown>>(formMeta?.metadata ?? {});
+    const [links, setLinks] = useState<ProcessingFormPublicLinkRow[]>([]);
     const [hasPublishedVersion, setHasPublishedVersion] = useState(Boolean(formMeta?.has_published_version));
     const [publishJustSucceeded, setPublishJustSucceeded] = useState(false);
 
@@ -141,6 +149,70 @@ export default function ProcessingFormBuilder({
     useEffect(() => {
         void load();
     }, [load]);
+
+    const reloadLinks = useCallback(async () => {
+        try {
+            setLinks(await listPublicLinks(formId));
+        } catch {
+            /* non-fatal */
+        }
+    }, [listPublicLinks, formId]);
+
+    useEffect(() => {
+        void reloadLinks();
+    }, [reloadLinks]);
+
+    const onFormMetadataUpdated = useCallback(
+        (metadata: Record<string, unknown>) => setFormMetaSnapshot(metadata),
+        []
+    );
+    const onLinkMetadataSaved = useCallback(
+        (linkId: string, metadata: Record<string, unknown>) =>
+            setLinks((prev) => prev.map((l) => (l.id === linkId ? { ...l, metadata } : l))),
+        []
+    );
+    const onCopy = useCallback((_key: string, text: string) => {
+        void navigator.clipboard?.writeText(text);
+    }, []);
+    const onCreateLocationLink = useCallback(
+        async ({ locationId, locationName }: { locationId: string; locationName: string }) => {
+            const pv = await loadPublishedVersionId(formId);
+            await mintProcessingPublicLink(formId, {
+                formName: displayFormName,
+                formKey: formMeta?.key ?? formId,
+                existingMeta: formMetaSnapshot,
+                publishedVersionId: pv,
+                locationId,
+                locationName,
+            });
+            await reloadLinks();
+        },
+        [loadPublishedVersionId, mintProcessingPublicLink, formId, displayFormName, formMeta?.key, formMetaSnapshot, reloadLinks]
+    );
+
+    const activeLink = useMemo(
+        () => links.find((l) => l.is_active && !distributionIsPreviewLink(l)) ?? links[0] ?? null,
+        [links]
+    );
+    const selectedLinkId = activeLink?.id ?? null;
+    const selectedLinkMetadata = activeLink?.metadata ?? null;
+    const hasOperationalLink = links.length > 0;
+    const outcomeLinks = useMemo<DistributionLinkRow[]>(
+        () => links.map((l) => ({ id: l.id, is_active: l.is_active, created_at: l.created_at ?? "", metadata: l.metadata })),
+        [links]
+    );
+    const locationLinks = useMemo<FormPublicLinkRow[]>(
+        () =>
+            links.map((l) => ({
+                id: l.id,
+                is_active: l.is_active,
+                created_at: l.created_at ?? "",
+                metadata: l.metadata,
+                token_prefix: l.token_prefix,
+                pinned_form_definition_version_id: l.pinned_form_definition_version_id,
+            })),
+        [links]
+    );
 
     const mutate = useCallback((fn: (s: FormSchemaV1) => FormSchemaV1) => {
         setSchema((cur) => (cur ? fn(cur) : cur));
@@ -251,6 +323,7 @@ export default function ProcessingFormBuilder({
             }
             setHasPublishedVersion(true);
             await loadForms({ force: true });
+            await reloadLinks();
         } catch (e) {
             setBuilderErr(e instanceof Error ? e.message : "Publish failed");
         } finally {
@@ -442,6 +515,82 @@ export default function ProcessingFormBuilder({
                             open={inspectorSection === "distribution"}
                             onOpenChange={(open) => open && setInspectorSection("distribution")}
                         />
+                        <ProcessingCollapsibleInspectorSection
+                            title="Purpose"
+                            subtitle="What this form is used for"
+                            open={inspectorSection === "purpose"}
+                            onOpenChange={(open) => open && setInspectorSection("purpose")}
+                        >
+                            <FormOperationalIntentPicker
+                                formId={formId}
+                                formKey={formMeta?.key ?? formId}
+                                formMetadata={formMetaSnapshot}
+                                selectedLinkId={selectedLinkId}
+                                selectedLinkMetadata={selectedLinkMetadata}
+                                canMutate={editable || hasPublishedVersion}
+                                hasOperationalLink={hasOperationalLink}
+                                onFormMetadataUpdated={onFormMetadataUpdated}
+                                onLinkMetadataSaved={onLinkMetadataSaved}
+                            />
+                        </ProcessingCollapsibleInspectorSection>
+                        <ProcessingCollapsibleInspectorSection
+                            title="Outcome"
+                            subtitle="What happens after submit"
+                            open={inspectorSection === "outcome"}
+                            onOpenChange={(open) => open && setInspectorSection("outcome")}
+                        >
+                            <FormOutcomeConfigPanel
+                                formId={formId}
+                                formMetadata={formMetaSnapshot}
+                                links={outcomeLinks}
+                                formKey={formMeta?.key ?? formId}
+                                documentGenerationConfigured={false}
+                                canMutate={editable || hasPublishedVersion}
+                                onLinkMetadataSaved={onLinkMetadataSaved}
+                            />
+                        </ProcessingCollapsibleInspectorSection>
+                        <ProcessingCollapsibleInspectorSection
+                            title="Lifecycle usage"
+                            subtitle="Which stage this form serves"
+                            open={inspectorSection === "lifecycle"}
+                            onOpenChange={(open) => open && setInspectorSection("lifecycle")}
+                        >
+                            <FormLifecycleUsagePanel
+                                formId={formId}
+                                formMetadata={formMetaSnapshot}
+                                canMutate={editable || hasPublishedVersion}
+                                hasSchema={Boolean(schema && schema.fields.length > 0)}
+                                onFormMetadataUpdated={onFormMetadataUpdated}
+                            />
+                        </ProcessingCollapsibleInspectorSection>
+                        <ProcessingCollapsibleInspectorSection
+                            title="Share by location"
+                            subtitle="Per-site links"
+                            open={inspectorSection === "locations"}
+                            onOpenChange={(open) => open && setInspectorSection("locations")}
+                        >
+                            <FormLocationShareLinksPanel
+                                formId={formId}
+                                formName={displayFormName}
+                                links={locationLinks}
+                                hasPublished={hasPublishedVersion}
+                                canMutate={editable || hasPublishedVersion}
+                                onCopy={onCopy}
+                                onCreateLocationLink={onCreateLocationLink}
+                            />
+                        </ProcessingCollapsibleInspectorSection>
+                        <ProcessingCollapsibleInspectorSection
+                            title="Send to existing record"
+                            subtitle="Attach to a known family"
+                            open={inspectorSection === "existing"}
+                            onOpenChange={(open) => open && setInspectorSection("existing")}
+                        >
+                            <FormExistingRecordSendPanel
+                                formId={formId}
+                                formName={displayFormName}
+                                canMutate={editable || hasPublishedVersion}
+                            />
+                        </ProcessingCollapsibleInspectorSection>
                         {selectedField ? (
                             <ProcessingFormQuestionInspector
                                 field={selectedField}
