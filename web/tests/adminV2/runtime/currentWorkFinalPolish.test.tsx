@@ -197,7 +197,7 @@ describe("Progress bar and density", () => {
     // summary presents progress + Open Workspace only; the workspace-level, settlement-derived
     // affordances (Quick actions / Other transitions / recent activity) are NOT in the summary — they
     // moved to the drill-in workspace (presentation="workspace"). See CurrentWorkCard SummaryBody.
-    it("collapsed summary shows progress and Open Work, not workspace-level affordances", () => {
+    it("collapsed summary shows readiness and Open Work, not workspace-level affordances", () => {
         const published = resolvePublishedStageInputsForCurrentWork({
             departmentMetadata: enrollmentLeadWithFieldRulesPublishedDepartmentMetadata(),
             builderStageKey: "lead",
@@ -214,8 +214,8 @@ describe("Progress bar and density", () => {
                 })}
             />,
         );
-        // Commit-critical operational summary: progress + the open-workspace affordance.
-        expect(html).toContain('data-work-progress="true"');
+        // Commit-critical operational summary: readiness + the open-workspace affordance.
+        expect(html).toContain('data-work-readiness="true"');
         expect(html).toContain('data-work-action="open-work"');
         // Workspace-level / settlement-derived affordances are NOT committed in the summary.
         expect(html).not.toContain("Quick actions");
@@ -227,17 +227,14 @@ describe("Progress bar and density", () => {
         expect(html).not.toMatch(/alloy-os-currentwork__summary[^>]*overflow:\s*auto/);
     });
 
-    it("progress bar is not inlined into the status pill markup", () => {
+    it("no progress bar or percentage meter in the What's Next card", () => {
         const source = readFileSync(
             resolve(__dirname, "../../../components/admin/focusPanel/cards/CurrentWorkCard.tsx"),
             "utf8",
         );
-        const pillBlock = source.slice(
-            source.indexOf("const statusChip"),
-            source.indexOf("const readinessSummary"),
-        );
-        expect(pillBlock).not.toContain("progress.percent");
-        expect(source).toContain('data-work-progress="true"');
-        expect(source).toContain("role=\"progressbar\"");
+        // Readiness is a state, not a score — the card renders no progress bar or percentage.
+        expect(source).not.toContain("progress.percent");
+        expect(source).not.toContain('data-work-progress="true"');
+        expect(source).not.toContain("role=\"progressbar\"");
     });
 });

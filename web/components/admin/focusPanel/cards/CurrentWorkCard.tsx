@@ -69,7 +69,6 @@ export default function CurrentWorkCard({
     const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
     const [activePanelAction, setActivePanelAction] = useState<CurrentWorkActionVM | null>(null);
     const [activityPreviewOpen, setActivityPreviewOpen] = useState(false);
-    const [requirementsExpanded, setRequirementsExpanded] = useState(false);
     const openWorkspaceTriggerRef = useRef<HTMLButtonElement>(null);
 
     const activityPreviewItems = useMemo(
@@ -350,7 +349,6 @@ export default function CurrentWorkCard({
         </span>
     );
 
-    const readinessSummary = surface.readiness.reasonLabel;
     const footerAction = null;
     const stageLabel = context.businessProcess?.stageKey ?? null;
     const ownerLabel = null;
@@ -482,9 +480,6 @@ export default function CurrentWorkCard({
                 onAction={invokeAction}
                 onOpenWork={() => openWorkspace({ kind: "drill_in" })}
                 openWorkTriggerRef={openWorkspaceTriggerRef}
-                requirementsExpanded={requirementsExpanded}
-                onToggleRequirements={() => setRequirementsExpanded((open) => !open)}
-                readinessSummary={readinessSummary}
                 activityPreviewOpen={activityPreviewOpen}
                 onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
                 onCloseActivityPreview={handleCloseActivityPreview}
@@ -520,85 +515,43 @@ export default function CurrentWorkCard({
     );
 }
 
-function SurfaceProgress({ surface }: { surface: CurrentWorkSurfaceVM }) {
-    const readiness = surface.readiness;
-    const showBar = surface.progress.total > 0;
-    if (!readiness.reasonLabel && !showBar) return null;
-    return (
-        <div className="alloy-os-currentwork__readiness-block" data-work-readiness="true">
-            {readiness.reasonLabel ?
-                <p className="alloy-os-currentwork__readiness-reason">{readiness.reasonLabel}</p>
-            :   null}
-            {showBar ?
-                <div
-                    className="alloy-os-currentwork__progress-block"
-                    data-work-progress="true"
-                    role="progressbar"
-                    aria-valuenow={surface.progress.percent}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={`${surface.progress.completed} of ${surface.progress.total} requirements complete, ${surface.progress.percent} percent`}
-                >
-                    <div className="alloy-os-currentwork__progress-header">
-                        <span>Progress</span>
-                        <span>{surface.progress.percent}%</span>
-                    </div>
-                    <div className="alloy-os-currentwork__progress-bar">
-                        <span
-                            className="alloy-os-currentwork__progress-bar-fill"
-                            style={{ width: `${surface.progress.percent}%` }}
-                        />
-                    </div>
-                    <p className="alloy-os-currentwork__progress-copy">
-                        {surface.progress.completed} of {surface.progress.total} requirements complete
-                    </p>
-                </div>
-            :   null}
-        </div>
-    );
-}
-
-function RequirementsDisclosure({
+/**
+ * What's Next readiness — the operator-facing replacement for the progress meter. Splits the View
+ * Model's existing `readiness.requirements.items` into "Ready to continue" (satisfied) and "Still
+ * needed" (outstanding). No percentage, no meter: readiness is a state, not a score. Still-needed
+ * items hand off to their owning card via the existing checklist navigation. Derives entirely from
+ * the View Model — no new runtime, no new field.
+ */
+export function ReadinessSummary({
     surface,
-    expanded,
-    onToggle,
     onNavigate,
 }: {
     surface: CurrentWorkSurfaceVM;
-    expanded: boolean;
-    onToggle: () => void;
     onNavigate: (item: CurrentWorkChecklistItemVM) => void;
 }) {
-    const items = surface.readiness.requirements?.items ?? [];
-    if (items.length === 0) return null;
-    const remaining = surface.readiness.requirements?.remaining ?? items.filter((i) => i.status !== "complete").length;
-    const incomplete = items.filter((i) => i.status !== "complete");
-    const visible = incomplete.slice(0, 5);
-    const overflow = incomplete.length - visible.length;
-
+    const items: CurrentWorkChecklistItemVM[] = surface.readiness.requirements?.items ?? [];
+    if (items.length === 0) {
+        return surface.readiness.reasonLabel ?
+                <div className="alloy-os-currentwork__readiness-block" data-work-readiness="true">
+                    <p className="alloy-os-currentwork__readiness-reason">{surface.readiness.reasonLabel}</p>
+                </div>
+            :   null;
+    }
+    const ready = items.filter((item) => item.status === "complete");
+    const stillNeeded = items.filter((item) => item.status !== "complete");
     return (
-        <div className="alloy-os-currentwork__requirements-disclosure" data-work-requirements-disclosure="true">
-            <button
-                type="button"
-                className="alloy-os-currentwork__requirements-trigger"
-                onClick={onToggle}
-                aria-expanded={expanded}
-                data-work-requirements-trigger="true"
-            >
-                <span>Requirements</span>
-                <span className="alloy-os-currentwork__requirements-meta">
-                    {remaining} remaining {expanded ? "▴" : "▾"}
-                </span>
-            </button>
-            {expanded ?
-                <>
-                    <ChecklistStepper items={visible as CurrentWorkChecklistItemVM[]} onNavigate={onNavigate} />
-                    {overflow > 0 ?
-                        <p className="alloy-os-currentwork__disclosure-overflow">
-                            +{overflow} more — open work for the full list
-                        </p>
-                    :   null}
-                </>
+        <div className="alloy-os-currentwork__readiness-block" data-work-readiness="true">
+            {ready.length > 0 ?
+                <div className="alloy-os-currentwork__readiness-group" data-work-readiness-group="ready">
+                    <p className="alloy-os-currentwork__readiness-reason">Ready to continue</p>
+                    <ChecklistStepper items={ready} onNavigate={onNavigate} />
+                </div>
+            :   null}
+            {stillNeeded.length > 0 ?
+                <div className="alloy-os-currentwork__readiness-group" data-work-readiness-group="still-needed">
+                    <p className="alloy-os-currentwork__readiness-reason">Still needed</p>
+                    <ChecklistStepper items={stillNeeded} onNavigate={onNavigate} />
+                </div>
             :   null}
         </div>
     );
@@ -694,8 +647,6 @@ function SummaryBody({
     onAction,
     onOpenWork,
     openWorkTriggerRef,
-    requirementsExpanded,
-    onToggleRequirements,
     activityPreviewOpen,
     onToggleActivityPreview,
     onCloseActivityPreview,
@@ -709,9 +660,6 @@ function SummaryBody({
     onAction: (action: CurrentWorkActionVM) => void;
     onOpenWork: () => void;
     openWorkTriggerRef?: React.RefObject<HTMLButtonElement | null>;
-    requirementsExpanded: boolean;
-    onToggleRequirements: () => void;
-    readinessSummary?: string | null;
     activityPreviewOpen: boolean;
     onToggleActivityPreview: () => void;
     onCloseActivityPreview: () => void;
@@ -734,31 +682,9 @@ function SummaryBody({
             className="alloy-os-currentwork__summary"
             data-work-summary="true"
             role="group"
-            aria-label="Current Work summary"
+            aria-label="What's Next summary"
         >
-            <div
-                className="alloy-os-currentwork__summary-open-region"
-                role="button"
-                tabIndex={0}
-                onClick={onOpenWork}
-                onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        onOpenWork();
-                    }
-                }}
-                aria-label={`Open ${surface.title} workspace`}
-                data-work-action="open-work-body"
-            >
-                <SurfaceProgress surface={surface} />
-            </div>
             <div className="alloy-os-currentwork__summary-controls">
-                <RequirementsDisclosure
-                    surface={surface}
-                    expanded={requirementsExpanded}
-                    onToggle={onToggleRequirements}
-                    onNavigate={onChecklistItem}
-                />
                 <div className="alloy-os-currentwork__primary-row" data-work-primary-row="true">
                     {primary ? <WorkPrimaryCard action={primary} onAction={onAction} /> : null}
                     {recordOutcome ?
@@ -784,14 +710,14 @@ function SummaryBody({
                         Open workspace →
                     </button>
                 </div>
-                {/* SUMMARY IS THE FIRST OPERATIONAL EXPERIENCE (product doctrine). The committed
-                    Current Work card presents the operational summary only — status, progress, the
-                    requirements readiness, and the first action(s). The workspace-level, SETTLEMENT-
-                    derived affordances (More actions, Other transitions, recent Activity) are NOT
-                    committed here: they reconstructed the card one settlement tick after commit (a
-                    visible second stage) and are drill detail, so they live in the drill-in workspace
-                    ("Open workspace →", presentation="workspace"). Settlement enriches this summary;
-                    it does not rebuild it. */}
+                {/* WHAT'S NEXT — obligation-first. The obligation and why sit in the card header
+                    (title + supporting insight); the summary body leads with the action, then presents
+                    readiness as "Ready to continue / Still needed" (ReadinessSummary) derived from the
+                    View Model's requirements — no progress meter or percentage. Workspace-level,
+                    SETTLEMENT-derived affordances (More actions, Other transitions, recent Activity)
+                    remain in the drill-in workspace ("Open workspace →", presentation="workspace");
+                    settlement enriches this summary, it does not rebuild it. */}
+                <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
             </div>
         </div>
     );

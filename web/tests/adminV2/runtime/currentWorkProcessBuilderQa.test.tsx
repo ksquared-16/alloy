@@ -55,18 +55,16 @@ function baseContext(runtime: StageWorkRuntimeProjection | null, overrides?: Par
 }
 
 describe("Current Work semantic readiness VM", () => {
-    it("status and progress render separately — no combined percent badge source", () => {
+    it("status renders without a progress meter — readiness is a state, not a percentage", () => {
         const cardSource = readFileSync(
             resolve(__dirname, "../../../components/admin/focusPanel/cards/CurrentWorkCard.tsx"),
             "utf8",
         );
-        const pillBlock = cardSource.slice(
-            cardSource.indexOf("const statusChip"),
-            cardSource.indexOf("const readinessSummary"),
-        );
-        expect(pillBlock).not.toContain("progress.percent");
+        // What's Next presents readiness as "Ready to continue / Still needed", not a progress bar.
         expect(cardSource).toContain("surface.readiness");
-        expect(cardSource).toContain('data-work-progress="true"');
+        expect(cardSource).not.toContain("progress.percent");
+        expect(cardSource).not.toContain('data-work-progress="true"');
+        expect(cardSource).not.toContain('role="progressbar"');
     });
 
     it("blocked reason is visible in readiness VM", () => {
@@ -108,7 +106,7 @@ describe("Current Work semantic readiness VM", () => {
         expect(vm.readiness.state).toBe("blocked");
     });
 
-    it("requirements disclosure defaults collapsed when requirement checklist exists", () => {
+    it("requirements render as Still needed in the readiness summary", () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("lead")!;
         const runtime: StageWorkRuntimeProjection = {
             stage_key: "lead",
@@ -172,8 +170,9 @@ describe("Current Work semantic readiness VM", () => {
             resolve(__dirname, "../../../components/admin/focusPanel/cards/CurrentWorkCard.tsx"),
             "utf8",
         );
-        expect(cardSource).toContain('aria-expanded={expanded}');
-        expect(cardSource).toContain("data-work-requirements-trigger");
+        // What's Next renders requirements as "Still needed" (ReadinessSummary), not a collapsed disclosure.
+        expect(cardSource).toContain("Still needed");
+        expect(cardSource).toContain('data-work-readiness-group="still-needed"');
         expect(cardSource).not.toContain("Location Id");
         void context;
     });
