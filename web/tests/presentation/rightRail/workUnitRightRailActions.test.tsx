@@ -20,7 +20,6 @@ vi.mock("@/lib/admin/actions/applyRegistryResolvedActionClient", () => ({
 vi.mock("@/components/platform/commands/createLead/CreateLeadCommandSurface", () => ({
     CreateLeadCommandSurface: () => null,
 }));
-// Render the registered node inline so we can assert what reaches the shell command rail.
 vi.mock("@/app/adminV2/components/workspace/WorkspaceCommandRailRegistrar", () => ({
     WorkspaceCommandRailRegistrar: ({ actions }: { actions: ReactNode }) => (
         <div data-registrar-surface="work_unit">{actions}</div>
@@ -71,13 +70,15 @@ afterEach(() => {
 
 const TWO = [action("create_lead", "Create Lead"), action("schedule_tour", "Schedule Tour")];
 
-describe("WorkUnitRightRailActions → shell command rail", () => {
-    it("registers an 'Actions (N)' section with one row per configured action", () => {
+describe("WorkUnitRightRailActions → header control band", () => {
+    it("renders Actions chrome in the workspace tree (independent of BOS) with one row per action", () => {
         const el = render(
             <WorkUnitRightRailActions actions={TWO} departmentId="dept-1" workUnitId="wu-1" />,
         );
-        // Registered into the command rail (not a center rail), with the count for the header.
+        // Placement surface still registered (null body — not the assistant column).
         expect(el.querySelector("[data-registrar-surface='work_unit']")).not.toBeNull();
+        expect(el.querySelector("[data-registrar-surface='work_unit']")?.childNodes.length ?? 0).toBe(0);
+        expect(el.querySelector("[data-workspace-actions-chrome='work_unit']")).not.toBeNull();
         expect(el.querySelector("[data-actions-section]")?.getAttribute("data-action-count")).toBe("2");
         const rows = el.querySelectorAll("button[data-right-rail-action]");
         expect(rows).toHaveLength(2);
@@ -85,11 +86,12 @@ describe("WorkUnitRightRailActions → shell command rail", () => {
         expect(el.querySelector('[data-right-rail-action="schedule_tour"]')?.textContent).toBe("Schedule Tour");
     });
 
-    it("registers NOTHING when the payload is empty (rail shows its own default, not a fake empty)", () => {
+    it("renders no Actions chrome when the payload is empty", () => {
         const el = render(
             <WorkUnitRightRailActions actions={[]} departmentId="dept-1" workUnitId="wu-1" />,
         );
         expect(el.querySelector("[data-actions-section]")).toBeNull();
+        expect(el.querySelector("[data-workspace-actions-chrome]")).toBeNull();
         expect(el.querySelectorAll("button[data-right-rail-action]")).toHaveLength(0);
     });
 
@@ -103,9 +105,7 @@ describe("WorkUnitRightRailActions → shell command rail", () => {
         const [passedAction, host] = applyMock.mock.calls[0];
         expect(passedAction.key).toBe("create_lead");
         expect(host.context).toEqual({ surface: "work_unit", department_id: "dept-1", work_unit_id: "wu-1" });
-        expect(host.entityId).toBe("opp-7"); // record-scoped actions target the open Focus Panel record
-        // No local openCreateLead — the runtime dispatches `adminv2:open-create-lead`, handled by the
-        // page-level CreateLeadEventHost (outside the command-rail floating menu that unmounts on click).
+        expect(host.entityId).toBe("opp-7");
         expect(host.openCreateLead).toBeUndefined();
     });
 });

@@ -144,6 +144,18 @@ Full doctrine: `../../sprints/archive/2026-07/communications-preview-vm-doctrine
 
 **Topic rail:** `threadsForActivityTopicRail` hides zero-message threads; titles from `deriveThreadTopicTitle` (email: thread subject → workflow → message subject → metadata → General; SMS: session continuity, no message-subject fallback).
 
+### Activity responsive composition (Adaptive Workspace Presentation)
+
+Composition derives from existing operator state — no parallel load/send/cache lifecycle:
+
+| State | When | Topic rail | Priority |
+|-------|------|------------|----------|
+| **empty** | No conversations | Hidden | Composer / New affordance |
+| **reading** | ≥1 conversation and not composing | Shown | Topic selection + readable timeline |
+| **composing** | New message or reply composer expanded | Hidden / collapsed | Timeline + composer width |
+
+Helpers: `deriveActivityCommsCompositionState`, `shouldShowActivityTopicRail` in `adaptiveWorkspacePresentation.ts`. Cancel/send restore prior reading/selection without clearing draft/VM caches beyond existing reply lifecycle.
+
 **Reply vs New Message:**
 
 | Mode | Selection | Composer | Recipients |

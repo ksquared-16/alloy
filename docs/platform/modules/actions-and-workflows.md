@@ -100,11 +100,13 @@ For compatibility, legacy child rules without timing are still downgraded to rec
 
 The **same canonical action key** may launch from:
 
-- Drawer header / overflow (top-right Actions)
-- Work-unit right rail
+- Workspace / Work Unit header Actions control band (operational chrome — independent of BOS state)
+- Focus Panel Manage / drawer header overflow (record-scoped; distinct from Work Unit Actions)
+- Work-unit right rail (legacy / local-rail surfaces only)
+- Section / related-list / Experience Builder placements
 - Layout `_action_button` (contact block, related-list column)
 - Queue row inline action
-- BOS proposal (future full UI)
+- BOS proposal (same Operational Command Runtime — BOS is a placement, not the owner of action chrome)
 - Workflow automation (registered event keys)
 
 **Target-specific actions** (e.g. `make_primary_contact`) appear only where the UI knows the target person/contact — not in generic header/rail unless a target picker exists (not shipped).

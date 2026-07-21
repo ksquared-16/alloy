@@ -12,6 +12,12 @@
 
 ---
 
+## Active (July 2026)
+
+| Objective | Doc |
+|-----------|-----|
+| **Adaptive Workspace Presentation Contract** | [`adaptive-workspace-presentation/discovery-and-implementation-plan.md`](./adaptive-workspace-presentation/discovery-and-implementation-plan.md) |
+
 ## Active (June 2026)
 
 | Objective | Doc (transitional path) |
