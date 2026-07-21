@@ -46,9 +46,20 @@ import {
     buildLocationsCollectionModel,
     LOCATION_WORKSPACE_TABS,
     locationsLandingHref,
-    locationWorkspaceHref,
     type LocationWorkspaceTab,
 } from "@/lib/locations/locationWorkspaceModel";
+import {
+    getLocationConcernDefinition,
+    locationConcernHref,
+    resolveActiveLocationConcern,
+} from "@/lib/locations/locationConcernContract";
+import {
+    invalidateLocationConcernCaches,
+    loadLocationOwnedSetup,
+    loadLocationAccessMembers,
+    loadLocationPlacementPolicy,
+    peekLocationOwnedSetup,
+} from "@/lib/locations/locationConcernCache";
 import { invalidateLocationsCollection } from "@/lib/locations/locationsCollectionCache";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 
@@ -86,6 +97,7 @@ export default function LocationsConfigurationPage({
     );
     const [toursKeepAlive, setToursKeepAlive] = useState(initialTab === "tours");
     const [placementKeepAlive, setPlacementKeepAlive] = useState(initialTab === "placement");
+    const [accessKeepAlive, setAccessKeepAlive] = useState(initialTab === "access");
     const {
         selectedId,
         setSelectedId,
@@ -116,18 +128,23 @@ export default function LocationsConfigurationPage({
     // Retained Continuity restore → replace-sync URL (no history loop).
     useEffect(() => {
         if (!shouldSyncRoute || !selectedId) return;
-        router.replace(locationWorkspaceHref(selectedId, activeTab));
+        router.replace(locationConcernHref(selectedId, activeTab));
     }, [shouldSyncRoute, selectedId, activeTab, router]);
 
     // Back/Forward + soft-nav query updates: server props project into local concern state.
     useEffect(() => {
-        setActiveTab(initialTab);
-        if (initialTab === "tours") setToursKeepAlive(true);
-        if (initialTab === "placement") setPlacementKeepAlive(true);
-        setSelectedRoomId(initialTab === "rooms" ? initialItemId : null);
-        setSelectedProgramId(initialTab === "programs" ? initialItemId : null);
-        setSelectedScheduleId(initialTab === "schedule" ? initialItemId : null);
-    }, [initialTab, initialItemId, initialLocationId]);
+        const resolved = resolveActiveLocationConcern(initialTab);
+        setActiveTab(resolved.concern);
+        if (resolved.concern === "tours") setToursKeepAlive(true);
+        if (resolved.concern === "placement") setPlacementKeepAlive(true);
+        if (resolved.concern === "access") setAccessKeepAlive(true);
+        setSelectedRoomId(resolved.concern === "rooms" ? initialItemId : null);
+        setSelectedProgramId(resolved.concern === "programs" ? initialItemId : null);
+        setSelectedScheduleId(resolved.concern === "schedule" ? initialItemId : null);
+        if (resolved.normalized && selectedId) {
+            router.replace(locationConcernHref(selectedId, resolved.concern, initialItemId));
+        }
+    }, [initialTab, initialItemId, initialLocationId, router, selectedId]);
 
     const visibleSites = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -194,49 +211,36 @@ export default function LocationsConfigurationPage({
         [selectedPrograms, selectedRooms],
     );
 
-    const refreshOwnedConcernSetup = useCallback(async (locationId: string) => {
-        const requestSeq = ++ownedConcernRequestSeq.current;
-        const [tours, access] = await Promise.all([
-            fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
-                credentials: "include",
-            })
-                .then(async (response) => {
-                    if (!response.ok) return null;
-                    const json = (await response.json().catch(() => ({}))) as {
-                        rules?: { location_id?: string | null; is_active?: boolean }[];
-                    };
-                    return (json.rules ?? []).some(
-                        (rule) => rule.location_id === locationId && rule.is_active !== false,
-                    );
-                })
-                .catch(() => null),
-            fetch("/api/admin/settings/users-roles/members", { credentials: "include" })
-                .then(async (response) => {
-                    if (!response.ok) return null;
-                    const json = (await response.json().catch(() => ({}))) as {
-                        members?: {
-                            role_keys?: string[];
-                            site_scope?: string;
-                            site_location_ids?: string[];
-                        }[];
-                    };
-                    return (json.members ?? []).some(
-                        (member) =>
-                            member.role_keys?.includes("admin") &&
-                            (member.site_scope === "all" || member.site_location_ids?.includes(locationId)),
-                    );
-                })
-                .catch(() => null),
-        ]);
-        if (requestSeq !== ownedConcernRequestSeq.current) return;
-        setOwnedConcernSetupByLocation((current) => ({
-            ...current,
-            [locationId]: {
-                tours: tours ?? undefined,
-                access: access ?? undefined,
-            },
-        }));
-    }, []);
+    const refreshOwnedConcernSetup = useCallback(
+        async (locationId: string) => {
+            if (!orgId) return;
+            const requestSeq = ++ownedConcernRequestSeq.current;
+            const peeked = peekLocationOwnedSetup(orgId, locationId);
+            if (peeked) {
+                setOwnedConcernSetupByLocation((current) => ({
+                    ...current,
+                    [locationId]: {
+                        tours: peeked.toursConfigured ?? undefined,
+                        access: peeked.accessConfigured ?? undefined,
+                    },
+                }));
+            }
+            try {
+                const { snapshot } = await loadLocationOwnedSetup(orgId, locationId, { force: !peeked });
+                if (requestSeq !== ownedConcernRequestSeq.current) return;
+                setOwnedConcernSetupByLocation((current) => ({
+                    ...current,
+                    [locationId]: {
+                        tours: snapshot.toursConfigured ?? undefined,
+                        access: snapshot.accessConfigured ?? undefined,
+                    },
+                }));
+            } catch {
+                /* overview setup badges degrade gracefully */
+            }
+        },
+        [orgId],
+    );
 
     const selectedSiteId = selectedSite?.id ?? null;
     useEffect(() => {
@@ -281,10 +285,11 @@ export default function LocationsConfigurationPage({
         setCreatingSchedule(false);
         if (tab === "tours") setToursKeepAlive(true);
         if (tab === "placement") setPlacementKeepAlive(true);
+        if (tab === "access") setAccessKeepAlive(true);
         setActiveTab(tab);
         continuity?.rememberLocationSelection({ locationId, tab, itemId: null });
         // Explicit operator selection — push so Back/Forward work across locations.
-        router.push(locationWorkspaceHref(locationId, tab));
+        router.push(locationConcernHref(locationId, tab));
     };
 
     const returnToLocations = () => {
@@ -306,15 +311,36 @@ export default function LocationsConfigurationPage({
             setCreatingSchedule(false);
             if (tab === "tours") setToursKeepAlive(true);
             if (tab === "placement") setPlacementKeepAlive(true);
+            if (tab === "access") setAccessKeepAlive(true);
             continuity?.rememberLocationSelection({
                 locationId: selectedSite.id,
                 tab,
                 itemId: itemId ?? null,
             });
             // Nested concern navigation — push for Back/Forward between concerns.
-            router.push(locationWorkspaceHref(selectedSite.id, tab, itemId));
+            router.push(locationConcernHref(selectedSite.id, tab, itemId));
         },
         [continuity, router, selectedSite],
+    );
+
+    const prefetchConcernIntent = useCallback(
+        (tab: LocationWorkspaceTab) => {
+            if (!selectedSite || !orgId) return;
+            const def = getLocationConcernDefinition(tab);
+            if (def.prefetch === "none") return;
+            // Advisory route warm — never authoritative.
+            void router.prefetch(locationConcernHref(selectedSite.id, tab));
+            if (tab === "tours" || tab === "access") {
+                void loadLocationOwnedSetup(orgId, selectedSite.id).catch(() => undefined);
+            }
+            if (tab === "access") {
+                void loadLocationAccessMembers(orgId, selectedSite.id).catch(() => undefined);
+            }
+            if (tab === "placement") {
+                void loadLocationPlacementPolicy(orgId).catch(() => undefined);
+            }
+        },
+        [orgId, router, selectedSite],
     );
 
     const showSetupDestination = (tab: LocationWorkspaceTab | "general") => {
@@ -338,7 +364,7 @@ export default function LocationsConfigurationPage({
         setCreatingSchedule(false);
         setCreatingRoom(true);
         setError(null);
-        router.replace(locationWorkspaceHref(selectedSite.id, "rooms"));
+        router.replace(locationConcernHref(selectedSite.id, "rooms"));
     }, [canMutate, router, selectedSite, setError]);
 
     const addProgram = useCallback(() => {
@@ -633,13 +659,10 @@ export default function LocationsConfigurationPage({
         if (activeTab === "placement") {
             return null;
         }
-        return (
-            <LocationAccessPanel
-                key={selectedSite.id}
-                locationId={selectedSite.id}
-                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
-            />
-        );
+        if (activeTab === "access") {
+            return null;
+        }
+        return null;
     })();
 
     return (
@@ -749,7 +772,7 @@ export default function LocationsConfigurationPage({
                                         tab: activeTab,
                                         itemId: null,
                                     });
-                                    router.push(locationWorkspaceHref(locationId, activeTab));
+                                    router.push(locationConcernHref(locationId, activeTab));
                                 }}
                             />
                         :   null}
@@ -775,7 +798,7 @@ export default function LocationsConfigurationPage({
                                                 tab: activeTab,
                                                 itemId: null,
                                             });
-                                            router.push(locationWorkspaceHref(event.target.value, activeTab));
+                                            router.push(locationConcernHref(event.target.value, activeTab));
                                         }}
                                     >
                                         {siteRows.map((site) => (
@@ -853,6 +876,7 @@ export default function LocationsConfigurationPage({
                                     tabs={LOCATION_WORKSPACE_TABS}
                                     activeSection={activeTab}
                                     onSectionChange={navigate}
+                                    onSectionIntent={prefetchConcernIntent}
                                     testId="locations-detail-runtime"
                                     headerTestId="locations-hero"
                                     tabAriaLabel="Location configuration"
@@ -865,9 +889,16 @@ export default function LocationsConfigurationPage({
                                             data-testid="locations-tours-keepalive"
                                         >
                                             <LocationToursPanel
+                                                key={selectedSite.id}
                                                 locationId={selectedSite.id}
                                                 locationLabel={model?.displayName ?? ""}
-                                                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
+                                                onMutationCommitted={() => {
+                                                    invalidateLocationConcernCaches(orgId, "tours", {
+                                                        locationId: selectedSite.id,
+                                                        reason: "tours-mutated",
+                                                    });
+                                                    return refreshOwnedConcernSetup(selectedSite.id);
+                                                }}
                                             />
                                         </div>
                                     :   null}
@@ -877,9 +908,24 @@ export default function LocationsConfigurationPage({
                                             data-testid="locations-placement-keepalive"
                                         >
                                             <LocationPlacementPanel
+                                                orgId={orgId}
                                                 rooms={selectedRooms}
                                                 onReviewRooms={() => navigate("rooms")}
                                                 canMutate={canMutate}
+                                                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
+                                            />
+                                        </div>
+                                    :   null}
+                                    {accessKeepAlive && !editingSite ?
+                                        <div
+                                            className={activeTab === "access" ? undefined : "hidden"}
+                                            data-testid="locations-access-keepalive"
+                                        >
+                                            <LocationAccessPanel
+                                                key={selectedSite.id}
+                                                orgId={orgId}
+                                                locationId={selectedSite.id}
+                                                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
                                             />
                                         </div>
                                     :   null}

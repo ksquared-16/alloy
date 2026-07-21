@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import TourAvailabilitySettingsClient from "@/app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient";
 import {
     ConfigurationInlineButton,
@@ -33,6 +33,17 @@ import {
     pickDefaultWaitlistRankingWorkUnitId,
 } from "@/lib/orchestration/placement/waitlistRankingPolicyWorkUnits";
 import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
+import {
+    invalidateLocationConcernCaches,
+    loadLocationAccessMembers,
+    loadLocationPlacementPolicy,
+    peekLocationAccessMembers,
+    peekLocationPlacementPolicy,
+} from "@/lib/locations/locationConcernCache";
+import {
+    projectLocationConcernTransition,
+    shouldApplyLocationConcernResponse,
+} from "@/lib/locations/locationConcernContract";
 
 function ConcernSurface({
     title,
@@ -115,64 +126,91 @@ export function LocationToursPanel({
 }
 
 export function LocationPlacementPanel({
+    orgId,
     rooms,
     onReviewRooms,
     canMutate,
+    onMutationCommitted,
 }: {
+    orgId: string;
     rooms: LocationHierarchyRow[];
     onReviewRooms: () => void;
     canMutate: boolean;
+    onMutationCommitted?: () => void | Promise<void>;
 }) {
     const activeRooms = rooms.filter((room) => room.is_active !== false);
-    const [workUnits, setWorkUnits] = useState<PlacementWorkUnit[]>([]);
-    const [processNames, setProcessNames] = useState<Record<string, string>>({});
+    const peeked = orgId ? peekLocationPlacementPolicy(orgId) : null;
+    const [workUnits, setWorkUnits] = useState<PlacementWorkUnit[]>(() => peeked?.workUnits ?? []);
+    const [processNames, setProcessNames] = useState<Record<string, string>>(
+        () => peeked?.processNames ?? {},
+    );
     const [selectedId, setSelectedId] = useState("");
     const [enabled, setEnabled] = useState(false);
     const [shadowMode, setShadowMode] = useState(false);
     const [ruleOrder, setRuleOrder] = useState<string[]>([]);
     const [enabledKeys, setEnabledKeys] = useState<Set<string>>(new Set());
-    const [loading, setLoading] = useState(true);
+    const hasDataRef = useRef(Boolean(peeked?.workUnits.length));
+    const [loading, setLoading] = useState(!hasDataRef.current);
+    const [refreshing, setRefreshing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [saved, setSaved] = useState(false);
+    const requestSeq = useRef(0);
 
-    const loadPolicy = useCallback(async () => {
-        setError(null);
-        try {
-            const [workUnitsResponse, catalogResponse] = await Promise.all([
-                fetch("/api/admin/work-units", { cache: "no-store" }),
-                fetch("/api/admin/lifecycle-catalog", { cache: "no-store" }),
-            ]);
-            const json = (await workUnitsResponse.json().catch(() => ({}))) as {
-                items?: PlacementWorkUnit[];
-                error?: string;
-            };
-            if (!workUnitsResponse.ok) {
-                throw new Error(json.error ?? "Waitlist ranking policy could not be loaded.");
-            }
-            const eligible = filterWaitlistRankingEligibleWorkUnits(json.items ?? []);
+    const applyEligible = useCallback(
+        (raw: PlacementWorkUnit[], names: Record<string, string>) => {
+            const eligible = filterWaitlistRankingEligibleWorkUnits(raw);
             const canonical = eligible.filter((workUnit) =>
                 Boolean(readPlacementLifecycleValue(workUnit.metadata, "lifecycle_process_id")),
             );
             const selectable = canonical.length > 0 ? canonical : eligible;
-            const catalog = (await catalogResponse.json().catch(() => ({}))) as {
-                items?: { process_id?: string; lifecycle_name?: string }[];
-            };
-            setProcessNames(
-                Object.fromEntries(
-                    (catalogResponse.ok ? (catalog.items ?? []) : [])
-                        .filter((item) => item.process_id && item.lifecycle_name)
-                        .map((item) => [item.process_id as string, item.lifecycle_name as string]),
-                ),
-            );
+            setProcessNames(names);
             setWorkUnits(selectable);
             setSelectedId((current) => pickDefaultWaitlistRankingWorkUnitId(selectable, current));
-        } catch (cause) {
-            setError(cause instanceof Error ? cause.message : "Waitlist ranking policy could not be loaded.");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+            hasDataRef.current = selectable.length > 0 || hasDataRef.current;
+        },
+        [],
+    );
+
+    const loadPolicy = useCallback(
+        async (opts?: { force?: boolean }) => {
+            if (!orgId.trim()) {
+                setLoading(false);
+                setError("Organization context is required.");
+                return;
+            }
+            const seq = ++requestSeq.current;
+            const hadData = hasDataRef.current;
+            if (hadData) setRefreshing(true);
+            else setLoading(true);
+            setError(null);
+            try {
+                const { snapshot } = await loadLocationPlacementPolicy(orgId, { force: opts?.force });
+                if (
+                    !shouldApplyLocationConcernResponse({
+                        requestSeq: seq,
+                        latestSeq: requestSeq.current,
+                        requestLocationId: orgId,
+                        activeLocationId: orgId,
+                        requestConcern: "placement",
+                        activeConcern: "placement",
+                    })
+                ) {
+                    return;
+                }
+                applyEligible(snapshot.workUnits as PlacementWorkUnit[], snapshot.processNames);
+            } catch (cause) {
+                if (seq !== requestSeq.current) return;
+                setError(cause instanceof Error ? cause.message : "Waitlist ranking policy could not be loaded.");
+            } finally {
+                if (seq === requestSeq.current) {
+                    setLoading(false);
+                    setRefreshing(false);
+                }
+            }
+        },
+        [applyEligible, orgId],
+    );
 
     useEffect(() => {
         void loadPolicy();
@@ -227,6 +265,14 @@ export function LocationPlacementPanel({
         CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1;
     const fallbackBucketKey = profile.fallback_bucket_key;
 
+    const transition = projectLocationConcernTransition({
+        hasPriorContent: hasDataRef.current || workUnits.length > 0,
+        loading,
+        refreshing,
+        error,
+        isEmptyResult: !loading && !refreshing && !selectedWorkUnit && !error,
+    });
+
     const savePolicy = async () => {
         if (!canMutate || !selectedWorkUnit) return;
         setSaving(true);
@@ -265,7 +311,11 @@ export function LocationPlacementPanel({
             ) {
                 throw new Error("Waitlist ranking save was not confirmed by the authoritative response.");
             }
-            await loadPolicy();
+            invalidateLocationConcernCaches(orgId, "placement", {
+                reason: "placement-policy-saved",
+            });
+            await loadPolicy({ force: true });
+            await onMutationCommitted?.();
             setSaved(true);
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Waitlist ranking policy could not be saved.");
@@ -275,7 +325,7 @@ export function LocationPlacementPanel({
     };
 
     return (
-        <div className="space-y-3" data-testid="locations-placement-surface">
+        <div className="space-y-3" data-testid="locations-placement-surface" data-transition={transition}>
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <p className="config-typo-sublabel max-w-2xl">
@@ -285,14 +335,17 @@ export function LocationPlacementPanel({
                 </div>
                 <span
                     className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                        loading ? "border-alloy-forge/15 bg-alloy-stone/10 text-alloy-midnight/50"
+                        transition === "cold" ? "border-alloy-forge/15 bg-alloy-stone/10 text-alloy-midnight/50"
                         : enabled ?
                             "border-alloy-bend-pine/25 bg-alloy-bend-pine/10 text-alloy-bend-pine"
                         :   "border-alloy-forge/15 bg-alloy-stone/15 text-alloy-midnight/55"
                     }`}
                     data-testid="locations-placement-status"
                 >
-                    {loading ? "Loading…" : enabled ? "● Ranking active" : "○ Ranking inactive"}
+                    {transition === "cold" ? "Loading…"
+                    : transition === "refreshing" ? (enabled ? "● Ranking active · refreshing" : "○ Ranking inactive · refreshing")
+                    : enabled ? "● Ranking active"
+                    :   "○ Ranking inactive"}
                 </span>
             </div>
 
@@ -302,7 +355,7 @@ export function LocationPlacementPanel({
                 </p>
             :   null}
 
-            {!loading && !selectedWorkUnit ?
+            {transition === "empty" ?
                 <p className="config-typo-sublabel">No waitlist-enabled Business Process is available for ranking.</p>
             : selectedWorkUnit ?
                 <fieldset disabled={!canMutate || saving} className="space-y-4">
@@ -470,55 +523,103 @@ type MemberRow = {
 };
 
 export function LocationAccessPanel({
+    orgId,
     locationId,
     onMutationCommitted,
 }: {
+    orgId: string;
     locationId: string;
     onMutationCommitted?: () => void | Promise<void>;
 }) {
-    const [members, setMembers] = useState<MemberRow[]>([]);
-    const [siteLocationIds, setSiteLocationIds] = useState<string[]>([]);
+    const peeked = orgId && locationId ? peekLocationAccessMembers(orgId, locationId) : null;
+    const [members, setMembers] = useState<MemberRow[]>(() => peeked?.members ?? []);
+    const [siteLocationIds, setSiteLocationIds] = useState<string[]>(() => peeked?.siteLocationIds ?? []);
     const [editing, setEditing] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [authorized, setAuthorized] = useState(false);
+    const hasDataRef = useRef(Boolean(peeked));
+    const [loading, setLoading] = useState(!hasDataRef.current);
+    const [refreshing, setRefreshing] = useState(false);
+    const [authorized, setAuthorized] = useState(peeked?.authorized ?? false);
     const [savingUserId, setSavingUserId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const requestSeq = useRef(0);
+    const activeLocationRef = useRef(locationId);
+    activeLocationRef.current = locationId;
 
-    const loadMembers = useCallback(async (cancelled?: () => boolean) => {
-        const response = await fetch("/api/admin/settings/users-roles/members", {
-            credentials: "include",
-        });
-        const json = (await response.json().catch(() => ({}))) as {
-            members?: MemberRow[];
-            site_locations?: { id: string }[];
-            error?: string;
-        };
-        if (cancelled?.()) return;
-        setAuthorized(response.ok);
-        if (response.ok) {
-            setMembers(json.members ?? []);
-            setSiteLocationIds((json.site_locations ?? []).map((site) => site.id));
-            setError(null);
-        } else {
-            setMembers([]);
-            setSiteLocationIds([]);
-            setError(json.error ?? "Location access is unavailable.");
-        }
-        setLoading(false);
-    }, []);
+    const loadMembers = useCallback(
+        async (opts?: { force?: boolean }) => {
+            if (!orgId.trim() || !locationId.trim()) {
+                setLoading(false);
+                setError("Organization and location context are required.");
+                return;
+            }
+            const seq = ++requestSeq.current;
+            const requestLocationId = locationId;
+            const hadData = hasDataRef.current;
+            if (hadData) setRefreshing(true);
+            else setLoading(true);
+            try {
+                const { snapshot } = await loadLocationAccessMembers(orgId, locationId, {
+                    force: opts?.force,
+                });
+                if (
+                    !shouldApplyLocationConcernResponse({
+                        requestSeq: seq,
+                        latestSeq: requestSeq.current,
+                        requestLocationId,
+                        activeLocationId: activeLocationRef.current,
+                        requestConcern: "access",
+                        activeConcern: "access",
+                    })
+                ) {
+                    return;
+                }
+                setAuthorized(snapshot.authorized);
+                if (snapshot.authorized) {
+                    setMembers(snapshot.members);
+                    setSiteLocationIds(snapshot.siteLocationIds);
+                    setError(null);
+                    hasDataRef.current = true;
+                } else {
+                    if (!hadData) {
+                        setMembers([]);
+                        setSiteLocationIds([]);
+                    }
+                    setError("Location access is unavailable.");
+                }
+            } catch (cause) {
+                if (seq !== requestSeq.current || requestLocationId !== activeLocationRef.current) return;
+                if (!hadData) {
+                    setMembers([]);
+                    setSiteLocationIds([]);
+                }
+                setError(cause instanceof Error ? cause.message : "Location access is unavailable.");
+            } finally {
+                if (seq === requestSeq.current) {
+                    setLoading(false);
+                    setRefreshing(false);
+                }
+            }
+        },
+        [locationId, orgId],
+    );
 
     useEffect(() => {
-        let cancelled = false;
-        void loadMembers(() => cancelled);
-        return () => {
-            cancelled = true;
-        };
-    }, [loadMembers, locationId]);
+        void loadMembers();
+    }, [loadMembers]);
 
     const membersWithAccess = members.filter(
         (member) => member.site_scope === "all" || member.site_location_ids.includes(locationId),
     );
     const adminCount = membersWithAccess.filter((member) => member.role_keys.includes("admin")).length;
+
+    const transition = projectLocationConcernTransition({
+        hasPriorContent: hasDataRef.current || members.length > 0,
+        loading,
+        refreshing,
+        error,
+        forbidden: !authorized && !loading && !refreshing,
+        isEmptyResult: authorized && !loading && !refreshing && membersWithAccess.length === 0,
+    });
 
     const updateLocationAccess = async (member: MemberRow, grant: boolean) => {
         const currentlyHasAccess = member.site_scope === "all" || member.site_location_ids.includes(locationId);
@@ -559,7 +660,16 @@ export function LocationAccessPanel({
             if (confirmedIds.size !== nextSiteIds.length || nextSiteIds.some((id) => !confirmedIds.has(id))) {
                 throw new Error("Location access save was not confirmed by the authoritative response.");
             }
-            await loadMembers();
+            invalidateLocationConcernCaches(orgId, "access", {
+                locationId,
+                reason: "location-access-saved",
+            });
+            invalidateLocationConcernCaches(orgId, "owned-setup", {
+                locationId,
+                reason: "location-access-saved",
+                publishBus: false,
+            });
+            await loadMembers({ force: true });
             await onMutationCommitted?.();
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Location access could not be saved.");
@@ -573,14 +683,14 @@ export function LocationAccessPanel({
             title="Access"
             consequence="See who can operate this location and adjust location access without leaving the workspace."
             status={
-                loading ? "Loading team…"
-                : authorized ?
-                    `${membersWithAccess.length} team members`
-                :   "Permission required"
+                transition === "cold" ? "Loading team…"
+                : transition === "refreshing" ? "Refreshing team…"
+                : transition === "forbidden" ? "Permission required"
+                :   `${membersWithAccess.length} team members`
             }
             testId="locations-access-surface"
             action={
-                <div className="space-y-3">
+                <div className="space-y-3" data-transition={transition}>
                     {error ?
                         <p
                             className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"

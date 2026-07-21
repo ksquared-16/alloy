@@ -14,6 +14,7 @@ export function ConfigWorkspaceTabBar<Section extends string>({
     tabs,
     activeSection,
     onSectionChange,
+    onSectionIntent,
     ariaLabel,
     testId,
     testIdPrefix,
@@ -21,6 +22,8 @@ export function ConfigWorkspaceTabBar<Section extends string>({
     tabs: readonly ConfigWorkspaceTab<Section>[];
     activeSection: Section;
     onSectionChange: (section: Section) => void;
+    /** Advisory prefetch / warm hint — never authoritative navigation. */
+    onSectionIntent?: (section: Section) => void;
     ariaLabel: string;
     testId?: string;
     testIdPrefix: string;
@@ -44,6 +47,8 @@ export function ConfigWorkspaceTabBar<Section extends string>({
                             : "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/75"
                     }`}
                     onClick={() => onSectionChange(tab.key)}
+                    onMouseEnter={() => onSectionIntent?.(tab.key)}
+                    onFocus={() => onSectionIntent?.(tab.key)}
                     data-testid={`${testIdPrefix}-${tab.key}`}
                 >
                     {tab.label}
