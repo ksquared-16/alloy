@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alloy.local/contracts/director-v1/events.json",
+  "title": "Alloy Director V1 event contracts",
+  "schema_version": "director-v1",
+  "description": "Stable local event contracts for the Alloy Director, independent of any delivery adapter (SSE today; WebSocket, mobile, or push adapters may be added later without changing these shapes). Events are produced by buildEvent() in scripts/local-dev/lib/director.mjs and validated by validateEvent().",
+  "envelope": {
+    "required": ["schema_version", "type", "initiative_key", "id"],
+    "fields": {
+      "schema_version": "Always \"director-v1\" for this contract generation.",
+      "type": "One of the declared event types.",
+      "initiative_key": "Canonical initiative/mission key (^[a-z0-9]+([_-][a-z0-9]+)*$); empty string only for the SSE hello frame.",
+      "occurred_at": "ISO-8601 UTC timestamp supplied by the emitter, or null. Pure projections never read the wall clock; the emitter injects time so events stay replayable.",
+      "data": "Type-specific object (free-form per type; recommended fields listed below).",
+      "id": "Deterministic 16-hex-char id = sha256(type|initiative_key|occurred_at|stableStringify(data)). Replaying identical state yields the identical id."
+    }
+  },
+  "events": {
+    "mission.started": {
+      "description": "An eligible mission became the single active mission and execution began (legal approved -> assigning transition).",
+      "recommended_data": ["task_id", "provider", "from_state", "to_state"]
+    },
+    "worker.completed": {
+      "description": "A worker reported a terminal, non-failed result for its task.",
+      "recommended_data": ["task_id", "provider", "report_status"]
+    },
+    "mission.blocked": {
+      "description": "A mission entered a blocked state, was paused, or is held by an open blocking decision.",
+      "recommended_data": ["reason", "decision_id"]
+    },
+    "decision.required": {
+      "description": "A human decision must be resolved before eligible execution can continue.",
+      "recommended_data": ["decision_id", "decision_type", "affected_tasks"]
+    },
+    "qa.ready": {
+      "description": "A mission reached a QA-ready posture with evidence available for review.",
+      "recommended_data": ["task_id", "evidence_count"]
+    },
+    "release.ready": {
+      "description": "A mission passed QA approval and awaits explicit human release approval (never auto-approved).",
+      "recommended_data": ["requires_release_approval"]
+    },
+    "mission.failed": {
+      "description": "A mission reached an unrecoverable failed posture.",
+      "recommended_data": ["reason", "task_id"]
+    }
+  }
+}
