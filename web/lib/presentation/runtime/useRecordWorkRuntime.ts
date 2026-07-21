@@ -128,6 +128,9 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
     const [coldLoading, setColdLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fetchGenRef = useRef(0);
+    // Monotonic guard for reload/recompose responses. Subject swaps are guarded by fetchGenRef; this
+    // orders concurrent reloads of the SAME subject so a stale response cannot overwrite newer state.
+    const reloadGenRef = useRef(0);
 
     const validSubject = subjectId && subjectId !== "new" ? subjectId : null;
 
@@ -217,10 +220,18 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
 
     const reloadDisplayVm = useCallback(async () => {
         if (!validSubject) return;
+        // Stale-response protection: capture the subject generation (guards a subject swap during the
+        // reload) and a monotonic reload generation (orders concurrent reloads of the same subject). A
+        // response that is no longer the latest for its subject is dropped, never applied.
+        const subjectGen = fetchGenRef.current;
+        const reloadGen = ++reloadGenRef.current;
         const result = await loadOpportunityDrawerViaViewModel(validSubject, null);
+        if (subjectGen !== fetchGenRef.current || reloadGen !== reloadGenRef.current) return;
         if (!result.ok || !isOpportunityDrawerViewModelPreload(result.preload)) return;
+        const completeVm = await completeVmWithStageWork(result.preload.viewModel);
+        if (subjectGen !== fetchGenRef.current || reloadGen !== reloadGenRef.current) return;
         // Same atomic contract as the initial load — reload reveals a complete VM, not a resize.
-        applyVm(await completeVmWithStageWork(result.preload.viewModel), "reload");
+        applyVm(completeVm, "reload");
     }, [validSubject, applyVm]);
 
     // ── Targeted refresh: record-patch + queue-updated events (same contracts as the drawer path). ──
@@ -239,7 +250,14 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             if (!id || id !== oid) return;
             invalidateOpportunityStageWorkCache({ opportunityId: oid });
             const actionKey = (detail?.action_key ?? "").trim();
-            if (!isTourSurfaceActionKey(actionKey)) return;
+            if (!isTourSurfaceActionKey(actionKey)) {
+                // RECOMPOSITION (What's Next): a committed command/outcome for this subject
+                // (e.g. "stage_work_outcome") just invalidated the stage-work cache. Re-project the VM
+                // so the settled item, the next obligation, and readiness recompose in place — no
+                // reload. Previously this returned here, leaving Current Work stale until a remount.
+                void reloadDisplayVm();
+                return;
+            }
             setDisplayVm((vm) => {
                 if (!vm || String(vm.entity.id) !== oid) return vm;
                 void fetchOpportunityDrawerHeaderActionsFromRecord(
@@ -264,7 +282,7 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             window.removeEventListener(ADMINV2_OPPORTUNITY_DRAWER_RECORD_PATCH, onRecordPatch as EventListener);
             window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated as EventListener);
         };
-    }, [validSubject, patchDisplayRecord]);
+    }, [validSubject, patchDisplayRecord, reloadDisplayVm]);
 
     // ── Deferred stage work (Tier 2) — resolve Current Work after first paint, scoped to the subject. ──
     const stageWorkStatus = displayVm?.workspace.stage_work?.status;
