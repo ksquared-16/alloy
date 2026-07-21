@@ -6,7 +6,10 @@
  * distribution behavior here; they keep their own authoritative storage.
  */
 
-import { CANONICAL_ORGANIZATION_PROGRAMS_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    CANONICAL_ORGANIZATION_FINANCIALS_HREF,
+    CANONICAL_ORGANIZATION_PROGRAMS_HREF,
+} from "@/lib/admin/canonicalAdminRoutes";
 
 export type ConfigurationAuthority = "platform" | "organization" | "location";
 export type ConfigurationInheritanceKind = "value" | "availability" | "none";
@@ -23,6 +26,7 @@ export type ConfigurationHealthState = "ready" | "attention" | "not_assessed";
 export type OrganizationConfigurationDomainIcon =
     | "locations"
     | "programs"
+    | "financials"
     | "access"
     | "communications"
     | "data-model"
@@ -154,34 +158,34 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         ownedConfiguration: ["Sites", "Programs offered", "Rooms & delivery resources", "Local schedules"],
     },
     {
-        key: "programs",
-        internalRuntimeKey: "commercial",
-        label: "Programs",
-        description: "Reusable service catalog published by the organization for every business vertical.",
-        href: CANONICAL_ORGANIZATION_PROGRAMS_HREF,
-        icon: "programs",
+        key: "financials",
+        label: "Financials",
+        description:
+            "Configure tuition, billable items, funding, financial rules, and accounting relationships.",
+        href: CANONICAL_ORGANIZATION_FINANCIALS_HREF,
+        icon: "financials",
         publisherLabel: "Organization",
-        configurationOwner: "Programs",
-        runtimeOwner: "Programs and Commercial Runtime",
-        consumers: ["Locations", "Enrollment", "Commercial", "Billing"],
+        configurationOwner: "Financials",
+        runtimeOwner: "Commercial and billing runtimes",
+        consumers: ["Enrollment", "Billing", "Locations", "Processing"],
         inheritance: {
-            kind: "availability",
+            kind: "value",
             path: ["organization", "location"],
-            label: "Organization publishes; Locations choose what they offer",
+            label: "Organization defaults inherit; Locations may override tuition cells",
         },
-        publication: { mode: "explicit", status: "publish_required", label: "Publish required" },
-        override: { state: "available", label: "Locations control availability, not Program identity" },
+        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+        override: { state: "available", label: "Location tuition overrides are supported" },
         health: {
             state: "not_assessed",
             label: "Not assessed",
-            detail: "Programs will report health from its authoritative catalog.",
+            detail: "Financials health remains owned by rate, catalog, and policy surfaces.",
         },
-        distributionMode: "assignment",
+        distributionMode: "inherit",
         ownedConfiguration: [
-            "Catalog & categories",
-            "Eligibility & licensing",
-            "Required resource types",
-            "Commercial, funding, and billing defaults",
+            "Tuition rates and cadence",
+            "Fees, add-ons, and catalog",
+            "Discount policies",
+            "Accounting mappings",
         ],
     },
     {
@@ -361,6 +365,44 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
     },
 ] as const;
 
+/**
+ * Programs remains a configuration domain for runtime/publication lookups and
+ * `/organization/programs` compatibility — it is intentionally excluded from the
+ * Organization landing peer tile set (Location-associated Program workflow).
+ */
+export const PROGRAMS_CONFIGURATION_DOMAIN: OrganizationConfigurationDomain = {
+    key: "programs",
+    internalRuntimeKey: "commercial",
+    label: "Programs",
+    description: "Reusable service catalog published by the organization for every business vertical.",
+    href: CANONICAL_ORGANIZATION_PROGRAMS_HREF,
+    icon: "programs",
+    publisherLabel: "Organization",
+    configurationOwner: "Programs",
+    runtimeOwner: "Programs and Commercial Runtime",
+    consumers: ["Locations", "Enrollment", "Commercial", "Billing"],
+    inheritance: {
+        kind: "availability",
+        path: ["organization", "location"],
+        label: "Organization publishes; Locations choose what they offer",
+    },
+    publication: { mode: "explicit", status: "publish_required", label: "Publish required" },
+    override: { state: "available", label: "Locations control availability, not Program identity" },
+    health: {
+        state: "not_assessed",
+        label: "Not assessed",
+        detail: "Programs will report health from its authoritative catalog.",
+    },
+    distributionMode: "assignment",
+    ownedConfiguration: [
+        "Catalog & categories",
+        "Eligibility & licensing",
+        "Required resource types",
+        "Delivery Options and Location assignment",
+    ],
+};
+
+/** Peer domains shown on `/organization` — Programs is not a landing peer. */
 export function organizationConfigurationDomains(): readonly OrganizationConfigurationDomain[] {
     return CONFIGURATION_DOMAINS;
 }
@@ -368,6 +410,12 @@ export function organizationConfigurationDomains(): readonly OrganizationConfigu
 export function organizationConfigurationDomain(
     domainKey: string,
 ): OrganizationConfigurationDomain | null {
+    if (
+        domainKey === PROGRAMS_CONFIGURATION_DOMAIN.key
+        || domainKey === PROGRAMS_CONFIGURATION_DOMAIN.internalRuntimeKey
+    ) {
+        return PROGRAMS_CONFIGURATION_DOMAIN;
+    }
     return (
         CONFIGURATION_DOMAINS.find(
             (domain) => domain.key === domainKey || domain.internalRuntimeKey === domainKey,

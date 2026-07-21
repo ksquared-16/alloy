@@ -53,7 +53,8 @@ describe("Configuration Continuity — soft-nav eligibility", () => {
         expect(shouldSoftNavigate("/organization")).toBe(true);
         expect(shouldSoftNavigate("/settings/locations")).toBe(true);
         expect(shouldSoftNavigate("/organization/programs")).toBe(true);
-        expect(shouldSoftNavigate("/organization/programs?chapter=tuition")).toBe(true);
+        expect(shouldSoftNavigate("/organization/programs")).toBe(true);
+        expect(shouldSoftNavigate("/organization/financials?chapter=tuition")).toBe(true);
         expect(shouldSoftNavigate("/admin/workflows")).toBe(false);
     });
 
@@ -162,12 +163,13 @@ describe("Configuration Continuity — invalidation bus", () => {
     });
 });
 
-describe("Configuration Continuity — Programs nav IA", () => {
-    it("config-mode Programs points at canonical /organization/programs", () => {
+describe("Configuration Continuity — Business / Locations nav IA", () => {
+    it("config-mode Business lists Financials (Programs is not a peer nav domain)", () => {
         const business = CONFIGURATION_MODE_NAV_GROUPS.find((g) => g.id === "business");
-        const programs = business?.items.find((i) => i.testId === "config-mode-nav-programs");
-        expect(programs?.href).toBe("/organization/programs");
-        expect(programs?.href).not.toBe("/settings/commercial");
+        expect(business?.items.find((i) => i.testId === "config-mode-nav-programs")).toBeUndefined();
+        expect(business?.items.find((i) => i.testId === "config-mode-nav-financials")?.href).toBe(
+            "/organization/financials",
+        );
     });
 
     it("config-mode Locations points at canonical /organization/locations", () => {

@@ -18,7 +18,10 @@ describe("Organization Configuration Runtime", () => {
         expect(organization?.items.map((item) => item.label)).not.toContain("Organization settings");
         expect(CONFIGURATION_MODE_NAV_GROUPS.flatMap((group) => group.items).find(
             (item) => item.href === "/organization/programs",
-        )?.label).toBe("Programs");
+        )).toBeUndefined();
+        expect(CONFIGURATION_MODE_NAV_GROUPS.flatMap((group) => group.items).find(
+            (item) => item.href === "/organization/financials",
+        )?.label).toBe("Financials");
         expect(CONFIGURATION_MODE_NAV_GROUPS.flatMap((group) => group.items).find(
             (item) => item.href === "/settings/commercial",
         )).toBeUndefined();

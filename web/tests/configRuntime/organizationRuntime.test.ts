@@ -40,7 +40,7 @@ describe("Organization Configuration Runtime", () => {
         expect(domains.every((domain) => domain.configurationOwner.trim().length > 0)).toBe(true);
         expect(domains.map((domain) => domain.key)).toEqual([
             "locations",
-            "programs",
+            "financials",
             "access",
             "communications",
             "data-model",
@@ -49,6 +49,7 @@ describe("Organization Configuration Runtime", () => {
             "automation",
             "operational-intelligence",
         ]);
+        expect(domains.some((domain) => domain.key === "programs")).toBe(false);
         expect(organizationConfigurationDomain("locations")?.distributionMode).toBe("none");
         expect(organizationConfigurationDomain("programs")?.inheritance.path).toEqual([
             "organization",
@@ -61,6 +62,7 @@ describe("Organization Configuration Runtime", () => {
                 (item) => !/capacity|rooms?/i.test(item),
             ),
         ).toBe(true);
+        expect(organizationConfigurationDomain("financials")?.href).toBe("/organization/financials");
     });
 
     it("resolves the nearest explicitly present layer without losing falsy values", () => {
