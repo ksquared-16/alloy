@@ -7,12 +7,11 @@
  * independently observable:
  *
  *   commit    → real git commits per worktree (author, subject, time)
- *   created   → worker metadata ALLOY_CREATED_AT
- *   paused    → worker metadata ALLOY_PAUSE_RECORDED_AT
- *   finished  → worker metadata ALLOY_FINISHED_AT
- *   evidence  → newest evidence artifact mtime per worktree
+ *   created   → worker detail created_at   (via alloy-ro worker-detail)
+ *   paused    → worker detail pause_recorded_at
+ *   finished  → worker detail finished_at
  *
- * These are reads of git + filesystem truth, composed and time-ordered — not a
+ * These are reads of git + governed metadata, composed and time-ordered — not a
  * parallel database. Replaying the same state yields the same feed. When a real
  * runtime event log lands (Phase 2), this projector swaps its source with no
  * change to the presentation contract.
@@ -36,21 +35,9 @@ export function projectActivity(sprintsCtx, limit = 20) {
         source: "git log",
       });
     }
-    pushMetaEvent(events, e, "ALLOY_CREATED_AT", "sprint.created", (t) => `Sprint ${e.sprint} created`);
-    pushMetaEvent(events, e, "ALLOY_PAUSE_RECORDED_AT", "worker.paused", () => `Worker paused on ${e.sprint}`);
-    pushMetaEvent(events, e, "ALLOY_FINISHED_AT", "sprint.finished", () => `Sprint ${e.sprint} finished`);
-    if (e.evidence?.newest_ms) {
-      events.push({
-        at_ms: e.evidence.newest_ms,
-        at: isoFromMs(e.evidence.newest_ms),
-        kind: "evidence",
-        actor: e.provider || null,
-        sprint: e.sprint,
-        summary: `New verification evidence (${e.evidence.count} artifact${e.evidence.count === 1 ? "" : "s"})`,
-        detail: { worktree: e.worktree },
-        source: "evidence dir mtime",
-      });
-    }
+    pushMetaEvent(events, e, "created_at", "sprint.created", () => `Sprint ${e.sprint} created`);
+    pushMetaEvent(events, e, "pause_recorded_at", "worker.paused", () => `Worker paused on ${e.sprint}`);
+    pushMetaEvent(events, e, "finished_at", "sprint.finished", () => `Sprint ${e.sprint} finished`);
   }
 
   events.sort((a, b) => (b.at_ms || 0) - (a.at_ms || 0));
@@ -58,10 +45,10 @@ export function projectActivity(sprintsCtx, limit = 20) {
 }
 
 function pushMetaEvent(events, e, key, kind, summary) {
-  const iso = e.meta?.[key];
+  const iso = e.detail?.[key];
   const ms = iso ? Date.parse(iso) : NaN;
   if (!iso || Number.isNaN(ms)) return;
-  events.push({ at_ms: ms, at: iso, kind, actor: e.provider || null, sprint: e.sprint, summary: summary(iso), detail: { worktree: e.worktree }, source: `metadata:${key}` });
+  events.push({ at_ms: ms, at: iso, kind, actor: e.provider || null, sprint: e.sprint, summary: summary(iso), detail: { worktree: e.worktree }, source: `alloy-ro worker-detail:${key}` });
 }
 
 function shorten(s, n) {

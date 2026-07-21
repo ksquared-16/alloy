@@ -24,8 +24,8 @@ export function projectProject(raw, sprints) {
     key: "alloy",
     name: name || "Alloy",
     root: canonical,
-    base_ref: raw.slots?.base || "origin/staging",
-    base_sha: raw.slots?.base_sha || null,
+    base_ref: raw.base?.ref || "origin/staging",
+    base_sha: raw.base?.sha || null,
     // Sprint hierarchy = the live occupied slots, ordered.
     sprint_keys: sprints.map((s) => s.key),
     sprint_count: sprints.length,

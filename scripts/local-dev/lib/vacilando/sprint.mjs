@@ -25,7 +25,7 @@ export function decisionIsOpen(d) {
 
 /** Deterministic operator status for a sprint, from real signals only. */
 export function deriveStatus(e) {
-  if (e.lifecycle === "paused" || e.meta?.ALLOY_PAUSE_RECORDED_AT) return STATUS.PAUSED;
+  if (e.lifecycle === "paused" || e.detail?.pause_recorded_at) return STATUS.PAUSED;
   const st = e.initiative?.state;
   if (st) {
     if (st === "reviewing") return STATUS.REVIEW;
@@ -73,7 +73,7 @@ export function projectSprint(e) {
   // Prefer a concise, stable title. The free-text objective can be a paragraph,
   // so it becomes a subtitle, never the heading.
   const title = e.initiative?.title || humanize(e.sprint);
-  const objective = e.meta?.ALLOY_SPRINT_OBJECTIVE || null;
+  const objective = e.detail?.sprint_objective || null;
   return {
     slot: e.slot,
     key: e.sprint,

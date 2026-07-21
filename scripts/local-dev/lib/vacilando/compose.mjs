@@ -1,16 +1,19 @@
 /**
  * Vacilando Runtime — compose.
  *
- * Orchestrates the read: collect authoritative sources ONCE, enrich each
- * occupied slot into a per-sprint context, then run the six pure projection
- * modules and assemble the single Command Center snapshot the UI binds to.
+ * Collect authoritative sources ONCE (all through alloy-ro, except read-only
+ * git), enrich each occupied slot into a per-sprint context, then run the six
+ * pure projection modules and assemble the single Command Center snapshot.
  *
- * The snapshot is the whole contract between runtime and presentation. If a
- * field is here, a UI component may bind to it and contain no business logic.
- * If a field is a gap, it is listed in `snapshot.gaps` — never faked.
+ * Read economy: exactly ONE git-heavy alloy-ro call (agent-status computes
+ * ahead/behind for every worktree). Worker detail and sprint manifests are read
+ * in one "all" call each. Initiatives are read once (project-wide). Evidence is
+ * a cheap per-slot count. base_sha is a single cheap `git rev-parse`. Snapshots
+ * are served from a single-flight cache in the server, so bursts never restart
+ * this work concurrently.
  *
  * Time is INJECTED (nowMs) so a snapshot is a deterministic function of state
- * plus a single clock reading — replayable, testable, cacheable.
+ * plus one clock reading — replayable, testable, cacheable.
  */
 import { join } from "node:path";
 
@@ -23,88 +26,68 @@ import { projectRepository } from "./repository.mjs";
 import { projectApprovals } from "./approval.mjs";
 import { projectActivity } from "./activity.mjs";
 
-/** Enrich one occupied slot with every authoritative read a projection needs. */
-async function enrichSlot(slot, ctx) {
-  const { paths, agentsByWorktree, serversByWorktree } = ctx;
-  const worktree = slot.worktree;
-  const agent = agentsByWorktree.get(worktree) || {};
-  const server = serversByWorktree.get(worktree) || {};
-  const ab = parseAheadBehind(slot.ahead_behind);
+const PERMANENT_SLOTS = 6;
 
+/** Enrich one occupied slot (an agent-status record) with the remaining reads. */
+async function enrichSlot(agent, ctx) {
+  const worktree = agent.worktree;
+  const ab = parseAheadBehind(agent.ahead_behind);
+  const detail = ctx.details.get(worktree) || {};
+  const manifest = ctx.manifests.get(worktree) || { present: false };
+  const initiativeKey = manifest.initiative_key || null;
+  const initiative = initiativeKey ? ctx.initiativeByKey.get(initiativeKey) || null : null;
   const path = agent.path || (worktree ? join(ctx.worktreeRoot, worktree) : null);
-  const meta = S.readMetadataEnv(join(paths.metadata_dir, `${worktree}.env`));
-  const manifest = paths.manifests_dir ? S.readManifest(paths.manifests_dir, worktree) : S.readJson(join(paths.runtime_root, "manifests", `${worktree}.json`)).data;
-  const initiativeKey = manifest?.initiative_key && manifest.initiative_key !== "undeclared" ? manifest.initiative_key : null;
-  let initiative = initiativeKey ? S.readInitiative(paths.initiatives_dir, initiativeKey) : null;
-  if (initiative && !initiative.key) initiative.key = initiativeKey;
-  const evidence = S.evidenceFor(paths.evidence_dir, worktree);
-  const git_recent = await S.gitRecent(path);
+  const [evidenceCount, git_recent] = await Promise.all([S.evidenceCount(worktree), S.gitRecent(path)]);
 
   return {
-    slot: slot.slot,
+    slot: Number(agent.slot),
     worktree,
-    sprint: slot.sprint,
-    provider: slot.provider,
-    git: slot.git,
+    sprint: agent.sprint || worktree,
+    provider: agent.provider,
+    git: agent.git,
     ahead: ab.ahead,
     behind: ab.behind,
-    server: slot.server ?? server.server ?? "unknown",
-    port: slot.port ?? server.port ?? null,
-    server_pid: server.server_pid || null,
+    server: agent.server ?? "unknown",
+    port: agent.port ?? null,
     path,
-    branch: agent.branch || meta.ALLOY_WORKTREE_BRANCH || null,
+    branch: agent.branch || null,
     branch_expected: agent.branch_expected || null,
-    lifecycle: agent.lifecycle || meta.ALLOY_WORKER_LIFECYCLE || null,
-    agent_status: agent.agent_status || meta.ALLOY_AGENT_STATUS || null,
-    meta,
+    lifecycle: agent.lifecycle || detail.lifecycle || null,
+    agent_status: agent.agent_status || detail.agent_status || null,
+    detail,
     manifest,
     initiative,
-    evidence,
+    evidence: { count: evidenceCount },
     git_recent,
   };
 }
 
-/**
- * Build the full Command Center snapshot. `opts.nowMs` injects the clock;
- * `opts.maxSlots` overrides the slot ceiling (default derived from sources).
- */
+/** Build the full Command Center snapshot. `opts.nowMs` injects the clock. */
 export async function composeSnapshot(opts = {}) {
   const nowMs = opts.nowMs ?? Date.now();
   const raw = await S.collectRaw();
 
-  const paths = {
-    runtime_root: raw.paths.runtime_root,
-    metadata_dir: raw.paths.metadata_dir,
-    initiatives_dir: raw.paths.initiatives_dir,
-    evidence_dir: raw.paths.evidence_dir,
-    manifests_dir: raw.paths.runtime_root ? join(raw.paths.runtime_root, "manifests") : null,
-  };
+  const occupied = (raw.agents.agents || []).filter((a) => a.worktree);
+  const initiativeByKey = new Map((raw.initiatives || []).map((i) => [i.key, i]));
   const worktreeRoot = deriveWorktreeRoot(raw);
+  const firstPath = occupied[0]?.path || null;
+  const base = { ref: "origin/staging", sha: await S.baseSha(firstPath) };
 
-  const agentsByWorktree = new Map((raw.agents.agents || []).map((a) => [a.worktree, a]));
-  const serversByWorktree = new Map((raw.servers.servers || []).map((s) => [s.worktree, s]));
+  const enrichCtx = { worktreeRoot, initiativeByKey, details: raw.details, manifests: raw.manifests };
+  const sprintsCtx = await Promise.all(occupied.map((a) => enrichSlot(a, enrichCtx)));
 
-  const occupied = (raw.slots.slots || []).filter((s) => s.occupied && s.worktree);
-  const enrichCtx = { paths, worktreeRoot, agentsByWorktree, serversByWorktree };
-  const sprintsCtx = await Promise.all(occupied.map((s) => enrichSlot(s, enrichCtx)));
-
-  // Approvals are a project-wide queue over ALL initiatives, not just slots.
-  const allInitiatives = S.readAllInitiatives(paths.initiatives_dir);
   const slotByInitiative = new Map(
     sprintsCtx.filter((e) => e.initiative?.key).map((e) => [e.initiative.key, { sprint: e.sprint, slot: e.slot }]),
   );
 
-  // Run the six projections (pure over enriched context).
   const sprints = projectSprints(sprintsCtx);
   const workers = projectWorkers(sprintsCtx);
-  const repository = projectRepository(sprintsCtx, raw);
-  const approvals = projectApprovals(allInitiatives, slotByInitiative);
+  const repository = projectRepository(sprintsCtx, { root: raw.root, base });
+  const approvals = projectApprovals(raw.initiatives || [], slotByInitiative);
   const activity = projectActivity(sprintsCtx);
-  const project = projectProject(raw, sprints);
+  const project = projectProject({ root: raw.root, base }, sprints);
 
-  const maxSlots = opts.maxSlots ?? (raw.slots.slots || []).length ?? 6;
-  const headline = composeHeadline({ sprints, workers, approvals, repository, maxSlots });
-
+  const headline = composeHeadline({ sprints, workers, approvals, repository, maxSlots: PERMANENT_SLOTS });
   const gaps = collectGaps(project, sprints, sourcesHealthy(raw));
 
   return {
@@ -127,9 +110,9 @@ function composeHeadline({ sprints, workers, approvals, repository, maxSlots }) 
   const activeSprints = sprints.filter((s) => !["complete", "idle"].includes(s.status)).length;
   return {
     active_sprints: activeSprints,
-    workers_running: wc, // { running, total }
+    workers_running: wc,
     questions_pending: approvals.counts.questions,
-    prs_ready: approvals.counts.merges, // merge-ready gates; PR objects themselves are a gap
+    prs_ready: approvals.counts.merges,
     tests_passing: { value: null, gap: true, note: "test pass-rate not tracked by the toolkit" },
     staging_sync: repository.counts.behind === 0 ? "up_to_date" : `${repository.counts.behind} behind`,
     needs_you: approvals.total,
@@ -141,6 +124,7 @@ function collectGaps(project, sprints, sources) {
   gaps.push(gap("headline.tests_passing", "No test pass-rate is recorded anywhere in the toolkit state.", "A validation result record written by alloy-validate."));
   gaps.push(gap("sprint.phase.index/total", "Numbered phases ('4 of 7') are not modelled; only lifecycle stages exist.", "A phase plan in the initiative (ordered phases) or sprint manifest."));
   gaps.push(gap("repository.worktrees[].pr", "PRs are printed but never executed or tracked by the toolkit.", "A PR record (e.g. gh api) or a promotion ledger."));
+  gaps.push(gap("activity[].source=git log", "Activity commits are projected from read-only git log directly, not through alloy-ro.", "A governed alloy-ro worker-activity verb (optional; git is authoritative VCS truth)."));
   if (sprints.some((s) => s.progress.value === null)) {
     gaps.push(gap("sprint.progress", "Managed sprints without an initiative have no progress signal.", "Initiative-backed sprints, or a declared phase plan."));
   }
@@ -152,10 +136,9 @@ function collectGaps(project, sprints, sources) {
 
 function sourcesHealthy(raw) {
   return {
-    worker_status: { ok: raw.slots.ok !== false, error: raw.slots.error || null },
     agent_status: { ok: raw.agents.ok !== false, error: raw.agents.error || null },
-    dev_status: { ok: raw.servers.ok !== false, error: raw.servers.error || null },
     runtime_paths: { ok: Boolean(raw.paths.runtime_root), error: null },
+    initiatives: { ok: Array.isArray(raw.initiatives), error: null },
   };
 }
 

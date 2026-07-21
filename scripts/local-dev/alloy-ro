@@ -61,6 +61,10 @@ Verbs (all read-only; safe under `Bash(alloy-ro *)`):
   agent-status [target]    Managed agent/slot detail (all, or one slot|name).
   dev-status [target]      Dev-server / tracked-port listener status.
   agent-evidence <target>  List evidence artifacts (names/sizes/mtimes) for a slot.
+  worker-detail <target>   Extended worker metadata (role, session, timestamps, objective).
+  sprint-manifest <target> Sprint manifest stage + initiative link for a worktree.
+  initiatives              All initiatives: key, state, title, open-decision count.
+  initiative <key>         One initiative: state, title, and human decisions.
   capabilities             Machine-readable capability declaration for this surface.
   runtime-list             Registered + discovered runtimes, reconciled (observe only).
   runtime-status <id|ns>   One runtime: services, health, ports, association.
@@ -440,6 +444,182 @@ verb_agent_evidence() {
 }
 
 # ---------------------------------------------------------------------------
+# verb: worker-detail  (extended per-worker metadata — KV, parsed not sourced)
+#
+# Promotes into the read boundary the metadata fields agent-status does not
+# expose (role, session id, created/opened/closed, pause/finish, objective).
+# Pure bash via the sanctioned KV parser (alloy_rc_meta_get); no subprocess.
+# ---------------------------------------------------------------------------
+_ro_worker_detail_emit() {   # <name> <leading_comma>
+  local name="$1" lead="$2" file role status life created opened closed sess pause fin obj sname
+  file="$(alloy_ro_metadata_path "$name")"
+  role="$(alloy_rc_meta_get "$file" ALLOY_AGENT_ROLE 2>/dev/null || true)"
+  status="$(alloy_rc_meta_get "$file" ALLOY_AGENT_STATUS 2>/dev/null || true)"
+  life="$(alloy_rc_meta_get "$file" ALLOY_WORKER_LIFECYCLE 2>/dev/null || true)"
+  created="$(alloy_rc_meta_get "$file" ALLOY_CREATED_AT 2>/dev/null || true)"
+  opened="$(alloy_rc_meta_get "$file" ALLOY_AGENT_OPENED_AT 2>/dev/null || true)"
+  closed="$(alloy_rc_meta_get "$file" ALLOY_AGENT_CLOSED_AT 2>/dev/null || true)"
+  sess="$(alloy_rc_meta_get "$file" ALLOY_PROVIDER_SESSION_ID 2>/dev/null || true)"
+  pause="$(alloy_rc_meta_get "$file" ALLOY_PAUSE_RECORDED_AT 2>/dev/null || true)"
+  fin="$(alloy_rc_meta_get "$file" ALLOY_FINISHED_AT 2>/dev/null || true)"
+  obj="$(alloy_rc_meta_get "$file" ALLOY_SPRINT_OBJECTIVE 2>/dev/null || true)"
+  sname="$(alloy_rc_meta_get "$file" ALLOY_SPRINT_NAME 2>/dev/null || true)"
+  if [[ "$JSON" -eq 1 ]]; then
+    [[ "$lead" -eq 1 ]] && printf ','
+    printf '{'
+    alloy_ro_json_kv worktree "$name"; printf ','
+    alloy_ro_json_kv role "$role"; printf ','
+    alloy_ro_json_kv agent_status "$status"; printf ','
+    alloy_ro_json_kv lifecycle "$life"; printf ','
+    alloy_ro_json_kv created_at "$created"; printf ','
+    alloy_ro_json_kv opened_at "$opened"; printf ','
+    alloy_ro_json_kv closed_at "$closed"; printf ','
+    alloy_ro_json_kv session_id "$sess"; printf ','
+    alloy_ro_json_kv pause_recorded_at "$pause"; printf ','
+    alloy_ro_json_kv finished_at "$fin"; printf ','
+    alloy_ro_json_kv sprint_name "$sname"; printf ','
+    alloy_ro_json_kv sprint_objective "$obj"
+    printf '}'
+  else
+    printf 'worker-detail %s\n  role: %s\n  lifecycle: %s\n  session: %s\n  created: %s\n' \
+      "$name" "${role:--}" "${life:--}" "${sess:--}" "${created:--}"
+  fi
+}
+verb_worker_detail() {
+  [[ $# -le 1 ]] || _ro_die_usage "worker-detail takes at most one target (omit for all)"
+  alloy_ro_config_init
+  local target="${1:-}" name first=1
+  if [[ -n "$target" ]]; then
+    name="$(alloy_ro_resolve_target "$target" 2>/dev/null || true)"
+    [[ -n "$name" ]] || { printf 'alloy-ro: no managed worktree for target: %s\n' "$target" >&2; exit "$EX_NOTFOUND"; }
+    [[ "$JSON" -eq 1 ]] && printf '{"workers":['
+    _ro_worker_detail_emit "$name" 0
+    [[ "$JSON" -eq 1 ]] && printf ']}\n'
+    return "$EX_OK"
+  fi
+  [[ "$JSON" -eq 1 ]] && printf '{"workers":['
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    _ro_worker_detail_emit "$name" "$([[ $first -eq 0 ]] && echo 1 || echo 0)"
+    first=0
+    [[ "$JSON" -eq 0 ]] && printf '\n'
+  done < <(alloy_ro_list_metadata)
+  [[ "$JSON" -eq 1 ]] && printf ']}\n'
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
+# verb: sprint-manifest  (stage + initiative link for a worktree)
+#
+# Reads the sprint manifest via the already-allowlisted fixed JSON reader
+# `manifest-io.mjs get` (never sources, never writes). Absent manifest is a
+# normal state → present:false. Fields are read one at a time and reassembled.
+# ---------------------------------------------------------------------------
+_ro_sprint_manifest_emit() {   # <name> <leading_comma>
+  local name="$1" lead="$2" file proj
+  file="${ALLOY_RO_RUNTIME_ROOT}/manifests/${name}.json"
+  if [[ "$JSON" -eq 1 ]]; then [[ "$lead" -eq 1 ]] && printf ','; fi
+  if [[ ! -f "$file" ]]; then
+    if [[ "$JSON" -eq 1 ]]; then
+      printf '{'; alloy_ro_json_kv worktree "$name"; printf ','; alloy_ro_json_kv_raw present false; printf '}'
+    else
+      printf 'sprint-manifest %s: (none)\n' "$name"
+    fi
+    return
+  fi
+  # Single-call read via the fixed, already-allowlisted manifest reader.
+  proj="$(node "${SCRIPT_DIR}/lib/manifest-io.mjs" project "$file" 2>/dev/null || true)"
+  if [[ "$JSON" -eq 1 ]]; then
+    if [[ -n "$proj" ]]; then
+      printf '{'; alloy_ro_json_kv worktree "$name"; printf ','; alloy_ro_json_kv_raw present true; printf ','; printf '%s' "${proj#\{}"
+    else
+      printf '{'; alloy_ro_json_kv worktree "$name"; printf ','; alloy_ro_json_kv_raw present false; printf '}'
+    fi
+  else
+    printf 'sprint-manifest %s\n  %s\n' "$name" "${proj:-(unreadable)}"
+  fi
+}
+verb_sprint_manifest() {
+  [[ $# -le 1 ]] || _ro_die_usage "sprint-manifest takes at most one target (omit for all)"
+  alloy_ro_config_init
+  local target="${1:-}" name first=1
+  if [[ -n "$target" ]]; then
+    name="$(alloy_ro_resolve_target "$target" 2>/dev/null || true)"
+    [[ -n "$name" ]] || { printf 'alloy-ro: no managed worktree for target: %s\n' "$target" >&2; exit "$EX_NOTFOUND"; }
+    [[ "$JSON" -eq 1 ]] && printf '{"manifests":['
+    _ro_sprint_manifest_emit "$name" 0
+    [[ "$JSON" -eq 1 ]] && printf ']}\n'
+    return "$EX_OK"
+  fi
+  [[ "$JSON" -eq 1 ]] && printf '{"manifests":['
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    _ro_sprint_manifest_emit "$name" "$([[ $first -eq 0 ]] && echo 1 || echo 0)"
+    first=0
+  done < <(alloy_ro_list_metadata)
+  [[ "$JSON" -eq 1 ]] && printf ']}\n'
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
+# verbs: initiatives / initiative  (initiative state + human decisions)
+#
+# The DECISIONS promotion. Reads initiative state.json through the fixed,
+# read-only toolkit reader `engineering-io.mjs project-read` (emits only
+# presentation-safe fields; never writes; never executes content). Keys are
+# validated; unknown keys and unreadable state fail closed.
+# ---------------------------------------------------------------------------
+_ro_valid_key() { [[ "$1" =~ ^[a-z0-9]+([_-][a-z0-9]+)*$ ]]; }
+_ro_initiative_read() {   # <statefile> -> projection JSON (empty on failure)
+  node "${SCRIPT_DIR}/lib/engineering-io.mjs" project-read "$1" 2>/dev/null || true
+}
+verb_initiatives() {
+  [[ $# -eq 0 ]] || _ro_die_usage "initiatives takes no arguments"
+  alloy_ro_config_init
+  local dir="${ALLOY_RO_INITIATIVES_DIR}" key sf first=1 json
+  [[ "$JSON" -eq 1 ]] && printf '{"initiatives":['
+  if [[ -d "$dir" ]]; then
+    shopt -s nullglob
+    local d
+    for d in "$dir"/*/; do
+      key="$(basename "$d")"
+      _ro_valid_key "$key" || continue
+      sf="${d}state.json"
+      [[ -f "$sf" ]] || continue
+      if [[ "$JSON" -eq 1 ]]; then
+        json="$(_ro_initiative_read "$sf")"
+        [[ -n "$json" ]] || continue
+        [[ "$first" -eq 0 ]] && printf ','
+        first=0
+        printf '%s' "$json"
+      else
+        printf '  %s\n' "$key"
+      fi
+    done
+    shopt -u nullglob
+  fi
+  [[ "$JSON" -eq 1 ]] && printf ']}\n'
+  return "$EX_OK"
+}
+verb_initiative() {
+  [[ $# -eq 1 ]] || _ro_die_usage "initiative requires exactly one initiative key"
+  alloy_ro_config_init
+  local key="$1" sf json
+  _ro_valid_key "$key" || _ro_die_usage "invalid initiative key: $key"
+  sf="${ALLOY_RO_INITIATIVES_DIR}/${key}/state.json"
+  [[ -f "$sf" ]] || { printf 'alloy-ro: no initiative: %s\n' "$key" >&2; exit "$EX_NOTFOUND"; }
+  if [[ "$JSON" -eq 1 ]]; then
+    json="$(_ro_initiative_read "$sf")"
+    [[ -n "$json" ]] || { printf 'alloy-ro: unreadable initiative state: %s\n' "$key" >&2; exit "$EX_NOTFOUND"; }
+    printf '%s\n' "$json"
+  else
+    printf 'initiative %s\n' "$key"
+    _ro_initiative_read "$sf" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const d=JSON.parse(s);process.stdout.write(`  state: ${d.state}\n  title: ${d.title}\n  open decisions: ${(d.human_decisions||[]).filter(x=>x.status!=="resolved"&&x.status!=="decided"&&x.status!=="superseded").length}\n`)}catch{process.stdout.write("  (unreadable)\n")}})' 2>/dev/null || true
+  fi
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
 # verb: capabilities
 # ---------------------------------------------------------------------------
 verb_capabilities() {
@@ -459,7 +639,7 @@ verb_capabilities() {
     printf '  deletion=false arbitrary_execution=false credential_access=false\n\n'
     printf 'Verbs:\n'
     local v
-    for v in root runtime-paths worker-status agent-status dev-status agent-evidence capabilities; do
+    for v in root runtime-paths worker-status agent-status dev-status agent-evidence worker-detail sprint-manifest initiatives initiative capabilities; do
       printf '  %-16s reads=true  (all mutation-sensitive capabilities false)\n' "$v"
     done
     printf '\nFull machine-readable declaration: alloy-ro capabilities --json\n'
@@ -1122,6 +1302,10 @@ main() {
     agent-status)    verb_agent_status "${rest[@]}" ;;
     dev-status)      verb_dev_status "${rest[@]}" ;;
     agent-evidence)  verb_agent_evidence "${rest[@]}" ;;
+    worker-detail)   verb_worker_detail "${rest[@]}" ;;
+    sprint-manifest) verb_sprint_manifest "${rest[@]}" ;;
+    initiatives)     verb_initiatives "${rest[@]}" ;;
+    initiative)      verb_initiative "${rest[@]}" ;;
     capabilities)    verb_capabilities "${rest[@]}" ;;
     runtime-list)       verb_runtime_list "${rest[@]}" ;;
     runtime-status)     verb_runtime_status "${rest[@]}" ;;

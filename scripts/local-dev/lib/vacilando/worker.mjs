@@ -18,8 +18,8 @@ import { glyphFor } from "./model.mjs";
 
 /** Deterministic health from real signals. */
 export function deriveHealth(e) {
-  if (e.lifecycle === "paused" || e.meta?.ALLOY_PAUSE_RECORDED_AT) return "paused";
-  if (e.meta?.ALLOY_FINISHED_AT) return "finished";
+  if (e.lifecycle === "paused" || e.detail?.pause_recorded_at) return "paused";
+  if (e.detail?.finished_at) return "finished";
   const drift = e.branch && e.branch_expected && e.branch !== e.branch_expected;
   if (drift) return "attention"; // on the wrong branch for its slot
   if (e.agent_status && e.agent_status !== "active") return "attention";
@@ -32,7 +32,7 @@ export function projectWorker(e) {
     provider: e.provider,
     slot: e.slot,
     glyph: glyphFor(e.worktree),
-    role: e.meta?.ALLOY_AGENT_ROLE || null,
+    role: e.detail?.role || null,
     lifecycle: e.lifecycle || null,
     agent_status: e.agent_status || null,
     health: deriveHealth(e),
@@ -40,9 +40,9 @@ export function projectWorker(e) {
     current_sprint_worktree: e.worktree,
     ownership: {
       worktree_path: e.path || null,
-      session_id: e.meta?.ALLOY_PROVIDER_SESSION_ID || null,
-      opened_at: e.meta?.ALLOY_AGENT_OPENED_AT || null,
-      created_at: e.meta?.ALLOY_CREATED_AT || null,
+      session_id: e.detail?.session_id || null,
+      opened_at: e.detail?.opened_at || null,
+      created_at: e.detail?.created_at || null,
     },
     server: e.server,
     port: e.port,

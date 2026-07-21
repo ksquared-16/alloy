@@ -357,6 +357,22 @@ function main(argv) {
     return 0;
   }
 
+  if (cmd === "project") {
+    // READ-ONLY single-call projection of presentation-safe manifest fields for
+    // the canonical read boundary (alloy-ro sprint-manifest). Never writes.
+    const m = readManifest(file);
+    if (!m) return 1;
+    const out = {
+      stage: m.stage ?? null,
+      role: m.role ?? null,
+      lane: m.lane ?? null,
+      sprint_name: m.sprint_name ?? null,
+      initiative_key: m.initiative_key && m.initiative_key !== "undeclared" ? m.initiative_key : null,
+    };
+    process.stdout.write(JSON.stringify(out) + "\n");
+    return 0;
+  }
+
   if (cmd === "show") {
     const m = readManifest(file);
     if (!m) return 1;

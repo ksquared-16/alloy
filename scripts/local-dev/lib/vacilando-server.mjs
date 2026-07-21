@@ -28,7 +28,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const LOOPBACK_HOST = "127.0.0.1";
 const PUBLIC_DIR = resolve(HERE, "..", "apps", "vacilando", "public");
 const DEFAULT_PORT = 3020;
-const TICK_MS = 4000;
+// A full projection costs ~6–8s (dominated by git ahead/behind across worktrees).
+// Serve from a single-flight cache with a matching TTL and background tick so
+// requests are instant and the machine never runs overlapping composes.
+const TICK_MS = 10000;
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -67,7 +70,7 @@ function serveStatic(res, urlPath) {
  * exec timeout. So: at most ONE compose runs at a time, its result is shared by
  * all waiters, and a short TTL collapses bursts into a single recompute.
  */
-const CACHE_TTL_MS = 2500;
+const CACHE_TTL_MS = 8000;
 const cache = { at: 0, snap: null, inflight: null };
 
 async function getSnapshot({ maxAgeMs = CACHE_TTL_MS } = {}) {
@@ -128,6 +131,9 @@ export function createVacilandoServer() {
     }
   }, TICK_MS);
   timer.unref?.();
+
+  // Warm the cache immediately so the first request isn't a cold ~8s compute.
+  getSnapshot().catch(() => {});
 
   return { server, clients, close: () => { clearInterval(timer); server.close(); } };
 }

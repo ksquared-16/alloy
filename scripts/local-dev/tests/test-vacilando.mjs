@@ -35,9 +35,10 @@ const ctxManaged = {
   slot: 6, worktree: "wt6-x", sprint: "vacilando-x", provider: "claude",
   git: "dirty", ahead: 1, behind: 0, server: "running", port: "3016",
   path: "/w/wt6-x", branch: "agent/claude/6-vacilando-x", branch_expected: "agent/claude/6-vacilando-x",
-  lifecycle: "active", agent_status: "active", meta: { ALLOY_AGENT_ROLE: "Experimental", ALLOY_CREATED_AT: "2026-07-21T00:00:00Z" },
+  lifecycle: "active", agent_status: "active",
+  detail: { role: "Experimental", created_at: "2026-07-21T00:00:00Z", session_id: "sess-1" },
   manifest: null, initiative: null,
-  evidence: { count: 2, files: ["a", "b"], newest_ms: 1000 },
+  evidence: { count: 2 },
   git_recent: { commits: [{ short: "abc", subject: "do thing", author: "claude", at: "2026-07-20T00:00:00Z", at_ms: 5000 }], last_ms: 5000 },
 };
 const ctxInitiative = (state, decisions = []) => ({
@@ -148,8 +149,8 @@ test("decisionIsOpen respects resolved/decided/superseded", () => {
 
 // --- activity ---------------------------------------------------------------
 test("activity is time-ordered desc and projected from git", () => {
-  const older = { ...ctxManaged, sprint: "old", git_recent: { commits: [{ short: "1", subject: "old", author: "c", at: "x", at_ms: 100 }], last_ms: 100 }, meta: {}, evidence: { count: 0 } };
-  const newer = { ...ctxManaged, sprint: "new", git_recent: { commits: [{ short: "2", subject: "new", author: "c", at: "x", at_ms: 900 }], last_ms: 900 }, meta: {}, evidence: { count: 0 } };
+  const older = { ...ctxManaged, sprint: "old", git_recent: { commits: [{ short: "1", subject: "old", author: "c", at: "x", at_ms: 100 }], last_ms: 100 }, detail: {}, evidence: { count: 0 } };
+  const newer = { ...ctxManaged, sprint: "new", git_recent: { commits: [{ short: "2", subject: "new", author: "c", at: "x", at_ms: 900 }], last_ms: 900 }, detail: {}, evidence: { count: 0 } };
   const ev = projectActivity([older, newer]);
   assert.equal(ev[0].at_ms, 900);
   assert.equal(ev[0].kind, "commit");

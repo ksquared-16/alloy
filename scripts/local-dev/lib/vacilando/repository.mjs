@@ -46,8 +46,8 @@ export function projectRepository(sprintsCtx, raw) {
 
   return {
     canonical: rootInfo.canonical || rootInfo.Canonical || null,
-    base_ref: raw.slots?.base || "origin/staging",
-    base_sha: raw.slots?.base_sha || null,
+    base_ref: raw.base?.ref || "origin/staging",
+    base_sha: raw.base?.sha || null,
     worktrees,
     counts: {
       total: worktrees.length,

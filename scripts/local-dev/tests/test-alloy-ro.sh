@@ -163,7 +163,8 @@ for k in sens:
 if cap["surface_capabilities"].get("reads") is not True:
     errs.append("surface reads is not true")
 # per verb
-impl = {"root","runtime-paths","worker-status","agent-status","dev-status","agent-evidence","capabilities",
+impl = {"root","runtime-paths","worker-status","agent-status","dev-status","agent-evidence",
+        "worker-detail","sprint-manifest","initiatives","initiative","capabilities",
         "runtime-list","runtime-status","runtime-capacity","runtime-discover","runtime-containers",
         "runtime-policy","runtime-admission","runtime-intent","runtime-explain",
         "runtime-reservations","runtime-executions","runtime-actuation-capacity"}
@@ -183,6 +184,34 @@ if errs:
 print("  ok   capability declaration matches implementation and is all-false on mutation keys")
 PY
 if [[ $? -eq 0 ]]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+
+printf '\n== 12. read-boundary verbs (worker-detail / sprint-manifest / initiatives / initiative) ==\n'
+# fail closed on bad/unknown targets and injection-shaped keys
+assert_exit 2 "initiative rejects an injection-shaped key" -- "$RO" initiative 'bad; rm -rf x'
+assert_exit 3 "initiative fails closed on unknown key"     -- "$RO" initiative no-such-initiative --json
+assert_exit 3 "worker-detail fails closed on absent slot"  -- "$RO" worker-detail 99 --json
+assert_exit 3 "sprint-manifest fails closed on absent slot" -- "$RO" sprint-manifest 99 --json
+assert_exit 2 "initiative requires exactly one key"        -- "$RO" initiative
+assert_exit 2 "initiatives takes no arguments"             -- "$RO" initiatives extra
+
+# initiatives --json is valid JSON even with an absent runtime (empty list), and deterministic
+if out1="$("$RO" initiatives --json 2>/dev/null)" \
+   && out2="$("$RO" initiatives --json 2>/dev/null)" \
+   && printf '%s' "$out1" | python3 -c 'import sys,json;d=json.load(sys.stdin);assert "initiatives" in d and isinstance(d["initiatives"],list)' 2>/dev/null \
+   && [[ "$out1" == "$out2" ]]; then
+  ok "initiatives --json is valid + deterministic on an absent runtime"
+else
+  bad "initiatives --json invalid or non-deterministic"
+fi
+
+# read-only: exercising the verbs creates no canary/state and no runtime dir
+"$RO" initiatives --json >/dev/null 2>&1
+"$RO" worker-detail 1 --json >/dev/null 2>&1 || true
+if [[ ! -e "$CANARY.subst" && ! -e "$CANARY.semi" && ! -e "$CANARY.bq" && ! -e "$CANARY.and" && ! -d "$RT" ]]; then
+  ok "read-boundary verbs mutate nothing (no canary, no runtime dir created)"
+else
+  bad "a read-boundary verb mutated the filesystem"
+fi
 
 printf '\n==== alloy-ro constitution tests: %d passed, %d failed ====\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
