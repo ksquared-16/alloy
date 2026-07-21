@@ -9,7 +9,9 @@
 import {
     CANONICAL_ORGANIZATION_FINANCIALS_HREF,
     CANONICAL_ORGANIZATION_PROGRAMS_HREF,
+    CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF,
 } from "@/lib/admin/canonicalAdminRoutes";
+import { ORGANIZATION_LOCATIONS_PATH } from "@/lib/admin/canonicalLocationSettingsRoutes";
 
 export type ConfigurationAuthority = "platform" | "organization" | "location";
 export type ConfigurationInheritanceKind = "value" | "availability" | "none";
@@ -26,6 +28,7 @@ export type ConfigurationHealthState = "ready" | "attention" | "not_assessed";
 export type OrganizationConfigurationDomainIcon =
     | "locations"
     | "programs"
+    | "programs-locations"
     | "financials"
     | "access"
     | "communications"
@@ -133,29 +136,38 @@ export type OrganizationGovernanceSummary = {
 
 const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
     {
-        key: "locations",
-        label: "Locations",
-        description: "Consumers of organization configuration and owners of local delivery resources.",
-        href: "/organization/locations",
-        icon: "locations",
+        key: "programs-locations",
+        label: "Programs & Locations",
+        description:
+            "Two perspectives on one operational system — reusable Organization services, and the places that deliver them.",
+        href: CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF,
+        icon: "programs-locations",
         publisherLabel: "Organization",
-        configurationOwner: "Locations",
-        runtimeOwner: "Location and operational runtimes",
-        consumers: ["Location Runtime", "Operational Runtime"],
+        configurationOwner: "Programs & Locations",
+        runtimeOwner: "Programs and Location runtimes",
+        consumers: ["Locations", "Enrollment", "Financials", "Operational Runtime"],
         inheritance: {
-            kind: "none",
+            kind: "availability",
             path: ["organization", "location"],
-            label: "Locations own local delivery configuration",
+            label: "Programs are authored once; Locations consume and deliver them",
         },
-        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
-        override: { state: "not_allowed", label: "Local objects are authoritative" },
+        publication: { mode: "immediate", status: "live_on_save", label: "Collections remain authoritative" },
+        override: {
+            state: "available",
+            label: "Locations own local delivery; Programs own reusable definition",
+        },
         health: {
             state: "not_assessed",
             label: "Not assessed",
-            detail: "Location readiness remains authoritative in Locations.",
+            detail: "Readiness remains owned by Programs and Locations collections.",
         },
-        distributionMode: "none",
-        ownedConfiguration: ["Sites", "Programs offered", "Rooms & delivery resources", "Local schedules"],
+        distributionMode: "assignment",
+        ownedConfiguration: [
+            "Organization Program definitions",
+            "Location delivery of Programs",
+            "Rooms, schedules, and local capacity",
+            "Program ↔ Location assignment",
+        ],
     },
     {
         key: "financials",
@@ -367,8 +379,8 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
 
 /**
  * Programs remains a configuration domain for runtime/publication lookups and
- * `/organization/programs` compatibility — it is intentionally excluded from the
- * Organization landing peer tile set (Location-associated Program workflow).
+ * `/organization/programs` compatibility — it is not an Organization landing peer.
+ * Peer entry is Programs & Locations.
  */
 export const PROGRAMS_CONFIGURATION_DOMAIN: OrganizationConfigurationDomain = {
     key: "programs",
@@ -402,7 +414,37 @@ export const PROGRAMS_CONFIGURATION_DOMAIN: OrganizationConfigurationDomain = {
     ],
 };
 
-/** Peer domains shown on `/organization` — Programs is not a landing peer. */
+/**
+ * Locations collection remains available for lookups and Continuity — not a landing peer.
+ * Peer entry is Programs & Locations.
+ */
+export const LOCATIONS_CONFIGURATION_DOMAIN: OrganizationConfigurationDomain = {
+    key: "locations",
+    label: "Locations",
+    description: "Consumers of organization configuration and owners of local delivery resources.",
+    href: ORGANIZATION_LOCATIONS_PATH,
+    icon: "locations",
+    publisherLabel: "Organization",
+    configurationOwner: "Locations",
+    runtimeOwner: "Location and operational runtimes",
+    consumers: ["Location Runtime", "Operational Runtime"],
+    inheritance: {
+        kind: "none",
+        path: ["organization", "location"],
+        label: "Locations own local delivery configuration",
+    },
+    publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+    override: { state: "not_allowed", label: "Local objects are authoritative" },
+    health: {
+        state: "not_assessed",
+        label: "Not assessed",
+        detail: "Location readiness remains authoritative in Locations.",
+    },
+    distributionMode: "none",
+    ownedConfiguration: ["Sites", "Programs offered", "Rooms & delivery resources", "Local schedules"],
+};
+
+/** Peer domains shown on `/organization` — Programs and Locations are not separate peers. */
 export function organizationConfigurationDomains(): readonly OrganizationConfigurationDomain[] {
     return CONFIGURATION_DOMAINS;
 }
@@ -415,6 +457,9 @@ export function organizationConfigurationDomain(
         || domainKey === PROGRAMS_CONFIGURATION_DOMAIN.internalRuntimeKey
     ) {
         return PROGRAMS_CONFIGURATION_DOMAIN;
+    }
+    if (domainKey === LOCATIONS_CONFIGURATION_DOMAIN.key) {
+        return LOCATIONS_CONFIGURATION_DOMAIN;
     }
     return (
         CONFIGURATION_DOMAINS.find(

@@ -172,9 +172,10 @@ describe("Configuration Continuity — Business / Locations nav IA", () => {
         );
     });
 
-    it("config-mode Locations points at canonical /organization/locations", () => {
+    it("config-mode Programs & Locations points at relationship landing", () => {
         const organization = CONFIGURATION_MODE_NAV_GROUPS.find((g) => g.id === "organization");
-        const locations = organization?.items.find((i) => i.testId === "config-mode-nav-locations");
-        expect(locations?.href).toBe("/organization/locations");
+        const peer = organization?.items.find((i) => i.testId === "config-mode-nav-programs-locations");
+        expect(peer?.href).toBe("/organization/programs-locations");
+        expect(peer?.label).toBe("Programs & Locations");
     });
 });

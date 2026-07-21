@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
@@ -797,18 +798,38 @@ export default function LocationsConfigurationPage({
                     >
                         {!loading ?
                             <div
-                                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-alloy-stone/25 pt-2"
+                                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-alloy-stone/25 pt-2"
                                 data-testid="locations-collection-posture"
                             >
-                                <ConfigScopeContextBar
-                                    mode="organization"
-                                    organizationLabel="Organization"
-                                    objectLabel="Location"
-                                    ownershipHint="All locations"
-                                    onModeChange={(mode) => {
-                                        if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
-                                    }}
-                                />
+                                <div className="flex min-w-0 flex-col gap-1.5">
+                                    <ConfigScopeContextBar
+                                        mode="organization"
+                                        organizationLabel="Organization"
+                                        objectLabel="Location"
+                                        ownershipHint="Programs & Locations · delivery"
+                                        onModeChange={(mode) => {
+                                            if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
+                                        }}
+                                    />
+                                    <ul
+                                        className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-alloy-midnight/52"
+                                        aria-label="Locations breadcrumb"
+                                    >
+                                        <li>
+                                            <Link
+                                                href="/organization/programs-locations"
+                                                className="font-medium hover:text-alloy-bend-pine"
+                                                data-testid="locations-breadcrumb-programs-locations"
+                                            >
+                                                Programs & Locations
+                                            </Link>
+                                            <span className="mx-1.5 text-alloy-midnight/35" aria-hidden>
+                                                ›
+                                            </span>
+                                            <span className="font-semibold text-alloy-midnight/70">Locations</span>
+                                        </li>
+                                    </ul>
+                                </div>
                                 <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-alloy-midnight/52">
                                     <li>
                                         <strong className="font-semibold text-alloy-midnight">

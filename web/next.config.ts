@@ -196,6 +196,13 @@ const nextConfig: NextConfig = {
       { source: "/settings/surfaces", destination: "/adminV2/settings/surfaces" },
       { source: "/settings/surfaces/:path*", destination: "/adminV2/settings/surfaces/:path*" },
       /**
+       * Organization Programs & Locations — relationship landing.
+       * Must precede exact `/organization` rewrite. Collections remain at
+       * `/organization/programs` and `/organization/locations`.
+       */
+      { source: "/organization/programs-locations", destination: "/adminV2/settings/organization/programs-locations" },
+      { source: "/organization/programs-locations/:path*", destination: "/adminV2/settings/organization/programs-locations/:path*" },
+      /**
        * Organization Locations — browser URL `/organization/locations`.
        * Must precede the exact `/organization` rewrite. Compatibility `/settings/locations`
        * remains via the generic `/settings/:path*` rewrite.

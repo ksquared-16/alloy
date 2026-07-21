@@ -841,6 +841,14 @@ function ProgramsPublicationObjectWorkspace(props: {
                         Organization
                     </Link>
                     <span aria-hidden>›</span>
+                    <Link
+                        href="/organization/programs-locations"
+                        className="font-medium hover:text-alloy-bend-pine"
+                        data-testid="programs-breadcrumb-programs-locations"
+                    >
+                        Programs & Locations
+                    </Link>
+                    <span aria-hidden>›</span>
                     <span className="font-semibold text-alloy-midnight/65">Programs</span>
                     {snapshot ?
                         <span className="ml-auto">

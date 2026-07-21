@@ -37,6 +37,7 @@ export type OrganizationConfigurationLocation = {
 const DOMAIN_ICONS: Record<OrganizationConfigurationDomainIcon, LucideIcon> = {
     locations: MapPin,
     programs: LibraryBig,
+    "programs-locations": LibraryBig,
     financials: Banknote,
     access: ShieldCheck,
     communications: MessagesSquare,

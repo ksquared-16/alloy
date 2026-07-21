@@ -12,6 +12,7 @@ import {
     CANONICAL_ORGANIZATION_BASE,
     CANONICAL_ORGANIZATION_FINANCIALS_HREF,
     CANONICAL_ORGANIZATION_PROGRAMS_HREF,
+    CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF,
     CANONICAL_SETTINGS_BASE,
     isCanonicalSettingsPath,
     normalizeToCanonicalAdminPath,
@@ -57,6 +58,7 @@ export function normalizeConfigurationSoftNavPathname(pathname: string): string 
 
 export type ConfigurationPrefetchTarget =
     | typeof CANONICAL_ORGANIZATION_BASE
+    | typeof CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF
     | typeof ORGANIZATION_LOCATIONS_PATH
     | typeof LOCATION_SETTINGS_PATH
     | typeof CANONICAL_ORGANIZATION_PROGRAMS_HREF
@@ -111,10 +113,11 @@ export function markConfigurationContinuity(
 
 /**
  * Primary Configuration Continuity destinations operators warm most often.
- * Seeds Organization + Locations + Programs + Financials landing (+ common sections).
+ * Seeds Organization + Programs & Locations landing + collections + Financials.
  */
 export const CONFIGURATION_CONTINUITY_WARM_HREFS = [
     CANONICAL_ORGANIZATION_BASE,
+    CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF,
     ORGANIZATION_LOCATIONS_PATH,
     CANONICAL_ORGANIZATION_PROGRAMS_HREF,
     CANONICAL_ORGANIZATION_FINANCIALS_HREF,

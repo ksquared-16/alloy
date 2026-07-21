@@ -50,11 +50,11 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         description: "Manage the foundation of your organization.",
         items: [
             {
-                href: "/organization/locations",
-                label: "Locations",
-                description: "Sites, Programs offered, delivery resources, and local schedules.",
+                href: "/organization/programs-locations",
+                label: "Programs & Locations",
+                description: "Reusable services and the places that deliver them.",
                 icon: "locations",
-                testId: "config-mode-nav-locations",
+                testId: "config-mode-nav-programs-locations",
             },
             {
                 href: settings("users-roles"),
@@ -177,6 +177,17 @@ export function configurationModeNavItemActive(href: string, path: string): bool
     const h = href.replace(/\/$/, "");
     const p = path.replace(/\/$/, "");
     if (h === "/admin/workflows") return p === h || p.startsWith(`${h}/`);
+    // Programs & Locations domain — highlight for landing and both collections.
+    if (h === "/organization/programs-locations") {
+        return (
+            p === h
+            || p.startsWith(`${h}/`)
+            || p === "/organization/programs"
+            || p.startsWith("/organization/programs/")
+            || p === "/organization/locations"
+            || p.startsWith("/organization/locations/")
+        );
+    }
     // Programs is owned by `/organization/programs` only — never treat Commercial/Financials as Programs IA.
     if (h === "/organization/programs") {
         return p === h || p.startsWith(`${h}/`);

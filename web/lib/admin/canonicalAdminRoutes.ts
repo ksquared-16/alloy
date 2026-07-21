@@ -36,6 +36,13 @@ export const CANONICAL_ORGANIZATION_BASE = "/organization" as const;
 export const CANONICAL_ORGANIZATION_PROGRAMS_HREF = `${CANONICAL_ORGANIZATION_BASE}/programs` as const;
 
 /**
+ * Organization Programs & Locations domain landing — relationship entry for the two
+ * operational collections. Does not replace `/organization/programs` or `/organization/locations`.
+ */
+export const CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF =
+    `${CANONICAL_ORGANIZATION_BASE}/programs-locations` as const;
+
+/**
  * Canonical Organization Financials surface (Tuition, Catalog, Policies, Accounting, Simulator, Funding).
  * Former Commercial / Programs `?chapter=` tools live here; Programs stays Programs-only.
  */
