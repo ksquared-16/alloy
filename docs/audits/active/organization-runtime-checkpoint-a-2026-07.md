@@ -120,7 +120,7 @@ Until live capture, code-evident claim: Organization rail no longer calls `admin
 - [x] Reload floor understands settings rewrites
 - [x] Focused unit tests updated/added
 - [ ] Live browser filmstrip timings (protocol above — capacity/auth gated)
-- [ ] Checkpoint B: Locations collection cache ownership + schedule batching
+- [x] Checkpoint B: Locations collection cache ownership + schedule batching — see `organization-runtime-checkpoint-b-2026-07.md`
 
 ## 6. Local implementation summary
 
