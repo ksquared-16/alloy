@@ -20,6 +20,7 @@ import {
     loadLocationsCollection,
     peekLocationsCollection,
 } from "@/lib/locations/locationsCollectionCache";
+import { invalidateProgramsCollection } from "@/lib/programs/programsCollectionCache";
 import { resolveLocationsSelection } from "@/lib/locations/locationsSelectionAdapter";
 import {
     publishConfigurationInvalidation,
@@ -462,8 +463,11 @@ export function useLocationsConfigurationSettings(options?: {
             }
             setProgramCategories((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
             bumpCollectionAfterMutation("location-program-patched");
+            if (orgId) {
+                invalidateProgramsCollection(orgId, "location-program-patched", { publishBus: true });
+            }
         },
-        [bumpCollectionAfterMutation],
+        [bumpCollectionAfterMutation, orgId],
     );
 
     const roomCapacitySummaryForSite = useCallback(

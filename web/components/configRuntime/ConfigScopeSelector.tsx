@@ -14,14 +14,14 @@ type Props = {
 
 /**
  * Config Runtime primitive — scope picker.
- * Renders "Org Default" and one button per location.
+ * Renders "Organization default" and one button per location.
  * Extracted from TuitionGridWorkspace; reused in Compare view.
  */
 export function ConfigScopeSelector({ scope, locations, onChange, loading, className }: Props) {
     const orgId = scope.orgId;
 
     const tabs: { key: string; label: string; scope: ConfigScope }[] = [
-        { key: "org", label: "Org Default", scope: { kind: "org", orgId } },
+        { key: "org", label: "Organization default", scope: { kind: "org", orgId } },
         ...locations.map((loc) => ({
             key: loc.id,
             label: loc.name,

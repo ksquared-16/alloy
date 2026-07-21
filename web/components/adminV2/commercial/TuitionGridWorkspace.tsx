@@ -443,7 +443,7 @@ export function TuitionGridWorkspace({
 
     const scopeLabel =
         scope?.kind === "org"
-            ? "Org Default"
+            ? "Organization default"
             : locations.find((l) => scope?.kind === "location" && l.id === scope.locationId)?.name ?? "Location";
 
     // ── Save helpers ──────────────────────────────────────────────────────────
@@ -595,7 +595,7 @@ export function TuitionGridWorkspace({
             :   null}
 
             {variants.length > 0 && (
-                <ConfigReadinessCard readiness={readiness} scopeLabel="Org Default" />
+                <ConfigReadinessCard readiness={readiness} scopeLabel="Organization default" />
             )}
 
             {mode === "edit" && (
