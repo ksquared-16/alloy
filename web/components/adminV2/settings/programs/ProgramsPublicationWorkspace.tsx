@@ -607,17 +607,18 @@ export default function ProgramsPublicationWorkspace(props: {
                     :   null}
                 </div>
                 <div
-                    className="mt-2 flex flex-wrap gap-2 border-t border-alloy-stone/15 pt-2"
+                    className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-alloy-stone/15 pt-2"
                     data-testid="programs-sibling-chapters"
                 >
                     <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                        Commercial chapters
+                        Related commercial tools
                     </span>
                     {PROGRAMS_WORKSPACE_SIBLING_CHAPTERS.map((chapter) => (
                         <Link
                             key={chapter.id}
-                            href="/settings/commercial"
-                            className="rounded-full border border-alloy-stone/25 px-2 py-0.5 text-[11px] text-alloy-midnight/55 hover:border-alloy-forge/25 hover:text-alloy-midnight"
+                            href={chapter.href}
+                            className="text-[11px] font-medium text-alloy-midnight/50 underline-offset-2 hover:text-alloy-bend-pine hover:underline"
+                            data-testid={`programs-sibling-${chapter.id}`}
                         >
                             {chapter.label}
                         </Link>

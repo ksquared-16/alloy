@@ -177,8 +177,9 @@ export function configurationModeNavItemActive(href: string, path: string): bool
     const h = href.replace(/\/$/, "");
     const p = path.replace(/\/$/, "");
     if (h === "/admin/workflows") return p === h || p.startsWith(`${h}/`);
+    // Programs is owned by `/organization/programs` only — never treat Commercial as Programs IA.
     if (h === "/organization/programs") {
-        return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/commercial");
+        return p === h || p.startsWith(`${h}/`);
     }
     if (h === settings("processes")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/business-processes");
     if (h === settings("surfaces")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/layouts");

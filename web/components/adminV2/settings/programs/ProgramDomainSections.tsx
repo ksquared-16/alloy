@@ -696,7 +696,10 @@ export function ProgramRelationshipsSection({
                         <p className="py-3 text-sm text-alloy-midnight/50">No Program-scoped catalog items.</p>
                     :   null}
                 </div>
-                <Link href="/settings/commercial" className="mt-3 inline-block text-sm font-semibold text-alloy-bend-pine">
+                <Link
+                    href="/settings/commercial?chapter=accounting"
+                    className="mt-3 inline-block text-sm font-semibold text-alloy-bend-pine"
+                >
                     Open accounting configuration →
                 </Link>
             </ConfigWorkspaceCard>

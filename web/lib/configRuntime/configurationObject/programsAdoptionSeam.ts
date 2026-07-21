@@ -11,6 +11,10 @@ import {
     type ProgramConfigurationSection,
 } from "@/lib/programs/programConfigurationSections";
 import { CANONICAL_ORGANIZATION_PROGRAMS_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    commercialSettingsHref,
+    type CommercialCompatChapter,
+} from "@/lib/commercial/commercialChapterRoutes";
 
 const PROGRAM_CONCERN_LABELS: Record<ProgramConfigurationSection, string> = {
     overview: "Overview",
@@ -77,12 +81,45 @@ export function buildProgramsConfigurationObjectDescriptor(args?: {
     };
 }
 
-/** Workspace chapters that remain outside a selected Program object. */
+/**
+ * Related Commercial tools — intentional leave paths only.
+ * Never link bare `/settings/commercial` (that historically owned Programs IA).
+ */
 export const PROGRAMS_WORKSPACE_SIBLING_CHAPTERS = [
-    { id: "tuition", label: "Tuition", objectRuntimeEligible: true },
-    { id: "catalog", label: "Catalog", objectRuntimeEligible: true },
-    { id: "policies", label: "Policies", objectRuntimeEligible: true },
-    { id: "accounting", label: "Accounting", objectRuntimeEligible: false },
-    { id: "simulator", label: "Simulator", objectRuntimeEligible: false },
-    { id: "funding", label: "Funding", objectRuntimeEligible: false },
+    {
+        id: "tuition" as const satisfies CommercialCompatChapter,
+        label: "Tuition",
+        objectRuntimeEligible: true,
+        href: commercialSettingsHref("tuition"),
+    },
+    {
+        id: "catalog" as const satisfies CommercialCompatChapter,
+        label: "Catalog",
+        objectRuntimeEligible: true,
+        href: commercialSettingsHref("catalog"),
+    },
+    {
+        id: "policies" as const satisfies CommercialCompatChapter,
+        label: "Policies",
+        objectRuntimeEligible: true,
+        href: commercialSettingsHref("policies"),
+    },
+    {
+        id: "accounting" as const satisfies CommercialCompatChapter,
+        label: "Accounting",
+        objectRuntimeEligible: false,
+        href: commercialSettingsHref("accounting"),
+    },
+    {
+        id: "simulator" as const satisfies CommercialCompatChapter,
+        label: "Simulator",
+        objectRuntimeEligible: false,
+        href: commercialSettingsHref("simulator"),
+    },
+    {
+        id: "funding" as const satisfies CommercialCompatChapter,
+        label: "Funding",
+        objectRuntimeEligible: false,
+        href: commercialSettingsHref("funding"),
+    },
 ] as const;
