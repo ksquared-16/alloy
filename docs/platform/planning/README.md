@@ -17,10 +17,18 @@ This folder holds one architecture and the trail that discovered it. If you read
 
 ## Build V1 (from architecture to product)
 
-- **[scheduling-product-v1.md](./scheduling-product-v1.md)** — the refined, director's-eye Scheduling product: the full workflow (enrollment → placement → committed), the sharpened Resolve experience (preselected recommendation, ≤3 options, "no new staff" markers, instant compare), the Roster (room health + hover detail), the Attendance seam, Insights (V2 smallest), the finalized Focus Panel, and per-capability V1/V2/never verdicts. Read this for the product.
-- **[mvp-product-definition.md](./mvp-product-definition.md)** — the MVP scope it refines (three problems, screens, journey).
-- **[engineering-handoff.md](./engineering-handoff.md)** — implementation-ready: per-screen spec (purpose · workflow · data · capabilities · dependencies · priority), a 7-step build sequence, acceptance criteria — all on the existing substrate, no new runtime.
-- **[mockups/scheduling-product-final.html](./mockups/scheduling-product-final.html)** — the final Scheduling mockups: Overview · Place a child (rooms ranked by health, "no new staff") · Over ratio (fixes marked by staff cost) · Roster (room health + click-to-inspect). Interactive; production quality; this is what engineering builds.
+**The authoritative product + contracts (read these to build):**
+- **[scheduling-product-spec.md](./scheduling-product-spec.md)** — the single authoritative product definition, refined for daily operation: Overview at zero/normal/high volume, operator language, Place a Child (four option states + no-valid-room), Over Ratio (cause-first, generated options), the Roster with drill-down to children, commit/undo-as-supersede/history, motion & degraded states, narrow BOS, cross-product handoffs, and V1/V2/Future scope + implementation readiness.
+- **[scheduling-calculation-map.md](./scheduling-calculation-map.md)** — every calculation (inputs · output · grain · mode · blocks/warns/ranks/informs · where · maturity). Scheduling invents nothing.
+- **[roster-projection-contract.md](./roster-projection-contract.md)** — the Room×Day read model: grid summary · cell drill-down (who's included) · a print-compatible superset (printing stays Studio config, never a source of truth).
+- **[temporary-move-policy-model.md](./temporary-move-policy-model.md)** — the anti-shuffle guardrail: platform capability / tenant policy / calculation input / operator decision, kept separate; stable schedules preferred by default; moves never preselected or BOS-suggested unless configured.
+- **[engineering-handoff.md](./engineering-handoff.md)** — per-screen build spec, 7-step sequence, acceptance criteria; existing substrate, no new runtime.
+
+**Mockups (production, no annotations):**
+- **[mockups/scheduling-product-states.html](./mockups/scheduling-product-states.html)** — the daily states: Overview all-clear & high-volume, Place (four option states), no-valid-room, Over Ratio with temporary-move shapes + continuity, **Roster drill-down to children**, child Focus Panel, commit review→success→undo, and degraded (staffing/stale) states.
+- **[mockups/scheduling-product-final.html](./mockups/scheduling-product-final.html)** — the core four surfaces (Overview · Place · Over ratio · Roster), interactive.
+
+*Superseded for product content:* [scheduling-product-v1.md](./scheduling-product-v1.md), [mvp-product-definition.md](./mvp-product-definition.md) — folded into the spec above; kept for the director-questions framing and MVP scope trail.
 
 ## The other final artifacts
 
