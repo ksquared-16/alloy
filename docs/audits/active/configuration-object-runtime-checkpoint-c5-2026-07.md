@@ -38,14 +38,16 @@ Source: `web/lib/configRuntime/configurationObject/eligibility.ts` (`ORGANIZATIO
 | Organization landing | landing | no |
 | Locations | hierarchical_workspace | no (reference laws; own workspace) |
 | Location nested concerns | nested_concern | no |
-| Programs | configuration_object | **yes** (Checkpoint D) |
-| Commercial compat | utility | no |
-| Tuition / Funding / Policies | configuration_object | yes (later) |
-| Catalog | singleton / chapter | no |
-| Accounting | utility | no |
-| Simulator | simulation | no |
+| Programs | configuration_object | **yes** (Checkpoint D; Continuity retention exists, restore not wired) |
+| Commercial compat home | utility | no |
+| Tuition / Policies / Catalog | nested_concern (Commercial/Program) | yes later (extract) |
+| Funding | utility (placeholder) | no |
+| Accounting / Simulator | utility / simulation | no |
+| Financials | operational (mixed) | no |
+| Statuses / Surfaces | configuration_object | yes (post-Programs Detail Runtime convergence) |
+| Processes | operational | no |
+| Entities / Communications | singleton | no |
 | Access / Fields | utility | no |
-| Communications | configuration_object | yes (maturing) |
 
 ## 4. Configuration Object eligibility
 
@@ -170,16 +172,17 @@ Descriptor: `buildProgramsConfigurationObjectDescriptor()`.
 | Distribution | `assignment` |
 | History | `history` |
 
-**Outside selected Program (sibling chapters):** Tuition, Catalog, Policies, Accounting, Simulator, Funding — `PROGRAMS_WORKSPACE_SIBLING_CHAPTERS`.
+**Outside selected Program (sibling chapters):** Tuition, Catalog, Policies, Accounting, Simulator, Funding — `PROGRAMS_WORKSPACE_SIBLING_CHAPTERS` (Funding not object-eligible until authored).
 
 **D sequence (recommended):**
 
-1. Wrap `ProgramsPublicationWorkspace` with Continuity retention for `programId`/`section` using object selection helpers.  
-2. Replace layout shell with `ConfigurationObjectWorkspace` while keeping Program loaders/mutations.  
+1. Wire Continuity restore for `programId`/`section` (retention keys already exist; workspace does not consume them yet — inventory gap).  
+2. Wrap layout with `ConfigurationObjectWorkspace` while keeping Program loaders/mutations.  
 3. Map Overview to `ConfigurationObjectOverview` regions without renaming Program APIs.  
 4. Gate definition editing through `ConfigurationObjectEditGate`.  
 5. Keep publication/assignment/distribution panels as domain slot content.  
-6. Retire Commercial-only chrome last.
+6. Document Commercial chapter sunset (Tuition/Policies/Catalog as nested concerns → Program ownership).  
+7. Later: Statuses/Surfaces Detail Runtime convergence (eligible, not D-blocking).
 
 **Do not** alter assignment, publication, distribution, or Program identity contracts during D.
 

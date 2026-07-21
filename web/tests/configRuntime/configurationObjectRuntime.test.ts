@@ -26,9 +26,14 @@ describe("Configuration Object Runtime — eligibility", () => {
     it("classifies Programs as eligible and Locations as hierarchical (not object consumer)", () => {
         const programs = ORGANIZATION_SURFACE_CLASSIFICATION.find((s) => s.id === "programs");
         const locations = ORGANIZATION_SURFACE_CLASSIFICATION.find((s) => s.id === "locations");
+        const statuses = ORGANIZATION_SURFACE_CLASSIFICATION.find((s) => s.id === "statuses");
+        const funding = ORGANIZATION_SURFACE_CLASSIFICATION.find((s) => s.id === "funding");
         expect(programs?.objectRuntimeEligible).toBe(true);
+        expect(programs?.notes).toContain("Continuity");
         expect(locations?.kind).toBe("hierarchical_workspace");
         expect(locations?.objectRuntimeEligible).toBe(false);
+        expect(statuses?.objectRuntimeEligible).toBe(true);
+        expect(funding?.objectRuntimeEligible).toBe(false);
         expect(configurationObjectEligibleSurfaces().some((s) => s.id === "programs")).toBe(true);
         expect(configurationObjectEligibleSurfaces().some((s) => s.id === "simulator")).toBe(false);
     });
