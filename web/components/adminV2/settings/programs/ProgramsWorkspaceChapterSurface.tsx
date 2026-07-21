@@ -23,6 +23,8 @@ import {
     loadProgramsChapterContext,
     peekProgramsChapterContext,
 } from "@/lib/programs/programsChapterContextCache";
+import { useConfigurationContinuityOptional } from "@/components/adminV2/settings/configurationRuntime/ConfigurationContinuityProvider";
+import { prepareConfigurationSoftNavTarget } from "@/lib/configRuntime/configurationContinuity";
 
 function ChapterTabs({
     active,
@@ -70,6 +72,7 @@ export default function ProgramsWorkspaceChapterSurface({
     orgId: string;
 }) {
     const router = useRouter();
+    const continuity = useConfigurationContinuityOptional();
     const peeked = orgId ? peekProgramsChapterContext(orgId) : null;
     const [loading, setLoading] = useState(!peeked);
     const [error, setError] = useState<string | null>(null);
@@ -114,8 +117,22 @@ export default function ProgramsWorkspaceChapterSurface({
         void reload(false);
     }, [reload]);
 
+    const rememberChapter = continuity?.rememberProgramsChapterSelection;
+    useEffect(() => {
+        rememberChapter?.({ chapter });
+        for (const sibling of PROGRAMS_WORKSPACE_CHAPTERS) {
+            void prepareConfigurationSoftNavTarget(organizationProgramsChapterHref(sibling), (href) =>
+                router.prefetch(href),
+            );
+        }
+        void prepareConfigurationSoftNavTarget(organizationProgramsChapterHref(null), (href) =>
+            router.prefetch(href),
+        );
+    }, [chapter, rememberChapter, router]);
+
     const meta = PROGRAMS_WORKSPACE_CHAPTER_META[chapter];
     const selectChapter = (next: ProgramsWorkspaceChapter) => {
+        rememberChapter?.({ chapter: next });
         router.push(organizationProgramsChapterHref(next), { scroll: false });
     };
 
