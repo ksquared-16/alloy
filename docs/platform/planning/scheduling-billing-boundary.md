@@ -11,6 +11,8 @@ supersedes: []
 
 **The result is four clean ownership lines:** Enrollment owns enrollment intent · **Scheduling owns operational schedule intent** · **Billing owns financial truth and recurring tuition** · Attendance owns actual execution. Everything downstream becomes composition, not invention.
 
+> **Projection shape refined by [`billing-rate-resolution-contract.md`](./billing-rate-resolution-contract.md) (final).** §4's single-rate `BillingProjection` is superseded by `BillingScheduleProjection`, which returns **eligible rate choices + a recommended default** and **numeric discounts/funding + family responsibility** (not a vague summary). The boundary, ownership, and workflows in this doc stand; read the contract for the final payload and the implementation gap report.
+
 ---
 
 ## 0. The one rule
