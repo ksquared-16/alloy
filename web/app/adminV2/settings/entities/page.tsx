@@ -1,4 +1,3 @@
-import { Boxes } from "lucide-react";
 import EntitiesConfigurationPage from "@/components/adminV2/settings/entities/EntitiesConfigurationPage";
 import OrganizationDomainLanding from "@/components/adminV2/settings/organization/OrganizationDomainLanding";
 import { buildDataModelLandingModel } from "@/lib/configRuntime/dataModelLandingModel";
@@ -22,7 +21,7 @@ export default async function AdminV2SettingsEntitiesPage({ searchParams }: Page
     return (
         <OrganizationDomainLanding
             model={buildDataModelLandingModel()}
-            icon={Boxes}
+            icon="boxes"
             testIdPrefix="data-model"
         />
     );

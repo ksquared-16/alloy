@@ -1,4 +1,3 @@
-import { LayoutTemplate } from "lucide-react";
 import SurfacesConfigurationPage from "@/components/adminV2/settings/surfaces/SurfacesConfigurationPage";
 import OrganizationDomainLanding from "@/components/adminV2/settings/organization/OrganizationDomainLanding";
 import { buildSurfacesLandingModel } from "@/lib/configRuntime/surfacesLandingModel";
@@ -42,7 +41,7 @@ export default async function AdminV2SettingsSurfacesPage({ searchParams }: Page
     return (
         <OrganizationDomainLanding
             model={buildSurfacesLandingModel()}
-            icon={LayoutTemplate}
+            icon="layout-template"
             testIdPrefix="surfaces"
         />
     );

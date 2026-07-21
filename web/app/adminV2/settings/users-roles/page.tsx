@@ -1,4 +1,3 @@
-import { KeyRound } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { canManageUsersAndRoles } from "@/lib/admin/canManageUsersAndRoles";
@@ -27,7 +26,7 @@ export default async function UsersRolesSettingsPage({ searchParams }: PageProps
         return (
             <OrganizationDomainLanding
                 model={buildAccessLandingModel()}
-                icon={KeyRound}
+                icon="key-round"
                 testIdPrefix="access"
             />
         );

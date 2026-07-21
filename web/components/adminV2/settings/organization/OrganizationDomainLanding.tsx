@@ -1,6 +1,13 @@
 "use client";
 
-import { ArrowUpRight, type LucideIcon } from "lucide-react";
+import {
+    ArrowUpRight,
+    Boxes,
+    KeyRound,
+    LayoutTemplate,
+    Workflow,
+    type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -18,11 +25,20 @@ import type {
 } from "@/lib/configRuntime/organizationDomainLandingModel";
 import { CANONICAL_ORGANIZATION_BASE } from "@/lib/admin/canonicalAdminRoutes";
 
+export type OrganizationDomainLandingIcon = "boxes" | "key-round" | "workflow" | "layout-template";
+
+const ICONS: Record<OrganizationDomainLandingIcon, LucideIcon> = {
+    boxes: Boxes,
+    "key-round": KeyRound,
+    workflow: Workflow,
+    "layout-template": LayoutTemplate,
+};
+
 function postureTone(kind: OrganizationDomainLandingTile["kind"]): string {
     if (kind === "utility") return "border-alloy-blue/20 bg-alloy-blue/[0.06] text-alloy-blue";
     if (kind === "boundary") return "border-alloy-forge/10 bg-alloy-stone/[0.08] text-alloy-midnight/50";
     if (kind === "assignment") return "border-alloy-ember/20 bg-alloy-ember/[0.06] text-alloy-ember";
-    return "border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.07] text-[#007d68]";
+    return "border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.07] text-alloy-bend-pine";
 }
 
 function SectionTile({
@@ -69,7 +85,7 @@ function SectionTile({
             </div>
             <button
                 type="button"
-                className="flex w-full items-center justify-between border-t border-alloy-stone/25 bg-alloy-stone/[0.025] px-3 py-1.5 text-left text-[11px] font-semibold text-[#007d68] transition-colors hover:bg-alloy-bend-pine/[0.05]"
+                className="flex w-full items-center justify-between border-t border-alloy-stone/25 bg-alloy-stone/[0.025] px-3 py-1.5 text-left text-[11px] font-semibold text-alloy-bend-pine transition-colors hover:bg-alloy-bend-pine/[0.05]"
                 data-testid={`${testIdPrefix}-open-${section.id}`}
                 onClick={() => onOpen(section.href)}
             >
@@ -82,14 +98,15 @@ function SectionTile({
 
 export default function OrganizationDomainLanding({
     model,
-    icon: Icon,
+    icon,
     testIdPrefix,
 }: {
     model: OrganizationDomainLandingModel;
-    icon: LucideIcon;
+    icon: OrganizationDomainLandingIcon;
     testIdPrefix: string;
 }) {
     const router = useRouter();
+    const Icon = ICONS[icon];
 
     const openSection = (href: string) => {
         markConfigurationContinuity("acknowledge", {

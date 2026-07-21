@@ -1,4 +1,3 @@
-import { Workflow } from "lucide-react";
 import ProcessesConfigurationPage from "@/components/adminV2/settings/businessProcess/ProcessesConfigurationPage";
 import OrganizationDomainLanding from "@/components/adminV2/settings/organization/OrganizationDomainLanding";
 import { buildBusinessProcessesLandingModel } from "@/lib/configRuntime/businessProcessesLandingModel";
@@ -23,7 +22,7 @@ export default async function AdminV2SettingsProcessesPage({ searchParams }: Pag
     return (
         <OrganizationDomainLanding
             model={buildBusinessProcessesLandingModel()}
-            icon={Workflow}
+            icon="workflow"
             testIdPrefix="business-processes"
         />
     );
