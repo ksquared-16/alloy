@@ -42,7 +42,23 @@ test("whats-next review — buttons, owner nav, composer footer, instant tour", 
     }
     proof.actionButtonWidths = widths;
     proof.actionButtonsEqual = widths.length > 1 ? Math.max(...widths) - Math.min(...widths) <= 2 : null;
+    const summaryLabels = (await card.locator('[data-work-primary-row] > button').allInnerTexts()).map((t) => t.trim());
+    proof.summaryButtons = summaryLabels;
     await card.screenshot({ path: path.join(OUT, "1-summary-card.png") }).catch(() => {});
+
+    // 1b) "View details" (focused surface) — the action buttons MUST match the summary.
+    const viewDetails = card.locator('[data-work-action="open-focused"]').first();
+    if (await viewDetails.count()) {
+        await viewDetails.click({ timeout: 10_000 }).catch(() => {});
+        await page.waitForTimeout(1500);
+        const focusedButtons = (await page.locator('[data-work-focused-actions] > button').allInnerTexts()).map((t) => t.trim());
+        proof.focusedButtons = focusedButtons;
+        proof.focusedMatchesSummary = JSON.stringify(focusedButtons) === JSON.stringify(summaryLabels);
+        await page.screenshot({ path: path.join(OUT, "1b-view-details.png"), animations: "disabled" }).catch(() => {});
+        // back to summary
+        await page.locator('[data-work-action="close-focused"]').first().click({ timeout: 5000 }).catch(() => {});
+        await page.waitForTimeout(600);
+    }
 
     // 2) Schedule tour — click and measure time-to-availability + absence of the bootstrap loader.
     const tourBtn = card.locator('button', { hasText: /^Schedule tour$/ }).first();

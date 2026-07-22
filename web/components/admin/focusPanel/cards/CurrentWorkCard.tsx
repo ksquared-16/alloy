@@ -20,10 +20,8 @@ import {
     resolveCurrentWorkRequirementOwner,
     type CurrentWorkRequirementOwner,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkRequirementOwner";
-import {
-    isCurrentWorkActionExecutable,
-    planCurrentWorkActionExecution,
-} from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
+import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
+import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import type {
     CurrentWorkActionVM,
     CurrentWorkChecklistItemVM,
@@ -531,22 +529,10 @@ function SummaryBody({
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
 }) {
-    const primary =
-        surface.primaryAction
-        && surface.primaryAction.handlerKey !== "expand_work"
-        && isCurrentWorkActionExecutable(surface.primaryAction)
-            ? surface.primaryAction
-            : null;
-    const recordOutcome =
-        surface.recordOutcomeAction && isCurrentWorkActionExecutable(surface.recordOutcomeAction)
-            ? surface.recordOutcomeAction
-            : null;
-    // ONE dominant action = the configured command; when work is outcome-led (no command), declaring
-    // the outcome IS the obligation, so it leads. Everything else (helpful actions, outcome access)
-    // stays visually subordinate. Runtime-derived — labels are never invented here.
-    const dominant = primary ?? recordOutcome;
-    const subordinateOutcome = primary ? recordOutcome : null;
-    const helpful = surface.supportingActions.filter(isCurrentWorkActionExecutable).slice(0, 2);
+    // ONE shared derivation so the summary and the focused "View details" surface show the SAME
+    // buttons — a dominant command (or outcome when outcome-led), two helpful actions, and Record
+    // outcome as a subordinate button when a command leads.
+    const { dominant, helpful, subordinateOutcome, dominantIsOutcome } = resolveCurrentWorkActionButtons(surface);
 
     return (
         <div
@@ -562,7 +548,7 @@ function SummaryBody({
                             type="button"
                             className="alloy-os-currentwork__primary-action"
                             data-work-primary-action={dominant.key}
-                            data-work-action={dominant === recordOutcome ? "record-outcome" : undefined}
+                            data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
                             onClick={() => onAction(dominant)}
                         >
                             {dominant.label}

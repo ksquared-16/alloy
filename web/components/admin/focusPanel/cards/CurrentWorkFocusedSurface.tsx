@@ -26,6 +26,7 @@ import clsx from "clsx";
 import { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWorkReadinessSummary";
 import type { CurrentWorkActivityPreviewItem } from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
 import { isCurrentWorkActionExecutable } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
+import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import type {
     CurrentWorkActionVM,
     CurrentWorkChecklistItemVM,
@@ -78,17 +79,10 @@ export default function CurrentWorkFocusedSurface({
 
     const reason = surface.readiness.reasonLabel?.trim() || surface.description?.trim() || null;
 
-    // Primary configured command (never invented from the work title).
-    const primary =
-        surface.primaryAction
-        && surface.primaryAction.handlerKey !== "expand_work"
-        && isCurrentWorkActionExecutable(surface.primaryAction)
-            ? surface.primaryAction
-            : null;
-    const secondary = [
-        ...surface.supportingActions,
-        ...surface.communicationActions,
-    ].filter(isCurrentWorkActionExecutable).slice(0, 4);
+    // SAME action buttons as the summary card (one shared derivation) so "View details" never shows
+    // a different action set. Record outcome enters the dedicated outcome mode instead of dispatching.
+    const { dominant, helpful, subordinateOutcome, recordOutcome, dominantIsOutcome } =
+        resolveCurrentWorkActionButtons(surface);
     const transitions = surface.alternatePaths.filter(isCurrentWorkActionExecutable);
     const outcomes = surface.showOutcomeCompletion ? surface.completionOutcomes : [];
     const outcomeEffect = (key: string): string[] =>
@@ -101,6 +95,15 @@ export default function CurrentWorkFocusedSurface({
     const runCommand = (action: CurrentWorkActionVM) => {
         setOutcomeModeClicked(false);
         onAction(action);
+    };
+    // Record outcome is a dedicated decision MODE here (we are already in the focused surface), so its
+    // button enters outcome mode directly instead of dispatching like the other commands.
+    const onActionButton = (action: CurrentWorkActionVM) => {
+        if (recordOutcome && action === recordOutcome) {
+            setOutcomeModeClicked(true);
+            return;
+        }
+        runCommand(action);
     };
     const exitOutcomeMode = () => {
         setOutcomeModeClicked(false);
@@ -197,44 +200,44 @@ export default function CurrentWorkFocusedSurface({
                     :   null}
                 </div>
             :   <>
-                    {primary || secondary.length > 0 ?
+                    {dominant || helpful.length > 0 ?
                         <div className="alloy-os-currentwork__focused-actions" data-work-focused-actions="true">
-                            {primary ?
+                            {dominant ?
                                 <button
                                     type="button"
                                     className="alloy-os-currentwork__primary-action"
-                                    data-work-primary-action={primary.key}
-                                    onClick={() => runCommand(primary)}
+                                    data-work-primary-action={dominant.key}
+                                    data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
+                                    onClick={() => onActionButton(dominant)}
                                 >
-                                    {primary.label}
+                                    {dominant.label}
                                 </button>
                             :   null}
-                            {secondary.map((action) => (
+                            {helpful.map((action) => (
                                 <button
                                     key={action.key}
                                     type="button"
                                     className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
                                     data-work-supporting-action={action.key}
-                                    onClick={() => runCommand(action)}
+                                    onClick={() => onActionButton(action)}
                                 >
                                     {action.label}
                                 </button>
                             ))}
+                            {subordinateOutcome ?
+                                <button
+                                    type="button"
+                                    className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                                    data-work-action="record-outcome"
+                                    onClick={() => onActionButton(subordinateOutcome)}
+                                >
+                                    {subordinateOutcome.label}
+                                </button>
+                            :   null}
                         </div>
                     :   null}
 
                     <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
-
-                    {outcomes.length > 0 ?
-                        <button
-                            type="button"
-                            className="alloy-os-currentwork__record-outcome-affordance"
-                            data-work-action="record-outcome"
-                            onClick={() => setOutcomeModeClicked(true)}
-                        >
-                            Record outcome →
-                        </button>
-                    :   null}
 
                     {transitions.length > 0 ?
                         <div className="alloy-os-currentwork__focused-transitions" data-work-focused-transitions="true">

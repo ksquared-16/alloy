@@ -9,25 +9,40 @@
     112
   ],
   "actionButtonsEqual": true,
+  "summaryButtons": [
+    "Message",
+    "Schedule tour",
+    "Send form",
+    "Record outcome"
+  ],
+  "focusedButtons": [
+    "Message",
+    "Schedule tour",
+    "Send form",
+    "Record outcome"
+  ],
+  "focusedMatchesSummary": true,
   "tour": {
-    "clickToAvailabilityMs": 82,
+    "clickToAvailabilityMs": 144,
     "bootstrapLoaderShown": false
   },
   "composer": {
     "hasSendLater": true,
     "hasBosAssist": true,
-    "hasSend": true
+    "hasSend": true,
+    "sendLaterWithinComposer": true,
+    "bosWithinComposer": false
   },
   "tourEvents": [
-    "+20683ms tour.prefetch.start miss",
-    "+23163ms tour.prefetch.reuse hit",
-    "+23530ms tour.prefetch.ready 24 slots · 0 bookings",
-    "+23834ms tour.prefetch.reuse hit",
-    "+24448ms tour.peek value ready",
-    "+24450ms tour.peek value ready",
-    "+24452ms tour.peek value ready",
-    "+24456ms tour.peek value ready",
-    "+24465ms tour.peek value ready",
-    "+24467ms tour.peek value ready"
+    "+21022ms tour.prefetch.start miss",
+    "+24477ms tour.prefetch.reuse hit",
+    "+54955ms tour.prefetch.ready 24 slots · 0 bookings",
+    "+55053ms tour.prefetch.reuse hit",
+    "+58024ms tour.peek value ready",
+    "+58028ms tour.peek value ready",
+    "+58033ms tour.peek value ready",
+    "+58040ms tour.peek value ready",
+    "+58054ms tour.peek value ready",
+    "+58055ms tour.peek value ready"
   ]
 }
