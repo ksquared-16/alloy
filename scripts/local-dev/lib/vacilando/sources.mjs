@@ -33,7 +33,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOOLKIT_DIR = resolve(HERE, "..", "..");
 const ALLOY_RO = join(TOOLKIT_DIR, "alloy-ro");
 
-const EXEC_TIMEOUT_MS = 15000;
+// Host can thrash under memory pressure (swap full) — alloy-ro then takes ~16s.
+// Tolerate a slow-but-working read instead of killing it at 15s and blanking the board.
+const EXEC_TIMEOUT_MS = 30000;
 const MAX_BUFFER = 8 * 1024 * 1024;
 
 function run(cmd, args, opts = {}) {

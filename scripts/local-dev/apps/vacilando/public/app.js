@@ -158,6 +158,27 @@ function resourcesCard() {
     </div>${o.warning ? `<div class="rwarn">${esc(o.warning)}</div>` : ""}</div>`;
 }
 
+// Memory management — Vacilando actively reclaims idle worker dev servers.
+function memoryBlock(mem) {
+  const servers = mem.servers || [];
+  const p = mem.pressure || {};
+  const auto = mem.policy?.auto_reclaim;
+  const totalG = mem.total_server_mb != null ? (mem.total_server_mb / 1024).toFixed(1) : "0.0";
+  const rows = servers.length
+    ? servers.map((s) => `<div class="memrow"><span class="memk"><b>slot ${s.slot}</b> · ${esc(s.title)}</span>
+        <span class="memv ${s.reclaimable ? "clean" : ""}">${s.rss_mb}MB · ${s.reclaimable ? "idle" : esc(s.status)}</span>
+        <button class="btn sm ${s.reclaimable ? "" : "warn"}" data-cmd="server.stop" data-slot="${s.slot}" title="${s.reclaimable ? "Idle — safe to reclaim" : "Active slot — reclaim only if you're not using it"}">Reclaim</button></div>`).join("")
+    : `<div class="muted">No worker dev servers running.</div>`;
+  const acted = (mem.auto_actions || []).filter((a) => a.ok);
+  return `<div class="dsec"><div class="dsh">Memory · managed by Vacilando
+      <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· auto-reclaim ${auto ? "on" : "off"} · pressure ${esc(p.level_label || "—")}${p.thrashing ? " · thrashing" : ""}</span></div>
+    <div class="memhead"><span>${servers.length} worker dev server${servers.length === 1 ? "" : "s"} · ${totalG}G held</span>
+      <span>${mem.reclaimable_mb ? `<span class="clean">${mem.reclaimable_mb}MB idle → auto-reclaimed under pressure</span>` : `<span class="muted">none idle right now</span>`}</span></div>
+    ${rows}
+    ${acted.length ? `<div class="muted src">Vacilando auto-reclaimed: ${acted.slice(0, 4).map((a) => `slot ${a.slot} (~${a.freed_mb}MB)`).join(", ")}.</div>` : ""}
+    <div class="muted src">Vacilando reclaims <b>idle</b> dev servers automatically when the host thrashes (never active work). External apps (Chrome, VMs, editors) are outside its control — the biggest hogs there are yours to close.</div></div>`;
+}
+
 // -------- Team Dashboard (default center) --------
 function dashboardCenter() {
   const d = state._dash;
@@ -165,6 +186,7 @@ function dashboardCenter() {
   const m = d.machine || {}, sc = d.scheduler || {}, tp = d.throughput || {}, ol = d.operator_load || {};
   const stat = (l, v, sub) => `<div class="dstat"><div class="dl">${l}</div><div class="dv">${v}</div>${sub ? `<div class="ds">${sub}</div>` : ""}</div>`;
   const c = sc.counts || {};
+  const memHtml = memoryBlock(d.memory || {});
   return `<div class="dash">
     <div class="dash-h"><div class="dt">${esc(d.team?.project || "Alloy")} · Team Dashboard</div><div class="muted mono">${d.team?.base_sha || ""}</div></div>
 
@@ -195,6 +217,8 @@ function dashboardCenter() {
         </div>`).join("")}
         <div class="muted src">One reconnect fixes every worker — providers are shared infrastructure, not per-worker logins. Manage in Settings → Providers.</div></div>
     </div>
+
+    ${memHtml}
 
     <div class="dgrid2">
       <div class="dsec"><div class="dsh">Scheduler <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· deterministic · auto-scheduling ${sc.auto_scheduling ? "on" : "off"}</span></div>

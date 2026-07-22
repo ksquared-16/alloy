@@ -38,6 +38,7 @@ import { prForWorktree } from "./vacilando/github.mjs";
 import { collectPolicies } from "./vacilando/policies.mjs";
 import { collectUsage } from "./vacilando/usage.mjs";
 import { getProviderRuntime } from "./vacilando/provider-runtime.mjs";
+import { computeReclaim, memoryPressure } from "./vacilando/memory-manager.mjs";
 import { schedule } from "./vacilando/scheduler.mjs";
 import { readReviews } from "./vacilando/commands/review.mjs";
 
@@ -49,6 +50,7 @@ const DEFAULT_PORT = 3020;
 // Serve from a single-flight cache with a matching TTL and background tick so
 // requests are instant and the machine never runs overlapping composes.
 const TICK_MS = 10000;
+const MEMORY_TICK_MS = 45000; // memory measure + idle-server auto-reclaim cadence
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -128,7 +130,16 @@ async function getSnapshot({ maxAgeMs = CACHE_TTL_MS } = {}) {
   if (cache.snap && now - cache.at < maxAgeMs) return cache.snap;
   if (cache.inflight) return cache.inflight;
   cache.inflight = composeSnapshot()
-    .then((s) => { cache.snap = s; cache.at = Date.now(); cache.inflight = null; return s; })
+    .then((s) => {
+      cache.inflight = null;
+      // Resilience: a memory-starved host can make alloy-ro time out, yielding a
+      // 0-sprint projection. Never let that transient empty frame blank a board we
+      // just had — keep the last-good snapshot and mark it degraded instead.
+      if ((!s.sprints || s.sprints.length === 0) && cache.snap?.sprints?.length > 0) {
+        return { ...cache.snap, degraded: true, degraded_note: "Projection timed out (host under memory pressure) — showing last known workers." };
+      }
+      cache.snap = s; cache.at = Date.now(); return s;
+    })
     .catch((e) => {
       cache.inflight = null;
       if (cache.snap) return cache.snap; // serve last-good rather than an empty frame
@@ -159,6 +170,36 @@ async function resourcesCached() {
     .then((d) => { resCache.data = d; resCache.at = Date.now(); resCache.inflight = null; return d; })
     .catch((e) => { resCache.inflight = null; return resCache.data || { workers: [], overall: {}, error: String(e.message || e) }; });
   return resCache.inflight;
+}
+
+/**
+ * Memory Manager — Vacilando actively manages the memory it CAN: idle worker
+ * dev servers. Auto-reclaim is idle-only (never touches an active slot), fires
+ * only when the host is genuinely thrashing, has a per-slot cooldown, and is
+ * fully audited (via the governed server.stop command). Toggle in policy.
+ */
+const MEMORY_POLICY = { auto_reclaim: true, swap_pct: 0.85, cooldown_ms: 180000 };
+let lastReclaim = { servers: [], reclaimable_mb: 0, idle_count: 0, heavy_active: [], total_server_mb: 0, pressure: null, auto_actions: [] };
+const reclaimCooldown = new Map(); // slot -> last-reclaim ts
+
+async function refreshMemory({ act = false } = {}) {
+  const snap = await snapshotSafe();
+  const [reclaim, pressure] = await Promise.all([computeReclaim(snap), memoryPressure(MEMORY_POLICY)]);
+  const auto_actions = [];
+  if (act && MEMORY_POLICY.auto_reclaim && pressure.thrashing) {
+    for (const s of reclaim.servers.filter((x) => x.reclaimable)) {
+      const last = reclaimCooldown.get(s.slot) || 0;
+      if (Date.now() - last < MEMORY_POLICY.cooldown_ms) continue;
+      reclaimCooldown.set(s.slot, Date.now());
+      try {
+        const out = await runCommand({ command: "server.stop", input: { slot: s.slot }, confirm: true, actor: "vacilando-memory" }, { snapshot: snap, refresh: forceSnapshot });
+        const ok = out?.ok !== false && (out?.result?.exit === 0 || out?.result?.data?.ok !== false);
+        auto_actions.push({ slot: s.slot, freed_mb: s.rss_mb, ok, at: new Date().toISOString() });
+      } catch (e) { auto_actions.push({ slot: s.slot, freed_mb: s.rss_mb, ok: false, error: String(e.message || e) }); }
+    }
+  }
+  lastReclaim = { ...reclaim, pressure, policy: MEMORY_POLICY, auto_actions: auto_actions.length ? auto_actions : lastReclaim.auto_actions?.slice?.(0, 10) || [] };
+  return lastReclaim;
 }
 
 /** Read a small JSON body from a loopback POST. Fails closed on size/parse. */
@@ -230,6 +271,9 @@ export function createVacilandoServer() {
       const rt = await getProviderRuntime(providerRuntimeInputs(snap));
       return sendJson(res, 200, rt);
     }
+    if (path === "/api/memory") {
+      return sendJson(res, 200, await refreshMemory());
+    }
     if (path === "/api/dashboard") {
       const [snap, resrc] = await Promise.all([snapshotSafe(), resourcesCached()]);
       const usage = collectUsage();
@@ -262,6 +306,7 @@ export function createVacilandoServer() {
         machine: resrc.overall,
         providers: usage,
         provider_runtime,
+        memory: lastReclaim,
         scheduler: sched,
         throughput,
         operator_load,
@@ -323,10 +368,16 @@ export function createVacilandoServer() {
   }, TICK_MS);
   timer.unref?.();
 
+  // Memory Manager tick: measure reclaimable memory and auto-reclaim idle dev
+  // servers when the host is thrashing. Slower cadence than the SSE tick.
+  const memTimer = setInterval(() => { refreshMemory({ act: true }).catch(() => {}); }, MEMORY_TICK_MS);
+  memTimer.unref?.();
+
   // Warm the cache immediately so the first request isn't a cold ~8s compute.
   getSnapshot().catch(() => {});
+  refreshMemory({ act: true }).catch(() => {});
 
-  return { server, clients, close: () => { clearInterval(timer); server.close(); } };
+  return { server, clients, close: () => { clearInterval(timer); clearInterval(memTimer); server.close(); } };
 }
 
 export function startVacilandoServer(port = DEFAULT_PORT) {

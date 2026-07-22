@@ -346,6 +346,13 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 .prov{border-top:1px solid var(--line-soft);padding:7px 0;} .prov:first-of-type{border-top:none;}
 .prov-h{display:flex;align-items:center;gap:8px;font-size:13px;} .prov-m{font-size:11.5px;color:var(--ink-2);margin-top:2px;} .prov-c{font-size:11px;color:var(--ink-3);}
 .prov-auth{font-size:11.5px;margin-top:3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+/* ---- Memory management block ---- */
+.memhead{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-bottom:8px;}
+.memrow{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line-soft);font-size:12.5px;}
+.memrow:first-of-type{border-top:none;}
+.memrow .memk{color:var(--ink-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.memrow .memv{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);flex:none;}
+.memrow .memv.clean{color:var(--green-ink);}
 .attn{color:var(--blocked);font-weight:700;}
 /* ---- Provider Manager (Settings → Providers) ---- */
 .pm-runtime{font-size:11.5px;color:var(--ink-3);margin:-2px 0 12px;} .pm-runtime .pm-k{margin-right:8px;}
