@@ -54,6 +54,8 @@ type PlacementOption = {
 
 type SchedChild = {
     id: string;
+    ocmId: string | null;
+    personId: string | null;
     name: string;
     program: string | null;
     room: string | null;
@@ -96,14 +98,26 @@ function statusFor(child: SchedChild): string {
  */
 export default function SchedulingCard({ model, context, receded = false, coordination, composerPreview }: Props) {
     const evidence = useMemo(() => buildChildrenCardEvidence(context), [context]);
-    const children: SchedChild[] = evidence.children.map((c) => ({
-        id: c.customerMemberId ?? c.id,
-        name: c.name,
-        program: c.program,
-        room: c.room,
-        schedule: c.schedule,
-        startDate: c.startDate,
-    }));
+    // Raw inquiry-child blocks carry the writable enrollment record id (`ocm_id`),
+    // which the evidence child does not surface. Align by index (same source order).
+    const rawInquiry = Array.isArray((context.truth as Record<string, unknown>)?._inquiry_children)
+        ? ((context.truth as Record<string, unknown>)._inquiry_children as Record<string, unknown>[])
+        : [];
+    const children: SchedChild[] = evidence.children.map((c, i) => {
+        const raw = rawInquiry[i] ?? {};
+        const ocmId =
+            (raw.ocm_id != null ? String(raw.ocm_id) : null) ?? (raw.id != null ? String(raw.id) : null);
+        return {
+            id: c.customerMemberId ?? c.id,
+            ocmId,
+            personId: c.personId ?? null,
+            name: c.name,
+            program: c.program,
+            room: c.room,
+            schedule: c.schedule,
+            startDate: c.startDate,
+        };
+    });
 
     const [activeChildId, setActiveChildId] = useState<string | null>(null);
     useEffect(() => {
@@ -248,8 +262,10 @@ function ScheduleWorkSurface({ child, onDone }: { child: SchedChild; onDone: () 
                 const o = await schedApi(qs).catch(() => ({ options: [] }));
                 const opts: PlacementOption[] = o.options ?? [];
                 setOptions(opts);
+                // Preselect the recommended room, but never clobber an existing choice
+                // (e.g. when the date changes and options refetch).
                 const rec = opts.find((x) => x.classification === "recommended");
-                if (rec) setRoomId(rec.roomId);
+                setRoomId((prev) => prev || rec?.roomId || "");
             } catch { /* non-fatal */ }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -286,6 +302,8 @@ function ScheduleWorkSurface({ child, onDone }: { child: SchedChild; onDone: () 
                 method: "POST",
                 body: JSON.stringify({
                     customer_member_id: child.id,
+                    opportunity_customer_member_id: child.ocmId,
+                    person_id: child.personId,
                     schedule_pattern_id: patternId,
                     room_location_id: roomId || null,
                     start_date: effStart || null,
@@ -296,9 +314,8 @@ function ScheduleWorkSurface({ child, onDone }: { child: SchedChild; onDone: () 
                     pattern_label: patterns.find((p) => p.id === patternId)?.label ?? "",
                 }),
             });
-            void res;
-            setDone(`Schedule saved for ${child.name.split(/\s+/)[0]}.`);
-            setTimeout(onDone, 1300);
+            setDone(res?.message ?? `Schedule saved for ${child.name.split(/\s+/)[0]}.`);
+            setTimeout(onDone, 1600);
         } catch (e) {
             setError((e as Error).message);
         } finally {

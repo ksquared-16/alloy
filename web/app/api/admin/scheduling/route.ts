@@ -162,13 +162,26 @@ export async function GET(request: NextRequest) {
                     .maybeSingle();
                 programCategoryId = (pl as { program_category_id?: string | null } | null)?.program_category_id ?? "";
                 if (!programCategoryId) {
-                    const { data: ocm } = await supabase
+                    // customerMemberId may be a real member id (enrolled) or an
+                    // opportunity_customer_member id (pre-enrolled) — try both.
+                    const byMember = await supabase
                         .from("opportunity_customer_members")
                         .select("program_category_id")
                         .eq("org_id", ctx.orgId)
                         .eq("customer_member_id", customerMemberId)
                         .maybeSingle();
-                    programCategoryId = (ocm as { program_category_id?: string | null } | null)?.program_category_id ?? "";
+                    programCategoryId =
+                        (byMember.data as { program_category_id?: string | null } | null)?.program_category_id ?? "";
+                    if (!programCategoryId) {
+                        const byId = await supabase
+                            .from("opportunity_customer_members")
+                            .select("program_category_id")
+                            .eq("org_id", ctx.orgId)
+                            .eq("id", customerMemberId)
+                            .maybeSingle();
+                        programCategoryId =
+                            (byId.data as { program_category_id?: string | null } | null)?.program_category_id ?? "";
+                    }
                 }
             }
             let programKey = "";
@@ -250,13 +263,26 @@ export async function POST(request: NextRequest) {
             siteLocationId
         );
         if (!agreement) {
-            return NextResponse.json(
-                {
-                    error: "This child isn't enrolled yet — enrollment (Registration) creates the schedulable record. Complete enrollment, then schedule.",
-                    code: "not_enrolled",
-                },
-                { status: 409 }
-            );
+            // Pre-enrolled child → persist a PROPOSED schedule (planning / forecasting /
+            // Billing preview), NOT an operational placement. It materializes into
+            // operational truth when the child enrolls (Enrollment is the boundary).
+            const proposed = await proposeSchedule(supabase, ctx.orgId, {
+                customerMemberId,
+                ocmId: String(body.opportunity_customer_member_id ?? "").trim() || null,
+                personId: String(body.person_id ?? "").trim() || null,
+                schedulePatternId: String(body.schedule_pattern_id ?? "").trim(),
+                roomLocationId: String(body.room_location_id ?? "").trim() || null,
+                startDate: String(body.start_date ?? "").trim() || null,
+            });
+            if (!proposed.ok) {
+                return NextResponse.json({ error: proposed.error, code: "propose_failed" }, { status: proposed.status });
+            }
+            return NextResponse.json({
+                ok: true,
+                proposed: true,
+                result: proposed.result,
+                message: "Proposed schedule saved — becomes operational at enrollment.",
+            });
         }
         body.enrollment_agreement_id = agreement.id;
     }
@@ -287,4 +313,106 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: result.error, correlationId: result.correlationId }, { status: result.status });
     }
     return NextResponse.json({ ok: true, result: result.result });
+}
+
+/**
+ * Persist a PROPOSED schedule for a pre-enrolled child by setting the desired
+ * schedule intent on the opportunity_customer_member (schedule_type · room ·
+ * start_date). Materialization (`applyChildEnrollmentMaterialization`) consumes
+ * these on enrollment — the proposal is planning-only until then. Room location
+ * id is stored on `program_room_cohort_key` (the handoff treats it as the room).
+ */
+async function proposeSchedule(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    input: {
+        customerMemberId: string;
+        ocmId: string | null;
+        personId: string | null;
+        schedulePatternId: string;
+        roomLocationId: string | null;
+        startDate: string | null;
+    }
+): Promise<
+    | { ok: true; result: { opportunity_customer_member_id: string; schedule_type: string | null } }
+    | { ok: false; error: string; status: number }
+> {
+    // Pre-enrolled inquiry children have no customer_member_id yet, so the card's
+    // identifier is the opportunity_customer_member id. Resolve by either.
+    let ocmId: string | undefined;
+    {
+        // The card carries the writable enrollment record id directly.
+        if (input.ocmId) {
+            const byOcm = await supabase
+                .from("opportunity_customer_members")
+                .select("id")
+                .eq("org_id", orgId)
+                .eq("id", input.ocmId)
+                .maybeSingle();
+            ocmId = (byOcm.data as { id?: string } | null)?.id;
+        }
+        if (!ocmId) {
+            const byId = await supabase
+                .from("opportunity_customer_members")
+                .select("id")
+                .eq("org_id", orgId)
+                .eq("id", input.customerMemberId)
+                .maybeSingle();
+            ocmId = (byId.data as { id?: string } | null)?.id;
+        }
+        if (!ocmId) {
+            const byMember = await supabase
+                .from("opportunity_customer_members")
+                .select("id")
+                .eq("org_id", orgId)
+                .eq("customer_member_id", input.customerMemberId)
+                .maybeSingle();
+            ocmId = (byMember.data as { id?: string } | null)?.id;
+        }
+        if (!ocmId && input.personId) {
+            const byPerson = await supabase
+                .from("opportunity_customer_members")
+                .select("id")
+                .eq("org_id", orgId)
+                .eq("person_id", input.personId)
+                .maybeSingle();
+            ocmId = (byPerson.data as { id?: string } | null)?.id;
+        }
+    }
+    if (!ocmId) {
+        return {
+            ok: false,
+            error: "Couldn't link this child to an enrollment record to save the proposed schedule.",
+            status: 404,
+        };
+    }
+
+    let scheduleType: string | null = null;
+    if (input.schedulePatternId) {
+        const { data: pat } = await supabase
+            .from("schedule_patterns")
+            .select("schedule_type_key")
+            .eq("org_id", orgId)
+            .eq("id", input.schedulePatternId)
+            .maybeSingle();
+        scheduleType = (pat as { schedule_type_key?: string | null } | null)?.schedule_type_key ?? null;
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (scheduleType) updates.schedule_type = scheduleType;
+    if (input.roomLocationId) updates.program_room_cohort_key = input.roomLocationId;
+    if (input.startDate) updates.start_date = input.startDate;
+    if (Object.keys(updates).length === 0) {
+        return { ok: false, error: "Nothing to propose (choose a pattern, room, or start date).", status: 400 };
+    }
+
+    const { error } = await supabase
+        .from("opportunity_customer_members")
+        .update(updates)
+        .eq("id", ocmId)
+        .eq("org_id", orgId);
+    if (error) {
+        return { ok: false, error: error.message, status: 400 };
+    }
+    return { ok: true, result: { opportunity_customer_member_id: ocmId, schedule_type: scheduleType } };
 }
