@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-22
+---
+
 # Vacilando — live QA (control-room milestone)
 
 Served at **http://127.0.0.1:3020** (loopback only). Screenshots in this folder were captured by

@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-22
+---
+
 # Vacilando — Control Room Reset (capability matrix + build)
 
 **Role:** Lead Engineer · **Slot 6** · branch `agent/claude/6-vacilando-os-product-def`

@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-22
+---
+
 # Vacilando Project OS — V1
 
 **Slot 6** · branch `agent/claude/6-vacilando-os-product-def` · served at `http://127.0.0.1:3020` (loopback).

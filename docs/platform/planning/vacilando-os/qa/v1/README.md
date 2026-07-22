@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-22
+---
+
 # Vacilando Project OS — V1 live QA
 
 Served **http://127.0.0.1:3020** (loopback). Screenshots captured by driving the live app

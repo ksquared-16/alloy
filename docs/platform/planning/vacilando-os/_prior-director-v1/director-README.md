@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-22
+---
+
 # Alloy Director — application (V1)
 
 The local, dark **command center** for the Alloy engineering organization. It is

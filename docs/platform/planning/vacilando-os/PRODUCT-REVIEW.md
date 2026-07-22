@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-22
+---
+
 # Vacilando OS — Product Review Package
 
 **Sprint:** vacilando-os-product-def (slot 6) · **Role:** Director (product definition, no implementation)

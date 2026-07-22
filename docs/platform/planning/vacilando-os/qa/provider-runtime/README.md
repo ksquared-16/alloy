@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-22
+---
+
 # Provider Runtime V1 — QA
 
 Verified against the live app at `http://127.0.0.1:3020` (loopback). Screenshots

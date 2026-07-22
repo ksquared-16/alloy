@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-22
+---
+
 # Vacilando Runtime — Phase 1 (Lead Engineer build)
 
 **Role:** Lead Engineer · **Slot:** 6 · **Branch:** `agent/claude/6-vacilando-os-product-def`

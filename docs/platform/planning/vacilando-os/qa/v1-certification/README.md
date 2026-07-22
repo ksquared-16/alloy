@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-22
+---
+
 # Vacilando Project OS — V1 Certification QA
 
 Live acceptance evidence for the end-to-end lifecycle certification. Full

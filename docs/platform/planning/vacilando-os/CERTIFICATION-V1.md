@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-22
+---
+
 # Vacilando Project OS — V1 Certification
 
 **Verdict — the success sentence is objectively true:**
