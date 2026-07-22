@@ -97,6 +97,9 @@ export default function LocationProgramDetailPanel({
             metadata?: Record<string, unknown>;
             local_description_override?: string | null;
             local_authorization_evidence?: string | null;
+            local_display_name?: string | null;
+            available_from?: string | null;
+            available_through?: string | null;
         },
     ) => Promise<void>;
     programs: LocationProgramCategoryRow[];
@@ -114,6 +117,9 @@ export default function LocationProgramDetailPanel({
     const [ageUnit, setAgeUnit] = useState("");
     const [defaultRoomTypes, setDefaultRoomTypes] = useState("");
     const [localDescription, setLocalDescription] = useState("");
+    const [localDisplayName, setLocalDisplayName] = useState("");
+    const [availableFrom, setAvailableFrom] = useState("");
+    const [availableThrough, setAvailableThrough] = useState("");
     const [localAuthorizationEvidence, setLocalAuthorizationEvidence] = useState("");
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -128,6 +134,9 @@ export default function LocationProgramDetailPanel({
         setAgeUnit(readMeta(program.metadata, "age_range_unit"));
         setDefaultRoomTypes(readMeta(program.metadata, "default_room_types"));
         setLocalDescription(program.local_description_override ?? "");
+        setLocalDisplayName(program.local_display_name ?? "");
+        setAvailableFrom(program.available_from ?? "");
+        setAvailableThrough(program.available_through ?? "");
         setLocalAuthorizationEvidence(program.local_authorization_evidence ?? "");
         setActive(program.is_active !== false);
         setError(null);
@@ -160,6 +169,9 @@ export default function LocationProgramDetailPanel({
         setAgeUnit(readMeta(program.metadata, "age_range_unit"));
         setDefaultRoomTypes(readMeta(program.metadata, "default_room_types"));
         setLocalDescription(program.local_description_override ?? "");
+        setLocalDisplayName(program.local_display_name ?? "");
+        setAvailableFrom(program.available_from ?? "");
+        setAvailableThrough(program.available_through ?? "");
         setLocalAuthorizationEvidence(program.local_authorization_evidence ?? "");
         setActive(program.is_active !== false);
         setError(null);
@@ -189,6 +201,9 @@ export default function LocationProgramDetailPanel({
                 ...(program.program_revision_id ? {} : { label: label.trim() }),
                 is_active: active,
                 metadata,
+                local_display_name: localDisplayName.trim() || null,
+                available_from: availableFrom.trim() || null,
+                available_through: availableThrough.trim() || null,
                 ...(program.program_revision_id
                     ? {
                           local_description_override: localDescription.trim() || null,
@@ -294,6 +309,47 @@ export default function LocationProgramDetailPanel({
                                 here. Location-only is the only supported mutation scope on this surface.
                             </p>
                         :   null}
+                        {program.program_revision_id ?
+                            <label className="block space-y-1">
+                                <span className="config-typo-field-label">Name at this Location</span>
+                                <input
+                                    type="text"
+                                    value={localDisplayName}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setLocalDisplayName(e.target.value)}
+                                    className="config-runtime-input"
+                                    placeholder={program.label}
+                                    data-testid="locations-program-local-name"
+                                />
+                                <span className="text-[11px] text-alloy-midnight/45">
+                                    Leave blank to use “{program.label},” the Organization Program name.
+                                </span>
+                            </label>
+                        :   null}
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            <label className="block space-y-1">
+                                <span className="config-typo-field-label">Available from</span>
+                                <input
+                                    type="date"
+                                    value={availableFrom}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setAvailableFrom(e.target.value)}
+                                    className="config-runtime-input"
+                                    data-testid="locations-program-available-from"
+                                />
+                            </label>
+                            <label className="block space-y-1">
+                                <span className="config-typo-field-label">Available through</span>
+                                <input
+                                    type="date"
+                                    value={availableThrough}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setAvailableThrough(e.target.value)}
+                                    className="config-runtime-input"
+                                    data-testid="locations-program-available-through"
+                                />
+                            </label>
+                        </div>
                         <label className="flex items-center gap-2">
                             <input
                                 type="checkbox"

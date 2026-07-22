@@ -437,6 +437,9 @@ export function useLocationsConfigurationSettings(options?: {
                 metadata?: Record<string, unknown>;
                 local_description_override?: string | null;
                 local_authorization_evidence?: string | null;
+                local_display_name?: string | null;
+                available_from?: string | null;
+                available_through?: string | null;
             },
         ) => {
             const res = await fetch("/api/admin/location-program-categories", {

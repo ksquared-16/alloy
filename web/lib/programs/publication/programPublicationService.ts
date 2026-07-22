@@ -35,6 +35,7 @@ export type ProgramCatalogItem = {
     id: string;
     key: string;
     lifecycleStatus: "active" | "retired";
+    createdAt: string | null;
     draft: ProgramDraft;
     revisions: ProgramRevision[];
     publications: ConfigurationPublicationRecord[];
@@ -67,6 +68,9 @@ export type ProgramAvailability = {
     consumedRevisionId: string | null;
     localDescriptionOverride: string | null;
     localAuthorizationEvidence: string | null;
+    localDisplayName: string | null;
+    availableFrom: string | null;
+    availableThrough: string | null;
     metadata: Record<string, unknown>;
 };
 
@@ -283,12 +287,12 @@ export async function loadProgramPublicationSnapshot(
     }
     let availabilityQuery = supabase
         .from("location_program_categories")
-        .select("id, program_id, key, location_id, is_active, program_revision_id, local_description_override, local_authorization_evidence, metadata")
+        .select("id, program_id, key, location_id, is_active, program_revision_id, local_description_override, local_authorization_evidence, local_display_name, available_from, available_through, metadata")
         .eq("org_id", orgId);
     if (options.allowedSiteLocationIds != null && options.allowedSiteLocationIds.length > 0) {
         availabilityQuery = availabilityQuery.in("location_id", options.allowedSiteLocationIds);
     }
-    const [programRows, locationsResult, evidence, availabilityResult, offeringsResult, policiesResult, productsResult] = await Promise.all([
+    const [programRows, locationsResult, evidence, availabilityFirst, offeringsResult, policiesResult, productsResult] = await Promise.all([
         loadProgramRows(supabase, orgId),
         options.allowedSiteLocationIds?.length === 0
             ? Promise.resolve({ data: [], error: null })
@@ -320,8 +324,32 @@ export async function loadProgramPublicationSnapshot(
             .not("program_key", "is", null)
             .order("name"),
     ]);
+    let availabilityResult: { data: DbRow[] | null; error: { message?: string } | null } = availabilityFirst as {
+        data: DbRow[] | null;
+        error: { message?: string } | null;
+    };
+    if (
+        availabilityResult.error
+        && /local_display_name|available_from|available_through/i.test(String(availabilityResult.error.message ?? ""))
+    ) {
+        let fallbackQuery = supabase
+            .from("location_program_categories")
+            .select("id, program_id, key, location_id, is_active, program_revision_id, local_description_override, local_authorization_evidence, metadata")
+            .eq("org_id", orgId);
+        if (options.allowedSiteLocationIds != null && options.allowedSiteLocationIds.length > 0) {
+            fallbackQuery = fallbackQuery.in("location_id", options.allowedSiteLocationIds);
+        }
+        const fallback =
+            options.allowedSiteLocationIds?.length === 0
+                ? { data: [] as DbRow[], error: null }
+                : await fallbackQuery;
+        availabilityResult = fallback as { data: DbRow[] | null; error: { message?: string } | null };
+    }
     assertNoError(locationsResult.error, "Load Locations");
-    assertNoError(availabilityResult.error, "Load Program availability");
+    assertNoError(
+        availabilityResult.error ? { message: String(availabilityResult.error.message ?? "unknown") } : null,
+        "Load Program availability",
+    );
     assertNoError(offeringsResult.error, "Load Program offerings");
     assertNoError(policiesResult.error, "Load Program policies");
     assertNoError(productsResult.error, "Load Program products");
@@ -344,6 +372,7 @@ export async function loadProgramPublicationSnapshot(
             id: programId,
             key: stringValue(program.program_key),
             lifecycleStatus: program.lifecycle_status === "retired" ? "retired" : "active",
+            createdAt: nullableString(program.created_at),
             draft: mapDraft(program, draftRow),
             revisions,
             publications,
@@ -410,6 +439,9 @@ export async function loadProgramPublicationSnapshot(
             consumedRevisionId: nullableString(row.program_revision_id),
             localDescriptionOverride: nullableString(row.local_description_override),
             localAuthorizationEvidence: nullableString(row.local_authorization_evidence),
+            localDisplayName: nullableString(row.local_display_name),
+            availableFrom: nullableString(row.available_from),
+            availableThrough: nullableString(row.available_through),
             metadata: recordValue(row.metadata),
         })),
         offerings,

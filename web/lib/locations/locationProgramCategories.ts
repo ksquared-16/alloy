@@ -19,11 +19,25 @@ export type LocationProgramCategoryRow = {
     /** Published Organization revision consumed by this Location. */
     program_revision_id?: string | null;
     configuration_consumption_id?: string | null;
-    /** The only Program identity-adjacent value Locations may override in V1. */
+    /** Optional Location-facing display name. Null inherits Organization Program name. */
+    local_display_name?: string | null;
+    /** Inclusive start date for offering at this Location. Null = immediately. */
+    available_from?: string | null;
+    /** Inclusive end date for offering at this Location. Null = indefinite. */
+    available_through?: string | null;
+    /** Location-owned description difference (not the display name). */
     local_description_override?: string | null;
     /** Location-owned evidence required for local readiness. */
     local_authorization_evidence?: string | null;
 };
+
+/** Effective label: local display name when set, otherwise Organization Program label. */
+export function effectiveLocationProgramLabel(
+    row: Pick<LocationProgramCategoryRow, "label" | "local_display_name">,
+): string {
+    const local = typeof row.local_display_name === "string" ? row.local_display_name.trim() : "";
+    return local || String(row.label ?? "").trim() || "Program";
+}
 
 export type LocationProgramCategorySelectOption = {
     value: string;
@@ -60,7 +74,7 @@ export function locationProgramCategoriesToSelectOptions(
 ): LocationProgramCategorySelectOption[] {
     return categories.map((c) => ({
         value: c.key,
-        label: c.label,
+        label: effectiveLocationProgramLabel(c),
         category_id: c.id,
     }));
 }

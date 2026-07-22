@@ -35,6 +35,7 @@ describe("bosRailPresentation", () => {
             hasOpportunityContext: false,
             opportunitySingular: "Inquiry",
             isConfigurationContext: true,
+            pathname: "/organization/locations",
         });
         expect(suggestions.map((suggestion) => suggestion.title)).toEqual([
             "Explain this configuration",
@@ -42,5 +43,21 @@ describe("bosRailPresentation", () => {
             "Review unpublished changes",
         ]);
         expect(suggestions.map((suggestion) => suggestion.title).join(" ")).not.toContain("queue");
+    });
+
+    it("uses Programs-native starters without unpublished-changes copy", () => {
+        const suggestions = resolveCommandSurfaceRailStarterSuggestions({
+            hasWorkUnitScope: false,
+            hasOpportunityContext: false,
+            opportunitySingular: "Inquiry",
+            isConfigurationContext: true,
+            pathname: "/organization/programs",
+        });
+        expect(suggestions.map((suggestion) => suggestion.title)).toEqual([
+            "Summarize this Program",
+            "Which Locations offer this Program?",
+            "What changed recently?",
+        ]);
+        expect(suggestions.map((suggestion) => suggestion.title).join(" ")).not.toMatch(/unpublished/i);
     });
 });

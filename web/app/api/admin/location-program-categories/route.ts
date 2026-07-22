@@ -23,6 +23,9 @@ type CategoryRow = {
     configuration_consumption_id: string | null;
     local_description_override: string | null;
     local_authorization_evidence: string | null;
+    local_display_name: string | null;
+    available_from: string | null;
+    available_through: string | null;
     created_at: string;
     updated_at: string | null;
 };
@@ -71,6 +74,32 @@ export function buildProgramCategoryPatch(
                 ? raw.local_authorization_evidence.trim() || null
                 : null;
     }
+    if (raw.local_display_name !== undefined) {
+        if (raw.local_display_name !== null && typeof raw.local_display_name !== "string") {
+            return { ok: false, error: "Name at this Location must be text or empty." };
+        }
+        patch.local_display_name =
+            typeof raw.local_display_name === "string" ? raw.local_display_name.trim() || null : null;
+    }
+    if (raw.available_from !== undefined) {
+        if (raw.available_from !== null && typeof raw.available_from !== "string") {
+            return { ok: false, error: "Available from must be a date or empty." };
+        }
+        const value = typeof raw.available_from === "string" ? raw.available_from.trim() : "";
+        patch.available_from = value || null;
+    }
+    if (raw.available_through !== undefined) {
+        if (raw.available_through !== null && typeof raw.available_through !== "string") {
+            return { ok: false, error: "Available through must be a date or empty." };
+        }
+        const value = typeof raw.available_through === "string" ? raw.available_through.trim() : "";
+        patch.available_through = value || null;
+    }
+    const from = typeof patch.available_from === "string" ? patch.available_from : null;
+    const through = typeof patch.available_through === "string" ? patch.available_through : null;
+    if (from && through && through < from) {
+        return { ok: false, error: "Available through must be on or after Available from." };
+    }
     return { ok: true, patch };
 }
 
@@ -95,6 +124,9 @@ export function mapCategoryRow(r: Record<string, unknown>): CategoryRow {
             (r.local_description_override as string | null | undefined) ?? null,
         local_authorization_evidence:
             (r.local_authorization_evidence as string | null | undefined) ?? null,
+        local_display_name: (r.local_display_name as string | null | undefined) ?? null,
+        available_from: (r.available_from as string | null | undefined) ?? null,
+        available_through: (r.available_through as string | null | undefined) ?? null,
         created_at: String(r.created_at ?? ""),
         updated_at: (r.updated_at as string | null | undefined) ?? null,
     };

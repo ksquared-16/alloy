@@ -1,28 +1,34 @@
 "use client";
 
 import { useCallback, useRef, type KeyboardEvent } from "react";
-import { BookOpen, ListFilter, Plus, Search } from "lucide-react";
-import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import { BookOpen, Search } from "lucide-react";
 import {
     QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
     QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
     QUEUE_ROW_CARD_SHELL_CLASS,
     QUEUE_ROW_SELECTED_RAIL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
-import type { ProgramOperatorRow, ProgramsLifecycleFilter } from "@/lib/programs/programsOperatorModel";
+import {
+    PROGRAMS_SORT_OPTIONS,
+    type ProgramOperatorRow,
+    type ProgramsLifecycleFilter,
+    type ProgramsSortDirection,
+    type ProgramsSortField,
+} from "@/lib/programs/programsOperatorModel";
 
 /**
- * Programs collection rail — mirrors LocationsObjectSelector structure and Alloy tokens.
+ * Programs collection rail — two-row filter/sort toolbar; no duplicate Add action.
  */
 export function ProgramsObjectSelector({
     programs,
     selectedId,
     filter,
     onFilterChange,
+    sortField,
+    sortDirection,
+    onSortChange,
     search,
     onSearchChange,
-    canMutate,
-    onAddProgram,
     onSelect,
     totalCount,
 }: {
@@ -30,10 +36,11 @@ export function ProgramsObjectSelector({
     selectedId: string | null;
     filter: ProgramsLifecycleFilter;
     onFilterChange: (filter: ProgramsLifecycleFilter) => void;
+    sortField: ProgramsSortField;
+    sortDirection: ProgramsSortDirection;
+    onSortChange: (field: ProgramsSortField, direction: ProgramsSortDirection) => void;
     search: string;
     onSearchChange: (value: string) => void;
-    canMutate: boolean;
-    onAddProgram: () => void;
     onSelect: (programId: string) => void;
     totalCount: number;
 }) {
@@ -68,14 +75,9 @@ export function ProgramsObjectSelector({
         [focusRowAt, onSelect, programs],
     );
 
-    const cycleFilter = () => {
-        if (filter === "active") onFilterChange("archived");
-        else if (filter === "archived") onFilterChange("all");
-        else onFilterChange("active");
-    };
-
     const filterLabel =
         filter === "active" ? "Active" : filter === "archived" ? "Archived" : "All";
+    const sortValue = `${sortField}:${sortDirection}`;
 
     return (
         <aside
@@ -85,19 +87,7 @@ export function ProgramsObjectSelector({
         >
             <header className="locations-collection-rail__header" data-testid="programs-nav-collection-header">
                 <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                        <h2 className="locations-collection-rail__title">Programs</h2>
-                        {canMutate ?
-                            <ConfigurationPrimaryButton
-                                className="shrink-0 gap-1 px-2 py-1 text-[11px]"
-                                onClick={onAddProgram}
-                                data-testid="programs-nav-add-program"
-                            >
-                                <Plus className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
-                                Add Program
-                            </ConfigurationPrimaryButton>
-                        :   null}
-                    </div>
+                    <h2 className="locations-collection-rail__title">Programs</h2>
                     <p className="locations-collection-rail__count">
                         {programs.length === totalCount
                             ? `${totalCount} Program${totalCount === 1 ? "" : "s"}`
@@ -108,35 +98,69 @@ export function ProgramsObjectSelector({
                 </div>
             </header>
 
-            <div className="locations-collection-rail__controls" data-testid="programs-nav-controls">
+            <div className="programs-collection-controls" data-testid="programs-nav-controls">
                 <label className="sr-only" htmlFor="programs-search">
                     Search Programs
                 </label>
-                <div className="locations-collection-rail__search-wrap">
-                    <Search className="locations-collection-rail__search-icon" strokeWidth={2} aria-hidden />
+                <div className="programs-collection-controls__search-wrap">
+                    <Search
+                        className="programs-collection-controls__search-icon"
+                        strokeWidth={2}
+                        aria-hidden
+                    />
                     <input
                         id="programs-search"
                         type="search"
                         value={search}
                         onChange={(event) => onSearchChange(event.target.value)}
                         placeholder="Search Programs…"
-                        className="locations-collection-rail__search"
+                        className="programs-collection-controls__search"
                         data-testid="programs-nav-search"
                     />
                 </div>
-                <button
-                    type="button"
-                    className={`locations-collection-rail__filter ${
-                        filter !== "active" ? "locations-collection-rail__filter--active" : ""
-                    }`}
-                    aria-pressed={filter !== "active"}
-                    aria-label={`Filter: ${filterLabel}. Click to change.`}
-                    title={`Showing ${filterLabel}`}
-                    onClick={cycleFilter}
-                    data-testid="programs-nav-filter"
-                >
-                    <ListFilter className="h-4 w-4" strokeWidth={2} aria-hidden />
-                </button>
+                <div className="programs-collection-controls__row">
+                    <label className="programs-collection-controls__field min-w-0">
+                        <span className="sr-only">Status</span>
+                        <select
+                            className="programs-collection-controls__select"
+                            value={filter}
+                            onChange={(event) =>
+                                onFilterChange(event.target.value as ProgramsLifecycleFilter)
+                            }
+                            data-testid="programs-nav-filter"
+                            aria-label="Filter Programs by status"
+                        >
+                            <option value="active">Active</option>
+                            <option value="archived">Archived</option>
+                            <option value="all">All</option>
+                        </select>
+                    </label>
+                    <label className="programs-collection-controls__field min-w-0">
+                        <span className="sr-only">Sort by</span>
+                        <select
+                            className="programs-collection-controls__select"
+                            value={sortValue}
+                            onChange={(event) => {
+                                const [field, direction] = event.target.value.split(":") as [
+                                    ProgramsSortField,
+                                    ProgramsSortDirection,
+                                ];
+                                onSortChange(field, direction);
+                            }}
+                            data-testid="programs-nav-sort"
+                            aria-label="Sort Programs"
+                        >
+                            {PROGRAMS_SORT_OPTIONS.map((option) => (
+                                <option
+                                    key={`${option.field}:${option.direction}`}
+                                    value={`${option.field}:${option.direction}`}
+                                >
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                </div>
             </div>
 
             <div

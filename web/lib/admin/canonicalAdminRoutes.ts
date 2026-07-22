@@ -98,10 +98,15 @@ export function isCanonicalAdminPath(pathname: string): boolean {
     );
 }
 
-/** Build Organization Programs href; optional selection/detail state survives refresh. */
+/** Build Organization Programs href; selection + filter/sort survive refresh. */
 export function organizationProgramsHref(
     programId?: string | null,
     section?: string | null,
+    options?: {
+        status?: string | null;
+        sort?: string | null;
+        direction?: string | null;
+    },
 ): string {
     const id = typeof programId === "string" ? programId.trim() : "";
     const detailSection = typeof section === "string" ? section.trim() : "";
@@ -110,6 +115,12 @@ export function organizationProgramsHref(
     if (id && detailSection && detailSection !== "overview") {
         params.set("section", detailSection);
     }
+    const status = typeof options?.status === "string" ? options.status.trim().toLowerCase() : "";
+    if (status && status !== "active") params.set("status", status);
+    const sort = typeof options?.sort === "string" ? options.sort.trim().toLowerCase() : "";
+    if (sort && sort !== "name") params.set("sort", sort);
+    const direction = typeof options?.direction === "string" ? options.direction.trim().toLowerCase() : "";
+    if (direction && direction !== "asc") params.set("direction", direction);
     const query = params.toString();
     return query ? `${CANONICAL_ORGANIZATION_PROGRAMS_HREF}?${query}` : CANONICAL_ORGANIZATION_PROGRAMS_HREF;
 }

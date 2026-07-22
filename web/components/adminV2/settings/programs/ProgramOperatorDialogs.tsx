@@ -5,10 +5,21 @@ import {
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import type { ProgramOperatorFields } from "@/lib/programs/programsOperatorClient";
+import {
+    emptyProgramOperatorFields,
+    type LocationProgramAssignmentConfig,
+    type ProgramOperatorFields,
+} from "@/lib/programs/programsOperatorClient";
 import type { ProgramAgeUnit } from "@/lib/programs/programsOperatorPresentation";
+import type { LocationProgramAvailabilityView } from "@/lib/programs/locationProgramAvailability";
 
-function AgeFields({
+const AGE_UNITS: { value: ProgramAgeUnit; label: string }[] = [
+    { value: "weeks", label: "Weeks" },
+    { value: "months", label: "Months" },
+    { value: "years", label: "Years" },
+];
+
+function AgeBoundaryFields({
     fields,
     onChange,
     idPrefix,
@@ -18,48 +29,79 @@ function AgeFields({
     idPrefix: string;
 }) {
     return (
-        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_8rem]">
-            <label>
-                <span className="config-typo-field-label">Minimum age</span>
-                <input
-                    id={`${idPrefix}-min-age`}
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={fields.minimumAge}
-                    onChange={(event) => onChange({ ...fields, minimumAge: event.target.value })}
-                    className="config-runtime-input mt-1"
-                    data-testid={`${idPrefix}-min-age`}
-                />
-            </label>
-            <label>
-                <span className="config-typo-field-label">Maximum age</span>
-                <input
-                    id={`${idPrefix}-max-age`}
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={fields.maximumAge}
-                    onChange={(event) => onChange({ ...fields, maximumAge: event.target.value })}
-                    className="config-runtime-input mt-1"
-                    data-testid={`${idPrefix}-max-age`}
-                />
-            </label>
-            <label>
-                <span className="config-typo-field-label">Unit</span>
-                <select
-                    id={`${idPrefix}-age-unit`}
-                    value={fields.ageUnit}
-                    onChange={(event) =>
-                        onChange({ ...fields, ageUnit: event.target.value as ProgramAgeUnit })
-                    }
-                    className="config-runtime-select mt-1"
-                    data-testid={`${idPrefix}-age-unit`}
-                >
-                    <option value="years">Years</option>
-                    <option value="months">Months</option>
-                </select>
-            </label>
+        <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                <label>
+                    <span className="config-typo-field-label">Minimum age</span>
+                    <input
+                        id={`${idPrefix}-min-age`}
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={fields.minimumAge}
+                        onChange={(event) => onChange({ ...fields, minimumAge: event.target.value })}
+                        className="config-runtime-input mt-1"
+                        data-testid={`${idPrefix}-min-age`}
+                    />
+                </label>
+                <label>
+                    <span className="config-typo-field-label">Unit</span>
+                    <select
+                        id={`${idPrefix}-min-unit`}
+                        value={fields.minimumAgeUnit}
+                        onChange={(event) =>
+                            onChange({
+                                ...fields,
+                                minimumAgeUnit: event.target.value as ProgramAgeUnit,
+                            })
+                        }
+                        className="config-runtime-select mt-1"
+                        data-testid={`${idPrefix}-min-unit`}
+                    >
+                        {AGE_UNITS.map((unit) => (
+                            <option key={unit.value} value={unit.value}>
+                                {unit.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                <label>
+                    <span className="config-typo-field-label">Maximum age</span>
+                    <input
+                        id={`${idPrefix}-max-age`}
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={fields.maximumAge}
+                        onChange={(event) => onChange({ ...fields, maximumAge: event.target.value })}
+                        className="config-runtime-input mt-1"
+                        data-testid={`${idPrefix}-max-age`}
+                    />
+                </label>
+                <label>
+                    <span className="config-typo-field-label">Unit</span>
+                    <select
+                        id={`${idPrefix}-max-unit`}
+                        value={fields.maximumAgeUnit}
+                        onChange={(event) =>
+                            onChange({
+                                ...fields,
+                                maximumAgeUnit: event.target.value as ProgramAgeUnit,
+                            })
+                        }
+                        className="config-runtime-select mt-1"
+                        data-testid={`${idPrefix}-max-unit`}
+                    >
+                        {AGE_UNITS.map((unit) => (
+                            <option key={unit.value} value={unit.value}>
+                                {unit.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            </div>
         </div>
     );
 }
@@ -98,7 +140,7 @@ export function ProgramFormFields({
             </label>
             <div>
                 <p className="config-typo-field-label mb-2">Age range</p>
-                <AgeFields fields={fields} onChange={onChange} idPrefix={idPrefix} />
+                <AgeBoundaryFields fields={fields} onChange={onChange} idPrefix={idPrefix} />
             </div>
         </div>
     );
@@ -115,17 +157,18 @@ export function ProgramCreateDialog({
     busy: boolean;
     error: string | null;
     onCancel: () => void;
-    onSubmit: (input: { fields: ProgramOperatorFields; locationIds: string[] }) => void;
+    onSubmit: (input: {
+        fields: ProgramOperatorFields;
+        locationIds: string[];
+        sharedAvailability: { availableFrom: string; availableThrough: string } | null;
+    }) => void;
 }) {
-    const [fields, setFields] = useState<ProgramOperatorFields>({
-        name: "",
-        description: "",
-        minimumAge: "",
-        maximumAge: "",
-        ageUnit: "years",
-    });
+    const [fields, setFields] = useState<ProgramOperatorFields>(() => emptyProgramOperatorFields());
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState<Set<string>>(() => new Set());
+    const [setDates, setSetDates] = useState(false);
+    const [availableFrom, setAvailableFrom] = useState("");
+    const [availableThrough, setAvailableThrough] = useState("");
 
     const visibleLocations = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -193,6 +236,43 @@ export function ProgramCreateDialog({
                                     );
                                 })}
                             </ul>
+                            {selected.size > 0 ?
+                                <div className="mt-3 space-y-2">
+                                    <label className="flex cursor-pointer items-center gap-2 text-sm text-alloy-midnight/75">
+                                        <input
+                                            type="checkbox"
+                                            checked={setDates}
+                                            onChange={(event) => setSetDates(event.target.checked)}
+                                            data-testid="program-create-set-dates"
+                                        />
+                                        <span>Set availability dates</span>
+                                    </label>
+                                    {setDates ?
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <label>
+                                                <span className="config-typo-field-label">Available from</span>
+                                                <input
+                                                    type="date"
+                                                    value={availableFrom}
+                                                    onChange={(event) => setAvailableFrom(event.target.value)}
+                                                    className="config-runtime-input mt-1"
+                                                    data-testid="program-create-available-from"
+                                                />
+                                            </label>
+                                            <label>
+                                                <span className="config-typo-field-label">Available through</span>
+                                                <input
+                                                    type="date"
+                                                    value={availableThrough}
+                                                    onChange={(event) => setAvailableThrough(event.target.value)}
+                                                    className="config-runtime-input mt-1"
+                                                    data-testid="program-create-available-through"
+                                                />
+                                            </label>
+                                        </div>
+                                    :   null}
+                                </div>
+                            :   null}
                         </section>
                     :   null}
                     {error ?
@@ -208,7 +288,16 @@ export function ProgramCreateDialog({
                     <ConfigurationPrimaryButton
                         disabled={!fields.name.trim() || busy}
                         data-testid="program-create-submit"
-                        onClick={() => onSubmit({ fields, locationIds: [...selected] })}
+                        onClick={() =>
+                            onSubmit({
+                                fields,
+                                locationIds: [...selected],
+                                sharedAvailability:
+                                    setDates && selected.size > 0
+                                        ? { availableFrom, availableThrough }
+                                        : null,
+                            })
+                        }
                     >
                         {busy ? "Creating…" : "Create Program"}
                     </ConfigurationPrimaryButton>
@@ -273,9 +362,18 @@ export function ProgramEditDialog({
     );
 }
 
+type ManageRowState = {
+    localDisplayName: string;
+    availableFrom: string;
+    availableThrough: string;
+    expanded: boolean;
+};
+
 export function ProgramManageLocationsDialog({
     locations,
+    organizationProgramName,
     initialSelectedIds,
+    initialAvailability,
     busy,
     error,
     blockedReasons,
@@ -283,15 +381,33 @@ export function ProgramManageLocationsDialog({
     onSubmit,
 }: {
     locations: readonly { id: string; label: string }[];
+    organizationProgramName: string;
     initialSelectedIds: readonly string[];
+    initialAvailability: readonly LocationProgramAvailabilityView[];
     busy: boolean;
     error: string | null;
     blockedReasons: ReadonlyMap<string, string>;
     onCancel: () => void;
-    onSubmit: (locationIds: string[]) => void;
+    onSubmit: (input: {
+        locationIds: string[];
+        configs: LocationProgramAssignmentConfig[];
+    }) => void;
 }) {
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelectedIds));
+    const [rows, setRows] = useState<Record<string, ManageRowState>>(() => {
+        const next: Record<string, ManageRowState> = {};
+        for (const location of locations) {
+            const existing = initialAvailability.find((row) => row.locationId === location.id);
+            next[location.id] = {
+                localDisplayName: existing?.localDisplayName ?? "",
+                availableFrom: existing?.availableFrom ?? "",
+                availableThrough: existing?.availableThrough ?? "",
+                expanded: false,
+            };
+        }
+        return next;
+    });
 
     const visible = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -319,6 +435,13 @@ export function ProgramManageLocationsDialog({
             }
             return next;
         });
+    };
+
+    const updateRow = (locationId: string, patch: Partial<ManageRowState>) => {
+        setRows((prev) => ({
+            ...prev,
+            [locationId]: { ...prev[locationId], ...patch },
+        }));
     };
 
     return (
@@ -372,39 +495,121 @@ export function ProgramManageLocationsDialog({
                         {visible.map((location) => {
                             const blocked = blockedReasons.get(location.id);
                             const checked = selected.has(location.id);
+                            const row = rows[location.id] ?? {
+                                localDisplayName: "",
+                                availableFrom: "",
+                                availableThrough: "",
+                                expanded: false,
+                            };
                             return (
-                                <li key={location.id}>
-                                    <label
-                                        className={`flex items-start gap-2 rounded-md px-2 py-1.5 text-sm ${
-                                            blocked ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:bg-alloy-stone/10"
-                                        }`}
-                                        title={blocked}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            className="mt-0.5"
-                                            checked={checked}
-                                            disabled={Boolean(blocked) && checked}
-                                            onChange={() => {
-                                                if (blocked && checked) return;
-                                                setSelected((prev) => {
-                                                    const next = new Set(prev);
-                                                    if (next.has(location.id)) next.delete(location.id);
-                                                    else next.add(location.id);
-                                                    return next;
-                                                });
-                                            }}
-                                            data-testid={`program-manage-location-${location.id}`}
-                                        />
-                                        <span>
-                                            <span className="block text-alloy-midnight">{location.label}</span>
-                                            {blocked ?
-                                                <span className="mt-0.5 block text-[11px] text-alloy-midnight/50">
-                                                    {blocked}
+                                <li key={location.id} className="rounded-md">
+                                    <div className="flex items-start gap-2 px-2 py-1.5">
+                                        <label
+                                            className={`flex min-w-0 flex-1 items-start gap-2 text-sm ${
+                                                blocked
+                                                    ? "cursor-not-allowed opacity-70"
+                                                    : "cursor-pointer"
+                                            }`}
+                                            title={blocked}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                className="mt-0.5"
+                                                checked={checked}
+                                                disabled={Boolean(blocked) && checked}
+                                                onChange={() => {
+                                                    if (blocked && checked) return;
+                                                    setSelected((prev) => {
+                                                        const next = new Set(prev);
+                                                        if (next.has(location.id)) next.delete(location.id);
+                                                        else next.add(location.id);
+                                                        return next;
+                                                    });
+                                                }}
+                                                data-testid={`program-manage-location-${location.id}`}
+                                            />
+                                            <span>
+                                                <span className="block text-alloy-midnight">{location.label}</span>
+                                                {blocked ?
+                                                    <span className="mt-0.5 block text-[11px] text-alloy-midnight/50">
+                                                        {blocked}
+                                                    </span>
+                                                :   null}
+                                            </span>
+                                        </label>
+                                        {checked && !blocked ?
+                                            <button
+                                                type="button"
+                                                className="shrink-0 text-xs font-medium text-alloy-bend-pine hover:underline"
+                                                onClick={() =>
+                                                    updateRow(location.id, { expanded: !row.expanded })
+                                                }
+                                                data-testid={`program-manage-configure-${location.id}`}
+                                            >
+                                                {row.expanded ? "Hide" : "Configure"}
+                                            </button>
+                                        :   null}
+                                    </div>
+                                    {checked && row.expanded ?
+                                        <div
+                                            className="mb-2 ml-8 space-y-2 rounded-md border border-alloy-stone/15 bg-alloy-stone/[0.04] p-3"
+                                            data-testid={`program-manage-config-panel-${location.id}`}
+                                        >
+                                            <label className="block">
+                                                <span className="config-typo-field-label">
+                                                    Name at this Location
                                                 </span>
-                                            :   null}
-                                        </span>
-                                    </label>
+                                                <input
+                                                    type="text"
+                                                    value={row.localDisplayName}
+                                                    onChange={(event) =>
+                                                        updateRow(location.id, {
+                                                            localDisplayName: event.target.value,
+                                                        })
+                                                    }
+                                                    className="config-runtime-input mt-1"
+                                                    placeholder={organizationProgramName}
+                                                    data-testid={`program-manage-local-name-${location.id}`}
+                                                />
+                                                <span className="mt-1 block text-[11px] text-alloy-midnight/45">
+                                                    Leave blank to use “{organizationProgramName},” the Organization
+                                                    Program name.
+                                                </span>
+                                            </label>
+                                            <div className="grid gap-2 sm:grid-cols-2">
+                                                <label>
+                                                    <span className="config-typo-field-label">Available from</span>
+                                                    <input
+                                                        type="date"
+                                                        value={row.availableFrom}
+                                                        onChange={(event) =>
+                                                            updateRow(location.id, {
+                                                                availableFrom: event.target.value,
+                                                            })
+                                                        }
+                                                        className="config-runtime-input mt-1"
+                                                        data-testid={`program-manage-from-${location.id}`}
+                                                    />
+                                                </label>
+                                                <label>
+                                                    <span className="config-typo-field-label">
+                                                        Available through
+                                                    </span>
+                                                    <input
+                                                        type="date"
+                                                        value={row.availableThrough}
+                                                        onChange={(event) =>
+                                                            updateRow(location.id, {
+                                                                availableThrough: event.target.value,
+                                                            })
+                                                        }
+                                                        className="config-runtime-input mt-1"
+                                                        data-testid={`program-manage-through-${location.id}`}
+                                                    />
+                                                </label>
+                                            </div>
+                                        </div>
+                                    :   null}
                                 </li>
                             );
                         })}
@@ -422,7 +627,19 @@ export function ProgramManageLocationsDialog({
                     <ConfigurationPrimaryButton
                         disabled={busy}
                         data-testid="program-manage-locations-submit"
-                        onClick={() => onSubmit([...selected])}
+                        onClick={() => {
+                            const locationIds = [...selected];
+                            const configs = locationIds.map((locationId) => {
+                                const row = rows[locationId];
+                                return {
+                                    locationId,
+                                    localDisplayName: row?.localDisplayName ?? "",
+                                    availableFrom: row?.availableFrom ?? "",
+                                    availableThrough: row?.availableThrough ?? "",
+                                };
+                            });
+                            onSubmit({ locationIds, configs });
+                        }}
                     >
                         {busy ? "Saving…" : "Save Changes"}
                     </ConfigurationPrimaryButton>

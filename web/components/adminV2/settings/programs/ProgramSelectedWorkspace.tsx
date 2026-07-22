@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { MoreHorizontal } from "lucide-react";
 import {
     ConfigurationPrimaryButton,
@@ -12,7 +11,6 @@ import { useEffect, useRef, useState } from "react";
 export function ProgramSelectedWorkspace({
     detail,
     canMutate,
-    locationsHref,
     onEdit,
     onManageLocations,
     onArchive,
@@ -21,7 +19,6 @@ export function ProgramSelectedWorkspace({
 }: {
     detail: ProgramOperatorDetail;
     canMutate: boolean;
-    locationsHref: string;
     onEdit: () => void;
     onManageLocations: () => void;
     onArchive: () => void;
@@ -31,8 +28,8 @@ export function ProgramSelectedWorkspace({
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const archived = detail.lifecycleStatus === "retired";
-    const previewLocations = detail.locationLabels.slice(0, 4);
-    const overflow = Math.max(0, detail.locationLabels.length - 4);
+    const previewLocations = detail.locationAvailability.slice(0, 6);
+    const overflow = Math.max(0, detail.locationAvailability.length - 6);
 
     useEffect(() => {
         if (!menuOpen) return;
@@ -182,9 +179,19 @@ export function ProgramSelectedWorkspace({
                             :   null}
                         </div>
                     :   <div className="mt-4">
-                            <ul className="space-y-1.5 text-sm text-alloy-midnight/75">
-                                {previewLocations.map((label) => (
-                                    <li key={label}>{label}</li>
+                            <ul className="space-y-3 text-sm text-alloy-midnight/75">
+                                {previewLocations.map((row) => (
+                                    <li key={row.locationId} data-testid={`programs-location-row-${row.locationId}`}>
+                                        <span className="block font-medium text-alloy-midnight">
+                                            {row.locationLabel}
+                                        </span>
+                                        <span className="block text-alloy-midnight/55">{row.statusLabel}</span>
+                                        {row.secondaryLine ?
+                                            <span className="block text-[12px] text-alloy-midnight/45">
+                                                {row.secondaryLine}
+                                            </span>
+                                        :   null}
+                                    </li>
                                 ))}
                                 {overflow > 0 ?
                                     <li className="text-alloy-midnight/50">+{overflow} more</li>
@@ -204,20 +211,6 @@ export function ProgramSelectedWorkspace({
                     }
                 </section>
             </div>
-
-            <section className="process-config-setup-card p-5" data-testid="programs-schedule-tile">
-                <h3 className="text-sm font-semibold text-alloy-midnight">Schedule patterns</h3>
-                <p className="mt-2 max-w-2xl text-sm text-alloy-midnight/60">
-                    Full Day, Half Day, and weekly schedule patterns are managed within each Location.
-                </p>
-                <Link
-                    href={locationsHref}
-                    className="mt-3 inline-flex text-sm font-medium text-alloy-bend-pine hover:underline"
-                    data-testid="programs-view-locations"
-                >
-                    View Locations
-                </Link>
-            </section>
         </div>
     );
 }

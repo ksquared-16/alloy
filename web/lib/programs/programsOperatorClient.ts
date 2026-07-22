@@ -9,18 +9,97 @@ import {
     previewMakeProgramAvailableClient,
 } from "@/lib/programs/makeProgramAvailableClient";
 import { slugifyProgramKey } from "@/lib/programs/locationProgramAssociation";
-import { operatorProgramError } from "@/lib/programs/programsOperatorPresentation";
-import type { ProgramAgeUnit } from "@/lib/programs/programsOperatorPresentation";
+import {
+    operatorProgramError,
+    readProgramAgeRange,
+    validateProgramAgeRange,
+    writeProgramAgeAudience,
+    type ProgramAgeUnit,
+} from "@/lib/programs/programsOperatorPresentation";
+import type { ProgramAgeRange } from "@/lib/programs/programAgeRange";
 
 export const PROGRAMS_ENDPOINT = "/api/admin/configuration/programs";
+export const LOCATION_PROGRAM_CATEGORIES_ENDPOINT = "/api/admin/location-program-categories";
 
 export type ProgramOperatorFields = {
     name: string;
     description: string;
     minimumAge: string;
+    minimumAgeUnit: ProgramAgeUnit;
     maximumAge: string;
-    ageUnit: ProgramAgeUnit;
+    maximumAgeUnit: ProgramAgeUnit;
 };
+
+export type LocationProgramAssignmentConfig = {
+    locationId: string;
+    localDisplayName: string;
+    availableFrom: string;
+    availableThrough: string;
+};
+
+function emptyFields(): ProgramOperatorFields {
+    return {
+        name: "",
+        description: "",
+        minimumAge: "",
+        minimumAgeUnit: "years",
+        maximumAge: "",
+        maximumAgeUnit: "years",
+    };
+}
+
+export function emptyProgramOperatorFields(): ProgramOperatorFields {
+    return emptyFields();
+}
+
+export function fieldsFromAudience(
+    name: string,
+    description: string | null | undefined,
+    audience: Record<string, unknown> | null | undefined,
+): ProgramOperatorFields {
+    const range = readProgramAgeRange(audience);
+    return {
+        name,
+        description: description ?? "",
+        minimumAge: range.minimum != null ? String(range.minimum.value) : "",
+        minimumAgeUnit: range.minimum?.unit ?? "years",
+        maximumAge: range.maximum != null ? String(range.maximum.value) : "",
+        maximumAgeUnit: range.maximum?.unit ?? "years",
+    };
+}
+
+function optionalNumber(value: string): number | null {
+    if (!value.trim()) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function fieldsToAgeRange(fields: ProgramOperatorFields): ProgramAgeRange {
+    const minValue = optionalNumber(fields.minimumAge);
+    const maxValue = optionalNumber(fields.maximumAge);
+    return {
+        minimum:
+            minValue == null
+                ? null
+                : { value: minValue, unit: fields.minimumAgeUnit },
+        maximum:
+            maxValue == null
+                ? null
+                : { value: maxValue, unit: fields.maximumAgeUnit },
+    };
+}
+
+export function validateProgramOperatorFields(fields: ProgramOperatorFields): string | null {
+    if (!fields.name.trim()) return "Program name is required.";
+    const minRaw = fields.minimumAge.trim();
+    const maxRaw = fields.maximumAge.trim();
+    if (minRaw && optionalNumber(minRaw) == null) return "Minimum age must be a number.";
+    if (maxRaw && optionalNumber(maxRaw) == null) return "Maximum age must be a number.";
+    if (minRaw.includes(".") || maxRaw.includes(".")) {
+        return "Use whole numbers with Weeks, Months, or Years.";
+    }
+    return validateProgramAgeRange(fieldsToAgeRange(fields));
+}
 
 async function postAction(body: Record<string, unknown>): Promise<Record<string, unknown>> {
     const response = await fetch(PROGRAMS_ENDPOINT, {
@@ -46,20 +125,8 @@ async function postAction(body: Record<string, unknown>): Promise<Record<string,
     return json;
 }
 
-function optionalNumber(value: string): number | undefined {
-    if (!value.trim()) return undefined;
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-}
-
 function audiencePatch(fields: ProgramOperatorFields): Record<string, unknown> {
-    const minimumAge = optionalNumber(fields.minimumAge);
-    const maximumAge = optionalNumber(fields.maximumAge);
-    const audience: Record<string, unknown> = {};
-    if (minimumAge != null) audience.minimumAge = minimumAge;
-    if (maximumAge != null) audience.maximumAge = maximumAge;
-    if (minimumAge != null || maximumAge != null) audience.ageUnit = fields.ageUnit;
-    return audience;
+    return writeProgramAgeAudience(fieldsToAgeRange(fields));
 }
 
 function uniqueProgramKey(name: string, existingKeys: ReadonlySet<string>): string {
@@ -73,6 +140,8 @@ function uniqueProgramKey(name: string, existingKeys: ReadonlySet<string>): stri
 }
 
 async function persistProgramDefinition(programId: string, fields: ProgramOperatorFields): Promise<void> {
+    const validationError = validateProgramOperatorFields(fields);
+    if (validationError) throw new Error(validationError);
     await postAction({
         action: "update_draft",
         programId,
@@ -90,13 +159,73 @@ async function persistProgramDefinition(programId: string, fields: ProgramOperat
     await postAction({ action: "publish", programId });
 }
 
+async function listLocationProgramCategories(): Promise<
+    Array<{ id: string; program_id: string | null; location_id: string }>
+> {
+    const response = await fetch(`${LOCATION_PROGRAM_CATEGORIES_ENDPOINT}?include_inactive=true`, {
+        credentials: "include",
+    });
+    const json = (await response.json().catch(() => ({}))) as {
+        categories?: Array<Record<string, unknown>>;
+        error?: string;
+    };
+    if (!response.ok) {
+        throw new Error(operatorProgramError(json.error ?? `Request failed (${response.status})`));
+    }
+    return (json.categories ?? []).map((row) => ({
+        id: String(row.id ?? ""),
+        program_id: row.program_id != null ? String(row.program_id) : null,
+        location_id: String(row.location_id ?? ""),
+    }));
+}
+
+export async function patchLocationProgramAssignments(input: {
+    programId: string;
+    configs: readonly LocationProgramAssignmentConfig[];
+}): Promise<void> {
+    if (input.configs.length === 0) return;
+
+    const categories = await listLocationProgramCategories();
+    const byLocation = new Map(
+        categories
+            .filter((row) => row.program_id === input.programId && row.id)
+            .map((row) => [row.location_id, row.id] as const),
+    );
+
+    const updates = input.configs.flatMap((config) => {
+        const id = byLocation.get(config.locationId);
+        if (!id) return [];
+        return [{
+            id,
+            local_display_name: config.localDisplayName.trim() || null,
+            available_from: config.availableFrom.trim() || null,
+            available_through: config.availableThrough.trim() || null,
+        }];
+    });
+    if (updates.length === 0) return;
+
+    const response = await fetch(LOCATION_PROGRAM_CATEGORIES_ENDPOINT, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates }),
+    });
+    const json = (await response.json().catch(() => ({}))) as { error?: string };
+    if (!response.ok) {
+        throw new Error(operatorProgramError(json.error ?? `Request failed (${response.status})`));
+    }
+}
+
 export async function createProgramOperator(input: {
     fields: ProgramOperatorFields;
     locationIds: readonly string[];
     existingKeys: ReadonlySet<string>;
+    sharedAvailability?: { availableFrom: string; availableThrough: string } | null;
 }): Promise<{ programId: string }> {
+    const validationError = validateProgramOperatorFields(input.fields);
+    if (validationError) throw new Error(validationError);
+
     const name = input.fields.name.trim();
-    if (!name) throw new Error("Program name is required.");
     const key = uniqueProgramKey(name, input.existingKeys);
     const locationIds = [...new Set(input.locationIds.map(String).filter(Boolean))];
 
@@ -130,9 +259,21 @@ export async function createProgramOperator(input: {
         });
         const programId = String(result.programId ?? "").trim();
         if (!programId) throw new Error("We could not create this Program. Try again.");
-        // Age range is not part of make_available create input — persist + publish.
-        if (input.fields.minimumAge.trim() || input.fields.maximumAge.trim()) {
+        const range = fieldsToAgeRange(input.fields);
+        if (range.minimum || range.maximum) {
             await persistProgramDefinition(programId, input.fields);
+        }
+        const shared = input.sharedAvailability;
+        if (shared && (shared.availableFrom.trim() || shared.availableThrough.trim())) {
+            await patchLocationProgramAssignments({
+                programId,
+                configs: locationIds.map((locationId) => ({
+                    locationId,
+                    localDisplayName: "",
+                    availableFrom: shared.availableFrom,
+                    availableThrough: shared.availableThrough,
+                })),
+            });
         }
         return { programId };
     }
@@ -152,8 +293,6 @@ export async function saveProgramOperator(input: {
     programId: string;
     fields: ProgramOperatorFields;
 }): Promise<void> {
-    const name = input.fields.name.trim();
-    if (!name) throw new Error("Program name is required.");
     await persistProgramDefinition(input.programId, input.fields);
 }
 
@@ -162,6 +301,7 @@ export async function syncProgramLocationsOperator(input: {
     publicationId?: string | null;
     selectedLocationIds: readonly string[];
     currentLocationIds: readonly string[];
+    configs?: readonly LocationProgramAssignmentConfig[];
 }): Promise<{ blocked: Array<{ locationId: string; locationLabel: string; reason: string }> }> {
     const selected = new Set(input.selectedLocationIds.map(String).filter(Boolean));
     const current = new Set(input.currentLocationIds.map(String).filter(Boolean));
@@ -201,6 +341,17 @@ export async function syncProgramLocationsOperator(input: {
         });
         const payload = result.result as { blocked?: Array<{ locationId: string; locationLabel: string; reason: string }> } | undefined;
         blocked = Array.isArray(payload?.blocked) ? payload.blocked : [];
+        for (const item of blocked) {
+            selected.add(item.locationId);
+        }
+    }
+
+    const remainingConfigs = (input.configs ?? []).filter((config) => selected.has(config.locationId));
+    if (remainingConfigs.length > 0 && blocked.length === 0) {
+        await patchLocationProgramAssignments({
+            programId: input.programId,
+            configs: remainingConfigs,
+        });
     }
 
     return { blocked };

@@ -7,7 +7,7 @@
  */
 
 export const LOCATION_PROGRAM_CATEGORY_SELECT_PUBLICATION =
-    "id, org_id, location_id, key, label, sort_order, is_active, metadata, program_id, program_revision_id, configuration_consumption_id, local_description_override, local_authorization_evidence, created_at, updated_at";
+    "id, org_id, location_id, key, label, sort_order, is_active, metadata, program_id, program_revision_id, configuration_consumption_id, local_description_override, local_authorization_evidence, local_display_name, available_from, available_through, created_at, updated_at";
 
 export const LOCATION_PROGRAM_CATEGORY_SELECT_ASSIGNMENT =
     "id, org_id, location_id, key, label, sort_order, is_active, metadata, created_at, updated_at, assignment_status, assigned_program_revision_id, consumed_program_revision_id";
@@ -17,6 +17,7 @@ export const LOCATION_PROGRAM_CATEGORY_SELECT_CORE =
 
 export const LOCATION_PROGRAM_CATEGORY_SELECT_ATTEMPTS = [
     LOCATION_PROGRAM_CATEGORY_SELECT_PUBLICATION,
+    "id, org_id, location_id, key, label, sort_order, is_active, metadata, program_id, program_revision_id, configuration_consumption_id, local_description_override, local_authorization_evidence, created_at, updated_at",
     LOCATION_PROGRAM_CATEGORY_SELECT_ASSIGNMENT,
     LOCATION_PROGRAM_CATEGORY_SELECT_CORE,
 ] as const;
@@ -62,6 +63,9 @@ export function stripUnavailableProgramCategoryPatchFields(
         "configuration_consumption_id",
         "local_description_override",
         "local_authorization_evidence",
+        "local_display_name",
+        "available_from",
+        "available_through",
     ] as const) {
         if (Object.prototype.hasOwnProperty.call(next, field) && message.includes(field)) {
             delete next[field];
@@ -76,6 +80,9 @@ export function stripUnavailableProgramCategoryPatchFields(
             "configuration_consumption_id",
             "local_description_override",
             "local_authorization_evidence",
+            "local_display_name",
+            "available_from",
+            "available_through",
         ] as const) {
             if (Object.prototype.hasOwnProperty.call(next, field)) {
                 delete next[field];

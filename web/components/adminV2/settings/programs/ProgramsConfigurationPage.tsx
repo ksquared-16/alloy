@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BookOpen, Plus } from "lucide-react";
 import {
     ConfigurationContext,
@@ -14,6 +14,7 @@ import {
 import { useConfigurationContinuityOptional } from "@/components/adminV2/settings/configurationRuntime/ConfigurationContinuityProvider";
 import { ProgramsObjectSelector } from "@/components/adminV2/settings/programs/ProgramsObjectSelector";
 import { ProgramSelectedWorkspace } from "@/components/adminV2/settings/programs/ProgramSelectedWorkspace";
+import { ProgramsOperatorLanding } from "@/components/adminV2/settings/programs/ProgramsOperatorLanding";
 import {
     ProgramCreateDialog,
     ProgramEditDialog,
@@ -39,18 +40,26 @@ import {
     buildProgramOperatorDetail,
     buildProgramsOperatorCollection,
     filterProgramOperatorRows,
+    normalizeProgramsLifecycleFilter,
+    normalizeProgramsSortDirection,
+    normalizeProgramsSortField,
+    sortProgramOperatorRows,
     type ProgramsLifecycleFilter,
+    type ProgramsSortDirection,
+    type ProgramsSortField,
 } from "@/lib/programs/programsOperatorModel";
+import { buildProgramsLandingModel } from "@/lib/programs/programsOperatorLanding";
 import {
     archiveProgramOperator,
     createProgramOperator,
     deleteProgramOperator,
+    fieldsFromAudience,
     restoreProgramOperator,
     saveProgramOperator,
     syncProgramLocationsOperator,
     type ProgramOperatorFields,
 } from "@/lib/programs/programsOperatorClient";
-import { operatorProgramError, readAudienceAge } from "@/lib/programs/programsOperatorPresentation";
+import { operatorProgramError } from "@/lib/programs/programsOperatorPresentation";
 import { readConfigurationRuntimeIssue } from "@/lib/configPublication/runtimeIssue";
 
 type DialogMode =
@@ -67,14 +76,16 @@ function fieldsFromSnapshot(
     programId: string,
 ): ProgramOperatorFields {
     const program = snapshot.programs.find((row) => row.id === programId);
-    const audience = readAudienceAge((program?.draft.audience ?? {}) as Record<string, unknown>);
-    return {
-        name: program?.draft.label ?? "",
-        description: program?.draft.description ?? "",
-        minimumAge: audience.minimumAge != null ? String(audience.minimumAge) : "",
-        maximumAge: audience.maximumAge != null ? String(audience.maximumAge) : "",
-        ageUnit: audience.ageUnit ?? "years",
-    };
+    return fieldsFromAudience(
+        program?.draft.label ?? "",
+        program?.draft.description ?? "",
+        (program?.draft.audience ?? {}) as Record<string, unknown>,
+    );
+}
+
+function readInitialQueryParam(key: string): string | null {
+    if (typeof window === "undefined") return null;
+    return new URL(window.location.href).searchParams.get(key);
 }
 
 /**
@@ -83,10 +94,17 @@ function fieldsFromSnapshot(
  */
 export default function ProgramsConfigurationPage({
     initialProgramId = null,
+    initialStatus = null,
+    initialSort = null,
+    initialDirection = null,
 }: {
     initialProgramId?: string | null;
+    initialStatus?: string | null;
+    initialSort?: string | null;
+    initialDirection?: string | null;
 }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { orgId: authOrgId } = useAdminAuth();
     const continuity = useConfigurationContinuityOptional();
     const orgId = continuity?.orgId || authOrgId || "";
@@ -94,14 +112,23 @@ export default function ProgramsConfigurationPage({
     const [snapshot, setSnapshot] = useState<ProgramPublicationSnapshot | null>(() =>
         orgId ? (peekProgramsCollection(orgId) ?? null) : null,
     );
+    // URL owns selection — never restore a Program from Continuity memory against an empty URL.
     const [selectedProgramId, setSelectedProgramId] = useState<string | null>(
-        initialProgramId?.trim() || continuity?.selection?.programId || null,
+        initialProgramId?.trim() || null,
     );
     const [shouldSyncRoute, setShouldSyncRoute] = useState(false);
     const [loading, setLoading] = useState(() => !orgId || !peekProgramsCollection(orgId || ""));
     const [error, setError] = useState<string | null>(null);
     const [search, setSearch] = useState("");
-    const [filter, setFilter] = useState<ProgramsLifecycleFilter>("active");
+    const [filter, setFilter] = useState<ProgramsLifecycleFilter>(() =>
+        normalizeProgramsLifecycleFilter(initialStatus ?? readInitialQueryParam("status")),
+    );
+    const [sortField, setSortField] = useState<ProgramsSortField>(() =>
+        normalizeProgramsSortField(initialSort ?? readInitialQueryParam("sort")),
+    );
+    const [sortDirection, setSortDirection] = useState<ProgramsSortDirection>(() =>
+        normalizeProgramsSortDirection(initialDirection ?? readInitialQueryParam("direction")),
+    );
     const [dialog, setDialog] = useState<DialogMode>(null);
     const [dialogError, setDialogError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -110,6 +137,19 @@ export default function ProgramsConfigurationPage({
     const [removalBlocks, setRemovalBlocks] = useState<Map<string, string>>(() => new Map());
 
     const canManage = snapshot?.capabilities.canManage === true;
+
+    const urlProgramId = searchParams.get("programId")?.trim() || null;
+    const urlStatus = normalizeProgramsLifecycleFilter(searchParams.get("status"));
+    const urlSort = normalizeProgramsSortField(searchParams.get("sort"));
+    const urlDirection = normalizeProgramsSortDirection(searchParams.get("direction"));
+
+    // URL owns selection + filter/sort (landing is legitimate when programId is absent).
+    useEffect(() => {
+        setSelectedProgramId((current) => (current === urlProgramId ? current : urlProgramId));
+        setFilter((current) => (current === urlStatus ? current : urlStatus));
+        setSortField((current) => (current === urlSort ? current : urlSort));
+        setSortDirection((current) => (current === urlDirection ? current : urlDirection));
+    }, [urlProgramId, urlStatus, urlSort, urlDirection]);
 
     const reload = useCallback(async (_reason: string) => {
         if (!orgId) return;
@@ -166,13 +206,27 @@ export default function ProgramsConfigurationPage({
         () => (snapshot ? buildProgramsOperatorCollection(snapshot) : []),
         [snapshot],
     );
-    const visibleRows = useMemo(
-        () => filterProgramOperatorRows(rows, { search, filter }),
-        [rows, search, filter],
-    );
+    const visibleRows = useMemo(() => {
+        const filtered = filterProgramOperatorRows(rows, { search, filter });
+        return sortProgramOperatorRows(filtered, sortField, sortDirection);
+    }, [rows, search, filter, sortField, sortDirection]);
     const detail = useMemo(
         () => (snapshot && selectedProgramId ? buildProgramOperatorDetail(snapshot, selectedProgramId) : null),
         [snapshot, selectedProgramId],
+    );
+    const landingModel = useMemo(
+        () => (snapshot ? buildProgramsLandingModel(snapshot) : null),
+        [snapshot],
+    );
+
+    const programsHref = useCallback(
+        (programId: string | null) =>
+            organizationProgramsHref(programId, null, {
+                status: filter,
+                sort: sortField,
+                direction: sortDirection,
+            }),
+        [filter, sortField, sortDirection],
     );
 
     // Drop selection when the Program no longer exists in a settled snapshot.
@@ -181,9 +235,21 @@ export default function ProgramsConfigurationPage({
         const exists = snapshot.programs.some((program) => program.id === selectedProgramId);
         if (!exists) {
             setSelectedProgramId(null);
+            continuity?.rememberProgramSelection({ programId: null, section: null });
             setShouldSyncRoute(true);
         }
-    }, [selectedProgramId, snapshot, loading, busy]);
+    }, [selectedProgramId, snapshot, loading, busy, continuity]);
+
+    // When filter/search excludes the selection, return to the Programs landing (do not auto-select).
+    useEffect(() => {
+        if (!snapshot || loading || busy) return;
+        if (!selectedProgramId) return;
+        const stillVisible = visibleRows.some((row) => row.id === selectedProgramId);
+        if (stillVisible) return;
+        setSelectedProgramId(null);
+        continuity?.rememberProgramSelection({ programId: null, section: null });
+        setShouldSyncRoute(true);
+    }, [visibleRows, selectedProgramId, snapshot, loading, busy, continuity]);
 
     const selectProgram = useCallback(
         (programId: string | null, options?: { replace?: boolean }) => {
@@ -192,7 +258,7 @@ export default function ProgramsConfigurationPage({
                 programId,
                 section: null,
             });
-            const href = organizationProgramsHref(programId);
+            const href = programsHref(programId);
             if (options?.replace) router.replace(href, { scroll: false });
             else router.push(href, { scroll: false });
             // Soft-nav can retain a stale search string on same pathname; keep canonical selection in the URL.
@@ -203,14 +269,25 @@ export default function ProgramsConfigurationPage({
                 }
             }
         },
-        [continuity, router],
+        [continuity, programsHref, router],
     );
+
+    const applyFilter = useCallback((next: ProgramsLifecycleFilter) => {
+        setFilter(next);
+        setShouldSyncRoute(true);
+    }, []);
+
+    const applySort = useCallback((field: ProgramsSortField, direction: ProgramsSortDirection) => {
+        setSortField(field);
+        setSortDirection(direction);
+        setShouldSyncRoute(true);
+    }, []);
 
     useEffect(() => {
         if (!shouldSyncRoute) return;
         setShouldSyncRoute(false);
-        router.replace(organizationProgramsHref(selectedProgramId), { scroll: false });
-    }, [router, selectedProgramId, shouldSyncRoute]);
+        router.replace(programsHref(selectedProgramId), { scroll: false });
+    }, [router, selectedProgramId, shouldSyncRoute, programsHref]);
 
     // Normalize legacy ?section= away without full reload
     useEffect(() => {
@@ -232,7 +309,15 @@ export default function ProgramsConfigurationPage({
         setDialog({ kind: "create" });
     };
 
-    const afterMutation = async (programId: string | null, message?: string) => {
+    const afterMutation = async (
+        programId: string | null,
+        message?: string,
+        routeOptions?: {
+            status?: ProgramsLifecycleFilter;
+            sort?: ProgramsSortField;
+            direction?: ProgramsSortDirection;
+        },
+    ) => {
         if (orgId) {
             invalidateProgramsCollection(orgId, "program-operator-mutation", { publishBus: true });
         }
@@ -246,7 +331,11 @@ export default function ProgramsConfigurationPage({
             markConfigurationContinuity("reveal", { domain: "programs" });
             setSelectedProgramId(programId);
             continuity?.rememberProgramSelection({ programId, section: null });
-            const href = organizationProgramsHref(programId);
+            const href = organizationProgramsHref(programId, null, {
+                status: routeOptions?.status ?? filter,
+                sort: routeOptions?.sort ?? sortField,
+                direction: routeOptions?.direction ?? sortDirection,
+            });
             router.replace(href, { scroll: false });
             if (typeof window !== "undefined") {
                 window.history.replaceState(window.history.state, "", href);
@@ -366,11 +455,12 @@ export default function ProgramsConfigurationPage({
                             programs={visibleRows}
                             selectedId={selectedProgramId}
                             filter={filter}
-                            onFilterChange={setFilter}
+                            onFilterChange={applyFilter}
+                            sortField={sortField}
+                            sortDirection={sortDirection}
+                            onSortChange={applySort}
                             search={search}
                             onSearchChange={setSearch}
-                            canMutate={canManage}
-                            onAddProgram={openCreate}
                             totalCount={rows.length}
                             onSelect={(programId) => selectProgram(programId)}
                         />
@@ -389,7 +479,7 @@ export default function ProgramsConfigurationPage({
                                         selectProgram(value || null);
                                     }}
                                 >
-                                    <option value="">Select a Program</option>
+                                    <option value="">Programs overview</option>
                                     {visibleRows.map((program) => (
                                         <option key={program.id} value={program.id}>
                                             {program.name}
@@ -402,7 +492,6 @@ export default function ProgramsConfigurationPage({
                                 <ProgramSelectedWorkspace
                                     detail={detail}
                                     canMutate={canManage}
-                                    locationsHref="/organization/locations"
                                     onEdit={() => {
                                         setDialogError(null);
                                         setDialog({ kind: "edit" });
@@ -440,15 +529,12 @@ export default function ProgramsConfigurationPage({
                                         })
                                     }
                                 />
-                            :   <div
-                                    className="process-config-setup-card p-8 text-center"
-                                    data-testid="programs-no-selection"
-                                >
-                                    <h2 className="config-typo-workspace-title">Select a Program</h2>
-                                    <p className="mx-auto mt-2 max-w-md text-sm text-alloy-midnight/55">
-                                        Choose a Program from the list to view details and manage where it is available.
-                                    </p>
-                                </div>
+                            : landingModel ?
+                                <ProgramsOperatorLanding
+                                    model={landingModel}
+                                    locationsHref="/organization/locations"
+                                />
+                            :   null
                             }
                         </main>
                     </div>
@@ -474,6 +560,7 @@ export default function ProgramsConfigurationPage({
                                     fields: input.fields,
                                     locationIds: input.locationIds,
                                     existingKeys,
+                                    sharedAvailability: input.sharedAvailability,
                                 });
                                 await afterMutation(created.programId, "Program created.");
                             } catch (err) {
@@ -518,7 +605,9 @@ export default function ProgramsConfigurationPage({
             {dialog?.kind === "manage-locations" && detail && snapshot && canManage ?
                 <ProgramManageLocationsDialog
                     locations={snapshot.locations}
+                    organizationProgramName={detail.name}
                     initialSelectedIds={associatedLocationIdsForProgram(snapshot, detail.id)}
+                    initialAvailability={detail.locationAvailability}
                     busy={busy}
                     error={dialogError}
                     blockedReasons={removalBlocks}
@@ -527,7 +616,7 @@ export default function ProgramsConfigurationPage({
                         setDialog(null);
                         setDialogError(null);
                     }}
-                    onSubmit={(locationIds) => {
+                    onSubmit={(input) => {
                         void (async () => {
                             setBusy(true);
                             setDialogError(null);
@@ -536,8 +625,9 @@ export default function ProgramsConfigurationPage({
                                 const result = await syncProgramLocationsOperator({
                                     programId: detail.id,
                                     publicationId: program?.latestPublication?.id ?? null,
-                                    selectedLocationIds: locationIds,
+                                    selectedLocationIds: input.locationIds,
                                     currentLocationIds: associatedLocationIdsForProgram(snapshot, detail.id),
+                                    configs: input.configs,
                                 });
                                 if (result.blocked.length > 0) {
                                     const next = new Map<string, string>();
@@ -594,8 +684,10 @@ export default function ProgramsConfigurationPage({
                                         setBusy(true);
                                         try {
                                             await archiveProgramOperator(detail.id);
-                                            await afterMutation(detail.id, "Program archived.");
                                             setFilter("archived");
+                                            await afterMutation(detail.id, "Program archived.", {
+                                                status: "archived",
+                                            });
                                         } catch (err) {
                                             setError(
                                                 operatorProgramError(
