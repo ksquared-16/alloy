@@ -60,11 +60,18 @@ describe("Current Work semantic readiness VM", () => {
             resolve(__dirname, "../../../components/admin/focusPanel/cards/CurrentWorkCard.tsx"),
             "utf8",
         );
-        // What's Next presents readiness as "Ready to continue / Still needed", not a progress bar.
-        expect(cardSource).toContain("surface.readiness");
-        expect(cardSource).not.toContain("progress.percent");
-        expect(cardSource).not.toContain('data-work-progress="true"');
-        expect(cardSource).not.toContain('role="progressbar"');
+        const focusedSource = readFileSync(
+            resolve(__dirname, "../../../components/admin/focusPanel/cards/CurrentWorkFocusedSurface.tsx"),
+            "utf8",
+        );
+        // What's Next presents readiness as state ("Still needed"), never a progress bar — in the
+        // summary card AND the focused configured-work surface (Slice A).
+        expect(focusedSource).toContain("surface.readiness");
+        for (const source of [cardSource, focusedSource]) {
+            expect(source).not.toContain("progress.percent");
+            expect(source).not.toContain('data-work-progress="true"');
+            expect(source).not.toContain('role="progressbar"');
+        }
     });
 
     it("blocked reason is visible in readiness VM", () => {
@@ -166,13 +173,19 @@ describe("Current Work semantic readiness VM", () => {
         expect(vm.readiness.requirements?.total).toBe(2);
         expect(vm.readiness.requirements?.remaining).toBe(2);
 
+        // ReadinessSummary now lives in its own module (extracted in Slice A so the focused surface
+        // can reuse it); What's Next renders requirements as "Still needed", not a collapsed disclosure.
+        const readinessSource = readFileSync(
+            resolve(__dirname, "../../../components/admin/focusPanel/cards/CurrentWorkReadinessSummary.tsx"),
+            "utf8",
+        );
+        expect(readinessSource).toContain("Still needed");
+        expect(readinessSource).toContain('data-work-readiness-group="still-needed"');
+        expect(readinessSource).not.toContain("Location Id");
         const cardSource = readFileSync(
             resolve(__dirname, "../../../components/admin/focusPanel/cards/CurrentWorkCard.tsx"),
             "utf8",
         );
-        // What's Next renders requirements as "Still needed" (ReadinessSummary), not a collapsed disclosure.
-        expect(cardSource).toContain("Still needed");
-        expect(cardSource).toContain('data-work-readiness-group="still-needed"');
         expect(cardSource).not.toContain("Location Id");
         void context;
     });

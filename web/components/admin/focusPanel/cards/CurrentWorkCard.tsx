@@ -8,7 +8,8 @@ import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentW
 import CurrentWorkActivityPreview, {
     type CurrentWorkActivityPreviewItem,
 } from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
-import CurrentWorkWorkspace from "@/components/admin/focusPanel/cards/CurrentWorkWorkspace";
+import CurrentWorkFocusedSurface from "@/components/admin/focusPanel/cards/CurrentWorkFocusedSurface";
+import { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWorkReadinessSummary";
 import { useWorkIntentOutcomeCompletion } from "@/components/workIntent/useWorkIntentOutcomeCompletion";
 import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
 import { buildCurrentWorkCardEvidence } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
@@ -373,100 +374,48 @@ export default function CurrentWorkCard({
     const stageLabel = context.businessProcess?.stageKey ?? null;
     const ownerLabel = null;
 
-    if (isWorkspace) {
-        if (stageWorkPending) {
-            return (
-                <section
-                    className="alloy-os-currentwork-workspace"
-                    data-current-work-workspace="true"
-                    data-work-pending="true"
-                    aria-busy="true"
-                >
-                    <button
-                        type="button"
-                        className="alloy-os-currentwork-workspace__back"
-                        onClick={closeWorkspace}
-                        data-work-action="back-to-summary"
-                    >
-                        ← Back to summary
-                    </button>
-                    <p className="alloy-os-household__row-detail alloy-os-currentwork__pending" aria-label="Loading current work">
-                        Loading current work…
-                    </p>
-                </section>
-            );
-        }
-        if (evidence.isEmpty) {
-            return (
-                <section className="alloy-os-currentwork-workspace" data-current-work-workspace="true" data-work-empty="true">
-                    <button
-                        type="button"
-                        className="alloy-os-currentwork-workspace__back"
-                        onClick={closeWorkspace}
-                        data-work-action="back-to-summary"
-                    >
-                        ← Back to summary
-                    </button>
-                    <p className="alloy-os-household__row-detail">No active work</p>
-                </section>
-            );
-        }
-        return (
-            <CurrentWorkWorkspace
-                surface={surface}
-                completionPhase={completionPhase}
-                pendingOutcome={pendingOutcome}
-                pendingOutcomeKey={pendingOutcomeKey}
-                primaryWorkItem={vm.primaryWorkItem}
-                busy={busy}
-                error={error}
-                handoffNotice={handoffNotice}
-                activityItems={activityPreviewItems}
-                activityPreviewOpen={activityPreviewOpen}
-                onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
-                onCloseActivityPreview={handleCloseActivityPreview}
-                onViewFullActivity={handleViewFullActivity}
-                onChecklistItem={handleChecklistItem}
-                onSelectOutcome={(key) => {
-                    clearError();
-                    setPendingOutcomeKey(key);
-                    setCompletionPhase("confirm");
-                }}
-                onCancelOutcome={() => {
-                    setPendingOutcomeKey(null);
-                    setCompletionPhase("select_result");
-                }}
-                onConfirmOutcome={handleConfirmOutcome}
-                onCancelPicker={() => {
-                    setPendingOutcomeKey(null);
-                    setCompletionPhase("working");
-                }}
-                onAction={invokeAction}
-                onBack={closeWorkspace}
-                onContinueAfterComplete={() => {
-                    if (completionSummary?.nextWorkLabel) {
-                        resetCompletion();
-                        return;
-                    }
-                    closeWorkspace();
-                }}
-                completionSummary={completionSummary}
-                stageLabel={stageLabel}
-                ownerLabel={ownerLabel}
-                actionPanel={
-                    activePanelAction ?
-                        <CurrentWorkActionPanel
-                            action={activePanelAction}
-                            context={context}
-                            mutation={mutation}
-                            onClose={closeActionPanel}
-                            onComplete={handleActionPanelComplete}
-                        />
-                    :   null
-                }
-            />
-        );
-    }
+    void stageLabel;
+    void ownerLabel;
+
+    // Slice A: the focused (elevated) state renders a PURPOSE-BUILT centered configured-work
+    // surface — NOT the legacy two-column workspace body — inside the same UniversalCard so the
+    // grid's centered elevation applies. Summary and focused share one card; only the body swaps.
+    const focusedBody = (
+        <CurrentWorkFocusedSurface
+            surface={surface}
+            completionPhase={completionPhase}
+            pendingOutcome={pendingOutcome}
+            pendingOutcomeKey={pendingOutcomeKey}
+            busy={busy}
+            error={error}
+            handoffNotice={handoffNotice}
+            activityItems={activityPreviewItems}
+            onChecklistItem={handleChecklistItem}
+            onAction={invokeAction}
+            onSelectOutcome={(key) => {
+                clearError();
+                setPendingOutcomeKey(key);
+                setCompletionPhase("confirm");
+            }}
+            onCancelOutcome={() => {
+                setPendingOutcomeKey(null);
+                setCompletionPhase("working");
+            }}
+            onConfirmOutcome={handleConfirmOutcome}
+            onClose={closeWorkspace}
+            actionPanel={
+                activePanelAction ?
+                    <CurrentWorkActionPanel
+                        action={activePanelAction}
+                        context={context}
+                        mutation={mutation}
+                        onClose={closeActionPanel}
+                        onComplete={handleActionPanelComplete}
+                    />
+                :   null
+            }
+        />
+    );
 
     const body =
         stageWorkPending ? (
@@ -492,6 +441,7 @@ export default function CurrentWorkCard({
                     resetCompletion();
                 }}
             />
+        : isWorkspace ? focusedBody
         :   <SummaryBody
                 surface={surface}
                 onChecklistItem={handleChecklistItem}
@@ -502,7 +452,7 @@ export default function CurrentWorkCard({
         <div
             className="alloy-os-household alloy-os-currentwork"
             data-work-card="true"
-            data-work-card-perspective={stageWorkPending ? "pending" : evidence.isEmpty ? "empty" : "summary"}
+            data-work-card-perspective={stageWorkPending ? "pending" : evidence.isEmpty ? "empty" : isWorkspace ? "focused" : "summary"}
             data-current-work-surface="true"
         >
             <UniversalCard
@@ -526,167 +476,10 @@ export default function CurrentWorkCard({
     );
 }
 
-/**
- * What's Next readiness — a CONCISE summary, not the full field checklist. Shows only the OUTSTANDING
- * requirements ("Still needed"); the complete/satisfied field inventory is owned by the Required
- * Information card and is deliberately not reproduced here (that dump is where duplicate labels and
- * internal identifiers leaked). Deduplicates by label and caps, with a handoff to Required Information
- * for the rest. Derives entirely from the View Model — no new runtime, no new field.
- */
-/** Effective owner for a requirement — runtime metadata first, scope fallback (never the label). */
-function requirementOwner(item: CurrentWorkChecklistItemVM): CurrentWorkRequirementOwner {
-    return item.owner ?? resolveCurrentWorkRequirementOwner({ scope: item.scope });
-}
-
-type ReadinessOwnerGroup = { owner: CurrentWorkRequirementOwner; items: CurrentWorkChecklistItemVM[] };
-
-/**
- * Group outstanding requirements by owning capability. Dedupes by owner+label (so the same
- * label under two owners is preserved as two groups — never collapsed into one). Group order
- * follows first appearance in the runtime projection.
- */
-function groupStillNeededByOwner(items: CurrentWorkChecklistItemVM[]): ReadinessOwnerGroup[] {
-    const groups: ReadinessOwnerGroup[] = [];
-    const byOwnerKey = new Map<string, ReadinessOwnerGroup>();
-    const seen = new Set<string>();
-    for (const item of items) {
-        if (item.status === "complete") continue;
-        const label = item.label.trim();
-        if (!label) continue;
-        const owner = requirementOwner(item);
-        const dedupeKey = `${owner.key}::${label.toLowerCase()}`;
-        if (seen.has(dedupeKey)) continue;
-        seen.add(dedupeKey);
-        let group = byOwnerKey.get(owner.key);
-        if (!group) {
-            group = { owner, items: [] };
-            byOwnerKey.set(owner.key, group);
-            groups.push(group);
-        }
-        group.items.push(item);
-    }
-    return groups;
-}
-
-/** Synthetic navigation target so the group-level "Open {owner} →" reuses the checklist handoff. */
-function ownerHandoffItem(owner: CurrentWorkRequirementOwner): CurrentWorkChecklistItemVM {
-    return { key: `owner:${owner.key}`, label: owner.label, status: "missing", owner };
-}
-
-export function ReadinessSummary({
-    surface,
-    onNavigate,
-}: {
-    surface: CurrentWorkSurfaceVM;
-    onNavigate: (item: CurrentWorkChecklistItemVM) => void;
-}) {
-    const items: CurrentWorkChecklistItemVM[] = surface.readiness.requirements?.items ?? [];
-    const groups = groupStillNeededByOwner(items);
-    if (groups.length === 0) return null;
-    // Cap total requirement rows across groups (density); the rest defer to Required Information.
-    const CAP = 4;
-    let shown = 0;
-    let overflow = 0;
-    const visibleGroups: ReadinessOwnerGroup[] = [];
-    for (const group of groups) {
-        if (shown >= CAP) {
-            overflow += group.items.length;
-            continue;
-        }
-        const room = CAP - shown;
-        const visibleItems = group.items.slice(0, room);
-        overflow += group.items.length - visibleItems.length;
-        visibleGroups.push({ owner: group.owner, items: visibleItems });
-        shown += visibleItems.length;
-    }
-    return (
-        <div className="alloy-os-currentwork__readiness-block" data-work-readiness="true" data-work-readiness-group="still-needed">
-            <p className="alloy-os-currentwork__readiness-reason">Still needed</p>
-            {visibleGroups.map((group) => (
-                <div
-                    key={group.owner.key}
-                    className="alloy-os-currentwork__readiness-owner-group"
-                    data-work-readiness-owner={group.owner.key}
-                >
-                    <p className="alloy-os-currentwork__readiness-owner">{group.owner.label}</p>
-                    <ChecklistStepper items={group.items} onNavigate={onNavigate} />
-                    {group.owner.card ?
-                        <button
-                            type="button"
-                            className="alloy-os-currentwork__stepper-button alloy-os-currentwork__readiness-owner-link"
-                            data-work-readiness-owner-link={group.owner.key}
-                            onClick={() => onNavigate(ownerHandoffItem(group.owner))}
-                        >
-                            <span className="alloy-os-currentwork__stepper-target">Open {group.owner.label} →</span>
-                        </button>
-                    :   null}
-                </div>
-            ))}
-            {overflow > 0 ?
-                <p className="alloy-os-currentwork__disclosure-overflow">
-                    +{overflow} more in Required information
-                </p>
-            :   null}
-        </div>
-    );
-}
-
-function ChecklistStepper({
-    items,
-    onNavigate,
-}: {
-    items: CurrentWorkChecklistItemVM[];
-    onNavigate: (item: CurrentWorkChecklistItemVM) => void;
-}) {
-    if (items.length === 0) return null;
-    return (
-        <ol className="alloy-os-currentwork__stepper" data-work-checklist="true">
-            {items.map((item, index) => {
-                const navigable =
-                    item.status !== "complete"
-                    && (item.actionRef != null || item.handoffItemId != null || item.owner?.card != null);
-                const mark =
-                    item.status === "complete" ? "✓"
-                    : item.status === "blocked" ? "!"
-                    : "○";
-                const content = (
-                    <>
-                        <span
-                            className={clsx(
-                                "alloy-os-currentwork__stepper-mark",
-                                item.status === "complete" && "alloy-os-currentwork__stepper-mark--complete",
-                            )}
-                            aria-hidden
-                        >
-                            {mark}
-                        </span>
-                        <span className="alloy-os-currentwork__stepper-label">{item.label}</span>
-                    </>
-                );
-                return (
-                    <li key={item.key} className="alloy-os-currentwork__stepper-item">
-                        {navigable ?
-                            <button
-                                type="button"
-                                className="alloy-os-currentwork__stepper-button"
-                                data-work-checklist-item={item.key}
-                                onClick={() => onNavigate(item)}
-                            >
-                                {content}
-                            </button>
-                        :   <div className="alloy-os-currentwork__stepper-static" data-work-checklist-state={item.status}>
-                                {content}
-                            </div>
-                        }
-                        {index < items.length - 1 ?
-                            <span className="alloy-os-currentwork__stepper-connector" aria-hidden />
-                        :   null}
-                    </li>
-                );
-            })}
-        </ol>
-    );
-}
+// ReadinessSummary (Slice E ownership grouping) lives in its own module so the focused
+// configured-work surface (Slice A) can reuse it without a circular import. Re-exported here
+// for back-compat with existing importers.
+export { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWorkReadinessSummary";
 
 function SummaryBody({
     surface,

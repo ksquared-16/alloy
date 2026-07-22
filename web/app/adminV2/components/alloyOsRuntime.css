@@ -5667,6 +5667,117 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   padding: 2px 0;
 }
 
+/* Slice A — centered configured-work focused surface. Single column; the centered card frame
+ * + elevation come from the elevated `.alloy-os-ucard` treatment, so this only owns internal
+ * layout. No progress meter, no two-column workspace grid. */
+.alloy-os-currentwork__focused {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px;
+  max-height: min(68vh, calc(100dvh - 120px));
+  overflow-y: auto;
+}
+.alloy-os-currentwork__focused-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.alloy-os-currentwork__focused-eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+.alloy-os-currentwork__focused-close {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 6px;
+  border-radius: 8px;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, #64748b);
+}
+.alloy-os-currentwork__focused-close:hover {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+}
+.alloy-os-currentwork__focused-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-currentwork__focused-reason {
+  margin: 0;
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 66%, #64748b);
+}
+.alloy-os-currentwork__focused-section-title {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, #64748b);
+}
+.alloy-os-currentwork__focused-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.alloy-os-currentwork__focused-outcome-pills,
+.alloy-os-currentwork__focused-transition-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.alloy-os-currentwork__focused-outcome-pill,
+.alloy-os-currentwork__focused-transition {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 16%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 3%, #fff);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-currentwork__focused-outcome-pill:hover,
+.alloy-os-currentwork__focused-transition:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
+}
+.alloy-os-currentwork__focused-effect {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 66%, #64748b);
+}
+.alloy-os-currentwork__focused-confirm-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.alloy-os-currentwork__focused-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.alloy-os-currentwork__focused-activity-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 66%, #64748b);
+}
+.alloy-os-currentwork__focused-activity-when {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 48%, #64748b);
+}
+
 .alloy-os-currentwork__guidance {
   margin: 0;
   padding: 8px 10px;

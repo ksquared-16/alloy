@@ -127,7 +127,7 @@ describe("Slice A — centered configured-work host", () => {
             <CurrentWorkCard model={model} context={context()} coordination={coordination(false)} />,
         );
         expect(html).toContain('data-work-summary="true"');
-        expect(html).not.toContain('data-current-work-workspace="true"');
+        expect(html).not.toContain('data-work-focused-surface="true"');
     });
 
     it("renders the configured-work surface when the host marks it open — no prop-driven canvas replace", () => {
@@ -135,13 +135,13 @@ describe("Slice A — centered configured-work host", () => {
             <CurrentWorkCard model={model} context={context()} coordination={coordination(true)} />,
         );
         // Elevated content is driven by coordination open-state (Slice A), not presentation="workspace".
-        expect(html).toContain('data-current-work-workspace="true"');
+        expect(html).toContain('data-work-focused-surface="true"');
     });
 
     it("elevates identically for a non-enrollment process (no capability-specific dispatch)", () => {
         const html = renderToStaticMarkup(
             <CurrentWorkCard model={model} context={context("service_intake")} coordination={coordination(true)} />,
         );
-        expect(html).toContain('data-current-work-workspace="true"');
+        expect(html).toContain('data-work-focused-surface="true"');
     });
 });
