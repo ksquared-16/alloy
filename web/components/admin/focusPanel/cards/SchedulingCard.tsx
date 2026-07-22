@@ -371,6 +371,7 @@ function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChi
                     customer_member_id: child.id,
                     opportunity_customer_member_id: child.ocmId,
                     person_id: child.personId,
+                    opportunity_id: opportunityId,
                     schedule_pattern_id: patternId,
                     room_location_id: roomId || null,
                     start_date: effStart || null,

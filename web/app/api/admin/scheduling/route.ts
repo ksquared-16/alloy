@@ -16,6 +16,7 @@ import type { CommercialContext } from "@/lib/commercial/execution/executionType
 import { mapCommercialResolutionToBillingProjection } from "@/lib/scheduling/billing/billingScheduleProjection";
 import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
 import { validateScheduleCreatePayload } from "@/lib/scheduling/commands/scheduleCreateInputs";
+import { ensureOpportunityCustomerMember } from "@/lib/opportunities/ensureOpportunityCustomerMember";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -346,6 +347,7 @@ export async function POST(request: NextRequest) {
                 customerMemberId,
                 ocmId: String(body.opportunity_customer_member_id ?? "").trim() || null,
                 personId: String(body.person_id ?? "").trim() || null,
+                opportunityId: String(body.opportunity_id ?? "").trim() || null,
                 schedulePatternId: String(body.schedule_pattern_id ?? "").trim(),
                 roomLocationId: String(body.room_location_id ?? "").trim() || null,
                 startDate: String(body.start_date ?? "").trim() || null,
@@ -406,6 +408,7 @@ async function proposeSchedule(
         customerMemberId: string;
         ocmId: string | null;
         personId: string | null;
+        opportunityId: string | null;
         schedulePatternId: string;
         roomLocationId: string | null;
         startDate: string | null;
@@ -456,6 +459,18 @@ async function proposeSchedule(
                 .maybeSingle();
             ocmId = (byPerson.data as { id?: string } | null)?.id;
         }
+    }
+    // Lead-stage inquiry children have NO OCM row yet (the OCM is created later in the
+    // pipeline). A proposed schedule needs one to hold the desired intent, so ensure it
+    // now — the same link the inquiry-child editor creates, ported server-side.
+    if (!ocmId && input.opportunityId && input.customerMemberId) {
+        const ensured = await ensureOpportunityCustomerMember(
+            supabase,
+            orgId,
+            input.opportunityId,
+            input.customerMemberId
+        );
+        if (ensured.ok) ocmId = ensured.ocmId;
     }
     if (!ocmId) {
         return {
