@@ -121,14 +121,14 @@ export function FormLifecycleUsagePanel({
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
-                throw new Error((json as { error?: string }).error ?? "Could not load lifecycle coverage");
+                throw new Error((json as { error?: string }).error ?? "Could not load business process coverage");
             }
             const data = (json as { data?: CoveragePayload }).data;
             if (data?.presentation) {
                 setPresentation(data.presentation);
             }
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Could not load lifecycle coverage");
+            setError(e instanceof Error ? e.message : "Could not load business process coverage");
         } finally {
             setLoading(false);
         }
@@ -157,7 +157,7 @@ export function FormLifecycleUsagePanel({
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
-                throw new Error((json as { error?: string }).error ?? "Could not save lifecycle usage");
+                throw new Error((json as { error?: string }).error ?? "Could not save business process");
             }
             const data = json as {
                 data?: {
@@ -175,7 +175,7 @@ export function FormLifecycleUsagePanel({
             }
             onCoverageSaved?.();
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Could not save lifecycle usage");
+            setError(e instanceof Error ? e.message : "Could not save business process");
         } finally {
             setSaving(false);
         }

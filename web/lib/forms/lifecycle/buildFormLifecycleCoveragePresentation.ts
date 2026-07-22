@@ -200,9 +200,9 @@ export function buildFormLifecycleCoveragePresentation(input: {
     if (!input.usage) {
         return {
             status: "empty",
-            status_headline: "No lifecycle selected",
+            status_headline: "No business process selected",
             status_message:
-                "Select a lifecycle stage to check whether this form captures the required fields.",
+                "Select a business process and stage to check whether this form captures the required fields.",
             schema_source,
             lifecycle_label,
             stage_label,
@@ -215,7 +215,7 @@ export function buildFormLifecycleCoveragePresentation(input: {
         return {
             status: "no_schema",
             status_headline: "Add form fields first",
-            status_message: "Publish or save a draft with fields to evaluate lifecycle coverage.",
+            status_message: "Publish or save a draft with fields to evaluate business process coverage.",
             schema_source,
             lifecycle_label,
             stage_label,
@@ -239,12 +239,12 @@ export function buildFormLifecycleCoveragePresentation(input: {
                 recordLabel === "Lead" ?
                     "Ready to create Lead."
                 :   `Ready to create ${recordLabel}.`
-            :   "Ready for this lifecycle stage";
+            :   "Ready for this business process stage";
         const status_message =
             recordIntent && recommendedGaps ?
                 `Ready to create ${recordLabel}. Recommended fields are missing but sharing is allowed.`
             : recordIntent ?
-                `This form captures the required information to create a ${recordLabel} for the selected lifecycle stage.`
+                `This form captures the required information to create a ${recordLabel} for the selected business process stage.`
             :   "This form captures the required information for the selected workflow stage.";
 
         return {
@@ -264,7 +264,7 @@ export function buildFormLifecycleCoveragePresentation(input: {
     );
     const recordBlockMessage =
         recordIntent ?
-            "This form cannot create a Lead yet because it does not capture all required information for the selected lifecycle stage."
+            "This form cannot create a Lead yet because it does not capture all required information for the selected business process stage."
         :   "Missing required fields. This form is not ready to create a Lead for this stage.";
 
     return {
