@@ -1,40 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Layers } from "lucide-react";
 import {
+    ConfigurationEmptyState,
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
+    ConfigurationQueueItem,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import {
+    CONFIG_OBJECT_CELL,
+    ConfigChildObjectMasterDetail,
+    ConfigEditorSection,
+    ConfigObjectHeader,
+} from "@/components/adminV2/settings/configurationRuntime/workspace";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import { effectiveLocationProgramLabel } from "@/lib/locations/locationProgramCategories";
 import {
     buildLocationProgramAvailabilityView,
     deriveLocationProgramOfferingState,
-    locationProgramOfferingCheckboxSelected,
+    locationProgramAvailabilityStatusLabel,
 } from "@/lib/programs/locationProgramAvailability";
 import {
     readEligibleSchedulePatternIds,
     writeEligibleSchedulePatternIds,
 } from "@/lib/locations/locationSchedulingConfig";
-import {
-    commitMakeProgramAvailableClient,
-    createMakeAvailableIdempotencyKey,
-    previewMakeProgramAvailableClient,
-    applyMakeAvailableRefreshTargets,
-} from "@/lib/programs/makeProgramAvailableClient";
-import {
-    loadProgramsCollection,
-    peekProgramsCollection,
-} from "@/lib/programs/programsCollectionCache";
 import { operatorProgramError } from "@/lib/programs/programsOperatorPresentation";
-
-type OrgProgramOption = {
-    id: string;
-    name: string;
-    publicationId: string | null;
-    lifecycleStatus: "active" | "retired";
-};
+import { readRoomSupportedProgramKeys } from "@/lib/locations/roomOfferingMetadata";
 
 type SchedulePatternOption = {
     id: string;
@@ -42,34 +34,39 @@ type SchedulePatternOption = {
     is_active: boolean;
 };
 
-type RowConfig = {
-    localDisplayName: string;
-    availableFrom: string;
-    availableThrough: string;
-    eligiblePatternIds: string[];
-    expanded: boolean;
+type RoomOption = {
+    id: string;
+    label: string;
+    is_active: boolean;
+    metadata?: unknown;
 };
 
 /**
- * Location → Programs Offered — checkbox availability with optional local name + dates.
+ * Location → Programs — collection → selected → edit (Rooms parity).
+ * Offered rows are LPC relationships; selection opens a focused workspace.
  */
 export default function LocationProgramsOfferedPanel({
-    orgId,
     locationId,
     locationLabel,
     offerings,
     schedulePatterns = [],
+    rooms = [],
     canMutate,
+    selectedOfferingId,
+    onSelectOffering,
     onPatchOffering,
     onRefresh,
     onAddProgram,
+    createDetail,
 }: {
-    orgId: string;
     locationId: string;
     locationLabel: string;
     offerings: LocationProgramCategoryRow[];
     schedulePatterns?: SchedulePatternOption[];
+    rooms?: RoomOption[];
     canMutate: boolean;
+    selectedOfferingId: string | null;
+    onSelectOffering: (offeringId: string) => void;
     onPatchOffering: (
         categoryId: string,
         patch: {
@@ -82,441 +79,479 @@ export default function LocationProgramsOfferedPanel({
     ) => Promise<void>;
     onRefresh: () => Promise<void> | void;
     onAddProgram?: () => void;
+    createDetail?: ReactNode;
 }) {
-    const [orgPrograms, setOrgPrograms] = useState<OrgProgramOption[]>(() => {
-        const peeked = orgId ? peekProgramsCollection(orgId) : null;
-        return (peeked?.programs ?? [])
-            .filter((program) => program.lifecycleStatus !== "retired")
-            .map((program) => ({
-                id: program.id,
-                name: String(program.draft.label ?? "").trim() || "Untitled Program",
-                publicationId: program.latestPublication?.id ?? null,
-                lifecycleStatus: program.lifecycleStatus === "retired" ? "retired" : "active",
-            }));
-    });
-    const [search, setSearch] = useState("");
-    const [busyId, setBusyId] = useState<string | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [configs, setConfigs] = useState<Record<string, RowConfig>>({});
-
-    useEffect(() => {
-        if (!orgId) return;
-        let cancelled = false;
-        void (async () => {
-            try {
-                const { snapshot } = await loadProgramsCollection(orgId);
-                if (cancelled) return;
-                setOrgPrograms(
-                    snapshot.programs
-                        .filter((program) => program.lifecycleStatus !== "retired")
-                        .map((program) => ({
-                            id: program.id,
-                            name: String(program.draft.label ?? "").trim() || "Untitled Program",
-                            publicationId: program.latestPublication?.id ?? null,
-                            lifecycleStatus: program.lifecycleStatus === "retired" ? "retired" : "active",
-                        })),
-                );
-            } catch {
-                // Keep peeked list.
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [orgId]);
-
-    const offeringByProgramId = useMemo(() => {
-        const map = new Map<string, LocationProgramCategoryRow>();
-        for (const row of offerings) {
-            const programId = String(row.program_id ?? "").trim();
-            if (programId) map.set(programId, row);
-        }
-        return map;
-    }, [offerings]);
-
-    useEffect(() => {
-        setConfigs((prev) => {
-            const next = { ...prev };
-            for (const row of offerings) {
-                const programId = String(row.program_id ?? "").trim();
-                if (!programId) continue;
-                if (next[programId]) continue;
-                next[programId] = {
-                    localDisplayName: row.local_display_name ?? "",
-                    availableFrom: row.available_from ?? "",
-                    availableThrough: row.available_through ?? "",
-                    eligiblePatternIds: readEligibleSchedulePatternIds(row.metadata),
-                    expanded: false,
-                };
-            }
-            return next;
-        });
-    }, [offerings]);
-
-    const visiblePrograms = useMemo(() => {
-        const query = search.trim().toLowerCase();
-        const rows = [...orgPrograms].sort((a, b) =>
-            a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
-        );
-        if (!query) return rows;
-        return rows.filter((program) => {
-            const offering = offeringByProgramId.get(program.id);
-            const local = offering ? effectiveLocationProgramLabel(offering) : program.name;
-            return (
-                program.name.toLowerCase().includes(query)
-                || local.toLowerCase().includes(query)
-            );
-        });
-    }, [orgPrograms, offeringByProgramId, search]);
-
-    const updateConfig = (programId: string, patch: Partial<RowConfig>) => {
-        setConfigs((prev) => ({
-            ...prev,
-            [programId]: {
-                ...(prev[programId] ?? {
-                    localDisplayName: "",
-                    availableFrom: "",
-                    availableThrough: "",
-                    eligiblePatternIds: [],
-                    expanded: false,
-                }),
-                ...patch,
-            },
-        }));
-    };
-
-    const saveConfig = useCallback(
-        async (programId: string) => {
-            const offering = offeringByProgramId.get(programId);
-            if (!offering) return;
-            const config = configs[programId];
-            setBusyId(programId);
-            setError(null);
-            try {
-                await onPatchOffering(offering.id, {
-                    local_display_name: config?.localDisplayName.trim() || null,
-                    available_from: config?.availableFrom.trim() || null,
-                    available_through: config?.availableThrough.trim() || null,
-                    metadata: writeEligibleSchedulePatternIds(
-                        offering.metadata,
-                        config?.eligiblePatternIds ?? [],
-                    ),
-                });
-                updateConfig(programId, { expanded: false });
-                await onRefresh();
-            } catch (err) {
-                setError(operatorProgramError(err instanceof Error ? err.message : "Save failed"));
-            } finally {
-                setBusyId(null);
-            }
-        },
-        [configs, offeringByProgramId, onPatchOffering, onRefresh],
+    const offered = useMemo(
+        () => offerings.filter((row) => row.is_active !== false),
+        [offerings],
+    );
+    const notOffered = useMemo(
+        () => offerings.filter((row) => row.is_active === false),
+        [offerings],
     );
 
-    const toggleOffered = async (program: OrgProgramOption, nextOffered: boolean) => {
-        setBusyId(program.id);
+    const effectiveId =
+        selectedOfferingId && offerings.some((row) => row.id === selectedOfferingId) ?
+            selectedOfferingId
+        :   (offered[0]?.id ?? notOffered[0]?.id ?? null);
+
+    const selected = offerings.find((row) => row.id === effectiveId) ?? null;
+
+    const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [localDisplayName, setLocalDisplayName] = useState("");
+    const [availableFrom, setAvailableFrom] = useState("");
+    const [availableThrough, setAvailableThrough] = useState("");
+    const [eligiblePatternIds, setEligiblePatternIds] = useState<string[]>([]);
+    const [available, setAvailable] = useState(true);
+
+    const hydrate = (row: LocationProgramCategoryRow) => {
+        setLocalDisplayName(row.local_display_name ?? "");
+        setAvailableFrom(row.available_from ?? "");
+        setAvailableThrough(row.available_through ?? "");
+        setEligiblePatternIds(readEligibleSchedulePatternIds(row.metadata));
+        setAvailable(row.is_active !== false);
+        setError(null);
+    };
+
+    useEffect(() => {
+        if (!selected) return;
+        hydrate(selected);
+        setEditing(false);
+    }, [selected?.id]);
+
+    const orgName = selected ? String(selected.label ?? "").trim() || "Program" : "Program";
+    const displayName = selected ? effectiveLocationProgramLabel(selected) : "";
+    const offeringState = selected ?
+        deriveLocationProgramOfferingState({ relationship: selected })
+    :   "not_offered";
+    const statusLabel =
+        selected ?
+            locationProgramAvailabilityStatusLabel(
+                offeringState,
+                selected.available_from ?? null,
+                selected.available_through ?? null,
+            )
+        :   "";
+
+    const eligibleRooms = useMemo(() => {
+        if (!selected) return [];
+        const key = String(selected.key ?? "").trim();
+        if (!key) return [];
+        return rooms.filter((room) => {
+            if (room.is_active === false) return false;
+            const md =
+                room.metadata != null && typeof room.metadata === "object" && !Array.isArray(room.metadata) ?
+                    (room.metadata as Record<string, unknown>)
+                :   {};
+            return readRoomSupportedProgramKeys(md).includes(key);
+        });
+    }, [rooms, selected]);
+
+    const removeOffering = async (row: LocationProgramCategoryRow) => {
+        setSaving(true);
         setError(null);
         try {
-            if (nextOffered) {
-                const idempotencyKey = createMakeAvailableIdempotencyKey();
-                await previewMakeProgramAvailableClient({
-                    program: {
-                        kind: "existing",
-                        programId: program.id,
-                        publicationId: program.publicationId ?? undefined,
-                    },
-                    locationIds: [locationId],
-                    originatingLocationId: locationId,
-                    idempotencyKey,
-                    entryPoint: "location",
-                });
-                const result = await commitMakeProgramAvailableClient({
-                    program: {
-                        kind: "existing",
-                        programId: program.id,
-                        publicationId: program.publicationId ?? undefined,
-                    },
-                    locationIds: [locationId],
-                    originatingLocationId: locationId,
-                    idempotencyKey,
-                    entryPoint: "location",
-                });
-                applyMakeAvailableRefreshTargets({
-                    orgId,
-                    refreshTargets: Array.isArray(result.refreshTargets) ? result.refreshTargets.map(String) : [],
-                    reason: "location-program-offered",
-                });
-            } else {
-                const response = await fetch("/api/admin/configuration/programs", {
-                    method: "POST",
-                    credentials: "include",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        action: "remove_locations",
-                        programId: program.id,
-                        locationIds: [locationId],
-                    }),
-                });
-                const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-                if (!response.ok) {
-                    const message =
-                        typeof json.reason === "string" ? json.reason
-                        : typeof (json.error as { message?: string } | undefined)?.message === "string" ?
-                            String((json.error as { message: string }).message)
-                        :   `Request failed (${response.status})`;
-                    throw new Error(operatorProgramError(message));
-                }
-            }
+            // Soft-remove (is_active=false) is the Location offering off-switch.
+            // Hard-deleting LPC rows fails when enrollments or other FKs reference the row —
+            // that path previously surfaced as a generic “highlighted fields” error.
+            await onPatchOffering(row.id, { is_active: false });
+            setEditing(false);
             await onRefresh();
         } catch (err) {
-            setError(operatorProgramError(err instanceof Error ? err.message : "Update failed"));
+            setError(
+                operatorProgramError(
+                    err instanceof Error ? err.message : "This Program could not be removed from the Location.",
+                ),
+            );
         } finally {
-            setBusyId(null);
+            setSaving(false);
         }
     };
 
-    return (
-        <div className="space-y-3" data-testid="locations-programs-offered">
-            <ConfigWorkspaceCard compact testId="locations-programs-offered-card">
-                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                        <h3 className="text-sm font-semibold text-alloy-midnight">Programs Offered</h3>
-                        <p className="mt-0.5 text-[12px] text-alloy-midnight/50">
-                            Choose which Organization Programs {locationLabel || "this Location"} offers.
-                        </p>
-                    </div>
-                    {canMutate && onAddProgram ?
-                        <ConfigurationPrimaryButton
-                            className="gap-1 px-2 py-1 text-[11px]"
-                            onClick={onAddProgram}
-                            data-testid="locations-programs-add"
-                        >
-                            + Add Program
-                        </ConfigurationPrimaryButton>
-                    :   null}
-                </div>
+    const restoreOffering = async (row: LocationProgramCategoryRow) => {
+        setSaving(true);
+        setError(null);
+        try {
+            await onPatchOffering(row.id, { is_active: true });
+            setEditing(false);
+            await onRefresh();
+        } catch (err) {
+            setError(
+                operatorProgramError(
+                    err instanceof Error ? err.message : "This Program could not be offered again.",
+                ),
+            );
+        } finally {
+            setSaving(false);
+        }
+    };
 
-                <input
-                    type="search"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search Programs…"
-                    className="config-runtime-input mb-3"
-                    data-testid="locations-programs-search"
+    const saveEdits = async () => {
+        if (!selected) return;
+        setSaving(true);
+        setError(null);
+        try {
+            const from = availableFrom.trim() || null;
+            const through = availableThrough.trim() || null;
+            if (from && through && through < from) {
+                throw new Error("Available through must be on or after Available from.");
+            }
+            await onPatchOffering(selected.id, {
+                local_display_name: localDisplayName.trim() || null,
+                available_from: from,
+                available_through: through,
+                is_active: available,
+                metadata: writeEligibleSchedulePatternIds(selected.metadata, eligiblePatternIds),
+            });
+            setEditing(false);
+            await onRefresh();
+        } catch (err) {
+            setError(operatorProgramError(err instanceof Error ? err.message : "Save failed"));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const view =
+        selected ?
+            buildLocationProgramAvailabilityView({
+                locationId,
+                locationLabel,
+                organizationProgramName: orgName,
+                localDisplayName: selected.local_display_name ?? null,
+                availableFrom: selected.available_from ?? null,
+                availableThrough: selected.available_through ?? null,
+                offered: selected.is_active !== false,
+            })
+        :   null;
+
+    const detail =
+        createDetail ? createDetail
+        : !selected ?
+            offerings.length === 0 ?
+                <ConfigurationEmptyState
+                    testId="locations-program-workspace-empty"
+                    title="No Programs offered"
+                    description="Add a Program this Location offers."
+                    actions={
+                        canMutate && onAddProgram ?
+                            <ConfigurationPrimaryButton
+                                className="config-primary-btn--sm"
+                                onClick={onAddProgram}
+                                data-testid="locations-program-empty-add"
+                            >
+                                Add Program
+                            </ConfigurationPrimaryButton>
+                        :   null
+                    }
                 />
-
+            :   <ConfigurationEmptyState
+                    testId="locations-program-workspace-empty"
+                    title="Select a Program"
+                    description="Choose a Program to review availability, rooms, and schedule patterns."
+                />
+        : editing ?
+            <div className="space-y-3" data-testid="locations-program-edit">
+                <ConfigObjectHeader
+                    size="hero"
+                    name={displayName}
+                    status={{ label: "Editing", tone: "attention" }}
+                    facts={[locationLabel ? `At ${locationLabel}` : ""].filter(Boolean)}
+                    actions={
+                        <ConfigurationSecondaryButton
+                            onClick={() => {
+                                hydrate(selected);
+                                setEditing(false);
+                            }}
+                            data-testid="locations-program-cancel-edit"
+                        >
+                            Cancel
+                        </ConfigurationSecondaryButton>
+                    }
+                    testId="locations-program-header"
+                />
                 {error ?
-                    <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+                    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
                         {error}
                     </p>
                 :   null}
-
-                {visiblePrograms.length === 0 ?
-                    <p className="py-6 text-center text-sm text-alloy-midnight/55" data-testid="locations-programs-empty">
-                        No Organization Programs match.
-                    </p>
-                :   <ul className="divide-y divide-alloy-forge/10">
-                        {visiblePrograms.map((program) => {
-                            const offering = offeringByProgramId.get(program.id) ?? null;
-                            const offeringState = deriveLocationProgramOfferingState({ relationship: offering });
-                            const selected = locationProgramOfferingCheckboxSelected(offeringState);
-                            const config = configs[program.id] ?? {
-                                localDisplayName: "",
-                                availableFrom: "",
-                                availableThrough: "",
-                                eligiblePatternIds: [],
-                                expanded: false,
-                            };
-                            const view =
-                                offering ?
-                                    buildLocationProgramAvailabilityView({
-                                        locationId,
-                                        locationLabel,
-                                        organizationProgramName: program.name,
-                                        localDisplayName: offering.local_display_name ?? null,
-                                        availableFrom: offering.available_from ?? null,
-                                        availableThrough: offering.available_through ?? null,
-                                        offered: offering.is_active !== false,
-                                    })
-                                :   null;
-                            const busy = busyId === program.id;
-                            return (
-                                <li key={program.id} className="py-3 first:pt-1" data-testid={`locations-program-offer-${program.id}`}>
-                                    <div className="flex items-start gap-2">
-                                        <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2">
+                <ConfigEditorSection title="Availability" testId="locations-program-editor-availability">
+                    <label className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            checked={available}
+                            disabled={!canMutate || saving}
+                            onChange={(event) => setAvailable(event.target.checked)}
+                            className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
+                            data-testid="locations-program-available"
+                        />
+                        <span className="config-typo-sublabel">Offered at this Location</span>
+                    </label>
+                    <label className="mt-3 block space-y-1.5">
+                        <span className="config-typo-field-label">Name at this Location</span>
+                        <input
+                            type="text"
+                            value={localDisplayName}
+                            disabled={!canMutate}
+                            onChange={(event) => setLocalDisplayName(event.target.value)}
+                            className="config-runtime-input"
+                            placeholder={orgName}
+                            data-testid="locations-program-local-name"
+                        />
+                        <span className="block text-[11px] text-alloy-midnight/45">
+                            Leave blank to use “{orgName},” the Organization Program name.
+                        </span>
+                    </label>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <label>
+                            <span className="config-typo-field-label">Available from</span>
+                            <input
+                                type="date"
+                                value={availableFrom}
+                                disabled={!canMutate}
+                                onChange={(event) => setAvailableFrom(event.target.value)}
+                                className="config-runtime-input mt-1"
+                                data-testid="locations-program-from"
+                            />
+                        </label>
+                        <label>
+                            <span className="config-typo-field-label">Available through</span>
+                            <input
+                                type="date"
+                                value={availableThrough}
+                                disabled={!canMutate}
+                                onChange={(event) => setAvailableThrough(event.target.value)}
+                                className="config-runtime-input mt-1"
+                                data-testid="locations-program-through"
+                            />
+                        </label>
+                    </div>
+                </ConfigEditorSection>
+                <ConfigEditorSection title="Eligible Schedule Patterns" testId="locations-program-editor-patterns">
+                    {schedulePatterns.length === 0 ?
+                        <p className="config-typo-sublabel">No Patterns at this Location yet.</p>
+                    :   <ul className="space-y-1.5">
+                            {schedulePatterns.map((pattern) => {
+                                const checked = eligiblePatternIds.includes(pattern.id);
+                                return (
+                                    <li key={pattern.id}>
+                                        <label className="flex items-center gap-2 text-[12px] text-alloy-midnight/80">
                                             <input
                                                 type="checkbox"
-                                                className="mt-0.5"
-                                                checked={selected}
-                                                disabled={!canMutate || busy}
+                                                checked={checked}
+                                                disabled={!canMutate || !pattern.is_active}
                                                 onChange={(event) => {
-                                                    void toggleOffered(program, event.target.checked);
+                                                    setEligiblePatternIds((current) =>
+                                                        event.target.checked ?
+                                                            [...new Set([...current, pattern.id])]
+                                                        :   current.filter((id) => id !== pattern.id),
+                                                    );
                                                 }}
-                                                data-testid={`locations-program-offer-check-${program.id}`}
+                                                data-testid={`locations-program-pattern-${pattern.id}`}
                                             />
-                                            <span className="min-w-0">
-                                                <span className="block text-sm font-semibold text-alloy-midnight">
-                                                    {program.name}
-                                                </span>
-                                                {selected && view ?
-                                                    <>
-                                                        <span className="mt-0.5 block text-[12px] text-alloy-midnight/55">
-                                                            {view.localDisplayName && view.localDisplayName !== program.name ?
-                                                                view.effectiveLabel
-                                                            :   "Uses Organization name"}
-                                                        </span>
-                                                        <span className="mt-0.5 block text-[12px] text-alloy-midnight/45">
-                                                            {offeringState === "active" && !view.availableFrom && !view.availableThrough ?
-                                                                "Available now"
-                                                            :   view.statusLabel}
-                                                        </span>
-                                                    </>
-                                                :   <span className="mt-0.5 block text-[12px] text-alloy-midnight/45">
-                                                        Not offered
-                                                    </span>
-                                                }
-                                            </span>
+                                            {pattern.label}
                                         </label>
-                                        {selected && canMutate ?
-                                            <button
-                                                type="button"
-                                                className="shrink-0 text-xs font-medium text-alloy-bend-pine hover:underline"
-                                                disabled={busy}
-                                                onClick={() =>
-                                                    updateConfig(program.id, { expanded: !config.expanded })
-                                                }
-                                                data-testid={`locations-program-configure-${program.id}`}
-                                            >
-                                                {config.expanded ? "Hide" : "Configure"}
-                                            </button>
-                                        :   null}
-                                    </div>
-                                    {selected && config.expanded ?
-                                        <div
-                                            className="mt-3 ml-6 space-y-2 rounded-md border border-alloy-stone/15 bg-alloy-stone/[0.04] p-3"
-                                            data-testid={`locations-program-config-${program.id}`}
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    }
+                </ConfigEditorSection>
+                {canMutate ?
+                    <div className="flex flex-wrap gap-2">
+                        <ConfigurationPrimaryButton
+                            disabled={saving}
+                            onClick={() => void saveEdits()}
+                            data-testid="locations-program-save"
+                        >
+                            {saving ? "Saving…" : "Save"}
+                        </ConfigurationPrimaryButton>
+                        <ConfigurationSecondaryButton
+                            disabled={saving}
+                            onClick={() => {
+                                hydrate(selected);
+                                setEditing(false);
+                            }}
+                        >
+                            Cancel
+                        </ConfigurationSecondaryButton>
+                    </div>
+                :   null}
+            </div>
+        :   <div className="space-y-3" data-testid="locations-program-detail">
+                <ConfigObjectHeader
+                    size="hero"
+                    name={displayName}
+                    status={{
+                        label: selected.is_active !== false ? "Available" : "Not offered",
+                        tone: selected.is_active !== false ? "active" : "inactive",
+                    }}
+                    facts={[locationLabel ? `At ${locationLabel}` : ""].filter(Boolean)}
+                    actions={
+                        canMutate ?
+                            <div className="flex flex-wrap gap-2">
+                                <ConfigurationSecondaryButton
+                                    onClick={() => setEditing(true)}
+                                    data-testid="locations-program-edit"
+                                >
+                                    Edit Program
+                                </ConfigurationSecondaryButton>
+                                {selected.is_active !== false ?
+                                    <ConfigurationSecondaryButton
+                                        disabled={saving}
+                                        onClick={() => void removeOffering(selected)}
+                                        data-testid="locations-program-remove"
+                                    >
+                                        Stop offering
+                                    </ConfigurationSecondaryButton>
+                                :   <ConfigurationSecondaryButton
+                                        disabled={saving}
+                                        onClick={() => void restoreOffering(selected)}
+                                        data-testid="locations-program-restore"
+                                    >
+                                        Offer again
+                                    </ConfigurationSecondaryButton>
+                                }
+                            </div>
+                        :   null
+                    }
+                    testId="locations-program-header"
+                />
+                {error ?
+                    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+                        {error}
+                    </p>
+                :   null}
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-program-ops">
+                    {[
+                        {
+                            key: "status",
+                            label: "Availability",
+                            value: statusLabel || (selected.is_active !== false ? "Available now" : "Not offered"),
+                        },
+                        {
+                            key: "name",
+                            label: "Name at this Location",
+                            value:
+                                view?.localDisplayName && view.localDisplayName !== orgName ?
+                                    view.effectiveLabel
+                                :   "Uses Organization name",
+                        },
+                        {
+                            key: "rooms",
+                            label: "Eligible Rooms",
+                            value:
+                                eligibleRooms.length > 0 ?
+                                    eligibleRooms.map((room) => room.label).join(", ")
+                                :   "None yet",
+                        },
+                        {
+                            key: "patterns",
+                            label: "Eligible Schedule Patterns",
+                            value: (() => {
+                                const ids = readEligibleSchedulePatternIds(selected.metadata);
+                                if (ids.length === 0) return "All Patterns";
+                                const labels = ids
+                                    .map((id) => schedulePatterns.find((pattern) => pattern.id === id)?.label)
+                                    .filter(Boolean);
+                                return labels.length > 0 ? labels.join(", ") : `${ids.length} selected`;
+                            })(),
+                        },
+                    ].map((card) => (
+                        <div
+                            key={card.key}
+                            className={CONFIG_OBJECT_CELL}
+                            data-testid={`locations-program-metric-${card.key}`}
+                        >
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                {card.label}
+                            </p>
+                            <p className="mt-0.5 text-base font-semibold leading-tight text-alloy-midnight">
+                                {card.value}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            </div>;
+
+    return (
+        <ConfigChildObjectMasterDetail
+            listTitle="Programs"
+            listSummary={`${offered.length} offered`}
+            listActions={
+                canMutate && onAddProgram ?
+                    <ConfigurationPrimaryButton
+                        className="px-2 py-1 text-[11px]"
+                        onClick={onAddProgram}
+                        data-testid="locations-programs-add"
+                    >
+                        + Add Program
+                    </ConfigurationPrimaryButton>
+                :   null
+            }
+            testId="locations-programs-offered"
+            list={
+                offerings.length > 0 ?
+                    <>
+                        {offered.map((row) => {
+                            const selectedRow = row.id === effectiveId && !createDetail;
+                            const name = effectiveLocationProgramLabel(row);
+                            const state = deriveLocationProgramOfferingState({ relationship: row });
+                            return (
+                                <ConfigurationQueueItem
+                                    key={row.id}
+                                    variant="rail"
+                                    active={selectedRow}
+                                    title={name}
+                                    subtitle={locationProgramAvailabilityStatusLabel(
+                                        state,
+                                        row.available_from ?? null,
+                                        row.available_through ?? null,
+                                    )}
+                                    leading={
+                                        <span
+                                            className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+                                                selectedRow ?
+                                                    "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine"
+                                                :   "bg-alloy-midnight/[0.04] text-alloy-bend-pine"
+                                            }`}
                                         >
-                                            <label className="block">
-                                                <span className="config-typo-field-label">Name at this Location</span>
-                                                <input
-                                                    type="text"
-                                                    value={config.localDisplayName}
-                                                    onChange={(event) =>
-                                                        updateConfig(program.id, {
-                                                            localDisplayName: event.target.value,
-                                                        })
-                                                    }
-                                                    className="config-runtime-input mt-1"
-                                                    placeholder={program.name}
-                                                    data-testid={`locations-program-local-name-${program.id}`}
-                                                />
-                                                <span className="mt-1 block text-[11px] text-alloy-midnight/45">
-                                                    Leave blank to use “{program.name},” the Organization Program name.
-                                                </span>
-                                            </label>
-                                            <div className="grid gap-2 sm:grid-cols-2">
-                                                <label>
-                                                    <span className="config-typo-field-label">Available from</span>
-                                                    <input
-                                                        type="date"
-                                                        value={config.availableFrom}
-                                                        onChange={(event) =>
-                                                            updateConfig(program.id, {
-                                                                availableFrom: event.target.value,
-                                                            })
-                                                        }
-                                                        className="config-runtime-input mt-1"
-                                                        data-testid={`locations-program-from-${program.id}`}
-                                                    />
-                                                </label>
-                                                <label>
-                                                    <span className="config-typo-field-label">Available through</span>
-                                                    <input
-                                                        type="date"
-                                                        value={config.availableThrough}
-                                                        onChange={(event) =>
-                                                            updateConfig(program.id, {
-                                                                availableThrough: event.target.value,
-                                                            })
-                                                        }
-                                                        className="config-runtime-input mt-1"
-                                                        data-testid={`locations-program-through-${program.id}`}
-                                                    />
-                                                </label>
-                                            </div>
-                                            {schedulePatterns.length > 0 ?
-                                                <div
-                                                    className="space-y-1.5"
-                                                    data-testid={`locations-program-patterns-${program.id}`}
-                                                >
-                                                    <span className="config-typo-field-label">
-                                                        Eligible Schedule Patterns
-                                                    </span>
-                                                    <p className="text-[11px] text-alloy-midnight/45">
-                                                        Offering Patterns ∩ Rooms supporting this Program resolve
-                                                        enrollment schedule options.
-                                                    </p>
-                                                    <ul className="space-y-1">
-                                                        {schedulePatterns.map((pattern) => {
-                                                            const checked = config.eligiblePatternIds.includes(
-                                                                pattern.id,
-                                                            );
-                                                            return (
-                                                                <li key={pattern.id}>
-                                                                    <label className="flex items-center gap-2 text-[12px] text-alloy-midnight/80">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={checked}
-                                                                            disabled={!canMutate || busy || !pattern.is_active}
-                                                                            onChange={(event) => {
-                                                                                const next = event.target.checked ?
-                                                                                    [
-                                                                                        ...config.eligiblePatternIds,
-                                                                                        pattern.id,
-                                                                                    ]
-                                                                                :   config.eligiblePatternIds.filter(
-                                                                                        (id) => id !== pattern.id,
-                                                                                    );
-                                                                                updateConfig(program.id, {
-                                                                                    eligiblePatternIds: [
-                                                                                        ...new Set(next),
-                                                                                    ],
-                                                                                });
-                                                                            }}
-                                                                            data-testid={`locations-program-pattern-${program.id}-${pattern.id}`}
-                                                                        />
-                                                                        {pattern.label}
-                                                                        {!pattern.is_active ? " (inactive)" : ""}
-                                                                    </label>
-                                                                </li>
-                                                            );
-                                                        })}
-                                                    </ul>
-                                                </div>
-                                            :   null}
-                                            <div className="flex justify-end gap-2 pt-1">
-                                                <ConfigurationSecondaryButton
-                                                    disabled={busy}
-                                                    onClick={() => updateConfig(program.id, { expanded: false })}
-                                                >
-                                                    Cancel
-                                                </ConfigurationSecondaryButton>
-                                                <ConfigurationPrimaryButton
-                                                    disabled={busy}
-                                                    onClick={() => void saveConfig(program.id)}
-                                                    data-testid={`locations-program-save-${program.id}`}
-                                                >
-                                                    {busy ? "Saving…" : "Save"}
-                                                </ConfigurationPrimaryButton>
-                                            </div>
-                                        </div>
-                                    :   null}
-                                </li>
+                                            <Layers className="h-4 w-4" strokeWidth={2} />
+                                        </span>
+                                    }
+                                    onClick={() => onSelectOffering(row.id)}
+                                    testId={`locations-program-${row.id}`}
+                                />
                             );
                         })}
-                    </ul>
-                }
-            </ConfigWorkspaceCard>
-        </div>
+                        {notOffered.length > 0 ?
+                            <div className="mt-3 border-t border-alloy-forge/10 pt-2">
+                                <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                    Not offered
+                                </p>
+                                {notOffered.map((row) => {
+                                    const selectedRow = row.id === effectiveId && !createDetail;
+                                    return (
+                                        <ConfigurationQueueItem
+                                            key={row.id}
+                                            variant="rail"
+                                            active={selectedRow}
+                                            muted
+                                            title={effectiveLocationProgramLabel(row)}
+                                            subtitle="Not offered"
+                                            onClick={() => onSelectOffering(row.id)}
+                                            testId={`locations-program-${row.id}`}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        :   null}
+                    </>
+                :   <p className="config-typo-sublabel">No Programs offered yet.</p>
+            }
+            detail={detail}
+        />
     );
 }

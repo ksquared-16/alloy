@@ -25,6 +25,7 @@ import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/Loc
 import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
 import LocationSchedulingSurface from "@/components/adminV2/settings/locations/LocationSchedulingSurface";
+import { warmLocationSchedulingDayTypes } from "@/lib/locations/useLocationSchedulingVm";
 import LocationSiteCreatePanel from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
 import LocationSiteDetailPanel from "@/components/adminV2/settings/locations/LocationSiteDetailPanel";
 import {
@@ -278,6 +279,11 @@ export default function LocationsConfigurationPage({
         }, 0);
         return () => window.clearTimeout(timeout);
     }, [refreshOwnedConcernSetup, selectedSiteId]);
+
+    useEffect(() => {
+        if (!orgId || !selectedSiteId) return;
+        warmLocationSchedulingDayTypes(orgId);
+    }, [orgId, selectedSiteId]);
 
     const ownedConcernSetup = selectedSite ? ownedConcernSetupByLocation[selectedSite.id] : undefined;
     const model =
@@ -537,53 +543,8 @@ export default function LocationsConfigurationPage({
             );
         }
         if (activeTab === "programs") {
-            if (creatingProgram && selectedSite) {
-                return (
-                    <LocationAddProgramPanel
-                        activeLocationId={selectedSite.id}
-                        activeLocationLabel={model?.displayName ?? selectedSite.label ?? ""}
-                        locations={siteRows
-                            .filter((site) => site.is_active !== false)
-                            .map((site) => ({
-                                id: site.id,
-                                label: site.label?.trim() || siteLabelById.get(site.id) || "Location",
-                            }))}
-                        associatedProgramIds={
-                            new Set(
-                                selectedPrograms
-                                    .map((row) => String(row.program_id ?? "").trim())
-                                    .filter(Boolean),
-                            )
-                        }
-                        associatedProgramKeys={
-                            new Set(
-                                selectedPrograms
-                                    .map((row) => String(row.key ?? "").trim())
-                                    .filter(Boolean),
-                            )
-                        }
-                        onCancel={() => setCreatingProgram(false)}
-                        onComplete={async ({ programId }) => {
-                            setCreatingProgram(false);
-                            if (orgId) {
-                                invalidateProgramsCollection(orgId, "program-make-available", {
-                                    publishBus: true,
-                                });
-                                invalidateLocationsCollection(orgId, "program-make-available", {
-                                    publishBus: true,
-                                });
-                            }
-                            if (programId) {
-                                setPendingAssociatedProgramId(programId);
-                            }
-                            await refreshPrograms();
-                        }}
-                    />
-                );
-            }
             return (
                 <LocationProgramsOfferedPanel
-                    orgId={orgId}
                     locationId={selectedSite.id}
                     locationLabel={model?.displayName ?? selectedSite.label ?? ""}
                     offerings={selectedPrograms}
@@ -592,10 +553,70 @@ export default function LocationsConfigurationPage({
                         label: pattern.label,
                         is_active: pattern.is_active,
                     }))}
+                    rooms={selectedRooms.map((room) => ({
+                        id: room.id,
+                        label: String(room.label ?? "").trim() || "Room",
+                        is_active: room.is_active !== false,
+                        metadata: room.metadata,
+                    }))}
                     canMutate={canMutate}
+                    selectedOfferingId={creatingProgram ? null : effectiveProgramId}
+                    onSelectOffering={(offeringId) => {
+                        setSelectedProgramId(offeringId);
+                        setCreatingProgram(false);
+                        continuity?.rememberLocationSelection({
+                            locationId: selectedSite.id,
+                            tab: "programs",
+                            itemId: offeringId,
+                        });
+                    }}
                     onPatchOffering={patchProgramCategory}
                     onRefresh={refreshPrograms}
                     onAddProgram={canMutate ? addProgram : undefined}
+                    createDetail={
+                        creatingProgram ?
+                            <LocationAddProgramPanel
+                                activeLocationId={selectedSite.id}
+                                activeLocationLabel={model?.displayName ?? selectedSite.label ?? ""}
+                                locations={siteRows
+                                    .filter((site) => site.is_active !== false)
+                                    .map((site) => ({
+                                        id: site.id,
+                                        label: site.label?.trim() || siteLabelById.get(site.id) || "Location",
+                                    }))}
+                                associatedProgramIds={
+                                    new Set(
+                                        selectedPrograms
+                                            .map((row) => String(row.program_id ?? "").trim())
+                                            .filter(Boolean),
+                                    )
+                                }
+                                associatedProgramKeys={
+                                    new Set(
+                                        selectedPrograms
+                                            .map((row) => String(row.key ?? "").trim())
+                                            .filter(Boolean),
+                                    )
+                                }
+                                onCancel={() => setCreatingProgram(false)}
+                                onComplete={async ({ programId }) => {
+                                    setCreatingProgram(false);
+                                    if (orgId) {
+                                        invalidateProgramsCollection(orgId, "program-make-available", {
+                                            publishBus: true,
+                                        });
+                                        invalidateLocationsCollection(orgId, "program-make-available", {
+                                            publishBus: true,
+                                        });
+                                    }
+                                    if (programId) {
+                                        setPendingAssociatedProgramId(programId);
+                                    }
+                                    await refreshPrograms();
+                                }}
+                            />
+                        :   undefined
+                    }
                 />
             );
         }
@@ -756,6 +777,7 @@ export default function LocationsConfigurationPage({
             );
             return (
                 <LocationSchedulingSurface
+                    orgId={orgId}
                     locationId={selectedSite.id}
                     locationMetadata={siteMetadata}
                     patternCount={selectedSchedules.length}

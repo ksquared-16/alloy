@@ -1,34 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { CalendarDays, Clock3, Layers3, Repeat2, SunMedium } from "lucide-react";
 import {
+    ConfigurationEmptyState,
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
+    ConfigurationQueueItem,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import {
-    allowedPatternWeekdays,
-    createTimeWindow,
-    readLocationSchedulingConfig,
-    renameScheduleTypeLabel,
-    resolveEnabledDayTypes,
-    writeLocationSchedulingConfig,
-    type DayTypeOption,
-    type LocationSchedulingConfig,
-    type LocationTimeWindow,
-} from "@/lib/locations/locationSchedulingConfig";
+    ConfigChildObjectMasterDetail,
+    ConfigEditorSection,
+    ConfigObjectHeader,
+    ConfigWorkspaceCard,
+} from "@/components/adminV2/settings/configurationRuntime/workspace";
+import {
+    useLocationSchedulingVm,
+    type SchedulingSubNav,
+} from "@/lib/locations/useLocationSchedulingVm";
 import { WEEKDAY_OPTIONS } from "@/lib/childcareOperational/fetchOperationalEnrollment";
-
-export type SchedulingSubNav =
-    | "overview"
-    | "patterns"
-    | "day_types"
-    | "schedule_types"
-    | "hours"
-    | "operating_days";
+import type { ScheduleRecurrenceBehavior } from "@/lib/locations/locationSchedulingConfig";
 
 const SUB_NAV: Array<{ key: SchedulingSubNav; label: string }> = [
-    { key: "overview", label: "Overview" },
     { key: "patterns", label: "Patterns" },
     { key: "day_types", label: "Day Types" },
     { key: "schedule_types", label: "Schedule Types" },
@@ -37,6 +30,7 @@ const SUB_NAV: Array<{ key: SchedulingSubNav; label: string }> = [
 ];
 
 type Props = {
+    orgId: string;
     locationId: string;
     locationMetadata: Record<string, unknown> | null | undefined;
     patternCount: number;
@@ -47,6 +41,7 @@ type Props = {
 };
 
 export default function LocationSchedulingSurface({
+    orgId,
     locationId,
     locationMetadata,
     patternCount,
@@ -55,67 +50,12 @@ export default function LocationSchedulingSurface({
     onAddPattern,
     patternsPanel,
 }: Props) {
-    const [subNav, setSubNav] = useState<SchedulingSubNav>("overview");
-    const [config, setConfig] = useState<LocationSchedulingConfig>(() =>
-        readLocationSchedulingConfig(locationMetadata),
-    );
-    const [dayTypes, setDayTypes] = useState<DayTypeOption[]>([]);
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [windowDraft, setWindowDraft] = useState({ label: "", startTime: "08:00", endTime: "17:00" });
-
-    useEffect(() => {
-        setConfig(readLocationSchedulingConfig(locationMetadata));
-    }, [locationId, locationMetadata]);
-
-    useEffect(() => {
-        let cancelled = false;
-        void (async () => {
-            try {
-                const res = await fetch("/api/admin/option-sets/childcare_schedule_type", {
-                    credentials: "include",
-                    cache: "no-store",
-                });
-                const json = (await res.json().catch(() => ({}))) as {
-                    items?: Array<{ item_key?: string; value?: string; label?: string; is_active?: boolean }>;
-                };
-                if (cancelled || !res.ok) return;
-                setDayTypes(
-                    (json.items ?? [])
-                        .map((item) => ({
-                            key: String(item.item_key ?? item.value ?? "").trim(),
-                            label: String(item.label ?? item.item_key ?? item.value ?? "").trim(),
-                            isActive: item.is_active !== false,
-                        }))
-                        .filter((row) => row.key && row.label),
-                );
-            } catch {
-                if (!cancelled) setDayTypes([]);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
-    const enabledDayTypes = useMemo(
-        () => resolveEnabledDayTypes(dayTypes, config.enabledDayTypeKeys),
-        [dayTypes, config.enabledDayTypeKeys],
-    );
-
-    const persist = async (next: LocationSchedulingConfig) => {
-        setSaving(true);
-        setError(null);
-        try {
-            const metadata = writeLocationSchedulingConfig(locationMetadata, next);
-            await onSaveMetadata(metadata);
-            setConfig(next);
-        } catch (cause) {
-            setError(cause instanceof Error ? cause.message : "Could not save Scheduling configuration.");
-        } finally {
-            setSaving(false);
-        }
-    };
+    const vm = useLocationSchedulingVm({
+        orgId,
+        locationId,
+        locationMetadata,
+        onSaveMetadata,
+    });
 
     return (
         <div className="space-y-3" data-testid="locations-scheduling">
@@ -124,7 +64,7 @@ export default function LocationSchedulingSurface({
                 data-testid="locations-scheduling-subnav"
             >
                 {SUB_NAV.map((item) => {
-                    const active = item.key === subNav;
+                    const active = item.key === vm.subNav;
                     return (
                         <button
                             key={item.key}
@@ -134,7 +74,7 @@ export default function LocationSchedulingSurface({
                                     "bg-alloy-bend-pine/[0.12] text-alloy-bend-pine"
                                 :   "text-alloy-midnight/55 hover:bg-alloy-stone/[0.08] hover:text-alloy-midnight"
                             }`}
-                            onClick={() => setSubNav(item.key)}
+                            onClick={() => vm.setSubNav(item.key)}
                             data-testid={`locations-scheduling-nav-${item.key}`}
                         >
                             {item.label}
@@ -143,374 +83,860 @@ export default function LocationSchedulingSurface({
                 })}
             </div>
 
-            {error ?
+            {vm.error ?
                 <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
-                    {error}
+                    {vm.error}
                 </p>
             :   null}
 
-            {subNav === "overview" ?
-                <ConfigWorkspaceCard compact testId="locations-scheduling-overview">
-                    <h3 className="text-sm font-semibold text-alloy-midnight">Scheduling</h3>
-                    <p className="mt-1 text-[12px] text-alloy-midnight/50">
-                        Compose operating days, Day Types, Schedule Types, Hours, and Patterns. Patterns
-                        reference these parts — they do not invent them inline.
-                    </p>
-                    <dl className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                        <div className="rounded-md border border-alloy-forge/10 bg-white px-3 py-2.5">
-                            <dt className="config-typo-field-label">Patterns</dt>
-                            <dd className="mt-1 text-lg font-semibold text-alloy-midnight">{patternCount}</dd>
-                        </div>
-                        <div className="rounded-md border border-alloy-forge/10 bg-white px-3 py-2.5">
-                            <dt className="config-typo-field-label">Day Types</dt>
-                            <dd className="mt-1 text-lg font-semibold text-alloy-midnight">
-                                {enabledDayTypes.length || dayTypes.filter((d) => d.isActive).length}
-                            </dd>
-                        </div>
-                        <div className="rounded-md border border-alloy-forge/10 bg-white px-3 py-2.5">
-                            <dt className="config-typo-field-label">Schedule Types</dt>
-                            <dd className="mt-1 text-lg font-semibold text-alloy-midnight">
-                                {config.scheduleTypes.filter((row) => row.isActive).length}
-                            </dd>
-                        </div>
-                        <div className="rounded-md border border-alloy-forge/10 bg-white px-3 py-2.5">
-                            <dt className="config-typo-field-label">Time Windows</dt>
-                            <dd className="mt-1 text-lg font-semibold text-alloy-midnight">
-                                {config.timeWindows.filter((row) => row.isActive).length}
-                            </dd>
-                        </div>
-                    </dl>
-                    {canMutate ?
-                        <div className="mt-4">
-                            <ConfigurationPrimaryButton
-                                className="px-2 py-1 text-[11px]"
-                                onClick={() => {
-                                    setSubNav("patterns");
-                                    onAddPattern();
-                                }}
-                                data-testid="locations-scheduling-add-pattern"
-                            >
-                                Add Pattern
-                            </ConfigurationPrimaryButton>
-                        </div>
-                    :   null}
-                    <div className="mt-4 space-y-2">
-                        {(
-                            [
-                                ["patterns", "Schedule Patterns", `${patternCount} configured`],
-                                [
-                                    "day_types",
-                                    "Day Types",
-                                    "Organization vocabulary · Location enablement",
-                                ],
-                                ["schedule_types", "Schedule Types", "continuous · rotating behaviors"],
-                                ["hours", "Time Windows", "Named local hours"],
-                                ["operating_days", "Operating days", "Days this Location may operate"],
-                            ] as const
-                        ).map(([key, title, subtitle]) => (
-                            <button
-                                key={key}
-                                type="button"
-                                className="flex w-full items-center justify-between rounded-md border border-alloy-forge/10 bg-white px-3 py-2 text-left hover:border-alloy-bend-pine/30"
-                                onClick={() => setSubNav(key)}
-                                data-testid={`locations-scheduling-jump-${key}`}
-                            >
-                                <span>
-                                    <span className="block text-sm font-semibold text-alloy-midnight">{title}</span>
-                                    <span className="block text-[12px] text-alloy-midnight/45">{subtitle}</span>
-                                </span>
-                                <span className="text-[12px] font-medium text-alloy-bend-pine">Open</span>
-                            </button>
-                        ))}
-                    </div>
-                </ConfigWorkspaceCard>
+            {vm.subNav === "patterns" ? patternsPanel : null}
+            {vm.subNav === "day_types" ?
+                <DayTypesCatalog vm={vm} canMutate={canMutate} />
+            :   null}
+            {vm.subNav === "schedule_types" ?
+                <ScheduleTypesCatalog vm={vm} canMutate={canMutate} />
+            :   null}
+            {vm.subNav === "hours" ?
+                <HoursCatalog vm={vm} canMutate={canMutate} />
+            :   null}
+            {vm.subNav === "operating_days" ?
+                <OperatingDaysPanel vm={vm} canMutate={canMutate} />
             :   null}
 
-            {subNav === "patterns" ? patternsPanel : null}
-
-            {subNav === "day_types" ?
-                <ConfigWorkspaceCard compact testId="locations-scheduling-day-types">
-                    <h3 className="text-sm font-semibold text-alloy-midnight">Day Types</h3>
-                    <p className="mt-1 text-[12px] text-alloy-midnight/50">
-                        Owned by the Organization option set <span className="font-medium">childcare_schedule_type</span>.
-                        This Location enables which types Patterns may use. Rename and archive at Organization Fields /
-                        Option Sets — not duplicated here.
-                    </p>
-                    {dayTypes.length === 0 ?
-                        <p className="mt-3 text-sm text-alloy-midnight/55">No Day Types published for this Organization yet.</p>
-                    :   <ul className="mt-3 divide-y divide-alloy-forge/10">
-                            {dayTypes.map((row) => {
-                                const enabled =
-                                    config.enabledDayTypeKeys.length === 0 ||
-                                    config.enabledDayTypeKeys.includes(row.key);
-                                return (
-                                    <li key={row.key} className="flex items-center justify-between gap-2 py-2.5">
-                                        <span>
-                                            <span className="block text-sm font-semibold text-alloy-midnight">
-                                                {row.label}
-                                            </span>
-                                            <span className="block text-[11px] text-alloy-midnight/45">
-                                                {row.isActive ? "Active at Organization" : "Archived at Organization"}
-                                            </span>
-                                        </span>
-                                        <label className="flex items-center gap-2 text-[12px] text-alloy-midnight/70">
-                                            <input
-                                                type="checkbox"
-                                                checked={enabled && row.isActive}
-                                                disabled={!canMutate || saving || !row.isActive}
-                                                onChange={(event) => {
-                                                    const checked = event.target.checked;
-                                                    const allKeys = dayTypes
-                                                        .filter((d) => d.isActive)
-                                                        .map((d) => d.key);
-                                                    let nextKeys: string[];
-                                                    if (config.enabledDayTypeKeys.length === 0) {
-                                                        nextKeys = checked ?
-                                                            allKeys
-                                                        :   allKeys.filter((key) => key !== row.key);
-                                                    } else if (checked) {
-                                                        nextKeys = [...new Set([...config.enabledDayTypeKeys, row.key])];
-                                                    } else {
-                                                        nextKeys = config.enabledDayTypeKeys.filter(
-                                                            (key) => key !== row.key,
-                                                        );
-                                                    }
-                                                    void persist({ ...config, enabledDayTypeKeys: nextKeys });
-                                                }}
-                                                data-testid={`locations-scheduling-day-type-${row.key}`}
-                                            />
-                                            Enabled
-                                        </label>
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    }
-                </ConfigWorkspaceCard>
-            :   null}
-
-            {subNav === "schedule_types" ?
-                <ConfigWorkspaceCard compact testId="locations-scheduling-schedule-types">
-                    <h3 className="text-sm font-semibold text-alloy-midnight">Schedule Types</h3>
-                    <p className="mt-1 text-[12px] text-alloy-midnight/50">
-                        Labels are configurable. Executable behavior is owned by code: continuous or rotating. New
-                        types must choose a supported behavior template.
-                    </p>
-                    <ul className="mt-3 space-y-3">
-                        {config.scheduleTypes.map((row) => (
-                            <li
-                                key={row.id}
-                                className="rounded-md border border-alloy-forge/10 bg-white px-3 py-2.5"
-                                data-testid={`locations-scheduling-schedule-type-${row.key}`}
-                            >
-                                <div className="flex flex-wrap items-start justify-between gap-2">
-                                    <div>
-                                        <p className="text-sm font-semibold text-alloy-midnight">{row.label}</p>
-                                        <p className="mt-0.5 text-[12px] text-alloy-midnight/45">
-                                            Behavior: {row.behavior}
-                                            {row.description ? ` · ${row.description}` : ""}
-                                        </p>
-                                    </div>
-                                    <span className="text-[11px] text-alloy-midnight/40">
-                                        {row.isActive ? "Active" : "Archived"}
-                                    </span>
-                                </div>
-                                {canMutate ?
-                                    <label className="mt-2 block">
-                                        <span className="config-typo-field-label">Operator label</span>
-                                        <div className="mt-1 flex flex-wrap gap-2">
-                                            <input
-                                                type="text"
-                                                defaultValue={row.label}
-                                                className="config-runtime-input max-w-xs"
-                                                data-testid={`locations-scheduling-schedule-type-label-${row.id}`}
-                                                onBlur={(event) => {
-                                                    const nextLabel = event.target.value.trim();
-                                                    if (!nextLabel || nextLabel === row.label) return;
-                                                    void persist({
-                                                        ...config,
-                                                        scheduleTypes: renameScheduleTypeLabel(
-                                                            config.scheduleTypes,
-                                                            row.id,
-                                                            nextLabel,
-                                                        ),
-                                                    });
-                                                }}
-                                            />
-                                        </div>
-                                    </label>
-                                :   null}
-                            </li>
-                        ))}
-                    </ul>
-                </ConfigWorkspaceCard>
-            :   null}
-
-            {subNav === "hours" ?
-                <ConfigWorkspaceCard compact testId="locations-scheduling-hours">
-                    <h3 className="text-sm font-semibold text-alloy-midnight">Time Windows</h3>
-                    <p className="mt-1 text-[12px] text-alloy-midnight/50">
-                        Named local wall-clock hours for this Location. Patterns may reference a window or use custom
-                        hours. Timezone is inherited from the Location.
-                    </p>
-                    {config.timeWindows.length === 0 ?
-                        <p className="mt-3 text-sm text-alloy-midnight/55">No Time Windows yet.</p>
-                    :   <ul className="mt-3 divide-y divide-alloy-forge/10">
-                            {config.timeWindows.map((row: LocationTimeWindow) => (
-                                <li key={row.id} className="flex items-center justify-between gap-2 py-2.5">
-                                    <span>
-                                        <span className="block text-sm font-semibold text-alloy-midnight">
-                                            {row.label}
-                                        </span>
-                                        <span className="block text-[12px] text-alloy-midnight/45">
-                                            {row.startTime}–{row.endTime}
-                                            {!row.isActive ? " · Archived" : ""}
-                                        </span>
-                                    </span>
-                                    {canMutate && row.isActive ?
-                                        <ConfigurationSecondaryButton
-                                            className="px-2 py-1 text-[11px]"
-                                            disabled={saving}
-                                            onClick={() =>
-                                                void persist({
-                                                    ...config,
-                                                    timeWindows: config.timeWindows.map((entry) =>
-                                                        entry.id === row.id ?
-                                                            { ...entry, isActive: false }
-                                                        :   entry,
-                                                    ),
-                                                })
-                                            }
-                                        >
-                                            Archive
-                                        </ConfigurationSecondaryButton>
-                                    :   null}
-                                </li>
-                            ))}
-                        </ul>
-                    }
-                    {canMutate ?
-                        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                            <label>
-                                <span className="config-typo-field-label">Name</span>
-                                <input
-                                    type="text"
-                                    value={windowDraft.label}
-                                    onChange={(event) =>
-                                        setWindowDraft((current) => ({ ...current, label: event.target.value }))
-                                    }
-                                    className="config-runtime-input mt-1"
-                                    placeholder="School Day"
-                                    data-testid="locations-scheduling-window-name"
-                                />
-                            </label>
-                            <label>
-                                <span className="config-typo-field-label">Start</span>
-                                <input
-                                    type="time"
-                                    value={windowDraft.startTime}
-                                    onChange={(event) =>
-                                        setWindowDraft((current) => ({
-                                            ...current,
-                                            startTime: event.target.value,
-                                        }))
-                                    }
-                                    className="config-runtime-input mt-1"
-                                    data-testid="locations-scheduling-window-start"
-                                />
-                            </label>
-                            <label>
-                                <span className="config-typo-field-label">End</span>
-                                <input
-                                    type="time"
-                                    value={windowDraft.endTime}
-                                    onChange={(event) =>
-                                        setWindowDraft((current) => ({
-                                            ...current,
-                                            endTime: event.target.value,
-                                        }))
-                                    }
-                                    className="config-runtime-input mt-1"
-                                    data-testid="locations-scheduling-window-end"
-                                />
-                            </label>
-                            <div className="sm:col-span-3">
-                                <ConfigurationPrimaryButton
-                                    className="px-2 py-1 text-[11px]"
-                                    disabled={
-                                        saving ||
-                                        !windowDraft.label.trim() ||
-                                        windowDraft.endTime <= windowDraft.startTime
-                                    }
-                                    data-testid="locations-scheduling-window-add"
-                                    onClick={() => {
-                                        if (windowDraft.endTime <= windowDraft.startTime) {
-                                            setError("End time must be after start time.");
-                                            return;
-                                        }
-                                        const created = createTimeWindow(windowDraft);
-                                        void persist({
-                                            ...config,
-                                            timeWindows: [...config.timeWindows, created],
-                                        }).then(() =>
-                                            setWindowDraft({ label: "", startTime: "08:00", endTime: "17:00" }),
-                                        );
-                                    }}
-                                >
-                                    Add Time Window
-                                </ConfigurationPrimaryButton>
-                            </div>
-                        </div>
-                    :   null}
-                </ConfigWorkspaceCard>
-            :   null}
-
-            {subNav === "operating_days" ?
-                <ConfigWorkspaceCard compact testId="locations-scheduling-operating-days">
-                    <h3 className="text-sm font-semibold text-alloy-midnight">Operating days</h3>
-                    <p className="mt-1 text-[12px] text-alloy-midnight/50">
-                        Days this Location may operate. Pattern scheduled days must be a subset. Removing a day that
-                        Patterns already use will warn — Patterns are not silently rewritten.
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-1.5" data-testid="locations-scheduling-operating-days-chips">
-                        {WEEKDAY_OPTIONS.map((day) => {
-                            const allowed = allowedPatternWeekdays(config.operatingDays);
-                            const selected = allowed.includes(day.value);
-                            const allUnset = config.operatingDays.length === 0;
-                            return (
-                                <button
-                                    key={day.value}
-                                    type="button"
-                                    disabled={!canMutate || saving}
-                                    aria-pressed={allUnset ? true : selected}
-                                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                                        allUnset || selected ?
-                                            "border-alloy-bend-pine bg-alloy-bend-pine text-white"
-                                        :   "border-alloy-forge/20 bg-white text-alloy-midnight/55"
-                                    }`}
-                                    onClick={() => {
-                                        const current =
-                                            config.operatingDays.length === 0 ?
-                                                [0, 1, 2, 3, 4, 5, 6]
-                                            :   [...config.operatingDays];
-                                        const next = current.includes(day.value) ?
-                                            current.filter((value) => value !== day.value)
-                                        :   [...current, day.value].sort((a, b) => a - b);
-                                        void persist({ ...config, operatingDays: next });
-                                    }}
-                                    data-testid={`locations-scheduling-operating-day-${day.value}`}
-                                >
-                                    {day.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-                    <p className="mt-3 text-[11px] text-alloy-midnight/45">
-                        Owner: Location metadata <code className="text-[10px]">location_scheduling_v1.operating_days</code>.
-                        When empty, all seven weekdays remain allowed until configured.
-                    </p>
-                </ConfigWorkspaceCard>
+            {/* Compact counts for operators landing on Patterns — no readiness. */}
+            {vm.subNav === "patterns" && patternCount === 0 ?
+                <p className="sr-only">
+                    {vm.enabledDayTypes.length} Day Types ·{" "}
+                    {vm.config.scheduleTypes.filter((row) => row.isActive).length} Schedule Types ·{" "}
+                    {vm.config.timeWindows.filter((row) => row.isActive).length} Hours
+                </p>
             :   null}
         </div>
+    );
+}
+
+type Vm = ReturnType<typeof useLocationSchedulingVm>;
+
+function DayTypesCatalog({ vm, canMutate }: { vm: Vm; canMutate: boolean }) {
+    const [creating, setCreating] = useState(false);
+    const [draftLabel, setDraftLabel] = useState("");
+    const [editing, setEditing] = useState(false);
+    const [editLabel, setEditLabel] = useState("");
+    const active = useMemo(
+        () => vm.orgDayTypes.filter((row) => !row.archived),
+        [vm.orgDayTypes],
+    );
+    const archived = useMemo(
+        () => vm.orgDayTypes.filter((row) => row.archived),
+        [vm.orgDayTypes],
+    );
+    const effectiveKey =
+        vm.selectedDayTypeKey && vm.orgDayTypes.some((row) => row.key === vm.selectedDayTypeKey) ?
+            vm.selectedDayTypeKey
+        :   (active[0]?.key ?? archived[0]?.key ?? null);
+    const selected = vm.orgDayTypes.find((row) => row.key === effectiveKey) ?? null;
+    const locationEnabled =
+        !selected ? false
+        : vm.config.enabledDayTypeKeys.length === 0 ? selected.isActive
+        : vm.config.enabledDayTypeKeys.includes(selected.key);
+
+    const detail =
+        creating ?
+            <div className="space-y-3" data-testid="locations-scheduling-day-type-create">
+                <ConfigObjectHeader
+                    size="hero"
+                    name="Add Day Type"
+                    status={{ label: "New", tone: "attention" }}
+                    actions={
+                        <ConfigurationSecondaryButton onClick={() => setCreating(false)}>
+                            Cancel
+                        </ConfigurationSecondaryButton>
+                    }
+                />
+                <label className="block max-w-md space-y-1.5">
+                    <span className="config-typo-field-label">Name</span>
+                    <input
+                        type="text"
+                        value={draftLabel}
+                        onChange={(event) => setDraftLabel(event.target.value)}
+                        className="config-runtime-input"
+                        placeholder="e.g. Drop-In"
+                        data-testid="locations-scheduling-day-type-name"
+                    />
+                </label>
+                <ConfigurationPrimaryButton
+                    disabled={vm.saving || !draftLabel.trim()}
+                    data-testid="locations-scheduling-day-type-create-save"
+                    onClick={() => {
+                        void (async () => {
+                            try {
+                                await vm.createDayType(draftLabel);
+                                setDraftLabel("");
+                                setCreating(false);
+                            } catch (cause) {
+                                vm.setError(
+                                    cause instanceof Error ? cause.message : "Day Type could not be created.",
+                                );
+                            }
+                        })();
+                    }}
+                >
+                    Add Day Type
+                </ConfigurationPrimaryButton>
+            </div>
+        : !selected ?
+            <ConfigurationEmptyState
+                title={vm.dayTypesReady ? "No Day Types yet" : "Day Types"}
+                description={
+                    vm.dayTypesReady ?
+                        "Add Day Types for Patterns to use. Organization owns the vocabulary."
+                    :   "Preparing Day Types…"
+                }
+                actions={
+                    canMutate ?
+                        <ConfigurationPrimaryButton
+                            className="config-primary-btn--sm"
+                            onClick={() => setCreating(true)}
+                        >
+                            Add Day Type
+                        </ConfigurationPrimaryButton>
+                    :   null
+                }
+            />
+        : editing ?
+            <div className="space-y-3" data-testid="locations-scheduling-day-type-edit">
+                <ConfigObjectHeader
+                    size="hero"
+                    name={editLabel || selected.label}
+                    status={{ label: "Editing", tone: "attention" }}
+                    actions={
+                        <ConfigurationSecondaryButton
+                            onClick={() => {
+                                setEditLabel(selected.label);
+                                setEditing(false);
+                            }}
+                        >
+                            Cancel
+                        </ConfigurationSecondaryButton>
+                    }
+                />
+                <ConfigEditorSection title="Day Type">
+                    <label className="block max-w-md space-y-1.5">
+                        <span className="config-typo-field-label">Name</span>
+                        <input
+                            type="text"
+                            value={editLabel}
+                            onChange={(event) => setEditLabel(event.target.value)}
+                            className="config-runtime-input"
+                            data-testid="locations-scheduling-day-type-edit-name"
+                        />
+                    </label>
+                </ConfigEditorSection>
+                <ConfigurationPrimaryButton
+                    disabled={vm.saving || !editLabel.trim()}
+                    onClick={() => {
+                        void (async () => {
+                            try {
+                                await vm.renameDayType(selected.id, editLabel);
+                                setEditing(false);
+                            } catch (cause) {
+                                vm.setError(
+                                    cause instanceof Error ? cause.message : "Day Type could not be renamed.",
+                                );
+                            }
+                        })();
+                    }}
+                >
+                    Save
+                </ConfigurationPrimaryButton>
+            </div>
+        :   <div className="space-y-3" data-testid="locations-scheduling-day-type-detail">
+                <ConfigObjectHeader
+                    size="hero"
+                    name={selected.label}
+                    status={{
+                        label: selected.archived ? "Archived" : "Active",
+                        tone: selected.archived ? "inactive" : "active",
+                    }}
+                    facts={["Organization vocabulary"]}
+                    actions={
+                        canMutate ?
+                            <div className="flex flex-wrap gap-2">
+                                <ConfigurationSecondaryButton
+                                    onClick={() => {
+                                        setEditLabel(selected.label);
+                                        setEditing(true);
+                                    }}
+                                    data-testid="locations-scheduling-day-type-edit"
+                                >
+                                    Edit
+                                </ConfigurationSecondaryButton>
+                                <ConfigurationSecondaryButton
+                                    disabled={vm.saving}
+                                    onClick={() =>
+                                        void vm.archiveDayType(selected.id, !selected.archived).catch((cause) =>
+                                            vm.setError(
+                                                cause instanceof Error ?
+                                                    cause.message
+                                                :   "Day Type could not be updated.",
+                                            ),
+                                        )
+                                    }
+                                >
+                                    {selected.archived ? "Restore" : "Archive"}
+                                </ConfigurationSecondaryButton>
+                            </div>
+                        :   null
+                    }
+                />
+                <ConfigEditorSection title="At this Location">
+                    <label className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            checked={locationEnabled && !selected.archived}
+                            disabled={!canMutate || vm.saving || selected.archived}
+                            onChange={(event) =>
+                                void vm
+                                    .setLocationDayTypeEnabled(selected.key, event.target.checked)
+                                    .catch((cause) =>
+                                        vm.setError(
+                                            cause instanceof Error ?
+                                                cause.message
+                                            :   "Could not update Location enablement.",
+                                        ),
+                                    )
+                            }
+                            data-testid={`locations-scheduling-day-type-enabled-${selected.key}`}
+                        />
+                        <span className="config-typo-sublabel">Enabled for Patterns at this Location</span>
+                    </label>
+                </ConfigEditorSection>
+                {canMutate && !selected.archived ?
+                    <div className="flex flex-wrap gap-2">
+                        <ConfigurationSecondaryButton
+                            disabled={vm.saving}
+                            onClick={() => void vm.reorderDayType(selected.id, -1)}
+                        >
+                            Move up
+                        </ConfigurationSecondaryButton>
+                        <ConfigurationSecondaryButton
+                            disabled={vm.saving}
+                            onClick={() => void vm.reorderDayType(selected.id, 1)}
+                        >
+                            Move down
+                        </ConfigurationSecondaryButton>
+                    </div>
+                :   null}
+            </div>;
+
+    return (
+        <ConfigChildObjectMasterDetail
+            listTitle="Day Types"
+            listSummary={`${active.length} active`}
+            testId="locations-scheduling-day-types"
+            listActions={
+                canMutate ?
+                    <ConfigurationPrimaryButton
+                        className="px-2 py-1 text-[11px]"
+                        onClick={() => {
+                            setCreating(true);
+                            setDraftLabel("");
+                        }}
+                        data-testid="locations-scheduling-day-type-add"
+                    >
+                        + Add
+                    </ConfigurationPrimaryButton>
+                :   null
+            }
+            list={
+                vm.orgDayTypes.length > 0 ?
+                    <>
+                        {active.map((row) => (
+                            <ConfigurationQueueItem
+                                key={row.id}
+                                variant="rail"
+                                active={row.key === effectiveKey && !creating}
+                                title={row.label}
+                                subtitle={
+                                    vm.config.enabledDayTypeKeys.length === 0 ||
+                                    vm.config.enabledDayTypeKeys.includes(row.key) ?
+                                        "Enabled here"
+                                    :   "Not enabled here"
+                                }
+                                leading={
+                                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-alloy-midnight/[0.04] text-alloy-bend-pine">
+                                        <Layers3 className="h-4 w-4" strokeWidth={2} />
+                                    </span>
+                                }
+                                onClick={() => {
+                                    setCreating(false);
+                                    setEditing(false);
+                                    vm.setSelectedDayTypeKey(row.key);
+                                }}
+                                testId={`locations-scheduling-day-type-${row.key}`}
+                            />
+                        ))}
+                        {archived.length > 0 ?
+                            <div className="mt-2 border-t border-alloy-forge/10 pt-2">
+                                <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                    Archived
+                                </p>
+                                {archived.map((row) => (
+                                    <ConfigurationQueueItem
+                                        key={row.id}
+                                        variant="rail"
+                                        muted
+                                        active={row.key === effectiveKey && !creating}
+                                        title={row.label}
+                                        subtitle="Archived"
+                                        onClick={() => {
+                                            setCreating(false);
+                                            vm.setSelectedDayTypeKey(row.key);
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        :   null}
+                    </>
+                :   <p className="config-typo-sublabel">
+                        {vm.dayTypesReady ? "No Day Types yet." : "Preparing…"}
+                    </p>
+            }
+            detail={detail}
+        />
+    );
+}
+
+function ScheduleTypesCatalog({ vm, canMutate }: { vm: Vm; canMutate: boolean }) {
+    const [creating, setCreating] = useState(false);
+    const [draftLabel, setDraftLabel] = useState("");
+    const [draftBehavior, setDraftBehavior] = useState<ScheduleRecurrenceBehavior>("continuous");
+    const [editing, setEditing] = useState(false);
+    const [editLabel, setEditLabel] = useState("");
+    const active = vm.config.scheduleTypes.filter((row) => row.isActive);
+    const archived = vm.config.scheduleTypes.filter((row) => !row.isActive);
+    const effectiveId =
+        vm.selectedScheduleTypeId &&
+        vm.config.scheduleTypes.some((row) => row.id === vm.selectedScheduleTypeId) ?
+            vm.selectedScheduleTypeId
+        :   (active[0]?.id ?? archived[0]?.id ?? null);
+    const selected = vm.config.scheduleTypes.find((row) => row.id === effectiveId) ?? null;
+
+    const detail =
+        creating ?
+            <div className="space-y-3" data-testid="locations-scheduling-schedule-type-create">
+                <ConfigObjectHeader
+                    size="hero"
+                    name="Add Schedule Type"
+                    status={{ label: "New", tone: "attention" }}
+                    actions={
+                        <ConfigurationSecondaryButton onClick={() => setCreating(false)}>
+                            Cancel
+                        </ConfigurationSecondaryButton>
+                    }
+                />
+                <label className="block max-w-md space-y-1.5">
+                    <span className="config-typo-field-label">Operator label</span>
+                    <input
+                        type="text"
+                        value={draftLabel}
+                        onChange={(event) => setDraftLabel(event.target.value)}
+                        className="config-runtime-input"
+                        placeholder="e.g. Same Every Week"
+                        data-testid="locations-scheduling-schedule-type-name"
+                    />
+                </label>
+                <label className="block max-w-md space-y-1.5">
+                    <span className="config-typo-field-label">Behavior</span>
+                    <select
+                        value={draftBehavior}
+                        onChange={(event) =>
+                            setDraftBehavior(event.target.value as ScheduleRecurrenceBehavior)
+                        }
+                        className="config-runtime-select"
+                        data-testid="locations-scheduling-schedule-type-behavior"
+                    >
+                        <option value="continuous">Continuous (every week)</option>
+                        <option value="rotating">Rotating weeks</option>
+                    </select>
+                    <span className="block text-[11px] text-alloy-midnight/45">
+                        Behavior is owned by the platform. Labels may be renamed later.
+                    </span>
+                </label>
+                <ConfigurationPrimaryButton
+                    disabled={vm.saving || !draftLabel.trim()}
+                    onClick={() => {
+                        void (async () => {
+                            try {
+                                await vm.addScheduleType(draftLabel, draftBehavior);
+                                setCreating(false);
+                                setDraftLabel("");
+                            } catch (cause) {
+                                vm.setError(
+                                    cause instanceof Error ?
+                                        cause.message
+                                    :   "Schedule Type could not be created.",
+                                );
+                            }
+                        })();
+                    }}
+                >
+                    Add Schedule Type
+                </ConfigurationPrimaryButton>
+            </div>
+        : !selected ?
+            <ConfigurationEmptyState
+                title="No Schedule Types"
+                description="Add a Schedule Type using a supported behavior template."
+            />
+        : editing ?
+            <div className="space-y-3">
+                <ConfigObjectHeader
+                    size="hero"
+                    name={editLabel || selected.label}
+                    status={{ label: "Editing", tone: "attention" }}
+                    actions={
+                        <ConfigurationSecondaryButton onClick={() => setEditing(false)}>
+                            Cancel
+                        </ConfigurationSecondaryButton>
+                    }
+                />
+                <label className="block max-w-md space-y-1.5">
+                    <span className="config-typo-field-label">Operator label</span>
+                    <input
+                        type="text"
+                        value={editLabel}
+                        onChange={(event) => setEditLabel(event.target.value)}
+                        className="config-runtime-input"
+                        data-testid="locations-scheduling-schedule-type-edit-name"
+                    />
+                </label>
+                <p className="text-[12px] text-alloy-midnight/50">
+                    Behavior stays <span className="font-medium">{selected.behavior}</span> and cannot be changed.
+                </p>
+                <ConfigurationPrimaryButton
+                    disabled={vm.saving || !editLabel.trim()}
+                    onClick={() => {
+                        void (async () => {
+                            try {
+                                await vm.updateScheduleTypeLabel(selected.id, editLabel);
+                                setEditing(false);
+                            } catch (cause) {
+                                vm.setError(
+                                    cause instanceof Error ?
+                                        cause.message
+                                    :   "Schedule Type could not be renamed.",
+                                );
+                            }
+                        })();
+                    }}
+                >
+                    Save
+                </ConfigurationPrimaryButton>
+            </div>
+        :   <div className="space-y-3" data-testid="locations-scheduling-schedule-type-detail">
+                <ConfigObjectHeader
+                    size="hero"
+                    name={selected.label}
+                    status={{
+                        label: selected.isActive ? "Active" : "Archived",
+                        tone: selected.isActive ? "active" : "inactive",
+                    }}
+                    facts={[`Behavior · ${selected.behavior}`]}
+                    actions={
+                        canMutate ?
+                            <div className="flex flex-wrap gap-2">
+                                <ConfigurationSecondaryButton
+                                    onClick={() => {
+                                        setEditLabel(selected.label);
+                                        setEditing(true);
+                                    }}
+                                    data-testid="locations-scheduling-schedule-type-edit"
+                                >
+                                    Edit
+                                </ConfigurationSecondaryButton>
+                                <ConfigurationSecondaryButton
+                                    disabled={vm.saving}
+                                    onClick={() =>
+                                        void vm
+                                            .archiveScheduleType(selected.id, selected.isActive)
+                                            .catch((cause) =>
+                                                vm.setError(
+                                                    cause instanceof Error ?
+                                                        cause.message
+                                                    :   "Schedule Type could not be updated.",
+                                                ),
+                                            )
+                                    }
+                                >
+                                    {selected.isActive ? "Archive" : "Restore"}
+                                </ConfigurationSecondaryButton>
+                            </div>
+                        :   null
+                    }
+                />
+                {selected.description ?
+                    <p className="config-typo-sublabel">{selected.description}</p>
+                :   null}
+            </div>;
+
+    return (
+        <ConfigChildObjectMasterDetail
+            listTitle="Schedule Types"
+            listSummary={`${active.length} active`}
+            testId="locations-scheduling-schedule-types"
+            listActions={
+                canMutate ?
+                    <ConfigurationPrimaryButton
+                        className="px-2 py-1 text-[11px]"
+                        onClick={() => setCreating(true)}
+                        data-testid="locations-scheduling-schedule-type-add"
+                    >
+                        + Add
+                    </ConfigurationPrimaryButton>
+                :   null
+            }
+            list={
+                vm.config.scheduleTypes.length > 0 ?
+                    vm.config.scheduleTypes.map((row) => (
+                        <ConfigurationQueueItem
+                            key={row.id}
+                            variant="rail"
+                            active={row.id === effectiveId && !creating}
+                            muted={!row.isActive}
+                            title={row.label}
+                            subtitle={row.behavior}
+                            leading={
+                                <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-alloy-midnight/[0.04] text-alloy-bend-pine">
+                                    <Repeat2 className="h-4 w-4" strokeWidth={2} />
+                                </span>
+                            }
+                            onClick={() => {
+                                setCreating(false);
+                                setEditing(false);
+                                vm.setSelectedScheduleTypeId(row.id);
+                            }}
+                            testId={`locations-scheduling-schedule-type-${row.key}`}
+                        />
+                    ))
+                :   <p className="config-typo-sublabel">No Schedule Types yet.</p>
+            }
+            detail={detail}
+        />
+    );
+}
+
+function HoursCatalog({ vm, canMutate }: { vm: Vm; canMutate: boolean }) {
+    const [creating, setCreating] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState({ label: "", startTime: "08:00", endTime: "15:00" });
+    const active = vm.config.timeWindows.filter((row) => row.isActive);
+    const archived = vm.config.timeWindows.filter((row) => !row.isActive);
+    const effectiveId =
+        vm.selectedTimeWindowId &&
+        vm.config.timeWindows.some((row) => row.id === vm.selectedTimeWindowId) ?
+            vm.selectedTimeWindowId
+        :   (active[0]?.id ?? archived[0]?.id ?? null);
+    const selected = vm.config.timeWindows.find((row) => row.id === effectiveId) ?? null;
+
+    const detail =
+        creating ?
+            <div className="space-y-3" data-testid="locations-scheduling-hours-create">
+                <ConfigObjectHeader
+                    size="hero"
+                    name="Add Hours"
+                    status={{ label: "New", tone: "attention" }}
+                    actions={
+                        <ConfigurationSecondaryButton onClick={() => setCreating(false)}>
+                            Cancel
+                        </ConfigurationSecondaryButton>
+                    }
+                />
+                <div className="grid max-w-lg gap-2 sm:grid-cols-3">
+                    <label className="sm:col-span-3">
+                        <span className="config-typo-field-label">Name</span>
+                        <input
+                            type="text"
+                            value={draft.label}
+                            onChange={(event) => setDraft((c) => ({ ...c, label: event.target.value }))}
+                            className="config-runtime-input mt-1"
+                            placeholder="School Day"
+                            data-testid="locations-scheduling-window-name"
+                        />
+                    </label>
+                    <label>
+                        <span className="config-typo-field-label">Start</span>
+                        <input
+                            type="time"
+                            value={draft.startTime}
+                            onChange={(event) => setDraft((c) => ({ ...c, startTime: event.target.value }))}
+                            className="config-runtime-input mt-1"
+                            data-testid="locations-scheduling-window-start"
+                        />
+                    </label>
+                    <label>
+                        <span className="config-typo-field-label">End</span>
+                        <input
+                            type="time"
+                            value={draft.endTime}
+                            onChange={(event) => setDraft((c) => ({ ...c, endTime: event.target.value }))}
+                            className="config-runtime-input mt-1"
+                            data-testid="locations-scheduling-window-end"
+                        />
+                    </label>
+                </div>
+                <ConfigurationPrimaryButton
+                    disabled={vm.saving || !draft.label.trim() || draft.endTime <= draft.startTime}
+                    data-testid="locations-scheduling-window-add"
+                    onClick={() => {
+                        void (async () => {
+                            try {
+                                await vm.addTimeWindow(draft);
+                                setCreating(false);
+                                setDraft({ label: "", startTime: "08:00", endTime: "15:00" });
+                            } catch (cause) {
+                                vm.setError(
+                                    cause instanceof Error ? cause.message : "Hours could not be created.",
+                                );
+                            }
+                        })();
+                    }}
+                >
+                    Add Hours
+                </ConfigurationPrimaryButton>
+            </div>
+        : !selected ?
+            <ConfigurationEmptyState
+                title="No Hours yet"
+                description="Add reusable Time Windows Patterns can reference."
+                actions={
+                    canMutate ?
+                        <ConfigurationPrimaryButton
+                            className="config-primary-btn--sm"
+                            onClick={() => setCreating(true)}
+                        >
+                            Add Hours
+                        </ConfigurationPrimaryButton>
+                    :   null
+                }
+            />
+        : editing ?
+            <div className="space-y-3">
+                <ConfigObjectHeader
+                    size="hero"
+                    name={draft.label || selected.label}
+                    status={{ label: "Editing", tone: "attention" }}
+                    actions={
+                        <ConfigurationSecondaryButton onClick={() => setEditing(false)}>
+                            Cancel
+                        </ConfigurationSecondaryButton>
+                    }
+                />
+                <div className="grid max-w-lg gap-2 sm:grid-cols-3">
+                    <label className="sm:col-span-3">
+                        <span className="config-typo-field-label">Name</span>
+                        <input
+                            type="text"
+                            value={draft.label}
+                            onChange={(event) => setDraft((c) => ({ ...c, label: event.target.value }))}
+                            className="config-runtime-input mt-1"
+                        />
+                    </label>
+                    <label>
+                        <span className="config-typo-field-label">Start</span>
+                        <input
+                            type="time"
+                            value={draft.startTime}
+                            onChange={(event) => setDraft((c) => ({ ...c, startTime: event.target.value }))}
+                            className="config-runtime-input mt-1"
+                        />
+                    </label>
+                    <label>
+                        <span className="config-typo-field-label">End</span>
+                        <input
+                            type="time"
+                            value={draft.endTime}
+                            onChange={(event) => setDraft((c) => ({ ...c, endTime: event.target.value }))}
+                            className="config-runtime-input mt-1"
+                        />
+                    </label>
+                </div>
+                <ConfigurationPrimaryButton
+                    disabled={vm.saving || !draft.label.trim() || draft.endTime <= draft.startTime}
+                    onClick={() => {
+                        void (async () => {
+                            try {
+                                await vm.updateTimeWindow(selected.id, {
+                                    label: draft.label.trim(),
+                                    startTime: draft.startTime,
+                                    endTime: draft.endTime,
+                                });
+                                setEditing(false);
+                            } catch (cause) {
+                                vm.setError(
+                                    cause instanceof Error ? cause.message : "Hours could not be saved.",
+                                );
+                            }
+                        })();
+                    }}
+                >
+                    Save
+                </ConfigurationPrimaryButton>
+            </div>
+        :   <div className="space-y-3" data-testid="locations-scheduling-hours-detail">
+                <ConfigObjectHeader
+                    size="hero"
+                    name={selected.label}
+                    status={{
+                        label: selected.isActive ? "Active" : "Archived",
+                        tone: selected.isActive ? "active" : "inactive",
+                    }}
+                    facts={[`${selected.startTime}–${selected.endTime}`]}
+                    actions={
+                        canMutate ?
+                            <div className="flex flex-wrap gap-2">
+                                <ConfigurationSecondaryButton
+                                    onClick={() => {
+                                        setDraft({
+                                            label: selected.label,
+                                            startTime: selected.startTime,
+                                            endTime: selected.endTime,
+                                        });
+                                        setEditing(true);
+                                    }}
+                                    data-testid="locations-scheduling-hours-edit"
+                                >
+                                    Edit
+                                </ConfigurationSecondaryButton>
+                                <ConfigurationSecondaryButton
+                                    disabled={vm.saving}
+                                    onClick={() =>
+                                        void vm
+                                            .archiveTimeWindow(selected.id, selected.isActive)
+                                            .catch((cause) =>
+                                                vm.setError(
+                                                    cause instanceof Error ?
+                                                        cause.message
+                                                    :   "Hours could not be updated.",
+                                                ),
+                                            )
+                                    }
+                                >
+                                    {selected.isActive ? "Archive" : "Restore"}
+                                </ConfigurationSecondaryButton>
+                            </div>
+                        :   null
+                    }
+                />
+            </div>;
+
+    return (
+        <ConfigChildObjectMasterDetail
+            listTitle="Hours"
+            listSummary={`${active.length} windows`}
+            testId="locations-scheduling-hours"
+            listActions={
+                canMutate ?
+                    <ConfigurationPrimaryButton
+                        className="px-2 py-1 text-[11px]"
+                        onClick={() => {
+                            setCreating(true);
+                            setDraft({ label: "", startTime: "08:00", endTime: "15:00" });
+                        }}
+                        data-testid="locations-scheduling-hours-add"
+                    >
+                        + Add
+                    </ConfigurationPrimaryButton>
+                :   null
+            }
+            list={
+                vm.config.timeWindows.length > 0 ?
+                    vm.config.timeWindows.map((row) => (
+                        <ConfigurationQueueItem
+                            key={row.id}
+                            variant="rail"
+                            active={row.id === effectiveId && !creating}
+                            muted={!row.isActive}
+                            title={row.label}
+                            subtitle={`${row.startTime}–${row.endTime}`}
+                            leading={
+                                <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-alloy-midnight/[0.04] text-alloy-bend-pine">
+                                    <Clock3 className="h-4 w-4" strokeWidth={2} />
+                                </span>
+                            }
+                            onClick={() => {
+                                setCreating(false);
+                                setEditing(false);
+                                vm.setSelectedTimeWindowId(row.id);
+                            }}
+                            testId={`locations-scheduling-window-${row.id}`}
+                        />
+                    ))
+                :   <p className="config-typo-sublabel">No Hours yet.</p>
+            }
+            detail={detail}
+        />
+    );
+}
+
+function OperatingDaysPanel({ vm, canMutate }: { vm: Vm; canMutate: boolean }) {
+    const selected = vm.allowedWeekdays;
+    const allUnset = vm.config.operatingDays.length === 0;
+
+    return (
+        <ConfigWorkspaceCard compact testId="locations-scheduling-operating-days">
+            <div className="mb-3 flex items-start gap-2">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-alloy-midnight/[0.04] text-alloy-bend-pine">
+                    <SunMedium className="h-4 w-4" strokeWidth={2} />
+                </span>
+                <div>
+                    <h3 className="text-sm font-semibold text-alloy-midnight">Operating days</h3>
+                    <p className="mt-0.5 text-[12px] text-alloy-midnight/50">
+                        Days this Location may operate. Pattern scheduled days must stay within this set.
+                    </p>
+                </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5" data-testid="locations-scheduling-operating-days-chips">
+                {WEEKDAY_OPTIONS.map((day) => {
+                    const on = allUnset || selected.includes(day.value);
+                    return (
+                        <button
+                            key={day.value}
+                            type="button"
+                            disabled={!canMutate || vm.saving}
+                            aria-pressed={on}
+                            className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                                on ?
+                                    "border-alloy-bend-pine bg-alloy-bend-pine text-white"
+                                :   "border-alloy-forge/20 bg-white text-alloy-midnight/55"
+                            }`}
+                            onClick={() => {
+                                const current =
+                                    vm.config.operatingDays.length === 0 ?
+                                        [0, 1, 2, 3, 4, 5, 6]
+                                    :   [...vm.config.operatingDays];
+                                const next = current.includes(day.value) ?
+                                    current.filter((value) => value !== day.value)
+                                :   [...current, day.value].sort((a, b) => a - b);
+                                void vm.setOperatingDays(next).catch((cause) =>
+                                    vm.setError(
+                                        cause instanceof Error ?
+                                            cause.message
+                                        :   "Operating days could not be saved.",
+                                    ),
+                                );
+                            }}
+                            data-testid={`locations-scheduling-operating-day-${day.value}`}
+                        >
+                            {day.label}
+                        </button>
+                    );
+                })}
+            </div>
+            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-alloy-midnight/45">
+                <CalendarDays className="h-3.5 w-3.5" strokeWidth={2} />
+                Loaded with this Location — no separate fetch.
+            </p>
+        </ConfigWorkspaceCard>
     );
 }

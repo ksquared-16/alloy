@@ -173,9 +173,14 @@ describe("Configuration Runtime — Locations", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         expect(offerings).toContain("effectiveLocationProgramLabel");
         expect(offerings).toContain("buildLocationProgramAvailabilityView");
+        expect(offerings).toContain("ConfigChildObjectMasterDetail");
         expect(offerings).toContain("local_display_name");
         expect(offerings).toContain("available_from");
         expect(offerings).toContain("available_through");
+        expect(offerings).toContain("is_active: false");
+        expect(offerings).not.toContain(">Configure<");
+        expect(offerings).not.toContain("locations-program-configure");
+        expect(offerings).not.toContain("remove_locations");
         expect(page).toContain("LocationProgramsOfferedPanel");
         expect(page).toContain("LocationAddProgramPanel");
         expect(page).toContain("setCreatingProgram(true)");
@@ -363,6 +368,14 @@ describe("Configuration Runtime — Locations", () => {
         expect(rail).toContain('id: "resolve-timezone"');
         expect(rail).not.toContain('label: "Apply to other locations"');
         expect(rail).toContain('group: "more"');
+        const scheduling = read("components/adminV2/settings/locations/LocationSchedulingSurface.tsx");
+        const schedulingVm = read("lib/locations/useLocationSchedulingVm.ts");
+        expect(scheduling).toContain("DayTypesCatalog");
+        expect(scheduling).toContain("ScheduleTypesCatalog");
+        expect(scheduling).toContain("HoursCatalog");
+        expect(scheduling).toContain("OperatingDaysPanel");
+        expect(schedulingVm).toContain("dayTypesCacheByOrg");
+        expect(schedulingVm).toContain("useLocationSchedulingVm");
         expect(read("components/adminV2/settings/locations/LocationsCommandRailActions.tsx")).toContain(
             'actionsPlacementSurface="company"',
         );

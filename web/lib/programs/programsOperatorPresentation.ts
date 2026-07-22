@@ -25,7 +25,10 @@ export function programLifecycleLabel(status: "active" | "retired" | string | nu
 
 export function operatorProgramError(message: string): string {
     const trimmed = message.trim();
-    if (!trimmed) return "We could not save this Program. Review the highlighted fields and try again.";
+    if (!trimmed) return "We could not save this Program. Try again.";
+    if (/active enrollments|cannot be removed from/i.test(trimmed)) {
+        return trimmed;
+    }
     if (/duplicate key|programs_org_key_unique|already exists/i.test(trimmed)) {
         const named = trimmed.match(/named\s+(.+?)\s+already/i);
         if (named?.[1]) return `A Program named ${named[1]} already exists.`;
@@ -34,8 +37,11 @@ export function operatorProgramError(message: string): string {
     if (/program_retired|retired/i.test(trimmed) && /publish|available/i.test(trimmed)) {
         return "Archived Programs cannot be changed for new Locations. Restore the Program first.";
     }
-    if (/foreign key|constraint|revision|publication|distribution|invariant|command/i.test(trimmed)) {
-        return "We could not save this Program. Review the highlighted fields and try again.";
+    if (/foreign key|violates.*constraint|constraint.*violat/i.test(trimmed)) {
+        return "This Program is still in use and cannot be fully removed. It can be marked Not offered instead.";
+    }
+    if (/revision|publication|distribution|invariant|command/i.test(trimmed)) {
+        return "We could not save this Program. Try again.";
     }
     return trimmed
         .replace(/\b(program[_ ]?key|stable key|revision|publication|distribution|command)\b/gi, "Program")
