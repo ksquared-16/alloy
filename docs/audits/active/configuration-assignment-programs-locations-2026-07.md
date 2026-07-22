@@ -1,10 +1,10 @@
 ---
 owner: engineering
-status: stage-2-backend-ready
+status: stage-3-production-frontend-ready
 last_reviewed: 2026-07-22
 sprint: org-runtime-realization
 slot: 4
-phase: configuration-assignment-backend-stage-2
+phase: configuration-assignment-frontend-stage-3
 ---
 
 # Configuration Assignment Reference — Programs → Locations
@@ -16,10 +16,12 @@ phase: configuration-assignment-backend-stage-2
 | 1 Interactive prototype | **Approved** |
 | 2 Backend authority + command | **Complete** |
 | 2.5 Capability certification | **Complete** — see `configuration-assignment-capability-certification-2026-07.md` |
-| 3 Production frontend | Not started — wires **Programs adapter** only |
+| 3 Production frontend | **Complete** — Programs adapter only; awaits operator QA |
 | 4 E2E certification | Not started |
 
 **Stage 2.5 headline:** This is not “a Programs feature that every page copies.” It is the first adapter on Configuration Assignment (availability). Tuition stays on value inherit/override. Preview→Commit is cross-cutting.
+
+**Stage 3 non-claim:** Tuition, Fees, Policies, Surfaces, and Access do **not** use this runtime. Business Processes and Automation remain future Assignment candidates only if Location availability semantics are proven.
 
 ## Frozen interaction contract (from Stage 1 approval)
 
@@ -185,16 +187,88 @@ Coverage: Verdict A freeze, 35-Location partition, refresh targets, API wiring, 
 
 ---
 
+## Stage 3 — Production adapter (complete)
+
+### Adapter
+
+| Piece | Path |
+|-------|------|
+| Shared workflow | `ProgramLocationAvailabilityFlow` |
+| Client | `web/lib/programs/makeProgramAvailableClient.ts` |
+| Stage flag | `PROGRAM_LOCATION_AVAILABILITY_STAGE = "production"` |
+| Org origin | Programs workspace → **Add to Locations** (`section=assignment`) |
+| Location origin | Location → Programs → **Add Program** |
+
+Both origins share one preview/commit capability. Origin affects preselection, copy, and return destination only.
+
+### API mapping
+
+| UI moment | Action | Notes |
+|-----------|--------|-------|
+| Enter Review | `preview_make_available` | Renders server preview; no client eligibility authority |
+| Confirm | `make_available` | Re-resolves authority; one HTTP commit for N Locations |
+| Retry (uncertain / retryable fail) | same `idempotencyKey` | Material Program/Location/intent edits mint a new key |
+
+Client body carries Program ref + Location IDs + idempotency key + entryPoint. No trusted `orgId` / `actorUserId` / site-scope lists from the browser.
+
+### Lifecycle enforcement
+
+- Existing Program: only published revisions selectable / continuable.
+- Unpublished from Program origin: hard stop + Open Publication.
+- Create-new Review copy states create **and publish**, then make available (uses `preview.program.willPublish`).
+
+### Preview / partial / refresh
+
+- Review UI binds to `MakeProgramAvailablePreview` fields (new / already / retained local / blocked / willPublish).
+- Commit UI renders `committed` | `partial` | `blocked` from the structured result (never generic success for partial).
+- `applyMakeAvailableRefreshTargets` maps returned `refreshTargets` into Programs/Locations/Organization Continuity invalidation (deduped scopes).
+
+### Ownership editing
+
+- Organization definition: Programs workspace definition section.
+- Location configuration: Location Program detail — Location-only editor; Restore Organization default for supported local description override. No save-time scope quiz.
+
+### Tests
+
+```bash
+cd web && npm run test -- \
+  tests/programs/makeProgramAvailableClient.test.ts \
+  tests/programs/makeProgramAvailableFlowIntegration.test.ts \
+  tests/programs/makeProgramAvailableEligibility.test.ts \
+  tests/programs/makeProgramAvailableAuthority.test.ts
+```
+
+### Localhost evidence
+
+Slot 4 · prefer `http://localhost:3014` · evidence dir `.alloy-agent-evidence/program-assignment-production-stage3/`
+
+Agent automated browser pass on 2026-07-22 reached the login wall (`storage-state` expired; `alloy-agent-login 4` requires interactive sign-in). Unit/integration adapter tests passed. Operator should refresh auth, keep ≤3 localhost servers (stop another slot if wt4 flaps), then certify:
+
+- Existing published Program → one Location / 35 Locations
+- Create → validate → publish → make available (one and bulk)
+- Unpublished blocked; preview/commit network shape; partial; restore Organization default; Back/Forward; projection refresh
+
+Screenshots / `qa-report.json` / `network.json` land in the evidence directory after operator or refreshed-auth agent pass.
+
+### Unresolved gaps
+
+1. Apply migration `20260722140000_configuration_command_operations_make_available.sql` on the live app DB for durable compound idempotency. Until applied, commit degrades to ephemeral ops (create+publish+assign still runs; durable replay requires the table).
+2. Per-Location failure detail in `failed[]` remains coarse when distribution finalize aggregates failures.
+3. Unassignment / consumption revoke still deferred.
+4. Stage 4 operator E2E certification (35-Location live timing, partial fixture, timeout replay) still open.
+5. Do not claim Tuition / Fees / Policies / Surfaces / Access use this frontend.
+
+---
+
 ## Remaining backend gaps (explicit)
 
-1. Apply migration `20260722140000_configuration_command_operations_make_available.sql` to the target database before production use.
+1. Apply migration `20260722140000_configuration_command_operations_make_available.sql` to the target database before durable production idempotency.
 2. Commit `failed[]` is coarse when distribution finalize reports failures (aggregate); enrich from `configuration_distribution_targets` in a follow-up if UX needs per-Location retry buttons.
 3. Unassignment / consumption revoke still deferred.
 4. No live 35-Location timing harness in CI (unit partition + authority tests only).
-5. Stage 1 prototype still permits unpublished fixture until Stage 3 wiring removes it.
 
 ---
 
 ## Stage 1 reference (preserved)
 
-Prototype QA routes, screenshots, and fixture behavior remain documented for Continuity UX. See git history / `.alloy-agent-evidence/program-location-availability-prototype/`.
+Prototype QA routes, screenshots, and fixture behavior remain documented for Continuity UX. See git history / `.alloy-agent-evidence/program-location-availability-prototype/`. Fixture mutation is removed from the production path.
