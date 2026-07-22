@@ -216,8 +216,10 @@ export async function sendViaProvider({ provider, message, cwd, resume = null, t
     return { ok: false, provider, error: `${a.label} is declared but not wired for round-trips in V1`, auth_required: false, unsupported: true };
   }
   const pr = await probe(provider);
-  if (pr.state !== "authenticated") {
-    // Fail closed with the operator vocabulary — no confusing CLI error, no prompt.
+  // Block ONLY on a definite negative. On an inconclusive probe ("unknown" — e.g.
+  // the auth-status command was starved under memory pressure) proceed and let the
+  // real round-trip decide, so a slow probe never false-fails a send.
+  if (pr.state === "needs_auth" || pr.state === "unavailable" || pr.state === "not_configured") {
     return { ok: false, provider, error: `${a.label} needs to reconnect`, auth_required: true, auth_state: pr.state, detail: pr.detail || null, reconnect_cmd: a.reconnect_cmd };
   }
   const r = await sendInstruction({ provider, message, cwd, resume, timeout });

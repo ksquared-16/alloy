@@ -26,6 +26,7 @@ import { routeInstruction, recordAsk } from "./director.mjs";
 import { PROVIDERS } from "../providers.mjs";
 import { sendViaProvider, verifyProvider, reconnectInfo, providerDiagnostics, ADAPTERS } from "../provider-runtime.mjs";
 import { recordReview } from "./review.mjs";
+import { preserveOutputs, discardGenerated } from "../closeout.mjs";
 
 // --------------------------------------------------------------------------
 // Declarative input validation (fail-closed).
@@ -607,6 +608,26 @@ Object.assign(COMMANDS, {
     preview: (v, t, snap) => ({ summary: `Close the PR for ${branchOf(snap, v.slot)} WITHOUT merging.`, authoritative_target: `gh pr close ${branchOf(snap, v.slot)}`, effects: ["Closes the pull request without merging (no code lands).", "Safe for certification — nothing is promoted."] }),
     refresh: ["snapshot"],
   },
+  "closeout.preserve_evidence": {
+    key: "closeout.preserve_evidence", title: "Preserve outputs", risk: "consequential", execution: "internal", confirmation: "required",
+    input: { slot: { type: "slot", required: true } },
+    resolveTarget: (v, snap) => target("repository", `preserve outputs for ${sprintBySlot(snap, v.slot)?.worktree}`, { slot: v.slot }),
+    eligibility: (t, snap, v) => (sprintBySlot(snap, v.slot) ? { eligible: true } : { eligible: false, reason: "slot not occupied" }),
+    preview: (v, snap) => ({ summary: `Copy this worker's evidence + unique planning docs to the durable store.`, authoritative_target: `cp -R .alloy-agent-evidence + planning → evidence store`, effects: ["Non-destructive — copies only. Nothing in the worktree is changed.", "Makes it safe to later discard generated artifacts and delete the worktree without losing outputs."] }),
+    run: async (v, snap) => await preserveOutputs(sprintBySlot(snap, v.slot)),
+    refresh: [],
+  },
+  "closeout.discard_generated": {
+    key: "closeout.discard_generated", title: "Discard generated artifacts", risk: "consequential", execution: "internal", confirmation: "required",
+    input: { slot: { type: "slot", required: true }, confirm_text: { type: "name" } },
+    typedConfirm: (v) => `discard ${v.slot}`,
+    resolveTarget: (v, snap) => target("repository", `discard generated in ${sprintBySlot(snap, v.slot)?.worktree}`, { slot: v.slot }),
+    eligibility: (t, snap, v) => (sprintBySlot(snap, v.slot) ? { eligible: true } : { eligible: false, reason: "slot not occupied" }),
+    preview: (v, snap) => ({ summary: `Remove ONLY untracked generated/evidence artifacts (never source, never unpreserved planning).`, authoritative_target: `rm untracked evidence/generated (requires prior Preserve)`, effects: ["DESTRUCTIVE for generated artifacts only. Source, tests, config, and planning docs are never touched.", "Refuses unless outputs were preserved to the durable store first.", `Type "discard ${v.slot}" to confirm.`] }),
+    run: async (v, snap) => await discardGenerated(sprintBySlot(snap, v.slot)),
+    refresh: ["snapshot"],
+  },
+
   "worktree.delete": {
     key: "worktree.delete", title: "Delete worktree", risk: "consequential", execution: "cli", bin: "git", confirmation: "required",
     input: { slot: { type: "slot", required: true }, confirm_text: { type: "name" } },

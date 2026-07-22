@@ -33,7 +33,7 @@ const run = (bin, args, timeout = 6000) =>
  * reliable source) rather than the resources cache, which can return empty under
  * memory pressure. Returns [{slot, port, pid}] for servers that are running.
  */
-async function runningDevServers() {
+export async function runningDevServers() {
   const out = await run(ALLOY_RO, ["dev-status", "--json"], 20000);
   let rows = [];
   try { const j = JSON.parse(out); rows = Array.isArray(j) ? j : (j.servers || j.dev || []); } catch { return []; }

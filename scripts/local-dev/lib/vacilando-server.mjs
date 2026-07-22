@@ -20,7 +20,7 @@
  *   POST /api/commands        → confirm+execute a command through the registry
  *   GET  /                    → the SPA shell (static, path-traversal safe)
  */
-import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
@@ -33,12 +33,16 @@ import { listCommands } from "./vacilando/commands/registry.mjs";
 import { readAuditEvents } from "./vacilando/commands/audit.mjs";
 import { collectResources } from "./vacilando/resources.mjs";
 import { workerOutputs, evidenceFilePath } from "./vacilando/outputs.mjs";
-import { readDirectorLog } from "./vacilando/commands/director.mjs";
+import { readDirectorLog, recordAsk } from "./vacilando/commands/director.mjs";
+import { createRequest, updateRequest, readRequests, pendingCount, recoverInterrupted, REQUEST_TYPES } from "./vacilando/commands/director-requests.mjs";
+import { sendViaProvider } from "./vacilando/provider-runtime.mjs";
+import { writeAuditEvent } from "./vacilando/commands/audit.mjs";
+import { computeCloseout } from "./vacilando/closeout.mjs";
 import { prForWorktree } from "./vacilando/github.mjs";
 import { collectPolicies } from "./vacilando/policies.mjs";
 import { collectUsage } from "./vacilando/usage.mjs";
 import { getProviderRuntime } from "./vacilando/provider-runtime.mjs";
-import { computeReclaim, memoryPressure } from "./vacilando/memory-manager.mjs";
+import { computeReclaim, memoryPressure, runningDevServers } from "./vacilando/memory-manager.mjs";
 import { schedule } from "./vacilando/scheduler.mjs";
 import { readReviews } from "./vacilando/commands/review.mjs";
 
@@ -151,6 +155,28 @@ const snapshotSafe = () => getSnapshot();
 /** Force a fresh projection (bypass TTL) and update the cache. Used after a command. */
 const forceSnapshot = () => getSnapshot({ maxAgeMs: 0 });
 
+/**
+ * Resolve a slot's worker from the snapshot, falling back to the slot metadata
+ * env file when the full projection is starved (host thrashing → thin snapshot).
+ * Lets closeout/send keep working when the dashboard board is momentarily empty.
+ */
+function sprintFromMetadata(slot) {
+  try {
+    const dir = join(process.env.HOME, ".local", "state", "alloy-dev", "metadata");
+    for (const f of readdirSync(dir).filter((x) => x.endsWith(".env"))) {
+      const t = readFileSync(join(dir, f), "utf8");
+      const g = (k) => (t.match(new RegExp(`^${k}="?([^"\n]*)"?`, "m")) || [])[1] || null;
+      if (Number(g("ALLOY_WORKTREE_SLOT")) === slot) {
+        const branch = g("ALLOY_WORKTREE_BRANCH");
+        const provider = branch ? (branch.match(/^agent\/([^/]+)\//) || [])[1] : null;
+        return { slot, worktree: g("ALLOY_WORKTREE_NAME"), branch, provider, port: Number(g("PORT")) || null };
+      }
+    }
+  } catch { /* none */ }
+  return null;
+}
+const resolveSprint = (snap, slot) => (snap?.sprints || []).find((s) => s.slot === slot) || sprintFromMetadata(slot);
+
 /** Assemble the (usage, worker-count) inputs the Provider Runtime needs, keyed by provider id. */
 function providerRuntimeInputs(snap, usage) {
   const usageByProvider = {};
@@ -202,6 +228,40 @@ async function refreshMemory({ act = false } = {}) {
   return lastReclaim;
 }
 
+/**
+ * Director async send: run a durable request's provider turn in the background
+ * and update its record through the lifecycle. The browser never waits on this —
+ * it created the record (Queued) and polls /api/director/requests for status.
+ */
+const QUICK_TIMEOUT_MS = 60000;
+const INSTRUCTION_TIMEOUT_MS = 600000; // 10 min for a worker instruction
+function runDirectorSend(reqRec, sprint) {
+  const t0 = Date.now();
+  const timeout = reqRec.request_type === "quick-ask" ? QUICK_TIMEOUT_MS : INSTRUCTION_TIMEOUT_MS;
+  const cwd = sprint?.worktree ? `${process.env.HOME}/Code/alloy-worktrees/${sprint.worktree}` : null;
+  let settled = false;
+  updateRequest(reqRec.request_id, { status: "starting", started_at: new Date().toISOString() });
+  // If the provider turn is genuinely running (didn't fast-fail on auth), show it.
+  const runningTimer = setTimeout(() => { if (!settled) updateRequest(reqRec.request_id, { status: "worker-running" }); }, 1500);
+  sendViaProvider({ provider: sprint?.provider, message: reqRec.instruction, cwd, timeout })
+    .then((r) => {
+      settled = true; clearTimeout(runningTimer);
+      const now = new Date().toISOString(); const dur = Date.now() - t0;
+      try { recordAsk({ slot: reqRec.worker_slot, worktree: sprint?.worktree, provider: sprint?.provider, message: reqRec.instruction, response: r }); } catch { /* legacy log best-effort */ }
+      let patch = { duration_ms: dur };
+      if (r.auth_required) patch = { ...patch, status: "authentication-required", error_code: "auth", error_message: r.error || "Authentication required", failed_at: now };
+      else if (r.timed_out) patch = { ...patch, status: "timed-out", error_code: "timeout", error_message: "provider timed out", failed_at: now };
+      else if (r.ok === false || r.unsupported) patch = { ...patch, status: "failed", error_code: "provider_error", error_message: r.error || "provider error", failed_at: now };
+      else patch = { ...patch, status: "worker-responded", response: r.text ?? null, usage: r.usage || null, provider_session_id: r.session_id || null, completed_at: now };
+      updateRequest(reqRec.request_id, patch);
+      writeAuditEvent({ actor: reqRec.actor || "operator", command: "director.send", input: { slot: reqRec.worker_slot, request_type: reqRec.request_type }, target: { kind: "worker", label: `slot ${reqRec.worker_slot}` }, outcome: patch.status === "worker-responded" ? "succeeded" : "failed", error: patch.error_message || null }, Date.now());
+    })
+    .catch((e) => {
+      settled = true; clearTimeout(runningTimer);
+      updateRequest(reqRec.request_id, { status: "failed", error_code: "exception", error_message: String(e.message || e), failed_at: new Date().toISOString(), duration_ms: Date.now() - t0 });
+    });
+}
+
 /** Read a small JSON body from a loopback POST. Fails closed on size/parse. */
 function readJsonBody(req, limit = 64 * 1024) {
   return new Promise((res) => {
@@ -244,6 +304,23 @@ export function createVacilandoServer() {
       if (mode === "execute" && out.snapshot) broadcast(out.snapshot);
       const status = out.ok ? 200 : statusForStage(out);
       return sendJson(res, status, out);
+    }
+
+    // Director async send: durable request created BEFORE execution; returns immediately.
+    if (req.method === "POST" && path === "/api/director/send") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      const { slot, instruction, request_type = "worker-instruction", retry_of = null } = body.value || {};
+      if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { ok: false, error: "bad_slot" });
+      if (typeof instruction !== "string" || !instruction.trim()) return sendJson(res, 400, { ok: false, error: "empty_instruction" });
+      if (instruction.length > 24000) return sendJson(res, 400, { ok: false, error: "too_long", detail: `${instruction.length} chars exceeds 24000` });
+      // Metadata resolve is instant (no compose) — the send must not wait on a
+      // starved projection just to accept a request.
+      const sprint = sprintFromMetadata(slot) || resolveSprint(await snapshotSafe(), slot);
+      if (!sprint) return sendJson(res, 409, { ok: false, error: "slot_not_occupied" });
+      const rec = createRequest({ slot, worktree: sprint.worktree, provider: sprint.provider, instruction, request_type: REQUEST_TYPES.has(request_type) ? request_type : "worker-instruction", retry_of });
+      runDirectorSend(rec, sprint);
+      return sendJson(res, 202, { ok: true, request_id: rec.request_id, status: "queued", created_at: rec.created_at, request_type: rec.request_type });
     }
 
     if (req.method !== "GET") return sendJson(res, 405, { error: "method_not_allowed" });
@@ -324,6 +401,21 @@ export function createVacilandoServer() {
       if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, log: readDirectorLog(slot) });
     }
+    if (path === "/api/director/requests") {
+      const slot = url.searchParams.get("slot") != null ? Number(url.searchParams.get("slot")) : null;
+      if (slot != null && (!Number.isInteger(slot) || slot < 1 || slot > 6)) return sendJson(res, 400, { error: "bad_slot" });
+      return sendJson(res, 200, { slot, requests: readRequests(slot) });
+    }
+    if (path === "/api/closeout") {
+      const slot = Number(url.searchParams.get("slot"));
+      if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
+      const sprint = sprintFromMetadata(slot) || resolveSprint(await snapshotSafe(), slot);
+      if (!sprint) return sendJson(res, 404, { error: "slot_not_occupied" });
+      // Cheap dev-server check (dev-status, no git/compose).
+      const running = await (async () => { try { return (await runningDevServers()).some((s) => s.slot === slot); } catch { return false; } })();
+      const co = await computeCloseout(sprint, { devServerRunning: running, providerRunning: false, pendingRequests: pendingCount(slot) });
+      return sendJson(res, 200, co);
+    }
     if (path === "/api/pr") {
       const wt = url.searchParams.get("worktree") || "";
       const br = url.searchParams.get("branch") || "";
@@ -372,6 +464,10 @@ export function createVacilandoServer() {
   // servers when the host is thrashing. Slower cadence than the SSE tick.
   const memTimer = setInterval(() => { refreshMemory({ act: true }).catch(() => {}); }, MEMORY_TICK_MS);
   memTimer.unref?.();
+
+  // Any Director request left non-terminal died with a previous process — mark it
+  // interrupted honestly rather than showing a fake "running".
+  try { const n = recoverInterrupted(); if (n) console.log(`[director] recovered ${n} interrupted request(s)`); } catch { /* best-effort */ }
 
   // Warm the cache immediately so the first request isn't a cold ~8s compute.
   getSnapshot().catch(() => {});

@@ -15,7 +15,28 @@ const STATUS_ACC = { running: "var(--run)", review: "var(--review)", blocked: "v
 function ago(ms) { if (!ms) return "—"; const s = Math.max(0, (Date.now() - ms) / 1000); if (s < 60) return `${s | 0}s`; if (s < 3600) return `${(s / 60) | 0}m`; if (s < 86400) return `${(s / 3600) | 0}h`; return `${(s / 86400) | 0}d`; }
 const shortBranch = (b, wt) => (b ? b.replace(/^agent\/[^/]+\//, "") : wt || "—");
 
-const state = { snap: null, res: null, sel: null, tab: "overview", outputs: {}, director: {}, drafts: {} };
+const state = { snap: null, res: null, sel: null, tab: "overview", outputs: {}, director: {}, drafts: {}, requests: {} };
+
+// -------- Director durable requests (server-owned; the browser is never the source of truth) --------
+const REQ_STATUS = {
+  queued: { label: "Queued", k: "idle" }, starting: { label: "Starting", k: "idle" },
+  "worker-running": { label: "Worker running", k: "run" }, "waiting-for-provider": { label: "Waiting for provider", k: "run" },
+  "worker-responded": { label: "Worker responded", k: "ok" }, "authentication-required": { label: "Authentication required", k: "auth" },
+  "timed-out": { label: "Timed out", k: "err" }, failed: { label: "Failed", k: "err" }, cancelled: { label: "Cancelled", k: "muted" },
+};
+const REQ_TERMINAL = new Set(["worker-responded", "authentication-required", "timed-out", "failed", "cancelled"]);
+async function fetchRequests(slot) { try { const r = await fetch(`/api/director/requests?slot=${slot}`); state.requests[slot] = (await r.json()).requests || []; render(true); } catch { /* keep last */ } }
+async function fetchCloseout(slot) { try { const r = await fetch(`/api/closeout?slot=${slot}`); (state._closeout = state._closeout || {})[slot] = await r.json(); render(true); } catch { /* keep last */ } }
+async function sendDirector(slot, request_type, instruction, retry_of = null) {
+  if (!instruction || !instruction.trim()) { toast("err", "Empty instruction"); return; }
+  const { data } = await api("/api/director/send", { slot, instruction, request_type, retry_of });
+  if (!data.ok) { toast("err", "Send not accepted", data.detail || data.error || ""); return; } // draft preserved on failure to create
+  clearDraft(slot); // submitted send is now durable + server-owned
+  (state.requests[slot] = state.requests[slot] || []);
+  state.requests[slot].unshift({ request_id: data.request_id, worker_slot: slot, instruction, request_type: data.request_type, status: "queued", created_at: data.created_at });
+  render(true);
+  fetchRequests(slot);
+}
 
 // -------- Director draft state (per worker slot) --------
 // The draft is owned by application state (state.drafts[slot]), NOT the DOM, so
@@ -246,8 +267,9 @@ function operatingSurface() {
   if (!sp) return `<div class="empty">Select a worker.</div>`;
   const w = state.snap.workers.find((x) => x.slot === sp.slot);
   const r = resFor(sp.slot);
-  const tabs = ["work", "director", "outputs", "resources", "repository", "history"];
+  const tabs = ["work", "director", "closeout", "outputs", "resources", "repository", "history"];
   const tabContent = state.tab === "director" ? tabDirector(sp)
+    : state.tab === "closeout" ? tabCloseout(sp)
     : state.tab === "outputs" ? tabOutputs(sp)
     : state.tab === "resources" ? tabResources(sp, w, r)
     : state.tab === "repository" ? tabRepository(sp)
@@ -283,6 +305,65 @@ function tabResources(sp, w, r) {
       ${kv("CPU load", `${o.cpu_load_pct}% (${o.load_1m}/${o.cpu_count})`)}${kv("Memory", `${o.mem_used_pct}% used · ${(o.mem_free_mb / 1024).toFixed(1)}G free`)}
       ${kv("Servers", o.running_servers + " running")}${kv("Capacity", `${o.slots.occupied}/6 occupied · ${o.slots.recommended_available} recommended`)}${kv("Pressure", `<span class="pr ${o.slots.pressure}">${o.slots.pressure}</span>`)}</dl>
       ${o.warning ? `<div class="rwarn">${esc(o.warning)}</div>` : ""}` : '<span class="muted">reading…</span>'}</div></div>`;
+}
+const CLASS_LABEL_UI = { source: "source", test: "test", config: "configuration", "planning-doc": "planning document", documentation: "documentation", "qa-evidence": "QA evidence", screenshot: "screenshot", report: "report", verification: "verification", generated: "generated artifact", unknown: "unknown" };
+const CLOSEOUT_K = { safe: "ok", "stop-runtime": "run", "preserve-evidence": "run", "review-planning": "auth", "commit-remaining": "auth", "requests-pending": "run", "requests-pending": "run" };
+function tabCloseout(sp) {
+  const co = (state._closeout || {})[sp.slot];
+  if (!co) { fetchCloseout(sp.slot); return `<div class="muted" style="padding:14px">Assessing closeout readiness…</div>`; }
+  if (co.error) return `<div class="sec"><h5>Closeout</h5><div class="muted">${esc(co.error)}</div></div>`;
+  const k = CLOSEOUT_K[co.result] || (co.result === "safe" ? "ok" : "auth");
+  const repo = co.repository || {}, rt = co.runtime || {}, ch = co.changes || {}, ev = co.evidence || {};
+  const kv = (a, b) => `<div class="co-row"><span class="co-k">${a}</span><span class="co-v">${b}</span></div>`;
+  const classChips = Object.entries(ch.by_class || {}).map(([c, n]) => `<span class="cap ${["source", "test", "config", "planning-doc"].includes(c) ? "on" : "off"}">${n} ${esc(CLASS_LABEL_UI[c] || c)}</span>`).join(" ");
+  const fileList = (ch.files || []).map((f) => `<div class="co-file"><span class="cap ${["source", "test", "config", "planning-doc"].includes(f.class) ? "on" : "off"}">${esc(f.class_label || f.class)}</span> <span class="mono">${esc(f.path)}</span></div>`).join("");
+  const running = rt.dev_server_running;
+  const canDelete = co.can_delete_worktree;
+  return `<div class="director">
+    <div class="dhead"><div class="dtitle">Closeout readiness</div>
+      <div class="co-result ${k}"><b>${esc(co.result_label)}</b> — next: ${esc(co.next_action)}</div>
+      ${(co.reasons || []).length ? `<div class="muted dmode">${co.reasons.map((r) => `• ${esc(r)}`).join("<br>")}</div>` : `<div class="muted dmode">Nothing blocks closing this worker.</div>`}</div>
+    <div class="cols2">
+      <div class="sec"><h5>Repository</h5><dl class="kv">
+        ${kv("PR", repo.pr_merged ? "merged into staging" : "not fully merged")}
+        ${kv("Branch", `${repo.ahead} ahead · ${repo.behind} behind`)}
+        ${kv("", `<span class="muted">${esc(repo.note || "")}</span>`)}</dl></div>
+      <div class="sec"><h5>Runtime</h5><dl class="kv">
+        ${kv("Dev server", running ? `<span class="attn">running${rt.port ? " :" + rt.port : ""}</span>` : "stopped")}
+        ${kv("Provider", rt.provider_running ? "active" : "idle")}
+        ${kv("Pending requests", String(co.unsaved_requests || 0))}</dl></div>
+      <div class="sec"><h5>Changes · ${ch.total || 0} uncommitted</h5>
+        <div class="pm-caps">${classChips || '<span class="muted">clean</span>'}</div>
+        <div class="co-files">${fileList}</div>
+        <div class="muted src">${ch.tracked || 0} tracked · ${ch.untracked || 0} untracked${ch.has_source ? " · includes source (never auto-discarded)" : " · no source at risk"}</div></div>
+      <div class="sec"><h5>Evidence & outputs</h5><dl class="kv">
+        ${kv("In worktree", `${ev.worktree_mb || 0} MB`)}
+        ${kv("Durable store", `${ev.store_mb || 0} MB`)}
+        ${kv("Preserved", ev.preserved ? "yes ✓" : `<span class="attn">no — ${ev.unique_unpreserved} unique item(s)</span>`)}</dl>
+        ${(co.would_lose || []).length ? `<div class="muted src">Deleting now would lose: ${co.would_lose.map((w) => w.kind === "evidence" ? esc(w.note) : esc(w.path || w.kind)).slice(0, 4).join("; ")}</div>` : ""}</div>
+    </div>
+    <div class="sec"><h5>Actions</h5><div class="detail-actions">
+      <button class="btn" data-nav-tab="repository">Review changes</button>
+      <button class="btn" data-cmd="closeout.preserve_evidence" data-slot="${sp.slot}">Preserve outputs</button>
+      <button class="btn warn" data-discardcmd="${sp.slot}">Discard generated…</button>
+      ${running ? `<button class="btn warn" data-cmd="server.stop" data-slot="${sp.slot}">Stop runtime</button>` : ""}
+      <button class="btn" data-end="${sp.slot}">End work</button>
+      ${canDelete ? `<button class="btn warn" data-delcmd="${sp.slot}">Delete worktree…</button>` : `<button class="btn" disabled title="Blocked until closeout is safe">Delete worktree (blocked)</button>`}
+    </div>
+      <div class="muted" style="font-size:11px;margin-top:7px"><b>End work</b> frees the slot but preserves the worktree + branch on disk. <b>Delete worktree</b> permanently removes the checkout — enabled only when nothing unique would be lost. Source is never auto-discarded; dirty worktrees are never deleted.</div></div>
+  </div>`;
+}
+function showDiscard(slot) {
+  const ov = el("div", "ov");
+  ov.innerHTML = `<div class="dlg"><h3>Discard generated artifacts · slot ${slot}</h3><span class="risk consequential">destructive</span>
+    <div class="b">Removes ONLY untracked generated/evidence artifacts. Source, tests, config, and planning documents are never touched, and it refuses unless outputs were preserved first.
+      <div class="willrun">Type <b>discard ${slot}</b> to confirm</div>
+      <input class="f-ct" placeholder="discard ${slot}" style="width:100%;margin-top:8px;padding:7px 9px;border:1px solid var(--line-strong);border-radius:8px"></div>
+    <div class="foot"><button class="btn cancel">Cancel</button><button class="btn go ok">Discard</button></div></div>`;
+  ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
+  ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
+  ov.querySelector(".ok").onclick = () => { const ct = ov.querySelector(".f-ct").value.trim(); ov.remove(); startCommandTyped("closeout.discard_generated", { slot }, ct); };
+  document.body.appendChild(ov);
 }
 function tabRepository(sp) {
   const pr = state._pr?.[sp.slot];
@@ -391,28 +472,39 @@ function directorStatus(m) {
   if (m.delivery === "clipboard+manual-paste") return { label: m.clipboard_ok ? "Copied for manual paste" : "Copy failed", k: "copied" };
   return { label: m.delivery || "recorded", k: "muted" };
 }
+function reqCard(r) {
+  const st = REQ_STATUS[r.status] || { label: r.status, k: "muted" };
+  const pending = !REQ_TERMINAL.has(r.status);
+  const when = r.created_at ? new Date(r.created_at).toLocaleString() : "";
+  const elapsed = pending && r.started_at ? ` · ${Math.max(0, Math.round((Date.now() - Date.parse(r.started_at)) / 1000))}s`
+    : (REQ_TERMINAL.has(r.status) && r.duration_ms ? ` · ${(r.duration_ms / 1000).toFixed(1)}s` : "");
+  const u = r.usage || {};
+  const meta = `${esc(r.request_type === "quick-ask" ? "Quick Ask" : "Worker Instruction")}${r.provider ? " · " + esc(r.provider) : ""} · ${esc(r.request_id)}`;
+  let body = "";
+  if (r.status === "worker-responded") {
+    body = `<div class="dc-resp ok"><span class="dc-role worker">Worker response</span><div class="dc-rtext">${esc(r.response || "(empty)")}</div></div>
+      <div class="dc-meta">${esc(r.provider || "provider")} · ${u.input_tokens ?? "?"}→${u.output_tokens ?? "?"} tok · ${r.duration_ms ? (r.duration_ms / 1000).toFixed(1) + "s" : "—"} · ${u.cost_usd != null ? "$" + u.cost_usd : "cost unavailable"}</div>`;
+  } else if (r.status === "failed" || r.status === "timed-out" || r.status === "authentication-required") {
+    body = `<div class="dc-resp err"><span class="dc-role worker">${esc(st.label)}</span><div class="dc-rtext">${esc(r.error_message || "")}</div></div>
+      <div class="dc-actions">${r.status === "authentication-required" && r.provider ? `<button class="btn sm warn" data-prov-reconnect="${esc(r.provider)}">Reconnect</button>` : ""}<button class="btn sm" data-retry="${esc(r.request_id)}">Retry</button></div>`;
+  } else if (pending) {
+    body = `<div class="dc-note">${st.label}… the worker is running independently — safe to refresh or navigate away.</div>`;
+  }
+  return `<div class="dconv" data-req="${esc(r.request_id)}">
+    <div class="dc-head"><span class="dc-role op">Operator → Director</span><span class="dc-badge ${st.k}${pending ? " live" : ""}">${esc(st.label)}${elapsed}</span><span class="dc-time">${when}</span></div>
+    <div class="dc-msg">${esc(r.instruction)}</div>${body}
+    <div class="dc-meta muted">${meta}</div></div>`;
+}
 function tabDirector(sp) {
+  if (state.requests[sp.slot] === undefined) fetchRequests(sp.slot);
   const log = state.director[sp.slot];
-  if (log === undefined) { fetchDirector(sp.slot); }
-  if (!state._providers) fetchProviders(); // authoritative provider status (Provider Runtime)
-  const items = log || [];
+  if (log === undefined) fetchDirector(sp.slot);
+  if (!state._providers) fetchProviders();
+  const reqs = state.requests[sp.slot] || [];
+  const clips = (log || []).filter((m) => m.delivery === "clipboard+manual-paste").map((m) => `<div class="dconv"><div class="dc-head"><span class="dc-role op">Operator → Director</span><span class="dc-badge copied">Copied for manual paste</span><span class="dc-time">${m.occurred_at ? new Date(m.occurred_at).toLocaleString() : ""}</span></div><div class="dc-msg">${esc(m.message)}</div><div class="dc-note">Clipboard / manual paste — Vacilando cannot inject into a running session.</div></div>`);
   const ps = providerStatus(sp.provider, sp.slot);
   const draft = draftFor(sp.slot);
-  const conv = (m) => {
-    const st = directorStatus(m);
-    const when = m.occurred_at ? new Date(m.occurred_at).toLocaleString() : "";
-    const head = `<div class="dc-head"><span class="dc-role op">Operator → Director</span><span class="dc-badge ${st.k}">${esc(st.label)}</span><span class="dc-time">${when}</span></div>
-      <div class="dc-msg">${esc(m.message)}</div>`;
-    if (m.delivery === "provider-round-trip") {
-      const u = m.usage || {};
-      const meta = `${esc(m.provider || "provider")} · ${u.input_tokens ?? "?"}→${u.output_tokens ?? "?"} tok · ${m.duration_ms ? (m.duration_ms / 1000).toFixed(1) + "s" : "—"} · ${u.cost_usd != null ? "$" + u.cost_usd : "cost unavailable"}`;
-      return `<div class="dconv">${head}
-        <div class="dc-resp ${st.k}"><span class="dc-role worker">Worker response</span><div class="dc-rtext">${esc(m.response || m.response_error || "(no response)")}</div></div>
-        <div class="dc-meta">${meta}</div></div>`;
-    }
-    return `<div class="dconv">${head}
-      <div class="dc-note">Delivered to worker by clipboard / manual paste — Vacilando cannot inject into a running session.</div></div>`;
-  };
+  const convHtml = (reqs.map(reqCard).concat(clips)).join("") || `<div class="empty">No interactions yet.</div>`;
   return `<div class="director">
     <div class="dhead">
       <div class="dtitle">Director</div>
@@ -421,15 +513,14 @@ function tabDirector(sp) {
         <span>Assigned provider: <b>${esc(capProvider(sp.provider))}</b></span>
         <span>Provider status: <span class="hpill ${ps.k}">${esc(ps.label)}</span></span>
       </div>
-      <div class="muted dmode">You talk to Director; Director routes work to the selected worker, whose runtime uses the assigned provider. <b>Send to Worker</b> = headless provider turn with worktree context. <b>Copy Instruction</b> = clipboard / manual paste. Injecting into a live editor session is not available.</div>
+      <div class="muted dmode">Sends are <b>durable</b> and run <b>asynchronously</b> — you'll see them immediately as Queued and can refresh or navigate away safely. <b>Send to Worker</b> = async worker instruction (may run for minutes). <b>Quick Ask</b> = short bounded advisory. <b>Copy Instruction</b> = clipboard / manual paste.</div>
     </div>
-    <div class="dlog">${items.length ? items.map(conv).join("") : `<div class="empty">No interactions yet.</div>`}</div>
+    <div class="dlog">${convHtml}</div>
     <div class="dcompose">
       <textarea id="d-msg" data-slot="${sp.slot}" maxlength="${DIRECTOR_MAX}" placeholder="Instruction for the worker — e.g. Summarize your latest change and list any blockers. Do not modify files.">${esc(draft)}</textarea>
       <div class="dc-count"><span id="d-count">${fmtCount(draft.length)}</span><span class="muted"> / ${DIRECTOR_MAX.toLocaleString()} max</span></div>
-      <div class="drow"><span class="muted dhelp">Preview → confirm → worker request → response</span>
-        <div class="dbtns"><button class="btn" data-director="${sp.slot}">Copy Instruction</button><button class="btn go" data-ask="${sp.slot}">Send to Worker</button></div></div>
-      <div class="muted dsend-note">This sends a live request to the assigned worker. Usage will be shown after completion when reported by the provider.</div>
+      <div class="drow"><span class="muted dhelp">Confirm → Queued immediately → runs async → status updates here</span>
+        <div class="dbtns"><button class="btn" data-director="${sp.slot}">Copy Instruction</button><button class="btn" data-quick-ask="${sp.slot}">Quick Ask</button><button class="btn go" data-send-worker="${sp.slot}">Send to Worker</button></div></div>
     </div>
   </div>`;
 }
@@ -561,6 +652,7 @@ async function execute(command, input, confirm, confirmText) {
     const sp = state.snap?.sprints.find((x) => x.slot === input.slot);
     if (sp) { fetchOutputs(sp.worktree); fetchPr(sp); }
     fetchResources(); loadAuditIfOpen();
+    if (input.slot != null && state._closeout) { delete state._closeout[input.slot]; if (state.tab === "closeout") fetchCloseout(input.slot); }
     render(true);
   } else { toast("err", `${command.replace(/\./g, " ")} not run`, data.reason || (data.errors || []).join("; ") || data.code); }
 }
@@ -620,6 +712,23 @@ async function showProviderDiagnostics(id) {
     <div class="foot"><button class="btn cancel">Close</button></div></div>`;
   ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
   ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
+  document.body.appendChild(ov);
+}
+function showSendConfirm(slot, type) {
+  const ta = document.getElementById("d-msg"); const instruction = ta ? ta.value.trim() : "";
+  if (!instruction) { toast("err", "Empty instruction"); return; }
+  const sp = state.snap?.sprints.find((s) => s.slot === slot);
+  const provider = sp?.provider || "the worker";
+  const isQuick = type === "quick-ask";
+  const ov = el("div", "ov");
+  ov.innerHTML = `<div class="dlg"><h3>${isQuick ? "Quick Ask" : "Send to Worker"} · slot ${slot}</h3><span class="risk consequential">consequential</span>
+    <div class="b">${isQuick ? `A short bounded advisory request to <b>${esc(provider)}</b> (up to 60s).` : `An asynchronous instruction to <b>${esc(provider)}</b> — creates a durable request, returns immediately, and may run for minutes.`}
+      <div class="willrun">${esc(instruction.slice(0, 200))}${instruction.length > 200 ? "…" : ""}</div>
+      <div class="muted note">${instruction.length.toLocaleString()} chars · appears as Queued immediately · status updates in the conversation · safe to refresh or navigate away.</div></div>
+    <div class="foot"><button class="btn cancel">Cancel</button><button class="btn go ok">${isQuick ? "Ask" : "Send"}</button></div></div>`;
+  ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
+  ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
+  ov.querySelector(".ok").onclick = () => { ov.remove(); sendDirector(slot, type, instruction); };
   document.body.appendChild(ov);
 }
 function showStartServer(slot) {
@@ -703,7 +812,11 @@ document.addEventListener("click", (e) => {
   if (t("[data-start]")) { showStartWork(); return; }
   if ((n = t("[data-startserver]"))) { e.stopPropagation(); showStartServer(Number(n.dataset.startserver)); return; }
   if ((n = t("[data-director]"))) { const msg = document.getElementById("d-msg")?.value?.trim(); if (!msg) { toast("err", "Empty instruction"); return; } startCommand("director.route", { slot: Number(n.dataset.director), message: msg }); return; }
-  if ((n = t("[data-ask]"))) { const msg = document.getElementById("d-msg")?.value?.trim(); if (!msg) { toast("err", "Empty message"); return; } startCommand("director.ask", { slot: Number(n.dataset.ask), message: msg }); return; }
+  if ((n = t("[data-send-worker]"))) { showSendConfirm(Number(n.dataset.sendWorker), "worker-instruction"); return; }
+  if ((n = t("[data-quick-ask]"))) { showSendConfirm(Number(n.dataset.quickAsk), "quick-ask"); return; }
+  if ((n = t("[data-retry]"))) { const rid = n.dataset.retry; const slot = state.sel; const orig = (state.requests[slot] || []).find((r) => r.request_id === rid); if (orig) sendDirector(slot, orig.request_type || "worker-instruction", orig.instruction, rid); return; }
+  if ((n = t("[data-discardcmd]"))) { showDiscard(Number(n.dataset.discardcmd)); return; }
+  if ((n = t("[data-nav-tab]"))) { state.tab = n.dataset.navTab; render(true); return; }
   if ((n = t("[data-review]"))) { showReview(n.dataset.review); return; }
   if ((n = t("[data-prcmd]"))) { e.stopPropagation(); showOpenPr(Number(n.dataset.slot)); return; }
   if ((n = t("[data-delcmd]"))) { e.stopPropagation(); showDelete(Number(n.dataset.delcmd)); return; }
@@ -769,5 +882,8 @@ if (!location.hash) location.hash = "#/command";
 connect(); poll(); fetchResources();
 setInterval(poll, 4000);
 setInterval(fetchResources, 9000);
+// Poll the selected worker's Director requests while any is still running, so
+// status advances live and the elapsed timer ticks. Server store is authoritative.
+setInterval(() => { const slot = state.sel; if (slot == null || document.hidden) return; const rs = state.requests[slot]; if (rs && rs.some((r) => !REQ_TERMINAL.has(r.status))) fetchRequests(slot); }, 2500);
 // Refresh the dashboard while it's the active center; pause when the tab is hidden (efficiency).
 setInterval(() => { if (document.hidden) return; if (route() === "command" && state.sel == null) fetchDashboard(); }, 10000);
