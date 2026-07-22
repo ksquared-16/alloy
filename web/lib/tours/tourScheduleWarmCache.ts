@@ -18,6 +18,7 @@ import {
     TOUR_SLOT_PAGE_DAYS,
     tourSlotWindowBoundsUtc,
 } from "@/lib/tours/availability/tourSlotWindowPagination";
+import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 
 const WARM_TTL_MS = 45_000;
 
@@ -89,7 +90,11 @@ export function prefetchTourSchedule(
     if (!oid || !loc) return null;
     const key = keyFor(oid, loc);
     const existing = cache.get(key);
-    if (existing && isFresh(existing, now)) return existing.promise;
+    if (existing && isFresh(existing, now)) {
+        logCurrentWorkInit("tour.prefetch.reuse", { subjectId: oid, cacheKey: key, cache: "hit" });
+        return existing.promise;
+    }
+    logCurrentWorkInit("tour.prefetch.start", { subjectId: oid, cacheKey: key, cache: "miss", preloadSource: "live" });
 
     const { from, to } = tourSlotWindowBoundsUtc(0, TOUR_SLOT_PAGE_DAYS);
     const windowFromIso = from.toISOString();
@@ -104,6 +109,12 @@ export function prefetchTourSchedule(
         const value: WarmTourSchedule = { activeBookings, slots, rulesById, windowFromIso, windowToIso };
         const entry = cache.get(key);
         if (entry) entry.value = value;
+        logCurrentWorkInit("tour.prefetch.ready", {
+            subjectId: oid,
+            cacheKey: key,
+            cache: "live",
+            note: `${slots.length} slots · ${activeBookings.length} bookings`,
+        });
         return value;
     })().catch((err) => {
         // Never cache a failure — drop the entry so the panel fetches fresh.
@@ -129,8 +140,15 @@ export function peekWarmTourSchedule(
     const loc = String(locationId ?? "").trim();
     if (!oid || !loc) return null;
     const entry = cache.get(keyFor(oid, loc));
-    if (!entry || !entry.value || !isFresh(entry, now)) return null;
-    return entry.value;
+    const hit = Boolean(entry && entry.value && isFresh(entry, now));
+    logCurrentWorkInit("tour.peek", {
+        subjectId: oid,
+        cacheKey: keyFor(oid, loc),
+        cache: hit ? "hit" : "miss",
+        note: entry ? (entry.value ? "value ready" : "in-flight, not ready") : "no entry",
+    });
+    if (!hit) return null;
+    return entry!.value;
 }
 
 /** Invalidate the warm entry after a booking mutation so the next open re-verifies. */

@@ -156,8 +156,14 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
             setSlotPhase(warm.activeBookings.length > 0 ? "duplicate_guard" : "schedule");
             return;
         }
+        // Host-shell-first: open STRAIGHT to the slot picker (its warm slots render instantly; a cold
+        // window shows the local availability skeleton) — never a blocking "Checking tour bookings…"
+        // gate. The duplicate-guard check runs in parallel and only surfaces if an active booking
+        // exists (rare on a fresh schedule; the server blocks duplicate bookings regardless).
         void prefetchTourSchedule(oid, loc);
-        setSlotPhase("bootstrapping");
+        setActiveBookings([]);
+        setBootstrapErr(null);
+        setSlotPhase("schedule");
         void loadActiveBookings();
     }, [open, hasSite, oid, loc, loadActiveBookings]);
 

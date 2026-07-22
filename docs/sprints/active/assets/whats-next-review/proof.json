@@ -1,0 +1,33 @@
+{
+  "hasOwnerLink": true,
+  "hasOldOpenChildrenAffordance": false,
+  "viewDetailsInFooter": true,
+  "actionButtonWidths": [
+    110,
+    112,
+    112,
+    112
+  ],
+  "actionButtonsEqual": true,
+  "tour": {
+    "clickToAvailabilityMs": 82,
+    "bootstrapLoaderShown": false
+  },
+  "composer": {
+    "hasSendLater": true,
+    "hasBosAssist": true,
+    "hasSend": true
+  },
+  "tourEvents": [
+    "+20683ms tour.prefetch.start miss",
+    "+23163ms tour.prefetch.reuse hit",
+    "+23530ms tour.prefetch.ready 24 slots · 0 bookings",
+    "+23834ms tour.prefetch.reuse hit",
+    "+24448ms tour.peek value ready",
+    "+24450ms tour.peek value ready",
+    "+24452ms tour.peek value ready",
+    "+24456ms tour.peek value ready",
+    "+24465ms tour.peek value ready",
+    "+24467ms tour.peek value ready"
+  ]
+}

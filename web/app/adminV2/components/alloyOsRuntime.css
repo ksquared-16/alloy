@@ -5903,7 +5903,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 .alloy-os-currentwork__focused-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
 }
 .alloy-os-currentwork__focused-outcome-pills,
@@ -6120,22 +6120,25 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .alloy-os-currentwork__primary-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: stretch;
   gap: 8px;
 }
-/* All action buttons in the row share ONE size — equal width (capped), centered labels, same
-   height (shared padding). Primary vs secondary differ only in fill, never in dimensions. */
+/* All action buttons in the row share ONE equal width (flex:1 with a 0 basis), centered labels on a
+   single line, same height. Primary vs secondary differ only in fill, never in dimensions. The row
+   stays on one line (nowrap) with min-width:0 so buttons shrink equally instead of a 3+1 wrap. */
 .alloy-os-currentwork__primary-row > button,
 .alloy-os-currentwork__focused-actions > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 1 1 0;
-  min-width: 116px;
-  max-width: 210px;
+  min-width: 0;
   align-self: stretch;
   text-align: center;
+  white-space: nowrap;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .alloy-os-currentwork__open-work {
