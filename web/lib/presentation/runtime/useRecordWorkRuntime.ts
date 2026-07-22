@@ -18,6 +18,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+    logCurrentWorkInit,
+    nextCurrentWorkInstanceId,
+} from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
+import {
     loadOpportunityDrawerViaViewModel,
     type LoadOpportunityDrawerViaViewModelResult,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
@@ -131,6 +135,9 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
     // Monotonic guard for reload/recompose responses. Subject swaps are guarded by fetchGenRef; this
     // orders concurrent reloads of the SAME subject so a stale response cannot overwrite newer state.
     const reloadGenRef = useRef(0);
+    // Stable per-mount id for the fetch owner (Phase A duplicate-init diagnostics).
+    const runtimeIdRef = useRef<string>("");
+    if (!runtimeIdRef.current) runtimeIdRef.current = nextCurrentWorkInstanceId("recordRuntime");
 
     const validSubject = subjectId && subjectId !== "new" ? subjectId : null;
 
@@ -177,11 +184,29 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             setError(null);
             return;
         }
-        if (displayVm && String(displayVm.entity.id) === String(validSubject)) return;
+        if (displayVm && String(displayVm.entity.id) === String(validSubject)) {
+            logCurrentWorkInit("recordRuntime.fetch.skip", {
+                subjectId: validSubject,
+                runtimeId: runtimeIdRef.current,
+                reqGen: fetchGenRef.current,
+                cache: "hit",
+                note: "displayVm already matches subject — no refetch",
+            });
+            return;
+        }
 
         const gen = ++fetchGenRef.current;
         setColdLoading(!displayVm);
         setError(null);
+        logCurrentWorkInit("recordRuntime.fetch.start", {
+            subjectId: validSubject,
+            runtimeId: runtimeIdRef.current,
+            reqGen: gen,
+            cacheKey: `opportunity:${validSubject}`,
+            preloadSource: "live",
+            cache: "miss",
+            note: displayVm ? "hold_prior" : "cold",
+        });
         logDrawerVmRuntime("cold_fetch_start", { opportunity_id: validSubject, runtime: "opportunity", hold_prior: Boolean(displayVm) });
 
         void loadOpportunityDrawerViaViewModel(validSubject, null).then(async (result) => {
@@ -203,6 +228,14 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             // swap reveals the new subject atomically instead of flashing a half-built card.
             const completeVm = await completeVmWithStageWork(result.preload.viewModel);
             if (gen !== fetchGenRef.current) return; // superseded during the stage-work resolve
+            logCurrentWorkInit("recordRuntime.fetch.apply", {
+                subjectId: validSubject,
+                runtimeId: runtimeIdRef.current,
+                reqGen: gen,
+                preloadSource: "live",
+                cache: "live",
+                note: "atomic complete reveal (stage-work pre-resolved)",
+            });
             applyVm(completeVm, "cold_fetch");
         });
     }, [validSubject, displayVm, applyVm]);
@@ -255,6 +288,12 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
                 // (e.g. "stage_work_outcome") just invalidated the stage-work cache. Re-project the VM
                 // so the settled item, the next obligation, and readiness recompose in place — no
                 // reload. Previously this returned here, leaving Current Work stale until a remount.
+                logCurrentWorkInit("recordRuntime.event.reload", {
+                    subjectId: oid,
+                    runtimeId: runtimeIdRef.current,
+                    cache: "event-reload",
+                    note: `queue-updated (${actionKey || "no-action"}) → reproject VM`,
+                });
                 void reloadDisplayVm();
                 return;
             }
@@ -311,9 +350,22 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         let cancelled = false;
         const warm = getOpportunityStageWorkWarm(params);
         if (warm) {
+            logCurrentWorkInit("recordRuntime.deferred.warm", {
+                subjectId: stageWorkOppId,
+                runtimeId: runtimeIdRef.current,
+                cache: "hit",
+                note: "deferred stage-work served warm (no network)",
+            });
             applyIfCurrent(warm);
             return;
         }
+        logCurrentWorkInit("recordRuntime.deferred.fetch", {
+            subjectId: stageWorkOppId,
+            runtimeId: runtimeIdRef.current,
+            cache: "deferred",
+            preloadSource: "live",
+            note: "stage_work still pending after apply — SECOND stage-work resolution",
+        });
         const pending = getOpportunityStageWorkInflight(params) ?? prefetchOpportunityStageWork(params);
         void pending
             .then((slice) => {

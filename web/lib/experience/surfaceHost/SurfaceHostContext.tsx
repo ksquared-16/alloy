@@ -23,6 +23,7 @@
  */
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 import { usePathname } from "next/navigation";
 
 import { surfaceRefFromPath } from "@/lib/experience/surfaceHost/surfaceRef";
@@ -268,6 +269,17 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     const committedIsWorkUnit = committed != null && committed.ref.target !== WORKSPACE_ATTENTION_TARGET;
     const workUnitExchange = committedIsWorkUnit && !committedMatchesDesired && !desiredIsWorkspace;
     const showWorkUnitLoader = !showWorkUnit && !desiredIsWorkspace && (routeIsWorkUnit || workUnitExchange);
+
+    // Phase A — the surface-host decision is LOADING #1 (boot shell) vs the provisioned surface.
+    const surfacePhase = showWorkUnit ? "provisioned" : showWorkUnitLoader ? "boot-loader" : "none";
+    const committedTarget = committed?.ref.target ?? null;
+    useEffect(() => {
+        logCurrentWorkInit("surfaceHost.render", {
+            subjectId: committedTarget,
+            note: surfacePhase,
+            cache: surfacePhase === "boot-loader" ? "miss" : undefined,
+        });
+    }, [surfacePhase, committedTarget]);
 
     return (
         <>

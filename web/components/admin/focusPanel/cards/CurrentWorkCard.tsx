@@ -38,6 +38,7 @@ import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusP
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
 import { stageWorkOutcomeEffectLines } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
+import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -63,6 +64,16 @@ export default function CurrentWorkCard({
     const vm = evidence.viewModel;
     const surface = vm.surface;
     const opportunityId = context.subject.id;
+    // Phase A — count how many times the card re-composes with a distinct evidence identity per
+    // subject (seed context → enriched context = two composes for one navigation).
+    const cardPerspective = context.stageWorkPending ? "pending" : evidence.isEmpty ? "empty" : "content";
+    useEffect(() => {
+        logCurrentWorkInit("currentWorkCard.compose", {
+            subjectId: opportunityId,
+            note: cardPerspective,
+            cache: cardPerspective === "pending" ? "miss" : undefined,
+        });
+    }, [opportunityId, cardPerspective]);
     const { completeOutcome, busy, error, clearError } = useWorkIntentOutcomeCompletion(opportunityId);
     // Slice A: Current Work elevates as a centered Focus Card. It is "open" (focused) when the
     // coordination host marks it open (drill-in / requestFocus) — or, for back-compat, when a
