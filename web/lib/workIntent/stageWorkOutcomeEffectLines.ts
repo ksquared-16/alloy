@@ -45,7 +45,11 @@ export function stageWorkOutcomeEffectLines(
     }
 
     const workLabel = item.label.trim();
-    lines.push(workLabel ? `Continue ${workLabel} work` : "Keep open · record attempt");
+    const fallback = workLabel ? `Continue ${workLabel} work` : "Keep open · record attempt";
+    // The automation preview may already have produced this exact line (e.g. a `Reopen:` effect
+    // normalizes to the same "Continue … work"). Respect the dedupe set so the fallback never
+    // repeats a line the preview supplied — that repeat is the source of "X · X" effect text.
+    if (!seen.has(fallback)) lines.push(fallback);
     return lines;
 }
 

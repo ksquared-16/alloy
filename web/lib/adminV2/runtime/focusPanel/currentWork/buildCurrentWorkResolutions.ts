@@ -22,6 +22,26 @@ import type { CurrentWorkSurfaceVM } from "./currentWorkSurfaceTypes";
 
 export type CurrentWorkResolutionKind = "outcome" | "transition";
 
+/**
+ * Shared normalized outcome/transition effect contract. Every resolution's `effect` runs through
+ * this one function so a host can render it verbatim: trims blank lines and drops case-insensitive
+ * duplicates (the source of "Continue X work · Continue X work"). Presentation-agnostic and generic
+ * — no per-label, per-outcome, or per-stage conditions.
+ */
+export function normalizeResolutionEffect(effect: readonly string[]): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of effect) {
+        const line = raw.trim();
+        if (!line) continue;
+        const key = line.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(line);
+    }
+    return out;
+}
+
 export type CurrentWorkResolutionVM = {
     kind: CurrentWorkResolutionKind;
     /** outcome_key for outcomes; transition_ref for transitions. */
@@ -69,9 +89,9 @@ export function buildCurrentWorkResolutions(surface: ResolutionInputs): CurrentW
             label: outcome.label,
             handlerKey: "record_outcome",
             targetKey: key,
-            effect: surface.primaryWorkItem
-                ? stageWorkOutcomeEffectLines(surface.primaryWorkItem, key)
-                : [],
+            effect: normalizeResolutionEffect(
+                surface.primaryWorkItem ? stageWorkOutcomeEffectLines(surface.primaryWorkItem, key) : [],
+            ),
             requiresConfirmation: true,
             execution: outcomeExecution,
         });
@@ -88,7 +108,7 @@ export function buildCurrentWorkResolutions(surface: ResolutionInputs): CurrentW
             handlerKey: transition.handlerKey ?? "process_stage_transition",
             // Destination stage key is derived from the process (actionRef), never hardcoded.
             targetKey: transition.actionRef ?? null,
-            effect: effectLine ? [effectLine] : [],
+            effect: normalizeResolutionEffect(effectLine ? [effectLine] : []),
             requiresConfirmation: true,
             execution: transition.execution ?? resolveCurrentWorkActionExecution(transition),
         });

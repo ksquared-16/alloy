@@ -877,10 +877,10 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     <button type="button" disabled={sending || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send" : "Send reply"}</button>
                     {!isNewMessageMode ? (
                         <>
-                            <button type="button" aria-label="Send later" className={`inline-flex shrink-0 items-center gap-1 ${activitySecondaryBtnClass}`}><Clock className="h-3.5 w-3.5" />Later</button>
-                            <button type="button" data-bos-assist-button="true" className={isActivityEmbed ? `${COMMS_ACTIVITY_SECONDARY_BTN_CLASS} min-w-[4.5rem]` : COMMS_BOS_HEADER_BTN_CLASS}>
+                            <button type="button" aria-label="Send later" className={`inline-flex shrink-0 items-center gap-1 ${activitySecondaryBtnClass}`}><Clock className="h-3.5 w-3.5" />Send later</button>
+                            <button type="button" data-bos-assist-button="true" aria-label="BOS Assist" className={isActivityEmbed ? `${COMMS_ACTIVITY_SECONDARY_BTN_CLASS} min-w-[4.5rem]` : COMMS_BOS_HEADER_BTN_CLASS}>
                                 <BosMark size="sm" horizon />
-                                BOS
+                                BOS Assist
                             </button>
                         </>
                     ) : null}

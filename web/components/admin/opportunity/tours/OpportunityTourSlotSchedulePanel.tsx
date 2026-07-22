@@ -266,10 +266,10 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                                             type="button"
                                             role="tab"
                                             aria-selected={selected}
-                                            className={`shrink-0 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold transition-colors focus-visible:outline focus-visible:ring-2 focus-visible:ring-alloy-midnight/25 ${
+                                            className={`shrink-0 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold transition-colors focus-visible:outline focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/30 ${
                                                 selected
-                                                    ? "border-alloy-midnight bg-alloy-midnight text-white"
-                                                    : "border-alloy-stone/20 bg-white text-alloy-midnight hover:bg-alloy-stone/5"
+                                                    ? "border-alloy-bend-pine bg-alloy-bend-pine text-white"
+                                                    : "border-alloy-stone/25 bg-white text-alloy-midnight hover:bg-alloy-stone/5"
                                             }`}
                                             onClick={() => {
                                                 setSelectedDayKey(dayKey);
@@ -309,10 +309,10 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                                                     key={`${s.startAt}-${s.ruleId}`}
                                                     type="button"
                                                     aria-pressed={sel}
-                                                    className={`rounded-md border px-2.5 py-1.5 text-left text-[12px] font-medium leading-snug transition-colors focus-visible:outline focus-visible:ring-2 focus-visible:ring-alloy-midnight/25 ${
+                                                    className={`rounded-md border px-2.5 py-1.5 text-left text-[12px] font-medium leading-snug transition-colors focus-visible:outline focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/30 ${
                                                         sel
-                                                            ? "border-alloy-midnight bg-alloy-midnight/10 text-alloy-midnight"
-                                                            : "border-alloy-stone/20 bg-white text-alloy-midnight hover:bg-alloy-stone/5"
+                                                            ? "border-alloy-bend-pine bg-alloy-bend-pine/10 text-alloy-midnight"
+                                                            : "border-alloy-stone/25 bg-white text-alloy-midnight hover:bg-alloy-stone/5"
                                                     }`}
                                                     onClick={() => setSelectedSlot(s)}
                                                 >
@@ -331,7 +331,7 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                         ) : null}
 
                         {selectedSlot ? (
-                            <div className="rounded-lg border border-alloy-pine/25 bg-alloy-pine/5 px-3 py-2 text-[11px] text-alloy-midnight">
+                            <div className="rounded-lg border border-alloy-bend-pine/30 bg-alloy-bend-pine/5 px-3 py-2 text-[11px] text-alloy-midnight">
                                 <span className="font-semibold">Selected:</span>{" "}
                                 {formatTourSlotTimeRangeLabel(selectedSlot)} ({localDateKeyForSlot(selectedSlot)})
                             </div>
@@ -342,12 +342,16 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                 {footerSlot ? <div className="border-t border-alloy-stone/10 pt-3">{footerSlot}</div> : null}
 
                 <div className="flex justify-end gap-2 border-t border-alloy-stone/10 pt-3">
-                    <button type="button" className="rounded-lg border px-3 py-1.5 text-xs" onClick={onCancel}>
+                    <button
+                        type="button"
+                        className="rounded-lg border border-alloy-stone/30 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight transition-colors hover:bg-alloy-stone/5"
+                        onClick={onCancel}
+                    >
                         Cancel
                     </button>
                     <button
                         type="button"
-                        className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-xs font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
+                        className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-alloy-bend-pine/90 disabled:pointer-events-none disabled:opacity-45"
                         disabled={!selectedSlot || saving || slotsLoading}
                         aria-disabled={!selectedSlot || saving || slotsLoading}
                         onClick={() => void createFromSlot()}

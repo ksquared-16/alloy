@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentWorkActionPanel";
@@ -351,20 +350,36 @@ export default function CurrentWorkCard({
         });
     }, [completeOutcome, pendingOutcomeKey, vm.primaryProjection, vm.primaryWorkItem]);
 
-    const statusChip = (
-        <span
-            className={clsx(
-                "alloy-os-card-pill alloy-os-card-pill--subtle alloy-os-currentwork__status-chip",
-                surface.status === "completed" && "alloy-os-card-pill--complete",
-                surface.status === "blocked" && "alloy-os-card-pill--blocked",
-            )}
-            data-work-status-pill="summary"
-        >
-            {surface.statusLabel}
-        </span>
-    );
+    // #6: the status is expressed through the SHARED UniversalCard status-chip system (one canonical
+    // chip aligned with the card title), never a bespoke pill nested inside the card's own status
+    // slot (that double-pill was the "detached, unfinished" look). Tone is derived generically from
+    // the surface status — no per-process/per-stage styling.
+    const statusChip = surface.statusLabel;
+    const statusTone: "blocked" | "done" | "neutral" =
+        surface.status === "blocked" ? "blocked"
+        : surface.status === "completed" ? "done"
+        :   "neutral";
 
-    const footerAction = null;
+    // #1: the drill-in to the focused surface is a CARD-LEVEL affordance, anchored in the card
+    // footer — never a second link stacked inside the "Still needed" requirement group (that
+    // group's own owner handoff is its navigation). Generic: shown for any configured work while
+    // the summary is presented, regardless of owner.
+    const canOpenFocused =
+        !isWorkspace
+        && !stageWorkPending
+        && !evidence.isEmpty
+        && completionPhase !== "complete"
+        && Boolean(coordination?.openCurrentWorkWorkspace);
+    const footerAction = canOpenFocused ? (
+        <button
+            type="button"
+            className="alloy-os-currentwork__summary-open"
+            data-work-action="open-focused"
+            onClick={() => openWorkspace({ kind: "drill_in" })}
+        >
+            View details →
+        </button>
+    ) : null;
     const stageLabel = context.businessProcess?.stageKey ?? null;
     const ownerLabel = null;
 
@@ -440,7 +455,6 @@ export default function CurrentWorkCard({
                 surface={surface}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
-                onOpen={coordination?.openCurrentWorkWorkspace ? () => openWorkspace({ kind: "drill_in" }) : undefined}
             />;
 
     // Shared hosted-capability mode: when a capability panel is active in the focused card, What's
@@ -465,7 +479,7 @@ export default function CurrentWorkCard({
                 tier={model.tier}
                 archetype="status"
                 statusChip={statusChip}
-                statusTone={surface.progress.total > 0 ? "neutral" : evidence.statusTone}
+                statusTone={statusTone}
                 density="compact"
                 gridSpan={model.span}
                 data-universal-card-key={model.key}
@@ -487,12 +501,10 @@ function SummaryBody({
     surface,
     onChecklistItem,
     onAction,
-    onOpen,
 }: {
     surface: CurrentWorkSurfaceVM;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
-    onOpen?: () => void;
 }) {
     const primary =
         surface.primaryAction
@@ -558,16 +570,6 @@ function SummaryBody({
                     visually subordinate, and shows a concise "Still needed" readiness summary. Detailed
                     completeness is owned by the Required Information card and is not reproduced here. */}
                 <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
-                {onOpen ?
-                    <button
-                        type="button"
-                        className="alloy-os-currentwork__summary-open"
-                        data-work-action="open-focused"
-                        onClick={onOpen}
-                    >
-                        View details →
-                    </button>
-                :   null}
             </div>
         </div>
     );
