@@ -274,6 +274,15 @@ function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChi
         setDays((d) => (d.includes(i) ? d.filter((x) => x !== i) : [...d, i].sort((a, b) => a - b)));
     }
 
+    // The day pills are the source of truth. The pattern is a starting template;
+    // once the operator edits the days away from it, the schedule is "Custom".
+    const selectedPattern = patterns.find((p) => p.id === patternId) ?? null;
+    const daysKey = [...days].sort((a, b) => a - b).join(",");
+    const isCustom =
+        days.length > 0 &&
+        !!selectedPattern &&
+        daysKey !== [...(selectedPattern.weekdays ?? [])].sort((a, b) => a - b).join(",");
+
     // Recommended room: option generator evaluates all; UI leads with the pick.
     useEffect(() => {
         if (!siteId || !patternId) return;
@@ -354,19 +363,45 @@ function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChi
                 </div>
             )}
 
-            {/* 1 · Weekly pattern (template) */}
+            {/* 1 · Weekly pattern — a compact starting template; the day pills are the schedule */}
             <section>
-                {sectionLabel("Weekly pattern")}
-                <select value={patternId} onChange={(e) => choosePattern(e.target.value)} style={selStyle}>
-                    {patterns.map((p) => (
-                        <option key={p.id} value={p.id}>{p.label}</option>
-                    ))}
-                </select>
+                {sectionLabel("Start from a pattern")}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }} data-pattern-selector="true">
+                    {patterns.map((p) => {
+                        const on = !isCustom && p.id === patternId;
+                        return (
+                            <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => choosePattern(p.id)}
+                                data-pattern={p.id}
+                                aria-pressed={on}
+                                style={patternChipStyle(on)}
+                            >
+                                {p.label}
+                            </button>
+                        );
+                    })}
+                    {isCustom && (
+                        <span data-pattern-custom="true" style={patternChipStyle(true, true)}>
+                            Custom
+                        </span>
+                    )}
+                </div>
             </section>
 
-            {/* 2 · Days (define the real schedule) */}
+            {/* 2 · Days (define the real schedule — the source of truth) */}
             <section>
-                {sectionLabel("Days")}
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 5 }}>
+                    <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#98a2b3" }}>
+                        Days
+                    </div>
+                    {isCustom && selectedPattern && (
+                        <button type="button" onClick={() => choosePattern(patternId)} style={{ ...linkBtnStyle, fontSize: 10.5 }}>
+                            Reset to {selectedPattern.label} →
+                        </button>
+                    )}
+                </div>
                 <div style={{ display: "flex", gap: 5 }}>
                     {WEEKDAYS.map((d, idx) => {
                         const on = days.includes(d.i);
@@ -590,3 +625,18 @@ const linkBtnStyle: CSSProperties = {
     color: "#00a283",
 };
 const fieldLabelStyle: CSSProperties = { display: "grid", gap: 3 };
+function patternChipStyle(on: boolean, custom = false): CSSProperties {
+    return {
+        all: "unset",
+        cursor: custom ? "default" : "pointer",
+        fontSize: 12,
+        fontWeight: 600,
+        lineHeight: 1,
+        padding: "7px 11px",
+        borderRadius: 999,
+        boxSizing: "border-box",
+        background: on ? "rgba(0,162,131,.12)" : "#f2f4f7",
+        color: on ? "#00a283" : "#667085",
+        border: on ? "1px solid rgba(0,162,131,.45)" : "1px solid transparent",
+    };
+}
