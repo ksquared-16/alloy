@@ -5667,6 +5667,24 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   padding: 2px 0;
 }
 
+/* Slice A (#1) — the communication host renders the real composer inline in the centered surface. */
+.alloy-os-currentwork__action-panel--composer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.alloy-os-currentwork__action-panel-embed {
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  max-height: 52vh;
+  overflow: hidden;
+}
+.alloy-os-currentwork__action-panel-embed > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* Slice A (#7) — the summary card links into the centered drill-in ("view more"). */
 .alloy-os-currentwork__summary-open {
   align-self: flex-start;

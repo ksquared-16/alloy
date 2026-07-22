@@ -4,6 +4,7 @@ import { useCallback } from "react";
 
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
 import CurrentWorkStageTransitionPanel from "@/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel";
+import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import { resolveOpportunityTourScheduleFromTruth } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveOpportunityTourScheduleFromTruth";
 import {
     resolveCurrentWorkActionSurface,
@@ -60,6 +61,45 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
                 onClose={onClose}
                 onComplete={onComplete}
             />
+        );
+    }
+
+    if (surface === "communications_composer") {
+        // #1: the communication host renders the REAL communications runtime inline in the centered
+        // surface (same embedded section the Focus Panel Activity uses), not the legacy Compose modal.
+        return (
+            <aside
+                className="alloy-os-currentwork__action-panel alloy-os-currentwork__action-panel--composer"
+                data-work-action-panel="true"
+                data-work-action-panel-key={action.key}
+                data-work-action-surface="communications_composer"
+                aria-label={`${action.label} composer`}
+            >
+                <div className="alloy-os-currentwork__action-panel-header">
+                    <div>
+                        <p className="alloy-os-currentwork__action-panel-eyebrow">Communication</p>
+                        <h3 className="alloy-os-currentwork__action-panel-title">{action.label}</h3>
+                    </div>
+                    <button
+                        type="button"
+                        className="alloy-os-currentwork__action-panel-close"
+                        onClick={onClose}
+                        aria-label="Close composer"
+                        data-work-action-panel-close="true"
+                    >
+                        Close
+                    </button>
+                </div>
+                <div className="alloy-os-currentwork__action-panel-embed" data-embedded-workspace="communications">
+                    <CommunicationsDrawerSection
+                        apiEntityType="opportunities"
+                        entityId={opportunityId}
+                        embedded
+                        embeddedHeaderMode="description_only"
+                        surfaceVariant="activity_embed"
+                    />
+                </div>
+            </aside>
         );
     }
 

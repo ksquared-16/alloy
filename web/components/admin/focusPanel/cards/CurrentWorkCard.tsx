@@ -205,23 +205,6 @@ export default function CurrentWorkCard({
         }
     };
 
-    const invokeCommunicationsComposer = () => {
-        const composer = coordination?.resolveCommunicationsComposerAction?.();
-        if (composer && coordination?.invokeHeaderAction) {
-            setHandoffNotice(null);
-            coordination.invokeHeaderAction(composer);
-            return;
-        }
-        if (coordination?.focusTargets?.has("communications") && coordination.requestFocus) {
-            setHandoffNotice(null);
-            coordination.requestFocus("communications", null, { card: "current_work", focus: null });
-            return;
-        }
-        setHandoffNotice(
-            "No communications composer is available — open Activity or add Communications to this panel.",
-        );
-    };
-
     const invokeAction = (action: CurrentWorkActionVM) => {
         const plan = planCurrentWorkActionExecution(action);
         switch (plan.kind) {
@@ -259,7 +242,14 @@ export default function CurrentWorkCard({
                 setActivePanelAction(plan.action);
                 return;
             case "communications_composer":
-                invokeCommunicationsComposer();
+                // #1: open the real communications composer INLINE in the centered surface (not the
+                // legacy modal). From the summary, elevate first, then the composer opens inline.
+                setHandoffNotice(null);
+                if (!isWorkspace) {
+                    openWorkspace({ kind: "action", actionKey: action.key });
+                    return;
+                }
+                setActivePanelAction(action);
                 return;
             case "header_delegate":
                 setHandoffNotice(null);
