@@ -105,12 +105,20 @@ describe("resolveCurrentWorkActionSurface", () => {
         expect(
             resolveCurrentWorkActionSurface(
                 action({
-                    key: "send_form",
-                    label: "Send form",
-                    resolved: resolvedAction("send_form"),
+                    key: "create_task",
+                    label: "Create task",
+                    resolved: resolvedAction("create_task"),
                 }),
             ),
         ).toBe("header_delegate");
+    });
+
+    it("routes send_form to its declared form_delivery host (metadata, not the action name)", () => {
+        expect(
+            resolveCurrentWorkActionSurface(
+                action({ key: "send_form", label: "Send form", resolved: resolvedAction("send_form") }),
+            ),
+        ).toBe("form_delivery");
     });
 
     // Slice B proof: host comes from capability metadata, never the action name/label.

@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
 import CurrentWorkStageTransitionPanel from "@/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
+import FormDeliverySurface from "@/components/admin/focusPanel/cards/FormDeliverySurface";
 import { resolveOpportunityTourScheduleFromTruth } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveOpportunityTourScheduleFromTruth";
 import {
     resolveCurrentWorkActionSurface,
@@ -58,6 +59,16 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
                 action={action}
                 opportunityId={opportunityId}
                 nextStatusKey={nextStatusKey}
+                onClose={onClose}
+                onComplete={onComplete}
+            />
+        );
+    }
+
+    if (surface === "form_delivery") {
+        return (
+            <FormDeliverySurface
+                opportunityId={opportunityId}
                 onClose={onClose}
                 onComplete={onComplete}
             />

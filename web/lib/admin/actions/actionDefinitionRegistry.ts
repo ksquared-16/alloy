@@ -27,7 +27,7 @@ export type ActionRegistryEntry = {
 };
 
 /** Generic interaction hosts a capability may declare. Not business- or action-name specific. */
-export type CapabilityInteractionHost = "inline_form" | "communications_composer" | "header_delegate";
+export type CapabilityInteractionHost = "inline_form" | "communications_composer" | "header_delegate" | "form_delivery";
 
 export const ACTION_CATEGORY_LABELS: Record<ActionDefinitionCategory, string> = {
     record: "Record",
@@ -159,6 +159,9 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         description: "Open the send-form composer to share an intake or update form with this family.",
         defaultSurface: "record_header",
         defaultSlot: "secondary",
+        // Declared interaction host: the generic form-delivery surface (which form → who receives
+        // it → what it relates to → how delivered), rendered inline in the centered What's Next card.
+        interactionHost: "form_delivery",
     },
     {
         key: "send_enrollment_packet",

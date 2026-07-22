@@ -5685,6 +5685,52 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   min-height: 0;
 }
 
+/* Generic form-delivery surface (send-form capability). */
+.alloy-os-formdelivery {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.alloy-os-formdelivery__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.alloy-os-formdelivery__select {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 16%, transparent);
+  background: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-formdelivery__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.alloy-os-formdelivery__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-formdelivery__option[data-disabled="true"] {
+  opacity: 0.5;
+}
+.alloy-os-formdelivery__hint {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 50%, #64748b);
+}
+.alloy-os-formdelivery__channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* Slice A (#7) — the summary card links into the centered drill-in ("view more"). */
 .alloy-os-currentwork__summary-open {
   align-self: flex-start;

@@ -136,8 +136,15 @@ describe("Current Work action execution planner", () => {
         expect(resolveCurrentWorkActionSurface(minimalSurface.supportingActions[0]!)).toBe("inline_form");
     });
 
-    it("plans send_form / add_child / create_task as header_delegate", () => {
-        for (const row of minimalSurface.supportingActions.slice(1)) {
+    it("plans send_form as its declared form_delivery inline host", () => {
+        const sendForm = minimalSurface.supportingActions.find((a) => a.key === "send_form")!;
+        expect(resolveCurrentWorkActionSurface(sendForm)).toBe("form_delivery");
+        expect(isCurrentWorkActionExecutable(sendForm)).toBe(true);
+        expect(planCurrentWorkActionExecution(sendForm).kind).toBe("open_inline_panel");
+    });
+
+    it("plans add_child / create_task as header_delegate", () => {
+        for (const row of minimalSurface.supportingActions.filter((a) => a.key === "add_child" || a.key === "create_task")) {
             expect(resolveCurrentWorkActionSurface(row)).toBe("header_delegate");
             expect(isCurrentWorkActionExecutable(row)).toBe(true);
             expect(planCurrentWorkActionExecution(row).kind).toBe("header_delegate");

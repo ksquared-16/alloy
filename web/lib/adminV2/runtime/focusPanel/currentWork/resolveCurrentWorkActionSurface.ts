@@ -13,6 +13,7 @@ export type CurrentWorkActionSurface =
     | "inline_form"
     | "communications_composer"
     | "header_delegate"
+    | "form_delivery"
     | "process_transition"
     | "unsupported";
 
