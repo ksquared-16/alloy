@@ -16,7 +16,8 @@ import type { CommercialContext } from "@/lib/commercial/execution/executionType
 import { mapCommercialResolutionToBillingProjection } from "@/lib/scheduling/billing/billingScheduleProjection";
 import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
 import { validateScheduleCreatePayload } from "@/lib/scheduling/commands/scheduleCreateInputs";
-import { ensureOpportunityCustomerMember } from "@/lib/opportunities/ensureOpportunityCustomerMember";
+import { applyChildParticipationEdit } from "@/lib/childcareOperational/applyChildParticipationEdit";
+import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -47,6 +48,22 @@ function normRange(v: unknown): { arrive: string; depart: string } | null {
     return { arrive, depart };
 }
 
+/** Normalize the builder's daily-hours payload for the schedule draft (default + per-day). */
+function normalizeDraftTimes(raw: unknown): { default: { arrive: string; depart: string } | null; perDay: Record<string, { arrive: string; depart: string }> } | null {
+    if (!raw || typeof raw !== "object") return null;
+    const src = raw as Record<string, unknown>;
+    const def = normRange(src.default);
+    const perDay: Record<string, { arrive: string; depart: string }> = {};
+    const perDaySrc = src.perDay && typeof src.perDay === "object" ? (src.perDay as Record<string, unknown>) : {};
+    for (const [k, v] of Object.entries(perDaySrc)) {
+        if (!/^[0-6]$/.test(k)) continue;
+        const r = normRange(v);
+        if (r) perDay[k] = r;
+    }
+    if (!def && Object.keys(perDay).length === 0) return null;
+    return { default: def, perDay };
+}
+
 /**
  * Read a pattern's configured default daily hours from schedule_patterns.metadata
  * (the sanctioned time store). Accepts `default_hours: {arrive,depart}` or flat
@@ -72,34 +89,13 @@ function readPatternDefaultOpenEnded(metadata: Record<string, unknown> | null): 
     return true;
 }
 
-/**
- * Normalize the builder's times payload into the shape stored WITH the schedule
- * definition (assignment / OCM metadata): a schedule-wide default range plus optional
- * per-weekday overrides. Invalid/empty ranges are dropped. Returns null when nothing valid.
- */
-function normalizeScheduleTimes(raw: unknown): {
-    default: { arrive: string; depart: string } | null;
-    perDay: Record<string, { arrive: string; depart: string }>;
-} | null {
-    if (!raw || typeof raw !== "object") return null;
-    const src = raw as Record<string, unknown>;
-    const def = normRange(src.default);
-    const perDay: Record<string, { arrive: string; depart: string }> = {};
-    const perDaySrc = src.perDay && typeof src.perDay === "object" ? (src.perDay as Record<string, unknown>) : {};
-    for (const [k, v] of Object.entries(perDaySrc)) {
-        if (!/^[0-6]$/.test(k)) continue;
-        const range = normRange(v);
-        if (range) perDay[k] = range;
-    }
-    if (!def && Object.keys(perDay).length === 0) return null;
-    return { default: def, perDay };
-}
 
 /**
  * Resolve the child's program category id: an operational placement first, else the
- * pre-enrolled desired program on the opportunity member (by customer_member_id, else
- * by ocm id). Shared by the billing preview and the placement-options recommendation
- * (so the recommended room can weigh program/age eligibility, not headroom alone).
+ * pre-enrolled desired program from the child's enrollment participation
+ * (`process_instances.metadata.program_category_id`) — the canonical owner, not OCM.
+ * Shared by the billing preview and the placement-options recommendation (so the
+ * recommended room can weigh program/age eligibility, not headroom alone).
  */
 async function resolveChildProgramCategoryId(
     supabase: ReturnType<typeof createAdminClient>,
@@ -114,24 +110,21 @@ async function resolveChildProgramCategoryId(
         .eq("customer_member_id", customerMemberId)
         .in("status", ["planned", "active", "ending"])
         .maybeSingle();
-    let programCategoryId = (pl as { program_category_id?: string | null } | null)?.program_category_id ?? "";
-    if (programCategoryId) return programCategoryId;
-    // customerMemberId may be a real member id (enrolled) or an OCM id (pre-enrolled).
-    const byMember = await supabase
-        .from("opportunity_customer_members")
-        .select("program_category_id")
+    const placed = (pl as { program_category_id?: string | null } | null)?.program_category_id ?? "";
+    if (placed) return placed;
+    // Pre-enrolled: read the desired program from the child's enrollment participation.
+    const { data: pi } = await supabase
+        .from("process_instances")
+        .select("metadata")
         .eq("org_id", orgId)
-        .eq("customer_member_id", customerMemberId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("subject_id", customerMemberId)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
-    programCategoryId = (byMember.data as { program_category_id?: string | null } | null)?.program_category_id ?? "";
-    if (programCategoryId) return programCategoryId;
-    const byId = await supabase
-        .from("opportunity_customer_members")
-        .select("program_category_id")
-        .eq("org_id", orgId)
-        .eq("id", customerMemberId)
-        .maybeSingle();
-    return (byId.data as { program_category_id?: string | null } | null)?.program_category_id ?? "";
+    const meta = (pi as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
+    const desired = (meta as { program_category_id?: string | null }).program_category_id;
+    return typeof desired === "string" ? desired : "";
 }
 
 /**
@@ -254,11 +247,25 @@ export async function GET(request: NextRequest) {
 
         if (view === "projection") {
             const customerMemberId = param(request, "customer_member_id");
-            const siteLocationId = param(request, "site_location_id");
             const subjectName = param(request, "subject_name") || "Child";
+            // Site comes from the operational subject: an explicit site_location_id, else
+            // resolved from the lead/opportunity (opportunities.location_id).
+            let siteLocationId = param(request, "site_location_id");
+            if (!siteLocationId) {
+                const opportunityId = param(request, "opportunity_id");
+                if (opportunityId) {
+                    const { data: opp } = await supabase
+                        .from("opportunities")
+                        .select("location_id")
+                        .eq("org_id", ctx.orgId)
+                        .eq("id", opportunityId)
+                        .maybeSingle();
+                    siteLocationId = (opp as { location_id?: string | null } | null)?.location_id ?? "";
+                }
+            }
             if (!customerMemberId || !siteLocationId) {
                 return NextResponse.json(
-                    { error: "customer_member_id and site_location_id are required", code: "invalid_input" },
+                    { error: "customer_member_id and a resolvable site are required", code: "invalid_input" },
                     { status: 400 }
                 );
             }
@@ -370,26 +377,52 @@ export async function POST(request: NextRequest) {
             siteLocationId
         );
         if (!agreement) {
-            // Pre-enrolled child → persist a PROPOSED schedule (planning / forecasting /
-            // Billing preview), NOT an operational placement. It materializes into
-            // operational truth when the child enrolls (Enrollment is the boundary).
-            const proposed = await proposeSchedule(supabase, ctx.orgId, {
+            // Pre-enrolled child → record the PROPOSED schedule as DRAFT participation on the
+            // child's enrollment process instance — the canonical runtime owner of child
+            // participation (process_instances.metadata). NOT an operational placement; it
+            // materializes when the child enrolls (Enrollment is the boundary). Never OCM:
+            // Scheduling consumes the participation model through the existing platform service,
+            // it does not create or manage participation (see the OCM removal plan).
+            const scheduleType = await resolveScheduleTypeForPattern(
+                supabase,
+                ctx.orgId,
+                String(body.schedule_pattern_id ?? "").trim()
+            );
+            const weekdays = Array.isArray(body.weekdays)
+                ? (body.weekdays as unknown[]).map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+                : null;
+            const edit = await applyChildParticipationEdit(supabase, {
+                orgId: ctx.orgId,
                 customerMemberId,
-                ocmId: String(body.opportunity_customer_member_id ?? "").trim() || null,
-                personId: String(body.person_id ?? "").trim() || null,
                 opportunityId: String(body.opportunity_id ?? "").trim() || null,
-                schedulePatternId: String(body.schedule_pattern_id ?? "").trim(),
-                roomLocationId: String(body.room_location_id ?? "").trim() || null,
-                startDate: String(body.start_date ?? "").trim() || null,
-                times: normalizeScheduleTimes(body.times),
+                patch: {
+                    schedule_type: scheduleType,
+                    program_room_cohort_key: String(body.room_location_id ?? "").trim() || null,
+                    start_date: String(body.start_date ?? "").trim() || null,
+                    end_date: String(body.end_date ?? "").trim() || null,
+                    location_id: siteLocationId || null,
+                    weekdays: weekdays && weekdays.length ? weekdays : null,
+                    scheduleTimes: normalizeDraftTimes(body.times),
+                },
+                actorUserId: ctx.userId,
             });
-            if (!proposed.ok) {
-                return NextResponse.json({ error: proposed.error, code: "propose_failed" }, { status: proposed.status });
+            if (!edit.ok) {
+                // The child has no enrollment participation object yet — a PLATFORM gap
+                // (some lead-creation paths don't create the process instance), not something
+                // Scheduling should paper over by minting a legacy record.
+                const message =
+                    edit.error === "no_enrollment_process_instance"
+                        ? "This child isn't in the enrollment process yet, so a proposed schedule can't be saved."
+                        : edit.error ?? "Could not save the proposed schedule.";
+                return NextResponse.json(
+                    { error: message, code: edit.error === "no_enrollment_process_instance" ? "no_participation" : "propose_failed" },
+                    { status: edit.error === "no_enrollment_process_instance" ? 409 : 400 }
+                );
             }
             return NextResponse.json({
                 ok: true,
                 proposed: true,
-                result: proposed.result,
+                routed: edit.routed,
                 message: "Proposed schedule saved — becomes operational at enrollment.",
             });
         }
@@ -424,130 +457,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, result: result.result });
 }
 
-/**
- * Persist a PROPOSED schedule for a pre-enrolled child by setting the desired
- * schedule intent on the opportunity_customer_member (schedule_type · room ·
- * start_date). Materialization (`applyChildEnrollmentMaterialization`) consumes
- * these on enrollment — the proposal is planning-only until then. Room location
- * id is stored on `program_room_cohort_key` (the handoff treats it as the room).
- */
-async function proposeSchedule(
+/** Resolve a pattern's `schedule_type_key` (the schedule type the proposed schedule sets). */
+async function resolveScheduleTypeForPattern(
     supabase: ReturnType<typeof createAdminClient>,
     orgId: string,
-    input: {
-        customerMemberId: string;
-        ocmId: string | null;
-        personId: string | null;
-        opportunityId: string | null;
-        schedulePatternId: string;
-        roomLocationId: string | null;
-        startDate: string | null;
-        times: { default: { arrive: string; depart: string } | null; perDay: Record<string, { arrive: string; depart: string }> } | null;
-    }
-): Promise<
-    | { ok: true; result: { opportunity_customer_member_id: string; schedule_type: string | null } }
-    | { ok: false; error: string; status: number }
-> {
-    // Pre-enrolled inquiry children have no customer_member_id yet, so the card's
-    // identifier is the opportunity_customer_member id. Resolve by either.
-    let ocmId: string | undefined;
-    {
-        // The card carries the writable enrollment record id directly.
-        if (input.ocmId) {
-            const byOcm = await supabase
-                .from("opportunity_customer_members")
-                .select("id")
-                .eq("org_id", orgId)
-                .eq("id", input.ocmId)
-                .maybeSingle();
-            ocmId = (byOcm.data as { id?: string } | null)?.id;
-        }
-        if (!ocmId) {
-            const byId = await supabase
-                .from("opportunity_customer_members")
-                .select("id")
-                .eq("org_id", orgId)
-                .eq("id", input.customerMemberId)
-                .maybeSingle();
-            ocmId = (byId.data as { id?: string } | null)?.id;
-        }
-        if (!ocmId) {
-            const byMember = await supabase
-                .from("opportunity_customer_members")
-                .select("id")
-                .eq("org_id", orgId)
-                .eq("customer_member_id", input.customerMemberId)
-                .maybeSingle();
-            ocmId = (byMember.data as { id?: string } | null)?.id;
-        }
-        if (!ocmId && input.personId) {
-            const byPerson = await supabase
-                .from("opportunity_customer_members")
-                .select("id")
-                .eq("org_id", orgId)
-                .eq("person_id", input.personId)
-                .maybeSingle();
-            ocmId = (byPerson.data as { id?: string } | null)?.id;
-        }
-    }
-    // Lead-stage inquiry children have NO OCM row yet (the OCM is created later in the
-    // pipeline). A proposed schedule needs one to hold the desired intent, so ensure it
-    // now — the same link the inquiry-child editor creates, ported server-side.
-    if (!ocmId && input.opportunityId && input.customerMemberId) {
-        const ensured = await ensureOpportunityCustomerMember(
-            supabase,
-            orgId,
-            input.opportunityId,
-            input.customerMemberId
-        );
-        if (ensured.ok) ocmId = ensured.ocmId;
-    }
-    if (!ocmId) {
-        return {
-            ok: false,
-            error: "Couldn't link this child to an enrollment record to save the proposed schedule.",
-            status: 404,
-        };
-    }
-
-    let scheduleType: string | null = null;
-    if (input.schedulePatternId) {
-        const { data: pat } = await supabase
-            .from("schedule_patterns")
-            .select("schedule_type_key")
-            .eq("org_id", orgId)
-            .eq("id", input.schedulePatternId)
-            .maybeSingle();
-        scheduleType = (pat as { schedule_type_key?: string | null } | null)?.schedule_type_key ?? null;
-    }
-
-    const updates: Record<string, unknown> = {};
-    if (scheduleType) updates.schedule_type = scheduleType;
-    if (input.roomLocationId) updates.program_room_cohort_key = input.roomLocationId;
-    if (input.startDate) updates.start_date = input.startDate;
-    // Daily time ranges live WITH the schedule definition. On the proposed schedule
-    // that store is the OCM's metadata jsonb; merge (never clobber other keys).
-    if (input.times) {
-        const { data: existing } = await supabase
-            .from("opportunity_customer_members")
-            .select("metadata")
-            .eq("id", ocmId)
-            .eq("org_id", orgId)
-            .maybeSingle();
-        const prevMeta = ((existing as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<string, unknown>;
-        updates.metadata = { ...prevMeta, scheduleTimes: input.times };
-    }
-    if (Object.keys(updates).length === 0) {
-        return { ok: false, error: "Nothing to propose (choose a pattern, room, or start date).", status: 400 };
-    }
-
-    const { error } = await supabase
-        .from("opportunity_customer_members")
-        .update(updates)
-        .eq("id", ocmId)
-        .eq("org_id", orgId);
-    if (error) {
-        return { ok: false, error: error.message, status: 400 };
-    }
-    return { ok: true, result: { opportunity_customer_member_id: ocmId, schedule_type: scheduleType } };
+    schedulePatternId: string
+): Promise<string | null> {
+    if (!schedulePatternId) return null;
+    const { data } = await supabase
+        .from("schedule_patterns")
+        .select("schedule_type_key")
+        .eq("org_id", orgId)
+        .eq("id", schedulePatternId)
+        .maybeSingle();
+    return (data as { schedule_type_key?: string | null } | null)?.schedule_type_key ?? null;
 }

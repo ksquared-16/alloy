@@ -69,6 +69,8 @@ export type PureChildSchedulingInput = {
     agreementStatus: string | null; // null => no operational agreement
     assignments: AssignmentInput[];
     asOf: string; // YYYY-MM-DD
+    /** A pre-enrollment proposed draft (already resolved from participation), or null. */
+    proposed?: ScheduleView | null;
 };
 
 function mapAssignment(input: AssignmentInput): Assignment {
@@ -139,12 +141,14 @@ function historyEntry(a: Assignment): ScheduleHistoryEntry {
 function resolveStatus(
     agreementStatus: string | null,
     hasCurrent: boolean,
-    hasUpcoming: boolean
+    hasUpcoming: boolean,
+    hasProposed: boolean
 ): ChildSchedulingStatus {
-    if (agreementStatus == null) return "needs-placement";
-    if (isAgreementTerminalStatus(agreementStatus)) return "ended";
+    if (agreementStatus != null && isAgreementTerminalStatus(agreementStatus)) return "ended";
     if (hasCurrent) return "scheduled";
     if (hasUpcoming) return "upcoming-only";
+    // A pre-enrollment proposed draft ranks above "needs a schedule".
+    if (hasProposed) return "proposed";
     return "needs-placement";
 }
 
@@ -192,16 +196,21 @@ export function buildChildScheduling(input: PureChildSchedulingInput): ChildSche
 
     historyEntries.sort((a, b) => compareIsoDates(b.effectiveFrom, a.effectiveFrom));
 
+    // A proposed draft only surfaces when there is no committed current schedule.
+    const proposed = current == null ? input.proposed ?? null : null;
+
     const status = resolveStatus(
         input.agreementStatus,
         current != null,
-        upcoming.length > 0
+        upcoming.length > 0,
+        proposed != null
     );
 
     return {
         child: input.subject,
         status,
         current,
+        proposed,
         upcoming,
         temporary: temporaryViews,
         history: historyEntries,
@@ -277,6 +286,94 @@ async function resolveProgramLabel(
     return row.label?.trim() || row.key?.trim() || null;
 }
 
+type ProposedDraftMeta = {
+    schedule_type?: string | null;
+    program_room_cohort_key?: string | null;
+    program_category_id?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    weekdays?: number[] | null;
+    scheduleTimes?: { default?: { arrive?: string; depart?: string } | null } | null;
+};
+
+/**
+ * Build the PROPOSED schedule view from the child's enrollment participation draft
+ * (`process_instances.metadata`) — the pre-enrollment schedule, with resolved labels.
+ * Returns null when the participation has no schedule facts drafted yet.
+ */
+async function loadProposedDraftForChild(
+    supabase: SupabaseClient,
+    orgId: string,
+    customerMemberId: string,
+    siteLocationId: string,
+    resolveRoom: (id: string | null) => Promise<string | null>,
+    resolveProgram: (id: string | null) => Promise<string | null>
+): Promise<ScheduleView | null> {
+    const { data: pi } = await supabase
+        .from("process_instances")
+        .select("metadata")
+        .eq("org_id", orgId)
+        .eq("process_key", "enrollment")
+        .eq("subject_id", customerMemberId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    const meta = ((pi as { metadata?: ProposedDraftMeta } | null)?.metadata ?? {}) as ProposedDraftMeta;
+    const scheduleType = meta.schedule_type?.trim() || null;
+    const roomId = meta.program_room_cohort_key?.trim() || null;
+    const startDate = meta.start_date?.trim() || null;
+    // No schedule facts drafted → no proposed schedule.
+    if (!scheduleType && !roomId && !startDate) return null;
+
+    // Resolve the pattern for this schedule type at the site → default weekdays + label.
+    let weekdays: number[] = Array.isArray(meta.weekdays) ? meta.weekdays : [];
+    let scheduleTypeLabel: string | null = null;
+    if (scheduleType) {
+        const { data: pat } = await supabase
+            .from("schedule_patterns")
+            .select("weekdays, label, schedule_type_key")
+            .eq("org_id", orgId)
+            .eq("site_location_id", siteLocationId)
+            .eq("schedule_type_key", scheduleType)
+            .eq("is_active", true)
+            .order("sort_order")
+            .limit(1)
+            .maybeSingle();
+        const row = pat as { weekdays?: number[]; label?: string | null } | null;
+        // The operator's saved weekdays win; the pattern is only the fallback template.
+        if (weekdays.length === 0) weekdays = row?.weekdays ?? [];
+        scheduleTypeLabel = row?.label?.trim() || null;
+    }
+
+    const arrive = meta.scheduleTimes?.default?.arrive ?? null;
+    const depart = meta.scheduleTimes?.default?.depart ?? null;
+    const effectiveFrom = startDate ?? "";
+    const assignment: Assignment = {
+        id: `proposed:${customerMemberId}`,
+        childId: customerMemberId,
+        room: { id: roomId, name: await resolveRoom(roomId), program: await resolveProgram(meta.program_category_id ?? null) },
+        weekdays,
+        arriveTime: arrive,
+        departTime: depart,
+        effectiveFrom,
+        effectiveTo: meta.end_date?.trim() || null,
+        openEnded: !meta.end_date,
+        kind: "base",
+    };
+    return {
+        bucket: "current",
+        effectiveFrom,
+        effectiveTo: assignment.effectiveTo,
+        openEnded: assignment.openEnded,
+        temporary: false,
+        assignments: [assignment],
+        scheduleType,
+        scheduleTypeLabel,
+        rate: "pending",
+        projectedTuition: null,
+    };
+}
+
 async function loadPatterns(
     supabase: SupabaseClient,
     orgId: string,
@@ -316,6 +413,12 @@ export type LoadSchedulingProjectionParams = {
     computedAt: string; // ISO instant
     subjectName: string;
     ageGroup?: string | null;
+    /**
+     * Pre-resolved site label. The site is opportunity-level, so a household caller
+     * (first-paint) resolves it ONCE and passes it here — avoiding an identical
+     * `locations` lookup per child. Absent → resolved locally (single-child callers).
+     */
+    siteName?: string | null;
 };
 
 /** Thin I/O: load canonical rows for one child + delegate to the pure stitch. */
@@ -334,14 +437,38 @@ export async function loadSchedulingProjectionForChild(
             siteLocationId
         );
 
-    const siteName = await resolveLocationLabel(supabase, orgId, siteLocationId);
+    const siteName =
+        params.siteName !== undefined ? params.siteName : await resolveLocationLabel(supabase, orgId, siteLocationId);
 
-    // No operational agreement → unscheduled child; nothing to bucket.
+    // Simple label resolvers (cached) shared by the committed + proposed paths.
+    const roomLabelCache = new Map<string, string | null>();
+    const programLabelCache = new Map<string, string | null>();
+    async function roomLabel(id: string | null): Promise<string | null> {
+        if (!id) return null;
+        if (!roomLabelCache.has(id)) roomLabelCache.set(id, await resolveLocationLabel(supabase, orgId, id));
+        return roomLabelCache.get(id) ?? null;
+    }
+    async function programLabel(id: string | null): Promise<string | null> {
+        if (!id) return null;
+        if (!programLabelCache.has(id)) programLabelCache.set(id, await resolveProgramLabel(supabase, orgId, id));
+        return programLabelCache.get(id) ?? null;
+    }
+
+    // No operational agreement → pre-enrollment child. Surface the PROPOSED draft (if any)
+    // from the enrollment participation; otherwise a true empty state.
     if (!agreement) {
+        const proposed = await loadProposedDraftForChild(
+            supabase,
+            orgId,
+            customerMemberId,
+            siteLocationId,
+            roomLabel,
+            programLabel
+        );
         const subject: ChildSchedulingSubject = {
             id: customerMemberId,
             name: params.subjectName,
-            program: null,
+            program: proposed?.assignments[0]?.room.program ?? null,
             ageGroup: params.ageGroup ?? null,
             siteId: siteLocationId,
             siteName,
@@ -351,6 +478,7 @@ export async function loadSchedulingProjectionForChild(
             agreementStatus: null,
             assignments: [],
             asOf: todayYmd,
+            proposed,
         });
         return buildSchedulingProjectionForChild(child, todayYmd, computedAt);
     }
@@ -365,22 +493,6 @@ export async function loadSchedulingProjectionForChild(
         orgId,
         assignmentRows.map((a) => a.schedule_pattern_id)
     );
-
-    // Resolve distinct room + program labels once.
-    const roomLabelCache = new Map<string, string | null>();
-    const programLabelCache = new Map<string, string | null>();
-    async function roomLabel(id: string | null): Promise<string | null> {
-        if (!id) return null;
-        if (!roomLabelCache.has(id))
-            roomLabelCache.set(id, await resolveLocationLabel(supabase, orgId, id));
-        return roomLabelCache.get(id) ?? null;
-    }
-    async function programLabel(id: string | null): Promise<string | null> {
-        if (!id) return null;
-        if (!programLabelCache.has(id))
-            programLabelCache.set(id, await resolveProgramLabel(supabase, orgId, id));
-        return programLabelCache.get(id) ?? null;
-    }
 
     const assignments: AssignmentInput[] = [];
     for (const row of assignmentRows) {

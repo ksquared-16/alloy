@@ -3269,6 +3269,17 @@ html[data-alloy-os-runtime-split="true"]
   animation: alloy-os-fp-card-zoom var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
 }
 
+/* Scheduling work surface — the schedule editor/detail is a tall composition; give the
+ * elevated card (and its scrollable body) enough height that the FULL card fits on a
+ * normal viewport without an inner scrollbar. Scoped to the scheduling card only so
+ * other expanded cards keep the compact 360px body cap. */
+.alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-scheduling-card="true"]) {
+  max-height: min(88vh, calc(100dvh - 32px));
+}
+.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) .alloy-os-ucard__body {
+  max-height: calc(88vh - 104px);
+}
+
 /* Shared identity drill-in — fully opaque elevated surface (no canvas bleed-through). */
 
 /* Composer edit mode: fully obscure non-elevated cards and lock elevated stack. */

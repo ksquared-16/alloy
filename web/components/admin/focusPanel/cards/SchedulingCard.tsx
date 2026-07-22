@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { CalendarDays, Clock, DoorOpen, CalendarRange, Wallet } from "lucide-react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
@@ -20,9 +22,22 @@ type Props = {
     composerPreview?: { perspective?: "expanded" };
 };
 
-type Site = { id: string; name: string };
+// ── Alloy design tokens (Midnight / Slate / Pine / Gold / Ember) ─────────────
+const T = {
+    pine: "#00A283",
+    forge: "#273F52",
+    ink: "#18273A",
+    slate: "#4b5563",
+    muted: "#59678b",
+    stone: "#F4F6F9",
+    gold: "#d0ad50",
+    ember: "#b4532a",
+    blue: "#00458C",
+    border: "#e5e9ef",
+    mid40: "rgba(39,63,82,.40)",
+};
+
 type DailyHours = { arrive: string; depart: string };
-type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string; defaultHours: DailyHours | null; defaultOpenEnded: boolean };
 type Money = { amountCents: number; currency: string };
 type BillingProjection = {
     status: "resolved" | "pending" | "unconfigured" | "stale";
@@ -38,31 +53,42 @@ type BillingProjection = {
     } | null;
     warnings: string[];
 };
-
 function money(m: Money | null | undefined, freq?: string): string {
     if (!m) return "—";
     const dollars = (m.amountCents / 100).toLocaleString("en-US", { style: "currency", currency: m.currency || "USD" });
     return freq ? `${dollars} / ${freq}` : dollars;
 }
-type PlacementOption = {
-    roomId: string;
-    roomName: string | null;
-    classification: "recommended" | "eligible" | "blocked";
-    reason: string;
-    afterPeakOccupancy: number;
-    blockers: string[];
+
+// ── Projection shapes (from ?view=projection) ────────────────────────────────
+type ProjRoom = { id: string | null; name: string | null; program: string | null };
+type ProjAssignment = {
+    room: ProjRoom;
+    weekdays: number[];
+    arriveTime: string | null;
+    departTime: string | null;
+    effectiveFrom: string;
+    effectiveTo: string | null;
+    openEnded: boolean;
+};
+type ProjView = {
+    effectiveFrom: string;
+    effectiveTo: string | null;
+    openEnded: boolean;
+    scheduleType?: string | null;
+    scheduleTypeLabel?: string | null;
+    assignments: ProjAssignment[];
+};
+type ChildStatus = "scheduled" | "proposed" | "needs-placement" | "upcoming-only" | "ended";
+type ChildProj = {
+    child: { id: string; name: string; program: string | null; siteId: string | null; siteName: string | null };
+    status: ChildStatus;
+    current: ProjView | null;
+    proposed: ProjView | null;
 };
 
-type SchedChild = {
-    id: string;
-    ocmId: string | null;
-    personId: string | null;
-    name: string;
-    program: string | null;
-    room: string | null;
-    schedule: string | null;
-    startDate: string | null;
-};
+type PlacementOption = { roomId: string; roomName: string | null; classification: "recommended" | "eligible" | "blocked"; reason: string };
+type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string; defaultHours: DailyHours | null; defaultOpenEnded: boolean };
+type SchedChild = { id: string; personId: string | null; name: string; imageUrl: string | null; dobAge: string | null };
 
 const WEEKDAYS = [
     { i: 1, l: "M" },
@@ -74,52 +100,123 @@ const WEEKDAYS = [
     { i: 0, l: "S" },
 ];
 const WEEKDAY_LABEL: Record<number, string> = { 0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat" };
+const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function formatDays(weekdays: number[]): string {
+    if (!weekdays.length) return "—";
+    const s = [...weekdays].sort((a, b) => a - b);
+    if (s.join(",") === "1,2,3,4,5") return "Monday–Friday";
+    return s.map((d) => WEEKDAY_NAMES[d]).join(", ");
+}
+function formatDate(iso: string | null): string {
+    if (!iso) return "";
+    const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+    if (!y || !m || !d) return iso;
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+function fmtTime(t: string | null): string {
+    if (!t) return "";
+    const [hh, mm] = t.split(":").map(Number);
+    if (Number.isNaN(hh)) return t;
+    const ap = hh < 12 ? "AM" : "PM";
+    const h12 = hh % 12 === 0 ? 12 : hh % 12;
+    return `${h12}:${String(mm).padStart(2, "0")} ${ap}`;
+}
 
 async function schedApi(path: string, init?: RequestInit): Promise<any> {
-    const res = await fetch(`/api/admin/scheduling${path}`, {
-        ...init,
-        headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
-    });
+    const res = await fetch(`/api/admin/scheduling${path}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
     return body;
 }
 
-/** Durable status word (identity) — the room is one attribute of the schedule. */
-function statusFor(child: SchedChild): string {
-    if (child.room && child.schedule) return "Scheduled";
-    if (child.schedule) return "Proposed schedule";
-    return "Needs schedule";
+// ── Derived schedule state (business meaning leads) ──────────────────────────
+type StateTone = "pine" | "gold" | "blue" | "muted";
+type ScheduleState = { label: string; tone: StateTone; sub: string | null };
+const TONE_COLOR: Record<StateTone, string> = { pine: T.pine, gold: T.gold, blue: T.blue, muted: T.muted };
+const TONE_BG: Record<StateTone, string> = {
+    pine: "rgba(0,162,131,.10)",
+    gold: "rgba(208,173,80,.14)",
+    blue: "rgba(0,69,140,.10)",
+    muted: "rgba(89,103,139,.10)",
+};
+
+/** State treatment from the projection's already-resolved status — never recomputed here. */
+function deriveScheduleState(p: ChildProj | null): ScheduleState {
+    if (!p) return { label: "—", tone: "muted", sub: null };
+    switch (p.status) {
+        case "scheduled":
+            return { label: "Active", tone: "pine", sub: null };
+        case "proposed":
+            // A child WITH a (planned) schedule reads distinctly from one that still
+            // needs a room — blue "has a schedule" vs gold "needs a room".
+            return { label: "Proposed", tone: "blue", sub: p.proposed?.effectiveFrom ? `Starts ${formatDate(p.proposed.effectiveFrom)}` : "Planning — active at enrollment" };
+        case "upcoming-only":
+            return { label: "Future", tone: "blue", sub: p.current?.effectiveFrom ? `Starts ${formatDate(p.current.effectiveFrom)}` : null };
+        case "ended":
+            return { label: "Ended", tone: "muted", sub: null };
+        default:
+            return { label: "Needs a room", tone: "gold", sub: null };
+    }
+}
+
+/** Compact status for the summary rows. */
+function summaryStatus(p: ChildProj): { label: string; color: string } {
+    const s = deriveScheduleState(p);
+    if (p.status === "proposed" && p.proposed?.effectiveFrom) return { label: `Starts ${formatDate(p.proposed.effectiveFrom)}`, color: TONE_COLOR[s.tone] };
+    return { label: s.label, color: TONE_COLOR[s.tone] };
+}
+function existingView(p: ChildProj | null): ProjView | null {
+    return p?.current ?? p?.proposed ?? null;
 }
 
 /**
- * Scheduling card — the "what is true?" identity surface. Per child, a durable
- * schedule status + facts; clicking a child opens the Scheduling WORK surface in
- * the center (the Household/Children/Billing expand pattern) where the operator
- * builds the schedule. The card never edits inline.
+ * Scheduling card — the "what is true?" identity surface, driven by the canonical
+ * SchedulingProjection. Clicking a child opens the Scheduling work surface in the
+ * center, which lands on a read-only Schedule Detail (existing truth) and only enters
+ * the editor via Edit / Create new. Detail and Edit share ONE region composition
+ * (ScheduleRegions): Detail renders values, Edit transforms the same regions into
+ * controls in place. The card never edits inline.
  */
 export default function SchedulingCard({ model, context, receded = false, coordination, composerPreview }: Props) {
     const evidence = useMemo(() => buildChildrenCardEvidence(context), [context]);
-    // Raw inquiry-child blocks carry the writable enrollment record id (`ocm_id`),
-    // which the evidence child does not surface. Align by index (same source order).
-    const rawInquiry = Array.isArray((context.truth as Record<string, unknown>)?._inquiry_children)
-        ? ((context.truth as Record<string, unknown>)._inquiry_children as Record<string, unknown>[])
-        : [];
-    const children: SchedChild[] = evidence.children.map((c, i) => {
-        const raw = rawInquiry[i] ?? {};
-        const ocmId =
-            (raw.ocm_id != null ? String(raw.ocm_id) : null) ?? (raw.id != null ? String(raw.id) : null);
-        return {
-            id: c.customerMemberId ?? c.id,
-            ocmId,
-            personId: c.personId ?? null,
-            name: c.name,
-            program: c.program,
-            room: c.room,
-            schedule: c.schedule,
-            startDate: c.startDate,
-        };
-    });
+    const children: SchedChild[] = useMemo(
+        () =>
+            evidence.children.map((c) => ({
+                id: c.customerMemberId ?? c.id,
+                personId: c.personId ?? null,
+                name: c.name,
+                imageUrl: c.imageUrl ?? null,
+                dobAge: c.dobAge ?? null,
+            })),
+        [evidence]
+    );
+    const opportunityId = context.subject.type === "opportunity" ? context.subject.id : null;
+
+    // Prebuilt projection: composed server-side into context.truth by the Focus Panel
+    // first-paint runtime (like Household), so the card reveals WITH the panel and opens
+    // a child's Detail instantly — no per-child fetch, no self-managed loading gate.
+    const prebuilt = useMemo(() => {
+        const bag = (context.truth as Record<string, unknown>)?._scheduling_projection;
+        const byMember = (bag && typeof bag === "object" ? (bag as { byMemberId?: Record<string, ChildProj> }).byMemberId : null) ?? {};
+        return byMember;
+    }, [context.truth]);
+
+    // Local overrides after a save (the prebuilt context does not re-compose on its own).
+    const [overrides, setOverrides] = useState<Record<string, ChildProj>>({});
+    const projById = useMemo(() => ({ ...prebuilt, ...overrides }), [prebuilt, overrides]);
+
+    const reloadChild = useCallback(
+        async (id: string, name: string): Promise<ChildProj | null> => {
+            const r = await schedApi(
+                `?view=projection&customer_member_id=${encodeURIComponent(id)}&subject_name=${encodeURIComponent(name)}${opportunityId ? `&opportunity_id=${encodeURIComponent(opportunityId)}` : ""}`
+            );
+            const p = (r.projection?.children?.[0] as ChildProj | undefined) ?? null;
+            if (p) setOverrides((prev) => ({ ...prev, [id]: p }));
+            return p;
+        },
+        [opportunityId]
+    );
 
     const [activeChildId, setActiveChildId] = useState<string | null>(null);
     useEffect(() => {
@@ -132,16 +229,12 @@ export default function SchedulingCard({ model, context, receded = false, coordi
 
     const insight = children.length === 0 ? "No children to schedule" : children.length === 1 ? "1 child" : `${children.length} children`;
 
-    const footerAction = activeChild ? (
-        <button type="button" className="alloy-os-ucard__action alloy-os-ucard__action--system5" onClick={() => setActiveChildId(null)}>
-            ← Back to panel
-        </button>
-    ) : null;
-
     return (
         <UniversalCard
             title={model.title}
-            insight={activeChild ? `Schedule · ${activeChild.name}` : insight}
+            // When a child is active the work surface leads with its own avatar identity
+            // header, so the redundant "Schedule · <name>" heading is suppressed.
+            insight={activeChild ? "" : insight}
             supportingInsight={activeChild ? null : children.length > 0 ? "Room · weekly pattern · effective dates" : null}
             iconName={model.iconName}
             tier={model.tier}
@@ -152,44 +245,45 @@ export default function SchedulingCard({ model, context, receded = false, coordi
             gridSpan={model.span}
             data-universal-card-key={model.key}
             receded={receded}
-            footerAction={footerAction}
         >
             <div data-scheduling-card="true">
                 {activeChild ? (
                     <ScheduleWorkSurface
                         child={activeChild}
-                        opportunityId={context.subject.type === "opportunity" ? context.subject.id : null}
-                        onDone={() => setActiveChildId(null)}
+                        opportunityId={opportunityId}
+                        projection={projById[activeChild.id] ?? null}
+                        reloadChild={() => reloadChild(activeChild.id, activeChild.name)}
+                        onClose={() => setActiveChildId(null)}
                     />
                 ) : children.length === 0 ? (
-                    <p style={{ fontSize: 12.5, color: "#667085" }}>Link children to schedule them.</p>
+                    <p style={{ fontSize: 12.5, color: T.muted }}>Link children to schedule them.</p>
                 ) : (
                     <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
-                        {children.map((child) => (
-                            <li key={child.id} data-scheduling-child={child.id}>
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveChildId(child.id)}
-                                    data-scheduling-open={child.id}
-                                    style={rowBtnStyle}
-                                >
-                                    <span style={{ display: "grid", gap: 1 }}>
-                                        <span style={{ fontSize: 13.5, fontWeight: 600, color: "#1d2939" }}>{child.name}</span>
-                                        <span style={{ fontSize: 11.5, color: "#475467" }}>
-                                            {child.room ? `${child.room} · ` : ""}
-                                            {child.schedule ?? "Monday–Friday"}
-                                            {child.startDate ? ` · from ${child.startDate}` : ""}
+                        {children.map((child) => {
+                            const proj = projById[child.id];
+                            const view = existingView(proj ?? null);
+                            const a = view?.assignments[0] ?? null;
+                            const chrome = proj ? summaryStatus(proj) : { label: "…", color: T.muted };
+                            const roomProgram = a?.room.name ? (a.room.program ? `${a.room.name} · ${a.room.program}` : a.room.name) : null;
+                            const detail = view
+                                ? [roomProgram, formatDays(a?.weekdays ?? []), view.effectiveFrom ? `from ${formatDate(view.effectiveFrom)}${view.openEnded ? " · open-ended" : ""}` : null].filter(Boolean).join(" · ")
+                                : "No schedule yet";
+                            return (
+                                <li key={child.id} data-scheduling-child={child.id}>
+                                    <button type="button" onClick={() => setActiveChildId(child.id)} data-scheduling-open={child.id} style={rowBtnStyle}>
+                                        <CardAvatar name={child.name} imageUrl={child.imageUrl} size={30} recordId={child.id} />
+                                        <span style={{ display: "grid", gap: 2, minWidth: 0, flex: 1 }}>
+                                            <span style={{ fontSize: 13.5, fontWeight: 600, color: T.forge }}>{child.name}</span>
+                                            <span style={{ fontSize: 11.5, color: T.slate, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{detail}</span>
                                         </span>
-                                    </span>
-                                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                        <span style={{ fontSize: 10.5, fontWeight: 600, color: statusFor(child) === "Scheduled" ? "#00a283" : "#667085" }}>
-                                            {statusFor(child)}
+                                        <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
+                                            <span data-scheduling-status={proj?.status} style={{ fontSize: 10.5, fontWeight: 700, color: chrome.color }}>{chrome.label}</span>
+                                            <span style={{ color: "#98a2b3" }}>›</span>
                                         </span>
-                                        <span style={{ color: "#98a2b3" }}>›</span>
-                                    </span>
-                                </button>
-                            </li>
-                        ))}
+                                    </button>
+                                </li>
+                            );
+                        })}
                     </ul>
                 )}
             </div>
@@ -197,488 +291,680 @@ export default function SchedulingCard({ model, context, receded = false, coordi
     );
 }
 
+// ── The work surface: Detail (read-only) ⇄ Editor (edit | create) ────────────
+// Both render the SAME ScheduleRegions composition. Detail passes value nodes;
+// Editor passes control nodes into the same regions.
+type SurfaceMode = "detail" | "edit" | "create";
+
+function ScheduleWorkSurface({
+    child,
+    opportunityId,
+    projection,
+    reloadChild,
+    onClose,
+}: {
+    child: SchedChild;
+    opportunityId: string | null;
+    projection: ChildProj | null;
+    reloadChild: () => Promise<ChildProj | null>;
+    onClose: () => void;
+}) {
+    const [proj, setProj] = useState<ChildProj | null>(projection);
+    const existing = existingView(proj);
+    // Existing schedule → open Detail INSTANTLY from the prebuilt projection (no fetch).
+    // No schedule → the create editor (which also renders instantly; deps load lazily).
+    const [mode, setMode] = useState<SurfaceMode>(existing ? "detail" : "create");
+    const [detailBilling, setDetailBilling] = useState<BillingProjection | null>(null);
+
+    // Detail billing — enriches the tuition line in the background; never gates Detail.
+    useEffect(() => {
+        if (mode !== "detail" || !existing?.scheduleType) return;
+        let cancelled = false;
+        (async () => {
+            const siteId = proj?.child.siteId || "";
+            if (!siteId) return;
+            const bill = await schedApi(
+                `?view=billing&site_location_id=${encodeURIComponent(siteId)}&customer_member_id=${encodeURIComponent(child.id)}&schedule_type=${encodeURIComponent(existing.scheduleType!)}${existing.effectiveFrom ? `&start_date=${existing.effectiveFrom}` : ""}`
+            ).catch(() => null);
+            if (!cancelled) setDetailBilling(bill?.projection ?? null);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [mode, existing?.scheduleType, existing?.effectiveFrom, proj?.child.siteId, child.id]);
+
+    const header = (
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 2 }}>
+            <button type="button" onClick={onClose} aria-label="Close" data-schedule-close="true" style={{ all: "unset", marginLeft: "auto", cursor: "pointer", color: T.mid40, fontSize: 15, lineHeight: 1, padding: 2 }}>
+                ✕
+            </button>
+        </div>
+    );
+
+    const onSaved = async () => {
+        const fresh = await reloadChild();
+        setProj(fresh);
+        setDetailBilling(null);
+        setMode("detail");
+    };
+
+    if (mode === "detail") {
+        return (
+            <div data-schedule-surface="true" data-schedule-ready="true">
+                {header}
+                <ScheduleDetail child={child} proj={proj} billing={detailBilling} onEdit={() => setMode("edit")} onCreate={() => setMode("create")} />
+            </div>
+        );
+    }
+
+    return (
+        <div data-schedule-surface="true" data-schedule-ready="true">
+            {header}
+            <ScheduleEditor
+                child={child}
+                opportunityId={opportunityId}
+                proj={proj}
+                existing={mode === "edit" ? existing : null}
+                mode={mode}
+                onCancel={() => setMode(existing ? "detail" : "detail")}
+                onSaved={onSaved}
+            />
+        </div>
+    );
+}
+
+// ── Shared region composition (identity · state · days · hours · site+room ·
+//    effective · billing). ONE layout; Detail and Edit fill the same slots. ────
+function IdentityHeader({ child, state }: { child: SchedChild; state: ScheduleState }) {
+    return (
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <CardAvatar name={child.name} imageUrl={child.imageUrl} size={38} recordId={child.id} />
+            <div style={{ display: "grid", gap: 1, minWidth: 0, flex: 1 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: T.forge, lineHeight: 1.15 }}>{child.name}</span>
+                {child.dobAge ? <span style={{ fontSize: 11, color: T.muted }}>{child.dobAge}</span> : null}
+            </div>
+            <StatePill state={state} />
+        </div>
+    );
+}
+function StatePill({ state }: { state: ScheduleState }) {
+    return (
+        <span
+            data-schedule-state={state.label}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: TONE_BG[state.tone], color: TONE_COLOR[state.tone], fontSize: 10.5, fontWeight: 700, letterSpacing: ".02em", padding: "3px 9px", borderRadius: 999 }}
+        >
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: TONE_COLOR[state.tone] }} />
+            {state.label}
+        </span>
+    );
+}
+
+/** A calm labeled region — the shared grouping used by every slot. */
+function Region({ icon: Icon, label, children }: { icon: typeof CalendarDays; label: string; children: ReactNode }) {
+    return (
+        <section style={{ display: "grid", gap: 6 }} data-schedule-region={label}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, color: T.mid40 }}>
+                <Icon size={12.5} strokeWidth={2} />
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>{label}</span>
+            </div>
+            {children}
+        </section>
+    );
+}
+
+/** Day cells — the schedule itself. Interactive in Edit, static in Detail (same visual). */
+function DayPills({ days, interactive, onToggle }: { days: number[]; interactive: boolean; onToggle?: (i: number) => void }) {
+    return (
+        <div style={{ display: "flex", gap: 5 }}>
+            {WEEKDAYS.map((d, idx) => {
+                const on = days.includes(d.i);
+                const style: CSSProperties = {
+                    width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center",
+                    fontSize: 10.5, fontWeight: 600,
+                    background: on ? "rgba(0,162,131,.10)" : T.stone,
+                    color: on ? T.pine : "#98a2b3",
+                    border: on ? "1px solid rgba(0,162,131,.35)" : `1px solid ${T.border}`,
+                };
+                if (!interactive) {
+                    return (
+                        <span key={idx} data-day={d.i} aria-pressed={on} style={{ ...style, opacity: on ? 1 : 0.55 }}>
+                            {d.l}
+                        </span>
+                    );
+                }
+                return (
+                    <button key={idx} type="button" onClick={() => onToggle?.(d.i)} data-day={d.i} aria-pressed={on} style={{ ...style, cursor: "pointer" }}>
+                        {d.l}
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
+/** The billing consequence box — identical treatment in Detail and Edit. */
+function BillingConsequence({ billing }: { billing: BillingProjection | null }) {
+    const family = billing?.totals ? money(billing.totals.familyResponsibility, billing.totals.recurringFrequency) : null;
+    return (
+        <div style={{ background: "#f9fafb", border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px", display: "grid", gap: 5 }} data-schedule-billing="true">
+            <div style={{ display: "flex", alignItems: "center", gap: 6, color: T.mid40 }}>
+                <Wallet size={12.5} strokeWidth={2} />
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Recurring tuition</span>
+            </div>
+            {family ? (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: T.forge }}>
+                    <span>Family responsibility</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{family}</span>
+                </div>
+            ) : (
+                <div style={{ fontSize: 12, color: T.muted, fontStyle: "italic" }}>Pending — becomes final when Billing is configured for this schedule.</div>
+            )}
+        </div>
+    );
+}
+
 /**
- * The Scheduling work surface (opens in the center on child click). Flow:
- * Weekly Pattern → Days → Site → Recommended Room → Effective Dates →
- * Financial Preview → Save. Neutral styling — a work surface, not a form.
+ * The shared spine. `identity` + the five ordered region slots + a footer. Detail
+ * and Edit both render THROUGH this — the regions never diverge structurally.
  */
-function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChild; opportunityId: string | null; onDone: () => void }) {
-    const [sites, setSites] = useState<Site[]>([]);
-    const [siteId, setSiteId] = useState("");
-    // The site is "context-established" when the operational subject resolved one
-    // (or only one site exists) — we then present it as a fact, not a choice.
-    const [siteFromContext, setSiteFromContext] = useState(false);
-    const [patterns, setPatterns] = useState<Pattern[]>([]);
-    const [patternId, setPatternId] = useState("");
-    const [days, setDays] = useState<number[]>([]);
-    const [options, setOptions] = useState<PlacementOption[] | null>(null);
-    const [roomId, setRoomId] = useState("");
-    const [showAllRooms, setShowAllRooms] = useState(false);
-    const [effStart, setEffStart] = useState("");
-    const [effEnd, setEffEnd] = useState("");
-    const [openEnded, setOpenEnded] = useState(true);
-    // Daily time ranges — part of the schedule definition. A schedule-wide default
-    // (seeded from the pattern's configured hours when present) plus optional per-day
-    // overrides. Empty until set — never synthesized.
-    const [arrive, setArrive] = useState("");
-    const [depart, setDepart] = useState("");
+function ScheduleRegions({
+    child,
+    state,
+    days,
+    hours,
+    siteRoom,
+    effective,
+    billing,
+    footer,
+    surface,
+}: {
+    child: SchedChild;
+    state: ScheduleState;
+    days: ReactNode;
+    hours: ReactNode;
+    siteRoom: ReactNode;
+    effective: ReactNode;
+    billing: ReactNode;
+    footer: ReactNode;
+    surface: "detail" | "editor";
+}) {
+    return (
+        <div style={{ display: "grid", gap: 13, paddingTop: 2 }} {...(surface === "detail" ? { "data-schedule-detail": "true" } : { "data-schedule-editor": "true" })}>
+            <IdentityHeader child={child} state={state} />
+            {state.sub ? <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div> : null}
+            <Region icon={CalendarDays} label="Days">{days}</Region>
+            <Region icon={Clock} label="Daily hours">{hours}</Region>
+            <Region icon={DoorOpen} label="Site & room">{siteRoom}</Region>
+            <Region icon={CalendarRange} label="Effective">{effective}</Region>
+            <BillingConsequence billing={billing as BillingProjection | null} />
+            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>{footer}</div>
+        </div>
+    );
+}
+
+// ── Read-only Schedule Detail (the completed state) ──────────────────────────
+function ScheduleDetail({
+    child,
+    proj,
+    billing,
+    onEdit,
+    onCreate,
+}: {
+    child: SchedChild;
+    proj: ChildProj | null;
+    billing: BillingProjection | null;
+    onEdit: () => void;
+    onCreate: () => void;
+}) {
+    const view = existingView(proj);
+    const a = view?.assignments[0] ?? null;
+    const state = deriveScheduleState(proj);
+    const hours = a?.arriveTime && a?.departTime ? `${fmtTime(a.arriveTime)} – ${fmtTime(a.departTime)}` : null;
+    const roomText = a?.room.name ? (a.room.program ? `${a.room.name} · ${a.room.program}` : a.room.name) : null;
+
+    return (
+        <ScheduleRegions
+            surface="detail"
+            child={child}
+            state={state}
+            billing={billing}
+            days={a?.weekdays.length ? <DayPills days={a.weekdays} interactive={false} /> : <Empty>No days set</Empty>}
+            hours={hours ? <Value>{hours}</Value> : <Empty>Not set</Empty>}
+            siteRoom={
+                <div style={{ display: "grid", gap: 2 }}>
+                    <Value>{proj?.child.siteName ?? "—"}</Value>
+                    {roomText ? <span style={{ fontSize: 12.5, color: T.slate }}>{roomText}</span> : <Empty>Room pending</Empty>}
+                </div>
+            }
+            effective={
+                <Value>
+                    {view?.effectiveFrom ? `from ${formatDate(view.effectiveFrom)}` : "—"}
+                    <span style={{ color: T.muted, fontWeight: 500 }}>{view?.openEnded ? " · open-ended" : view?.effectiveTo ? ` · until ${formatDate(view.effectiveTo)}` : ""}</span>
+                </Value>
+            }
+            footer={
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <button type="button" onClick={onEdit} data-schedule-edit="true" style={primaryBtn(false)}>
+                        Edit schedule
+                    </button>
+                    <button type="button" onClick={onCreate} data-schedule-create-new="true" style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.pine }}>
+                        Create new schedule →
+                    </button>
+                </div>
+            }
+        />
+    );
+}
+
+// ── The editor — same regions, transformed into controls in place ────────────
+function ScheduleEditor({
+    child,
+    opportunityId,
+    proj,
+    existing,
+    mode,
+    onCancel,
+    onSaved,
+}: {
+    child: SchedChild;
+    opportunityId: string | null;
+    proj: ChildProj | null;
+    existing: ProjView | null;
+    mode: SurfaceMode;
+    onCancel: () => void;
+    onSaved: () => Promise<void>;
+}) {
+    const ex = existing?.assignments[0] ?? null;
+    // Site is known from the projection — NO sites fetch, NO editor gate.
+    const siteId = proj?.child.siteId ?? "";
+    const siteName = proj?.child.siteName ?? "Site";
+
+    // Edit model initialized SYNCHRONOUSLY from the prebuilt projection.
+    const [days, setDays] = useState<number[]>(mode === "edit" && ex?.weekdays.length ? [...ex.weekdays] : []);
+    const [arrive, setArrive] = useState(ex?.arriveTime || "");
+    const [depart, setDepart] = useState(ex?.departTime || "");
     const [perDayOpen, setPerDayOpen] = useState(false);
     const [perDay, setPerDay] = useState<Record<number, DailyHours>>({});
+    const [start, setStart] = useState(mode === "edit" ? existing?.effectiveFrom || "" : "");
+    const [end, setEnd] = useState(existing?.effectiveTo || "");
+    const [openEnded, setOpenEnded] = useState(existing ? existing.openEnded : true);
+    const [scheduleType, setScheduleType] = useState<string | null>(existing?.scheduleType || null);
+
+    const [roomId, setRoomId] = useState<string | null>(ex?.room.id ?? null);
+    const [roomName, setRoomName] = useState<string | null>(ex?.room.name ?? null);
+    const [roomFromRec, setRoomFromRec] = useState<boolean>(false);
+    const [roomPicking, setRoomPicking] = useState(false);
+    const [patternPicking, setPatternPicking] = useState(false);
+
+    // Deferred dependencies (Scope 3): patterns load ONLY when the operator invokes
+    // "Use a schedule pattern" (or lazily at save, to resolve the pattern id); billing
+    // patches in once a schedule type is known. None gates the editor's first paint.
+    const [patterns, setPatterns] = useState<Pattern[] | null>(null);
+    const patternsReqRef = useRef<Promise<Pattern[]> | null>(null);
+    const [billing, setBilling] = useState<BillingProjection | null>(null);
+
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [done, setDone] = useState<string | null>(null);
-    const [billing, setBilling] = useState<BillingProjection | null>(null);
-    const [billingLoading, setBillingLoading] = useState(false);
 
-    // Load sites, then patterns for the chosen site. The site is resolved from the
-    // operational subject when possible (the lead's established site), so the operator
-    // isn't asked to choose one that context already fixes.
-    useEffect(() => {
-        (async () => {
-            try {
-                const s = await schedApi(`?view=sites${opportunityId ? `&opportunity_id=${encodeURIComponent(opportunityId)}` : ""}`);
-                const siteList: Site[] = s.sites ?? [];
-                setSites(siteList);
-                const resolved: string | null = s.resolvedSiteId ?? null;
-                if (resolved) {
-                    setSiteId(resolved);
-                    setSiteFromContext(true);
-                } else if (siteList.length === 1) {
-                    setSiteId(siteList[0].id);
-                    setSiteFromContext(true);
-                } else if (siteList.length) {
-                    // Genuinely ambiguous — default to the first but let the operator choose.
-                    setSiteId(siteList[0].id);
-                    setSiteFromContext(false);
-                }
-            } catch (e) {
-                setError((e as Error).message);
-            }
+    /** Load site patterns once, on demand. Shared by the shortcut and save(). */
+    const ensurePatterns = useCallback((): Promise<Pattern[]> => {
+        if (patternsReqRef.current) return patternsReqRef.current;
+        const p = (async () => {
+            if (!siteId) return [];
+            const overview = await schedApi(`?view=overview&site_location_id=${encodeURIComponent(siteId)}`).catch(() => null);
+            const ps = (overview?.patterns as Pattern[]) ?? [];
+            setPatterns(ps);
+            return ps;
         })();
-    }, [opportunityId]);
-    useEffect(() => {
-        if (!siteId) return;
-        (async () => {
-            try {
-                const o = await schedApi(`?view=overview&site_location_id=${encodeURIComponent(siteId)}`);
-                setPatterns(o.patterns ?? []);
-                if ((o.patterns ?? []).length && !patternId) {
-                    const first = o.patterns[0] as Pattern;
-                    setPatternId(first.id);
-                    setDays(first.weekdays ?? []);
-                    if (first.defaultHours) {
-                        setArrive((a) => a || first.defaultHours!.arrive);
-                        setDepart((d) => d || first.defaultHours!.depart);
-                    }
-                    setOpenEnded(first.defaultOpenEnded);
-                }
-            } catch (e) {
-                setError((e as Error).message);
-            }
-        })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        patternsReqRef.current = p;
+        return p;
     }, [siteId]);
 
-    // Pattern initializes the day selection; days then define the schedule.
-    function choosePattern(id: string) {
-        setPatternId(id);
-        const p = patterns.find((x) => x.id === id);
-        if (p) {
-            setDays(p.weekdays);
-            // Seed the schedule's daily hours from the pattern's configured default,
-            // but never overwrite hours the operator already entered.
-            if (p.defaultHours) {
-                setArrive((a) => a || p.defaultHours!.arrive);
-                setDepart((d) => d || p.defaultHours!.depart);
-            }
-            // Open-ended follows the pattern's configured policy (config-driven default).
-            setOpenEnded(p.defaultOpenEnded);
-        }
+    function openPatternPicker() {
+        setPatternPicking((v) => !v);
+        void ensurePatterns();
     }
 
-    // The schedule-definition times payload sent on save. A default range (both ends
-    // valid + ordered) and per-day overrides restricted to the selected days.
-    const validRange = (r: DailyHours | undefined | null): r is DailyHours =>
-        !!r && !!r.arrive && !!r.depart && r.depart > r.arrive;
-    function buildTimesPayload(): { default: DailyHours | null; perDay: Record<string, DailyHours> } | null {
-        const def = validRange({ arrive, depart }) ? { arrive, depart } : null;
-        const pd: Record<string, DailyHours> = {};
-        if (perDayOpen) {
-            for (const [k, v] of Object.entries(perDay)) {
-                if (days.includes(Number(k)) && validRange(v)) pd[k] = v;
-            }
-        }
-        return def || Object.keys(pd).length ? { default: def, perDay: pd } : null;
-    }
+    // Background: billing preview once a schedule type is known (patches the tuition line).
+    useEffect(() => {
+        if (!siteId || !scheduleType) return;
+        let cancelled = false;
+        (async () => {
+            const bill = await schedApi(
+                `?view=billing&site_location_id=${encodeURIComponent(siteId)}&customer_member_id=${encodeURIComponent(child.id)}&schedule_type=${encodeURIComponent(scheduleType)}${start ? `&start_date=${start}` : ""}`
+            ).catch(() => null);
+            if (!cancelled) setBilling(bill?.projection ?? null);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [siteId, scheduleType, start, child.id]);
+
     function toggleDay(i: number) {
         setDays((d) => (d.includes(i) ? d.filter((x) => x !== i) : [...d, i].sort((a, b) => a - b)));
     }
+    function applyPattern(p: Pattern) {
+        setDays([...p.weekdays]);
+        if (p.defaultHours) {
+            setArrive(p.defaultHours.arrive);
+            setDepart(p.defaultHours.depart);
+        }
+        setScheduleType(p.scheduleTypeKey);
+        setPatternPicking(false);
+    }
 
-    // The day pills are the source of truth. The pattern is a starting template;
-    // once the operator edits the days away from it, the schedule is "Custom".
-    const selectedPattern = patterns.find((p) => p.id === patternId) ?? null;
-    const daysKey = [...days].sort((a, b) => a - b).join(",");
-    const isCustom =
-        days.length > 0 &&
-        !!selectedPattern &&
-        daysKey !== [...(selectedPattern.weekdays ?? [])].sort((a, b) => a - b).join(",");
-
-    // Recommended room: option generator evaluates all; UI leads with the pick.
-    useEffect(() => {
-        if (!siteId || !patternId) return;
-        (async () => {
-            try {
-                const qs = `?view=options&site_location_id=${encodeURIComponent(siteId)}&pattern_id=${encodeURIComponent(patternId)}&child_agreement_id=${encodeURIComponent(child.id)}${effStart ? `&start_date=${effStart}` : ""}`;
-                const o = await schedApi(qs).catch(() => ({ options: [] }));
-                const opts: PlacementOption[] = o.options ?? [];
-                setOptions(opts);
-                // Preselect the recommended room, but never clobber an existing choice
-                // (e.g. when the date changes and options refetch).
-                const rec = opts.find((x) => x.classification === "recommended");
-                setRoomId((prev) => prev || rec?.roomId || "");
-            } catch { /* non-fatal */ }
-        })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [siteId, patternId, effStart]);
-
-    const recommended = options?.find((o) => o.classification === "recommended") ?? null;
-    const chosen = options?.find((o) => o.roomId === roomId) ?? recommended;
-
-    // Financial preview — Billing projection for the schedule (updates as it changes).
-    useEffect(() => {
-        if (!siteId || !patternId) return;
-        const pat = patterns.find((p) => p.id === patternId);
-        const scheduleType = pat?.scheduleTypeKey ?? "";
-        setBillingLoading(true);
-        (async () => {
-            try {
-                const qs = `?view=billing&site_location_id=${encodeURIComponent(siteId)}&customer_member_id=${encodeURIComponent(child.id)}&schedule_type=${encodeURIComponent(scheduleType)}${effStart ? `&start_date=${effStart}` : ""}`;
-                const b = await schedApi(qs);
-                setBilling(b.projection ?? null);
-            } catch {
-                setBilling(null);
-            } finally {
-                setBillingLoading(false);
-            }
-        })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [siteId, patternId, effStart, patterns.length]);
+    function resolvePatternId(): string | null {
+        if (!patterns) return null;
+        return patterns.find((p) => p.scheduleTypeKey === scheduleType)?.id ?? patterns[0]?.id ?? null;
+    }
+    const patternId = resolvePatternId();
+    const state = deriveScheduleState(proj) ;
+    const editState: ScheduleState = mode === "create" && !existing ? { label: "New schedule", tone: "blue", sub: null } : { ...state, sub: null };
+    const canSave = days.length > 0 && !!start && !!roomId && (!arrive || !depart || depart > arrive);
 
     async function save() {
         setBusy(true);
         setError(null);
         try {
-            const res = await schedApi("", {
+            let pid = patternId;
+            if (!pid) {
+                // Patterns weren't opened — resolve the id lazily now (single shared load).
+                const ps = await ensurePatterns();
+                pid = ps.find((p) => p.scheduleTypeKey === scheduleType)?.id ?? ps[0]?.id ?? null;
+            }
+            const times = {
+                default: arrive && depart && depart > arrive ? { arrive, depart } : null,
+                perDay: perDayOpen
+                    ? Object.fromEntries(Object.entries(perDay).filter(([k, v]) => days.includes(Number(k)) && v.arrive && v.depart && v.depart > v.arrive))
+                    : {},
+            };
+            await schedApi("", {
                 method: "POST",
                 body: JSON.stringify({
                     customer_member_id: child.id,
-                    opportunity_customer_member_id: child.ocmId,
                     person_id: child.personId,
                     opportunity_id: opportunityId,
-                    schedule_pattern_id: patternId,
-                    room_location_id: roomId || null,
-                    start_date: effStart || null,
-                    end_date: openEnded ? null : effEnd || null,
-                    times: buildTimesPayload(),
+                    schedule_pattern_id: pid,
+                    room_location_id: roomId,
+                    start_date: start || null,
+                    end_date: openEnded ? null : end || null,
+                    weekdays: days,
+                    times,
                     site_location_id: siteId,
-                    child_name: child.name,
-                    room_label: chosen?.roomName ?? "",
-                    pattern_label: patterns.find((p) => p.id === patternId)?.label ?? "",
+                    // Effective-dated intent: Create makes the next schedule; Edit changes the current.
+                    change_kind: mode === "create" && existing ? "successor" : "current",
                 }),
             });
-            setDone(res?.message ?? `Schedule saved for ${child.name.split(/\s+/)[0]}.`);
-            setTimeout(onDone, 1600);
+            await onSaved();
         } catch (e) {
             setError((e as Error).message);
-        } finally {
             setBusy(false);
         }
     }
 
-    if (done) return <div style={{ fontSize: 13, color: "#067647", fontWeight: 600, padding: "8px 0" }}>{done}</div>;
+    if (roomPicking) {
+        return (
+            <RoomPicker
+                siteId={siteId}
+                childId={child.id}
+                patternId={patternId}
+                start={start}
+                selectedRoomId={roomId}
+                onPick={(id, name, recommended) => {
+                    setRoomId(id);
+                    setRoomName(name);
+                    setRoomFromRec(recommended);
+                    setRoomPicking(false);
+                }}
+                onCancel={() => setRoomPicking(false)}
+            />
+        );
+    }
 
     return (
-        <div style={{ display: "grid", gap: 14, paddingTop: 4 }} data-schedule-surface="true">
-            {error && (
-                <div style={{ fontSize: 12, color: "#b42318", background: "#fef3f2", border: "1px solid #fecdca", borderRadius: 8, padding: "8px 10px" }}>
-                    {error}
-                </div>
-            )}
-
-            {/* 1 · Weekly pattern — a compact starting template; the day pills are the schedule */}
-            <section>
-                {sectionLabel("Start from a pattern")}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }} data-pattern-selector="true">
-                    {patterns.map((p) => {
-                        const on = !isCustom && p.id === patternId;
-                        return (
-                            <button
-                                key={p.id}
-                                type="button"
-                                onClick={() => choosePattern(p.id)}
-                                data-pattern={p.id}
-                                aria-pressed={on}
-                                style={patternChipStyle(on)}
-                            >
-                                {p.label}
-                            </button>
-                        );
-                    })}
-                    {isCustom && (
-                        <span data-pattern-custom="true" style={patternChipStyle(true, true)}>
-                            Custom
-                        </span>
-                    )}
-                </div>
-            </section>
-
-            {/* 2 · Days (define the real schedule — the source of truth) */}
-            <section>
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 5 }}>
-                    <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#98a2b3" }}>
-                        Days
-                    </div>
-                    {isCustom && selectedPattern && (
-                        <button type="button" onClick={() => choosePattern(patternId)} style={{ ...linkBtnStyle, fontSize: 10.5 }}>
-                            Reset to {selectedPattern.label} →
+        <>
+            {error && <div style={{ marginBottom: 10 }}><ErrorNote message={error} /></div>}
+            <ScheduleRegions
+                surface="editor"
+                child={child}
+                state={editState}
+                billing={billing}
+                days={
+                    <div style={{ display: "grid", gap: 8 }}>
+                        <DayPills days={days} interactive onToggle={toggleDay} />
+                        <button type="button" onClick={openPatternPicker} data-pattern-shortcut="true" style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine, width: "fit-content" }}>
+                            Use a schedule pattern →
                         </button>
-                    )}
-                </div>
-                <div style={{ display: "flex", gap: 5 }}>
-                    {WEEKDAYS.map((d, idx) => {
-                        const on = days.includes(d.i);
-                        return (
-                            <button
-                                key={idx}
-                                type="button"
-                                onClick={() => toggleDay(d.i)}
-                                data-day={d.i}
-                                aria-pressed={on}
-                                style={{
-                                    width: 30, height: 30, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                                    background: on ? "rgba(0,162,131,.12)" : "#f2f4f7",
-                                    color: on ? "#00a283" : "#98a2b3",
-                                    border: on ? "1px solid rgba(0,162,131,.45)" : "1px solid transparent",
-                                }}
-                            >
-                                {d.l}
-                            </button>
-                        );
-                    })}
-                </div>
-            </section>
-
-            {/* 2b · Daily hours — part of the schedule definition (default + per-day) */}
-            <section data-daily-hours="true">
-                {sectionLabel("Daily hours")}
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                    <label style={fieldLabelStyle}>
-                        <span style={{ fontSize: 10.5, color: "#98a2b3" }}>Arrive</span>
-                        <input type="time" value={arrive} onChange={(e) => setArrive(e.target.value)} data-arrive="true" style={{ ...selStyle, width: 130 }} />
-                    </label>
-                    <label style={fieldLabelStyle}>
-                        <span style={{ fontSize: 10.5, color: "#98a2b3" }}>Depart</span>
-                        <input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} data-depart="true" style={{ ...selStyle, width: 130 }} />
-                    </label>
-                    {days.length > 1 && (
-                        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#475467", marginTop: 14 }}>
-                            <input type="checkbox" checked={perDayOpen} onChange={(e) => setPerDayOpen(e.target.checked)} data-perday-toggle="true" />
-                            Different times per day
-                        </label>
-                    )}
-                </div>
-                {arrive && depart && depart <= arrive && (
-                    <div style={{ fontSize: 11, color: "#b42318", marginTop: 4 }}>Depart must be after arrive.</div>
-                )}
-                {perDayOpen && (
-                    <div style={{ display: "grid", gap: 5, marginTop: 8 }} data-perday-grid="true">
-                        {WEEKDAYS.filter((d) => days.includes(d.i)).map((d) => {
-                            const row = perDay[d.i] ?? { arrive: "", depart: "" };
-                            const setRow = (patch: Partial<DailyHours>) =>
-                                setPerDay((prev) => ({ ...prev, [d.i]: { ...row, ...patch } }));
-                            return (
-                                <div key={d.i} style={{ display: "flex", gap: 8, alignItems: "center" }} data-perday-row={d.i}>
-                                    <span style={{ width: 26, fontSize: 11.5, fontWeight: 600, color: "#475467" }}>{WEEKDAY_LABEL[d.i]}</span>
-                                    <input type="time" value={row.arrive} onChange={(e) => setRow({ arrive: e.target.value })} placeholder={arrive} style={{ ...selStyle, width: 120 }} />
-                                    <span style={{ color: "#98a2b3", fontSize: 11 }}>→</span>
-                                    <input type="time" value={row.depart} onChange={(e) => setRow({ depart: e.target.value })} placeholder={depart} style={{ ...selStyle, width: 120 }} />
+                        {patternPicking &&
+                            (patterns == null ? (
+                                // Loading is NOT the list — the picker only exists once patterns resolve.
+                                <span style={{ fontSize: 11, color: T.muted }}>Loading patterns…</span>
+                            ) : (
+                                <div data-pattern-list="true" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                    {patterns.map((p) => (
+                                        <button key={p.id} type="button" onClick={() => applyPattern(p)} data-pattern-option={p.id} style={patternChip}>
+                                            {p.label}
+                                        </button>
+                                    ))}
+                                    {patterns.length === 0 ? <span style={{ fontSize: 11, color: T.muted }}>No patterns configured.</span> : null}
                                 </div>
-                            );
-                        })}
-                        <span style={{ fontSize: 10.5, color: "#98a2b3" }}>Blank rows use the default hours above.</span>
+                            ))}
                     </div>
-                )}
-            </section>
-
-            {/* 3 · Site — a fact when context establishes it; a choice only when ambiguous */}
-            <section>
-                {sectionLabel("Site")}
-                {siteFromContext ? (
-                    <div data-schedule-site-context="true" style={{ fontSize: 13, fontWeight: 600, color: "#1d2939", display: "flex", alignItems: "center", gap: 6 }}>
-                        {sites.find((s) => s.id === siteId)?.name ?? "Site"}
-                        {sites.length > 1 && (
-                            <button type="button" onClick={() => setSiteFromContext(false)} style={linkBtnStyle}>
+                }
+                hours={
+                    <div style={{ display: "grid", gap: 6 }}>
+                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                            <input type="time" value={arrive} onChange={(e) => setArrive(e.target.value)} data-arrive="true" style={timeStyle} />
+                            <span style={{ color: T.mid40 }}>–</span>
+                            <input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} data-depart="true" style={timeStyle} />
+                        </div>
+                        {arrive && depart && depart <= arrive && <div style={{ fontSize: 11, color: T.ember }}>Depart must be after arrive.</div>}
+                        {days.length > 1 && (
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: T.slate, cursor: "pointer" }}>
+                                <AlloyCheck checked={perDayOpen} onChange={setPerDayOpen} data-perday-toggle="true" />
+                                Different times per day
+                            </label>
+                        )}
+                        {perDayOpen && (
+                            <div style={{ display: "grid", gap: 5, marginTop: 2 }} data-perday-grid="true">
+                                {WEEKDAYS.filter((d) => days.includes(d.i)).map((d) => {
+                                    const row = perDay[d.i] ?? { arrive: "", depart: "" };
+                                    const setRow = (patch: Partial<DailyHours>) => setPerDay((prev) => ({ ...prev, [d.i]: { ...row, ...patch } }));
+                                    return (
+                                        <div key={d.i} style={{ display: "flex", gap: 8, alignItems: "center" }} data-perday-row={d.i}>
+                                            <span style={{ width: 30, fontSize: 11.5, fontWeight: 600, color: T.slate }}>{WEEKDAY_LABEL[d.i]}</span>
+                                            <input type="time" value={row.arrive} onChange={(e) => setRow({ arrive: e.target.value })} style={timeStyle} />
+                                            <span style={{ color: T.mid40, fontSize: 11 }}>–</span>
+                                            <input type="time" value={row.depart} onChange={(e) => setRow({ depart: e.target.value })} style={timeStyle} />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                }
+                siteRoom={
+                    <div style={{ display: "grid", gap: 6 }}>
+                        <div data-schedule-site-context="true" style={{ fontSize: 13, fontWeight: 600, color: T.forge }}>{siteName}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span data-room-value="true" style={{ fontSize: 12.5, fontWeight: 600, color: roomName ? T.slate : T.muted }}>{roomName ?? "Room pending"}</span>
+                            {roomFromRec && <RecTag />}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    // The room decision needs a pattern (schedule) to evaluate fit —
+                                    // load it as part of invoking Change, then open the picker.
+                                    void ensurePatterns();
+                                    setRoomPicking(true);
+                                }}
+                                data-room-change="true"
+                                style={{ all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.pine }}
+                            >
                                 Change →
                             </button>
-                        )}
-                    </div>
-                ) : (
-                    <select value={siteId} onChange={(e) => setSiteId(e.target.value)} style={selStyle} data-schedule-site-select="true">
-                        {sites.map((s) => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                    </select>
-                )}
-            </section>
-
-            {/* 4 · Recommended room (alternatives collapsed) */}
-            <section>
-                {sectionLabel("Room")}
-                {!options ? (
-                    <div style={{ fontSize: 12, color: "#98a2b3" }}>Evaluating rooms…</div>
-                ) : options.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "#667085" }}>Rooms resolve once enrollment is created.</div>
-                ) : !showAllRooms && recommended ? (
-                    <div style={{ display: "grid", gap: 6 }}>
-                        <RoomRow option={chosen ?? recommended} selected recommended />
-                        <button type="button" onClick={() => setShowAllRooms(true)} style={linkBtnStyle}>
-                            Change room →
-                        </button>
-                    </div>
-                ) : (
-                    <div style={{ display: "grid", gap: 5 }}>
-                        {options.map((o) => (
-                            <button
-                                key={o.roomId}
-                                type="button"
-                                disabled={o.classification === "blocked"}
-                                onClick={() => setRoomId(o.roomId)}
-                                style={{ all: "unset", cursor: o.classification === "blocked" ? "not-allowed" : "pointer", display: "block" }}
-                            >
-                                <RoomRow option={o} selected={o.roomId === roomId} recommended={o.classification === "recommended"} />
-                            </button>
-                        ))}
-                        {recommended && (
-                            <button type="button" onClick={() => setShowAllRooms(false)} style={linkBtnStyle}>
-                                ← Use recommended
-                            </button>
-                        )}
-                    </div>
-                )}
-            </section>
-
-            {/* 5 · Effective dates (start + optional end / open-ended) */}
-            <section>
-                {sectionLabel("Effective dates")}
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                    <label style={fieldLabelStyle}>
-                        <span style={{ fontSize: 10.5, color: "#98a2b3" }}>Start</span>
-                        <input type="date" value={effStart} onChange={(e) => setEffStart(e.target.value)} style={{ ...selStyle, width: 150 }} />
-                    </label>
-                    <label style={fieldLabelStyle}>
-                        <span style={{ fontSize: 10.5, color: "#98a2b3" }}>End</span>
-                        <input
-                            type="date"
-                            value={effEnd}
-                            disabled={openEnded}
-                            onChange={(e) => setEffEnd(e.target.value)}
-                            style={{ ...selStyle, width: 150, opacity: openEnded ? 0.5 : 1 }}
-                        />
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#475467", marginTop: 14 }}>
-                        <input type="checkbox" checked={openEnded} onChange={(e) => setOpenEnded(e.target.checked)} data-open-ended={openEnded ? "true" : "false"} />
-                        Open-ended
-                    </label>
-                </div>
-                <div style={{ fontSize: 10.5, color: "#98a2b3", marginTop: 4 }} data-open-ended-caption="true">
-                    {openEnded ? "Ongoing — no end date; ends later via a change." : "Bounded — ends on the date above."}
-                </div>
-            </section>
-
-            {/* 6 · Financial preview (Billing owns the amounts; Scheduling displays) */}
-            <section style={{ background: "#f9fafb", border: "1px solid #eaecf0", borderRadius: 10, padding: "10px 12px" }}>
-                {sectionLabel("Recurring tuition")}
-                {billingLoading ? (
-                    <div style={{ fontSize: 12.5, color: "#98a2b3" }}>Calculating…</div>
-                ) : !billing || billing.status === "unconfigured" || !billing.totals ? (
-                    <div style={{ fontSize: 12.5, color: "#667085" }}>
-                        Pending — Billing not yet configured for this schedule.
-                    </div>
-                ) : (
-                    <div style={{ display: "grid", gap: 4 }}>
-                        <FinRow label={billing.recommendedRate?.name ?? "Base tuition"} value={money(billing.totals.baseRecurringTuition, billing.totals.recurringFrequency)} />
-                        {billing.discounts.map((d, i) => (
-                            <FinRow key={i} label={d.name} value={`− ${money(d.amount)}`} muted />
-                        ))}
-                        {billing.funding.map((f, i) => (
-                            <FinRow key={i} label={f.name} value={`− ${money(f.projectedAmount)}`} muted />
-                        ))}
-                        <div style={{ borderTop: "1px solid #eaecf0", marginTop: 3, paddingTop: 5 }}>
-                            <FinRow label="Family responsibility" value={money(billing.totals.familyResponsibility, billing.totals.recurringFrequency)} strong />
                         </div>
                     </div>
-                )}
-            </section>
+                }
+                effective={
+                    <div style={{ display: "grid", gap: 6 }}>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                            <label style={{ display: "grid", gap: 3 }}>
+                                <span style={{ fontSize: 10, color: T.mid40 }}>Start</span>
+                                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} style={{ ...selStyle, width: 150 }} />
+                            </label>
+                            <label style={{ display: "grid", gap: 3 }}>
+                                <span style={{ fontSize: 10, color: T.mid40 }}>End</span>
+                                <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} style={{ ...selStyle, width: 150, opacity: openEnded ? 0.5 : 1 }} />
+                            </label>
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: T.slate, cursor: "pointer", paddingBottom: 7 }}>
+                                <AlloyCheck checked={openEnded} onChange={setOpenEnded} data-open-ended={openEnded ? "true" : "false"} />
+                                Open-ended
+                            </label>
+                        </div>
+                        <div style={{ fontSize: 10.5, color: T.mid40 }}>{openEnded ? "Ongoing — no end date; ends later via a change." : "Bounded — ends on the date above."}</div>
+                    </div>
+                }
+                footer={
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 10.5, color: T.muted }}>{mode === "create" ? "New schedule — configure the minimum." : "Editing the current schedule."}</span>
+                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+                            <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
+                                Cancel
+                            </button>
+                            <button type="button" disabled={busy || !canSave} onClick={save} data-schedule-commit="true" style={primaryBtn(busy || !canSave)}>
+                                {busy ? "Saving…" : mode === "create" ? "Save schedule" : "Save changes"}
+                            </button>
+                        </div>
+                    </div>
+                }
+            />
+        </>
+    );
+}
 
-            {/* 7 · Save */}
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <button
-                    type="button"
-                    disabled={busy || !patternId || !roomId || !effStart || days.length === 0}
-                    onClick={save}
-                    data-schedule-commit="true"
-                    style={{
-                        fontSize: 13, fontWeight: 600, color: "#fff",
-                        background: busy || !roomId || !effStart || days.length === 0 ? "#98a2b3" : "#00a283",
-                        border: "none", borderRadius: 8, padding: "8px 16px", cursor: busy ? "default" : "pointer",
-                    }}
-                >
-                    {busy ? "Saving…" : "Save schedule"}
+// ── Room picker (invokes the placement resolver; ranking stays owned there) ──
+function RoomPicker({
+    siteId,
+    childId,
+    patternId,
+    start,
+    selectedRoomId,
+    onPick,
+    onCancel,
+}: {
+    siteId: string;
+    childId: string;
+    patternId: string | null;
+    start: string;
+    selectedRoomId: string | null;
+    onPick: (id: string, name: string | null, recommended: boolean) => void;
+    onCancel: () => void;
+}) {
+    const [options, setOptions] = useState<PlacementOption[] | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    useEffect(() => {
+        // The fit resolver evaluates against a schedule (pattern) — wait for it to
+        // resolve (loaded as part of invoking Change) rather than fire a request the
+        // resolver would reject.
+        if (!patternId) return;
+        let cancelled = false;
+        setError(null);
+        (async () => {
+            try {
+                const o = await schedApi(
+                    `?view=options&site_location_id=${encodeURIComponent(siteId)}&pattern_id=${encodeURIComponent(patternId)}&child_agreement_id=${encodeURIComponent(childId)}${start ? `&start_date=${start}` : ""}`
+                );
+                if (!cancelled) setOptions(o.options ?? []);
+            } catch (e) {
+                if (!cancelled) setError((e as Error).message);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [siteId, patternId, childId, start]);
+
+    return (
+        <div style={{ display: "grid", gap: 10, paddingTop: 4 }} data-room-picker="true">
+            {label("Choose a room")}
+            {error && <ErrorNote message={error} />}
+            {!options ? (
+                <Thinking label="Evaluating rooms…" />
+            ) : (
+                <div style={{ display: "grid", gap: 6 }}>
+                    {options.map((o) => {
+                        const blocked = o.classification === "blocked";
+                        const selected = o.roomId === selectedRoomId;
+                        return (
+                            <button key={o.roomId} type="button" disabled={blocked} onClick={() => onPick(o.roomId, o.roomName, o.classification === "recommended")} data-room-option={o.roomId}
+                                style={{ all: "unset", cursor: blocked ? "not-allowed" : "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", border: selected ? `1px solid ${T.pine}` : `1px solid ${T.border}`, background: blocked ? "#f9fafb" : selected ? "rgba(0,162,131,.06)" : "#fff", borderRadius: 8, padding: "8px 12px", opacity: blocked ? 0.7 : 1 }}>
+                                <span style={{ color: blocked ? T.muted : T.forge, minWidth: 0 }}>
+                                    <span style={{ fontWeight: 600 }}>{o.roomName ?? "Room"}</span>
+                                    <span style={{ color: T.muted, marginLeft: 8, fontSize: 11.5 }}>{o.reason}</span>
+                                </span>
+                                <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: o.classification === "recommended" ? T.pine : blocked ? T.ember : T.muted, flex: "0 0 auto" }}>
+                                    {o.classification === "recommended" ? "Recommended" : o.classification === "blocked" ? "Ineligible" : "Eligible"}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+            <div style={{ display: "flex", borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
+                <button type="button" onClick={onCancel} style={{ all: "unset", marginLeft: "auto", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
+                    Cancel
                 </button>
-                <button type="button" onClick={onDone} style={linkBtnStyle}>Cancel</button>
             </div>
         </div>
     );
 }
 
-function RoomRow({ option, selected, recommended }: { option: PlacementOption; selected?: boolean; recommended?: boolean }) {
-    const blocked = option.classification === "blocked";
+// ── Small presentational pieces ──────────────────────────────────────────────
+function Value({ children }: { children: ReactNode }) {
+    return <span style={{ fontSize: 13, fontWeight: 600, color: T.forge }}>{children}</span>;
+}
+function Empty({ children }: { children: ReactNode }) {
+    return <span style={{ fontSize: 12.5, color: T.muted, fontStyle: "italic" }}>{children}</span>;
+}
+function RecTag() {
+    return <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: T.pine }}>Recommended</span>;
+}
+function Thinking({ label }: { label: string }) {
     return (
-        <div
-            style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                border: selected ? "1px solid #00a283" : "1px solid #e4e7ec",
-                background: blocked ? "#f9fafb" : selected ? "rgba(0,162,131,.06)" : "#fff",
-                color: blocked ? "#98a2b3" : "#1d2939",
-                borderRadius: 8, padding: "8px 12px", fontSize: 13,
+        <div data-scheduling-thinking="true" style={{ display: "flex", alignItems: "center", gap: 8, padding: "18px 0", color: T.muted, fontSize: 12.5 }}>
+            <span style={{ width: 13, height: 13, borderRadius: "50%", border: `2px solid ${T.border}`, borderTopColor: T.pine, display: "inline-block", animation: "alloy-spin 0.7s linear infinite" }} />
+            <style>{"@keyframes alloy-spin{to{transform:rotate(360deg)}}"}</style>
+            {label}
+        </div>
+    );
+}
+function ErrorNote({ message }: { message: string }) {
+    return <div style={{ fontSize: 12, color: "#b42318", background: "#fef3f2", border: "1px solid #fecdca", borderRadius: 8, padding: "8px 10px" }}>{message}</div>;
+}
+function AlloyCheck({ checked, onChange, ...rest }: { checked: boolean; onChange: (v: boolean) => void } & Record<string, unknown>) {
+    return (
+        <span role="checkbox" aria-checked={checked} tabIndex={0} onClick={() => onChange(!checked)}
+            onKeyDown={(e) => {
+                if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    onChange(!checked);
+                }
             }}
-        >
-            <span>
-                <span style={{ fontWeight: 600 }}>{option.roomName ?? option.roomId}</span>
-                <span data-room-reason={recommended ? "recommended" : undefined} style={{ color: "#98a2b3", marginLeft: 8, fontSize: 11.5 }}>{option.reason}</span>
-            </span>
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: recommended ? "#00a283" : "#98a2b3" }}>
-                {recommended ? "Recommended" : option.classification}
-            </span>
-        </div>
+            {...rest}
+            style={{ width: 15, height: 15, borderRadius: 4, border: checked ? `1px solid ${T.pine}` : `2px solid ${T.mid40}`, background: checked ? T.pine : "#fff", display: "inline-grid", placeItems: "center", cursor: "pointer", flex: "0 0 auto" }}>
+            {checked && (
+                <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.5 6.2 5 8.5 9.5 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            )}
+        </span>
     );
 }
-
-function FinRow({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) {
-    return (
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: strong ? 13 : 12.5, fontWeight: strong ? 700 : 500, color: muted ? "#667085" : "#1d2939" }}>
-            <span>{label}</span>
-            <span>{value}</span>
-        </div>
-    );
+function label(s: string) {
+    return <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: T.mid40, marginBottom: 7 }}>{s}</div>;
 }
-
-function sectionLabel(s: string) {
-    return (
-        <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#98a2b3", marginBottom: 5 }}>
-            {s}
-        </div>
-    );
+function primaryBtn(disabled: boolean): CSSProperties {
+    return { fontSize: 12.5, fontWeight: 600, color: "#fff", background: disabled ? "#98a2b3" : T.pine, border: "none", borderRadius: 7, padding: "8px 16px", cursor: disabled ? "default" : "pointer" };
 }
 
 const rowBtnStyle: CSSProperties = {
@@ -686,44 +972,15 @@ const rowBtnStyle: CSSProperties = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 10,
     width: "100%",
     boxSizing: "border-box",
     cursor: "pointer",
-    border: "1px solid #e4e7ec",
+    border: `1px solid ${T.border}`,
     borderRadius: 10,
-    padding: "9px 12px",
+    padding: "8px 12px",
     background: "#fff",
 };
-const selStyle: CSSProperties = {
-    width: "100%",
-    fontSize: 13,
-    padding: "6px 9px",
-    borderRadius: 8,
-    border: "1px solid #e4e7ec",
-    background: "#fff",
-    color: "#1d2939",
-    boxSizing: "border-box",
-};
-const linkBtnStyle: CSSProperties = {
-    all: "unset",
-    cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#00a283",
-};
-const fieldLabelStyle: CSSProperties = { display: "grid", gap: 3 };
-function patternChipStyle(on: boolean, custom = false): CSSProperties {
-    return {
-        all: "unset",
-        cursor: custom ? "default" : "pointer",
-        fontSize: 12,
-        fontWeight: 600,
-        lineHeight: 1,
-        padding: "7px 11px",
-        borderRadius: 999,
-        boxSizing: "border-box",
-        background: on ? "rgba(0,162,131,.12)" : "#f2f4f7",
-        color: on ? "#00a283" : "#667085",
-        border: on ? "1px solid rgba(0,162,131,.45)" : "1px solid transparent",
-    };
-}
+const selStyle: CSSProperties = { fontSize: 13, padding: "6px 9px", borderRadius: 8, border: `1px solid ${T.border}`, background: "#fff", color: T.forge, boxSizing: "border-box" };
+const timeStyle: CSSProperties = { ...selStyle, width: 118 };
+const patternChip: CSSProperties = { all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.slate, background: T.stone, border: `1px solid ${T.border}`, borderRadius: 999, padding: "6px 11px" };

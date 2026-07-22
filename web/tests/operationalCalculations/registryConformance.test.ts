@@ -127,7 +127,7 @@ const capBase: CapacityCalculationRequest["params"] = {
 // ---------------------------------------------------------------------------
 
 describe("registry — the registered keys resolve and resolution fails closed", () => {
-    it("registers the resource/capacity family (V1) plus the scheduling/occupancy family (Phase 6)", () => {
+    it("registers the resource/capacity family (V1), the scheduling/occupancy family (Phase 6), and placement room-fit", () => {
         const keys = listOperationalCalculationDefinitions()
             .map((d) => d.key)
             .sort();
@@ -136,6 +136,7 @@ describe("registry — the registered keys resolve and resolution fails closed",
             "capacity.room_binding",
             "occupancy.actual",
             "occupancy.expected",
+            "placement.room_fit",
             "resource.ratio",
             "resource.required_staff",
             "scheduling.actual_staffing",
@@ -161,8 +162,11 @@ describe("registry — the registered keys resolve and resolution fails closed",
         expect(listOperationalCalculationDefinitionsByFamily("resource_requirements")).toHaveLength(2);
         expect(listOperationalCalculationDefinitionsByFamily("occupancy")).toHaveLength(2);
         expect(listOperationalCalculationDefinitionsByFamily("scheduling")).toHaveLength(2);
-        // All four resource/capacity defs plus all four scheduling/occupancy defs declare `scheduling`.
-        expect(listOperationalCalculationDefinitionsByConsumer("scheduling")).toHaveLength(8);
+        expect(listOperationalCalculationDefinitionsByFamily("placement").map((d) => d.key)).toEqual(["placement.room_fit"]);
+        // The four resource/capacity defs, the four scheduling/occupancy defs, and
+        // placement.room_fit all declare `scheduling` as a consumer.
+        expect(listOperationalCalculationDefinitionsByConsumer("scheduling")).toHaveLength(9);
+        expect(listOperationalCalculationDefinitionsByConsumer("placement").map((d) => d.key)).toContain("placement.room_fit");
     });
 
     it("every registered definition carries the V1 governance core", () => {

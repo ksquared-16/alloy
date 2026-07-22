@@ -1,114 +1,142 @@
+/**
+ * placement.room_fit — hard eligibility BEFORE ranking; age as of the proposed
+ * effective date; capacity/headroom never overrides age or program; an ineligible
+ * room is never rank 0 (never Recommended). Covers the required deterministic set.
+ */
 import { describe, expect, it } from "vitest";
 import {
-    classifyPlacementOptions,
-    DEFAULT_RECOMMENDATION_POLICY,
-    type RoomOccupancyDelta,
-} from "@/lib/scheduling/options/generatePlacementOptions";
+    ageInMonthsAsOf,
+    computeRoomFit,
+    DEFAULT_ROOM_FIT_POLICY,
+    type RoomFitCandidate,
+    type RoomFitRequest,
+} from "@/lib/operationalCalculations/families/placement";
 
-function delta(
-    roomId: string,
-    afterPeakOccupancy: number,
-    blockers: string[] = [],
-    roomName = roomId,
-    extra: Partial<Pick<RoomOccupancyDelta, "programMatch" | "continuity">> = {}
-): RoomOccupancyDelta {
+/** A fully-eligible candidate; override fields per case. */
+function room(id: string, over: Partial<RoomFitCandidate> = {}): RoomFitCandidate {
     return {
-        roomId,
-        roomName,
-        beforePeakOccupancy: afterPeakOccupancy - 1,
-        afterPeakOccupancy,
-        blockers,
-        ...extra,
+        roomId: id,
+        roomName: id,
+        active: true,
+        ageBand: null,
+        programMatch: true,
+        programKnown: true,
+        continuity: false,
+        scheduleEligible: true,
+        withinOperatingWindow: true,
+        capacityExceeded: false,
+        occupancyAfter: 8,
+        capacityHeadroom: null,
+        ...over,
     };
 }
+function req(candidates: RoomFitCandidate[], over: Partial<RoomFitRequest> = {}): RoomFitRequest {
+    return { asOf: "2026-08-24", childAgeMonths: 48, dobKnown: true, candidates, ...over };
+}
+const recommended = (entries: ReturnType<typeof computeRoomFit>["entries"]) => entries.find((e) => e.rank === 0) ?? null;
 
-describe("classifyPlacementOptions", () => {
-    it("recommends the eligible room with the most headroom (lowest resulting occupancy)", () => {
-        const opts = classifyPlacementOptions([
-            delta("sunflower", 11),
-            delta("sunshine", 8),
-            delta("rainbow", 10),
-        ]);
-        const recommended = opts.filter((o) => o.classification === "recommended");
-        expect(recommended).toHaveLength(1);
-        expect(recommended[0].roomId).toBe("sunshine");
-        expect(recommended[0].reason).toContain("Most headroom");
-        // recommended sorts first
-        expect(opts[0].roomId).toBe("sunshine");
+describe("ageInMonthsAsOf", () => {
+    it("honours the day of month when computing whole months (ages in on the birthday)", () => {
+        expect(ageInMonthsAsOf("2023-08-25", "2026-08-24")).toBe(35); // 1 day before the 3rd birthday
+        expect(ageInMonthsAsOf("2023-08-24", "2026-08-24")).toBe(36); // exactly 3 years
+        expect(ageInMonthsAsOf("2023-08-23", "2026-08-24")).toBe(36);
     });
-
-    it("marks rooms with blockers as blocked and never recommends them", () => {
-        const opts = classifyPlacementOptions([
-            delta("full", 12, ["expected 12 exceeds capacity 11"]),
-            delta("sunshine", 9),
-        ]);
-        const full = opts.find((o) => o.roomId === "full")!;
-        expect(full.classification).toBe("blocked");
-        expect(full.reason).toBe("expected 12 exceeds capacity 11");
-        expect(opts.find((o) => o.classification === "recommended")!.roomId).toBe("sunshine");
+    it("returns null for unknown/unparseable DOB (age cannot gate)", () => {
+        expect(ageInMonthsAsOf(null, "2026-08-24")).toBeNull();
+        expect(ageInMonthsAsOf("", "2026-08-24")).toBeNull();
     });
+});
 
-    it("recommends nothing when every candidate is blocked (no valid room)", () => {
-        const opts = classifyPlacementOptions([
-            delta("a", 12, ["capacity"]),
-            delta("b", 13, ["age group ineligible"]),
-        ]);
-        expect(opts.every((o) => o.classification === "blocked")).toBe(true);
-        expect(opts.some((o) => o.classification === "recommended")).toBe(false);
-    });
-
-    it("breaks headroom ties stably by room id", () => {
-        const opts = classifyPlacementOptions([delta("bravo", 8), delta("alpha", 8)]);
-        expect(opts[0].classification).toBe("recommended");
-        expect(opts[0].roomId).toBe("alpha");
-    });
-
-    it("prefers the program/age-matched room over merely emptier rooms (headroom alone is not sufficient)", () => {
-        const opts = classifyPlacementOptions([
-            delta("empty_wrong_age", 3, [], "empty_wrong_age", { programMatch: false }),
-            delta("program_room", 9, [], "program_room", { programMatch: true }),
-        ]);
-        const rec = opts.find((o) => o.classification === "recommended")!;
-        expect(rec.roomId).toBe("program_room");
-        expect(rec.reason).toContain("Right room for the program");
-    });
-
-    it("prefers continuity when no program match distinguishes the rooms", () => {
-        const opts = classifyPlacementOptions([
-            delta("new_empty", 4, [], "new_empty", { continuity: false }),
-            delta("current_room", 7, [], "current_room", { continuity: true }),
-        ]);
-        const rec = opts.find((o) => o.classification === "recommended")!;
-        expect(rec.roomId).toBe("current_room");
-        expect(rec.reason).toContain("continuity");
-    });
-
-    it("never recommends a blocked room even when it is the program match", () => {
-        const opts = classifyPlacementOptions([
-            delta("program_full", 12, ["expected 12 exceeds capacity 11"], "program_full", { programMatch: true }),
-            delta("open_room", 8, [], "open_room", { programMatch: false }),
-        ]);
-        expect(opts.find((o) => o.roomId === "program_full")!.classification).toBe("blocked");
-        expect(opts.find((o) => o.classification === "recommended")!.roomId).toBe("open_room");
-    });
-
-    it("honors a configured policy that puts headroom first", () => {
-        const headroomFirst = { factors: ["headroom", "program_match", "continuity"] as const };
-        const opts = classifyPlacementOptions(
-            [
-                delta("program_room", 9, [], "program_room", { programMatch: true }),
-                delta("emptier", 3, [], "emptier", { programMatch: false }),
-            ],
-            { factors: [...headroomFirst.factors] }
+describe("computeRoomFit — hard eligibility before ranking", () => {
+    it("child too young for Pre-K by the effective date is INELIGIBLE (never recommended)", () => {
+        // Blake: 34 months old on Aug 24; Pre-K requires 36 months.
+        const { entries } = computeRoomFit(
+            req([room("prek", { ageBand: { minMonths: 36, maxMonths: 60 }, occupancyAfter: 3 })], { childAgeMonths: 34 }),
         );
-        expect(opts.find((o) => o.classification === "recommended")!.roomId).toBe("emptier");
+        const prek = entries.find((e) => e.roomId === "prek")!;
+        expect(prek.eligible).toBe(false);
+        expect(prek.rank).toBeNull();
+        expect(prek.ineligibleReasons.map((r) => r.ruleId)).toContain("age.min");
+        expect(recommended(entries)).toBeNull();
     });
 
-    it("default policy leads with program match, then continuity, then headroom", () => {
-        expect(DEFAULT_RECOMMENDATION_POLICY.factors).toEqual([
-            "program_match",
-            "continuity",
-            "headroom",
-        ]);
+    it("child who AGES INTO Pre-K by the effective date is eligible", () => {
+        // 35 months today, but turns 36 months on the Aug 24 start date.
+        const { entries } = computeRoomFit(
+            req([room("prek", { ageBand: { minMonths: 36, maxMonths: 60 } })], { childAgeMonths: 36 }),
+        );
+        const prek = entries.find((e) => e.roomId === "prek")!;
+        expect(prek.eligible).toBe(true);
+        expect(prek.explanation).toContain("Age eligible on Aug 24");
+    });
+
+    it("an INACTIVE room is ineligible", () => {
+        const { entries } = computeRoomFit(req([room("closed", { active: false })]));
+        const closed = entries.find((e) => e.roomId === "closed")!;
+        expect(closed.eligible).toBe(false);
+        expect(closed.ineligibleReasons.map((r) => r.ruleId)).toContain("room.active");
+    });
+
+    it("a room AT CAPACITY is ineligible", () => {
+        const { entries } = computeRoomFit(req([room("full", { capacityExceeded: true })]));
+        expect(entries.find((e) => e.roomId === "full")!.eligible).toBe(false);
+    });
+
+    it("a PROGRAM MISMATCH (known program) is ineligible", () => {
+        const { entries } = computeRoomFit(req([room("wrong", { programMatch: false, programKnown: true })]));
+        const wrong = entries.find((e) => e.roomId === "wrong")!;
+        expect(wrong.eligible).toBe(false);
+        expect(wrong.ineligibleReasons.map((r) => r.ruleId)).toContain("program.compatible");
+    });
+
+    it("multiple eligible rooms rank by headroom (lower resulting occupancy first)", () => {
+        const { entries } = computeRoomFit(
+            req([room("busy", { occupancyAfter: 11 }), room("open", { occupancyAfter: 6 }), room("mid", { occupancyAfter: 9 })]),
+        );
+        expect(recommended(entries)!.roomId).toBe("open");
+        // recommended sorts first in display order
+        expect(entries[0].roomId).toBe("open");
+    });
+
+    it("NO eligible room ⇒ nothing recommended", () => {
+        const { entries, warnings } = computeRoomFit(
+            req([room("a", { active: false }), room("b", { capacityExceeded: true })]),
+        );
+        expect(entries.every((e) => !e.eligible)).toBe(true);
+        expect(recommended(entries)).toBeNull();
+        expect(warnings.map((w) => w.code)).toContain("no_eligible_room");
+    });
+
+    it("capacity/headroom NEVER overrides age: an emptier but age-ineligible room loses to an eligible one", () => {
+        const { entries } = computeRoomFit(
+            req(
+                [
+                    room("prek_empty", { ageBand: { minMonths: 36, maxMonths: 60 }, occupancyAfter: 1 }),
+                    room("toddler_busy", { ageBand: { minMonths: 18, maxMonths: 35 }, occupancyAfter: 10 }),
+                ],
+                { childAgeMonths: 30 }, // eligible for toddler, too young for Pre-K
+            ),
+        );
+        expect(entries.find((e) => e.roomId === "prek_empty")!.eligible).toBe(false);
+        expect(recommended(entries)!.roomId).toBe("toddler_busy");
+    });
+
+    it("fails OPEN on unknown DOB — age cannot gate, result is honest (incomplete + warning)", () => {
+        const { entries, warnings } = computeRoomFit(
+            req([room("prek", { ageBand: { minMonths: 36, maxMonths: 60 } })], { childAgeMonths: null, dobKnown: false }),
+        );
+        expect(entries.find((e) => e.roomId === "prek")!.eligible).toBe(true);
+        expect(warnings.map((w) => w.code)).toContain("child_dob_unknown");
+    });
+
+    it("default policy leads with program, then continuity, then headroom", () => {
+        expect(DEFAULT_ROOM_FIT_POLICY.factors).toEqual(["program_match", "continuity", "headroom"]);
+    });
+
+    it("prefers continuity when headroom/program do not distinguish eligible rooms", () => {
+        const { entries } = computeRoomFit(
+            req([room("new", { occupancyAfter: 8, continuity: false }), room("current", { occupancyAfter: 8, continuity: true })]),
+        );
+        expect(recommended(entries)!.roomId).toBe("current");
     });
 });

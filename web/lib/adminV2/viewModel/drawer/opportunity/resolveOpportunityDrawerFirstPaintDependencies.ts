@@ -9,6 +9,7 @@ import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import { drawerFirstPaintDependenciesSettled } from "@/lib/adminV2/viewModel/drawer/drawerFirstPaint";
 import { loadOpportunityActiveTourBookingsForViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityActiveTourBookingsForViewModel";
 import { loadOpportunityScheduledSendsPreview } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityScheduledSendsPreview";
+import { loadSchedulingProjectionsForFirstPaint } from "@/lib/adminV2/viewModel/drawer/opportunity/loadSchedulingProjectionsForFirstPaint";
 import {
     opportunityFirstPaintDependencySatisfiedFromRecord,
     opportunityTourBookingsFetchRequired,
@@ -92,11 +93,12 @@ export async function resolveOpportunityDrawerFirstPaintDependencies(
     const needsAttention = planIncludes(params.dependencies, "attention_bundle");
     const needsHeaderActions = planIncludes(params.dependencies, "header_actions");
     const needsScheduledSends = planIncludes(params.dependencies, "scheduled_sends");
+    const needsScheduling = planIncludes(params.dependencies, "scheduling_projection");
     const needsTourBookings =
         planIncludes(params.dependencies, "tour_bookings") && opportunityTourBookingsFetchRequired(params.record);
 
     const tParallel0 = Date.now();
-    const [attentionBundle, headerActions, reminders, tourBookings] = await Promise.all([
+    const [attentionBundle, headerActions, reminders, tourBookings, schedulingProjection] = await Promise.all([
         needsAttention ?
             attachOpportunityAttentionSuggestionBundle({
                 supabase: params.supabase,
@@ -143,6 +145,9 @@ export async function resolveOpportunityDrawerFirstPaintDependencies(
         needsTourBookings ?
             loadOpportunityActiveTourBookingsForViewModel(params.supabase, params.gate.orgId, params.opportunityId)
         :   Promise.resolve([] as TourBookingRow[]),
+        needsScheduling ?
+            loadSchedulingProjectionsForFirstPaint(params.supabase, params.gate.orgId, params.record)
+        :   Promise.resolve(null),
     ]);
     phases_ms.first_paint_dependencies_ms = Date.now() - tParallel0;
 
@@ -219,6 +224,16 @@ export async function resolveOpportunityDrawerFirstPaintDependencies(
             data.tour_bookings = bookings;
             finalize("tour_bookings", readyState("tour_bookings", bookings.length === 0, "server_fetch"));
         }
+    }
+
+    if (needsScheduling) {
+        const projection = schedulingProjection ?? { byMemberId: {}, asOf: "" };
+        data.scheduling_projection = projection;
+        // Attach to the record so the Scheduling card reads it synchronously from
+        // context.truth (reveals with the panel; no per-child client fetch).
+        record_patches._scheduling_projection = projection;
+        const empty = Object.keys(projection.byMemberId).length === 0;
+        finalize("scheduling_projection", readyState("scheduling_projection", empty, "server_fetch"));
     }
 
     return { dependencies, data, record_patches, phases_ms };

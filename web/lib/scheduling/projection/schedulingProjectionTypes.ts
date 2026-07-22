@@ -14,6 +14,15 @@
  * enriched from the Billing projection (Billing owns money).
  */
 
+/**
+ * V2 REQUIREMENT (not V1 — do not expand the V1 storage/editor for this):
+ * **Rotating schedules** — Week A / Week B and other multi-week rotations. V1 stores a
+ * single weekly pattern per schedule (weekdays + daily hours). A rotation needs a
+ * multi-week cycle model (an ordered set of week-patterns with a cycle length + anchor
+ * date) on the assignment/participation store, plus editor affordances to author each
+ * week. Deferred to V2; V1 authors one week only.
+ */
+
 /** Lifecycle bucket an assignment resolves into for a given `asOf` date. */
 export type SchedulingLifecycleBucket = "current" | "upcoming" | "temporary";
 
@@ -58,6 +67,10 @@ export type ScheduleView = {
     openEnded: boolean;
     temporary: boolean;
     assignments: Assignment[]; // 1+ (split-week = several)
+    /** The schedule type (e.g. `full_day`) resolved for the pattern; drives re-save. */
+    scheduleType?: string | null;
+    /** Configured label for the schedule type (e.g. "Full Day") — never a raw key. */
+    scheduleTypeLabel?: string | null;
     rate: SchedulingMoney | "pending";
     projectedTuition: SchedulingMoney | null;
     fundingApplies?: boolean;
@@ -72,6 +85,7 @@ export type ScheduleHistoryEntry = {
 
 export type ChildSchedulingStatus =
     | "scheduled"
+    | "proposed"
     | "needs-placement"
     | "upcoming-only"
     | "ended";
@@ -110,6 +124,13 @@ export type ChildScheduling = {
     child: ChildSchedulingSubject;
     status: ChildSchedulingStatus;
     current: ScheduleView | null;
+    /**
+     * A pre-enrollment PROPOSED schedule drafted on the child's enrollment
+     * participation (`process_instances.metadata`), when no committed `current`
+     * exists. Planning-only until enrollment materializes it. Null when neither a
+     * committed schedule nor a draft exists (true empty state).
+     */
+    proposed: ScheduleView | null;
     upcoming: ScheduleView[];
     temporary: ScheduleView[];
     history: ScheduleHistoryEntry[];
