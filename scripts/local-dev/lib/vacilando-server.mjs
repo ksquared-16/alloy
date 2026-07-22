@@ -20,7 +20,8 @@
  *   POST /api/commands        → confirm+execute a command through the registry
  *   GET  /                    → the SPA shell (static, path-traversal safe)
  */
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
 import { dirname } from "node:path";
@@ -33,6 +34,8 @@ import { readAuditEvents } from "./vacilando/commands/audit.mjs";
 import { collectResources } from "./vacilando/resources.mjs";
 import { workerOutputs, evidenceFilePath } from "./vacilando/outputs.mjs";
 import { readDirectorLog } from "./vacilando/commands/director.mjs";
+import { prForWorktree } from "./vacilando/github.mjs";
+import { collectPolicies } from "./vacilando/policies.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const LOOPBACK_HOST = "127.0.0.1";
@@ -74,17 +77,33 @@ function statusForStage(out) {
   return 400;
 }
 
+/** Build id from the SPA assets' size+mtime — changes whenever a file changes,
+ *  so versioned asset URLs bust the browser cache automatically. */
+function assetBuildId() {
+  let s = "";
+  for (const f of ["app.js", "styles.css", "index.html"]) {
+    try { const st = statSync(join(PUBLIC_DIR, f)); s += `${f}:${st.size}:${Math.round(st.mtimeMs)};`; } catch {}
+  }
+  return createHash("sha1").update(s).digest("hex").slice(0, 10);
+}
+
 function serveStatic(res, urlPath) {
   const rel = urlPath === "/" ? "index.html" : urlPath.replace(/^\/+/, "");
   const full = normalize(join(PUBLIC_DIR, rel));
-  if (!full.startsWith(PUBLIC_DIR)) {
-    // Path traversal — fail closed to the shell.
-    return serveStatic(res, "/");
-  }
+  if (!full.startsWith(PUBLIC_DIR)) return serveStatic(res, "/"); // path traversal → shell
   if (!existsSync(full) || !statSync(full).isFile()) {
     if (rel !== "index.html") return serveStatic(res, "/"); // SPA fallback
     res.writeHead(404, { "Content-Type": "text/plain" });
     return res.end("Vacilando SPA shell missing");
+  }
+  // The shell is rewritten to version its asset URLs, and is always no-store,
+  // so a fresh page load can never run a stale app.js/styles.css.
+  if (rel === "index.html") {
+    const v = assetBuildId();
+    let html = readFileSync(full, "utf8")
+      .replace(/(src|href)="(app\.js|styles\.css)"/g, `$1="$2?v=${v}"`);
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, must-revalidate", "X-Vacilando-Build": v });
+    return res.end(html);
   }
   res.writeHead(200, { "Content-Type": MIME[extname(full)] || "application/octet-stream", "Cache-Control": "no-store" });
   createReadStream(full).pipe(res);
@@ -199,6 +218,15 @@ export function createVacilandoServer() {
       const slot = Number(url.searchParams.get("slot"));
       if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, log: readDirectorLog(slot) });
+    }
+    if (path === "/api/pr") {
+      const wt = url.searchParams.get("worktree") || "";
+      const br = url.searchParams.get("branch") || "";
+      if (!/^[a-z0-9][a-z0-9._-]*$/i.test(wt)) return sendJson(res, 400, { error: "bad_worktree" });
+      return sendJson(res, 200, await prForWorktree(wt, br));
+    }
+    if (path === "/api/policies") {
+      return sendJson(res, 200, await collectPolicies());
     }
     if (path === "/api/evidence") {
       const full = evidenceFilePath(url.searchParams.get("worktree") || "", url.searchParams.get("file") || "");

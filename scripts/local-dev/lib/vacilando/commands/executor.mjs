@@ -77,7 +77,7 @@ export async function runCommand(req, ctx) {
 
   // 5. PREVIEW (pure; never executes).
   const preview = def.preview ? def.preview(value, target, snapshot) : { summary: def.title, effects: [] };
-  const willRun = def.execution === "cli" ? { bin: def.bin, args: def.buildArgv(value) } : { internal: true };
+  const willRun = def.execution === "cli" ? { bin: def.bin, args: def.buildArgv(value, snapshot) } : { internal: true };
 
   if (mode === "preview") {
     return {
@@ -92,6 +92,14 @@ export async function runCommand(req, ctx) {
     writeAuditEvent({ actor, command: def.key, input: value, target, preview_summary: preview.summary, confirmed: false, outcome: "refused", error: "confirmation_required" }, nowMs);
     return { ok: false, stage: "confirm", code: "confirmation_required", command: def.key, target, preview, will_run: willRun };
   }
+  // 6b. TYPED CONFIRM (destructive commands require the operator to type an exact phrase).
+  if (def.typedConfirm) {
+    const need = def.typedConfirm(value);
+    if (!req.confirm_text || req.confirm_text !== need) {
+      writeAuditEvent({ actor, command: def.key, input: value, target, preview_summary: preview.summary, confirmed: false, outcome: "refused", error: "typed_confirmation_required" }, nowMs);
+      return { ok: false, stage: "confirm", code: "typed_confirmation_required", command: def.key, target, preview, typed_confirm_phrase: need };
+    }
+  }
 
   // 7. EXECUTE — only through the registered adapter.
   let result;
@@ -101,13 +109,15 @@ export async function runCommand(req, ctx) {
     result = { kind: "internal", data };
     ok = data && data.ok === false ? false : true;
   } else {
-    const binPath = join(TOOLKIT_DIR, def.bin);
-    // Fixed path under the toolkit; never a request-supplied path.
-    if (!existsSync(binPath) || !statSync(binPath).isFile()) {
+    // Fixed bin: either a toolkit command (resolved under TOOLKIT_DIR) or an
+    // allowlisted system VCS binary (git/gh, resolved from PATH by execFile).
+    const SYSTEM_BINS = new Set(["git", "gh"]);
+    const binPath = SYSTEM_BINS.has(def.bin) ? def.bin : join(TOOLKIT_DIR, def.bin);
+    if (!SYSTEM_BINS.has(def.bin) && (!existsSync(binPath) || !statSync(binPath).isFile())) {
       writeAuditEvent({ actor, command: def.key, input: value, target, preview_summary: preview.summary, confirmed: req.confirm === true, outcome: "failed", error: `binary_missing: ${def.bin}` }, nowMs);
       return { ok: false, stage: "execute", code: "binary_missing", command: def.key, bin: def.bin };
     }
-    const argv = def.buildArgv(value);
+    const argv = def.buildArgv(value, snapshot);
     const r = await runCli(binPath, argv);
     ok = r.exit === 0;
     result = { kind: "cli", bin: def.bin, args: argv, exit: r.exit, stdout: truncate(r.stdout), stderr: truncate(r.stderr), timed_out: r.timedOut };

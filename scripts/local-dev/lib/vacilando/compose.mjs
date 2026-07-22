@@ -25,6 +25,7 @@ import { projectWorkers, workerCounts } from "./worker.mjs";
 import { projectRepository } from "./repository.mjs";
 import { projectApprovals } from "./approval.mjs";
 import { projectActivity } from "./activity.mjs";
+import { reviewDispositions } from "./commands/review.mjs";
 
 const PERMANENT_SLOTS = 6;
 
@@ -83,7 +84,7 @@ export async function composeSnapshot(opts = {}) {
   const sprints = projectSprints(sprintsCtx);
   const workers = projectWorkers(sprintsCtx);
   const repository = projectRepository(sprintsCtx, { root: raw.root, base });
-  const approvals = projectApprovals(raw.initiatives || [], slotByInitiative);
+  const approvals = projectApprovals(raw.initiatives || [], slotByInitiative, reviewDispositions());
   const activity = projectActivity(sprintsCtx);
   const project = projectProject({ root: raw.root, base }, sprints);
 

@@ -18,26 +18,32 @@ const shortBranch = (b, wt) => (b ? b.replace(/^agent\/[^/]+\//, "") : wt || "�
 const state = { snap: null, res: null, sel: null, tab: "overview", outputs: {}, director: {} };
 
 // -------- routing (Command Center / Work History / Settings) --------
-function route() { return (location.hash.replace(/^#\/?/, "") || "command").split("/")[0]; }
+function parseRoute() { const p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean); return { name: p[0] || "command", sub: p[1], param: p[2] }; }
+function route() { return parseRoute().name; }
 function go(r) { location.hash = "#/" + r; }
-const CRUMBS = { command: "Command Center", history: "Work History", settings: "Settings" };
-function setActiveNav(r) {
-  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === r));
-  $("#crumb").textContent = CRUMBS[r] || "Command Center";
+const CRUMBS = { command: "Command Center", history: "Work History", policies: "Policies", settings: "Settings" };
+function setActiveNav(name) {
+  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === name));
+  $("#crumb").textContent = CRUMBS[name] || "Command Center";
 }
 
 let lastKey = null;
 function render(force) {
   if (document.querySelector(".ov")) return;
-  const r = route();
-  const key = r + "|" + (state.snap?.generated_at || "") + "|" + (state.res?.overall?.mem_used_pct ?? "") + "|" + state.sel + "|" + state.tab + "|" + Object.keys(state.outputs).length + "|" + Object.keys(state.director).length;
+  const r = parseRoute();
+  // The URL drives selection so reload + back/forward preserve the selected worker.
+  if (r.name === "command" && r.sub === "worker" && r.param) {
+    const n = Number(r.param);
+    if (n !== state.sel) { state.sel = n; if (!state.tab || state.tab === "overview") state.tab = "work"; const sp = state.snap?.sprints.find((x) => x.slot === n); if (sp) { fetchOutputs(sp.worktree); fetchDirector(n); fetchPr(sp); } }
+  }
+  const key = location.hash + "|" + (state.snap?.generated_at || "") + "|" + (state.res?.overall?.mem_used_pct ?? "") + "|" + state.sel + "|" + state.tab + "|" + Object.keys(state.outputs).length + "|" + Object.keys(state.director).length + "|" + Object.keys(state._pr || {}).length;
   if (!force && key === lastKey) return;
   lastKey = key;
-  setActiveNav(r);
+  setActiveNav(r.name);
   const V = $("#view");
   if (!state.snap || !state.snap.headline) { V.innerHTML = `<div class="empty"><div class="big">Connecting to the runtime…</div></div>`; return; }
-  if (state.sel == null && state.snap.sprints[0]) select(state.snap.sprints[0].slot, false);
-  V.innerHTML = ({ command: viewCommand, history: viewHistory, settings: viewSettings }[r] || viewCommand)();
+  if (state.sel == null && state.snap.sprints[0]) { state.sel = state.snap.sprints[0].slot; const sp = state.snap.sprints[0]; state.tab = state.tab || "work"; fetchOutputs(sp.worktree); fetchDirector(sp.slot); fetchPr(sp); }
+  V.innerHTML = ({ command: viewCommand, history: viewHistory, policies: viewPolicies, settings: viewSettings }[r.name] || viewCommand)();
   $("#nb-needs").textContent = state.snap ? needsYou().length : 0;
 }
 
@@ -56,7 +62,7 @@ function viewCommand() {
 function needsYouHtml() {
   const items = needsYou();
   return `<div class="rail-hh">Needs You <span class="b">${items.length}</span></div>` +
-    (items.length ? items.map((it) => `<div class="rcard" ${it.sel ? `data-sel="${it.sel}"` : ""} ${it.route ? `data-nav="${it.route}"` : ""}><span class="sd ${it.k}"></span><div><div class="rt">${esc(it.t)}</div><div class="rs trunc">${esc(it.s)}</div></div></div>`).join("") : `<div class="rempty">All clear.</div>`);
+    (items.length ? items.map((it) => `<div class="rcard" ${it.sel ? `data-sel="${it.sel}"` : ""} ${it.route ? `data-nav="${it.route}"` : ""} ${it.review ? `data-review="${esc(it.review)}"` : ""}><span class="sd ${it.k}"></span><div><div class="rt">${esc(it.t)}</div><div class="rs trunc">${esc(it.s)}</div></div></div>`).join("") : `<div class="rempty">All clear.</div>`);
 }
 
 function resFor(slot) { return (state.res?.workers || []).find((w) => w.slot === slot) || null; }
@@ -100,7 +106,13 @@ function operatingSurface() {
   if (!sp) return `<div class="empty">Select a worker.</div>`;
   const w = state.snap.workers.find((x) => x.slot === sp.slot);
   const r = resFor(sp.slot);
-  const tabs = ["overview", "outputs", "director"];
+  const tabs = ["work", "director", "outputs", "resources", "repository", "history"];
+  const tabContent = state.tab === "director" ? tabDirector(sp)
+    : state.tab === "outputs" ? tabOutputs(sp)
+    : state.tab === "resources" ? tabResources(sp, w, r)
+    : state.tab === "repository" ? tabRepository(sp)
+    : state.tab === "history" ? tabHistory(sp)
+    : tabOverview(sp, w, r);
   return `<div class="surf-h">
       <span class="gl big">${glyph(sp.glyph)}</span>
       <div class="surf-t"><div class="tt">${esc(sp.title)}</div>
@@ -112,7 +124,49 @@ function operatingSurface() {
         <button class="btn sm warn" data-end="${sp.slot}">End work</button>
       </div></div>
     <div class="tabs">${tabs.map((t) => `<button class="tab ${state.tab === t ? "on" : ""}" data-tab="${t}">${t}</button>`).join("")}</div>
-    <div class="tabc">${state.tab === "overview" ? tabOverview(sp, w, r) : state.tab === "outputs" ? tabOutputs(sp) : tabDirector(sp)}</div>`;
+    <div class="tabc">${tabContent}</div>`;
+}
+function tabResources(sp, w, r) {
+  const p = r?.server_process, o = state.res?.overall;
+  const kv = (a, b) => `<dt>${a}</dt><dd>${b}</dd>`;
+  return `<div class="cols2">
+    <div class="sec"><h5>This worker</h5><dl class="kv">
+      ${p ? kv("Server PID", `<span class="mono">${p.pid}</span>`) + kv("CPU", p.cpu_pct + "%") + kv("Memory", p.rss_mb + " MB (" + p.mem_pct + "%)") + kv("Elapsed", p.elapsed) + kv("State", p.state) : kv("Process", '<span class="muted">no active process confidently identified</span>')}
+      ${r ? kv("Port", r.port ? `:${r.port}` : "—") + kv("Disk", r.disk_mb != null ? `${(r.disk_mb / 1024).toFixed(1)} GB` : "—") : ""}
+      ${kv("Provider app", '<span class="muted">PID not tracked by toolkit</span>')}
+      ${kv("Provider usage", '<span class="muted">available per Director round-trip (see Director tab)</span>')}</dl></div>
+    <div class="sec"><h5>Machine</h5>${o ? `<dl class="kv">
+      ${kv("CPU load", `${o.cpu_load_pct}% (${o.load_1m}/${o.cpu_count})`)}${kv("Memory", `${o.mem_used_pct}% used · ${(o.mem_free_mb / 1024).toFixed(1)}G free`)}
+      ${kv("Servers", o.running_servers + " running")}${kv("Capacity", `${o.slots.occupied}/6 occupied · ${o.slots.recommended_available} recommended`)}${kv("Pressure", `<span class="pr ${o.slots.pressure}">${o.slots.pressure}</span>`)}</dl>
+      ${o.warning ? `<div class="rwarn">${esc(o.warning)}</div>` : ""}` : '<span class="muted">reading…</span>'}</div></div>`;
+}
+function tabRepository(sp) {
+  const pr = state._pr?.[sp.slot];
+  let prHtml;
+  if (!pr) prHtml = `<span class="muted">reading PR state…</span>`;
+  else if (pr.available === false) prHtml = `<span class="muted">PR state unavailable: ${esc(pr.reason || "")}</span>`;
+  else if (!pr.pr) prHtml = `<span class="chip idle">no PR</span> <span class="muted">— push, then open a draft PR</span>`;
+  else prHtml = `<span class="chip ${pr.pr.state === "MERGED" ? "complete" : pr.pr.draft ? "planning" : "running"}">${pr.pr.draft ? "draft" : esc((pr.pr.state || "").toLowerCase())}</span>
+      <a href="${esc(pr.pr.url)}" target="_blank" class="mono" style="margin-left:8px">#${pr.pr.number}</a>
+      · ${esc(pr.pr.base)} ← ${esc(pr.pr.head)} · checks ${pr.pr.checks.passed}/${pr.pr.checks.total} · ${esc(String(pr.pr.mergeable || "?").toLowerCase())}${pr.pr.review_decision ? " · " + esc(pr.pr.review_decision.toLowerCase()) : ""}`;
+  const kv = (a, b) => `<dt>${a}</dt><dd>${b}</dd>`;
+  return `<div class="sec"><h5>Repository</h5><dl class="kv">
+      ${kv("Worktree", `<span class="mono">${esc(sp.worktree)}</span>`)}${kv("Branch", `<span class="mono">${esc(sp.branch || "—")}</span>`)}
+      ${kv("Position", `↑${sp.git.ahead} ↓${sp.git.behind} · <span class="${sp.git.state === "dirty" ? "dirty" : "clean"}">${sp.git.state}</span>`)}
+      ${kv("Base", esc(state.snap.repository.base_ref) + " @ " + esc(state.snap.repository.base_sha || "—"))}
+      ${kv("Pull request", prHtml)}</dl></div>
+    <div class="sec"><h5>Governed actions (preview → confirm)</h5><div class="detail-actions">
+      <button class="btn" data-cmd="repository.push" data-slot="${sp.slot}">Push branch</button>
+      <button class="btn" data-prcmd="promotion.open_pr" data-slot="${sp.slot}">Open draft PR…</button>
+      <button class="btn" data-cmd="merge.execute" data-slot="${sp.slot}">Merge PR</button>
+      <button class="btn warn" data-delcmd="${sp.slot}">Delete worktree…</button></div>
+      <div class="muted" style="font-size:11px;margin-top:6px">Each previews the exact command; release/merge is never auto-approved; deletion needs a typed phrase and is blocked when dirty.</div></div>`;
+}
+function tabHistory(sp) {
+  const log = state.director[sp.slot] || [];
+  const commits = (state.outputs[sp.worktree]?.items || []).filter((i) => i.type === "commit").slice(0, 8);
+  return `<div class="sec"><h5>Director interactions</h5>${log.length ? log.slice(0, 8).map((m) => `<div class="commit"><span class="sh">${esc(m.delivery === "provider-round-trip" ? "ask" : "route")}</span><span class="trunc">${esc(m.message)}</span></div>`).join("") : '<span class="muted">none yet</span>'}</div>
+    <div class="sec"><h5>Recent commits</h5>${commits.length ? commits.map((c) => `<div class="commit"><span class="sh">${esc(c.short || "")}</span><span class="trunc">${esc(c.title)}</span></div>`).join("") : '<span class="muted">none</span>'}</div>`;
 }
 
 function tabOverview(sp, w, r) {
@@ -143,7 +197,14 @@ function tabOutputs(sp) {
   const o = state.outputs[sp.worktree];
   if (!o) { fetchOutputs(sp.worktree); return `<div class="muted" style="padding:14px">Loading outputs…</div>`; }
   if (!o.items.length) return `<div class="empty">No outputs yet for this worker.</div>`;
-  return `<div class="outputs">${o.items.map((it) => outputCard(it, sp.worktree)).join("")}</div>`;
+  const commits = o.items.filter((i) => i.type === "commit").length;
+  const shots = o.items.filter((i) => i.is_image).length;
+  const changed = o.items.find((i) => i.type === "changed-files");
+  return `<div class="worksum"><div class="ws-h">Current work summary <span class="muted">· grounded in real outputs</span></div>
+      <div class="ws-grid"><span>Latest: <b>${esc((o.items.find((i) => i.type === "commit")?.title || "—")).slice(0, 60)}</b></span>
+      <span>${commits} commits</span><span>${changed ? changed.title : "clean tree"}</span><span>${shots} screenshot${shots === 1 ? "" : "s"}</span>
+      <span>${sp.question_count ? `<span class="dirty">${sp.question_count} open question(s)</span>` : "no blockers"}</span></div></div>
+    <div class="outputs">${o.items.map((it) => outputCard(it, sp.worktree)).join("")}</div>`;
 }
 function outputCard(it, worktree) {
   const when = it.created_ms ? ago(it.created_ms) + " ago" : "";
@@ -162,11 +223,21 @@ function tabDirector(sp) {
   const log = state.director[sp.slot];
   if (log === undefined) { fetchDirector(sp.slot); }
   const items = log || [];
+  const msg = (m) => {
+    if (m.delivery === "provider-round-trip") {
+      return `<div class="dmsg ask"><div class="dm-h"><span class="who">You → ${esc(m.provider || "")} · slot ${m.slot}</span><span class="dt">${m.occurred_at ? new Date(m.occurred_at).toLocaleString() : ""}</span></div>
+        <div class="dm-b">${esc(m.message)}</div>
+        <div class="dm-resp ${m.response_ok ? "ok" : "err"}"><b>${esc(m.provider || "provider")}:</b> ${esc(m.response || m.response_error || "(no response)")}</div>
+        <div class="dm-f">round-trip${m.usage ? ` · ${m.usage.input_tokens ?? "?"}→${m.usage.output_tokens ?? "?"} tok${m.usage.cost_usd != null ? ` · $${m.usage.cost_usd}` : ""}` : ""}${m.duration_ms ? ` · ${(m.duration_ms / 1000).toFixed(1)}s` : ""}</div></div>`;
+    }
+    return `<div class="dmsg"><div class="dm-h"><span class="who">Director → slot ${m.slot}</span><span class="dt">${m.occurred_at ? new Date(m.occurred_at).toLocaleString() : ""}</span></div><div class="dm-b">${esc(m.message)}</div><div class="dm-f">${esc(m.delivery)}${m.clipboard_ok ? " · copied ✓" : ""}</div></div>`;
+  };
   return `<div class="director">
-    <div class="dintro">Compose an instruction for <b>${esc(sp.provider)} · slot ${sp.slot}</b>. Vacilando records it and copies it to your clipboard — <b>you paste it into the live session</b>. There is no governed way to inject text into a running Claude/Cursor session.</div>
-    <div class="dlog">${items.length ? items.map((m) => `<div class="dmsg"><div class="dm-h"><span class="who">Director → slot ${m.slot}</span><span class="dt">${m.occurred_at ? new Date(m.occurred_at).toLocaleString() : ""}</span></div><div class="dm-b">${esc(m.message)}</div><div class="dm-f">${esc(m.delivery)}${m.clipboard_ok ? " · copied ✓" : ""}</div></div>`).join("") : `<div class="empty">No instructions routed yet.</div>`}</div>
-    <div class="dcompose"><textarea id="d-msg" placeholder="e.g. Review the last change and tell me what to fix, then wait for my approval."></textarea>
-      <div class="drow"><span class="muted" style="font-size:11px">Preview → confirm → record + clipboard</span><button class="btn go" data-director="${sp.slot}">Route instruction →</button></div></div>
+    <div class="dintro"><b>Ask</b> sends a real governed round-trip to <b>${esc(sp.provider)}</b> (headless, worktree context) and shows the reply. <b>Route</b> records the instruction and copies it to your clipboard to paste into the live editor. Injecting into the running editor buffer is not available.</div>
+    <div class="dlog">${items.length ? items.map(msg).join("") : `<div class="empty">No interactions yet.</div>`}</div>
+    <div class="dcompose"><textarea id="d-msg" placeholder="e.g. Summarize your latest change and list any blockers. Do not modify files."></textarea>
+      <div class="drow"><span class="muted" style="font-size:11px">preview → confirm → ${sp.provider} responds (may incur cost)</span>
+        <div style="display:flex;gap:7px"><button class="btn" data-director="${sp.slot}">Route (clipboard)</button><button class="btn go" data-ask="${sp.slot}">Ask ${esc(sp.provider)} →</button></div></div></div>
   </div>`;
 }
 
@@ -175,8 +246,8 @@ function needsYou() {
   const out = [];
   for (const sp of state.snap.sprints) {
     if (sp.question_count > 0) out.push({ k: "q", t: `Question · slot ${sp.slot}`, s: sp.title, sel: sp.slot });
-    if (sp.status === "review") out.push({ k: "review", t: `Review · slot ${sp.slot}`, s: sp.title, sel: sp.slot });
   }
+  for (const rv of (state.snap.approvals?.reviews || [])) out.push({ k: "review", t: "Review required", s: rv.title || rv.initiative_key, review: rv.initiative_key });
   const o = state.res?.overall;
   if (o?.warning) out.push({ k: "warn", t: "Resource warning", s: o.warning });
   for (const w of (state.snap.workers || [])) if (w.health === "attention") out.push({ k: "warn", t: `Worker attention · slot ${w.slot}`, s: `${w.id} needs a look`, sel: w.slot });
@@ -207,38 +278,60 @@ function viewSettings() {
 }
 
 // -------- selection + data --------
-function select(slot, rerender = true) {
-  state.sel = slot; state.tab = "overview";
-  const sp = state.snap?.sprints.find((x) => x.slot === slot);
-  if (sp) { fetchOutputs(sp.worktree); fetchDirector(slot); }
-  if (rerender) render(true);
-}
+function select(slot) { go("command/worker/" + slot); } // URL drives selection (preserved on reload/back)
+state._pr = {};
 async function fetchOutputs(wt) { if (!wt) return; try { const r = await fetch(`/api/outputs?worktree=${encodeURIComponent(wt)}`); state.outputs[wt] = await r.json(); render(true); } catch {} }
 async function fetchDirector(slot) { try { const r = await fetch(`/api/director?slot=${slot}`); state.director[slot] = (await r.json()).log || []; render(true); } catch {} }
+async function fetchPr(sp) { if (!sp?.worktree) return; try { const r = await fetch(`/api/pr?worktree=${encodeURIComponent(sp.worktree)}&branch=${encodeURIComponent(sp.branch || "")}`); state._pr[sp.slot] = await r.json(); render(true); } catch {} }
 async function fetchAudit() { try { const r = await fetch("/api/audit"); state._audit = (await r.json()).events; render(true); } catch {} }
 async function fetchCommands() { try { const r = await fetch("/api/commands"); state._cmds = (await r.json()).commands; render(true); } catch {} }
+async function fetchPolicies() { try { const r = await fetch("/api/policies"); state._pol = await r.json(); render(true); } catch {} }
 async function fetchResources() { try { const r = await fetch("/api/resources"); state.res = await r.json(); render(); } catch {} }
+
+function viewPolicies() {
+  if (!state._pol) { fetchPolicies(); return `<div class="muted" style="padding:14px">Loading policies…</div>`; }
+  return `<div class="section-title">How the toolkit is configured today <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· read-only · authoritative sources</span></div>
+    <div class="polcols">${state._pol.groups.map((g) => `<section class="card polgroup"><div class="pg-h">${esc(g.title)}</div>
+      ${g.rows.map((r) => `<div class="prow"><div class="pn">${esc(r.name)}</div><div class="pvv">${esc(r.value)}</div>
+        <div class="pmeta"><span>src: ${esc(r.source)}</span><span>enforce: ${esc(r.enforcement)}</span><span>${r.configurable === "no" ? "fixed" : "configurable: " + esc(r.configurable)}</span>${r.related && r.related !== "—" ? `<span class="mono">${esc(r.related)}</span>` : ""}</div></div>`).join("")}
+    </section>`).join("")}</div>`;
+}
 
 // -------- command runtime --------
 async function api(p, b) { const r = await fetch(p, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }); return { status: r.status, data: await r.json() }; }
 async function startCommand(command, input) {
   const { data: pv } = await api("/api/commands/preview", { command, input });
-  if (!pv.ok) { toast("err", `Can't ${command}`, pv.reason || (pv.errors || []).join("; ") || pv.code); return; }
+  if (!pv.ok) { toast("err", `Can't ${command.replace(/\./g, " ")}`, pv.reason || (pv.errors || []).join("; ") || pv.code); return; }
   if (!pv.requires_confirmation) return execute(command, input, false);
-  showConfirm(pv, () => execute(command, input, true));
+  const long = command === "director.ask";
+  showConfirm(pv, () => { if (long) toast("ok", `${input.provider || "provider"} is thinking…`, "round-trip in progress"); execute(command, input, true); });
 }
-async function execute(command, input, confirm) {
-  const { data } = await api("/api/commands", { command, input, confirm, actor: "operator" });
+async function startCommandTyped(command, input, confirmText) {
+  const { data: pv } = await api("/api/commands/preview", { command, input });
+  if (!pv.ok) { toast("err", `Can't ${command}`, pv.reason || (pv.errors || []).join("; ") || pv.code); return; }
+  showConfirm(pv, () => execute(command, input, true, confirmText));
+}
+async function execute(command, input, confirm, confirmText) {
+  const body = { command, input, confirm, actor: "operator" };
+  if (confirmText) body.confirm_text = confirmText;
+  const { data } = await api("/api/commands", body);
   if (data.stage === "execute") {
-    const okc = data.result ? (data.result.exit === undefined || data.result.exit === 0) : data.ok;
-    const msg = data.result?.kind === "cli" ? (data.result.stdout || data.result.stderr || "") : (data.result?.data?.clipboard ? "recorded + copied to clipboard" : "done");
-    toast(okc ? "ok" : "err", `${command} ${okc ? "done" : "failed"}`, String(msg).split("\n").slice(0, 3).join("\n"));
+    const d = data.result?.data;
+    const okc = data.result ? (data.result.exit === undefined || data.result.exit === 0) && (d?.ok !== false) : data.ok;
+    let msg = data.result?.kind === "cli" ? (data.result.stdout || data.result.stderr || "") : "done";
+    if (command === "director.ask") msg = d?.response_ok ? `${d.provider}: ${d.response}` : `${d?.provider || "provider"}: ${d?.error || "no response"}`;
+    else if (command === "director.route") msg = "recorded + copied to clipboard";
+    else if (command === "review.resolve") msg = `review ${d?.disposition}`;
+    toast(okc ? "ok" : "err", `${command.replace(/\./g, " ")} ${okc ? "done" : "failed"}`, String(msg).split("\n").slice(0, 4).join("\n"));
     if (data.snapshot) { state.snap = data.snapshot; }
-    if (command === "director.route" && input.slot) fetchDirector(input.slot);
-    if (command.startsWith("worker.") || command.startsWith("sprint.")) { const sp = state.snap?.sprints.find((x) => x.slot === input.slot); if (sp) fetchOutputs(sp.worktree); fetchResources(); }
+    if ((command === "director.route" || command === "director.ask") && input.slot) fetchDirector(input.slot);
+    const sp = state.snap?.sprints.find((x) => x.slot === input.slot);
+    if (sp) { fetchOutputs(sp.worktree); fetchPr(sp); }
+    fetchResources(); loadAuditIfOpen();
     render(true);
-  } else { toast("err", `${command} not run`, data.reason || (data.errors || []).join("; ") || data.code); }
+  } else { toast("err", `${command.replace(/\./g, " ")} not run`, data.reason || (data.errors || []).join("; ") || data.code); }
 }
+function loadAuditIfOpen() { if (route() === "history") { state._audit = null; fetchAudit(); } }
 function showConfirm(pv, onConfirm) {
   const ov = el("div", "ov");
   ov.innerHTML = `<div class="dlg"><h3>${esc(pv.title || pv.command)}</h3><span class="risk ${pv.risk || "low"}">${esc(pv.risk || "low")}</span>
@@ -279,14 +372,16 @@ function showEndWork(slot) {
     <div class="b">${esc(sp?.title || "")}
       <ul><li><b>Pause &amp; keep</b> — stop the provider/server, preserve everything (reversible).</li>
       <li><b>Close session &amp; keep worktree</b> — archive metadata, free the slot; never deletes/pushes/merges.</li>
-      <li><b>Delete worktree</b> — not available from Vacilando (needs an interactive terminal).</li></ul>
+      <li><b>Promotion / push / PR / merge / delete</b> — governed on the <b>Repository</b> tab (preview → confirm; delete needs a typed phrase and is blocked when dirty).</li></ul>
       ${dirty ? `<label style="display:flex;gap:7px;align-items:center;font-size:12px"><input type="checkbox" class="f-ack" style="width:auto"> Worktree is dirty — acknowledge uncommitted changes (required to close)</label>` : ""}</div>
     <div class="foot" style="flex-wrap:wrap"><button class="btn cancel">Cancel</button>
+      <button class="btn" data-do="repo">Repository ↗</button>
       <button class="btn warn" data-do="pause">Pause &amp; keep</button>
       <button class="btn go" data-do="finish">Close session</button></div></div>`;
   const close = () => { ov.remove(); render(true); };
   ov.querySelector(".cancel").onclick = close;
   ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  ov.querySelector('[data-do="repo"]').onclick = () => { ov.remove(); state.tab = "repository"; go("command/worker/" + slot); };
   ov.querySelector('[data-do="pause"]').onclick = () => { ov.remove(); startCommand("worker.pause", { slot }); };
   ov.querySelector('[data-do="finish"]').onclick = () => { const ack = ov.querySelector(".f-ack")?.checked; ov.remove(); startCommand("sprint.finish", ack ? { slot, acknowledge_uncommitted: true } : { slot }); };
   document.body.appendChild(ov);
@@ -308,9 +403,53 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-end]"))) { e.stopPropagation(); showEndWork(Number(n.dataset.end)); return; }
   if (t("[data-start]")) { showStartWork(); return; }
   if ((n = t("[data-director]"))) { const msg = document.getElementById("d-msg")?.value?.trim(); if (!msg) { toast("err", "Empty instruction"); return; } startCommand("director.route", { slot: Number(n.dataset.director), message: msg }); return; }
+  if ((n = t("[data-ask]"))) { const msg = document.getElementById("d-msg")?.value?.trim(); if (!msg) { toast("err", "Empty message"); return; } startCommand("director.ask", { slot: Number(n.dataset.ask), message: msg }); return; }
+  if ((n = t("[data-review]"))) { showReview(n.dataset.review); return; }
+  if ((n = t("[data-prcmd]"))) { e.stopPropagation(); showOpenPr(Number(n.dataset.slot)); return; }
+  if ((n = t("[data-delcmd]"))) { e.stopPropagation(); showDelete(Number(n.dataset.delcmd)); return; }
   if ((n = t("[data-nav]"))) { go(n.dataset.nav); return; }
   if ((n = t("[data-route]"))) { e.preventDefault(); go(n.dataset.route); return; }
 });
+function showReview(initiative_key) {
+  const rv = (state.snap.approvals?.reviews || []).find((x) => x.initiative_key === initiative_key);
+  const ov = el("div", "ov");
+  ov.innerHTML = `<div class="dlg"><h3>Review · ${esc(initiative_key)}</h3><span class="risk consequential">consequential</span>
+    <div class="b">${esc(rv?.summary || "Review required")}
+      <ul><li>Recorded as an audited disposition; clears from Needs You.</li><li>Does not force the toolkit's initiative state machine.</li></ul>
+      <label>Note (optional)</label><input class="f-note" placeholder="rationale or requested changes"></div>
+    <div class="foot" style="flex-wrap:wrap"><button class="btn cancel">Cancel</button>
+      <button class="btn warn" data-do="rc">Request changes</button><button class="btn go" data-do="ap">Approve</button></div></div>`;
+  const close = () => { ov.remove(); render(true); };
+  ov.querySelector(".cancel").onclick = close;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  ov.querySelector('[data-do="ap"]').onclick = () => { const note = ov.querySelector(".f-note").value.trim(); ov.remove(); startCommand("review.resolve", { initiative_key, disposition: "approve", ...(note ? { note } : {}) }); };
+  ov.querySelector('[data-do="rc"]').onclick = () => { const note = ov.querySelector(".f-note").value.trim(); ov.remove(); startCommand("review.resolve", { initiative_key, disposition: "request_changes", ...(note ? { note } : {}) }); };
+  document.body.appendChild(ov);
+}
+function showOpenPr(slot) {
+  const sp = state.snap.sprints.find((x) => x.slot === slot);
+  const ov = el("div", "ov");
+  ov.innerHTML = `<div class="dlg"><h3>Open draft PR · slot ${slot}</h3><span class="risk consequential">consequential</span>
+    <div class="b">${esc(sp?.branch || "")} → staging (draft)<label>Title</label><input class="f-t" value="${esc(sp?.title || "")}"></div>
+    <div class="foot"><button class="btn cancel">Cancel</button><button class="btn go ok">Preview →</button></div></div>`;
+  ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
+  ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
+  ov.querySelector(".ok").onclick = () => { const title = ov.querySelector(".f-t").value.trim(); ov.remove(); startCommand("promotion.open_pr", { slot, title }); };
+  document.body.appendChild(ov);
+}
+function showDelete(slot) {
+  const sp = state.snap.sprints.find((x) => x.slot === slot);
+  const phrase = `delete ${slot}`;
+  const ov = el("div", "ov");
+  ov.innerHTML = `<div class="dlg"><h3>Delete worktree · slot ${slot}</h3><span class="risk consequential">destructive</span>
+    <div class="b">${esc(sp?.worktree || "")} — DESTRUCTIVE. Blocked when dirty; never uses --force.
+      <label>Type <b>${esc(phrase)}</b> to confirm</label><input class="f-ct" placeholder="${esc(phrase)}"></div>
+    <div class="foot"><button class="btn cancel">Cancel</button><button class="btn go ok">Preview →</button></div></div>`;
+  ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
+  ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
+  ov.querySelector(".ok").onclick = () => { const ct = ov.querySelector(".f-ct").value.trim(); ov.remove(); startCommandTyped("worktree.delete", { slot, confirm_text: ct }, ct); };
+  document.body.appendChild(ov);
+}
 $("#refresh-btn").addEventListener("click", async (ev) => { ev.target.disabled = true; const x = ev.target.textContent; ev.target.textContent = "↻ …"; await execute("runtime.refresh", {}, false); fetchResources(); ev.target.disabled = false; ev.target.textContent = x; });
 window.addEventListener("hashchange", () => render(true));
 

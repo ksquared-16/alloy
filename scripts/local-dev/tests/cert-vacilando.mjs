@@ -105,7 +105,7 @@ async function main() {
 
   // ---- 12b every command binds a FIXED bin + buildArgv (no raw command strings) ----
   const cliCmds = Object.values(COMMANDS).filter((c) => c.execution === "cli");
-  const boundOk = cliCmds.every((c) => typeof c.bin === "string" && /^alloy-[a-z-]+$/.test(c.bin) && typeof c.buildArgv === "function");
+  const boundOk = cliCmds.every((c) => typeof c.bin === "string" && /^(alloy-[a-z-]+|git|gh)$/.test(c.bin) && typeof c.buildArgv === "function");
   check("12b cli commands bind a fixed alloy-* bin + buildArgv (no shell strings)", boundOk, cliCmds.map((c) => c.bin).join(","));
   // question.answer maps to the exact governed toolkit command
   const qa = COMMANDS["question.answer"];

@@ -50,6 +50,30 @@ export async function routeInstruction({ slot, worktree, provider, message, occu
   return { id: rec.id, occurred_at, clipboard, delivery: rec.delivery };
 }
 
+/**
+ * Record a REAL round-trip (operator message + provider response). Unlike
+ * routeInstruction (clipboard staging), this stores the actual provider reply.
+ */
+export function recordAsk({ slot, worktree, provider, message, response, occurredAtMs, actor = "operator" }) {
+  const occurred_at = new Date(occurredAtMs ?? Date.now()).toISOString();
+  const rec = {
+    schema_version: "vacilando.director.v1",
+    occurred_at, slot, worktree: worktree || null, provider: provider || null,
+    actor, message,
+    delivery: "provider-round-trip",
+    response: response?.text ?? null,
+    response_ok: response?.ok === true,
+    response_error: response?.error ?? null,
+    session_id: response?.session_id ?? null,
+    usage: response?.usage ?? null,
+    duration_ms: response?.duration_ms ?? null,
+  };
+  rec.id = "ask_" + createHash("sha256").update(occurred_at + slot + message).digest("hex").slice(0, 18);
+  if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true });
+  appendFileSync(logPath(slot), JSON.stringify(rec) + "\n", "utf8");
+  return { id: rec.id, occurred_at, response_ok: rec.response_ok };
+}
+
 /** Read the Director interaction log for a slot (newest first). */
 export function readDirectorLog(slot, limit = 40) {
   try {

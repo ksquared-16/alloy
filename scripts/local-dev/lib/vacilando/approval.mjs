@@ -18,7 +18,7 @@
  */
 import { decisionIsOpen } from "./sprint.mjs";
 
-export function projectApprovals(allInitiatives, slotByInitiative = new Map()) {
+export function projectApprovals(allInitiatives, slotByInitiative = new Map(), dispositions = {}) {
   const questions = [];
   const reviews = [];
   const merges = [];
@@ -44,8 +44,8 @@ export function projectApprovals(allInitiatives, slotByInitiative = new Map()) {
       });
     }
 
-    if (init.state === "reviewing") {
-      reviews.push({ ...ctx, kind: "review", summary: `Review required — ${ctx.title}`, source: `initiative:${ctx.initiative_key}/state` });
+    if (init.state === "reviewing" && dispositions[init.key]?.disposition !== "approve") {
+      reviews.push({ ...ctx, kind: "review", summary: `Review required — ${ctx.title}`, source: `initiative:${ctx.initiative_key}/state`, disposition: dispositions[init.key]?.disposition || null });
     }
     if (init.state === "merge_ready") {
       merges.push({ ...ctx, kind: "merge", summary: `Merge approval — ${ctx.title}`, pr: null, source: `initiative:${ctx.initiative_key}/state` });
