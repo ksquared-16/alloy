@@ -248,6 +248,9 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 .obj-lead .obj{font-size:14.5px;line-height:1.5;}
 .work-stats{margin-bottom:12px;}
 .dstat .dv.sm{font-size:13.5px;font-weight:700;line-height:1.35;letter-spacing:0;word-break:break-word;}
+.ss-h{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin:12px 0 6px;}
+.ss-row{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line-soft);font-size:12.5px;}
+.ss-row:first-of-type{border-top:none;} .ss-row .ss-w{color:var(--ink-2);} .ss-row .ss-w .clean{font-family:var(--mono);}
 .blocker{font-size:12.5px;color:var(--blocked);background:var(--blocked-bg);border-radius:8px;padding:7px 10px;margin-bottom:6px;}
 
 /* outputs */

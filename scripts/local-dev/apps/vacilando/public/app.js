@@ -86,7 +86,9 @@ function workerCard(sp) {
     <div class="wc-ctl">
       ${sp.status === "paused" ? `<button class="btn sm warn" data-cmd="worker.resume" data-slot="${sp.slot}">Resume</button>` : `<button class="btn sm" data-cmd="worker.pause" data-slot="${sp.slot}">Pause</button>`}
       <button class="btn sm" data-cmd="worker.doctor" data-slot="${sp.slot}">Diagnose</button>
-      ${sp.server === "running" && sp.port ? `<a class="btn sm" href="http://127.0.0.1:${sp.port}" target="_blank" title="Open the worker's local app" onclick="event.stopPropagation()">Open App</a>` : ""}
+      ${sp.server === "running" && sp.port
+        ? `<a class="btn sm" href="http://127.0.0.1:${sp.port}" target="_blank" title="Open the worker's local app on :${sp.port}" onclick="event.stopPropagation()">Open App</a>`
+        : `<button class="btn sm" data-startserver="${sp.slot}" title="App is stopped — start its dev server">App: stopped</button>`}
       <button class="btn sm" data-end="${sp.slot}">End</button>
     </div></div>`;
 }
@@ -174,6 +176,9 @@ function operatingSurface() {
       <div class="surf-t"><div class="tt">${esc(sp.title)}</div>
         <div class="su">slot ${sp.slot} · ${esc(sp.provider)} · <span class="chip ${sp.status}">${esc(sp.status)}</span> · ${w2 ? `<span class="hpill ${w2.health}">${w2.health}</span>` : ""} · upd ${ago(sp.updated_at_ms)} ago${sp.server === "running" && sp.port ? ` · <a href="http://127.0.0.1:${sp.port}" target="_blank">Open App ↗</a>` : ""}</div></div>
       <div class="surf-actions">
+        ${sp.server === "running" && sp.port
+          ? `<a class="btn sm" href="http://127.0.0.1:${sp.port}" target="_blank" title="Open the worker's local app on :${sp.port}">Open App</a>`
+          : `<button class="btn sm" data-startserver="${sp.slot}" title="App is stopped — start its dev server">Start server</button>`}
         <button class="btn sm" data-cmd="worker.doctor" data-slot="${sp.slot}">Diagnose</button>
         ${sp.status === "paused" ? `<button class="btn sm warn" data-cmd="worker.resume" data-slot="${sp.slot}">Resume</button>` : `<button class="btn sm warn" data-cmd="worker.pause" data-slot="${sp.slot}">Pause</button>`}
         <button class="btn sm warn" data-end="${sp.slot}">End work</button>
@@ -404,6 +409,25 @@ function showConfirm(pv, onConfirm) {
   ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
   document.body.appendChild(ov);
 }
+function showStartServer(slot) {
+  const sp = state.snap.sprints.find((s) => s.slot === slot);
+  if (!sp) return;
+  const running = state.snap.sprints.filter((s) => s.server === "running");
+  const rows = running.length
+    ? running.map((s) => `<div class="ss-row"><span class="ss-w"><b>slot ${s.slot}</b> · ${esc(shortBranch(s.branch, s.worktree))}${s.port ? ` · <span class="clean">:${s.port}</span>` : ""}</span><button class="btn sm warn" data-stop="${s.slot}">Stop</button></div>`).join("")
+    : `<div class="muted">No dev servers are running.</div>`;
+  const ov = el("div", "ov");
+  ov.innerHTML = `<div class="dlg"><h3>Start dev server</h3><span class="risk consequential">consequential</span>
+    <div class="b">Boot the toolkit-owned Next dev server for <b>${esc(sp.title)}</b> (slot ${slot}${sp.port ? `, :${sp.port}` : ""}) so its app becomes openable.
+      <div class="ss-h">Running servers (${running.length})</div>${rows}
+      <div class="muted note">Server capacity is limited. If Start is blocked because capacity is full, stop one above first, then start.</div></div>
+    <div class="foot"><button class="btn cancel">Cancel</button><button class="btn go ok">Start server</button></div></div>`;
+  ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
+  ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
+  ov.querySelectorAll("[data-stop]").forEach((b) => { b.onclick = () => { const s = Number(b.dataset.stop); ov.remove(); startCommand("server.stop", { slot: s }); }; });
+  ov.querySelector(".ok").onclick = () => { ov.remove(); startCommand("server.start", { slot }); };
+  document.body.appendChild(ov);
+}
 function showStartWork() {
   const free = [1, 2, 3, 4, 5, 6].filter((n) => !state.snap.sprints.some((s) => s.slot === n));
   const ov = el("div", "ov");
@@ -457,11 +481,14 @@ function toast(kind, title, msg) {
 document.addEventListener("click", (e) => {
   const t = (a) => e.target.closest(a);
   let n;
-  if ((n = t("[data-sel]"))) { select(Number(n.dataset.sel)); return; }
+  // Specific actions win over container selection: a worker-dock card is a
+  // [data-sel] container that WRAPS its own action buttons, so [data-sel] must
+  // be the LAST fallback — otherwise every button click just selects the card.
   if ((n = t("[data-tab]"))) { state.tab = n.dataset.tab; render(true); return; }
   if ((n = t("[data-cmd]"))) { e.stopPropagation(); startCommand(n.dataset.cmd, n.dataset.slot ? { slot: Number(n.dataset.slot) } : {}); return; }
   if ((n = t("[data-end]"))) { e.stopPropagation(); showEndWork(Number(n.dataset.end)); return; }
   if (t("[data-start]")) { showStartWork(); return; }
+  if ((n = t("[data-startserver]"))) { e.stopPropagation(); showStartServer(Number(n.dataset.startserver)); return; }
   if ((n = t("[data-director]"))) { const msg = document.getElementById("d-msg")?.value?.trim(); if (!msg) { toast("err", "Empty instruction"); return; } startCommand("director.route", { slot: Number(n.dataset.director), message: msg }); return; }
   if ((n = t("[data-ask]"))) { const msg = document.getElementById("d-msg")?.value?.trim(); if (!msg) { toast("err", "Empty message"); return; } startCommand("director.ask", { slot: Number(n.dataset.ask), message: msg }); return; }
   if ((n = t("[data-review]"))) { showReview(n.dataset.review); return; }
@@ -469,6 +496,7 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-delcmd]"))) { e.stopPropagation(); showDelete(Number(n.dataset.delcmd)); return; }
   if ((n = t("[data-nav]"))) { go(n.dataset.nav); return; }
   if ((n = t("[data-route]"))) { e.preventDefault(); go(n.dataset.route); return; }
+  if ((n = t("[data-sel]"))) { select(Number(n.dataset.sel)); return; }
 });
 function showReview(initiative_key) {
   const rv = (state.snap.approvals?.reviews || []).find((x) => x.initiative_key === initiative_key);

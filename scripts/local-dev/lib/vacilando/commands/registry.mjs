@@ -18,6 +18,10 @@
  * promotion, merge, and destructive git are intentionally NOT executable
  * (declared unsupported with a reason) — the toolkit prints but never runs them.
  */
+import { existsSync, readFileSync } from "node:fs";
+import os from "node:os";
+import { join } from "node:path";
+
 import { routeInstruction, recordAsk } from "./director.mjs";
 import { sendInstruction, PROVIDERS } from "../providers.mjs";
 import { recordReview } from "./review.mjs";
@@ -87,6 +91,21 @@ export function validateInput(schema, input) {
 // --------------------------------------------------------------------------
 const sprintBySlot = (snap, slot) => (snap?.sprints || []).find((s) => s.slot === slot) || null;
 const target = (kind, label, ref) => ({ kind, label, ref });
+
+// Dev-server capacity: the toolkit caps concurrently running Next dev servers
+// (ALLOY_MAX_RUNNING_SERVERS, default 3). Starting one at capacity is blocked —
+// an operator must stop another first (surfaced in the Start-server dialog).
+const runningServerCount = (snap) => (snap?.sprints || []).filter((s) => s.server === "running").length;
+function maxRunningServers() {
+  try {
+    const p = join(os.homedir(), ".config", "alloy-dev", "config");
+    if (existsSync(p)) {
+      const m = readFileSync(p, "utf8").match(/^ALLOY_MAX_RUNNING_SERVERS=["']?(\d+)/m);
+      if (m) return Number(m[1]);
+    }
+  } catch { /* fall through to default */ }
+  return 3;
+}
 
 // --------------------------------------------------------------------------
 // Supported commands.
@@ -218,6 +237,75 @@ const COMMANDS = {
       authoritative_target: `alloy-worker-resume ${v.slot}`,
       effects: ["Restores the slot's prior resources from its pause state."],
     }),
+    refresh: ["snapshot"],
+  },
+
+  "server.start": {
+    key: "server.start",
+    title: "Start dev server",
+    risk: "consequential",
+    execution: "cli",
+    bin: "alloy-dev-start",
+    confirmation: "required",
+    input: { slot: { type: "slot", required: true } },
+    buildArgv: (v, snap) => [sprintBySlot(snap, v.slot)?.worktree],
+    resolveTarget: (v, snap) => {
+      const s = sprintBySlot(snap, v.slot);
+      return s ? target("worker", `dev server for slot ${s.slot} — ${s.title}`, { slot: v.slot, worktree: s.worktree }) : null;
+    },
+    eligibility: (t, snap, v) => {
+      const s = sprintBySlot(snap, v.slot);
+      if (!s) return { eligible: false, reason: "slot is not occupied" };
+      if (s.server === "running") return { eligible: false, reason: "dev server is already running" };
+      const running = runningServerCount(snap), max = maxRunningServers();
+      if (running >= max) return { eligible: false, reason: `${running}/${max} dev servers already running — stop one first to free capacity` };
+      return { eligible: true };
+    },
+    preview: (v, t, snap) => {
+      const s = sprintBySlot(snap, v.slot);
+      const running = runningServerCount(snap), max = maxRunningServers();
+      return {
+        summary: `Start the dev server for slot ${v.slot}${s ? ` (${s.title})` : ""}.`,
+        authoritative_target: `alloy-dev-start ${s?.worktree || ""}`,
+        effects: [
+          `Boots the toolkit-owned Next dev server${s?.port ? ` on port :${s.port}` : ""} so its app becomes openable.`,
+          `Server capacity after start: ${running + 1}/${max}.`,
+        ],
+      };
+    },
+    refresh: ["snapshot"],
+  },
+
+  "server.stop": {
+    key: "server.stop",
+    title: "Stop dev server",
+    risk: "consequential",
+    execution: "cli",
+    bin: "alloy-dev-stop",
+    confirmation: "required",
+    input: { slot: { type: "slot", required: true } },
+    buildArgv: (v, snap) => [sprintBySlot(snap, v.slot)?.worktree],
+    resolveTarget: (v, snap) => {
+      const s = sprintBySlot(snap, v.slot);
+      return s ? target("worker", `dev server for slot ${s.slot} — ${s.title}`, { slot: v.slot, worktree: s.worktree }) : null;
+    },
+    eligibility: (t, snap, v) => {
+      const s = sprintBySlot(snap, v.slot);
+      if (!s) return { eligible: false, reason: "slot is not occupied" };
+      if (s.server !== "running") return { eligible: false, reason: "no running dev server on this slot" };
+      return { eligible: true };
+    },
+    preview: (v, t, snap) => {
+      const s = sprintBySlot(snap, v.slot);
+      return {
+        summary: `Stop the dev server for slot ${v.slot}${s ? ` (${s.title})` : ""}.`,
+        authoritative_target: `alloy-dev-stop ${s?.worktree || ""}`,
+        effects: [
+          "Gracefully stops the toolkit-owned dev server for this slot only.",
+          "Frees a server-capacity slot. Does not touch the agent or worktree.",
+        ],
+      };
+    },
     refresh: ["snapshot"],
   },
 
