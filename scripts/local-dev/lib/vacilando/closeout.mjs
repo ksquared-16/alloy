@@ -69,6 +69,7 @@ const DISCARDABLE = new Set(["qa-evidence", "screenshot", "report", "verificatio
  * cleanup — evidence AND unique planning documents. Non-destructive; copies only.
  */
 export async function preserveOutputs(sprint) {
+  if (!sprint?.worktree) return { ok: false, error: "worker could not be resolved (thin snapshot) — try again" };
   const wt = join(WT_ROOT, sprint.worktree);
   const dest = join(EVID_STORE_ROOT, sprint.worktree, "preserved");
   if (!existsSync(wt)) return { ok: false, error: "worktree not found" };
@@ -96,6 +97,7 @@ export async function preserveOutputs(sprint) {
  * unpreserved planning). Refuses unless outputs were preserved first.
  */
 export async function discardGenerated(sprint, { requirePreserved = true } = {}) {
+  if (!sprint?.worktree) return { ok: false, error: "worker could not be resolved (thin snapshot) — try again" };
   const wt = join(WT_ROOT, sprint.worktree);
   if (!existsSync(wt)) return { ok: false, error: "worktree not found" };
   const preservedDir = join(EVID_STORE_ROOT, sprint.worktree, "preserved");

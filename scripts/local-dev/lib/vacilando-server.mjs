@@ -296,14 +296,25 @@ export function createVacilandoServer() {
       const body = await readJsonBody(req);
       if (!body.ok) return sendJson(res, 400, { ok: false, stage: "request", code: body.error });
       const mode = path.endsWith("/preview") ? "preview" : "execute";
-      const snapshot = await snapshotSafe();
-      const out = await runCommand(
-        { command: body.value.command, input: body.value.input, confirm: body.value.confirm === true, confirm_text: body.value.confirm_text, mode, actor: body.value.actor || "operator" },
-        { snapshot, refresh: forceSnapshot },
-      );
-      if (mode === "execute" && out.snapshot) broadcast(out.snapshot);
-      const status = out.ok ? 200 : statusForStage(out);
-      return sendJson(res, status, out);
+      try {
+        // Use the CACHED snapshot (any age) so a command never blocks ~16s on a
+        // fresh compose under memory pressure — slot resolution only needs which
+        // slots exist, which the cache already holds. Falls back to a fresh
+        // compose only when truly cold.
+        const snapshot = await getSnapshot({ maxAgeMs: 600000 });
+        const out = await runCommand(
+          { command: body.value.command, input: body.value.input, confirm: body.value.confirm === true, confirm_text: body.value.confirm_text, mode, actor: body.value.actor || "operator" },
+          // Post-execute refresh must NOT block the response on a ~16s compose:
+          // return the cached snapshot now and force a fresh one in the background.
+          { snapshot, refresh: () => { forceSnapshot().catch(() => {}); return getSnapshot({ maxAgeMs: 600000 }); } },
+        );
+        if (mode === "execute" && out.snapshot) broadcast(out.snapshot);
+        const status = out.ok ? 200 : statusForStage(out);
+        return sendJson(res, status, out);
+      } catch (e) {
+        // NEVER hang: a thrown command returns a real error the UI can show.
+        return sendJson(res, 500, { ok: false, stage: "execute", code: "server_error", command: body.value?.command, error: String(e && e.message || e) });
+      }
     }
 
     // Director async send: durable request created BEFORE execution; returns immediately.

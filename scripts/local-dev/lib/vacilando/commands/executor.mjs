@@ -105,9 +105,15 @@ export async function runCommand(req, ctx) {
   let result;
   let ok;
   if (def.execution === "internal") {
-    const data = def.run ? await def.run(value, snapshot, { nowMs }) : { done: true };
-    result = { kind: "internal", data };
-    ok = data && data.ok === false ? false : true;
+    try {
+      const data = def.run ? await def.run(value, snapshot, { nowMs }) : { done: true };
+      result = { kind: "internal", data };
+      ok = data && data.ok === false ? false : true;
+    } catch (e) {
+      // A throwing run() is a bug, not control-flow — surface it, never swallow.
+      writeAuditEvent({ actor, command: def.key, input: value, target, preview_summary: preview.summary, confirmed: req.confirm === true, outcome: "failed", error: String(e && e.message || e) }, nowMs);
+      return { ok: false, stage: "execute", code: "run_error", command: def.key, error: String(e && e.message || e) };
+    }
   } else {
     // Fixed bin: either a toolkit command (resolved under TOOLKIT_DIR) or an
     // allowlisted system VCS binary (git/gh, resolved from PATH by execFile).

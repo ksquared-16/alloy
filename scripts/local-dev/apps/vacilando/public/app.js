@@ -362,7 +362,7 @@ function showDiscard(slot) {
     <div class="foot"><button class="btn cancel">Cancel</button><button class="btn go ok">Discard</button></div></div>`;
   ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
   ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
-  ov.querySelector(".ok").onclick = () => { const ct = ov.querySelector(".f-ct").value.trim(); ov.remove(); startCommandTyped("closeout.discard_generated", { slot }, ct); };
+  ov.querySelector(".ok").onclick = () => { const ct = ov.querySelector(".f-ct").value.trim(); ov.remove(); execute("closeout.discard_generated", { slot }, true, ct); };
   document.body.appendChild(ov);
 }
 function tabRepository(sp) {
@@ -633,7 +633,14 @@ async function startCommandTyped(command, input, confirmText) {
 async function execute(command, input, confirm, confirmText) {
   const body = { command, input, confirm, actor: "operator" };
   if (confirmText) body.confirm_text = confirmText;
-  const { data } = await api("/api/commands", body);
+  const label = command.replace(/\./g, " ");
+  // IMMEDIATE feedback — the operator never clicks Confirm and wonders. Shows a
+  // running state right away; the POST runs independently.
+  toast("ok", `${label}…`, "running — this can take a moment under load");
+  let data;
+  try { const r = await api("/api/commands", body); data = r.data; }
+  catch (e) { toast("err", `${label} failed`, `no response from the runtime (${String(e && e.message || e)})`); return; }
+  if (!data) { toast("err", `${label} failed`, "empty response from the runtime"); return; }
   if (data.stage === "execute") {
     const d = data.result?.data;
     const okc = data.result ? (data.result.exit === undefined || data.result.exit === 0) && (d?.ok !== false) : data.ok;
@@ -865,7 +872,7 @@ function showDelete(slot) {
     <div class="foot"><button class="btn cancel">Cancel</button><button class="btn go ok">Preview →</button></div></div>`;
   ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
   ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
-  ov.querySelector(".ok").onclick = () => { const ct = ov.querySelector(".f-ct").value.trim(); ov.remove(); startCommandTyped("worktree.delete", { slot, confirm_text: ct }, ct); };
+  ov.querySelector(".ok").onclick = () => { const ct = ov.querySelector(".f-ct").value.trim(); ov.remove(); execute("worktree.delete", { slot, confirm_text: ct }, true, ct); };
   document.body.appendChild(ov);
 }
 $("#refresh-btn").addEventListener("click", async (ev) => { ev.target.disabled = true; const x = ev.target.textContent; ev.target.textContent = "↻ …"; await execute("runtime.refresh", {}, false); fetchResources(); ev.target.disabled = false; ev.target.textContent = x; });

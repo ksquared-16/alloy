@@ -75,6 +75,38 @@ auto-discarded** · `discard_generated` refuses unless outputs preserved and onl
 removes untracked evidence/generated · all consequential actions previewed,
 confirmed (typed for destructive), and audited.
 
+## Fix — governed-action silent Confirm (Discard did "nothing")
+
+**Root cause (instrumented, three-layer):** clicking Confirm on Discard produced
+**~16 s of silence then a second dialog**. The network trace showed
+`POST /api/commands/preview` taking **16.7 s** — every governed command did
+`await snapshotSafe()` first, which forces a full projection compose (~16 s under
+the memory thrash). Compounding it: the typed dialog routed through
+`startCommandTyped` → **preview → showConfirm (a second dialog)** = double-confirm;
+and there was **no try/catch** in the executor's internal `run()`, the server
+`/api/commands` handler, or the frontend `execute()` — so a thin-snapshot
+`TypeError` (`sprintBySlot → undefined → discardGenerated(undefined).worktree`)
+would propagate to a hung response and a silent `await`.
+
+**Fix:**
+1. Commands use the **cached** snapshot (`getSnapshot({maxAgeMs:600000})`) instead
+   of blocking ~16 s on a fresh compose — preview dropped 16.7 s → **0.02 s**.
+2. Post-execute refresh is **non-blocking** — returns cached now, forces a fresh
+   compose in the background — execute dropped ~30 s (hang) → **0.45 s**.
+3. **Immediate feedback:** `execute()` shows a *"running"* toast synchronously the
+   instant Confirm is clicked, then *"done"/"failed"* — verified live.
+4. **No double-confirm:** typed dialogs (discard/delete) execute directly.
+5. **Never silent:** try/catch added in the executor internal `run()`, the server
+   `/api/commands` handler (returns 500 JSON, never hangs), and `execute()`
+   (network failure → error toast). Null-sprint guarded in preserve/discard.
+
+**Proven live:** click Confirm → immediate toast *"closeout discard_generated…
+running"* (0 ms) → *"done"* (~0.5 s), **no second dialog**, no stuck overlay;
+Discard removed the 7 evidence artifacts (safe in the durable store) and correctly
+**skipped the planning-doc** (`skipped: ['planning-doc']`). Confirmation gate
+verified intact (`repository.push` → preview requires confirmation → execute
+without confirm → **428**). Screenshot: `03-governed-action-immediate-feedback.png`.
+
 ## Request record schema (durable, server-owned)
 
 `director/requests.jsonl` — append-only events projected per `request_id`:
