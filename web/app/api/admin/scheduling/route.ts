@@ -60,7 +60,23 @@ export async function GET(request: NextRequest) {
                 id: s.id,
                 name: s.label?.trim() || "Site",
             }));
-            return NextResponse.json({ view, sites });
+            // Resolve the subject's site from the operational context so the operator
+            // is not asked to choose one when it is already established. The lead/
+            // opportunity carries its site as `location_id`; we only trust it when it
+            // resolves to an actual site (guards against a non-site location).
+            const opportunityId = param(request, "opportunity_id");
+            let resolvedSiteId: string | null = null;
+            if (opportunityId) {
+                const { data: opp } = await supabase
+                    .from("opportunities")
+                    .select("location_id")
+                    .eq("org_id", ctx.orgId)
+                    .eq("id", opportunityId)
+                    .maybeSingle();
+                const oppSiteId = (opp as { location_id?: string | null } | null)?.location_id ?? null;
+                if (oppSiteId && sites.some((s) => s.id === oppSiteId)) resolvedSiteId = oppSiteId;
+            }
+            return NextResponse.json({ view, sites, resolvedSiteId });
         }
 
         if (view === "overview") {

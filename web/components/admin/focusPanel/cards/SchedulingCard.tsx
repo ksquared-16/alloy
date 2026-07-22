@@ -154,7 +154,11 @@ export default function SchedulingCard({ model, context, receded = false, coordi
         >
             <div data-scheduling-card="true">
                 {activeChild ? (
-                    <ScheduleWorkSurface child={activeChild} onDone={() => setActiveChildId(null)} />
+                    <ScheduleWorkSurface
+                        child={activeChild}
+                        opportunityId={context.subject.type === "opportunity" ? context.subject.id : null}
+                        onDone={() => setActiveChildId(null)}
+                    />
                 ) : children.length === 0 ? (
                     <p style={{ fontSize: 12.5, color: "#667085" }}>Link children to schedule them.</p>
                 ) : (
@@ -196,9 +200,12 @@ export default function SchedulingCard({ model, context, receded = false, coordi
  * Weekly Pattern → Days → Site → Recommended Room → Effective Dates →
  * Financial Preview → Save. Neutral styling — a work surface, not a form.
  */
-function ScheduleWorkSurface({ child, onDone }: { child: SchedChild; onDone: () => void }) {
+function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChild; opportunityId: string | null; onDone: () => void }) {
     const [sites, setSites] = useState<Site[]>([]);
     const [siteId, setSiteId] = useState("");
+    // The site is "context-established" when the operational subject resolved one
+    // (or only one site exists) — we then present it as a fact, not a choice.
+    const [siteFromContext, setSiteFromContext] = useState(false);
     const [patterns, setPatterns] = useState<Pattern[]>([]);
     const [patternId, setPatternId] = useState("");
     const [days, setDays] = useState<number[]>([]);
@@ -214,18 +221,32 @@ function ScheduleWorkSurface({ child, onDone }: { child: SchedChild; onDone: () 
     const [billing, setBilling] = useState<BillingProjection | null>(null);
     const [billingLoading, setBillingLoading] = useState(false);
 
-    // Load sites, then patterns for the chosen site.
+    // Load sites, then patterns for the chosen site. The site is resolved from the
+    // operational subject when possible (the lead's established site), so the operator
+    // isn't asked to choose one that context already fixes.
     useEffect(() => {
         (async () => {
             try {
-                const s = await schedApi("?view=sites");
-                setSites(s.sites ?? []);
-                if ((s.sites ?? []).length) setSiteId(s.sites[0].id);
+                const s = await schedApi(`?view=sites${opportunityId ? `&opportunity_id=${encodeURIComponent(opportunityId)}` : ""}`);
+                const siteList: Site[] = s.sites ?? [];
+                setSites(siteList);
+                const resolved: string | null = s.resolvedSiteId ?? null;
+                if (resolved) {
+                    setSiteId(resolved);
+                    setSiteFromContext(true);
+                } else if (siteList.length === 1) {
+                    setSiteId(siteList[0].id);
+                    setSiteFromContext(true);
+                } else if (siteList.length) {
+                    // Genuinely ambiguous — default to the first but let the operator choose.
+                    setSiteId(siteList[0].id);
+                    setSiteFromContext(false);
+                }
             } catch (e) {
                 setError((e as Error).message);
             }
         })();
-    }, []);
+    }, [opportunityId]);
     useEffect(() => {
         if (!siteId) return;
         (async () => {
@@ -370,14 +391,25 @@ function ScheduleWorkSurface({ child, onDone }: { child: SchedChild; onDone: () 
                 </div>
             </section>
 
-            {/* 3 · Site */}
+            {/* 3 · Site — a fact when context establishes it; a choice only when ambiguous */}
             <section>
                 {sectionLabel("Site")}
-                <select value={siteId} onChange={(e) => setSiteId(e.target.value)} style={selStyle}>
-                    {sites.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                </select>
+                {siteFromContext ? (
+                    <div data-schedule-site-context="true" style={{ fontSize: 13, fontWeight: 600, color: "#1d2939", display: "flex", alignItems: "center", gap: 6 }}>
+                        {sites.find((s) => s.id === siteId)?.name ?? "Site"}
+                        {sites.length > 1 && (
+                            <button type="button" onClick={() => setSiteFromContext(false)} style={linkBtnStyle}>
+                                Change →
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <select value={siteId} onChange={(e) => setSiteId(e.target.value)} style={selStyle} data-schedule-site-select="true">
+                        {sites.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                    </select>
+                )}
             </section>
 
             {/* 4 · Recommended room (alternatives collapsed) */}
