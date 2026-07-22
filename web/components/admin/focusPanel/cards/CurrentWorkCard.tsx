@@ -32,6 +32,7 @@ import type {
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import { useDismissSignal, useReportPerspective } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
@@ -62,7 +63,11 @@ export default function CurrentWorkCard({
     const surface = vm.surface;
     const opportunityId = context.subject.id;
     const { completeOutcome, busy, error, clearError } = useWorkIntentOutcomeCompletion(opportunityId);
-    const isWorkspace = presentation === "workspace";
+    // Slice A: Current Work elevates as a centered Focus Card. It is "open" (focused) when the
+    // coordination host marks it open (drill-in / requestFocus) — or, for back-compat, when a
+    // caller still passes presentation="workspace". The card then renders the configured-work
+    // surface inside the elevated cell instead of a full-canvas replace.
+    const isWorkspace = presentation === "workspace" || coordination?.currentWorkWorkspace?.open === true;
     // Tier-2 stage work still resolving — hold a neutral loading treatment in the region's final
     // geometry. A pending projection must NEVER render as "No active work" (false-empty).
     const stageWorkPending = context.stageWorkPending === true;
@@ -128,6 +133,16 @@ export default function CurrentWorkCard({
         coordination?.closeCurrentWorkWorkspace?.();
         queueMicrotask(() => openWorkspaceTriggerRef.current?.focus());
     }, [closeActionPanel, coordination, resetCompletion]);
+
+    // Slice A: report the centered-elevation depth so the host raises this cell (backdrop +
+    // centered) — the same path Household/Children use — and collapse on backdrop/ESC dismiss.
+    useReportPerspective(coordination, "current_work", isWorkspace ? "focused" : "base");
+    useDismissSignal(coordination, "current_work", () => {
+        resetCompletion();
+        closeActionPanel();
+        setActivityPreviewOpen(false);
+        coordination?.closeCurrentWorkWorkspace?.();
+    });
 
     useEffect(() => {
         const onFocusCurrentWork = (event: Event) => {

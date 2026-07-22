@@ -165,8 +165,8 @@ describe("Current Work action execution planner", () => {
 });
 
 describe("Current Work Focus workspace composition", () => {
-    it("does not elevate Current Work as a centered Focus Card", () => {
-        expect(isFocusElevatingCard("current_work")).toBe(false);
+    it("elevates Current Work as a centered Focus Card (Slice A)", () => {
+        expect(isFocusElevatingCard("current_work")).toBe(true);
         expect(isFocusElevatingCard("household")).toBe(true);
     });
 
@@ -256,26 +256,27 @@ describe("Current Work Focus workspace composition", () => {
         expect(html).not.toContain("data-work-primary-action");
     });
 
-    it("ModeGrid hosts current_work workspace replace", () => {
+    it("ModeGrid elevates current_work via the standard depth path — no canvas replace (Slice A)", () => {
         const source = readFileSync(
             path.join(process.cwd(), "components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx"),
             "utf8",
         );
-        expect(source).toContain('data-focus-panel-workspace="current_work"');
-        expect(source).toContain('presentation="workspace"');
-        expect(source).toContain("openCurrentWorkWorkspace");
-        expect(source).toContain("closeCurrentWorkWorkspace");
+        // Slice A removed the full-canvas workspace replace; current_work elevates like truth cards.
+        expect(source).not.toContain('data-focus-panel-workspace="current_work"');
+        expect(source).not.toContain('presentation="workspace"');
+        expect(source).toContain("elevatedCellKey");
     });
 
-    it("summary card opens workspace instead of local focused elevation", () => {
+    it("current_work card reports centered-elevation depth (Slice A)", () => {
         const source = readFileSync(
             path.join(process.cwd(), "components/admin/focusPanel/cards/CurrentWorkCard.tsx"),
             "utf8",
         );
         expect(source).toContain('presentation?: "summary" | "workspace"');
-        // The workspace is still reachable (it hosts the outcome picker) via openCurrentWorkWorkspace,
-        // but M1 removed the standalone "Open workspace" affordance from the obligation-first summary.
-        expect(source).toContain("openCurrentWorkWorkspace");
+        // Opening now elevates the card (reports "focused") instead of a canvas replace; the
+        // coordination host raises the cell (backdrop + centered) via activeDepth/elevatedCellKey.
+        expect(source).toContain('useReportPerspective(coordination, "current_work"');
+        expect(source).toContain("useDismissSignal(coordination, \"current_work\"");
         expect(source).not.toContain("setFocused(true)");
     });
 });

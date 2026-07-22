@@ -38,7 +38,6 @@ import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/f
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { resolveCommunicationsComposerAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCommunicationsComposerAction";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
-import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 
 /** Reverse-zoom dismiss window — matches CSS `--alloy-os-fp-depth-ms` (240ms). */
 const FOCUS_PANEL_DEPTH_MS = 240;
@@ -321,8 +320,9 @@ export default function OpportunityFocusPanelModeGrid({
         [canMutate, drawerId, record],
     );
 
-    // ESC: Current Work workspace closes first; else return focused/edit card to base.
-    // Captured before the drawer's ESC-to-close so depth dismisses without closing the record.
+    // ESC: return the focused/edit card to base (Current Work now elevates via activeDepth,
+    // so it dismisses through the same animated path). Captured before the drawer's ESC-to-close
+    // so depth dismisses without closing the record.
     useEffect(() => {
         if (!currentWorkWorkspace.open && !activeDepth) return;
         const onKey = (event: KeyboardEvent) => {
@@ -330,11 +330,11 @@ export default function OpportunityFocusPanelModeGrid({
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
-            if (currentWorkWorkspace.open) {
-                closeCurrentWorkWorkspace();
+            if (activeDepth) {
+                dismiss(activeDepth.card);
                 return;
             }
-            if (activeDepth) dismiss(activeDepth.card);
+            if (currentWorkWorkspace.open) closeCurrentWorkWorkspace();
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
@@ -460,37 +460,9 @@ export default function OpportunityFocusPanelModeGrid({
         );
     }
 
-    if (currentWorkWorkspace.open) {
-        const baseModel = cards.get("current_work");
-        const resolution =
-            [...cellResolution.entries()].find(([, value]) => value.typeKey === "current_work")?.[1]
-            ?? null;
-        const model = baseModel
-            ? composeEffectiveCardModel(baseModel, resolution?.config ?? null, record)
-            : null;
-        if (model) {
-            return (
-                <div
-                    ref={gridContainerRef}
-                    id={`focus-panel-mode-${mode}`}
-                    role="tabpanel"
-                    aria-labelledby={`focus-panel-mode-tab-${mode}`}
-                    data-focus-panel-mode={mode}
-                    data-focus-panel-workspace="current_work"
-                    data-focus-panel-work-state={mode === "work" && workflowActive ? "active" : undefined}
-                    {...alloySectionDomAttrs(mode === "work" ? "WU-10" : "WU-09")}
-                >
-                    <CurrentWorkCard
-                        model={model}
-                        context={operationalContext}
-                        coordination={coordination}
-                        mutation={mutation}
-                        presentation="workspace"
-                    />
-                </div>
-            );
-        }
-    }
+    // Slice A: Current Work no longer replaces the canvas. When opened it elevates as a
+    // centered Focus Card through the standard activeDepth/elevatedCellKey path below — its
+    // grid cell reports "focused" and FocusPanelCardGrid raises it (backdrop + centered).
 
     return (
         <div
