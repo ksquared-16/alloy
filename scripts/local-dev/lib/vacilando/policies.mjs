@@ -32,6 +32,25 @@ export async function collectPolicies() {
   return {
     generated_at_source: "read at request time",
     groups: [
+      { title: "Projects & missions", rows: [
+        P("Projects", "single project (canonical repo) in V1", "Vacilando durable records", "Vacilando", "V1.1 multi-project", "Start Work"),
+        P("Mission lifecycle", "draft → assigned → active → review → done | closed", "Vacilando mission record", "Vacilando + toolkit gates", "no", "Start/End Work"),
+        P("State ownership", "Vacilando owns project/mission/Director/decision/audit; Git/PR/process/resources are PROJECTED, never copied into a mutable store", "data-model boundary", "runtime", "no", "compose/projections"),
+      ]},
+      { title: "Execution hosts", rows: [
+        P("Hosts", "local (this Mac) only in V1", "Execution Host contract", "Vacilando", "V1.x remote host", "resources"),
+        P("Remote execution", "not enabled — console + host on one machine; future: MacBook console → Mac mini host", "roadmap", "n/a", "no", "—"),
+        P("Network exposure", "127.0.0.1 loopback only", "vacilando-server.mjs", "hard rule", "no", "—"),
+      ]},
+      { title: "Scheduler", rows: [
+        P("Mode", "deterministic recommendations; auto-scheduling OFF by default", "scheduler.mjs", "operator applies", "policy flag (disabled)", "dashboard"),
+        P("Start gate", "blocked when kernel pressure=critical; ≤1 lightweight when warn", "kern.memorystatus_vm_pressure_level", "advisory + eligibility", "thresholds", "sprint.start"),
+        P("Never", "auto-pause active real work", "safety policy", "hard rule", "no", "—"),
+      ]},
+      { title: "Cost budget", rows: [
+        P("Cost source", "authoritative only when a provider reports it (Claude when authed); Cursor tokens only", "usage.mjs", "read-only", "add pricing table", "dashboard"),
+        P("Budget policy", "none enforced in V1 (usage surfaced, not capped)", "V1 scope", "advisory", "V1.1", "—"),
+      ]},
       { title: "Slots & roles", rows: [
         P("Permanent slots", "6 (1–6)", "read-core ALLOY_MAX_AGENTS", "alloy-sprint-start (fail-closed)", "config", "alloy-sprint-start"),
         P("Slot roles", "1 Product · 2 Architecture · 3 Performance · 4 UI/UX · 5 Refactor · 6 Experimental", "README permanent slot identities", "labels only", "config (ALLOY_SLOT_N_ROLE)", "alloy-worker-status"),

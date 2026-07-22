@@ -36,6 +36,9 @@ import { workerOutputs, evidenceFilePath } from "./vacilando/outputs.mjs";
 import { readDirectorLog } from "./vacilando/commands/director.mjs";
 import { prForWorktree } from "./vacilando/github.mjs";
 import { collectPolicies } from "./vacilando/policies.mjs";
+import { collectUsage } from "./vacilando/usage.mjs";
+import { schedule } from "./vacilando/scheduler.mjs";
+import { readReviews } from "./vacilando/commands/review.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const LOOPBACK_HOST = "127.0.0.1";
@@ -208,6 +211,46 @@ export function createVacilandoServer() {
     }
     if (path === "/api/resources") {
       return sendJson(res, 200, await resourcesCached());
+    }
+    if (path === "/api/usage") {
+      return sendJson(res, 200, collectUsage());
+    }
+    if (path === "/api/dashboard") {
+      const [snap, resrc] = await Promise.all([snapshotSafe(), resourcesCached()]);
+      const usage = collectUsage();
+      const sched = schedule(snap, resrc);
+      const audit = readAuditEvents(300);
+      const today = new Date().toISOString().slice(0, 10);
+      const isToday = (e) => (e.occurred_at || "").slice(0, 10) === today;
+      const reviews = readReviews(200);
+      const throughput = {
+        commands_today: audit.filter(isToday).length,
+        succeeded_today: audit.filter((e) => isToday(e) && e.outcome === "succeeded").length,
+        failed_today: audit.filter((e) => isToday(e) && e.outcome === "failed").length,
+        reviews_resolved_today: reviews.filter((r) => (r.occurred_at || "").slice(0, 10) === today).length,
+        provider_round_trips_today: usage.total_calls_today,
+      };
+      // Kelly-Minutes foundation: we can count human command interactions from the
+      // audit; elapsed human minutes are not yet instrumented → marked unavailable.
+      const operator_load = {
+        interventions_today: audit.filter(isToday).length,
+        decisions_escalated: (snap.approvals?.total ?? 0),
+        human_minutes: { value: null, kind: "unavailable", note: "Elapsed human time is not yet instrumented; event foundation (audit) is in place." },
+      };
+      return sendJson(res, 200, {
+        generated_at: snap.generated_at,
+        team: {
+          slots: sched.counts, base: snap.repository?.base_ref, base_sha: snap.repository?.base_sha,
+          project: snap.project?.name,
+        },
+        machine: resrc.overall,
+        providers: usage,
+        scheduler: sched,
+        throughput,
+        operator_load,
+        needs_you: snap.approvals?.total ?? 0,
+        recent_outputs: (snap.activity || []).slice(0, 6),
+      });
     }
     if (path === "/api/outputs") {
       const wt = url.searchParams.get("worktree") || "";

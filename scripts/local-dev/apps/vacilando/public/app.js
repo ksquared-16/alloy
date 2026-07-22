@@ -31,31 +31,34 @@ let lastKey = null;
 function render(force) {
   if (document.querySelector(".ov")) return;
   const r = parseRoute();
-  // The URL drives selection so reload + back/forward preserve the selected worker.
+  // URL drives the center: #/command → Team Dashboard; #/command/worker/N → that worker.
   if (r.name === "command" && r.sub === "worker" && r.param) {
     const n = Number(r.param);
     if (n !== state.sel) { state.sel = n; if (!state.tab || state.tab === "overview") state.tab = "work"; const sp = state.snap?.sprints.find((x) => x.slot === n); if (sp) { fetchOutputs(sp.worktree); fetchDirector(n); fetchPr(sp); } }
+  } else if (r.name === "command") {
+    state.sel = null; // Team Dashboard is the default center — never a worker
+    if (!state._dash) fetchDashboard();
   }
-  const key = location.hash + "|" + (state.snap?.generated_at || "") + "|" + (state.res?.overall?.mem_used_pct ?? "") + "|" + state.sel + "|" + state.tab + "|" + Object.keys(state.outputs).length + "|" + Object.keys(state.director).length + "|" + Object.keys(state._pr || {}).length;
+  const key = location.hash + "|" + (state.snap?.generated_at || "") + "|" + state.sel + "|" + state.tab + "|" + Object.keys(state.outputs).length + "|" + Object.keys(state.director).length + "|" + Object.keys(state._pr || {}).length + "|" + (state._dash?.generated_at || "");
   if (!force && key === lastKey) return;
   lastKey = key;
   setActiveNav(r.name);
   const V = $("#view");
   if (!state.snap || !state.snap.headline) { V.innerHTML = `<div class="empty"><div class="big">Connecting to the runtime…</div></div>`; return; }
-  if (state.sel == null && state.snap.sprints[0]) { state.sel = state.snap.sprints[0].slot; const sp = state.snap.sprints[0]; state.tab = state.tab || "work"; fetchOutputs(sp.worktree); fetchDirector(sp.slot); fetchPr(sp); }
   V.innerHTML = ({ command: viewCommand, history: viewHistory, policies: viewPolicies, settings: viewSettings }[r.name] || viewCommand)();
   $("#nb-needs").textContent = state.snap ? needsYou().length : 0;
 }
 
 // -------- Command Center: board | operating surface | rail --------
 function viewCommand() {
+  const center = state.sel != null ? operatingSurface() : dashboardCenter();
   return `<div class="room">
     <section class="board">
-      <div class="board-h"><span>Workers</span><button class="btn primary sm" data-start>+ Start Work</button></div>
+      <div class="board-h"><span>Worker Dock</span><button class="btn primary sm" data-start>+ Start Work</button></div>
       ${state.snap.sprints.map(workerCard).join("")}
       ${resourcesCard()}
     </section>
-    <section class="surface">${operatingSurface()}</section>
+    <section class="surface">${center}</section>
     <aside class="needs">${needsYouHtml()}</aside>
   </div>`;
 }
@@ -83,6 +86,7 @@ function workerCard(sp) {
     <div class="wc-ctl">
       ${sp.status === "paused" ? `<button class="btn sm warn" data-cmd="worker.resume" data-slot="${sp.slot}">Resume</button>` : `<button class="btn sm" data-cmd="worker.pause" data-slot="${sp.slot}">Pause</button>`}
       <button class="btn sm" data-cmd="worker.doctor" data-slot="${sp.slot}">Diagnose</button>
+      ${sp.server === "running" && sp.port ? `<a class="btn sm" href="http://127.0.0.1:${sp.port}" target="_blank" title="Open the worker's local app" onclick="event.stopPropagation()">Open App</a>` : ""}
       <button class="btn sm" data-end="${sp.slot}">End</button>
     </div></div>`;
 }
@@ -93,11 +97,61 @@ function resourcesCard() {
   const pc = o.slots.pressure;
   return `<div class="rescard ${pc}"><div class="rh">Machine · <span class="pr ${pc}">${pc}</span></div>
     <div class="rgrid">
-      <div><span class="rl">CPU load</span><span class="rv">${o.cpu_load_pct}% <small>(${o.load_1m}/${o.cpu_count})</small></span></div>
-      <div><span class="rl">Memory</span><span class="rv">${o.mem_used_pct}% <small>${(o.mem_free_mb / 1024).toFixed(1)}G free</small></span></div>
-      <div><span class="rl">Servers</span><span class="rv">${o.running_servers} running</span></div>
-      <div><span class="rl">Capacity</span><span class="rv">${o.slots.occupied}/6 · ${o.slots.recommended_available} free rec.</span></div>
+      <div><span class="rl">CPU load</span><span class="rv">${o.cpu_load_pct}% <small>${o.load_5m}/${o.cpu_count}</small></span></div>
+      <div><span class="rl">Memory used</span><span class="rv">${o.mem_used_pct}% <small>${(o.mem_available_mb / 1024).toFixed(1)}G avail</small></span></div>
+      <div><span class="rl">Swap</span><span class="rv">${o.swap?.used_mb != null ? (o.swap.used_mb / 1024).toFixed(1) + "G" : "—"}</span></div>
+      <div><span class="rl">Capacity</span><span class="rv">${o.slots.occupied}/6 · ${o.slots.recommended_available} rec.</span></div>
     </div>${o.warning ? `<div class="rwarn">${esc(o.warning)}</div>` : ""}</div>`;
+}
+
+// -------- Team Dashboard (default center) --------
+function dashboardCenter() {
+  const d = state._dash;
+  if (!d) { fetchDashboard(); return `<div class="empty" style="margin:20px"><div class="big">Team Dashboard</div>Loading team, machine, providers, and scheduler…</div>`; }
+  const m = d.machine || {}, sc = d.scheduler || {}, tp = d.throughput || {}, ol = d.operator_load || {};
+  const stat = (l, v, sub) => `<div class="dstat"><div class="dl">${l}</div><div class="dv">${v}</div>${sub ? `<div class="ds">${sub}</div>` : ""}</div>`;
+  const c = sc.counts || {};
+  return `<div class="dash">
+    <div class="dash-h"><div class="dt">${esc(d.team?.project || "Alloy")} · Team Dashboard</div><div class="muted mono">${d.team?.base_sha || ""}</div></div>
+
+    <div class="dsec"><div class="dsh">Team status</div><div class="dstats">
+      ${stat("Slots", `${c.available != null ? 6 - c.available : "—"}/6`, "occupied")}${stat("Active", c.active ?? "—")}${stat("Waiting", c.waiting ?? "—")}${stat("Paused", c.paused ?? "—")}${stat("Blocked", c.blocked ?? "—")}${stat("Idle", c.idle ?? "—")}${stat("Queued", c.queued ?? 0)}${stat("Available", c.available ?? "—", "capacity")}</div></div>
+
+    <div class="dgrid2">
+      <div class="dsec"><div class="dsh">Machine health <span class="pr ${m.slots?.pressure || ""}">${m.slots?.pressure || "—"}</span></div><div class="dstats sm">
+        ${stat("CPU load", `${m.cpu_load_pct ?? "—"}%`, `${m.load_5m ?? ""}/${m.cpu_count ?? ""} (5m)`)}
+        ${stat("Memory used", `${m.mem_used_pct ?? "—"}%`, `${m.mem_available_mb != null ? (m.mem_available_mb / 1024).toFixed(1) + "G avail" : ""}`)}
+        ${stat("Compressed", m.mem_compressed_mb != null ? `${(m.mem_compressed_mb / 1024).toFixed(1)}G` : "—", "reclaimable")}
+        ${stat("Wired", m.mem_wired_mb != null ? `${(m.mem_wired_mb / 1024).toFixed(1)}G` : "—")}
+        ${stat("Swap", m.swap?.used_mb != null ? `${(m.swap.used_mb / 1024).toFixed(1)}G` : "—", m.swap?.total_mb ? `of ${(m.swap.total_mb / 1024).toFixed(1)}G` : "")}
+        ${stat("Servers", m.running_servers ?? "—", "running")}</div>
+        <div class="muted src">${esc(m.mem_source || "")}</div></div>
+
+      <div class="dsec"><div class="dsh">Provider usage</div>${(d.providers?.providers || []).length ? (d.providers.providers).map((p) => `
+        <div class="prov"><div class="prov-h"><b>${esc(p.provider)}</b> <span class="hpill ${p.auth_state === "authenticated" ? "healthy" : p.auth_state === "needs_auth" ? "attention" : "finished"}">${esc(p.auth_state)}</span></div>
+          <div class="prov-m">${p.calls} calls · ${p.calls_today} today · ${p.input_tokens}→${p.output_tokens} tok · ${p.avg_duration_ms != null ? (p.avg_duration_ms / 1000).toFixed(1) + "s avg" : "—"} · ${p.failures} fail</div>
+          <div class="prov-c">cost: ${p.cost.kind === "authoritative" ? `$${p.cost.value_usd} (authoritative)` : p.cost.kind === "estimate" ? `~$${p.cost.value_usd} (estimate)` : "unavailable"}</div></div>`).join("") : `<div class="muted">No provider round-trips yet. Use a worker's Director tab.</div>`}
+        <div class="muted src">${esc(d.providers?.cost_note || "")}</div></div>
+    </div>
+
+    <div class="dgrid2">
+      <div class="dsec"><div class="dsh">Scheduler <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· deterministic · auto-scheduling ${sc.auto_scheduling ? "on" : "off"}</span></div>
+        <div class="muted" style="margin-bottom:6px">${sc.may_start ? `✅ Safe to start${sc.recommended_slot ? ` on slot ${sc.recommended_slot}` : ""}` : "⛔ Do not start a new worker now"}</div>
+        ${(sc.recommendations || []).map((r) => `<div class="srec ${r.kind}">${esc(r.text)}</div>`).join("")}</div>
+
+      <div class="dsec"><div class="dsh">Throughput & operator load (today)</div><div class="dstats sm">
+        ${stat("Commands", tp.commands_today ?? 0, `${tp.succeeded_today ?? 0} ok · ${tp.failed_today ?? 0} fail`)}
+        ${stat("Round-trips", tp.provider_round_trips_today ?? 0, "provider")}
+        ${stat("Reviews", tp.reviews_resolved_today ?? 0, "resolved")}
+        ${stat("Interventions", ol.interventions_today ?? 0, "human")}
+        ${stat("Escalated", ol.decisions_escalated ?? 0, "need you")}
+        ${stat("Kelly-minutes", ol.human_minutes?.value ?? "n/a", ol.human_minutes?.kind || "")}</div>
+        <div class="muted src">${esc(ol.human_minutes?.note || "")}</div></div>
+    </div>
+
+    <div class="dsec"><div class="dsh">Recent outputs</div>${(d.recent_outputs || []).length ? (d.recent_outputs).map((a) => `<div class="commit"><span class="sh">${esc(a.kind)}</span><span class="trunc">${esc(a.actor || "")} · ${esc(a.summary)}</span></div>`).join("") : `<div class="muted">none</div>`}</div>
+    <div class="muted" style="font-size:11px;margin-top:6px">Select a worker in the dock to open its operating surface. This dashboard is the default center.</div>
+  </div>`;
 }
 
 // -------- selected worker operating surface --------
@@ -113,12 +167,13 @@ function operatingSurface() {
     : state.tab === "repository" ? tabRepository(sp)
     : state.tab === "history" ? tabHistory(sp)
     : tabOverview(sp, w, r);
+  const w2 = w;
   return `<div class="surf-h">
+      <button class="btn sm backdash" data-nav="command" title="Back to Team Dashboard">← Dashboard</button>
       <span class="gl big">${glyph(sp.glyph)}</span>
       <div class="surf-t"><div class="tt">${esc(sp.title)}</div>
-        <div class="su">slot ${sp.slot} · ${esc(sp.provider)} · <span class="chip ${sp.status}">${esc(sp.status)}</span> · ${w ? `<span class="hpill ${w.health}">${w.health}</span>` : ""} · upd ${ago(sp.updated_at_ms)} ago</div></div>
+        <div class="su">slot ${sp.slot} · ${esc(sp.provider)} · <span class="chip ${sp.status}">${esc(sp.status)}</span> · ${w2 ? `<span class="hpill ${w2.health}">${w2.health}</span>` : ""} · upd ${ago(sp.updated_at_ms)} ago${sp.server === "running" && sp.port ? ` · <a href="http://127.0.0.1:${sp.port}" target="_blank">Open App ↗</a>` : ""}</div></div>
       <div class="surf-actions">
-        <button class="btn sm" data-cmd="runtime.refresh">Refresh</button>
         <button class="btn sm" data-cmd="worker.doctor" data-slot="${sp.slot}">Diagnose</button>
         ${sp.status === "paused" ? `<button class="btn sm warn" data-cmd="worker.resume" data-slot="${sp.slot}">Resume</button>` : `<button class="btn sm warn" data-cmd="worker.pause" data-slot="${sp.slot}">Pause</button>`}
         <button class="btn sm warn" data-end="${sp.slot}">End work</button>
@@ -287,6 +342,7 @@ async function fetchAudit() { try { const r = await fetch("/api/audit"); state._
 async function fetchCommands() { try { const r = await fetch("/api/commands"); state._cmds = (await r.json()).commands; render(true); } catch {} }
 async function fetchPolicies() { try { const r = await fetch("/api/policies"); state._pol = await r.json(); render(true); } catch {} }
 async function fetchResources() { try { const r = await fetch("/api/resources"); state.res = await r.json(); render(); } catch {} }
+async function fetchDashboard() { try { const r = await fetch("/api/dashboard"); state._dash = await r.json(); render(true); } catch {} }
 
 function viewPolicies() {
   if (!state._pol) { fetchPolicies(); return `<div class="muted" style="padding:14px">Loading policies…</div>`; }
@@ -464,3 +520,5 @@ if (!location.hash) location.hash = "#/command";
 connect(); poll(); fetchResources();
 setInterval(poll, 4000);
 setInterval(fetchResources, 9000);
+// Refresh the dashboard while it's the active center; pause when the tab is hidden (efficiency).
+setInterval(() => { if (document.hidden) return; if (route() === "command" && state.sel == null) fetchDashboard(); }, 10000);

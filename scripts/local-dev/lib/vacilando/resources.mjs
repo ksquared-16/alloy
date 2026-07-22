@@ -43,6 +43,47 @@ async function psStats(pid) {
   };
 }
 
+/**
+ * macOS-authoritative memory. os.freemem() only counts truly-free pages and
+ * grossly overstates "used" (it ignores inactive/purgeable/speculative memory
+ * that is reclaimable without swap). We read vm_stat + sysctl instead:
+ *   available = free + inactive + speculative + purgeable   (reclaimable)
+ *   used      = active + wired + compressed                 (real footprint)
+ * plus swap from vm.swapusage. Pressure matches `memory_pressure` reality.
+ */
+async function macMemory(totalBytes) {
+  const vm = await run("vm_stat", [], 3000);
+  if (!vm.ok) return null;
+  const pageSize = Number((vm.out.match(/page size of (\d+) bytes/) || [])[1] || 16384);
+  const pg = (label) => { const m = vm.out.match(new RegExp(`${label}:\\s+(\\d+)`)); return m ? Number(m[1]) * pageSize : 0; };
+  const free = pg("Pages free"), inactive = pg("Pages inactive"), speculative = pg("Pages speculative"),
+    active = pg("Pages active"), wired = pg("Pages wired down"), purgeable = pg("Pages purgeable"),
+    compressed = pg("Pages occupied by compressor");
+  const available = free + inactive + speculative + purgeable;
+  const used = Math.max(0, totalBytes - available);
+  let swap = { used_mb: null, total_mb: null };
+  const sw = await run("sysctl", ["-n", "vm.swapusage"], 2000);
+  if (sw.ok) {
+    const t = sw.out.match(/total = ([\d.]+)M/), u = sw.out.match(/used = ([\d.]+)M/);
+    swap = { total_mb: t ? Math.round(Number(t[1])) : null, used_mb: u ? Math.round(Number(u[1])) : null };
+  }
+  // Kernel's authoritative pressure level: 1=normal, 2=warn, 4=critical.
+  const pl = await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"], 2000);
+  const level = pl.ok ? Number(pl.out.trim()) : null;
+  return {
+    pressure_level: level, // 1|2|4|null
+    pressure: level === 4 ? "high" : level === 2 ? "elevated" : level === 1 ? "ok" : null,
+    total_mb: Math.round(totalBytes / 1048576),
+    available_mb: Math.round(available / 1048576),
+    used_mb: Math.round(used / 1048576),
+    used_pct: Math.round((used / totalBytes) * 100),
+    active_mb: Math.round(active / 1048576),
+    wired_mb: Math.round(wired / 1048576),
+    compressed_mb: Math.round(compressed / 1048576),
+    swap,
+  };
+}
+
 /** Bounded disk usage (KB→MB) for a worktree; null if it can't be measured fast. */
 async function diskMb(path) {
   if (!path || !existsSync(path)) return null;
@@ -79,27 +120,43 @@ export async function collectResources() {
   }));
 
   const totalMem = os.totalmem();
-  const freeMem = os.freemem();
-  const memUsedPct = Math.round(((totalMem - freeMem) / totalMem) * 100);
-  const load1 = os.loadavg()[0];
+  const mem = (await macMemory(totalMem)) || {
+    total_mb: Math.round(totalMem / 1048576), available_mb: Math.round(os.freemem() / 1048576),
+    used_mb: Math.round((totalMem - os.freemem()) / 1048576), used_pct: Math.round(((totalMem - os.freemem()) / totalMem) * 100),
+    active_mb: null, wired_mb: null, compressed_mb: null, swap: { used_mb: null, total_mb: null },
+  };
+  const load = os.loadavg();
   const cpuCount = os.cpus().length;
+  const loadPct = Math.round((load[1] / cpuCount) * 100); // 5-min load is steadier than 1-min
   const occupied = servers.length;
-  const pressure = memUsedPct >= 88 || load1 > cpuCount * 1.5 ? "high" : memUsedPct >= 75 ? "elevated" : "ok";
-  const recommendedAvailable = pressure === "high" ? 0 : Math.max(0, 6 - occupied);
+  // Pressure comes from the KERNEL's authoritative level (kern.memorystatus_vm_
+  // pressure_level: 1 normal / 2 warn / 4 critical). Fall back to a load/used
+  // heuristic only if the kernel value is unavailable. Reclaimable memory is not
+  // "used", so this reflects real macOS pressure, not os.freemem()'s overstatement.
+  const pressure = mem.pressure || (mem.used_pct >= 90 || loadPct >= 200 ? "high" : mem.used_pct >= 80 || loadPct >= 130 ? "elevated" : "ok");
+  const recommendedAvailable = pressure === "high" ? 0 : pressure === "elevated" ? Math.min(1, Math.max(0, 6 - occupied)) : Math.max(0, 6 - occupied);
 
   return {
     workers,
     overall: {
-      load_1m: Math.round(load1 * 100) / 100,
+      load_1m: Math.round(load[0] * 100) / 100,
+      load_5m: Math.round(load[1] * 100) / 100,
       cpu_count: cpuCount,
-      cpu_load_pct: Math.min(100, Math.round((load1 / cpuCount) * 100)),
-      mem_total_mb: Math.round(totalMem / 1048576),
-      mem_free_mb: Math.round(freeMem / 1048576),
-      mem_used_pct: memUsedPct,
+      cpu_load_pct: Math.min(100, loadPct),
+      mem_total_mb: mem.total_mb,
+      mem_available_mb: mem.available_mb,
+      mem_used_mb: mem.used_mb,
+      mem_used_pct: mem.used_pct,
+      mem_active_mb: mem.active_mb,
+      mem_wired_mb: mem.wired_mb,
+      mem_compressed_mb: mem.compressed_mb,
+      swap: mem.swap,
+      mem_pressure_level: mem.pressure_level ?? null,
+      mem_source: "vm_stat + kern.memorystatus_vm_pressure_level (macOS-authoritative)",
       running_servers: servers.filter((s) => s.server === "running").length,
       slots: { total: 6, occupied, recommended_available: recommendedAvailable, pressure },
-      warning: pressure === "high" ? "High machine pressure — avoid starting new workers." : pressure === "elevated" ? "Elevated memory use." : null,
+      warning: pressure === "high" ? "High machine pressure — do not start new workers; consider pausing an idle one." : pressure === "elevated" ? "Elevated pressure — start at most one lightweight worker." : null,
     },
-    provider_cost: { available: false, note: "No provider token/cost source on staging. Needs headless `claude -p` usage JSON (stranded Director capability)." },
+    provider_cost: { available: false, note: "Aggregated per Director round-trip (see /api/usage). Cursor reports tokens; Claude reports cost when authenticated." },
   };
 }
