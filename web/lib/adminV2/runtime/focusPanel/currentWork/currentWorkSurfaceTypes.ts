@@ -7,9 +7,11 @@ import type {
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { CurrentWorkExecutionVM } from "./buildCurrentWorkExecutionVM";
 import type { CurrentWorkActionExecution } from "./executeCurrentWorkAction";
+import type { CurrentWorkResolutionVM } from "./buildCurrentWorkResolutions";
 import type { CurrentWorkRequirementOwner } from "./resolveCurrentWorkRequirementOwner";
 
 export type { CurrentWorkRequirementOwner } from "./resolveCurrentWorkRequirementOwner";
+export type { CurrentWorkResolutionVM, CurrentWorkResolutionKind } from "./buildCurrentWorkResolutions";
 
 /** Operator-facing status for Current Work summary chip. */
 export type CurrentWorkSurfaceStatus = "not_started" | "in_progress" | "blocked" | "completed";
@@ -152,6 +154,8 @@ export type CurrentWorkSurfaceVM = {
     showOutcomeCompletion: boolean;
     outcomeCompletionBlockReason: string | null;
     completionOutcomes: StageCompletionOutcomeV1[];
+    /** Unified generic contract for resolving work — configured outcomes + BP transitions (Slice D). */
+    resolutions: CurrentWorkResolutionVM[];
     primaryWorkItem: StageWorkItemProjection | null;
     primaryProjection: WorkIntentRuntimeProjection | null;
     runtime: StageWorkRuntimeProjection | null;

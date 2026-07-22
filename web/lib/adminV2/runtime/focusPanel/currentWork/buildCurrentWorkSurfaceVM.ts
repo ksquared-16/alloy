@@ -26,6 +26,7 @@ import {
 } from "./currentWorkTemplateConfig";
 import { buildCurrentWorkExecutionVM } from "./buildCurrentWorkExecutionVM";
 import { resolveCurrentWorkActionExecution } from "./executeCurrentWorkAction";
+import { buildCurrentWorkResolutions } from "./buildCurrentWorkResolutions";
 import type {
     CurrentWorkChecklistItemVM,
     CurrentWorkLastActivity,
@@ -729,6 +730,21 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
     const withActionExecutionAll = (actions: CurrentWorkActionVM[]): CurrentWorkActionVM[] =>
         actions.map((action) => withActionExecution(action)!);
 
+    const resolvedAlternatePaths = withActionExecutionAll(alternatePaths);
+    const resolvedOutcomeBlockReason = showOutcomeCompletion
+        ? null
+        : outcomeCompletionBlockReason(actionableWorkItem, pickerOutcomes, context.capabilities.canMutate);
+    const resolvedPrimaryWorkItem = actionableWorkItem ?? primaryWorkItem;
+
+    // Generic resolution contract (Slice D): configured outcomes + BP transitions unified.
+    const resolutions = buildCurrentWorkResolutions({
+        completionOutcomes: pickerOutcomes,
+        alternatePaths: resolvedAlternatePaths,
+        primaryWorkItem: resolvedPrimaryWorkItem,
+        showOutcomeCompletion,
+        outcomeCompletionBlockReason: resolvedOutcomeBlockReason,
+    });
+
     return {
         id: `${recordId}:${workKey}`,
         recordId,
@@ -747,21 +763,16 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         recordOutcomeAction: withActionExecution(recordOutcomeAction),
         execution,
         supportingActions: withActionExecutionAll(supportingActions),
-        alternatePaths: withActionExecutionAll(alternatePaths),
+        alternatePaths: resolvedAlternatePaths,
         administrativeActions: withActionExecutionAll(classified.administrative),
         communicationActions: withActionExecutionAll(communicationActions),
         bosRecommendations: withActionExecutionAll(classified.bosRecommendations),
         lastActivity: lastActivityFromContext(context, communicationSummary ?? null),
         showOutcomeCompletion,
-        outcomeCompletionBlockReason: showOutcomeCompletion
-            ? null
-            : outcomeCompletionBlockReason(
-                  actionableWorkItem,
-                  pickerOutcomes,
-                  context.capabilities.canMutate,
-              ),
+        outcomeCompletionBlockReason: resolvedOutcomeBlockReason,
         completionOutcomes: pickerOutcomes,
-        primaryWorkItem: actionableWorkItem ?? primaryWorkItem,
+        resolutions,
+        primaryWorkItem: resolvedPrimaryWorkItem,
         primaryProjection,
         runtime,
         isEmpty,
