@@ -26,6 +26,21 @@ function action(partial: Partial<CurrentWorkActionVM> & Pick<CurrentWorkActionVM
     };
 }
 
+/** Registry-resolved client object — record-header actions carry this in production. */
+function resolvedFor(key: string): CurrentWorkActionVM["resolved"] {
+    return {
+        key,
+        label: key,
+        description: null,
+        action_type: "registry",
+        icon: null,
+        style: null,
+        display_style: "outline",
+        payload: {},
+        workflow_id: null,
+    };
+}
+
 const minimalSurface = {
     title: "Contact Family",
     description: "Reach out to understand needs",
@@ -52,6 +67,7 @@ const minimalSurface = {
         category: "primary",
         placement: "current_work_primary",
         handlerKey: "send_email",
+        resolved: resolvedFor("send_email"),
     }),
     recordOutcomeAction: action({
         key: "record_outcome",
@@ -74,6 +90,7 @@ const minimalSurface = {
             category: "supporting",
             placement: "current_work_supporting",
             handlerKey: "send_form",
+            resolved: resolvedFor("send_form"),
         }),
         action({
             key: "add_child",
@@ -81,6 +98,7 @@ const minimalSurface = {
             category: "supporting",
             placement: "current_work_supporting",
             handlerKey: "add_child",
+            resolved: resolvedFor("add_child"),
         }),
         action({
             key: "create_task",
@@ -88,6 +106,7 @@ const minimalSurface = {
             category: "supporting",
             placement: "current_work_supporting",
             handlerKey: "create_task",
+            resolved: resolvedFor("create_task"),
         }),
     ],
     communicationActions: [],

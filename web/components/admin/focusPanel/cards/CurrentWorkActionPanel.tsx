@@ -4,7 +4,6 @@ import { useCallback } from "react";
 
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
 import CurrentWorkStageTransitionPanel from "@/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel";
-import { isScheduleTourRegistryAction } from "@/lib/admin/actions/scheduleTourWorkUnitActions";
 import { resolveOpportunityTourScheduleFromTruth } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveOpportunityTourScheduleFromTruth";
 import {
     resolveCurrentWorkActionSurface,
@@ -105,8 +104,10 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
                     }}
                     surface={surface}
                 />
-            : surface === "inline_form"
-                && isScheduleTourRegistryAction({ key: actionKey, payload: action.resolved?.payload ?? null }) ?
+            : surface === "inline_form" ?
+                // `inline_form` is the scheduling capability's declared interaction host (metadata,
+                // not the action name). It is the only inline_form capability today; when more exist,
+                // resolve the component from a host registry rather than assuming the scheduler.
                 <OpportunityTourScheduleActionModal
                     open
                     variant="embedded"

@@ -9,7 +9,7 @@
  */
 
 import type { ActionRegistryEntry } from "@/lib/admin/actions/actionDefinitionRegistry";
-import { ACTION_BUTTON_LIBRARY } from "@/lib/admin/actions/actionDefinitionRegistry";
+import { ACTION_BUTTON_LIBRARY, type CapabilityInteractionHost } from "@/lib/admin/actions/actionDefinitionRegistry";
 import type { RelationshipActionKey } from "@/lib/admin/relationship/relationshipActionContract";
 import {
     RELATIONSHIP_ACTION_REGISTRY,
@@ -68,6 +68,8 @@ export type CanonicalActionDefinition = {
     bosProposalSupport: boolean;
     runtimeWired: boolean;
     settingsConfigurable: boolean;
+    /** Capability-declared interaction host; the runtime resolves the host from this, not the key. */
+    interactionHost?: CapabilityInteractionHost;
 };
 
 const LAYOUT_CONTEXT_ALL: readonly LayoutEditorActionPickerContext[] = [
@@ -179,6 +181,7 @@ function platformCanonicalEntry(entry: ActionRegistryEntry): CanonicalActionDefi
         bosProposalSupport: entry.category === "bos_native",
         runtimeWired: true,
         settingsConfigurable: entry.settingsConfigurable,
+        interactionHost: entry.interactionHost,
     };
 }
 

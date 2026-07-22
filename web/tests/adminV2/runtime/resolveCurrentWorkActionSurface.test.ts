@@ -112,6 +112,35 @@ describe("resolveCurrentWorkActionSurface", () => {
             ),
         ).toBe("header_delegate");
     });
+
+    // Slice B proof: host comes from capability metadata, never the action name/label.
+    it("resolves two differently-named capabilities with the same declared host to the same host", () => {
+        const a = resolveCurrentWorkActionSurface(
+            action({ key: "schedule_tour", label: "Schedule tour", actionRef: "schedule_tour" }),
+        );
+        const b = resolveCurrentWorkActionSurface(
+            action({ key: "reschedule_tour", label: "Reschedule tour", actionRef: "reschedule_tour" }),
+        );
+        // Both declare interactionHost="inline_form" in capability metadata → same host, different names.
+        expect(a).toBe("inline_form");
+        expect(b).toBe("inline_form");
+        expect(a).toBe(b);
+    });
+
+    it("gives no special treatment to labels containing tour/message/form/enrollment without metadata", () => {
+        // A key with no canonical capability, no resolved handler, and no communication category is
+        // unsupported no matter what its label says — routing is metadata-driven, never label text.
+        for (const label of [
+            "Schedule the tour now",
+            "Send a message",
+            "Share the intake form",
+            "Enroll the child / waitlist",
+        ]) {
+            expect(
+                resolveCurrentWorkActionSurface(action({ key: "custom_unmapped_action", label })),
+            ).toBe("unsupported");
+        }
+    });
 });
 
 describe("resolveOpportunityTourScheduleFromTruth", () => {

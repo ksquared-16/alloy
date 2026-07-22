@@ -1,10 +1,11 @@
 /**
  * Resolve how a Current Work action should execute when the operator clicks it.
- * Config-first, category-backed — no enrollment-specific branching.
+ * Fully metadata-driven — the host comes from capability metadata (declared interaction host,
+ * category, placement) or the registry-resolved handler, never from an action name/label/stage/
+ * process/intent.
  */
 
 import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
-import { isScheduleTourRegistryAction } from "@/lib/admin/actions/scheduleTourWorkUnitActions";
 
 import type { CurrentWorkActionVM } from "./currentWorkSurfaceTypes";
 
@@ -19,28 +20,6 @@ function actionRegistryKey(action: Pick<CurrentWorkActionVM, "key" | "handlerKey
     return (action.handlerKey ?? action.actionRef ?? action.key).trim();
 }
 
-/**
- * Known non-canonical registry keys that still execute through the Focus Panel
- * header → `applyRegistryResolvedActionClient` path by action key alone.
- */
-const HEADER_DELEGATE_KNOWN_KEYS = new Set([
-    "send_form",
-    "create_task",
-    "add_child",
-    "add_family_member",
-    "add_sibling",
-    "send_email",
-    "send_sms",
-    "send_message",
-    "call_parent",
-    "upload_document",
-    "schedule_tour",
-    "reschedule_tour",
-    "request_documents",
-    "log_note",
-    "add_note",
-]);
-
 function isProcessTransitionAction(
     action: Pick<CurrentWorkActionVM, "key" | "handlerKey" | "actionRef" | "category"> &
         Partial<Pick<CurrentWorkActionVM, "placement">>,
@@ -48,11 +27,10 @@ function isProcessTransitionAction(
     if (action.handlerKey === "process_stage_transition") return true;
     if (action.placement === "current_work_alternate_paths" && action.category === "alternate_path") {
         const key = actionRegistryKey(action);
-        // Process transition refs and destination stage keys are not catalog actions.
+        // Process-transition refs and destination stage keys are not catalog capabilities;
+        // a registered capability (canonical) is never a raw transition.
         if (!key) return false;
-        if (HEADER_DELEGATE_KNOWN_KEYS.has(key)) return false;
         if (canonicalActionDefinition(key)) return false;
-        if (isScheduleTourRegistryAction({ key, payload: null })) return false;
         return true;
     }
     return false;
@@ -75,13 +53,12 @@ export function resolveCurrentWorkActionSurface(
         return "process_transition";
     }
 
-    if (isScheduleTourRegistryAction({ key, payload: action.resolved?.payload ?? null })) {
-        return "inline_form";
-    }
-
     const canonical = canonicalActionDefinition(key);
     if (canonical) {
         if (!canonical.runtimeWired) return "unsupported";
+
+        // Capability-declared interaction host wins — metadata, never the action name.
+        if (canonical.interactionHost) return canonical.interactionHost;
 
         if (canonical.category === "communication" || action.category === "communication") {
             return "communications_composer";
@@ -91,16 +68,7 @@ export function resolveCurrentWorkActionSurface(
             return "unsupported";
         }
 
-        if (
-            canonical.category === "status_lifecycle"
-            || canonical.category === "relationship"
-            || canonical.executor.kind === "relationship_execute"
-            || canonical.executor.kind === "dedicated_modal"
-            || canonical.executor.kind === "admin_execute"
-        ) {
-            return "header_delegate";
-        }
-
+        // status_lifecycle / relationship / admin / dedicated executors delegate to the header host.
         return "header_delegate";
     }
 
@@ -108,20 +76,14 @@ export function resolveCurrentWorkActionSurface(
         return "communications_composer";
     }
 
-    if (action.resolved || HEADER_DELEGATE_KNOWN_KEYS.has(key)) {
+    // Registry-resolved actions carry an executable handler — run them through the header host.
+    if (action.resolved) {
         return "header_delegate";
     }
 
-    // Template helpful/primary refs resolve to execution keys without a resolved client
-    // object — still run through the registry host by key (never silent no-op).
-    if (
-        action.category === "primary"
-        || action.category === "supporting"
-        || action.placement === "current_work_primary"
-        || action.placement === "current_work_supporting"
-    ) {
-        return "header_delegate";
-    }
-
+    // No capability resolved (not canonical, not registry-resolved, not a reserved handler /
+    // transition / communication). An action with no resolvable capability must not present as
+    // executable — return unsupported rather than a blind name/placement header fallback (no-op
+    // prevention). Real template refs resolve to a canonical capability or a resolved handler above.
     return "unsupported";
 }
