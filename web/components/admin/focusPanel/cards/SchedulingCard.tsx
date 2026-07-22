@@ -21,7 +21,28 @@ type Props = {
 };
 
 type Site = { id: string; name: string };
-type Pattern = { id: string; label: string; weekdays: number[] };
+type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string };
+type Money = { amountCents: number; currency: string };
+type BillingProjection = {
+    status: "resolved" | "pending" | "unconfigured" | "stale";
+    recommendedRate: { name: string; baseAmount: Money; recurringFrequency: string } | null;
+    discounts: { name: string; amount: Money }[];
+    funding: { name: string; projectedAmount: Money | null }[];
+    totals: {
+        baseRecurringTuition: Money;
+        totalDiscounts: Money;
+        totalFunding: Money;
+        familyResponsibility: Money;
+        recurringFrequency: string;
+    } | null;
+    warnings: string[];
+};
+
+function money(m: Money | null | undefined, freq?: string): string {
+    if (!m) return "—";
+    const dollars = (m.amountCents / 100).toLocaleString("en-US", { style: "currency", currency: m.currency || "USD" });
+    return freq ? `${dollars} / ${freq}` : dollars;
+}
 type PlacementOption = {
     roomId: string;
     roomName: string | null;
@@ -176,6 +197,8 @@ function ScheduleWorkSurface({ child, onDone }: { child: SchedChild; onDone: () 
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [done, setDone] = useState<string | null>(null);
+    const [billing, setBilling] = useState<BillingProjection | null>(null);
+    const [billingLoading, setBillingLoading] = useState(false);
 
     // Load sites, then patterns for the chosen site.
     useEffect(() => {
@@ -234,6 +257,26 @@ function ScheduleWorkSurface({ child, onDone }: { child: SchedChild; onDone: () 
 
     const recommended = options?.find((o) => o.classification === "recommended") ?? null;
     const chosen = options?.find((o) => o.roomId === roomId) ?? recommended;
+
+    // Financial preview — Billing projection for the schedule (updates as it changes).
+    useEffect(() => {
+        if (!siteId || !patternId) return;
+        const pat = patterns.find((p) => p.id === patternId);
+        const scheduleType = pat?.scheduleTypeKey ?? "";
+        setBillingLoading(true);
+        (async () => {
+            try {
+                const qs = `?view=billing&site_location_id=${encodeURIComponent(siteId)}&customer_member_id=${encodeURIComponent(child.id)}&schedule_type=${encodeURIComponent(scheduleType)}${effStart ? `&start_date=${effStart}` : ""}`;
+                const b = await schedApi(qs);
+                setBilling(b.projection ?? null);
+            } catch {
+                setBilling(null);
+            } finally {
+                setBillingLoading(false);
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [siteId, patternId, effStart, patterns.length]);
 
     async function save() {
         setBusy(true);
@@ -381,10 +424,29 @@ function ScheduleWorkSurface({ child, onDone }: { child: SchedChild; onDone: () 
                 </div>
             </section>
 
-            {/* 6 · Financial preview (Billing projection lands here — next milestone) */}
+            {/* 6 · Financial preview (Billing owns the amounts; Scheduling displays) */}
             <section style={{ background: "#f9fafb", border: "1px solid #eaecf0", borderRadius: 10, padding: "10px 12px" }}>
                 {sectionLabel("Recurring tuition")}
-                <div style={{ fontSize: 12.5, color: "#667085" }}>Financial preview — pending Billing determination for this schedule.</div>
+                {billingLoading ? (
+                    <div style={{ fontSize: 12.5, color: "#98a2b3" }}>Calculating…</div>
+                ) : !billing || billing.status === "unconfigured" || !billing.totals ? (
+                    <div style={{ fontSize: 12.5, color: "#667085" }}>
+                        Pending — Billing not yet configured for this schedule.
+                    </div>
+                ) : (
+                    <div style={{ display: "grid", gap: 4 }}>
+                        <FinRow label={billing.recommendedRate?.name ?? "Base tuition"} value={money(billing.totals.baseRecurringTuition, billing.totals.recurringFrequency)} />
+                        {billing.discounts.map((d, i) => (
+                            <FinRow key={i} label={d.name} value={`− ${money(d.amount)}`} muted />
+                        ))}
+                        {billing.funding.map((f, i) => (
+                            <FinRow key={i} label={f.name} value={`− ${money(f.projectedAmount)}`} muted />
+                        ))}
+                        <div style={{ borderTop: "1px solid #eaecf0", marginTop: 3, paddingTop: 5 }}>
+                            <FinRow label="Family responsibility" value={money(billing.totals.familyResponsibility, billing.totals.recurringFrequency)} strong />
+                        </div>
+                    </div>
+                )}
             </section>
 
             {/* 7 · Save */}
@@ -427,6 +489,15 @@ function RoomRow({ option, selected, recommended }: { option: PlacementOption; s
             <span style={{ fontSize: 10.5, fontWeight: 600, color: recommended ? "#00a283" : "#98a2b3" }}>
                 {recommended ? "Recommended" : option.classification}
             </span>
+        </div>
+    );
+}
+
+function FinRow({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) {
+    return (
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: strong ? 13 : 12.5, fontWeight: strong ? 700 : 500, color: muted ? "#667085" : "#1d2939" }}>
+            <span>{label}</span>
+            <span>{value}</span>
         </div>
     );
 }

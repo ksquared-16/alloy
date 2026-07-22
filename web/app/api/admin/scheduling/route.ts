@@ -9,6 +9,11 @@ import { detectUnplacedChildren } from "@/lib/scheduling/problems/detectUnplaced
 import { generatePlacementOptions } from "@/lib/scheduling/options/generatePlacementOptions";
 import { loadSchedulingProjectionForChild } from "@/lib/scheduling/projection/buildSchedulingProjection";
 import { getOperationalAgreementForMemberSite } from "@/lib/childcareOperational/enrollmentAgreementService";
+import { composeCommercialExport } from "@/lib/commercial/execution/export";
+import { evaluate } from "@/lib/commercial/execution/evaluate/evaluate";
+import { resolveCommercialScope } from "@/lib/commercial/execution/billing/resolveCommercialScope";
+import type { CommercialContext } from "@/lib/commercial/execution/executionTypes";
+import { mapCommercialResolutionToBillingProjection } from "@/lib/scheduling/billing/billingScheduleProjection";
 import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
 import { validateScheduleCreatePayload } from "@/lib/scheduling/commands/scheduleCreateInputs";
 
@@ -66,14 +71,19 @@ export async function GET(request: NextRequest) {
             const unplaced = await detectUnplacedChildren(supabase, ctx.orgId, siteLocationId);
             const { data: patternData } = await supabase
                 .from("schedule_patterns")
-                .select("id, label, weekdays")
+                .select("id, label, weekdays, schedule_type_key")
                 .eq("org_id", ctx.orgId)
                 .eq("site_location_id", siteLocationId)
                 .eq("is_active", true)
                 .order("sort_order");
-            const patterns = ((patternData ?? []) as { id: string; label: string | null; weekdays: number[] }[]).map(
-                (p) => ({ id: p.id, label: p.label?.trim() || "Schedule", weekdays: p.weekdays ?? [] })
-            );
+            const patterns = (
+                (patternData ?? []) as { id: string; label: string | null; weekdays: number[]; schedule_type_key: string | null }[]
+            ).map((p) => ({
+                id: p.id,
+                label: p.label?.trim() || "Schedule",
+                weekdays: p.weekdays ?? [],
+                scheduleTypeKey: p.schedule_type_key ?? "",
+            }));
             return NextResponse.json({ view, siteLocationId, unplaced, patterns });
         }
 
@@ -123,6 +133,84 @@ export async function GET(request: NextRequest) {
                 todayYmd,
                 computedAt: `${todayYmd}T00:00:00.000Z`,
                 subjectName,
+            });
+            return NextResponse.json({ view, projection });
+        }
+
+        if (view === "billing") {
+            // Financial preview for a (proposed) schedule — Billing owns the amounts;
+            // Scheduling only displays. Read-shaping over the write-free commercial
+            // pipeline. Graceful "unconfigured" when a rate can't be resolved.
+            const siteLocationId = param(request, "site_location_id");
+            const scheduleType = param(request, "schedule_type");
+            const customerMemberId = param(request, "customer_member_id");
+            const startDate = param(request, "start_date");
+            const asOf = startDate && ISO_DATE_RE.test(startDate)
+                ? startDate
+                : await resolveOperationalEnrollmentTodayYmd(supabase, ctx.orgId);
+
+            // Resolve the child's program category (operational placement first, else
+            // the pre-enrolled desired program on the opportunity member), then its key.
+            let programCategoryId = param(request, "program_category_id");
+            if (!programCategoryId && customerMemberId) {
+                const { data: pl } = await supabase
+                    .from("child_placements")
+                    .select("program_category_id")
+                    .eq("org_id", ctx.orgId)
+                    .eq("customer_member_id", customerMemberId)
+                    .in("status", ["planned", "active", "ending"])
+                    .maybeSingle();
+                programCategoryId = (pl as { program_category_id?: string | null } | null)?.program_category_id ?? "";
+                if (!programCategoryId) {
+                    const { data: ocm } = await supabase
+                        .from("opportunity_customer_members")
+                        .select("program_category_id")
+                        .eq("org_id", ctx.orgId)
+                        .eq("customer_member_id", customerMemberId)
+                        .maybeSingle();
+                    programCategoryId = (ocm as { program_category_id?: string | null } | null)?.program_category_id ?? "";
+                }
+            }
+            let programKey = "";
+            if (programCategoryId) {
+                const { data } = await supabase
+                    .from("location_program_categories")
+                    .select("key")
+                    .eq("org_id", ctx.orgId)
+                    .eq("id", programCategoryId)
+                    .maybeSingle();
+                programKey = (data as { key?: string } | null)?.key?.trim() ?? "";
+            }
+
+            const unconfigured = () =>
+                NextResponse.json({
+                    view,
+                    projection: {
+                        status: "unconfigured",
+                        recommendedRate: null,
+                        discounts: [],
+                        funding: [],
+                        totals: null,
+                        warnings: ["Billing not yet configured for this schedule."],
+                    },
+                });
+
+            if (!programKey || !scheduleType) return unconfigured();
+
+            const { export: exp } = await composeCommercialExport({ supabase, orgId: ctx.orgId, asOf });
+            const scope = resolveCommercialScope(exp, { programKey, scheduleBasis: scheduleType });
+            if (!scope.resolved) return unconfigured();
+
+            const context: CommercialContext = {
+                subject: { type: "child", id: null },
+                scope: { programKey, offeringId: scope.offeringId, variantId: scope.variantId, locationId: siteLocationId || null },
+                commitment: { cadenceKey: scope.cadenceKey, payerIntent: scope.payerType },
+                asOf,
+                mode: "actual",
+            };
+            const resolution = evaluate(context, exp);
+            const projection = mapCommercialResolutionToBillingProjection(resolution, {
+                computedAt: `${asOf}T00:00:00.000Z`,
             });
             return NextResponse.json({ view, projection });
         }
