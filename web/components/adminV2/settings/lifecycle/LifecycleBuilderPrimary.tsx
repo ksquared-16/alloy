@@ -25,9 +25,11 @@ import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
 export default function LifecycleBuilderPrimary({
     contextActions = null,
     onContextActionsChange,
+    initialSection,
 }: {
     contextActions?: ReactNode;
     onContextActionsChange?: (actions: ReactNode) => void;
+    initialSection?: string;
 } = {}) {
     const { orgId, userId } = useAdminAuth();
     const [catalog, setCatalog] = useState<LifecycleCatalogEntry[]>([]);
@@ -237,6 +239,15 @@ export default function LifecycleBuilderPrimary({
                 <div className="flex min-h-0 flex-1 flex-col">
                     <LifecycleActivationBoard
                         key={creatingNew ? "new" : selectedCatalogEntry!.id}
+                        initialSection={
+                            initialSection === "stages"
+                            || initialSection === "work-views"
+                            || initialSection === "actions"
+                            || initialSection === "automation"
+                            || initialSection === "health"
+                                ? initialSection
+                                : "stages"
+                        }
                         identity={
                             creatingNew ?
                                 identity

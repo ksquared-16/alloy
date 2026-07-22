@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
     ConfigurationContext,
-    ConfigurationEmptyState,
     ConfigurationPrimaryButton,
     ConfigurationQueueItem,
     ConfigurationSecondaryButton,
@@ -18,11 +18,14 @@ import {
     ConfigObjectHeader,
     ConfigScopeContextBar,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
-import LocationProgramDetailPanel from "@/components/adminV2/settings/locations/LocationProgramDetailPanel";
+import LocationAddProgramPanel from "@/components/adminV2/settings/locations/LocationAddProgramPanel";
+import LocationProgramsOfferedPanel from "@/components/adminV2/settings/locations/LocationProgramsOfferedPanel";
 import LocationRoomCreatePanel from "@/components/adminV2/settings/locations/LocationRoomCreatePanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
 import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
+import LocationSchedulingSurface from "@/components/adminV2/settings/locations/LocationSchedulingSurface";
+import { warmLocationSchedulingDayTypes } from "@/lib/locations/useLocationSchedulingVm";
 import LocationSiteCreatePanel from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
 import LocationSiteDetailPanel from "@/components/adminV2/settings/locations/LocationSiteDetailPanel";
 import {
@@ -36,19 +39,36 @@ import { LocationsCommandRailActions } from "@/components/adminV2/settings/locat
 import { LocationsObjectSelector } from "@/components/adminV2/settings/locations/LocationsObjectSelector";
 import { useLocationsConfigurationSettings } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
 import LocationsLanding from "@/components/adminV2/settings/locations/LocationsLanding";
+import { useConfigurationContinuityOptional } from "@/components/adminV2/settings/configurationRuntime/ConfigurationContinuityProvider";
 import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
 import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
 import { buildLocationsRailActions } from "@/lib/locations/buildLocationsRailActions";
 import {
     buildLocationWorkspaceModel,
-    buildLocationProgramOperationalSummaries,
     buildLocationsCollectionModel,
     LOCATION_WORKSPACE_TABS,
     locationsLandingHref,
-    locationWorkspaceHref,
     type LocationWorkspaceTab,
 } from "@/lib/locations/locationWorkspaceModel";
+import {
+    getLocationConcernDefinition,
+    locationConcernHref,
+    parseLocationConcernTab,
+    resolveActiveLocationConcern,
+} from "@/lib/locations/locationConcernContract";
+import { resolveLocationsConcernState } from "@/lib/locations/locationsSelectionAdapter";
+import {
+    invalidateLocationConcernCaches,
+    loadLocationOwnedSetup,
+    loadLocationAccessMembers,
+    loadLocationPlacementPolicy,
+    loadLocationTourRules,
+    peekLocationOwnedSetup,
+} from "@/lib/locations/locationConcernCache";
+import { invalidateLocationsCollection } from "@/lib/locations/locationsCollectionCache";
+import { invalidateProgramsCollection } from "@/lib/programs/programsCollectionCache";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
+import { formatSchedulePatternSummary } from "@/lib/locations/schedulePatternPresentation";
 
 export default function LocationsConfigurationPage({
     initialLocationId = null,
@@ -60,10 +80,17 @@ export default function LocationsConfigurationPage({
     initialItemId?: string | null;
 }) {
     const router = useRouter();
-    const { canMutate } = useAdminAuth();
+    const { canMutate, orgId: authOrgId } = useAdminAuth();
+    const continuity = useConfigurationContinuityOptional();
+    const orgId = continuity?.orgId || authOrgId || "";
+    const retainedLocationId = continuity?.selection?.locationId ?? null;
+    const retainedConcernTab = continuity?.selection?.locationTab ?? null;
+    const retainedConcernItemId = continuity?.selection?.locationItemId ?? null;
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
     const [creatingRoom, setCreatingRoom] = useState(false);
+    const [creatingProgram, setCreatingProgram] = useState(false);
+    const [pendingAssociatedProgramId, setPendingAssociatedProgramId] = useState<string | null>(null);
     const [creatingSchedule, setCreatingSchedule] = useState(false);
     const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
         Record<string, Partial<Record<"tours" | "placement" | "access", boolean>>>
@@ -81,9 +108,11 @@ export default function LocationsConfigurationPage({
     );
     const [toursKeepAlive, setToursKeepAlive] = useState(initialTab === "tours");
     const [placementKeepAlive, setPlacementKeepAlive] = useState(initialTab === "placement");
+    const [accessKeepAlive, setAccessKeepAlive] = useState(initialTab === "access");
     const {
         selectedId,
         setSelectedId,
+        shouldSyncRoute,
         loading,
         error,
         setError,
@@ -97,11 +126,46 @@ export default function LocationsConfigurationPage({
         createRoomUnit,
         patchLocation,
         patchProgramCategory,
+        refreshPrograms,
         roomCapacitySummaryForSite,
         programOptionsForSite,
-        ageUnitSelectOptions,
         setSchedulePatterns,
-    } = useLocationsConfigurationSettings({ initialLocationId });
+    } = useLocationsConfigurationSettings({
+        initialLocationId,
+        orgId,
+        retainedLocationId,
+    });
+
+    // Retained Continuity must not restore selection against an empty URL (Programs parity).
+    // URL search params (page props) remain the selection authority for Back/Forward + soft-nav.
+    useEffect(() => {
+        const active = resolveActiveLocationConcern(initialTab);
+        const localItemId =
+            activeTab === "rooms" ? selectedRoomId
+            : activeTab === "programs" ? selectedProgramId
+            : activeTab === "schedule" ? selectedScheduleId
+            : null;
+        const projected = resolveLocationsConcernState({
+            routeTab: active.concern,
+            routeItemId: initialItemId,
+            localTab: activeTab,
+            localItemId,
+            routeLocationId: initialLocationId,
+            localLocationId: selectedId,
+        });
+        setActiveTab(projected.tab);
+        if (projected.tab === "tours") setToursKeepAlive(true);
+        if (projected.tab === "placement") setPlacementKeepAlive(true);
+        if (projected.tab === "access") setAccessKeepAlive(true);
+        setSelectedRoomId(projected.tab === "rooms" ? projected.itemId : null);
+        setSelectedProgramId(projected.tab === "programs" ? projected.itemId : null);
+        setSelectedScheduleId(projected.tab === "schedule" ? projected.itemId : null);
+        if (active.normalized && selectedId) {
+            router.replace(locationConcernHref(selectedId, projected.tab, projected.itemId));
+        }
+        // Route props are authoritative; omit local tab/item from deps to avoid loops.
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- history projection
+    }, [initialTab, initialItemId, initialLocationId, router, selectedId]);
 
     const visibleSites = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -157,60 +221,55 @@ export default function LocationsConfigurationPage({
             selectedScheduleId
         :   (selectedSchedules[0]?.id ?? null);
     const selectedRoom = selectedRooms.find((room) => room.id === effectiveRoomId) ?? null;
-    const selectedProgram = selectedPrograms.find((program) => program.id === effectiveProgramId) ?? null;
     const selectedSchedule = selectedSchedules.find((schedule) => schedule.id === effectiveScheduleId) ?? null;
-    const programSummaries = useMemo(
-        () =>
-            buildLocationProgramOperationalSummaries({
-                programs: selectedPrograms,
-                rooms: selectedRooms,
-            }),
-        [selectedPrograms, selectedRooms],
-    );
 
-    const refreshOwnedConcernSetup = useCallback(async (locationId: string) => {
-        const requestSeq = ++ownedConcernRequestSeq.current;
-        const [tours, access] = await Promise.all([
-            fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
-                credentials: "include",
-            })
-                .then(async (response) => {
-                    if (!response.ok) return null;
-                    const json = (await response.json().catch(() => ({}))) as {
-                        rules?: { location_id?: string | null; is_active?: boolean }[];
-                    };
-                    return (json.rules ?? []).some(
-                        (rule) => rule.location_id === locationId && rule.is_active !== false,
-                    );
-                })
-                .catch(() => null),
-            fetch("/api/admin/settings/users-roles/members", { credentials: "include" })
-                .then(async (response) => {
-                    if (!response.ok) return null;
-                    const json = (await response.json().catch(() => ({}))) as {
-                        members?: {
-                            role_keys?: string[];
-                            site_scope?: string;
-                            site_location_ids?: string[];
-                        }[];
-                    };
-                    return (json.members ?? []).some(
-                        (member) =>
-                            member.role_keys?.includes("admin") &&
-                            (member.site_scope === "all" || member.site_location_ids?.includes(locationId)),
-                    );
-                })
-                .catch(() => null),
-        ]);
-        if (requestSeq !== ownedConcernRequestSeq.current) return;
-        setOwnedConcernSetupByLocation((current) => ({
-            ...current,
-            [locationId]: {
-                tours: tours ?? undefined,
-                access: access ?? undefined,
-            },
-        }));
-    }, []);
+    // After in-context assign/create, select the Location LPC tied to the Organization program.
+    useEffect(() => {
+        if (!pendingAssociatedProgramId || !selectedSite) return;
+        const match = selectedPrograms.find(
+            (row) => String(row.program_id ?? "").trim() === pendingAssociatedProgramId,
+        );
+        if (!match) return;
+        setPendingAssociatedProgramId(null);
+        setSelectedProgramId(match.id);
+        continuity?.rememberLocationSelection({
+            locationId: selectedSite.id,
+            tab: "programs",
+            itemId: match.id,
+        });
+        router.replace(locationConcernHref(selectedSite.id, "programs", match.id));
+    }, [continuity, pendingAssociatedProgramId, router, selectedPrograms, selectedSite]);
+
+    const refreshOwnedConcernSetup = useCallback(
+        async (locationId: string) => {
+            if (!orgId) return;
+            const requestSeq = ++ownedConcernRequestSeq.current;
+            const peeked = peekLocationOwnedSetup(orgId, locationId);
+            if (peeked) {
+                setOwnedConcernSetupByLocation((current) => ({
+                    ...current,
+                    [locationId]: {
+                        tours: peeked.toursConfigured ?? undefined,
+                        access: peeked.accessConfigured ?? undefined,
+                    },
+                }));
+            }
+            try {
+                const { snapshot } = await loadLocationOwnedSetup(orgId, locationId, { force: !peeked });
+                if (requestSeq !== ownedConcernRequestSeq.current) return;
+                setOwnedConcernSetupByLocation((current) => ({
+                    ...current,
+                    [locationId]: {
+                        tours: snapshot.toursConfigured ?? undefined,
+                        access: snapshot.accessConfigured ?? undefined,
+                    },
+                }));
+            } catch {
+                /* overview setup badges degrade gracefully */
+            }
+        },
+        [orgId],
+    );
 
     const selectedSiteId = selectedSite?.id ?? null;
     useEffect(() => {
@@ -220,6 +279,11 @@ export default function LocationsConfigurationPage({
         }, 0);
         return () => window.clearTimeout(timeout);
     }, [refreshOwnedConcernSetup, selectedSiteId]);
+
+    useEffect(() => {
+        if (!orgId || !selectedSiteId) return;
+        warmLocationSchedulingDayTypes(orgId);
+    }, [orgId, selectedSiteId]);
 
     const ownedConcernSetup = selectedSite ? ownedConcernSetupByLocation[selectedSite.id] : undefined;
     const model =
@@ -252,20 +316,44 @@ export default function LocationsConfigurationPage({
         setEditingSite(false);
         setCreatingSite(false);
         setCreatingRoom(false);
+        setCreatingProgram(false);
         setCreatingSchedule(false);
-        if (tab === "tours") setToursKeepAlive(true);
+        // Prefetch Tours / Placement / Access so concern tabs paint immediately.
+        setToursKeepAlive(true);
         if (tab === "placement") setPlacementKeepAlive(true);
+        if (tab === "access") setAccessKeepAlive(true);
         setActiveTab(tab);
-        router.replace(locationWorkspaceHref(locationId, tab));
+        continuity?.rememberLocationSelection({ locationId, tab, itemId: null });
+        const href = locationConcernHref(locationId, tab);
+        router.push(href, { scroll: false });
+        if (typeof window !== "undefined") {
+            const current = `${window.location.pathname}${window.location.search}`;
+            if (current !== href) {
+                window.history.replaceState(window.history.state, "", href);
+            }
+        }
+        if (orgId) {
+            void loadLocationTourRules(orgId, locationId).catch(() => undefined);
+            void loadLocationOwnedSetup(orgId, locationId).catch(() => undefined);
+        }
     };
 
     const returnToLocations = () => {
         setSelectedId(null);
         setEditingSite(false);
         setCreatingRoom(false);
+        setCreatingProgram(false);
         setCreatingSchedule(false);
         setActiveTab("overview");
-        router.replace(locationsLandingHref());
+        continuity?.rememberLocationSelection({ locationId: null, tab: null, itemId: null });
+        const href = locationsLandingHref();
+        router.push(href, { scroll: false });
+        if (typeof window !== "undefined") {
+            const current = `${window.location.pathname}${window.location.search}`;
+            if (current !== href) {
+                window.history.replaceState(window.history.state, "", href);
+            }
+        }
     };
 
     const navigate = useCallback(
@@ -274,12 +362,40 @@ export default function LocationsConfigurationPage({
             setActiveTab(tab);
             setEditingSite(false);
             setCreatingRoom(false);
+            setCreatingProgram(false);
             setCreatingSchedule(false);
             if (tab === "tours") setToursKeepAlive(true);
             if (tab === "placement") setPlacementKeepAlive(true);
-            router.replace(locationWorkspaceHref(selectedSite.id, tab, itemId));
+            if (tab === "access") setAccessKeepAlive(true);
+            continuity?.rememberLocationSelection({
+                locationId: selectedSite.id,
+                tab,
+                itemId: itemId ?? null,
+            });
+            // Nested concern navigation — push for Back/Forward between concerns.
+            router.push(locationConcernHref(selectedSite.id, tab, itemId));
         },
-        [router, selectedSite],
+        [continuity, router, selectedSite],
+    );
+
+    const prefetchConcernIntent = useCallback(
+        (tab: LocationWorkspaceTab) => {
+            if (!selectedSite || !orgId) return;
+            const def = getLocationConcernDefinition(tab);
+            if (def.prefetch === "none") return;
+            // Advisory route warm — never authoritative.
+            void router.prefetch(locationConcernHref(selectedSite.id, tab));
+            if (tab === "tours" || tab === "access") {
+                void loadLocationOwnedSetup(orgId, selectedSite.id).catch(() => undefined);
+            }
+            if (tab === "access") {
+                void loadLocationAccessMembers(orgId, selectedSite.id).catch(() => undefined);
+            }
+            if (tab === "placement") {
+                void loadLocationPlacementPolicy(orgId).catch(() => undefined);
+            }
+        },
+        [orgId, router, selectedSite],
     );
 
     const showSetupDestination = (tab: LocationWorkspaceTab | "general") => {
@@ -301,15 +417,23 @@ export default function LocationsConfigurationPage({
         setActiveTab("rooms");
         setEditingSite(false);
         setCreatingSchedule(false);
+        setCreatingProgram(false);
         setCreatingRoom(true);
         setError(null);
-        router.replace(locationWorkspaceHref(selectedSite.id, "rooms"));
+        router.replace(locationConcernHref(selectedSite.id, "rooms"));
     }, [canMutate, router, selectedSite, setError]);
 
     const addProgram = useCallback(() => {
         if (!selectedSite || !canMutate) return;
-        router.push("/organization/programs");
-    }, [canMutate, router, selectedSite]);
+        setActiveTab("programs");
+        setEditingSite(false);
+        setCreatingRoom(false);
+        setCreatingSchedule(false);
+        setCreatingProgram(true);
+        setSelectedProgramId(null);
+        setError(null);
+        router.replace(locationConcernHref(selectedSite.id, "programs"));
+    }, [canMutate, router, selectedSite, setError]);
 
     const firstRoomNeedingCapacityId = useMemo(() => {
         const match = selectedRooms.find((room) => !readLocationMetadataPresentation(room.metadata).capacity);
@@ -420,23 +544,79 @@ export default function LocationsConfigurationPage({
         }
         if (activeTab === "programs") {
             return (
-                <LocationProgramDetailPanel
-                    program={selectedProgram}
-                    summary={programSummaries.find((summary) => summary.id === effectiveProgramId) ?? null}
-                    summaries={programSummaries}
-                    siteLabel={model?.displayName ?? ""}
-                    locationHasSchedule={selectedSchedules.length > 0}
-                    scheduleSummary={scheduleSummary}
+                <LocationProgramsOfferedPanel
+                    locationId={selectedSite.id}
+                    locationLabel={model?.displayName ?? selectedSite.label ?? ""}
+                    offerings={selectedPrograms}
+                    schedulePatterns={selectedSchedules.map((pattern) => ({
+                        id: pattern.id,
+                        label: pattern.label,
+                        is_active: pattern.is_active,
+                    }))}
+                    rooms={selectedRooms.map((room) => ({
+                        id: room.id,
+                        label: String(room.label ?? "").trim() || "Room",
+                        is_active: room.is_active !== false,
+                        metadata: room.metadata,
+                    }))}
                     canMutate={canMutate}
-                    onSave={patchProgramCategory}
-                    programs={selectedPrograms}
-                    selectedProgramId={effectiveProgramId}
-                    onSelectProgram={(programId) => {
-                        setSelectedProgramId(programId);
-                        navigate("programs", programId);
+                    selectedOfferingId={creatingProgram ? null : effectiveProgramId}
+                    onSelectOffering={(offeringId) => {
+                        setSelectedProgramId(offeringId);
+                        setCreatingProgram(false);
+                        continuity?.rememberLocationSelection({
+                            locationId: selectedSite.id,
+                            tab: "programs",
+                            itemId: offeringId,
+                        });
                     }}
+                    onPatchOffering={patchProgramCategory}
+                    onRefresh={refreshPrograms}
                     onAddProgram={canMutate ? addProgram : undefined}
-                    ageUnitSelectOptions={ageUnitSelectOptions}
+                    createDetail={
+                        creatingProgram ?
+                            <LocationAddProgramPanel
+                                activeLocationId={selectedSite.id}
+                                activeLocationLabel={model?.displayName ?? selectedSite.label ?? ""}
+                                locations={siteRows
+                                    .filter((site) => site.is_active !== false)
+                                    .map((site) => ({
+                                        id: site.id,
+                                        label: site.label?.trim() || siteLabelById.get(site.id) || "Location",
+                                    }))}
+                                associatedProgramIds={
+                                    new Set(
+                                        selectedPrograms
+                                            .map((row) => String(row.program_id ?? "").trim())
+                                            .filter(Boolean),
+                                    )
+                                }
+                                associatedProgramKeys={
+                                    new Set(
+                                        selectedPrograms
+                                            .map((row) => String(row.key ?? "").trim())
+                                            .filter(Boolean),
+                                    )
+                                }
+                                onCancel={() => setCreatingProgram(false)}
+                                onComplete={async ({ programId }) => {
+                                    setCreatingProgram(false);
+                                    if (orgId) {
+                                        invalidateProgramsCollection(orgId, "program-make-available", {
+                                            publishBus: true,
+                                        });
+                                        invalidateLocationsCollection(orgId, "program-make-available", {
+                                            publishBus: true,
+                                        });
+                                    }
+                                    if (programId) {
+                                        setPendingAssociatedProgramId(programId);
+                                    }
+                                    await refreshPrograms();
+                                }}
+                            />
+                        :   undefined
+                    }
                 />
             );
         }
@@ -446,7 +626,7 @@ export default function LocationsConfigurationPage({
                     room={selectedRoom}
                     siteLabel={model?.displayName ?? ""}
                     programOptions={programOptionsForSite(selectedSite.id)}
-                    ageUnitSelectOptions={ageUnitSelectOptions}
+                    schedulePatterns={selectedSchedules}
                     canMutate={canMutate}
                     onSave={patchLocation}
                     rooms={selectedRooms}
@@ -456,14 +636,12 @@ export default function LocationsConfigurationPage({
                         navigate("rooms", roomId);
                     }}
                     onAddRoom={canMutate ? addRoom : undefined}
-                    locationHasSchedule={selectedSchedules.length > 0}
-                    scheduleSummary={scheduleSummary}
                     createDetail={
                         creatingRoom ?
                             <LocationRoomCreatePanel
                                 siteLabel={model?.displayName ?? ""}
                                 programOptions={programOptionsForSite(selectedSite.id)}
-                                ageUnitSelectOptions={ageUnitSelectOptions}
+                                schedulePatterns={selectedSchedules}
                                 onCancel={() => setCreatingRoom(false)}
                                 onCreate={async (input) => {
                                     const newId = await createRoomUnit(selectedSite.id, input);
@@ -478,10 +656,16 @@ export default function LocationsConfigurationPage({
             );
         }
         if (activeTab === "schedule") {
-            return (
+            const siteMetadata =
+                selectedSite.metadata != null &&
+                typeof selectedSite.metadata === "object" &&
+                !Array.isArray(selectedSite.metadata) ?
+                    (selectedSite.metadata as Record<string, unknown>)
+                :   null;
+            const patternsPanel = (
                 <div className="space-y-3" data-testid="locations-schedule">
                     <ConfigChildObjectMasterDetail
-                        listTitle="Schedule patterns"
+                        listTitle="Schedule Patterns"
                         listSummary={`${selectedSchedules.length} ${
                             selectedSchedules.length === 1 ? "pattern" : "patterns"
                         }`}
@@ -493,7 +677,7 @@ export default function LocationsConfigurationPage({
                                     onClick={() => setCreatingSchedule(true)}
                                     data-testid="locations-schedule-add"
                                 >
-                                    + Add pattern
+                                    + Add Pattern
                                 </ConfigurationPrimaryButton>
                             :   null
                         }
@@ -508,7 +692,14 @@ export default function LocationsConfigurationPage({
                                             active={selected}
                                             muted={!schedule.is_active}
                                             title={schedule.label}
-                                            subtitle={`${schedule.is_active ? "Active" : "Inactive"} · ${formatWeekdaySelection(schedule.weekdays)}`}
+                                            subtitle={`${schedule.is_active ? "Active" : "Inactive"} · ${formatSchedulePatternSummary(
+                                                {
+                                                    label: schedule.label,
+                                                    scheduleTypeKey: schedule.schedule_type_key,
+                                                    weekdays: schedule.weekdays,
+                                                    metadata: schedule.metadata ?? null,
+                                                },
+                                            )}`}
                                             leading={
                                                 <span
                                                     className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
@@ -537,9 +728,21 @@ export default function LocationsConfigurationPage({
                             creatingSchedule ?
                                 <LocationSchedulePatternCreatePanel
                                     locationId={selectedSite.id}
+                                    operatingDays={
+                                        siteMetadata ?
+                                            (
+                                                siteMetadata.location_scheduling_v1 as
+                                                    | { operating_days?: number[] }
+                                                    | undefined
+                                            )?.operating_days
+                                        :   undefined
+                                    }
                                     onCancel={() => setCreatingSchedule(false)}
                                     onCreated={(created) => {
                                         setSchedulePatterns((current) => [...current, created]);
+                                        if (orgId) {
+                                            invalidateLocationsCollection(orgId, "schedule-pattern-created");
+                                        }
                                         setSelectedScheduleId(created.id);
                                         setCreatingSchedule(false);
                                         navigate("schedule", created.id);
@@ -549,41 +752,42 @@ export default function LocationsConfigurationPage({
                                     pattern={selectedSchedule}
                                     siteLabel={siteLabelById.get(selectedSite.id) ?? model?.displayName ?? ""}
                                     canMutate={canMutate}
+                                    operatingDays={
+                                        siteMetadata ?
+                                            (
+                                                siteMetadata.location_scheduling_v1 as
+                                                    | { operating_days?: number[] }
+                                                    | undefined
+                                            )?.operating_days
+                                        :   undefined
+                                    }
                                     onUpdated={(row) => {
                                         setSchedulePatterns((prev) =>
                                             prev.map((pattern) => (pattern.id === row.id ? row : pattern)),
                                         );
+                                        if (orgId) {
+                                            invalidateLocationsCollection(orgId, "schedule-pattern-updated");
+                                        }
                                     }}
                                     onError={setError}
                                 />
                         }
                     />
-
-                    <section className="process-config-setup-card p-4" data-testid="locations-schedule-closures">
-                        <div className="flex items-start justify-between gap-3">
-                            <div>
-                                <h3 className="config-typo-workspace-title">Closures and exceptions</h3>
-                                <p className="config-typo-sublabel mt-1">
-                                    Date-specific changes stay distinct from recurring weekly patterns.
-                                </p>
-                            </div>
-                            <ConfigurationSecondaryButton
-                                disabled
-                                title="Closure records are not available in the current schedule provider."
-                                data-testid="locations-schedule-add-closure"
-                            >
-                                Add closure
-                            </ConfigurationSecondaryButton>
-                        </div>
-                        <div className="mt-4 rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.035] px-3 py-3">
-                            <p className="text-sm font-medium text-alloy-midnight">No closure provider available</p>
-                            <p className="config-typo-sublabel mt-1">
-                                Add Closure is unavailable until date-specific exceptions have an authoritative
-                                persistence source.
-                            </p>
-                        </div>
-                    </section>
                 </div>
+            );
+            return (
+                <LocationSchedulingSurface
+                    orgId={orgId}
+                    locationId={selectedSite.id}
+                    locationMetadata={siteMetadata}
+                    patternCount={selectedSchedules.length}
+                    canMutate={canMutate}
+                    onAddPattern={() => setCreatingSchedule(true)}
+                    onSaveMetadata={async (metadata) => {
+                        await patchLocation(selectedSite.id, { metadata });
+                    }}
+                    patternsPanel={patternsPanel}
+                />
             );
         }
         if (activeTab === "tours") {
@@ -592,13 +796,10 @@ export default function LocationsConfigurationPage({
         if (activeTab === "placement") {
             return null;
         }
-        return (
-            <LocationAccessPanel
-                key={selectedSite.id}
-                locationId={selectedSite.id}
-                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
-            />
-        );
+        if (activeTab === "access") {
+            return null;
+        }
+        return null;
     })();
 
     return (
@@ -614,18 +815,38 @@ export default function LocationsConfigurationPage({
                     >
                         {!loading ?
                             <div
-                                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-alloy-stone/25 pt-2"
+                                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-alloy-stone/25 pt-2"
                                 data-testid="locations-collection-posture"
                             >
-                                <ConfigScopeContextBar
-                                    mode="organization"
-                                    organizationLabel="Organization"
-                                    objectLabel="Location"
-                                    ownershipHint="All locations"
-                                    onModeChange={(mode) => {
-                                        if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
-                                    }}
-                                />
+                                <div className="flex min-w-0 flex-col gap-1.5">
+                                    <ConfigScopeContextBar
+                                        mode="organization"
+                                        organizationLabel="Organization"
+                                        objectLabel="Location"
+                                        ownershipHint="Programs & Locations · delivery"
+                                        onModeChange={(mode) => {
+                                            if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
+                                        }}
+                                    />
+                                    <ul
+                                        className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-alloy-midnight/52"
+                                        aria-label="Locations breadcrumb"
+                                    >
+                                        <li>
+                                            <Link
+                                                href="/organization/programs-locations"
+                                                className="font-medium hover:text-alloy-bend-pine"
+                                                data-testid="locations-breadcrumb-programs-locations"
+                                            >
+                                                Programs & Locations
+                                            </Link>
+                                            <span className="mx-1.5 text-alloy-midnight/35" aria-hidden>
+                                                ›
+                                            </span>
+                                            <span className="font-semibold text-alloy-midnight/70">Locations</span>
+                                        </li>
+                                    </ul>
+                                </div>
                                 <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-alloy-midnight/52">
                                     <li>
                                         <strong className="font-semibold text-alloy-midnight">
@@ -635,15 +856,15 @@ export default function LocationsConfigurationPage({
                                     </li>
                                     <li>
                                         <strong className="font-semibold text-alloy-midnight">
-                                            {locationsCollection.averageSetupPercent}%
+                                            {locationsCollection.totalPrograms}
                                         </strong>{" "}
-                                        Average Readiness
+                                        Programs Offered
                                     </li>
                                     <li>
                                         <strong className="font-semibold text-alloy-midnight">
-                                            {locationsCollection.locationsNeedingAttention}
+                                            {locationsCollection.totalRooms}
                                         </strong>{" "}
-                                        Need Attention
+                                        Rooms
                                     </li>
                                 </ul>
                             </div>
@@ -662,12 +883,14 @@ export default function LocationsConfigurationPage({
             :   null}
 
             <ConfigurationShell testId="locations-configuration-shell">
-                {loading ?
-                    <ConfigurationEmptyState
-                        testId="locations-loading"
-                        title="Loading locations"
-                        description="Fetching locations and their owned configuration."
-                    />
+                {loading && siteRows.length === 0 && !error ?
+                    <div
+                        className="grid items-start gap-4 pb-4 xl:grid-cols-[20.5rem_minmax(0,1fr)]"
+                        data-testid="locations-loading"
+                    >
+                        <div className="hidden min-h-[24rem] rounded-xl border border-alloy-forge/10 bg-white/70 xl:block" />
+                        <div className="min-h-[16rem] rounded-xl border border-alloy-forge/10 bg-white/70" />
+                    </div>
                 : creatingSite ?
                     <LocationSiteCreatePanel
                         canMutate={canMutate}
@@ -684,29 +907,30 @@ export default function LocationsConfigurationPage({
                             return newId;
                         }}
                     />
-                :   <div
-                        className={`grid items-start gap-4 pb-4 ${
-                            selectedSite ? "xl:grid-cols-[20.5rem_minmax(0,1fr)]" : ""
-                        }`}
-                    >
-                        {selectedSite ?
-                            <LocationsObjectSelector
-                                sites={visibleSites}
-                                selectedId={selectedId}
-                                showInactive={showInactive}
-                                onShowInactiveChange={setShowInactive}
-                                search={search}
-                                onSearchChange={setSearch}
-                                canMutate={canMutate}
-                                onAddLocation={beginAddLocation}
-                                locationSummaryById={locationSummaryById}
-                                onSelect={(locationId) => {
-                                    setSelectedId(locationId);
-                                    setEditingSite(false);
-                                    router.replace(locationWorkspaceHref(locationId, activeTab));
-                                }}
-                            />
-                        :   null}
+                : siteRows.length === 0 ?
+                    <LocationsLanding
+                        collection={locationsCollection}
+                        onOpenLocation={(locationId, tab) =>
+                            openLocation(locationId, tab === "general" || tab == null ? "overview" : tab)
+                        }
+                        onAddLocation={beginAddLocation}
+                        canMutate={canMutate}
+                    />
+                :   <div className="grid items-start gap-4 pb-4 xl:grid-cols-[20.5rem_minmax(0,1fr)]">
+                        <LocationsObjectSelector
+                            sites={visibleSites}
+                            selectedId={selectedId}
+                            showInactive={showInactive}
+                            onShowInactiveChange={setShowInactive}
+                            search={search}
+                            onSearchChange={setSearch}
+                            canMutate={canMutate}
+                            onAddLocation={beginAddLocation}
+                            locationSummaryById={locationSummaryById}
+                            onSelect={(locationId) => {
+                                openLocation(locationId, activeTab === "overview" ? "overview" : activeTab);
+                            }}
+                        />
 
                         <main
                             className="min-w-0 space-y-2.5"
@@ -722,9 +946,7 @@ export default function LocationsConfigurationPage({
                                         className="config-runtime-select mt-1"
                                         value={selectedSite.id}
                                         onChange={(event) => {
-                                            setSelectedId(event.target.value);
-                                            setEditingSite(false);
-                                            router.replace(locationWorkspaceHref(event.target.value, activeTab));
+                                            openLocation(event.target.value, activeTab);
                                         }}
                                     >
                                         {siteRows.map((site) => (
@@ -739,10 +961,6 @@ export default function LocationsConfigurationPage({
                             {!selectedSite ?
                                 <LocationsLanding
                                     collection={locationsCollection}
-                                    showInactive={showInactive}
-                                    onShowInactiveChange={setShowInactive}
-                                    search={search}
-                                    onSearchChange={setSearch}
                                     onOpenLocation={(locationId, tab) =>
                                         openLocation(locationId, tab === "general" || tab == null ? "overview" : tab)
                                     }
@@ -802,6 +1020,7 @@ export default function LocationsConfigurationPage({
                                     tabs={LOCATION_WORKSPACE_TABS}
                                     activeSection={activeTab}
                                     onSectionChange={navigate}
+                                    onSectionIntent={prefetchConcernIntent}
                                     testId="locations-detail-runtime"
                                     headerTestId="locations-hero"
                                     tabAriaLabel="Location configuration"
@@ -814,9 +1033,17 @@ export default function LocationsConfigurationPage({
                                             data-testid="locations-tours-keepalive"
                                         >
                                             <LocationToursPanel
+                                                key={selectedSite.id}
+                                                orgId={orgId}
                                                 locationId={selectedSite.id}
                                                 locationLabel={model?.displayName ?? ""}
-                                                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
+                                                onMutationCommitted={() => {
+                                                    invalidateLocationConcernCaches(orgId, "tours", {
+                                                        locationId: selectedSite.id,
+                                                        reason: "tours-mutated",
+                                                    });
+                                                    return refreshOwnedConcernSetup(selectedSite.id);
+                                                }}
                                             />
                                         </div>
                                     :   null}
@@ -826,9 +1053,24 @@ export default function LocationsConfigurationPage({
                                             data-testid="locations-placement-keepalive"
                                         >
                                             <LocationPlacementPanel
+                                                orgId={orgId}
                                                 rooms={selectedRooms}
                                                 onReviewRooms={() => navigate("rooms")}
                                                 canMutate={canMutate}
+                                                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
+                                            />
+                                        </div>
+                                    :   null}
+                                    {accessKeepAlive && !editingSite ?
+                                        <div
+                                            className={activeTab === "access" ? undefined : "hidden"}
+                                            data-testid="locations-access-keepalive"
+                                        >
+                                            <LocationAccessPanel
+                                                key={selectedSite.id}
+                                                orgId={orgId}
+                                                locationId={selectedSite.id}
+                                                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
                                             />
                                         </div>
                                     :   null}

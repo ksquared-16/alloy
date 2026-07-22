@@ -193,7 +193,13 @@ function TuitionCell({
                 saving || !canManage ? "opacity-70" : "cursor-pointer hover:bg-gray-50",
             ].join(" ")}
             onClick={isNotOffered ? undefined : startEdit}
-            title={isInherited ? "Inherited from org default — click to override" : undefined}
+            title={
+                isInherited
+                    ? "Inherited from Organization — click to create a Location override"
+                    : isLocOverride
+                      ? "Location override — × restores Organization default"
+                      : undefined
+            }
         >
             {isNotOffered ? (
                 <span className="flex items-center justify-end gap-1">
@@ -218,7 +224,7 @@ function TuitionCell({
                             type="button"
                             onClick={(e) => { e.stopPropagation(); void clearOverride(); }}
                             className="text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-xs leading-none"
-                            title="Remove override — inherit org default"
+                            title="Restore Organization default"
                         >
                             ×
                         </button>
@@ -437,7 +443,7 @@ export function TuitionGridWorkspace({
 
     const scopeLabel =
         scope?.kind === "org"
-            ? "Org Default"
+            ? "Organization default"
             : locations.find((l) => scope?.kind === "location" && l.id === scope.locationId)?.name ?? "Location";
 
     // ── Save helpers ──────────────────────────────────────────────────────────
@@ -554,7 +560,8 @@ export function TuitionGridWorkspace({
                         {embedded ? "Pricing matrix" : "Tuition Grid"}
                     </h1>
                     <p className="text-sm text-gray-500 mt-0.5">
-                        Variant × billing cadence rates. Organization defaults inherit to all Locations.
+                        Organization default rates inherit to Locations. Location override replaces the inherited
+                        value until restored. Effective value = Location override ?? Organization default.
                     </p>
                 </div>
                 <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm flex-shrink-0">
@@ -588,7 +595,7 @@ export function TuitionGridWorkspace({
             :   null}
 
             {variants.length > 0 && (
-                <ConfigReadinessCard readiness={readiness} scopeLabel="Org Default" />
+                <ConfigReadinessCard readiness={readiness} scopeLabel="Organization default" />
             )}
 
             {mode === "edit" && (
@@ -604,7 +611,8 @@ export function TuitionGridWorkspace({
                     {locationId && (
                         <div className="flex items-center justify-between bg-pine-50 border border-pine-200 rounded-lg px-4 py-2.5 text-sm">
                             <span className="text-pine-700">
-                                Viewing <strong>{scopeLabel}</strong> — green dot = local override, italic = inherited.
+                                Viewing <strong>{scopeLabel}</strong> — green = Location override, italic =
+                                Inherited from Organization, plain at org scope = Organization default.
                             </span>
                             {canManage ?
                             <button
@@ -700,7 +708,7 @@ export function TuitionGridWorkspace({
                                     <span className="w-2 h-2 rounded-full bg-pine-500" />
                                     Location override
                                 </span>
-                                <span className="italic">Italic = inherited from org</span>
+                                <span className="italic">Italic = Inherited from Organization</span>
                             </>
                         )}
                         <span>

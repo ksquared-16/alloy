@@ -1,0 +1,34 @@
+{
+  "status": 200,
+  "json": {
+    "ok": true,
+    "result": {
+      "status": "blocked",
+      "operationId": "911358c4-caad-40ab-bee1-64fa05b14679",
+      "programId": "64adf957-537f-4ce9-b2b4-9f6def7ebf6a",
+      "revisionId": null,
+      "publicationId": null,
+      "createdProgram": false,
+      "publishedProgram": false,
+      "associatedLocationIds": [],
+      "unchangedLocationIds": [],
+      "blocked": [
+        {
+          "locationId": "*",
+          "code": "publication_required",
+          "reason": "Only published Program revisions may be made available at Locations."
+        }
+      ],
+      "failed": [],
+      "refreshTargets": [
+        "locations:collection",
+        "organization:programs-locations",
+        "programs:collection",
+        "programs:program:64adf957-537f-4ce9-b2b4-9f6def7ebf6a",
+        "programs:program:64adf957-537f-4ce9-b2b4-9f6def7ebf6a:assignment"
+      ],
+      "distributionRunId": null,
+      "idempotentReplay": false
+    }
+  }
+}

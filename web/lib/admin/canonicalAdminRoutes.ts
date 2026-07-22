@@ -35,6 +35,19 @@ export const CANONICAL_ORGANIZATION_BASE = "/organization" as const;
  */
 export const CANONICAL_ORGANIZATION_PROGRAMS_HREF = `${CANONICAL_ORGANIZATION_BASE}/programs` as const;
 
+/**
+ * Organization Programs & Locations domain landing — relationship entry for the two
+ * operational collections. Does not replace `/organization/programs` or `/organization/locations`.
+ */
+export const CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF =
+    `${CANONICAL_ORGANIZATION_BASE}/programs-locations` as const;
+
+/**
+ * Canonical Organization Financials surface (Tuition, Catalog, Policies, Accounting, Simulator, Funding).
+ * Former Commercial / Programs `?chapter=` tools live here; Programs stays Programs-only.
+ */
+export const CANONICAL_ORGANIZATION_FINANCIALS_HREF = `${CANONICAL_ORGANIZATION_BASE}/financials` as const;
+
 /** Legacy admin implementation base (financials, old list pages, unmigrated system). */
 export const LEGACY_ADMIN_BASE = "/legacy-admin" as const;
 
@@ -85,10 +98,15 @@ export function isCanonicalAdminPath(pathname: string): boolean {
     );
 }
 
-/** Build Organization Programs href; optional selection/detail state survives refresh. */
+/** Build Organization Programs href; selection + filter/sort survive refresh. */
 export function organizationProgramsHref(
     programId?: string | null,
     section?: string | null,
+    options?: {
+        status?: string | null;
+        sort?: string | null;
+        direction?: string | null;
+    },
 ): string {
     const id = typeof programId === "string" ? programId.trim() : "";
     const detailSection = typeof section === "string" ? section.trim() : "";
@@ -97,6 +115,12 @@ export function organizationProgramsHref(
     if (id && detailSection && detailSection !== "overview") {
         params.set("section", detailSection);
     }
+    const status = typeof options?.status === "string" ? options.status.trim().toLowerCase() : "";
+    if (status && status !== "active") params.set("status", status);
+    const sort = typeof options?.sort === "string" ? options.sort.trim().toLowerCase() : "";
+    if (sort && sort !== "name") params.set("sort", sort);
+    const direction = typeof options?.direction === "string" ? options.direction.trim().toLowerCase() : "";
+    if (direction && direction !== "asc") params.set("direction", direction);
     const query = params.toString();
     return query ? `${CANONICAL_ORGANIZATION_PROGRAMS_HREF}?${query}` : CANONICAL_ORGANIZATION_PROGRAMS_HREF;
 }

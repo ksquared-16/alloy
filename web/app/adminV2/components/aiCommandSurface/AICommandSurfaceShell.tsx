@@ -2199,6 +2199,7 @@ export default function AICommandSurfaceShell({
         hasWorkUnitScope: Boolean(globalAssistant?.workspaceScope?.work_unit_id?.trim()),
         hasOpportunityContext: globalAssistant?.currentContext?.entity_type === "opportunities",
         opportunitySingular,
+        pathname,
         isConfigurationContext:
           pathname === "/organization"
           || pathname.startsWith("/organization/")

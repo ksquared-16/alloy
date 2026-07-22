@@ -1,20 +1,31 @@
 /**
- * Soft-nav reload floor (NAV-1 (A) / Surface Host, Phase 2A).
+ * Soft-nav reload floor (NAV-1 (A) / Surface Host + Configuration Continuity Checkpoint A).
  *
- * Eligible Workspace <-> Work Unit navigations commit via `router.push` (soft) so the shell stays
- * mounted. `runAdminV2NavigationTransition` has no post-commit recovery, so this is the reload
- * floor: after a soft commit we arm a watchdog — if the navigation has NOT reached the target path
- * by the timeout (and has not been superseded by a newer navigation), recover via the guaranteed
- * hard reload (`window.location.assign`, injected). Bounds the worst case to a delayed reload —
+ * Eligible Workspace <-> Work Unit and Organization / Settings navigations commit via
+ * `router.push` (soft) so the AdminV2 shell stays mounted. `runAdminV2NavigationTransition`
+ * has no post-commit recovery, so this is the reload floor: after a soft commit we arm a
+ * watchdog — if the navigation has NOT reached the target path by the timeout (and has not
+ * been superseded by a newer navigation), recover via the guaranteed hard reload
+ * (`window.location.assign`, injected). Bounds the worst case to a delayed reload —
  * never a stuck / dead soft-nav frame. `window.location.assign` is retained, never removed.
  */
 
+import { normalizeToCanonicalAdminPath } from "@/lib/admin/canonicalAdminRoutes";
 import { normalizeOperatorPathname } from "@/lib/admin/canonicalOperatorRoutes";
+import { isConfigurationSoftNavEligibleHref } from "@/lib/configRuntime/configurationContinuity";
 
 export const DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS = 3000;
 
 /** Monotonic generation — a newer soft nav supersedes older watchdogs so they never fire late. */
 let softNavGeneration = 0;
+
+/** Canonicalize workspace OR configuration paths for stall comparison. */
+export function normalizeSoftNavReloadPathname(pathname: string): string {
+    if (isConfigurationSoftNavEligibleHref(pathname)) {
+        return normalizeToCanonicalAdminPath(pathname.trim());
+    }
+    return normalizeOperatorPathname(pathname);
+}
 
 /**
  * Pure decision: at watchdog time, does the soft nav look stalled (→ fire the reload floor)?
@@ -28,8 +39,8 @@ export function shouldFireReloadFloor(args: {
 }): boolean {
     if (args.superseded) return false;
     return (
-        normalizeOperatorPathname(args.currentPathname) !==
-        normalizeOperatorPathname(args.targetPathname)
+        normalizeSoftNavReloadPathname(args.currentPathname) !==
+        normalizeSoftNavReloadPathname(args.targetPathname)
     );
 }
 

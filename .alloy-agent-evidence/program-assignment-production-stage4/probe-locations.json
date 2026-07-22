@@ -1,0 +1,24 @@
+{
+  "url": "http://127.0.0.1:3014/organization/locations",
+  "body": "1\n4\n⌘K\nKK\nOrganization\nlocations\nLocations\n\nLoading locations\n\nFetching locations and their owned configuration.\n\nActions (1)\n▶\nBOS\n\nOperational Intelligence\n\nAttention\n· No urgent issues\n\nHere are some ways I can help\n\nExplain this configuration\nSummarize the active state and working changes\nReview configuration attention\nIdentify setup, publication, or assignment issues\nReview unpublished changes\nExplain what remains private to Organization\n↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy.",
+  "testids": [
+    "configuration-continuity-root",
+    "organization-configuration-shell",
+    "locations-configuration-page",
+    "locations-content-column",
+    "locations-configuration-context",
+    "locations-configuration-context-title-icon",
+    "locations-configuration-shell",
+    "configuration-workspace",
+    "locations-loading"
+  ],
+  "buttons": [
+    "1",
+    "4",
+    "KK",
+    "Actions (1)\n▶",
+    "Explain this configuration\nSummarize the active state and working changes",
+    "Review configuration attention\nIdentify setup, publication, or assignment issues",
+    "Review unpublished changes\nExplain what remains private to Organization"
+  ]
+}

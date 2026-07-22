@@ -7,8 +7,10 @@ const USERS_ROLES_SUBTITLE = "Org members, role assignment, and permission grant
 
 export default function UsersRolesConfigurationPage({
     canManageUsersRoles,
+    initialTab = "users",
 }: {
     canManageUsersRoles: boolean;
+    initialTab?: "users" | "roles";
 }) {
     return (
         <SettingsConfigurationSurfaceShell
@@ -16,7 +18,10 @@ export default function UsersRolesConfigurationPage({
             subtitle={USERS_ROLES_SUBTITLE}
             testId="settings-users-roles-page"
         >
-            <UsersRolesSettingsClient canManageUsersRoles={canManageUsersRoles} />
+            <UsersRolesSettingsClient
+                canManageUsersRoles={canManageUsersRoles}
+                initialTab={initialTab}
+            />
         </SettingsConfigurationSurfaceShell>
     );
 }

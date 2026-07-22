@@ -55,7 +55,9 @@ export function useInquiryChildPlacementCascade(params: {
             const [locRes, items, categories] = await Promise.all([
                 dedupeAdminFetchWithTtl(WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL, init, HIERARCHY_TTL_MS),
                 fetchOptionSetItemsBySetKey("childcare_program_type", init),
-                fetchLocationProgramCategories(init, { includeInactive: true }),
+                fetchLocationProgramCategories(init, { includeInactive: true }).catch(
+                    () => [] as LocationProgramCategoryRow[],
+                ),
             ]);
             if (cancelled) return;
 

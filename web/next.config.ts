@@ -87,9 +87,11 @@ const nextConfig: NextConfig = {
       { source: "/settings", destination: "/organization", permanent: false },
       { source: "/settings/organization", destination: "/organization", permanent: false },
       /**
-       * Organization Programs — canonical under `/organization/programs`.
-       * Legacy Commercial compatibility entry points redirect; they must not remain product IA.
+       * Organization Financials — canonical under `/organization/financials`.
+       * Legacy Commercial tool chapters redirect here. Programs catalog stays on `/organization/programs`.
        */
+      { source: "/settings/commercial", destination: "/organization/financials", permanent: false },
+      { source: "/settings/commercial/tuition", destination: "/organization/financials?chapter=tuition", permanent: false },
       { source: "/settings/commercial/programs", destination: "/organization/programs", permanent: false },
       { source: "/settings/commercial/programs/:path*", destination: "/organization/programs", permanent: false },
       { source: "/admin/commercial/programs", destination: "/organization/programs", permanent: false },
@@ -97,6 +99,8 @@ const nextConfig: NextConfig = {
       { source: "/adminV2/commercial/programs", destination: "/organization/programs", permanent: false },
       { source: "/adminV2/settings/commercial/programs", destination: "/organization/programs", permanent: false },
       { source: "/adminV2/settings/commercial/programs/:path*", destination: "/organization/programs", permanent: false },
+      { source: "/adminV2/settings/commercial", destination: "/organization/financials", permanent: false },
+      { source: "/adminV2/settings/commercial/tuition", destination: "/organization/financials?chapter=tuition", permanent: false },
       /**
        * Surfaces rename — `/settings/layouts` is no longer product IA. Canonical
        * user-facing route is `/settings/surfaces`. Storage terms (entity_layouts,
@@ -192,11 +196,31 @@ const nextConfig: NextConfig = {
       { source: "/settings/surfaces", destination: "/adminV2/settings/surfaces" },
       { source: "/settings/surfaces/:path*", destination: "/adminV2/settings/surfaces/:path*" },
       /**
+       * Organization Programs & Locations — relationship landing.
+       * Must precede exact `/organization` rewrite. Collections remain at
+       * `/organization/programs` and `/organization/locations`.
+       */
+      { source: "/organization/programs-locations", destination: "/adminV2/settings/organization/programs-locations" },
+      { source: "/organization/programs-locations/:path*", destination: "/adminV2/settings/organization/programs-locations/:path*" },
+      /**
+       * Organization Locations — browser URL `/organization/locations`.
+       * Must precede the exact `/organization` rewrite. Compatibility `/settings/locations`
+       * remains via the generic `/settings/:path*` rewrite.
+       */
+      { source: "/organization/locations", destination: "/adminV2/settings/locations" },
+      { source: "/organization/locations/:path*", destination: "/adminV2/settings/locations/:path*" },
+      /**
        * Organization Programs — browser URL `/organization/programs` (and optional
        * `?programId=` selection). Must precede the exact `/organization` rewrite.
        */
       { source: "/organization/programs", destination: "/adminV2/settings/organization/programs" },
       { source: "/organization/programs/:path*", destination: "/adminV2/settings/organization/programs/:path*" },
+      /**
+       * Organization Financials — browser URL `/organization/financials`.
+       * Must precede the exact `/organization` rewrite.
+       */
+      { source: "/organization/financials", destination: "/adminV2/settings/organization/financials" },
+      { source: "/organization/financials/:path*", destination: "/adminV2/settings/organization/financials/:path*" },
       { source: "/organization", destination: "/adminV2/settings/organization" },
       { source: "/settings/:path*", destination: "/adminV2/settings/:path*" },
       /**

@@ -927,6 +927,102 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-pine) 14%, transparent);
 }
 
+/* Programs collection toolbar — two-row layout (search full width; filter + sort below). */
+.programs-collection-controls {
+    display: grid;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.65rem var(--locations-rail-pad-x) 0.5rem;
+}
+
+.programs-collection-controls__search-wrap {
+    position: relative;
+    min-width: 0;
+    width: 100%;
+}
+
+.programs-collection-controls__search-icon {
+    position: absolute;
+    top: 50%;
+    left: 0.65rem;
+    width: 0.875rem;
+    height: 0.875rem;
+    transform: translateY(-50%);
+    color: color-mix(in srgb, var(--cr-midnight) 40%, transparent);
+    pointer-events: none;
+}
+
+.programs-collection-controls__search,
+.programs-collection-controls__select {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: 2.125rem;
+    border-radius: 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--cr-midnight) 14%, transparent);
+    background: #fff;
+    font-size: 0.8125rem;
+    line-height: 1.2;
+    color: var(--cr-midnight);
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.programs-collection-controls__search {
+    padding: 0.45rem 0.65rem 0.45rem 1.85rem;
+}
+
+.programs-collection-controls__select {
+    padding: 0.35rem 1.75rem 0.35rem 0.65rem;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555e6d' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.55rem center;
+    background-size: 0.75rem;
+}
+
+.programs-collection-controls__search::placeholder {
+    color: color-mix(in srgb, var(--cr-midnight) 40%, transparent);
+}
+
+.programs-collection-controls__search:hover,
+.programs-collection-controls__select:hover {
+    background-color: color-mix(in srgb, var(--cr-midnight) 2.5%, white);
+}
+
+.programs-collection-controls__search:focus,
+.programs-collection-controls__select:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--cr-pine) 55%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-pine) 14%, transparent);
+}
+
+.programs-collection-controls__search:disabled,
+.programs-collection-controls__select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background-color: color-mix(in srgb, var(--cr-midnight) 3%, white);
+}
+
+.programs-collection-controls__row {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.programs-collection-controls__field {
+    display: block;
+    min-width: 0;
+}
+
+.locations-collection-rail:has(.programs-collection-controls) .locations-collection-rail__list {
+    padding-top: 0.15rem;
+}
+
 .locations-collection-rail__filter {
     display: inline-flex;
     flex-shrink: 0;

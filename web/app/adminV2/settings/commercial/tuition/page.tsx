@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
+import { organizationProgramsChapterHref } from "@/lib/commercial/commercialChapterRoutes";
 
 export const dynamic = "force-dynamic";
 
-// Consolidated: one Commercial home at /settings/commercial (Tuition is a tab there).
+/** Compatibility — Tuition lives under Organization Programs. */
 export default function SettingsCommercialTuitionPage() {
-    redirect("/settings/commercial");
+    redirect(organizationProgramsChapterHref("tuition"));
 }

@@ -2,6 +2,11 @@ import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgram
 
 export const WORKSPACE_LOCATION_PROGRAM_CATEGORIES_URL = "/api/admin/location-program-categories";
 
+function asOptionalString(value: unknown): string | null {
+    const raw = String(value ?? "").trim();
+    return raw || null;
+}
+
 function mapCategoryRow(r: Record<string, unknown>): LocationProgramCategoryRow | null {
     const id = String(r.id ?? "").trim();
     const location_id = String(r.location_id ?? "").trim();
@@ -20,6 +25,15 @@ function mapCategoryRow(r: Record<string, unknown>): LocationProgramCategoryRow 
             r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
                 ? (r.metadata as Record<string, unknown>)
                 : null,
+        // Publication / availability columns — required for Location ↔ Program identity matching.
+        program_id: asOptionalString(r.program_id),
+        program_revision_id: asOptionalString(r.program_revision_id),
+        configuration_consumption_id: asOptionalString(r.configuration_consumption_id),
+        local_display_name: asOptionalString(r.local_display_name),
+        available_from: asOptionalString(r.available_from),
+        available_through: asOptionalString(r.available_through),
+        local_description_override: asOptionalString(r.local_description_override),
+        local_authorization_evidence: asOptionalString(r.local_authorization_evidence),
     };
 }
 
@@ -40,7 +54,9 @@ export async function fetchLocationProgramCategories(
         categories?: Array<Record<string, unknown>>;
         error?: string;
     };
-    if (!res.ok) return [];
+    if (!res.ok) {
+        throw new Error(json.error ?? `Failed to load location programs (${res.status})`);
+    }
     return (json.categories ?? [])
         .map((r) => mapCategoryRow(r))
         .filter((r): r is LocationProgramCategoryRow => r != null);

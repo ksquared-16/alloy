@@ -1,0 +1,12 @@
+Has Programs Offered header? true
+Has Configure? false
+offered visible: 1, list: 1
+Configure buttons: 0
+PASS: stop offering clean
+PASS: restored
+Operating days ms: 49
+day_types ms: 460
+schedule_types ms: 450
+hours ms: 449
+patterns ms: 439
+PASS: rooms

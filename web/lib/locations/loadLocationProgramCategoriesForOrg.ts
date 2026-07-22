@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
+import { LOCATION_PROGRAM_CATEGORY_SELECT_PUBLICATION } from "@/lib/locations/locationProgramCategorySelect";
+
+function asOptionalString(value: unknown): string | null {
+    const raw = String(value ?? "").trim();
+    return raw || null;
+}
 
 function mapCategoryRow(row: Record<string, unknown>): LocationProgramCategoryRow | null {
     const id = String(row.id ?? "").trim();
@@ -19,6 +25,14 @@ function mapCategoryRow(row: Record<string, unknown>): LocationProgramCategoryRo
             row.metadata != null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
                 ? (row.metadata as Record<string, unknown>)
                 : null,
+        program_id: asOptionalString(row.program_id),
+        program_revision_id: asOptionalString(row.program_revision_id),
+        configuration_consumption_id: asOptionalString(row.configuration_consumption_id),
+        local_display_name: asOptionalString(row.local_display_name),
+        available_from: asOptionalString(row.available_from),
+        available_through: asOptionalString(row.available_through),
+        local_description_override: asOptionalString(row.local_description_override),
+        local_authorization_evidence: asOptionalString(row.local_authorization_evidence),
     };
 }
 
@@ -29,7 +43,7 @@ export async function loadLocationProgramCategoriesForOrg(
 ): Promise<LocationProgramCategoryRow[]> {
     const { data, error } = await supabase
         .from("location_program_categories")
-        .select("id, org_id, location_id, key, label, sort_order, is_active, metadata")
+        .select(LOCATION_PROGRAM_CATEGORY_SELECT_PUBLICATION)
         .eq("org_id", orgId)
         .order("sort_order", { ascending: true })
         .order("label", { ascending: true });

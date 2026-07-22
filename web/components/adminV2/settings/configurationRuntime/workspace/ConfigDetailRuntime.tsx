@@ -19,6 +19,7 @@ export function ConfigDetailRuntime<Section extends string = ConfigurationDetail
     tabs,
     activeSection,
     onSectionChange,
+    onSectionIntent,
     children,
     testId = "config-detail-runtime",
     headerTestId,
@@ -30,6 +31,7 @@ export function ConfigDetailRuntime<Section extends string = ConfigurationDetail
     tabs: readonly ConfigDetailTab<Section>[];
     activeSection: Section;
     onSectionChange: (section: Section) => void;
+    onSectionIntent?: (section: Section) => void;
     children: ReactNode;
     testId?: string;
     headerTestId?: string;
@@ -50,6 +52,7 @@ export function ConfigDetailRuntime<Section extends string = ConfigurationDetail
                     tabs={tabs}
                     activeSection={activeSection}
                     onSectionChange={onSectionChange}
+                    onSectionIntent={onSectionIntent}
                     ariaLabel={tabAriaLabel}
                     testId={`${testId}-tabs`}
                     testIdPrefix={tabTestIdPrefix ?? `${testId}-tab`}

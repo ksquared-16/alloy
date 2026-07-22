@@ -43,9 +43,15 @@ function displayName(m: MemberRow): string {
     return (m.email ?? "").trim() || m.user_id;
 }
 
-export default function UsersRolesSettingsClient({ canManageUsersRoles }: { canManageUsersRoles: boolean }) {
+export default function UsersRolesSettingsClient({
+    canManageUsersRoles,
+    initialTab = "users",
+}: {
+    canManageUsersRoles: boolean;
+    initialTab?: MainTab;
+}) {
     const router = useRouter();
-    const [mainTab, setMainTab] = useState<MainTab>("users");
+    const [mainTab, setMainTab] = useState<MainTab>(initialTab);
     const [members, setMembers] = useState<MemberRow[]>([]);
     const [departments, setDepartments] = useState<DeptOpt[]>([]);
     const [siteLocations, setSiteLocations] = useState<SiteLocOpt[]>([]);

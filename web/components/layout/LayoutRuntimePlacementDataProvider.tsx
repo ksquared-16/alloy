@@ -67,7 +67,9 @@ export default function LayoutRuntimePlacementDataProvider({ children }: { child
                 dedupeAdminFetchWithTtl(WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL, init, HIERARCHY_TTL_MS),
                 fetchOptionSetItemsBySetKey("childcare_program_type", init),
                 fetchOptionSetItemsBySetKey("childcare_schedule_type", init),
-                fetchLocationProgramCategories(init, { includeInactive: true }),
+                fetchLocationProgramCategories(init, { includeInactive: true }).catch(
+                    () => [] as LocationProgramCategoryRow[],
+                ),
             ]);
             if (cancelled) return;
 

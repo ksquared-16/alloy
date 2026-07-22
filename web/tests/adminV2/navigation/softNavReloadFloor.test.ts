@@ -114,21 +114,27 @@ describe("armSoftNavReloadFloor — watchdog", () => {
     });
 });
 
-describe("shouldSoftNavigate — eligible Workspace <-> Work Unit only", () => {
+describe("shouldSoftNavigate — Workspace + Configuration Continuity", () => {
     it("eligible operator paths soft-navigate by default (shell stays mounted)", () => {
         expect(shouldSoftNavigate("/workspace")).toBe(true);
         expect(shouldSoftNavigate("/workspace/work-unit/active-pipeline")).toBe(true);
         expect(shouldSoftNavigate("/workspace/dept/sales")).toBe(true);
     });
 
-    it("non-operator paths keep the hard reload (unchanged)", () => {
-        expect(shouldSoftNavigate("/adminV2/settings/fields")).toBe(false);
-        expect(shouldSoftNavigate("/adminV2/workflows")).toBe(false);
+    it("Organization / Settings soft-navigate by default (Checkpoint A)", () => {
+        expect(shouldSoftNavigate("/organization")).toBe(true);
+        expect(shouldSoftNavigate("/settings/locations")).toBe(true);
+        expect(shouldSoftNavigate("/organization/programs")).toBe(true);
+    });
+
+    it("workflows keep the hard reload (unchanged)", () => {
+        expect(shouldSoftNavigate("/admin/workflows")).toBe(false);
     });
 
     it("kill switch (…SOFT_SIDEBAR_NAV=0) forces hard everywhere", () => {
         vi.stubEnv("NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV", "0");
         expect(shouldSoftNavigate("/workspace")).toBe(false);
         expect(shouldSoftNavigate("/workspace/work-unit/active-pipeline")).toBe(false);
+        expect(shouldSoftNavigate("/organization")).toBe(false);
     });
 });

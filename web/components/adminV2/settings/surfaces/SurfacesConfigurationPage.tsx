@@ -81,7 +81,11 @@ function SurfacesCategoryNav({
     );
 }
 
-export default function SurfacesConfigurationPage() {
+export default function SurfacesConfigurationPage({
+    initialSection,
+}: {
+    initialSection?: SurfaceConfigSectionKey;
+} = {}) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [pendingCatalogIds, setPendingCatalogIds] = useReactState<string[]>([]);
@@ -110,7 +114,7 @@ export default function SurfacesConfigurationPage() {
         sections,
         listItems,
         selectedObject,
-    } = useSurfacesConfigurationSettings(configuredSurfaces, queueRowSurfaces);
+    } = useSurfacesConfigurationSettings(configuredSurfaces, queueRowSurfaces, initialSection);
 
     const activeSectionLabel = sectionLabel(section);
     const [nestedSurfaceId, setNestedSurfaceId] = useReactState<string | null>(null);

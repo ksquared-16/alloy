@@ -1,0 +1,43 @@
+{
+  "preview": {
+    "status": 200,
+    "ok": true,
+    "eligible": 3,
+    "willPublish": true
+  },
+  "commit": {
+    "status": 200,
+    "ok": true,
+    "resultStatus": "committed",
+    "programId": "c0358ff7-ce0c-4caa-969a-194159bf8dab",
+    "operationId": "fe88e786-0390-4c05-8eb0-9e8143c32f32",
+    "associated": [
+      "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "ae34d822-60ef-4f82-81eb-8f3513059627",
+      "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+    ],
+    "refreshTargets": [
+      "locations:collection",
+      "locations:location:1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "locations:location:1a5644a7-45c4-413b-9021-5f556118b6e2:programs",
+      "locations:location:ae34d822-60ef-4f82-81eb-8f3513059627",
+      "locations:location:ae34d822-60ef-4f82-81eb-8f3513059627:programs",
+      "locations:location:e9ed1883-d6a5-463d-bda0-b765e15c6214",
+      "locations:location:e9ed1883-d6a5-463d-bda0-b765e15c6214:programs",
+      "organization:programs-locations",
+      "programs:collection",
+      "programs:program:c0358ff7-ce0c-4caa-969a-194159bf8dab",
+      "programs:program:c0358ff7-ce0c-4caa-969a-194159bf8dab:assignment"
+    ],
+    "commitMs": 12532
+  },
+  "replay": {
+    "status": 200,
+    "ok": true,
+    "programId": "c0358ff7-ce0c-4caa-969a-194159bf8dab",
+    "operationId": "fe88e786-0390-4c05-8eb0-9e8143c32f32",
+    "idempotentReplay": true,
+    "sameProgram": true
+  },
+  "idem": "make-available:recert3-w9k7sx"
+}

@@ -50,11 +50,11 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         description: "Manage the foundation of your organization.",
         items: [
             {
-                href: settings("locations"),
-                label: "Locations",
-                description: "Sites, Programs offered, delivery resources, and local schedules.",
+                href: "/organization/programs-locations",
+                label: "Programs & Locations",
+                description: "Reusable services and the places that deliver them.",
                 icon: "locations",
-                testId: "config-mode-nav-locations",
+                testId: "config-mode-nav-programs-locations",
             },
             {
                 href: settings("users-roles"),
@@ -141,11 +141,11 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         description: "Configure business modules and rules.",
         items: [
             {
-                href: settings("commercial"),
-                label: "Programs",
-                description: "Reusable service catalog, eligibility, requirements, and defaults.",
-                icon: "commercial",
-                testId: "config-mode-nav-programs",
+                href: "/organization/financials",
+                label: "Financials",
+                description: "Tuition, fees, catalog, policies, accounting, and commercial simulation.",
+                icon: "financials",
+                testId: "config-mode-nav-financials",
             },
         ],
     },
@@ -177,6 +177,24 @@ export function configurationModeNavItemActive(href: string, path: string): bool
     const h = href.replace(/\/$/, "");
     const p = path.replace(/\/$/, "");
     if (h === "/admin/workflows") return p === h || p.startsWith(`${h}/`);
+    // Programs & Locations domain — highlight for landing and both collections.
+    if (h === "/organization/programs-locations") {
+        return (
+            p === h
+            || p.startsWith(`${h}/`)
+            || p === "/organization/programs"
+            || p.startsWith("/organization/programs/")
+            || p === "/organization/locations"
+            || p.startsWith("/organization/locations/")
+        );
+    }
+    // Programs is owned by `/organization/programs` only — never treat Commercial/Financials as Programs IA.
+    if (h === "/organization/programs") {
+        return p === h || p.startsWith(`${h}/`);
+    }
+    if (h === "/organization/financials") {
+        return p === h || p.startsWith(`${h}/`);
+    }
     if (h === settings("processes")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/business-processes");
     if (h === settings("surfaces")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/layouts");
     if (h === settings("entities")) {

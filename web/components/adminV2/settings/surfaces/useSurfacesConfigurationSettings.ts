@@ -131,8 +131,9 @@ export const SURFACE_OBJECTS: Record<Exclude<SurfaceConfigSectionKey, "workspace
 export function useSurfacesConfigurationSettings(
     workspaceSurfaces: SurfaceConfigObject[] = [],
     queueRowSurfaces: SurfaceConfigObject[] = [],
+    initialSection: SurfaceConfigSectionKey = "focus-panels",
 ) {
-    const [section, setSectionState] = useState<SurfaceConfigSectionKey>("focus-panels");
+    const [section, setSectionState] = useState<SurfaceConfigSectionKey>(initialSection);
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
     const listItems = useMemo((): SurfaceConfigObject[] => {

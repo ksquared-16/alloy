@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchLocationProgramCategories } from "@/lib/admin/location/fetchLocationProgramCategories";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     fetchOptionSetItemsBySetKey,
     mapOptionItemsToSelectOptions,
@@ -12,13 +11,22 @@ import {
     resolveActiveProgramCategoriesForSite,
     type LocationProgramCategoryRow,
 } from "@/lib/locations/locationProgramCategories";
-import {
-    fetchSchedulePatternsForSite,
-    type SchedulePatternRow,
-} from "@/lib/childcareOperational/fetchOperationalEnrollment";
+import type { SchedulePatternRow } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 import { mergeLocationMetadataField } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import type { LocationSiteCreateInput } from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
 import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
+import {
+    invalidateLocationsCollection,
+    loadLocationsCollection,
+    peekLocationsCollection,
+} from "@/lib/locations/locationsCollectionCache";
+import { invalidateProgramsCollection } from "@/lib/programs/programsCollectionCache";
+import { resolveLocationsSelection } from "@/lib/locations/locationsSelectionAdapter";
+import {
+    publishConfigurationInvalidation,
+    subscribeConfigurationInvalidation,
+} from "@/lib/configRuntime/configurationInvalidation";
+import { markConfigurationContinuity } from "@/lib/configRuntime/configurationContinuity";
 
 export type LocationConfigSection =
     | "locations"
@@ -55,16 +63,32 @@ function isRoom(row: LocationHierarchyRow): boolean {
     return String(row.location_type ?? "").trim() === "unit";
 }
 
-export function useLocationsConfigurationSettings(options?: { initialLocationId?: string | null }) {
+export function useLocationsConfigurationSettings(options?: {
+    initialLocationId?: string | null;
+    orgId?: string | null;
+    retainedLocationId?: string | null;
+}) {
     const initialLocationId = String(options?.initialLocationId ?? "").trim() || null;
+    const orgId = String(options?.orgId ?? "").trim();
+    const retainedLocationId = String(options?.retainedLocationId ?? "").trim() || null;
     const [section, setSection] = useState<LocationConfigSection>("locations");
-    const [rows, setRows] = useState<LocationHierarchyRow[]>([]);
-    const [programCategories, setProgramCategories] = useState<LocationProgramCategoryRow[]>([]);
-    const [schedulePatterns, setSchedulePatterns] = useState<SchedulePatternRow[]>([]);
+    const [rows, setRows] = useState<LocationHierarchyRow[]>(() =>
+        orgId ? (peekLocationsCollection(orgId)?.rows ?? []) : [],
+    );
+    const [programCategories, setProgramCategories] = useState<LocationProgramCategoryRow[]>(() =>
+        orgId ? (peekLocationsCollection(orgId)?.programCategories ?? []) : [],
+    );
+    const [schedulePatterns, setSchedulePatterns] = useState<SchedulePatternRow[]>(() =>
+        orgId ? (peekLocationsCollection(orgId)?.schedulePatterns ?? []) : [],
+    );
     const [ageUnitSelectOptions, setAgeUnitSelectOptions] = useState<{ value: string; label: string }[]>([]);
-    const [loading, setLoading] = useState(true);
+    const hasDataRef = useRef(rows.length > 0);
+    const [loading, setLoading] = useState(!hasDataRef.current);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [selectionSource, setSelectionSource] = useState<"route" | "retained" | "none">("none");
+    const [shouldSyncRoute, setShouldSyncRoute] = useState(false);
 
     const siteRows = useMemo(() => rows.filter(isSite), [rows]);
     const roomRows = useMemo(() => rows.filter(isRoom), [rows]);
@@ -82,52 +106,75 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
         [programCategories],
     );
 
-    const refreshLocations = useCallback(async () => {
-        const res = await fetch("/api/admin/locations?include_inactive=true&hierarchy=1", {
-            credentials: "include",
-        });
-        const json = (await res.json()) as { locations?: LocationHierarchyRow[]; error?: string };
-        if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
-        setRows(json.locations ?? []);
-    }, []);
+    const applySnapshot = useCallback(
+        (snapshot: {
+            rows: LocationHierarchyRow[];
+            programCategories: LocationProgramCategoryRow[];
+            schedulePatterns: SchedulePatternRow[];
+        }) => {
+            setRows(snapshot.rows);
+            setProgramCategories(snapshot.programCategories);
+            setSchedulePatterns(snapshot.schedulePatterns);
+            hasDataRef.current = snapshot.rows.length > 0 || snapshot.programCategories.length > 0;
+        },
+        [],
+    );
+
+    const refresh = useCallback(
+        async (opts?: { force?: boolean }) => {
+            if (!orgId) {
+                setLoading(false);
+                setError("Organization context is required.");
+                return;
+            }
+            const hadData = hasDataRef.current;
+            if (hadData) setRefreshing(true);
+            else setLoading(true);
+            setError(null);
+            try {
+                const { snapshot, meta } = await loadLocationsCollection(orgId, {
+                    force: opts?.force === true,
+                });
+                applySnapshot(snapshot);
+                markConfigurationContinuity("reveal", {
+                    domain: "locations",
+                    cache_hit: meta.cacheHit,
+                    inflight_join: meta.inflightJoin,
+                    stale_reuse: meta.staleReuse,
+                });
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Failed to load locations");
+                if (!hadData) {
+                    setRows([]);
+                    setProgramCategories([]);
+                    setSchedulePatterns([]);
+                }
+            } finally {
+                setLoading(false);
+                setRefreshing(false);
+            }
+        },
+        [applySnapshot, orgId],
+    );
 
     const refreshPrograms = useCallback(async () => {
-        const categories = await fetchLocationProgramCategories({ credentials: "include" }, { includeInactive: true });
-        setProgramCategories(categories);
-    }, []);
+        await refresh({ force: true });
+    }, [refresh]);
 
     const refreshSchedulePatterns = useCallback(async () => {
-        const sites = rows.filter(isSite);
-        if (!sites.length) {
-            setSchedulePatterns([]);
-            return;
-        }
-        const batches = await Promise.all(sites.map((s) => fetchSchedulePatternsForSite(s.id).catch(() => [])));
-        setSchedulePatterns(batches.flat());
-    }, [rows]);
-
-    const refresh = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            await refreshLocations();
-            await refreshPrograms();
-        } catch (e) {
-            setError(e instanceof Error ? e.message : "Failed to load locations");
-            setRows([]);
-            setProgramCategories([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [refreshLocations, refreshPrograms]);
-
-    useEffect(() => {
-        void refresh();
+        await refresh({ force: true });
     }, [refresh]);
 
     useEffect(() => {
-        if (!loading) void refreshSchedulePatterns();
-    }, [loading, refreshSchedulePatterns]);
+        if (!orgId) return;
+        // Re-hydrate from Continuity collection cache when org context arrives / remounts.
+        const peeked = peekLocationsCollection(orgId);
+        if (peeked) {
+            applySnapshot(peeked);
+            setLoading(false);
+        }
+        void refresh();
+    }, [applySnapshot, orgId, refresh]);
 
     useEffect(() => {
         let cancelled = false;
@@ -142,13 +189,23 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
     useEffect(() => {
         const onSaved = (e: Event) => {
             const d = (e as CustomEvent<{ type: string }>)?.detail;
-            if (d?.type === "locations") {
-                void refresh();
+            if (d?.type === "locations" && orgId) {
+                invalidateLocationsCollection(orgId, "admin-entity-saved", { publishBus: false });
+                void refresh({ force: true });
             }
         };
         window.addEventListener("admin-entity-saved", onSaved);
         return () => window.removeEventListener("admin-entity-saved", onSaved);
-    }, [refresh]);
+    }, [orgId, refresh]);
+
+    useEffect(() => {
+        if (!orgId) return;
+        return subscribeConfigurationInvalidation((event) => {
+            if (event.scope !== "locations" && event.scope !== "all") return;
+            invalidateLocationsCollection(orgId, event.reason, { publishBus: false });
+            void refresh({ force: true });
+        });
+    }, [orgId, refresh]);
 
     const listItems = useMemo(() => {
         if (section === "locations") {
@@ -196,41 +253,22 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
             .sort((a, b) => a.sortSite.localeCompare(b.sortSite) || a.title.localeCompare(b.title));
     }, [section, siteRows, programCategories, roomRows, schedulePatterns, siteLabelById]);
 
-    // URL is the source of truth for the Locations landing versus an object workspace.
+    // Deterministic selection projection (route → retained → none).
+    // Locations landing: never auto-open the first location. Do not invent a default.
     useEffect(() => {
-        if (loading) return;
-        if (!initialLocationId) {
-            setSelectedId(null);
-            setError(null);
-        }
-    }, [initialLocationId, loading]);
-
-    useEffect(() => {
-        if (loading || !initialLocationId) return;
-        if (section !== "locations") {
-            setSection("locations");
-            return;
-        }
-        const siteMatch = siteRows.some((site) => site.id === initialLocationId);
-        if (siteMatch) {
-            setSelectedId(initialLocationId);
-            setError(null);
-            return;
-        }
-        if (siteRows.length > 0) {
-            setError("Location not found or unavailable.");
-            setSelectedId(null);
-        }
-    }, [initialLocationId, loading, siteRows, section]);
-
-    // Locations landing: never auto-open the first location. Drop stale ids only.
-    useEffect(() => {
-        if (!selectedId || !listItems.length) return;
-        if (initialLocationId && section === "locations") return;
-        if (!listItems.some((item) => item.id === selectedId)) {
-            setSelectedId(null);
-        }
-    }, [listItems, selectedId, initialLocationId, section]);
+        if (loading && !hasDataRef.current) return;
+        const resolution = resolveLocationsSelection({
+            routeLocationId: initialLocationId,
+            retainedLocationId,
+            validSiteIds: siteRows.map((s) => s.id),
+            // URL owns selection — empty locationId is a legitimate portfolio landing (Programs parity).
+            allowRetainedRestore: false,
+        });
+        setSelectedId(resolution.locationId);
+        setSelectionSource(resolution.source);
+        setShouldSyncRoute(resolution.shouldSyncRoute);
+        setError(resolution.error);
+    }, [initialLocationId, retainedLocationId, loading, siteRows]);
 
     const selectedSite = useMemo(
         () => (section === "locations" ? siteRows.find((s) => s.id === selectedId) ?? null : null),
@@ -253,6 +291,17 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
                 schedulePatterns.find((p) => p.id === selectedId) ?? null
             :   null,
         [section, schedulePatterns, selectedId],
+    );
+
+    const bumpCollectionAfterMutation = useCallback(
+        (reason: string) => {
+            if (orgId) {
+                invalidateLocationsCollection(orgId, reason, { publishBus: true });
+            } else {
+                publishConfigurationInvalidation("locations", reason);
+            }
+        },
+        [orgId],
     );
 
     const createSiteLocation = useCallback(
@@ -282,12 +331,13 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
                 throw new Error("Location creation was not confirmed by the authoritative response.");
             }
             setRows((prev) => (prev.some((row) => row.id === newId) ? prev : [...prev, json]));
+            bumpCollectionAfterMutation("location-site-created");
             window.dispatchEvent(
                 new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
             );
             return newId;
         },
-        [],
+        [bumpCollectionAfterMutation],
     );
 
     const createRoomUnit = useCallback(
@@ -312,12 +362,13 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
                 throw new Error("Room creation was not confirmed by the authoritative response.");
             }
             setRows((prev) => (prev.some((row) => row.id === newId) ? prev : [...prev, json]));
+            bumpCollectionAfterMutation("location-room-created");
             window.dispatchEvent(
                 new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
             );
             return newId;
         },
-        [],
+        [bumpCollectionAfterMutation],
     );
 
     const createProgramCategory = useCallback(
@@ -349,9 +400,10 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
                 throw new Error("Program creation was not confirmed by the authoritative response.");
             }
             setProgramCategories((prev) => [...prev, created]);
+            bumpCollectionAfterMutation("location-program-created");
             return newId;
         },
-        [],
+        [bumpCollectionAfterMutation],
     );
 
     const patchLocation = useCallback(
@@ -372,8 +424,9 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
             setRows((prev) =>
                 prev.map((row) => (row.id === id ? { ...row, ...json, id: row.id } : row)),
             );
+            bumpCollectionAfterMutation("location-patched");
         },
-        [],
+        [bumpCollectionAfterMutation],
     );
 
     const patchProgramCategory = useCallback(
@@ -386,6 +439,9 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
                 metadata?: Record<string, unknown>;
                 local_description_override?: string | null;
                 local_authorization_evidence?: string | null;
+                local_display_name?: string | null;
+                available_from?: string | null;
+                available_through?: string | null;
             },
         ) => {
             const res = await fetch("/api/admin/location-program-categories", {
@@ -411,8 +467,12 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
                 throw new Error("Program save was not confirmed by the authoritative response.");
             }
             setProgramCategories((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
+            bumpCollectionAfterMutation("location-program-patched");
+            if (orgId) {
+                invalidateProgramsCollection(orgId, "location-program-patched", { publishBus: true });
+            }
         },
-        [],
+        [bumpCollectionAfterMutation, orgId],
     );
 
     const roomCapacitySummaryForSite = useCallback(
@@ -439,7 +499,10 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
         setSection,
         selectedId,
         setSelectedId,
+        selectionSource,
+        shouldSyncRoute,
         loading,
+        refreshing,
         error,
         setError,
         listItems,
