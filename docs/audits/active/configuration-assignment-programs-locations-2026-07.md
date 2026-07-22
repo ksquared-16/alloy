@@ -13,10 +13,13 @@ phase: configuration-assignment-backend-stage-2
 
 | Stage | State |
 |-------|--------|
-| 1 Interactive prototype | **Approved** (operator gate passed) |
-| 2 Backend authority + command | **Complete** — await Stage 3 frontend wiring |
-| 3 Production frontend | Not started |
+| 1 Interactive prototype | **Approved** |
+| 2 Backend authority + command | **Complete** |
+| 2.5 Capability certification | **Complete** — see `configuration-assignment-capability-certification-2026-07.md` |
+| 3 Production frontend | Not started — wires **Programs adapter** only |
 | 4 E2E certification | Not started |
+
+**Stage 2.5 headline:** This is not “a Programs feature that every page copies.” It is the first adapter on Configuration Assignment (availability). Tuition stays on value inherit/override. Preview→Commit is cross-cutting.
 
 ## Frozen interaction contract (from Stage 1 approval)
 

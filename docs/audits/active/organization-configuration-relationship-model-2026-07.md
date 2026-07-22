@@ -316,4 +316,20 @@ These are **explicitly open**; do not invent answers in UI:
 
 This document is the Organization Configuration Relationship Model for implementation. Domains may gain UI polish only within these ownership, assignment, inheritance, override, and execution boundaries. New capabilities require a new evidence-backed amendment — not mockup-driven IA drift.
 
+## 9. Post–Assignment certification strategy (Stage 2.5)
+
+After Programs Assignment is wired (Stage 3), Organization work should not invent page-local engines.
+
+For each Organization surface ask:
+
+1. Object Collection or Configuration Hub?
+2. Needs **Configuration Assignment** (availability)?
+3. Needs **Configuration Continuity**?
+4. Supports **local overrides** (value kind)?
+5. Requires **Preview → Review → Commit**?
+
+Certified kinds: Assignment · Value inherit/override · Authorization assignment · Surface/process binding · Preview→Commit.
+
+Canonical certification: `docs/audits/active/configuration-assignment-capability-certification-2026-07.md`.
+
 ORGANIZATION CONFIGURATION RELATIONSHIP MODEL READY — ownership, assignment, inheritance, override, and execution boundaries are frozen and implementation can continue without further IA drift.
