@@ -6,6 +6,9 @@ import type {
 } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { CurrentWorkExecutionVM } from "./buildCurrentWorkExecutionVM";
+import type { CurrentWorkRequirementOwner } from "./resolveCurrentWorkRequirementOwner";
+
+export type { CurrentWorkRequirementOwner } from "./resolveCurrentWorkRequirementOwner";
 
 /** Operator-facing status for Current Work summary chip. */
 export type CurrentWorkSurfaceStatus = "not_started" | "in_progress" | "blocked" | "completed";
@@ -52,6 +55,8 @@ export type CurrentWorkChecklistItemVM = {
     kind?: CurrentWorkChecklistItemKind;
     scope?: "record" | "child" | "person";
     targetLabel?: string | null;
+    /** Owning capability resolved from runtime metadata (not the label) — drives grouping + handoff. */
+    owner?: CurrentWorkRequirementOwner | null;
     actionRef?: string | null;
     description?: string | null;
     /** When navigable via Focus handoff (legacy stage-work rows). */
@@ -70,6 +75,8 @@ export type CurrentWorkReadinessItemVM = {
     status: CurrentWorkChecklistStatus;
     scope?: "record" | "child" | "person";
     targetLabel?: string | null;
+    /** Owning capability resolved from runtime metadata — drives owner grouping + handoff. */
+    owner?: CurrentWorkRequirementOwner | null;
 };
 
 export type CurrentWorkReadinessVM = {

@@ -17,6 +17,10 @@ import type { CurrentWorkChecklistItem } from "@/lib/adminV2/runtime/focusPanel/
 import { resolveWorkItemHandoff } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveWorkItemHandoff";
 import { handoffOwnerCardForChecklistScope } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkSurfaceVM";
 import {
+    resolveCurrentWorkRequirementOwner,
+    type CurrentWorkRequirementOwner,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkRequirementOwner";
+import {
     isCurrentWorkActionExecutable,
     planCurrentWorkActionExecution,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
@@ -261,13 +265,14 @@ export default function CurrentWorkCard({
             return;
         }
 
-        const ownerCard = handoffOwnerCardForChecklistScope(item.scope);
+        // Owner comes from runtime metadata (Slice E); fall back to the legacy scope map.
+        const ownerCard = item.owner?.card ?? handoffOwnerCardForChecklistScope(item.scope);
         if (ownerCard && coordination?.requestFocus) {
             setHandoffNotice(null);
             const source = { card: "current_work" as const, focus: null };
             if (isWorkspace) coordination.closeCurrentWorkWorkspace?.();
             resetCompletion();
-            coordination.requestFocus(ownerCard, null, source);
+            coordination.requestFocus(ownerCard, item.owner?.focus ?? null, source);
             return;
         }
 
@@ -513,6 +518,46 @@ export default function CurrentWorkCard({
  * internal identifiers leaked). Deduplicates by label and caps, with a handoff to Required Information
  * for the rest. Derives entirely from the View Model — no new runtime, no new field.
  */
+/** Effective owner for a requirement — runtime metadata first, scope fallback (never the label). */
+function requirementOwner(item: CurrentWorkChecklistItemVM): CurrentWorkRequirementOwner {
+    return item.owner ?? resolveCurrentWorkRequirementOwner({ scope: item.scope });
+}
+
+type ReadinessOwnerGroup = { owner: CurrentWorkRequirementOwner; items: CurrentWorkChecklistItemVM[] };
+
+/**
+ * Group outstanding requirements by owning capability. Dedupes by owner+label (so the same
+ * label under two owners is preserved as two groups — never collapsed into one). Group order
+ * follows first appearance in the runtime projection.
+ */
+function groupStillNeededByOwner(items: CurrentWorkChecklistItemVM[]): ReadinessOwnerGroup[] {
+    const groups: ReadinessOwnerGroup[] = [];
+    const byOwnerKey = new Map<string, ReadinessOwnerGroup>();
+    const seen = new Set<string>();
+    for (const item of items) {
+        if (item.status === "complete") continue;
+        const label = item.label.trim();
+        if (!label) continue;
+        const owner = requirementOwner(item);
+        const dedupeKey = `${owner.key}::${label.toLowerCase()}`;
+        if (seen.has(dedupeKey)) continue;
+        seen.add(dedupeKey);
+        let group = byOwnerKey.get(owner.key);
+        if (!group) {
+            group = { owner, items: [] };
+            byOwnerKey.set(owner.key, group);
+            groups.push(group);
+        }
+        group.items.push(item);
+    }
+    return groups;
+}
+
+/** Synthetic navigation target so the group-level "Open {owner} →" reuses the checklist handoff. */
+function ownerHandoffItem(owner: CurrentWorkRequirementOwner): CurrentWorkChecklistItemVM {
+    return { key: `owner:${owner.key}`, label: owner.label, status: "missing", owner };
+}
+
 export function ReadinessSummary({
     surface,
     onNavigate,
@@ -521,22 +566,47 @@ export function ReadinessSummary({
     onNavigate: (item: CurrentWorkChecklistItemVM) => void;
 }) {
     const items: CurrentWorkChecklistItemVM[] = surface.readiness.requirements?.items ?? [];
-    const seen = new Set<string>();
-    const stillNeeded = items.filter((item) => {
-        if (item.status === "complete") return false;
-        const key = item.label.trim().toLowerCase();
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
-    if (stillNeeded.length === 0) return null;
+    const groups = groupStillNeededByOwner(items);
+    if (groups.length === 0) return null;
+    // Cap total requirement rows across groups (density); the rest defer to Required Information.
     const CAP = 4;
-    const visible = stillNeeded.slice(0, CAP);
-    const overflow = stillNeeded.length - visible.length;
+    let shown = 0;
+    let overflow = 0;
+    const visibleGroups: ReadinessOwnerGroup[] = [];
+    for (const group of groups) {
+        if (shown >= CAP) {
+            overflow += group.items.length;
+            continue;
+        }
+        const room = CAP - shown;
+        const visibleItems = group.items.slice(0, room);
+        overflow += group.items.length - visibleItems.length;
+        visibleGroups.push({ owner: group.owner, items: visibleItems });
+        shown += visibleItems.length;
+    }
     return (
         <div className="alloy-os-currentwork__readiness-block" data-work-readiness="true" data-work-readiness-group="still-needed">
             <p className="alloy-os-currentwork__readiness-reason">Still needed</p>
-            <ChecklistStepper items={visible} onNavigate={onNavigate} />
+            {visibleGroups.map((group) => (
+                <div
+                    key={group.owner.key}
+                    className="alloy-os-currentwork__readiness-owner-group"
+                    data-work-readiness-owner={group.owner.key}
+                >
+                    <p className="alloy-os-currentwork__readiness-owner">{group.owner.label}</p>
+                    <ChecklistStepper items={group.items} onNavigate={onNavigate} />
+                    {group.owner.card ?
+                        <button
+                            type="button"
+                            className="alloy-os-currentwork__stepper-button alloy-os-currentwork__readiness-owner-link"
+                            data-work-readiness-owner-link={group.owner.key}
+                            onClick={() => onNavigate(ownerHandoffItem(group.owner))}
+                        >
+                            <span className="alloy-os-currentwork__stepper-target">Open {group.owner.label} →</span>
+                        </button>
+                    :   null}
+                </div>
+            ))}
             {overflow > 0 ?
                 <p className="alloy-os-currentwork__disclosure-overflow">
                     +{overflow} more in Required information
@@ -559,7 +629,7 @@ function ChecklistStepper({
             {items.map((item, index) => {
                 const navigable =
                     item.status !== "complete"
-                    && (item.actionRef != null || item.handoffItemId != null || item.targetLabel != null);
+                    && (item.actionRef != null || item.handoffItemId != null || item.owner?.card != null);
                 const mark =
                     item.status === "complete" ? "✓"
                     : item.status === "blocked" ? "!"
@@ -576,9 +646,6 @@ function ChecklistStepper({
                             {mark}
                         </span>
                         <span className="alloy-os-currentwork__stepper-label">{item.label}</span>
-                        {navigable && item.targetLabel ?
-                            <span className="alloy-os-currentwork__stepper-target">{item.targetLabel} →</span>
-                        :   null}
                     </>
                 );
                 return (

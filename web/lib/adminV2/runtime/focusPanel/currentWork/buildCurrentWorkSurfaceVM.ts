@@ -16,7 +16,8 @@ import {
     actionsFromConfigRefs,
     classifyRecordHeaderActionsForCurrentWork,
 } from "./classifyCurrentWorkActions";
-import { inferWorkItemOwner } from "./inferWorkItemOwner";
+import { resolveCurrentWorkRequirementOwner } from "./resolveCurrentWorkRequirementOwner";
+import { resolveCurrentWorkRequirementOperatorLabel } from "./resolveCurrentWorkFieldRuleDisplayLabel";
 import { CURRENT_WORK_RECORD_OUTCOME_CTA } from "./currentWorkCopy";
 import {
     resolvedHelpfulActionRefs,
@@ -97,6 +98,7 @@ function classifyChecklistItems(checklist: CurrentWorkChecklistItemVM[]): {
             status: item.status,
             scope: item.scope,
             targetLabel: item.targetLabel,
+            owner: item.owner ?? resolveCurrentWorkRequirementOwner({ scope: item.scope }),
         };
         if (item.kind === "stage_work") {
             workItems.push(row);
@@ -189,36 +191,19 @@ function checklistFromStageRuntime(runtime: StageWorkRuntimeProjection | null): 
         (item): item is StageWorkItemProjection => item != null,
     );
     return items.map((item) => {
-        const operationalItem = {
-            id: item.work_id ?? item.template_key,
-            label: item.label,
-            state:
-                item.state === "completed" ? ("completed" as const)
-                : item.state === "open" ? ("open" as const)
-                : ("planned" as const),
-            dueLabel: null,
-            dueAt: item.due_at,
-            urgency: null,
-            source: null,
-            kind: "stage_work" as const,
-        };
-        const owner = inferWorkItemOwner(operationalItem);
         const status =
             item.state === "completed" ? ("complete" as const) : ("missing" as const);
-        const ownerCard = owner?.card ?? null;
-        const targetLabel =
-            ownerCard === "household" ? "Household"
-            : ownerCard === "children" ? "Children"
-            : ownerCard === "communications" ? "Communications"
-            : ownerCard === "documents" ? "Documents"
-            : null;
+        // Stage-work rows carry no field-rule entity — they are WORK, not a data requirement.
+        // No label-regex owner inference (that heuristic was the Slice E debt); a work item has
+        // no data-owning card, so ownership is left unset rather than guessed from the label.
         return {
             key: item.template_key,
             label: item.label,
             status,
-            kind: "stage_work",
-            scope: "record",
-            targetLabel,
+            kind: "stage_work" as const,
+            scope: "record" as const,
+            targetLabel: null,
+            owner: null,
             actionRef: null,
             description: item.description?.trim() || null,
             handoffItemId: item.work_id ?? item.template_key,
@@ -247,6 +232,7 @@ function checklistFromConfig(
                 ?? (row.scope === "child" ? "Children"
                 : row.scope === "person" ? "Person"
                 : null),
+            owner: resolveCurrentWorkRequirementOwner({ scope: row.scope }),
             actionRef: row.action_ref ?? null,
             description: truth?.detail ?? null,
             handoffItemId: null,
@@ -269,23 +255,34 @@ function mergeChecklists(
 
 function checklistFromReadiness(readiness: ReadinessResult | null | undefined): CurrentWorkChecklistItemVM[] {
     if (!readiness?.gaps?.length) return [];
-    return readiness.gaps.map((gap) => ({
-        key: gap.requirement_id,
-        label: gap.label,
-        status: gap.blocking ? ("blocked" as const) : ("missing" as const),
-        kind: "requirement" as const,
-        scope:
+    const rows: CurrentWorkChecklistItemVM[] = [];
+    for (const gap of readiness.gaps) {
+        // Suppress internal identifiers (foreign keys like `location_id`) — they leak from the
+        // derivation layer and are never operator requirements. Catalog-backed fields resolve.
+        const operatorLabel = resolveCurrentWorkRequirementOperatorLabel(gap.requirement_id);
+        if (operatorLabel === null) continue;
+        const scope =
             gap.entity_type === "child" ? ("child" as const)
             : gap.entity_type === "person" ? ("person" as const)
-            : ("record" as const),
-        targetLabel:
-            gap.entity_type === "child" ? "Children"
-            : gap.entity_type === "person" ? "Person"
-            : null,
-        actionRef: gap.resolution?.action_key ?? null,
-        description: gap.missing_reason,
-        handoffItemId: null,
-    }));
+            : ("record" as const);
+        rows.push({
+            key: gap.requirement_id,
+            // Prefer the authored gap label; fall back to the canonical operator label. Never the id.
+            label: gap.label?.trim() || operatorLabel,
+            status: gap.blocking ? ("blocked" as const) : ("missing" as const),
+            kind: "requirement" as const,
+            scope,
+            targetLabel:
+                gap.entity_type === "child" ? "Children"
+                : gap.entity_type === "person" ? "Person"
+                : null,
+            owner: resolveCurrentWorkRequirementOwner({ scope, entityType: gap.entity_type }),
+            actionRef: gap.resolution?.action_key ?? null,
+            description: gap.missing_reason,
+            handoffItemId: null,
+        });
+    }
+    return rows;
 }
 
 function pickPrimaryOpenItem(runtime: StageWorkRuntimeProjection | null): StageWorkItemProjection | null {

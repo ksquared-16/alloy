@@ -117,11 +117,14 @@ describe("projectCurrentWork", () => {
         expect(source).not.toContain("stage_key");
     });
 
-    it("routes Contact Family checklist items to Communications as outreach actions", () => {
+    it("does not label-infer an owner for stage-work checklist items (Slice E: metadata-only ownership)", () => {
+        // "Contact Family" is WORK, not a data requirement. The prior behavior routed it to
+        // Communications purely from its label (inferWorkItemOwner regex) — that heuristic was
+        // removed from the surface path. A stage-work row now carries no data-owning card.
         const vm = projectCurrentWork(context({ runtime: stageRuntime() }));
         const contact = vm.checklist.find((item) => item.label === "Contact Family");
-        expect(contact?.ownerCard).toBe("communications");
-        expect(contact?.handoffKind).toBe("outreach");
+        expect(contact?.ownerCard).toBeNull();
+        expect(contact?.handoffKind).toBeNull();
     });
 
     it("exposes all configured completion outcomes from stage runtime", () => {
