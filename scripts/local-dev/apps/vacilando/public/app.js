@@ -226,26 +226,30 @@ function tabHistory(sp) {
 
 function tabOverview(sp, w, r) {
   const kv = (a, b, mono) => `<dt>${a}</dt><dd class="${mono ? "mono" : ""}">${b}</dd>`;
+  const stat = (l, v, sub) => `<div class="dstat"><div class="dl">${l}</div><div class="dv sm">${v}</div>${sub ? `<div class="ds">${sub}</div>` : ""}</div>`;
   const proc = r?.server_process;
-  return `<div class="cols2">
-    <div class="sec"><h5>Objective &amp; Instructions</h5>
+  const dirty = sp.git.state === "dirty";
+  return `<div class="obj-lead">
       <div class="obj">${esc(sp.objective || sp.title)}</div>
-      <div class="muted note">Full live instructions are held in the worker's session and its worktree package; Vacilando composes and routes new instructions from the Director tab (it cannot read the live editor buffer).</div></div>
-    <div class="sec"><h5>State</h5><dl class="kv">
-      ${kv("Provider", esc(sp.provider))}${kv("Stage", esc(sp.phase?.label || "—"))}
-      ${kv("Initiative", sp.initiative_key ? esc(sp.initiative_key) : '<span class="muted">— managed sprint</span>')}
-      ${kv("Session", w?.ownership?.session_id ? esc(w.ownership.session_id) : "—", 1)}
-      ${kv("Health", w ? `<span class="hpill ${w.health}">${w.health}</span>` : "—")}</dl></div>
-    <div class="sec"><h5>Worktree &amp; Git</h5><dl class="kv">
-      ${kv("Worktree", esc(sp.worktree), 1)}${kv("Branch", esc(sp.branch || "—"), 1)}
-      ${kv("Position", `↑${sp.git.ahead} ↓${sp.git.behind} · <span class="${sp.git.state === "dirty" ? "dirty" : "clean"}">${sp.git.state}</span>`)}
-      ${kv("Server", esc(sp.server) + (sp.port ? ` · :${sp.port}` : ""))}</dl></div>
-    <div class="sec"><h5>Resources</h5><dl class="kv">
-      ${proc ? kv("Server proc", `pid ${proc.pid} · ${proc.cpu_pct}% cpu · ${proc.rss_mb}MB · ${proc.elapsed}`) : kv("Process", '<span class="muted">no active process identified</span>')}
-      ${r ? kv("Disk", r.disk_mb != null ? `${(r.disk_mb / 1024).toFixed(1)} GB` : "—") : ""}
-      ${kv("Provider app", '<span class="muted">PID not tracked by toolkit</span>')}</dl></div>
-    ${sp.questions?.length ? `<div class="sec span2"><h5>Open Questions / Blockers</h5>${sp.questions.map((q) => `<div class="blocker">${esc(q.question)}</div>`).join("")}</div>` : ""}
-  </div>`;
+      <div class="muted note">Full live instructions live in the worker's session and its worktree package. Vacilando composes and routes new instructions from the Director tab — it does not read the live editor buffer.</div></div>
+    <div class="dstats sm work-stats">
+      ${stat("Provider", esc(sp.provider))}
+      ${stat("Stage", esc(sp.phase?.label || "—"))}
+      ${stat("Health", w ? `<span class="hpill ${w.health}">${w.health}</span>` : "—")}
+      ${stat("Position", `<span class="${dirty ? "dirty" : "clean"}">↑${sp.git.ahead} ↓${sp.git.behind}</span>`, dirty ? "uncommitted changes" : "clean")}
+      ${stat("Server", sp.server === "running" && sp.port ? `<span class="clean">:${sp.port}</span>` : esc(sp.server))}
+      ${stat("Initiative", sp.initiative_key ? esc(sp.initiative_key) : "managed sprint")}</div>
+    <div class="cols2">
+      <div class="sec"><h5>Worktree &amp; Git</h5><dl class="kv">
+        ${kv("Worktree", esc(sp.worktree), 1)}${kv("Branch", esc(sp.branch || "—"), 1)}
+        ${kv("Base", esc(state.snap.repository.base_ref) + " @ " + esc(state.snap.repository.base_sha || "—"), 1)}</dl></div>
+      <div class="sec"><h5>This worker</h5><dl class="kv">
+        ${proc ? kv("Process", `pid ${proc.pid} · ${proc.cpu_pct}% cpu · ${proc.rss_mb}MB · ${proc.elapsed}`) : kv("Process", '<span class="muted">no active process</span>')}
+        ${r?.disk_mb != null ? kv("Disk", `${(r.disk_mb / 1024).toFixed(1)} GB`) : ""}
+        ${kv("Provider app", '<span class="muted">PID not tracked</span>')}</dl>
+        <div class="muted src">Provider usage is recorded per Director round-trip — see the Director tab.</div></div>
+    </div>
+    ${sp.questions?.length ? `<div class="sec"><h5>Open Questions / Blockers</h5>${sp.questions.map((q) => `<div class="blocker">${esc(q.question)}</div>`).join("")}</div>` : ""}`;
 }
 
 function tabOutputs(sp) {
