@@ -175,27 +175,6 @@ export function FormOperationalIntentPicker({
                 </p>
             :   null}
 
-            {!hasOperationalLink ?
-                <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2">
-                    <p className="text-xs font-medium text-amber-900">Create a share link to apply intake defaults.</p>
-                    {canMutate && onCreateLink ?
-                        <button
-                            type="button"
-                            className={clsx(intakeWorkspaceBtnPrimary, "mt-2")}
-                            disabled={creatingLink || busy || shareCreationBlocked}
-                            data-testid="form-intent-create-share-link"
-                            onClick={onCreateLink}
-                        >
-                            {creatingLink ?
-                                "Creating…"
-                            : shareCreationBlocked ?
-                                shareBlockButtonLabel
-                            :   "Get share link"}
-                        </button>
-                    :   null}
-                </div>
-            :   null}
-
             <div className="mt-3 grid gap-2 sm:grid-cols-2" data-testid="form-operational-intent-options">
                 {primaryTemplates.map((template) => {
                     const selected = effectiveIntent === template.key;
@@ -203,7 +182,7 @@ export function FormOperationalIntentPicker({
                         <button
                             key={template.key}
                             type="button"
-                            disabled={!canMutate || busy || (!hasOperationalLink && template.key !== "custom")}
+                            disabled={!canMutate || busy}
                             className={clsx(
                                 "rounded-lg px-3 py-2.5 text-left ring-1 transition",
                                 selected ?

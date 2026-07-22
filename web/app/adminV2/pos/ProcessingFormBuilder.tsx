@@ -145,7 +145,10 @@ export default function ProcessingFormBuilder({
         }
         setSchema(result.schema);
         setEditVersionId(result.editVersionId);
-        setSelectedSectionId(result.schema.sections[0]?.id ?? null);
+        // Open on the form-configuration rail (Form · Purpose · Business Process · …), not a
+        // pre-selected section — the rail is the primary inspector; a section/question editor
+        // only takes over when the operator clicks one on the canvas.
+        setSelectedSectionId(null);
         setBranding(parseFormBranding(result.formRow ?? formMeta));
         setFormMetaSnapshot(result.formRow?.metadata ?? formMeta?.metadata ?? {});
         setHasPublishedVersion(Boolean(result.formRow?.has_published_version ?? formMeta?.has_published_version));
@@ -502,12 +505,26 @@ export default function ProcessingFormBuilder({
                         data-surface-inspector="true"
                     >
                         <div>
-                        <p
-                            className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40"
-                            data-testid="processing-builder-inspector-header"
-                        >
-                            {selectedField ? "Question" : selectedSection ? "Section" : "Form configuration"}
-                        </p>
+                        {selectedField || selectedSection ? (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSelectedFieldId(null);
+                                    setSelectedSectionId(null);
+                                }}
+                                className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40 hover:text-alloy-midnight"
+                                data-testid="processing-builder-inspector-header"
+                            >
+                                <span aria-hidden>←</span> {selectedField ? "Question" : "Section"} · Back to form
+                            </button>
+                        ) : (
+                            <p
+                                className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40"
+                                data-testid="processing-builder-inspector-header"
+                            >
+                                Form configuration
+                            </p>
+                        )}
                         {selectedField ? (
                             <ProcessingFormQuestionInspector
                                 field={selectedField}
