@@ -5667,20 +5667,19 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   padding: 2px 0;
 }
 
-/* Slice A (#1) — the communication host renders the real composer inline in the centered surface. */
-.alloy-os-currentwork__action-panel--composer {
+/* #1 — communication host: reuse the Activity embed contract so the composer fills the centered
+ * host with an internal-scroll thread + a visible Send/Send later/BOS Assist footer. */
+.alloy-os-currentwork__composer-host {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  height: 100%;
+  gap: 8px;
 }
-.alloy-os-currentwork__action-panel-embed {
-  display: flex;
-  flex-direction: column;
-  min-height: 320px;
-  max-height: 52vh;
-  overflow: hidden;
+.alloy-os-currentwork__composer-header {
+  flex: 0 0 auto;
 }
-.alloy-os-currentwork__action-panel-embed > * {
+.alloy-os-currentwork__composer-host > .alloy-os-activity-cockpit__comms {
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -5758,6 +5757,28 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   padding: 2px;
   max-height: min(68vh, calc(100dvh - 120px));
   overflow-y: auto;
+}
+/* #1: when a hosted capability (composer/tour) is active, the surface fills a fixed height and
+ * does NOT scroll as a whole — the capability body scrolls internally, its footer stays visible. */
+.alloy-os-currentwork__focused[data-has-panel="true"] {
+  height: min(82vh, calc(100dvh - 72px));
+  max-height: none;
+  overflow: hidden;
+  gap: 8px;
+}
+.alloy-os-currentwork__focused[data-has-panel="true"] .alloy-os-currentwork__focused-topbar {
+  flex: 0 0 auto;
+}
+.alloy-os-currentwork__focused-panel-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.alloy-os-currentwork__focused-panel-host > * {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .alloy-os-currentwork__focused-topbar {
   display: flex;
@@ -5861,6 +5882,101 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__focused-activity-when {
   flex-shrink: 0;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 48%, #64748b);
+}
+
+/* #2 — Record outcome is a subordinate affordance in the default work mode. */
+.alloy-os-currentwork__record-outcome-affordance {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
+}
+.alloy-os-currentwork__record-outcome-affordance:hover {
+  text-decoration: underline;
+}
+
+/* #2 — dedicated outcome-declaration mode: premium full-width selection rows, not pills. */
+.alloy-os-currentwork__focused-outcome-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.alloy-os-currentwork__focused-back {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 70%, var(--alloy-os-midnight, #273f52));
+}
+.alloy-os-currentwork__outcome-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alloy-os-currentwork__outcome-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 2%, #fff);
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.alloy-os-currentwork__outcome-row:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 30%, transparent);
+}
+.alloy-os-currentwork__outcome-row--selected {
+  border-color: var(--alloy-os-bend-pine, #00a283);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+}
+.alloy-os-currentwork__outcome-radio {
+  flex-shrink: 0;
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, transparent);
+}
+.alloy-os-currentwork__outcome-row--selected .alloy-os-currentwork__outcome-radio {
+  border-color: var(--alloy-os-bend-pine, #00a283);
+  background:
+    radial-gradient(circle at center, var(--alloy-os-bend-pine, #00a283) 0 4px, transparent 5px);
+}
+.alloy-os-currentwork__outcome-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.alloy-os-currentwork__outcome-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-currentwork__outcome-effect {
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 58%, #64748b);
+}
+.alloy-os-currentwork__outcome-confirm {
+  align-self: flex-start;
+  margin-top: 2px;
 }
 
 .alloy-os-currentwork__guidance {

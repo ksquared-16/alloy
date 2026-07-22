@@ -5,14 +5,19 @@
  *
  * The focused version of the What's Next card: a single-column composition over the GENERIC
  * View Model (Slices E/F/D). NOT the legacy two-column workspace body — no progress meter, no
- * requirement counts, no workspace columns, no workflow headings, no legacy navigation. Rendered
- * inside the card's UniversalCard so the grid's centered elevation applies; the UniversalCard
- * header already shows What's Next / obligation / status, so this body does NOT repeat them.
+ * requirement counts, no workspace columns, no legacy navigation. Rendered inside the card's
+ * UniversalCard so the grid's centered elevation applies.
  *
- * Anatomy: state/reason → primary configured action → secondary configured actions → grouped
- * missing information (Slice E) → configured outcomes (Slice D) → eligible configured transitions
- * (Slice D) → recent activity. Engaging the outcome section recedes the commands (they stay
- * available, just visually secondary). All execution is runtime-derived (Slice F gating).
+ * Two modes:
+ *  - actions (default): obligation reason → primary action → subordinate actions → missing info →
+ *    subordinate "Record outcome" affordance → transitions → recent activity. The full outcome
+ *    collection is NOT shown alongside the commands.
+ *  - outcome: a dedicated decision mode — compact context, "Back to actions", configured outcomes
+ *    as premium full-width selection rows (label + configured effect), then one dominant Confirm.
+ *
+ * When a hosted capability (composer / tour) is active it becomes the primary content: the context
+ * header stays compact and the capability fills the remaining height with its own internal scroll.
+ * All labels/effects/transitions are runtime-derived (no hardcoded enrollment language).
  */
 
 import { useState } from "react";
@@ -65,14 +70,15 @@ export default function CurrentWorkFocusedSurface({
     onClose,
     actionPanel,
 }: Props) {
-    // Engaging the outcome section recedes the commands (they stay available, just secondary).
-    // Opening via "Record outcome" (select_result phase) starts in outcome-emphasis mode directly.
-    const [outcomeClicked, setOutcomeClicked] = useState(false);
-    const emphasizeOutcome = outcomeClicked || completionPhase === "select_result";
+    // Record-outcome is a dedicated decision MODE, not a section shown next to the commands.
+    // Opening via "Record outcome" from the summary (select_result) enters outcome mode directly.
+    const [outcomeModeClicked, setOutcomeModeClicked] = useState(false);
+    const inOutcomeMode =
+        outcomeModeClicked || completionPhase === "select_result" || completionPhase === "confirm";
 
     const reason = surface.readiness.reasonLabel?.trim() || surface.description?.trim() || null;
 
-    // Primary configured command (never invented from the work title). Outcomes lead on their own.
+    // Primary configured command (never invented from the work title).
     const primary =
         surface.primaryAction
         && surface.primaryAction.handlerKey !== "expand_work"
@@ -85,23 +91,28 @@ export default function CurrentWorkFocusedSurface({
     ].filter(isCurrentWorkActionExecutable).slice(0, 4);
     const transitions = surface.alternatePaths.filter(isCurrentWorkActionExecutable);
     const outcomes = surface.showOutcomeCompletion ? surface.completionOutcomes : [];
-    const confirmEffect =
-        surface.resolutions.find((r) => r.kind === "outcome" && r.key === pendingOutcomeKey)?.effect ?? [];
+    const outcomeEffect = (key: string): string[] =>
+        surface.resolutions.find((r) => r.kind === "outcome" && r.key === key)?.effect ?? [];
     const activity = activityItems.slice(0, 3);
 
-    const confirming = completionPhase === "confirm" && pendingOutcome != null;
     const processing = completionPhase === "processing";
+    const hasPanel = Boolean(actionPanel);
 
     const runCommand = (action: CurrentWorkActionVM) => {
-        setOutcomeClicked(false);
+        setOutcomeModeClicked(false);
         onAction(action);
+    };
+    const exitOutcomeMode = () => {
+        setOutcomeModeClicked(false);
+        onCancelOutcome();
     };
 
     return (
         <div
             className="alloy-os-currentwork__focused"
             data-work-focused-surface="true"
-            data-emphasize-outcome={emphasizeOutcome ? "true" : undefined}
+            data-has-panel={hasPanel ? "true" : undefined}
+            data-outcome-mode={inOutcomeMode && !hasPanel ? "true" : undefined}
             role="group"
             aria-label="What's Next"
         >
@@ -120,50 +131,68 @@ export default function CurrentWorkFocusedSurface({
                 </button>
             </div>
 
-            {actionPanel ?
-                // An active capability panel (composer / tour / transition) IS the primary content —
-                // it replaces the command/outcome sections instead of appending below them.
+            {hasPanel ?
+                // Active capability (composer / tour) is the primary content: it fills the remaining
+                // height and scrolls internally; the context header above stays compact.
                 <div className="alloy-os-currentwork__focused-panel-host">{actionPanel}</div>
-            : confirming ?
-                <div className="alloy-os-currentwork__focused-confirm" data-work-outcome-confirm="true">
-                    <p className="alloy-os-currentwork__focused-section-title">Record outcome</p>
-                    <p className="alloy-os-currentwork__focused-confirm-outcome">{pendingOutcome!.label}</p>
-                    {confirmEffect.length > 0 ?
-                        <ul className="alloy-os-currentwork__focused-effect">
-                            {confirmEffect.map((line) => (
-                                <li key={line}>{line}</li>
-                            ))}
-                        </ul>
-                    :   null}
-                    <div className="alloy-os-currentwork__focused-confirm-controls">
+            : processing ?
+                <p className="alloy-os-currentwork__focused-reason" aria-busy="true">Recording…</p>
+            : inOutcomeMode ?
+                <div className="alloy-os-currentwork__focused-outcome-mode" data-work-outcome-mode="true">
+                    <button
+                        type="button"
+                        className="alloy-os-currentwork__focused-back"
+                        data-work-action="back-to-actions"
+                        onClick={exitOutcomeMode}
+                    >
+                        ← Back to actions
+                    </button>
+                    <p className="alloy-os-currentwork__focused-section-title">What happened?</p>
+                    <ul className="alloy-os-currentwork__outcome-list" role="radiogroup" aria-label="Outcome">
+                        {outcomes.map((outcome) => {
+                            const selected = pendingOutcomeKey === outcome.outcome_key;
+                            const effect = outcomeEffect(outcome.outcome_key);
+                            return (
+                                <li key={outcome.outcome_key}>
+                                    <button
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={selected}
+                                        className={clsx(
+                                            "alloy-os-currentwork__outcome-row",
+                                            selected && "alloy-os-currentwork__outcome-row--selected",
+                                        )}
+                                        data-work-outcome={outcome.outcome_key}
+                                        data-selected={selected ? "true" : undefined}
+                                        onClick={() => onSelectOutcome(outcome.outcome_key)}
+                                    >
+                                        <span className="alloy-os-currentwork__outcome-radio" aria-hidden />
+                                        <span className="alloy-os-currentwork__outcome-text">
+                                            <span className="alloy-os-currentwork__outcome-label">{outcome.label}</span>
+                                            {effect.length > 0 ?
+                                                <span className="alloy-os-currentwork__outcome-effect">{effect.join(" · ")}</span>
+                                            :   null}
+                                        </span>
+                                    </button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                    {pendingOutcome ?
                         <button
                             type="button"
-                            className="alloy-os-currentwork__primary-action"
+                            className="alloy-os-currentwork__primary-action alloy-os-currentwork__outcome-confirm"
                             data-work-action="confirm-outcome"
                             disabled={busy}
                             onClick={onConfirmOutcome}
                         >
-                            {busy ? "Recording…" : "Confirm"}
+                            {busy ? "Recording…" : "Confirm outcome"}
                         </button>
-                        <button
-                            type="button"
-                            className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
-                            data-work-action="cancel-outcome"
-                            disabled={busy}
-                            onClick={onCancelOutcome}
-                        >
-                            Cancel
-                        </button>
-                    </div>
+                    :   null}
                 </div>
-            : processing ?
-                <p className="alloy-os-currentwork__focused-reason" aria-busy="true">Recording…</p>
             :   <>
                     {primary || secondary.length > 0 ?
-                        <div
-                            className="alloy-os-currentwork__focused-actions"
-                            data-work-focused-actions="true"
-                        >
+                        <div className="alloy-os-currentwork__focused-actions" data-work-focused-actions="true">
                             {primary ?
                                 <button
                                     type="button"
@@ -191,30 +220,14 @@ export default function CurrentWorkFocusedSurface({
                     <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
 
                     {outcomes.length > 0 ?
-                        <div className="alloy-os-currentwork__focused-outcomes" data-work-focused-outcomes="true">
-                            <button
-                                type="button"
-                                className="alloy-os-currentwork__focused-section-title alloy-os-currentwork__focused-outcomes-toggle"
-                                data-work-action="focus-outcomes"
-                                aria-pressed={emphasizeOutcome}
-                                onClick={() => setOutcomeClicked(true)}
-                            >
-                                What happened?
-                            </button>
-                            <div className="alloy-os-currentwork__focused-outcome-pills">
-                                {outcomes.map((outcome) => (
-                                    <button
-                                        key={outcome.outcome_key}
-                                        type="button"
-                                        className="alloy-os-currentwork__focused-outcome-pill"
-                                        data-work-outcome={outcome.outcome_key}
-                                        onClick={() => onSelectOutcome(outcome.outcome_key)}
-                                    >
-                                        {outcome.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                        <button
+                            type="button"
+                            className="alloy-os-currentwork__record-outcome-affordance"
+                            data-work-action="record-outcome"
+                            onClick={() => setOutcomeModeClicked(true)}
+                        >
+                            Record outcome →
+                        </button>
                     :   null}
 
                     {transitions.length > 0 ?
@@ -241,7 +254,7 @@ export default function CurrentWorkFocusedSurface({
                             <p className="alloy-os-currentwork__focused-section-title">Recent activity</p>
                             <ul className="alloy-os-currentwork__focused-activity-list">
                                 {activity.map((item, index) => (
-                                    <li key={`${item.label}-${index}`} className={clsx("alloy-os-currentwork__focused-activity-item")}>
+                                    <li key={`${item.label}-${index}`} className="alloy-os-currentwork__focused-activity-item">
                                         <span>{item.label}</span>
                                         {item.occurredAt ?
                                             <span className="alloy-os-currentwork__focused-activity-when">{item.occurredAt}</span>

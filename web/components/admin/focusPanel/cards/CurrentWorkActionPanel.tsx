@@ -77,16 +77,19 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
 
     if (surface === "communications_composer") {
         // #1: the communication host renders the REAL communications runtime inline in the centered
-        // surface (same embedded section the Focus Panel Activity uses), not the legacy Compose modal.
+        // surface — reusing the SAME embedded section + fill/scroll/pinned-footer layout contract the
+        // Focus Panel Activity uses (`.alloy-os-activity-cockpit__comms` → `.alloy-os-activity-
+        // workspace__embed` → activity_embed variant). The composer fills the host height with an
+        // internal-scroll thread and its Send / Send later / BOS Assist footer stays visible.
         return (
-            <aside
-                className="alloy-os-currentwork__action-panel alloy-os-currentwork__action-panel--composer"
+            <div
+                className="alloy-os-currentwork__composer-host"
                 data-work-action-panel="true"
                 data-work-action-panel-key={action.key}
                 data-work-action-surface="communications_composer"
                 aria-label={`${action.label} composer`}
             >
-                <div className="alloy-os-currentwork__action-panel-header">
+                <div className="alloy-os-currentwork__action-panel-header alloy-os-currentwork__composer-header">
                     <div>
                         <p className="alloy-os-currentwork__action-panel-eyebrow">Communication</p>
                         <h3 className="alloy-os-currentwork__action-panel-title">{action.label}</h3>
@@ -101,16 +104,18 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
                         Close
                     </button>
                 </div>
-                <div className="alloy-os-currentwork__action-panel-embed" data-embedded-workspace="communications">
-                    <CommunicationsDrawerSection
-                        apiEntityType="opportunities"
-                        entityId={opportunityId}
-                        embedded
-                        embeddedHeaderMode="description_only"
-                        surfaceVariant="activity_embed"
-                    />
+                <div className="alloy-os-activity-cockpit__comms">
+                    <div className="alloy-os-activity-workspace__embed" data-activity-cockpit-embed="true">
+                        <CommunicationsDrawerSection
+                            apiEntityType="opportunities"
+                            entityId={opportunityId}
+                            embedded
+                            embeddedHeaderMode="description_only"
+                            surfaceVariant="activity_embed"
+                        />
+                    </div>
                 </div>
-            </aside>
+            </div>
         );
     }
 

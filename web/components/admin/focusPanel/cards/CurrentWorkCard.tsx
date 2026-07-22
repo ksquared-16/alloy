@@ -34,6 +34,7 @@ import type {
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import { useDismissSignal, useReportPerspective } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
@@ -81,12 +82,15 @@ export default function CurrentWorkCard({
     const [activityPreviewOpen, setActivityPreviewOpen] = useState(false);
     const openWorkspaceTriggerRef = useRef<HTMLButtonElement>(null);
 
+    // Canonical local-time doctrine: activity timestamps render in the operator's resolved timezone.
+    const viewerTimeZone = useAdminViewerTimezone();
     const activityPreviewItems = useMemo(
         () => buildCurrentWorkActivityPreviewItemsFromContext(context, {
             currentWorkId: vm.primaryWorkItem?.work_id ?? undefined,
             workTemplateKey: vm.primaryWorkItem?.template_key ?? undefined,
+            timeZone: viewerTimeZone,
         }),
-        [context, vm.primaryWorkItem?.template_key, vm.primaryWorkItem?.work_id],
+        [context, vm.primaryWorkItem?.template_key, vm.primaryWorkItem?.work_id, viewerTimeZone],
     );
 
     const closeActionPanel = useCallback(() => {
