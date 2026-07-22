@@ -81,8 +81,10 @@ export type MakeProgramAvailableCommitResult = {
     status: "committed" | "partial" | "blocked";
     operationId: string;
     programId: string;
-    revisionId: string;
-    publicationId: string;
+    /** Null when blocked before a publication/revision exists (e.g. draft Program). */
+    revisionId: string | null;
+    /** Null when blocked before a publication/revision exists (e.g. draft Program). */
+    publicationId: string | null;
     createdProgram: boolean;
     publishedProgram: boolean;
     associatedLocationIds: string[];

@@ -917,12 +917,17 @@ export async function assignProgramDistribution(input: {
             org_id: input.orgId,
             publication_id: publication.id,
             domain_key: "programs",
+            subject_key: publication.subjectId,
+            revision_id: revision.id,
+            revision_number: revision.revisionNumber,
+            revision_checksum: revision.payloadChecksum,
             provider_key: plan.providerKey,
             provider_version: plan.providerVersion,
             idempotency_key: plan.idempotencyKey,
             target_set_checksum: plan.targetSetChecksum,
             status: "running",
-            created_by: input.actorUserId,
+            requested_by: input.actorUserId,
+            requested_by_label: "Programs Make Available",
             started_at: new Date().toISOString(),
         })
         .select("id")
@@ -937,6 +942,8 @@ export async function assignProgramDistribution(input: {
             .from("configuration_distribution_runs")
             .select("id")
             .eq("org_id", input.orgId)
+            .eq("domain_key", "programs")
+            .eq("subject_key", publication.subjectId)
             .eq("idempotency_key", plan.idempotencyKey)
             .single();
         assertNoError(existingError, "Reload distribution run");
@@ -950,10 +957,16 @@ export async function assignProgramDistribution(input: {
             targets.map((target) => ({
                 org_id: input.orgId,
                 run_id: runId,
+                domain_key: "programs",
+                subject_key: publication.subjectId,
                 location_id: target.locationId,
+                target_kind: "location",
+                target_key: target.locationId,
+                target_label: target.locationLabel.slice(0, 240) || "Location",
                 status: "pending",
+                provider_result: {},
             })),
-            { onConflict: "run_id,location_id", ignoreDuplicates: true },
+            { onConflict: "run_id,target_kind,target_key", ignoreDuplicates: true },
         );
     assertNoError(targetError, "Persist distribution targets");
 

@@ -262,9 +262,10 @@ export async function previewMakeProgramAvailable(
                       "assign_selected_locations",
                   ]
                 : [];
-        // Without a published revision we cannot evaluate Location associations yet.
-        // Still soft-check Location existence/scope for early blockers.
+        // Create-new: publication is planned (not a Location block). Soft-check Locations
+        // and treat eligible ones as planned new associations for Review copy.
         const locationBlocks: MakeProgramAvailablePreview["blocked"] = [];
+        const plannedAssociations: MakeProgramAvailablePreview["newAssociations"] = [];
         if (resolved.willPublish || resolved.programId) {
             const { data: locations, error } = await supabase
                 .from("locations")
@@ -314,6 +315,18 @@ export async function previewMakeProgramAvailable(
                         code: "location_out_of_scope",
                         reason: "This Location is outside your allowed site scope.",
                     });
+                    continue;
+                }
+                if (resolved.willPublish) {
+                    plannedAssociations.push({
+                        locationId,
+                        locationLabel: String(row.label ?? "Location"),
+                        status: "new_association",
+                        reason: "Will be associated after publication.",
+                        hasLocalConfiguration: false,
+                        offered: null,
+                        currentRevisionId: null,
+                    });
                 }
             }
         }
@@ -330,25 +343,27 @@ export async function previewMakeProgramAvailable(
                 willPublish: resolved.willPublish,
             },
             requestedLocationIds,
-            newAssociations: [],
+            newAssociations: plannedAssociations,
             alreadyAvailable: [],
-            blocked: [
-                {
-                    locationId: "*",
-                    locationLabel: "Program",
-                    code: "publication_required",
-                    reason: resolved.reason,
-                },
-                ...locationBlocks,
-            ],
+            blocked: resolved.willPublish
+                ? locationBlocks
+                : [
+                      {
+                          locationId: "*",
+                          locationLabel: "Program",
+                          code: "publication_required",
+                          reason: resolved.reason,
+                      },
+                      ...locationBlocks,
+                  ],
             locallyConfigured: [],
             retainedLocalConfiguration: [],
             plannedOperations,
             impact: {
                 requested: requestedLocationIds.length,
-                eligible: 0,
+                eligible: plannedAssociations.length,
                 unchanged: 0,
-                blocked: 1 + locationBlocks.length,
+                blocked: (resolved.willPublish ? 0 : 1) + locationBlocks.length,
             },
         };
     }
@@ -603,6 +618,50 @@ export async function commitMakeProgramAvailable(
         return { ...replay.result, idempotentReplay: true, operationId: replay.id };
     }
 
+    try {
+        return await commitMakeProgramAvailableBody({
+            supabase,
+            input,
+            idempotencyKey,
+            requestedLocationIds,
+            entryPoint,
+            operationId,
+            durable,
+        });
+    } catch (error) {
+        if (durable && !operationId.startsWith("ephemeral:")) {
+            const message = error instanceof Error ? error.message : "Make available failed.";
+            await supabase
+                .from("configuration_command_operations")
+                .update({
+                    status: "failed",
+                    result: {
+                        status: "failed",
+                        operatorMessage: message.slice(0, 500),
+                    },
+                    completed_at: new Date().toISOString(),
+                })
+                .eq("org_id", input.orgId)
+                .eq("id", operationId)
+                .eq("status", "running");
+        }
+        throw error;
+    }
+}
+
+async function commitMakeProgramAvailableBody(input: {
+    supabase: SupabaseClient;
+    input: MakeProgramAvailableCommandInput;
+    idempotencyKey: string;
+    requestedLocationIds: string[];
+    entryPoint: string;
+    operationId: string;
+    durable: boolean;
+}): Promise<MakeProgramAvailableCommitResult> {
+    const { supabase, idempotencyKey, requestedLocationIds, entryPoint, operationId, durable } =
+        input;
+    const commandInput = input.input;
+
     // Re-resolve authority at commit time (do not trust preview).
     let createdProgram = false;
     let publishedProgram = false;
@@ -610,11 +669,11 @@ export async function commitMakeProgramAvailable(
     let publicationId: string;
     let revisionId: string;
 
-    if (input.program.kind === "new") {
+    if (commandInput.program.kind === "new") {
         // Idempotent create: if operation already linked a program, reuse it.
         const existingOp = await loadIdempotentOperation({
             supabase,
-            orgId: input.orgId,
+            orgId: commandInput.orgId,
             idempotencyKey,
         });
         if (existingOp?.program_id && existingOp.publication_id && existingOp.revision_id) {
@@ -624,25 +683,25 @@ export async function commitMakeProgramAvailable(
         } else {
             programId = await createProgramDraft({
                 supabase,
-                orgId: input.orgId,
-                actorUserId: input.actorUserId,
-                key: input.program.input.key,
-                label: input.program.input.label,
+                orgId: commandInput.orgId,
+                actorUserId: commandInput.actorUserId,
+                key: commandInput.program.input.key,
+                label: commandInput.program.input.label,
             });
             createdProgram = true;
-            if (input.program.input.description != null) {
+            if (commandInput.program.input.description != null) {
                 await updateProgramDraft({
                     supabase,
-                    orgId: input.orgId,
-                    actorUserId: input.actorUserId,
+                    orgId: commandInput.orgId,
+                    actorUserId: commandInput.actorUserId,
                     programId,
-                    patch: { description: input.program.input.description },
+                    patch: { description: commandInput.program.input.description },
                 });
             }
             const errors = await validateProgramDraft({
                 supabase,
-                orgId: input.orgId,
-                actorUserId: input.actorUserId,
+                orgId: commandInput.orgId,
+                actorUserId: commandInput.actorUserId,
                 programId,
             });
             if (errors.length > 0) {
@@ -650,14 +709,14 @@ export async function commitMakeProgramAvailable(
             }
             await publishProgramDraft({
                 supabase,
-                orgId: input.orgId,
-                actorUserId: input.actorUserId,
+                orgId: commandInput.orgId,
+                actorUserId: commandInput.actorUserId,
                 programId,
             });
             publishedProgram = true;
             const published = await loadLatestProgramPublication({
                 supabase,
-                orgId: input.orgId,
+                orgId: commandInput.orgId,
                 programId,
             });
             if (!published) {
@@ -674,23 +733,23 @@ export async function commitMakeProgramAvailable(
                         publication_id: publicationId,
                         revision_id: revisionId,
                     })
-                    .eq("org_id", input.orgId)
+                    .eq("org_id", commandInput.orgId)
                     .eq("id", operationId);
             }
         }
     } else {
         const published = await loadLatestProgramPublication({
             supabase,
-            orgId: input.orgId,
-            programId: input.program.programId,
+            orgId: commandInput.orgId,
+            programId: commandInput.program.programId,
         });
         if (!published) {
             const blockedResult: MakeProgramAvailableCommitResult = {
                 status: "blocked",
                 operationId,
-                programId: input.program.programId,
-                revisionId: "",
-                publicationId: "",
+                programId: commandInput.program.programId,
+                revisionId: null,
+                publicationId: null,
                 createdProgram: false,
                 publishedProgram: false,
                 associatedLocationIds: [],
@@ -704,24 +763,24 @@ export async function commitMakeProgramAvailable(
                 ],
                 failed: [],
                 refreshTargets: buildMakeProgramAvailableRefreshTargets({
-                    programId: input.program.programId,
+                    programId: commandInput.program.programId,
                     associatedLocationIds: [],
-                    originatingLocationId: input.originatingLocationId,
+                    originatingLocationId: commandInput.originatingLocationId,
                 }),
                 distributionRunId: null,
                 idempotentReplay: false,
             };
             await finalizeOperation({
                 supabase,
-                orgId: input.orgId,
+                orgId: commandInput.orgId,
                 operationId,
                 result: blockedResult,
                 durable,
             });
             await writeGroupedAuditEvent({
                 supabase,
-                orgId: input.orgId,
-                actorUserId: input.actorUserId,
+                orgId: commandInput.orgId,
+                actorUserId: commandInput.actorUserId,
                 operationId,
                 result: blockedResult,
                 entryPoint,
@@ -729,21 +788,21 @@ export async function commitMakeProgramAvailable(
             });
             return blockedResult;
         }
-        programId = input.program.programId;
+        programId = commandInput.program.programId;
         publicationId = published.publication.id;
         revisionId = published.revision.id;
     }
 
     const soft = await resolveProgramTargetsSoft({
         supabase,
-        orgId: input.orgId,
+        orgId: commandInput.orgId,
         revision: (await loadLatestProgramPublication({
             supabase,
-            orgId: input.orgId,
+            orgId: commandInput.orgId,
             programId,
         }))!.revision,
         targetIds: requestedLocationIds,
-        allowedSiteLocationIds: input.allowedSiteLocationIds,
+        allowedSiteLocationIds: commandInput.allowedSiteLocationIds,
     });
     const partition = partitionMakeProgramAvailableTargets({
         resolved: soft,
@@ -757,17 +816,16 @@ export async function commitMakeProgramAvailable(
     if (assignTargetIds.length > 0) {
         const assignResult = await assignProgramDistribution({
             supabase,
-            orgId: input.orgId,
-            actorUserId: input.actorUserId,
+            orgId: commandInput.orgId,
+            actorUserId: commandInput.actorUserId,
             publicationId,
             targetIds: assignTargetIds,
-            allowedSiteLocationIds: input.allowedSiteLocationIds,
+            allowedSiteLocationIds: commandInput.allowedSiteLocationIds,
         });
         distributionRunId =
             typeof assignResult.run_id === "string" ? assignResult.run_id : null;
         const failedCount = Number(assignResult.failed ?? 0);
         if (failedCount > 0) {
-            // Per-target failure detail lives on distribution targets; mark partial.
             failed.push({
                 locationId: "*",
                 code: "distribution_partial_failure",
@@ -807,7 +865,7 @@ export async function commitMakeProgramAvailable(
         refreshTargets: buildMakeProgramAvailableRefreshTargets({
             programId,
             associatedLocationIds,
-            originatingLocationId: input.originatingLocationId,
+            originatingLocationId: commandInput.originatingLocationId,
         }),
         distributionRunId,
         idempotentReplay: false,
@@ -815,15 +873,15 @@ export async function commitMakeProgramAvailable(
 
     await finalizeOperation({
         supabase,
-        orgId: input.orgId,
+        orgId: commandInput.orgId,
         operationId,
         result,
         durable,
     });
     await writeGroupedAuditEvent({
         supabase,
-        orgId: input.orgId,
-        actorUserId: input.actorUserId,
+        orgId: commandInput.orgId,
+        actorUserId: commandInput.actorUserId,
         operationId,
         result,
         entryPoint,
