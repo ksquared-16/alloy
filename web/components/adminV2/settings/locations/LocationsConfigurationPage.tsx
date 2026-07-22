@@ -24,6 +24,7 @@ import LocationRoomCreatePanel from "@/components/adminV2/settings/locations/Loc
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
 import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
+import LocationSchedulingSurface from "@/components/adminV2/settings/locations/LocationSchedulingSurface";
 import LocationSiteCreatePanel from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
 import LocationSiteDetailPanel from "@/components/adminV2/settings/locations/LocationSiteDetailPanel";
 import {
@@ -586,6 +587,11 @@ export default function LocationsConfigurationPage({
                     locationId={selectedSite.id}
                     locationLabel={model?.displayName ?? selectedSite.label ?? ""}
                     offerings={selectedPrograms}
+                    schedulePatterns={selectedSchedules.map((pattern) => ({
+                        id: pattern.id,
+                        label: pattern.label,
+                        is_active: pattern.is_active,
+                    }))}
                     canMutate={canMutate}
                     onPatchOffering={patchProgramCategory}
                     onRefresh={refreshPrograms}
@@ -629,10 +635,16 @@ export default function LocationsConfigurationPage({
             );
         }
         if (activeTab === "schedule") {
-            return (
+            const siteMetadata =
+                selectedSite.metadata != null &&
+                typeof selectedSite.metadata === "object" &&
+                !Array.isArray(selectedSite.metadata) ?
+                    (selectedSite.metadata as Record<string, unknown>)
+                :   null;
+            const patternsPanel = (
                 <div className="space-y-3" data-testid="locations-schedule">
                     <ConfigChildObjectMasterDetail
-                        listTitle="Schedule patterns"
+                        listTitle="Schedule Patterns"
                         listSummary={`${selectedSchedules.length} ${
                             selectedSchedules.length === 1 ? "pattern" : "patterns"
                         }`}
@@ -644,7 +656,7 @@ export default function LocationsConfigurationPage({
                                     onClick={() => setCreatingSchedule(true)}
                                     data-testid="locations-schedule-add"
                                 >
-                                    + Add pattern
+                                    + Add Pattern
                                 </ConfigurationPrimaryButton>
                             :   null
                         }
@@ -695,6 +707,15 @@ export default function LocationsConfigurationPage({
                             creatingSchedule ?
                                 <LocationSchedulePatternCreatePanel
                                     locationId={selectedSite.id}
+                                    operatingDays={
+                                        siteMetadata ?
+                                            (
+                                                siteMetadata.location_scheduling_v1 as
+                                                    | { operating_days?: number[] }
+                                                    | undefined
+                                            )?.operating_days
+                                        :   undefined
+                                    }
                                     onCancel={() => setCreatingSchedule(false)}
                                     onCreated={(created) => {
                                         setSchedulePatterns((current) => [...current, created]);
@@ -710,6 +731,15 @@ export default function LocationsConfigurationPage({
                                     pattern={selectedSchedule}
                                     siteLabel={siteLabelById.get(selectedSite.id) ?? model?.displayName ?? ""}
                                     canMutate={canMutate}
+                                    operatingDays={
+                                        siteMetadata ?
+                                            (
+                                                siteMetadata.location_scheduling_v1 as
+                                                    | { operating_days?: number[] }
+                                                    | undefined
+                                            )?.operating_days
+                                        :   undefined
+                                    }
                                     onUpdated={(row) => {
                                         setSchedulePatterns((prev) =>
                                             prev.map((pattern) => (pattern.id === row.id ? row : pattern)),
@@ -723,6 +753,19 @@ export default function LocationsConfigurationPage({
                         }
                     />
                 </div>
+            );
+            return (
+                <LocationSchedulingSurface
+                    locationId={selectedSite.id}
+                    locationMetadata={siteMetadata}
+                    patternCount={selectedSchedules.length}
+                    canMutate={canMutate}
+                    onAddPattern={() => setCreatingSchedule(true)}
+                    onSaveMetadata={async (metadata) => {
+                        await patchLocation(selectedSite.id, { metadata });
+                    }}
+                    patternsPanel={patternsPanel}
+                />
             );
         }
         if (activeTab === "tours") {

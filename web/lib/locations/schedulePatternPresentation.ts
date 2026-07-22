@@ -564,8 +564,57 @@ export function toSchedulePatternSchedulingContract(input: {
 }
 
 /**
- * rotation_anchor_date is required for deterministic rotating projection in Scheduling.
- * Locations Phase 2 correction stores the field when provided; UI may omit until Scheduling owns the pick.
+ * Rotation begins (rotation_anchor_date) is required for rotating Patterns.
+ * Week 1 contains the anchor date. Platform default week-start is Sunday (weekday 0)
+ * unless Location/org week-start config exists.
  */
 export const ROTATION_ANCHOR_SCHEDULING_BLOCKER =
-    "Rotating Schedule Definitions need rotation_anchor_date (Rotation begins) before Scheduling can project which week is active. Until set, week lists are configuration-only.";
+    "Rotating Patterns require Rotation begins (ISO date). Week 1 contains that date; projection uses Location week-start (platform default: Sunday).";
+
+export const PLATFORM_DEFAULT_WEEK_START_WEEKDAY = 0 as const; // Sunday
+
+export function isValidRotationAnchorDate(value: string | null | undefined): boolean {
+    if (typeof value !== "string") return false;
+    return /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
+}
+
+/**
+ * Which rotation week (1-based) applies on `asOfYmd` given an anchor date.
+ * Week 1 contains the calendar week of the anchor (week starts on weekStartWeekday).
+ */
+export function resolveRotationWeekPosition(input: {
+    asOfYmd: string;
+    rotationAnchorDate: string;
+    weekCount: number;
+    weekStartWeekday?: number;
+}): number | null {
+    if (!isValidRotationAnchorDate(input.asOfYmd) || !isValidRotationAnchorDate(input.rotationAnchorDate)) {
+        return null;
+    }
+    const weekCount = Math.max(1, Math.floor(input.weekCount));
+    const weekStart = Number.isInteger(input.weekStartWeekday) ?
+        Math.min(6, Math.max(0, input.weekStartWeekday as number))
+    :   PLATFORM_DEFAULT_WEEK_START_WEEKDAY;
+
+    const toUtcDate = (ymd: string) => {
+        const [y, m, d] = ymd.split("-").map(Number);
+        return Date.UTC(y!, m! - 1, d!);
+    };
+    const startOfWeek = (ymd: string) => {
+        const ms = toUtcDate(ymd);
+        const day = new Date(ms).getUTCDay();
+        const delta = (day - weekStart + 7) % 7;
+        return ms - delta * 86_400_000;
+    };
+
+    const anchorWeek = startOfWeek(input.rotationAnchorDate);
+    const asOfWeek = startOfWeek(input.asOfYmd);
+    const weeksApart = Math.floor((asOfWeek - anchorWeek) / (7 * 86_400_000));
+    const mod = ((weeksApart % weekCount) + weekCount) % weekCount;
+    return mod + 1;
+}
+
+export function rotatingPatternRequiresAnchor(patternType: SchedulePatternType, anchor: string | null | undefined): boolean {
+    if (patternType !== "rotating") return false;
+    return !isValidRotationAnchorDate(anchor);
+}

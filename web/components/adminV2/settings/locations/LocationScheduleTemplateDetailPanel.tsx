@@ -22,8 +22,10 @@ import {
     formatSchedulePatternHours,
     formatWeekdayList,
     isValidScheduleHours,
+    isValidRotationAnchorDate,
     readScheduleDefinitionPresentation,
     resolveScheduleDefinitionWeekdays,
+    rotatingPatternRequiresAnchor,
     scheduleDayTypeLabel,
     schedulePatternTypeLabel,
     scheduleTypeKeyFromDayType,
@@ -34,11 +36,14 @@ import {
     type SchedulePatternType,
     type ScheduleWeekDefinition,
 } from "@/lib/locations/schedulePatternPresentation";
+import { allowedPatternWeekdays } from "@/lib/locations/locationSchedulingConfig";
 
 const WEEKDAY_CHIP_SELECTED =
     "rounded-full border border-alloy-bend-pine bg-alloy-bend-pine text-white";
 const WEEKDAY_CHIP_IDLE =
     "rounded-full border border-alloy-forge/20 bg-white text-alloy-midnight/55 hover:border-alloy-bend-pine/40 hover:text-alloy-bend-pine";
+const WEEKDAY_CHIP_DISABLED =
+    "rounded-full border border-alloy-forge/10 bg-alloy-stone/[0.04] text-alloy-midnight/25 cursor-not-allowed";
 
 const DAY_TYPES: ScheduleDayType[] = ["full_time", "part_time", "hourly"];
 
@@ -48,31 +53,40 @@ function emptyWeek(position: number): ScheduleWeekDefinition {
 
 function WeekdayChips({
     selected,
+    allowedDays,
     disabled,
     onToggle,
     testId,
 }: {
     selected: number[];
+    allowedDays: number[];
     disabled?: boolean;
     onToggle: (value: number) => void;
     testId: string;
 }) {
     return (
         <div className="flex flex-wrap gap-1.5" data-testid={testId}>
-            {WEEKDAY_OPTIONS.map((day) => (
-                <button
-                    key={day.value}
-                    type="button"
-                    disabled={disabled}
-                    aria-pressed={selected.includes(day.value)}
-                    className={`px-2.5 py-1 text-xs font-semibold ${
-                        selected.includes(day.value) ? WEEKDAY_CHIP_SELECTED : WEEKDAY_CHIP_IDLE
-                    }`}
-                    onClick={() => onToggle(day.value)}
-                >
-                    {day.label}
-                </button>
-            ))}
+            {WEEKDAY_OPTIONS.map((day) => {
+                const allowed = allowedDays.includes(day.value);
+                return (
+                    <button
+                        key={day.value}
+                        type="button"
+                        disabled={disabled || !allowed}
+                        aria-pressed={selected.includes(day.value)}
+                        className={`px-2.5 py-1 text-xs font-semibold ${
+                            !allowed ? WEEKDAY_CHIP_DISABLED
+                            : selected.includes(day.value) ? WEEKDAY_CHIP_SELECTED
+                            : WEEKDAY_CHIP_IDLE
+                        }`}
+                        onClick={() => {
+                            if (allowed) onToggle(day.value);
+                        }}
+                    >
+                        {day.label}
+                    </button>
+                );
+            })}
         </div>
     );
 }
@@ -81,12 +95,14 @@ export default function LocationScheduleTemplateDetailPanel({
     pattern,
     siteLabel,
     canMutate,
+    operatingDays,
     onUpdated,
     onError,
 }: {
     pattern: SchedulePatternRow | null;
     siteLabel: string;
     canMutate: boolean;
+    operatingDays?: readonly number[] | null;
     onUpdated: (row: SchedulePatternRow) => void;
     onError: (message: string) => void;
 }) {
@@ -94,9 +110,11 @@ export default function LocationScheduleTemplateDetailPanel({
     const [dayType, setDayType] = useState<ScheduleDayType | "">("");
     const [patternType, setPatternType] = useState<SchedulePatternType>("continuous");
     const [weeks, setWeeks] = useState<ScheduleWeekDefinition[]>([emptyWeek(1)]);
+    const [rotationAnchorDate, setRotationAnchorDate] = useState("");
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editing, setEditing] = useState(false);
+    const allowedDays = allowedPatternWeekdays(operatingDays ?? []);
 
     const hydrate = (next: SchedulePatternRow) => {
         const presentation = readScheduleDefinitionPresentation(
@@ -107,6 +125,7 @@ export default function LocationScheduleTemplateDetailPanel({
         setLabel(next.label);
         setDayType(presentation.dayType ?? "");
         setPatternType(presentation.patternType);
+        setRotationAnchorDate(presentation.rotationAnchorDate ?? "");
         setWeeks(
             presentation.weeks.length > 0 ?
                 presentation.weeks
@@ -151,6 +170,7 @@ export default function LocationScheduleTemplateDetailPanel({
     });
 
     const toggleDay = (weekIndex: number, value: number) => {
+        if (!allowedDays.includes(value)) return;
         setWeeks((current) =>
             current.map((week, index) => {
                 if (index !== weekIndex) return week;
@@ -211,13 +231,13 @@ export default function LocationScheduleTemplateDetailPanel({
                     <h2 className="config-typo-workspace-title mb-3">
                         {presentation.patternType === "rotating" ?
                             `${presentation.weeks.length}-week rotation`
-                        :   "Available days"}
+                        :   "Scheduled days"}
                     </h2>
                     <div className="space-y-3" data-testid="locations-schedule-weekdays-view">
                         {presentation.weeks.map((week) => (
                             <div key={week.position}>
                                 {presentation.patternType === "rotating" ?
-                                    <p className="config-typo-field-label mb-1">Week {week.position}</p>
+                                    <p className="config-typo-field-label mb-1">Week {week.position} days</p>
                                 :   null}
                                 <p className="text-sm text-alloy-midnight">
                                     {formatWeekdayList(week.days.length ? week.days : pattern.weekdays)}
@@ -235,7 +255,7 @@ export default function LocationScheduleTemplateDetailPanel({
                         ))}
                     </div>
                 </section>
-                <dl className="grid gap-2 sm:grid-cols-3">
+                <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.035] px-3 py-2.5">
                         <dt className="config-typo-field-label">Day type</dt>
                         <dd className="mt-1 text-sm font-semibold text-alloy-midnight">
@@ -245,11 +265,19 @@ export default function LocationScheduleTemplateDetailPanel({
                         </dd>
                     </div>
                     <div className="rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.035] px-3 py-2.5">
-                        <dt className="config-typo-field-label">Repeats</dt>
+                        <dt className="config-typo-field-label">Schedule type</dt>
                         <dd className="mt-1 text-sm font-semibold text-alloy-midnight">
                             {schedulePatternTypeLabel(presentation.patternType)}
                         </dd>
                     </div>
+                    {presentation.patternType === "rotating" ?
+                        <div className="rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.035] px-3 py-2.5">
+                            <dt className="config-typo-field-label">Rotation begins</dt>
+                            <dd className="mt-1 text-sm font-semibold text-alloy-midnight">
+                                {presentation.rotationAnchorDate ?? "Required"}
+                            </dd>
+                        </div>
+                    :   null}
                     <div className="rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.035] px-3 py-2.5">
                         <dt className="config-typo-field-label">Status</dt>
                         <dd className="mt-1 text-sm font-semibold text-alloy-midnight">
@@ -270,7 +298,8 @@ export default function LocationScheduleTemplateDetailPanel({
         patternType === "continuous" ?
             (weeks[0]?.days.length ?? 0) > 0
         :   weeks.length >= 1 && weeks.every((week) => week.days.length > 0);
-    const canSave = Boolean(label.trim()) && Boolean(dayType) && weeksOk && hoursOk;
+    const anchorOk = patternType !== "rotating" || isValidRotationAnchorDate(rotationAnchorDate);
+    const canSave = Boolean(label.trim()) && Boolean(dayType) && weeksOk && hoursOk && anchorOk;
 
     return (
         <div className="space-y-3" data-testid="locations-schedule-edit">
@@ -320,7 +349,7 @@ export default function LocationScheduleTemplateDetailPanel({
                         </select>
                     </label>
                     <label className="block space-y-1.5">
-                        <span className="config-typo-field-label">Repeats</span>
+                        <span className="config-typo-field-label">Schedule type</span>
                         <select
                             value={patternType}
                             disabled={!canMutate}
@@ -342,6 +371,23 @@ export default function LocationScheduleTemplateDetailPanel({
                         </select>
                     </label>
                 </div>
+                {patternType === "rotating" ?
+                    <label className="mt-3 block space-y-1.5">
+                        <span className="config-typo-field-label">Rotation begins</span>
+                        <input
+                            type="date"
+                            value={rotationAnchorDate}
+                            disabled={!canMutate}
+                            onChange={(event) => setRotationAnchorDate(event.target.value)}
+                            className="config-runtime-input max-w-xs"
+                            data-testid="locations-schedule-rotation-anchor"
+                            required
+                        />
+                        <span className="block text-[11px] text-alloy-midnight/45">
+                            Week 1 contains this date. Required for calendar projection.
+                        </span>
+                    </label>
+                :   null}
             </ConfigEditorSection>
 
             <ConfigEditorSection
@@ -356,7 +402,7 @@ export default function LocationScheduleTemplateDetailPanel({
                     >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm font-semibold text-alloy-midnight">
-                                {patternType === "rotating" ? `Week ${weekIndex + 1}` : "Available days"}
+                                {patternType === "rotating" ? `Week ${weekIndex + 1} days` : "Scheduled days"}
                             </p>
                             {patternType === "rotating" && weeks.length > 1 ?
                                 <ConfigurationSecondaryButton
@@ -376,6 +422,7 @@ export default function LocationScheduleTemplateDetailPanel({
                         </div>
                         <WeekdayChips
                             selected={week.days}
+                            allowedDays={allowedDays}
                             disabled={!canMutate}
                             testId={
                                 patternType === "rotating" ?
@@ -465,6 +512,9 @@ export default function LocationScheduleTemplateDetailPanel({
                                 if (!dayType) throw new Error("Select a Day Type.");
                                 if (!weeksOk) throw new Error("Select at least one day for each week.");
                                 if (!hoursOk) throw new Error("End time must be after start time.");
+                                if (rotatingPatternRequiresAnchor(patternType, rotationAnchorDate)) {
+                                    throw new Error("Rotation begins is required for rotating Patterns.");
+                                }
                                 const hours = {
                                     opensAt: weeks[0]?.startTime ?? null,
                                     closesAt: weeks[0]?.endTime ?? null,
@@ -475,7 +525,8 @@ export default function LocationScheduleTemplateDetailPanel({
                                     patternType,
                                     hours,
                                     weeks,
-                                    rotationAnchorDate: presentation.rotationAnchorDate,
+                                    rotationAnchorDate:
+                                        patternType === "rotating" ? rotationAnchorDate : null,
                                 });
                                 const patch = {
                                     label: label.trim(),

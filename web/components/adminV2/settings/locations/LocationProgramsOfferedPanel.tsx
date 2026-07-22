@@ -10,7 +10,13 @@ import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgram
 import { effectiveLocationProgramLabel } from "@/lib/locations/locationProgramCategories";
 import {
     buildLocationProgramAvailabilityView,
+    deriveLocationProgramOfferingState,
+    locationProgramOfferingCheckboxSelected,
 } from "@/lib/programs/locationProgramAvailability";
+import {
+    readEligibleSchedulePatternIds,
+    writeEligibleSchedulePatternIds,
+} from "@/lib/locations/locationSchedulingConfig";
 import {
     commitMakeProgramAvailableClient,
     createMakeAvailableIdempotencyKey,
@@ -30,10 +36,17 @@ type OrgProgramOption = {
     lifecycleStatus: "active" | "retired";
 };
 
+type SchedulePatternOption = {
+    id: string;
+    label: string;
+    is_active: boolean;
+};
+
 type RowConfig = {
     localDisplayName: string;
     availableFrom: string;
     availableThrough: string;
+    eligiblePatternIds: string[];
     expanded: boolean;
 };
 
@@ -45,6 +58,7 @@ export default function LocationProgramsOfferedPanel({
     locationId,
     locationLabel,
     offerings,
+    schedulePatterns = [],
     canMutate,
     onPatchOffering,
     onRefresh,
@@ -54,6 +68,7 @@ export default function LocationProgramsOfferedPanel({
     locationId: string;
     locationLabel: string;
     offerings: LocationProgramCategoryRow[];
+    schedulePatterns?: SchedulePatternOption[];
     canMutate: boolean;
     onPatchOffering: (
         categoryId: string,
@@ -62,6 +77,7 @@ export default function LocationProgramsOfferedPanel({
             available_from?: string | null;
             available_through?: string | null;
             is_active?: boolean;
+            metadata?: Record<string, unknown>;
         },
     ) => Promise<void>;
     onRefresh: () => Promise<void> | void;
@@ -129,6 +145,7 @@ export default function LocationProgramsOfferedPanel({
                     localDisplayName: row.local_display_name ?? "",
                     availableFrom: row.available_from ?? "",
                     availableThrough: row.available_through ?? "",
+                    eligiblePatternIds: readEligibleSchedulePatternIds(row.metadata),
                     expanded: false,
                 };
             }
@@ -160,6 +177,7 @@ export default function LocationProgramsOfferedPanel({
                     localDisplayName: "",
                     availableFrom: "",
                     availableThrough: "",
+                    eligiblePatternIds: [],
                     expanded: false,
                 }),
                 ...patch,
@@ -179,6 +197,10 @@ export default function LocationProgramsOfferedPanel({
                     local_display_name: config?.localDisplayName.trim() || null,
                     available_from: config?.availableFrom.trim() || null,
                     available_through: config?.availableThrough.trim() || null,
+                    metadata: writeEligibleSchedulePatternIds(
+                        offering.metadata,
+                        config?.eligiblePatternIds ?? [],
+                    ),
                 });
                 updateConfig(programId, { expanded: false });
                 await onRefresh();
@@ -295,12 +317,14 @@ export default function LocationProgramsOfferedPanel({
                     </p>
                 :   <ul className="divide-y divide-alloy-forge/10">
                         {visiblePrograms.map((program) => {
-                            const offering = offeringByProgramId.get(program.id);
-                            const offered = Boolean(offering && offering.is_active !== false);
+                            const offering = offeringByProgramId.get(program.id) ?? null;
+                            const offeringState = deriveLocationProgramOfferingState({ relationship: offering });
+                            const selected = locationProgramOfferingCheckboxSelected(offeringState);
                             const config = configs[program.id] ?? {
                                 localDisplayName: "",
                                 availableFrom: "",
                                 availableThrough: "",
+                                eligiblePatternIds: [],
                                 expanded: false,
                             };
                             const view =
@@ -323,7 +347,7 @@ export default function LocationProgramsOfferedPanel({
                                             <input
                                                 type="checkbox"
                                                 className="mt-0.5"
-                                                checked={offered}
+                                                checked={selected}
                                                 disabled={!canMutate || busy}
                                                 onChange={(event) => {
                                                     void toggleOffered(program, event.target.checked);
@@ -334,7 +358,7 @@ export default function LocationProgramsOfferedPanel({
                                                 <span className="block text-sm font-semibold text-alloy-midnight">
                                                     {program.name}
                                                 </span>
-                                                {offered && view ?
+                                                {selected && view ?
                                                     <>
                                                         <span className="mt-0.5 block text-[12px] text-alloy-midnight/55">
                                                             {view.localDisplayName && view.localDisplayName !== program.name ?
@@ -342,8 +366,8 @@ export default function LocationProgramsOfferedPanel({
                                                             :   "Uses Organization name"}
                                                         </span>
                                                         <span className="mt-0.5 block text-[12px] text-alloy-midnight/45">
-                                                            {view.status === "active" && !view.availableFrom && !view.availableThrough ?
-                                                                "Available immediately"
+                                                            {offeringState === "active" && !view.availableFrom && !view.availableThrough ?
+                                                                "Available now"
                                                             :   view.statusLabel}
                                                         </span>
                                                     </>
@@ -353,7 +377,7 @@ export default function LocationProgramsOfferedPanel({
                                                 }
                                             </span>
                                         </label>
-                                        {offered && canMutate ?
+                                        {selected && canMutate ?
                                             <button
                                                 type="button"
                                                 className="shrink-0 text-xs font-medium text-alloy-bend-pine hover:underline"
@@ -367,7 +391,7 @@ export default function LocationProgramsOfferedPanel({
                                             </button>
                                         :   null}
                                     </div>
-                                    {offered && config.expanded ?
+                                    {selected && config.expanded ?
                                         <div
                                             className="mt-3 ml-6 space-y-2 rounded-md border border-alloy-stone/15 bg-alloy-stone/[0.04] p-3"
                                             data-testid={`locations-program-config-${program.id}`}
@@ -420,6 +444,56 @@ export default function LocationProgramsOfferedPanel({
                                                     />
                                                 </label>
                                             </div>
+                                            {schedulePatterns.length > 0 ?
+                                                <div
+                                                    className="space-y-1.5"
+                                                    data-testid={`locations-program-patterns-${program.id}`}
+                                                >
+                                                    <span className="config-typo-field-label">
+                                                        Eligible Schedule Patterns
+                                                    </span>
+                                                    <p className="text-[11px] text-alloy-midnight/45">
+                                                        Offering Patterns ∩ Rooms supporting this Program resolve
+                                                        enrollment schedule options.
+                                                    </p>
+                                                    <ul className="space-y-1">
+                                                        {schedulePatterns.map((pattern) => {
+                                                            const checked = config.eligiblePatternIds.includes(
+                                                                pattern.id,
+                                                            );
+                                                            return (
+                                                                <li key={pattern.id}>
+                                                                    <label className="flex items-center gap-2 text-[12px] text-alloy-midnight/80">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={checked}
+                                                                            disabled={!canMutate || busy || !pattern.is_active}
+                                                                            onChange={(event) => {
+                                                                                const next = event.target.checked ?
+                                                                                    [
+                                                                                        ...config.eligiblePatternIds,
+                                                                                        pattern.id,
+                                                                                    ]
+                                                                                :   config.eligiblePatternIds.filter(
+                                                                                        (id) => id !== pattern.id,
+                                                                                    );
+                                                                                updateConfig(program.id, {
+                                                                                    eligiblePatternIds: [
+                                                                                        ...new Set(next),
+                                                                                    ],
+                                                                                });
+                                                                            }}
+                                                                            data-testid={`locations-program-pattern-${program.id}-${pattern.id}`}
+                                                                        />
+                                                                        {pattern.label}
+                                                                        {!pattern.is_active ? " (inactive)" : ""}
+                                                                    </label>
+                                                                </li>
+                                                            );
+                                                        })}
+                                                    </ul>
+                                                </div>
+                                            :   null}
                                             <div className="flex justify-end gap-2 pt-1">
                                                 <ConfigurationSecondaryButton
                                                     disabled={busy}

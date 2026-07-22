@@ -137,7 +137,7 @@ describe("Configuration Runtime — Locations", () => {
             "Overview",
             "Programs",
             "Rooms",
-            "Schedule",
+            "Scheduling",
             "Tours",
             "Placement",
             "Access",
@@ -327,6 +327,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).not.toContain("No closure provider available");
         expect(page).not.toContain("locations-schedule-closures");
         expect(page).toContain("LocationSchedulePatternCreatePanel");
+        expect(page).toContain("LocationSchedulingSurface");
         expect(page).toContain("ConfigChildObjectMasterDetail");
         expect(page).toContain('data-testid="locations-schedule-add"');
         expect(page).toContain("formatSchedulePatternSummary");
@@ -338,12 +339,15 @@ describe("Configuration Runtime — Locations", () => {
         expect(create).toContain("is_active: active");
         expect(create).toContain("locations-schedule-create-day-type");
         expect(create).toContain("locations-schedule-create-repeats");
+        expect(create).toContain("locations-schedule-create-rotation-anchor");
+        expect(create).toContain("Scheduled days");
         expect(create).toContain("writeScheduleDefinitionMetadata");
         expect(create).toContain("border-alloy-bend-pine bg-alloy-bend-pine text-white");
         expect(detail).toContain("locations-schedule-edit");
         expect(detail).toContain("locations-schedule-weekdays-view");
         expect(detail).toContain("locations-schedule-day-type");
         expect(detail).toContain("locations-schedule-repeats");
+        expect(detail).toContain("locations-schedule-rotation-anchor");
         expect(detail).toContain("schedulePatternTypeLabel");
         expect(detail).toContain("needsDayTypeReview");
         expect(detail).not.toContain("#00a283");
@@ -352,6 +356,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(presentation).toContain("resolveScheduleDefinitionWeekdays");
         expect(presentation).toContain("migrateV1ScheduleMetadata");
         expect(presentation).toContain("needsDayTypeReview");
+        expect(presentation).toContain("resolveRotationWeekPosition");
         expect(service).toContain("is_active: input.isActive ?? true");
         expect(route).toContain('typeof body.is_active === "boolean"');
         expect(rail).toContain('id: "configure-capacity"');

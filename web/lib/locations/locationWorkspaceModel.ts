@@ -6,7 +6,7 @@ export const LOCATION_WORKSPACE_TABS = [
     { key: "overview", label: "Overview" },
     { key: "programs", label: "Programs" },
     { key: "rooms", label: "Rooms" },
-    { key: "schedule", label: "Schedule" },
+    { key: "schedule", label: "Scheduling" },
     { key: "tours", label: "Tours" },
     { key: "placement", label: "Placement" },
     { key: "access", label: "Access" },

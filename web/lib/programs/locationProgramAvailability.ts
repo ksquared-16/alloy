@@ -1,8 +1,18 @@
 /**
  * Location Program availability presentation — effective dates + local display name.
+ *
+ * Canonical semantics (null dates do NOT mean not offered):
+ * - no relationship → not_offered
+ * - relationship + is_active false / archived → not_offered (removed)
+ * - relationship + future available_from → scheduled
+ * - relationship + past available_through → ended
+ * - otherwise → active (offered now)
  */
 
 export type LocationProgramAvailabilityStatus = "scheduled" | "active" | "ended" | "not_offered";
+
+/** Alias used by Locations offering checklist / cross-surface agreement. */
+export type LocationProgramOfferingState = LocationProgramAvailabilityStatus;
 
 export type LocationProgramAvailabilityView = {
     locationId: string;
@@ -30,6 +40,15 @@ export function todayYmd(now = new Date()): string {
     return now.toISOString().slice(0, 10);
 }
 
+/**
+ * Precedence:
+ * 1. no relationship / inactive → not_offered
+ * 2. future available_from → scheduled
+ * 3. expired available_through → ended
+ * 4. otherwise → active
+ *
+ * Null available_from + null available_through = currently offered (active).
+ */
 export function deriveLocationProgramAvailabilityStatus(input: {
     offered: boolean;
     availableFrom: string | null | undefined;
@@ -43,6 +62,29 @@ export function deriveLocationProgramAvailabilityStatus(input: {
     if (from && from > asOf) return "scheduled";
     if (through && through < asOf) return "ended";
     return "active";
+}
+
+/** Canonical resolver for Location Program Offering checklist + counts agreement. */
+export function deriveLocationProgramOfferingState(input: {
+    relationship:
+        | { is_active?: boolean | null; available_from?: string | null; available_through?: string | null }
+        | null
+        | undefined;
+    asOfYmd?: string;
+}): LocationProgramOfferingState {
+    if (!input.relationship) return "not_offered";
+    const offered = input.relationship.is_active !== false;
+    return deriveLocationProgramAvailabilityStatus({
+        offered,
+        availableFrom: input.relationship.available_from,
+        availableThrough: input.relationship.available_through,
+        asOfYmd: input.asOfYmd,
+    });
+}
+
+/** Checkbox selected when a relationship exists and is not removed (includes scheduled + ended). */
+export function locationProgramOfferingCheckboxSelected(state: LocationProgramOfferingState): boolean {
+    return state === "active" || state === "scheduled" || state === "ended";
 }
 
 function formatShortDate(ymd: string): string {
@@ -68,7 +110,7 @@ export function locationProgramAvailabilityStatusLabel(
     }
     const through = parseDateOnly(availableThrough);
     if (through) return `Through ${formatShortDate(through)}`;
-    return "Active";
+    return "Available now";
 }
 
 export function buildLocationProgramAvailabilityView(input: {

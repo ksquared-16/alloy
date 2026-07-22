@@ -13,7 +13,9 @@ import {
 import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
 import {
     isValidScheduleHours,
+    isValidRotationAnchorDate,
     resolveScheduleDefinitionWeekdays,
+    rotatingPatternRequiresAnchor,
     scheduleDayTypeLabel,
     schedulePatternTypeLabel,
     scheduleTypeKeyFromDayType,
@@ -23,11 +25,14 @@ import {
     type SchedulePatternType,
     type ScheduleWeekDefinition,
 } from "@/lib/locations/schedulePatternPresentation";
+import { allowedPatternWeekdays } from "@/lib/locations/locationSchedulingConfig";
 
 const WEEKDAY_CHIP_SELECTED =
     "rounded-full border border-alloy-bend-pine bg-alloy-bend-pine text-white";
 const WEEKDAY_CHIP_IDLE =
     "rounded-full border border-alloy-forge/20 bg-white text-alloy-midnight/55 hover:border-alloy-bend-pine/40 hover:text-alloy-bend-pine";
+const WEEKDAY_CHIP_DISABLED =
+    "rounded-full border border-alloy-forge/10 bg-alloy-stone/[0.04] text-alloy-midnight/25 cursor-not-allowed";
 
 const DAY_TYPES: ScheduleDayType[] = ["full_time", "part_time", "hourly"];
 
@@ -47,38 +52,50 @@ function emptyWeek(position: number): ScheduleWeekDefinition {
 
 function WeekdayChips({
     selected,
+    allowedDays,
     onToggle,
     testId,
 }: {
     selected: number[];
+    allowedDays: number[];
     onToggle: (value: number) => void;
     testId: string;
 }) {
     return (
         <div className="flex flex-wrap gap-1.5" data-testid={testId}>
-            {WEEKDAY_OPTIONS.map((day) => (
-                <button
-                    key={day.value}
-                    type="button"
-                    aria-pressed={selected.includes(day.value)}
-                    className={`px-2.5 py-1 text-xs font-semibold ${
-                        selected.includes(day.value) ? WEEKDAY_CHIP_SELECTED : WEEKDAY_CHIP_IDLE
-                    }`}
-                    onClick={() => onToggle(day.value)}
-                >
-                    {day.label}
-                </button>
-            ))}
+            {WEEKDAY_OPTIONS.map((day) => {
+                const allowed = allowedDays.includes(day.value);
+                return (
+                    <button
+                        key={day.value}
+                        type="button"
+                        disabled={!allowed}
+                        aria-pressed={selected.includes(day.value)}
+                        className={`px-2.5 py-1 text-xs font-semibold ${
+                            !allowed ? WEEKDAY_CHIP_DISABLED
+                            : selected.includes(day.value) ? WEEKDAY_CHIP_SELECTED
+                            : WEEKDAY_CHIP_IDLE
+                        }`}
+                        onClick={() => {
+                            if (allowed) onToggle(day.value);
+                        }}
+                    >
+                        {day.label}
+                    </button>
+                );
+            })}
         </div>
     );
 }
 
 export default function LocationSchedulePatternCreatePanel({
     locationId,
+    operatingDays,
     onCancel,
     onCreated,
 }: {
     locationId: string;
+    operatingDays?: readonly number[] | null;
     onCancel: () => void;
     onCreated: (pattern: SchedulePatternRow) => void;
 }) {
@@ -86,11 +103,15 @@ export default function LocationSchedulePatternCreatePanel({
     const [dayType, setDayType] = useState<ScheduleDayType>("full_time");
     const [patternType, setPatternType] = useState<SchedulePatternType>("continuous");
     const [weeks, setWeeks] = useState<ScheduleWeekDefinition[]>([emptyWeek(1)]);
+    const [rotationAnchorDate, setRotationAnchorDate] = useState("");
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const allowedDays = allowedPatternWeekdays(operatingDays ?? []);
+
     const toggleDay = (weekIndex: number, value: number) => {
+        if (!allowedDays.includes(value)) return;
         setWeeks((current) =>
             current.map((week, index) => {
                 if (index !== weekIndex) return week;
@@ -125,14 +146,16 @@ export default function LocationSchedulePatternCreatePanel({
         patternType === "continuous" ?
             (weeks[0]?.days.length ?? 0) > 0
         :   weeks.length >= 1 && weeks.every((week) => week.days.length > 0);
-    const canSave = Boolean(label.trim()) && weeksOk && hoursOk;
+    const anchorOk =
+        patternType !== "rotating" || isValidRotationAnchorDate(rotationAnchorDate);
+    const canSave = Boolean(label.trim()) && weeksOk && hoursOk && anchorOk;
 
     return (
         <section className="process-config-setup-card space-y-4 p-4" data-testid="locations-schedule-create">
             <div>
-                <h2 className="config-typo-workspace-title">Add schedule definition</h2>
+                <h2 className="config-typo-workspace-title">Add Pattern</h2>
                 <p className="config-typo-sublabel mt-1">
-                    Name the schedule, choose day type and how it repeats, then set days and hours.
+                    Compose a reusable Pattern from Day Type, Schedule Type, scheduled days, and hours.
                 </p>
             </div>
 
@@ -142,7 +165,7 @@ export default function LocationSchedulePatternCreatePanel({
                     type="text"
                     value={label}
                     onChange={(event) => setLabel(event.target.value)}
-                    placeholder="e.g. Full Time · School Week"
+                    placeholder="e.g. Three-Day Preschool"
                     className="config-runtime-input"
                     autoFocus
                     data-testid="locations-schedule-create-name"
@@ -166,7 +189,7 @@ export default function LocationSchedulePatternCreatePanel({
                     </select>
                 </label>
                 <label className="block space-y-1.5">
-                    <span className="config-typo-field-label">Repeats</span>
+                    <span className="config-typo-field-label">Schedule type</span>
                     <select
                         value={patternType}
                         onChange={(event) => {
@@ -189,9 +212,25 @@ export default function LocationSchedulePatternCreatePanel({
             </div>
 
             {patternType === "rotating" ?
-                <p className="text-sm text-alloy-midnight/60" data-testid="locations-schedule-create-cycle">
-                    {weeks.length}-week rotation
-                </p>
+                <>
+                    <p className="text-sm text-alloy-midnight/60" data-testid="locations-schedule-create-cycle">
+                        {weeks.length}-week rotation
+                    </p>
+                    <label className="block space-y-1.5">
+                        <span className="config-typo-field-label">Rotation begins</span>
+                        <input
+                            type="date"
+                            value={rotationAnchorDate}
+                            onChange={(event) => setRotationAnchorDate(event.target.value)}
+                            className="config-runtime-input max-w-xs"
+                            data-testid="locations-schedule-create-rotation-anchor"
+                            required
+                        />
+                        <span className="block text-[11px] text-alloy-midnight/45">
+                            Week 1 contains this date. Required for projecting rotating Patterns onto calendar dates.
+                        </span>
+                    </label>
+                </>
             :   null}
 
             {weeks.map((week, weekIndex) => (
@@ -202,7 +241,7 @@ export default function LocationSchedulePatternCreatePanel({
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-alloy-midnight">
-                            {patternType === "rotating" ? `Week ${weekIndex + 1}` : "Available days"}
+                            {patternType === "rotating" ? `Week ${weekIndex + 1} days` : "Scheduled days"}
                         </p>
                         {patternType === "rotating" && weeks.length > 1 ?
                             <ConfigurationSecondaryButton
@@ -221,6 +260,7 @@ export default function LocationSchedulePatternCreatePanel({
                     </div>
                     <WeekdayChips
                         selected={week.days}
+                        allowedDays={allowedDays}
                         testId={
                             patternType === "rotating" ?
                                 `locations-schedule-create-week${weekIndex + 1}-days`
@@ -279,7 +319,7 @@ export default function LocationSchedulePatternCreatePanel({
                     className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
                     data-testid="locations-schedule-create-active"
                 />
-                <span className="config-typo-sublabel">Active schedule</span>
+                <span className="config-typo-sublabel">Active Pattern</span>
             </label>
             {error ?
                 <p role="alert" className="text-sm text-red-800">
@@ -300,6 +340,9 @@ export default function LocationSchedulePatternCreatePanel({
                                 if (!hoursOk) {
                                     throw new Error("End time must be after start time.");
                                 }
+                                if (rotatingPatternRequiresAnchor(patternType, rotationAnchorDate)) {
+                                    throw new Error("Rotation begins is required for rotating Patterns.");
+                                }
                                 const hours = {
                                     opensAt: weeks[0]?.startTime ?? null,
                                     closesAt: weeks[0]?.endTime ?? null,
@@ -309,7 +352,8 @@ export default function LocationSchedulePatternCreatePanel({
                                     patternType,
                                     hours,
                                     weeks,
-                                    rotationAnchorDate: null,
+                                    rotationAnchorDate:
+                                        patternType === "rotating" ? rotationAnchorDate : null,
                                 });
                                 const input = {
                                     site_location_id: locationId,
@@ -340,7 +384,7 @@ export default function LocationSchedulePatternCreatePanel({
                                 onCreated(created);
                             } catch (cause) {
                                 setError(
-                                    cause instanceof Error ? cause.message : "Schedule definition could not be created.",
+                                    cause instanceof Error ? cause.message : "Pattern could not be created.",
                                 );
                             } finally {
                                 setSaving(false);
@@ -348,7 +392,7 @@ export default function LocationSchedulePatternCreatePanel({
                         })();
                     }}
                 >
-                    {saving ? "Adding…" : "Add schedule definition"}
+                    {saving ? "Adding…" : "Add Pattern"}
                 </ConfigurationPrimaryButton>
                 <ConfigurationSecondaryButton onClick={onCancel} disabled={saving}>
                     Cancel
