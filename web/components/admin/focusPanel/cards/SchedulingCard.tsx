@@ -22,7 +22,7 @@ type Props = {
 
 type Site = { id: string; name: string };
 type DailyHours = { arrive: string; depart: string };
-type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string; defaultHours: DailyHours | null };
+type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string; defaultHours: DailyHours | null; defaultOpenEnded: boolean };
 type Money = { amountCents: number; currency: string };
 type BillingProjection = {
     status: "resolved" | "pending" | "unconfigured" | "stale";
@@ -270,6 +270,7 @@ function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChi
                         setArrive((a) => a || first.defaultHours!.arrive);
                         setDepart((d) => d || first.defaultHours!.depart);
                     }
+                    setOpenEnded(first.defaultOpenEnded);
                 }
             } catch (e) {
                 setError((e as Error).message);
@@ -290,6 +291,8 @@ function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChi
                 setArrive((a) => a || p.defaultHours!.arrive);
                 setDepart((d) => d || p.defaultHours!.depart);
             }
+            // Open-ended follows the pattern's configured policy (config-driven default).
+            setOpenEnded(p.defaultOpenEnded);
         }
     }
 
@@ -583,9 +586,12 @@ function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChi
                         />
                     </label>
                     <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#475467", marginTop: 14 }}>
-                        <input type="checkbox" checked={openEnded} onChange={(e) => setOpenEnded(e.target.checked)} />
+                        <input type="checkbox" checked={openEnded} onChange={(e) => setOpenEnded(e.target.checked)} data-open-ended={openEnded ? "true" : "false"} />
                         Open-ended
                     </label>
+                </div>
+                <div style={{ fontSize: 10.5, color: "#98a2b3", marginTop: 4 }} data-open-ended-caption="true">
+                    {openEnded ? "Ongoing — no end date; ends later via a change." : "Bounded — ends on the date above."}
                 </div>
             </section>
 

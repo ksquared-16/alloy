@@ -60,6 +60,19 @@ function readPatternDefaultHours(metadata: Record<string, unknown> | null): { ar
 }
 
 /**
+ * Whether schedules from this pattern default to open-ended. Config-driven from
+ * schedule_patterns.metadata (`default_open_ended` / `openEndedDefault`); when
+ * unconfigured, open-ended is the default simple case per schedule-lifecycle §3.
+ */
+function readPatternDefaultOpenEnded(metadata: Record<string, unknown> | null): boolean {
+    if (!metadata) return true;
+    const raw = metadata.default_open_ended ?? metadata.openEndedDefault;
+    if (typeof raw === "boolean") return raw;
+    if (typeof raw === "string") return raw.trim().toLowerCase() !== "false";
+    return true;
+}
+
+/**
  * Normalize the builder's times payload into the shape stored WITH the schedule
  * definition (assignment / OCM metadata): a schedule-wide default range plus optional
  * per-weekday overrides. Invalid/empty ranges are dropped. Returns null when nothing valid.
@@ -160,6 +173,8 @@ export async function GET(request: NextRequest) {
                 // Config-driven default daily hours (schedule_patterns.metadata is the
                 // sanctioned time store — no synthesized source). Absent → operator sets them.
                 defaultHours: readPatternDefaultHours(p.metadata),
+                // Config-driven open-ended default (metadata policy, else the simple case).
+                defaultOpenEnded: readPatternDefaultOpenEnded(p.metadata),
             }));
             return NextResponse.json({ view, siteLocationId, unplaced, patterns });
         }
