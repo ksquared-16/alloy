@@ -12,15 +12,12 @@ import {
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
-    ConfigAssignmentRuntime,
     ConfigDistributionRuntime,
     ConfigHistoryTimeline,
     ConfigWorkspaceCard,
     type ConfigDetailTab,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import { ProgramLocationAvailabilityFlow } from "@/components/adminV2/settings/programs/ProgramLocationAvailabilityFlow";
-import { ProgramOwnershipEditPrototype } from "@/components/adminV2/settings/programs/ProgramOwnershipEditPrototype";
-import { isProgramLocationAvailabilityPrototype } from "@/lib/configRuntime/programLocationAvailabilityPrototypeModel";
 import {
     ConfigurationObjectEditGate,
     ConfigurationObjectWorkspace,
@@ -32,7 +29,6 @@ import {
 import { useConfigurationContinuityOptional } from "@/components/adminV2/settings/configurationRuntime/ConfigurationContinuityProvider";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { organizationProgramsHref } from "@/lib/admin/canonicalAdminRoutes";
-import type { ConfigurationTargetPreview } from "@/lib/configPublication/types";
 import type { ConfigurationDetailSection } from "@/lib/configPublication/runtimeModel";
 import {
     classifyConfigurationRuntimeIssue,
@@ -246,9 +242,6 @@ function ProgramsPublicationObjectWorkspace(props: {
     const [shouldSyncRoute, setShouldSyncRoute] = useState(false);
     const [form, setForm] = useState<DraftForm | null>(null);
     const [editSession, setEditSession] = useState(() => createConfigurationObjectEditSession<DraftForm>());
-    const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
-    const [preview, setPreview] = useState<ConfigurationTargetPreview[] | null>(null);
-    const [ownershipEditOpen, setOwnershipEditOpen] = useState(false);
     const [loading, setLoading] = useState(!snapshot);
     const [working, setWorking] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -457,8 +450,6 @@ function ProgramsPublicationObjectWorkspace(props: {
     useEffect(() => {
         setForm(selectedProgram ? formFor(selectedProgram) : null);
         setEditSession(createConfigurationObjectEditSession<DraftForm>());
-        setPreview(null);
-        setSelectedLocationIds([]);
     }, [selectedProgram]);
 
     const run = useCallback(
@@ -813,8 +804,6 @@ function ProgramsPublicationObjectWorkspace(props: {
             .filter((assignment) => assignment.revisionId === selectedProgram?.latestPublication?.revision.id)
             .map((assignment) => assignment.locationId) ?? [],
     );
-    const availableAssignmentLocations =
-        snapshot?.locations.filter((location) => !activeAssignmentLocationIds.has(location.id)) ?? [];
 
     return (
         <div
@@ -1411,202 +1400,54 @@ function ProgramsPublicationObjectWorkspace(props: {
                                     </div>
                                 : activeSection === "assignment" ?
                                     <div className="space-y-4" data-testid="program-distribution-concern">
-                                        {isProgramLocationAvailabilityPrototype() && selectedProgram ?
+                                        {selectedProgram && canManage ?
                                             <ProgramLocationAvailabilityFlow
                                                 entry={{
                                                     direction: "organization_program",
                                                     programId: selectedProgram.id,
                                                     programLabel:
-                                                        selectedProgram.latestPublication?.revision.label
-                                                        ?? selectedProgram.draft?.label
+                                                        selectedProgram.draft?.label
                                                         ?? selectedProgram.key,
-                                                    publicationReady:
-                                                        Boolean(selectedProgram.latestPublication)
-                                                        || isProgramLocationAvailabilityPrototype(),
+                                                    publicationReady: Boolean(selectedProgram.latestPublication),
+                                                    publicationId: selectedProgram.latestPublication?.id ?? null,
+                                                    lifecycleStatus: selectedProgram.lifecycleStatus,
+                                                    currentLocationCount: activeAssignmentLocationIds.size,
                                                 }}
                                                 locations={snapshot?.locations ?? []}
-                                                alreadyAssociatedLocationIds={activeAssignmentLocationIds}
                                                 onCancel={() => navigateSection("overview")}
-                                                onDone={() => {
-                                                    setOwnershipEditOpen(false);
-                                                    navigateSection("overview");
+                                                onDone={async () => {
+                                                    if (orgId) {
+                                                        invalidateProgramsCollection(orgId, "program-make-available");
+                                                        publishConfigurationInvalidation(
+                                                            "locations",
+                                                            "program-make-available",
+                                                        );
+                                                    }
+                                                    await reload({ force: true });
+                                                    navigateSection("assignment");
                                                 }}
                                             />
-                                        :   <>
-                                        <p className="text-sm text-alloy-midnight/60">
-                                            Make a published Organization Program available at Locations. That is separate from
-                                            each Location enabling local availability.
-                                        </p>
-                                        <ConfigAssignmentRuntime
-                                            posture={viewModel.runtime.assignment}
-                                            assignments={viewModel.assignments}
-                                            activeRevisionId={selectedProgram.latestPublication?.revision.id ?? null}
-                                            activeRevisionLabel={viewModel.runtime.publication.activeRevisionLabel}
-                                            testId="program-assignment-runtime"
-                                            workflow={
-                                                !canManage ? undefined
-                                                : !selectedProgram.latestPublication ?
-                                                    <p className="py-4 text-sm text-alloy-midnight/50">
-                                                        Publish this Program before making it available at Locations.
-                                                    </p>
-                                                : availableAssignmentLocations.length === 0 ?
-                                                    <p className="py-4 text-sm text-alloy-midnight/50">
-                                                        Every eligible Location already has this Program available.
-                                                    </p>
-                                                :   <>
-                                                        <div className="grid gap-2 sm:grid-cols-2">
-                                                            {availableAssignmentLocations.map((location) => (
-                                                                <label
-                                                                    key={location.id}
-                                                                    className="flex items-center gap-2 rounded-lg border border-alloy-stone/15 px-3 py-2 text-sm"
-                                                                >
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={selectedLocationIds.includes(location.id)}
-                                                                        onChange={(event) =>
-                                                                            setSelectedLocationIds((current) =>
-                                                                                event.target.checked
-                                                                                    ? [...current, location.id]
-                                                                                    : current.filter((id) => id !== location.id),
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                    <span>{location.label}</span>
-                                                                </label>
-                                                            ))}
-                                                        </div>
-                                                        <div className="mt-3 flex flex-wrap gap-2">
-                                                            <ConfigurationSecondaryButton
-                                                                disabled={selectedLocationIds.length === 0 || working != null}
-                                                                data-testid="program-preview-delivery"
-                                                                onClick={() =>
-                                                                    void run(
-                                                                        "preview",
-                                                                        async () => {
-                                                                            const result = await postAction({
-                                                                                action: "preview",
-                                                                                publicationId:
-                                                                                    selectedProgram.latestPublication!.id,
-                                                                                targetIds: selectedLocationIds,
-                                                                            });
-                                                                            setPreview(
-                                                                                (result.preview as ConfigurationTargetPreview[])
-                                                                                    ?? [],
-                                                                            );
-                                                                        },
-                                                                        { reload: false },
-                                                                    )
-                                                                }
-                                                            >
-                                                                {working === "preview" ? "Previewing…" : "Preview impact"}
-                                                            </ConfigurationSecondaryButton>
-                                                            <ConfigurationPrimaryButton
-                                                                disabled={!preview || preview.length === 0 || working != null}
-                                                                data-testid="program-assign-delivery"
-                                                                onClick={() =>
-                                                                    void run(
-                                                                        "assign",
-                                                                        async () => {
-                                                                            await postAction({
-                                                                                action: "assign",
-                                                                                publicationId:
-                                                                                    selectedProgram.latestPublication!.id,
-                                                                                targetIds: selectedLocationIds,
-                                                                            });
-                                                                            setPreview(null);
-                                                                        },
-                                                                        {
-                                                                            afterSuccess: () => {
-                                                                                if (orgId) {
-                                                                                    invalidateProgramsCollection(
-                                                                                        orgId,
-                                                                                        "program-assigned",
-                                                                                    );
-                                                                                    publishConfigurationInvalidation(
-                                                                                        "locations",
-                                                                                        "program-assigned",
-                                                                                    );
-                                                                                }
-                                                                                navigateSection("overview");
-                                                                            },
-                                                                        },
-                                                                    )
-                                                                }
-                                                            >
-                                                                {working === "assign" ? "Applying…" : "Make available"}
-                                                            </ConfigurationPrimaryButton>
-                                                        </div>
-                                                        {preview ?
-                                                            <div className="mt-4 space-y-2" data-testid="program-delivery-preview">
-                                                                <p className="text-xs font-semibold text-alloy-midnight">
-                                                                    Impact preview · {preview.length} Locations
-                                                                </p>
-                                                                {preview.map((target) => (
-                                                                    <div
-                                                                        key={target.locationId}
-                                                                        className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.035] p-3"
-                                                                    >
-                                                                        <div className="flex justify-between gap-2">
-                                                                            <strong className="text-sm text-alloy-midnight">
-                                                                                {target.locationLabel}
-                                                                            </strong>
-                                                                            <span className="text-xs text-alloy-midnight/45">
-                                                                                {target.currentRevisionId === target.nextRevisionId
-                                                                                    ? "Current"
-                                                                                    : "Update ready"}
-                                                                            </span>
-                                                                        </div>
-                                                                        <ul className="mt-2 space-y-1 text-xs text-alloy-midnight/60">
-                                                                            {target.impacts.map((impact) => (
-                                                                                <li key={`${impact.fieldKey}-${impact.kind}`}>
-                                                                                    {impact.message}
-                                                                                </li>
-                                                                            ))}
-                                                                        </ul>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        :   null}
-                                                    </>
-                                            }
-                                        />
-                                        </>}
-                                        {isProgramLocationAvailabilityPrototype() && selectedProgram && canManage ?
+                                        : selectedProgram ?
+                                            <p className="text-sm text-alloy-midnight/55">
+                                                You can review Location availability. Managing availability requires Program configuration permission.
+                                            </p>
+                                        :   null}
+                                        {selectedProgram && canManage ?
                                             <div className="rounded-lg border border-alloy-forge/10 bg-white px-3 py-3">
                                                 <p className="text-sm font-semibold text-alloy-midnight">
-                                                    After availability — editing ownership
+                                                    Edit Organization definition
                                                 </p>
                                                 <p className="mt-1 text-[11px] text-alloy-midnight/55">
-                                                    Choose Organization definition vs Location configuration before editing.
+                                                    Organization-owned fields are edited on the Program definition — not mixed with Location configuration.
                                                 </p>
                                                 <div className="mt-2">
                                                     <ConfigurationSecondaryButton
-                                                        onClick={() => setOwnershipEditOpen(true)}
-                                                        data-testid="programs-open-ownership-edit-prototype"
+                                                        onClick={() => navigateSection("definition")}
+                                                        data-testid="programs-edit-organization-definition"
                                                     >
-                                                        Open ownership edit prototype
+                                                        Edit Organization definition
                                                     </ConfigurationSecondaryButton>
                                                 </div>
-                                                {ownershipEditOpen ?
-                                                    <div className="mt-3">
-                                                        <ProgramOwnershipEditPrototype
-                                                            programId={selectedProgram.id}
-                                                            programLabel={
-                                                                selectedProgram.latestPublication?.revision.label
-                                                                ?? selectedProgram.draft?.label
-                                                                ?? selectedProgram.key
-                                                            }
-                                                            locationId={snapshot?.locations[0]?.id ?? "location"}
-                                                            locationLabel={snapshot?.locations[0]?.label ?? "Location"}
-                                                            hasLocalDescription={false}
-                                                            organizationDescription={
-                                                                selectedProgram.draft?.label
-                                                                ?? selectedProgram.key
-                                                            }
-                                                            onClose={() => setOwnershipEditOpen(false)}
-                                                        />
-                                                    </div>
-                                                :   null}
                                             </div>
                                         :   null}
                                         <ConfigDistributionRuntime

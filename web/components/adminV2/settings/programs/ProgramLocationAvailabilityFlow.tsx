@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
@@ -9,40 +9,58 @@ import {
     ConfigEditorSection,
     ConfigObjectHeader,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import { PROGRAM_LOCATION_STATUS_LABEL } from "@/lib/configRuntime/programLocationAvailabilityPrototypeModel";
+import type {
+    MakeProgramAvailableCommitResult,
+    MakeProgramAvailablePreview,
+    MakeProgramAvailableProgramRef,
+} from "@/lib/programs/commands/makeProgramAvailable/makeProgramAvailableModel";
 import {
-    applyPrototypeAvailability,
-    buildPrototypePreview,
-    isProgramLocationAvailabilityPrototype,
-    PROGRAM_LOCATION_STATUS_LABEL,
-    resolvePrototypeLocationRows,
-    statusLabelForRow,
-    type PrototypeApplyResult,
-    type PrototypeLocationRow,
-} from "@/lib/configRuntime/programLocationAvailabilityPrototypeModel";
+    applyMakeAvailableRefreshTargets,
+    commitMakeProgramAvailableClient,
+    createMakeAvailableIdempotencyKey,
+    makeAvailableIntentFingerprint,
+    previewMakeProgramAvailableClient,
+} from "@/lib/programs/makeProgramAvailableClient";
 import {
     fetchProgramCatalogSnapshot,
     publishedProgramsForAssignment,
     slugifyProgramKey,
 } from "@/lib/programs/locationProgramAssociation";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { organizationProgramsHref } from "@/lib/admin/canonicalAdminRoutes";
+import Link from "next/link";
 
 export type ProgramLocationAvailabilityEntry =
-    | { direction: "organization_program"; programId: string; programLabel: string; publicationReady: boolean }
+    | {
+          direction: "organization_program";
+          programId: string;
+          programLabel: string;
+          publicationReady: boolean;
+          publicationId?: string | null;
+          lifecycleStatus?: string;
+          currentLocationCount?: number;
+      }
     | { direction: "location"; activeLocationId: string; activeLocationLabel: string };
 
 type Step = "context" | "locations" | "review" | "success";
 type LocationEntryMode = "choose" | "use_existing" | "create_new";
 
-type PublishedProgram = { id: string; key: string; label: string; publicationId: string };
+type CatalogProgram = {
+    id: string;
+    key: string;
+    label: string;
+    publicationId: string | null;
+    published: boolean;
+};
 
 /**
- * Stage 1 interactive prototype — Programs made available at Locations.
- * Renders inside Configuration Continuity surfaces. Does not mutate production.
+ * Programs Make Available — production shared workflow (Stage 3).
+ * Both origins call preview_make_available / make_available.
  */
 export function ProgramLocationAvailabilityFlow({
     entry,
     locations,
-    alreadyAssociatedLocationIds,
-    locallyConfiguredLocationIds,
     associatedProgramIds,
     associatedProgramKeys,
     onCancel,
@@ -50,21 +68,19 @@ export function ProgramLocationAvailabilityFlow({
 }: {
     entry: ProgramLocationAvailabilityEntry;
     locations: readonly { id: string; label: string }[];
-    alreadyAssociatedLocationIds: ReadonlySet<string>;
-    locallyConfiguredLocationIds?: ReadonlySet<string>;
     associatedProgramIds?: ReadonlySet<string>;
     associatedProgramKeys?: ReadonlySet<string>;
     onCancel: () => void;
-    onDone: (result: PrototypeApplyResult) => void;
+    onDone: (result: MakeProgramAvailableCommitResult) => void;
 }) {
-    const prototype = isProgramLocationAvailabilityPrototype();
+    const { orgId } = useAdminAuth();
     const [step, setStep] = useState<Step>("context");
     const [locationMode, setLocationMode] = useState<LocationEntryMode>(
         entry.direction === "location" ? "choose" : "use_existing",
     );
     const [search, setSearch] = useState("");
     const [locationSearch, setLocationSearch] = useState("");
-    const [published, setPublished] = useState<PublishedProgram[]>([]);
+    const [catalog, setCatalog] = useState<CatalogProgram[]>([]);
     const [catalogLoading, setCatalogLoading] = useState(false);
     const [catalogError, setCatalogError] = useState<string | null>(null);
     const [selectedProgramId, setSelectedProgramId] = useState<string | null>(
@@ -76,7 +92,17 @@ export function ProgramLocationAvailabilityFlow({
     const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>(() =>
         entry.direction === "location" ? [entry.activeLocationId] : [],
     );
-    const [applyResult, setApplyResult] = useState<PrototypeApplyResult | null>(null);
+    const [preview, setPreview] = useState<MakeProgramAvailablePreview | null>(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [commitResult, setCommitResult] = useState<MakeProgramAvailableCommitResult | null>(null);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const idempotencyKeyRef = useRef(createMakeAvailableIdempotencyKey());
+    const intentFingerprintRef = useRef<string>("");
+    const requestSeq = useRef(0);
+
+    const entryPoint =
+        entry.direction === "organization_program" ? "organization_program" : "location";
 
     useEffect(() => {
         if (entry.direction !== "location") return;
@@ -87,21 +113,29 @@ export function ProgramLocationAvailabilityFlow({
         void fetchProgramCatalogSnapshot()
             .then((snapshot) => {
                 if (cancelled) return;
-                const publishedOnly = publishedProgramsForAssignment(snapshot.programs ?? []);
-                if (publishedOnly.length > 0) {
-                    setPublished(publishedOnly);
-                    return;
-                }
-                // Stage 1: when no published Programs exist, surface drafts so Use existing remains demoable.
-                const drafts = (snapshot.programs ?? [])
+                const published = new Map(
+                    publishedProgramsForAssignment(snapshot.programs ?? []).map((row) => [
+                        row.id,
+                        row,
+                    ]),
+                );
+                const rows: CatalogProgram[] = (snapshot.programs ?? [])
                     .filter((program) => program.lifecycleStatus !== "retired")
-                    .map((program) => ({
-                        id: program.id,
-                        key: program.key,
-                        label: program.draft?.label?.trim() || program.key,
-                        publicationId: program.latestPublication?.id ?? `prototype-draft:${program.id}`,
-                    }));
-                setPublished(drafts);
+                    .map((program) => {
+                        const pub = published.get(program.id);
+                        return {
+                            id: program.id,
+                            key: program.key,
+                            label:
+                                pub?.label
+                                || String(program.draft?.label ?? "").trim()
+                                || program.key,
+                            publicationId: pub?.publicationId ?? null,
+                            published: Boolean(pub?.publicationId),
+                        };
+                    })
+                    .sort((a, b) => a.label.localeCompare(b.label));
+                setCatalog(rows);
             })
             .catch((cause) => {
                 if (cancelled) return;
@@ -115,91 +149,104 @@ export function ProgramLocationAvailabilityFlow({
         };
     }, [entry.direction, locationMode]);
 
+    const selectedCatalogProgram = catalog.find((row) => row.id === selectedProgramId) ?? null;
+
+    const programRef: MakeProgramAvailableProgramRef | null = useMemo(() => {
+        if (entry.direction === "organization_program") {
+            if (!entry.publicationReady) return null;
+            return {
+                kind: "existing",
+                programId: entry.programId,
+                publicationId: entry.publicationId ?? undefined,
+            };
+        }
+        if (locationMode === "create_new") {
+            const label = createName.trim();
+            const key = (keyTouched ? createKey : slugifyProgramKey(label) || createKey).trim();
+            if (!label || !key) return null;
+            return { kind: "new", input: { key, label } };
+        }
+        if (locationMode === "use_existing" && selectedCatalogProgram?.published) {
+            return {
+                kind: "existing",
+                programId: selectedCatalogProgram.id,
+                publicationId: selectedCatalogProgram.publicationId ?? undefined,
+            };
+        }
+        return null;
+    }, [
+        entry,
+        locationMode,
+        createName,
+        createKey,
+        keyTouched,
+        selectedCatalogProgram,
+    ]);
+
     const programLabel =
         entry.direction === "organization_program"
             ? entry.programLabel
             : locationMode === "create_new"
               ? createName.trim() || "New Program"
-              : (published.find((row) => row.id === selectedProgramId)?.label ?? "Program");
+              : (selectedCatalogProgram?.label ?? "Program");
 
-    const programIdForRows =
-        entry.direction === "organization_program"
-            ? entry.programId
-            : locationMode === "create_new"
-              ? `__draft__:${slugifyProgramKey(createName) || "new"}`
-              : selectedProgramId;
-
-    const rows: PrototypeLocationRow[] = useMemo(() => {
-        const already = new Set(alreadyAssociatedLocationIds);
-        if (
-            entry.direction === "location"
-            && selectedProgramId
-            && (associatedProgramIds?.has(selectedProgramId)
-                || associatedProgramKeys?.has(
-                    published.find((row) => row.id === selectedProgramId)?.key ?? "",
-                ))
-        ) {
-            already.add(entry.activeLocationId);
-        }
-        return resolvePrototypeLocationRows({
-            locations,
-            programId: programIdForRows,
-            alreadyAssociatedIds: already,
-            locallyConfiguredIds: locallyConfiguredLocationIds,
-        });
-    }, [
-        locations,
-        programIdForRows,
-        alreadyAssociatedLocationIds,
-        locallyConfiguredLocationIds,
-        entry,
-        selectedProgramId,
-        associatedProgramIds,
-        associatedProgramKeys,
-        published,
-    ]);
-
-    const selectedSet = useMemo(() => new Set(selectedLocationIds), [selectedLocationIds]);
-
-    const preview = useMemo(
-        () =>
-            buildPrototypePreview({
-                programLabel,
-                rows,
-                selectedIds: selectedSet,
-            }),
-        [programLabel, rows, selectedSet],
-    );
-
-    const filteredLocations = useMemo(() => {
-        const q = locationSearch.trim().toLowerCase();
-        if (!q) return rows;
-        return rows.filter(
-            (row) => row.label.toLowerCase().includes(q) || row.id.toLowerCase().includes(q),
-        );
-    }, [rows, locationSearch]);
-
-    const filteredPrograms = useMemo(() => {
+    const filteredCatalog = useMemo(() => {
         const q = search.trim().toLowerCase();
-        return published.filter((program) => {
+        return catalog.filter((program) => {
             if (!q) return true;
             return (
                 program.label.toLowerCase().includes(q) || program.key.toLowerCase().includes(q)
             );
         });
-    }, [published, search]);
+    }, [catalog, search]);
 
-    const currentAvailableCount = rows.filter(
-        (row) =>
-            row.status === "already_associated_inherits"
-            || row.status === "already_associated_local",
-    ).length;
+    const filteredLocations = useMemo(() => {
+        const q = locationSearch.trim().toLowerCase();
+        if (!q) return locations;
+        return locations.filter(
+            (row) => row.label.toLowerCase().includes(q) || row.id.toLowerCase().includes(q),
+        );
+    }, [locations, locationSearch]);
+
+    const locationMetaById = useMemo(() => {
+        const map = new Map<string, { statusLabel: string; reason?: string }>();
+        if (!preview) return map;
+        for (const row of preview.newAssociations) {
+            map.set(row.locationId, { statusLabel: PROGRAM_LOCATION_STATUS_LABEL.notAvailable });
+        }
+        for (const row of preview.alreadyAvailable) {
+            map.set(row.locationId, {
+                statusLabel: row.hasLocalConfiguration
+                    ? PROGRAM_LOCATION_STATUS_LABEL.locallyConfigured
+                    : PROGRAM_LOCATION_STATUS_LABEL.inheritsOrganization,
+            });
+        }
+        for (const row of preview.blocked) {
+            if (row.locationId === "*") continue;
+            map.set(row.locationId, {
+                statusLabel: PROGRAM_LOCATION_STATUS_LABEL.blocked,
+                reason: row.reason,
+            });
+        }
+        return map;
+    }, [preview]);
+
+    const syncIdempotencyKey = (nextProgram: MakeProgramAvailableProgramRef, locationIds: string[]) => {
+        const fingerprint = makeAvailableIntentFingerprint({
+            program: nextProgram,
+            locationIds,
+        });
+        if (fingerprint !== intentFingerprintRef.current) {
+            intentFingerprintRef.current = fingerprint;
+            idempotencyKeyRef.current = createMakeAvailableIdempotencyKey();
+        }
+    };
 
     const canContinueFromContext =
         entry.direction === "organization_program"
             ? entry.publicationReady
             : locationMode === "use_existing"
-              ? Boolean(selectedProgramId)
+              ? Boolean(selectedCatalogProgram?.published)
               : locationMode === "create_new"
                 ? Boolean(
                       createName.trim()
@@ -214,55 +261,96 @@ export function ProgramLocationAvailabilityFlow({
                 ? current.filter((id) => id !== locationId)
                 : [...current, locationId],
         );
+        setPreview(null);
     };
 
-    const selectAllEligible = () => {
-        const ids = rows
-            .filter((row) => row.status !== "blocked")
-            .map((row) => row.id);
+    const selectAllVisibleEligible = () => {
+        const blocked = new Set(
+            (preview?.blocked ?? [])
+                .filter((row) => row.locationId !== "*")
+                .map((row) => row.locationId),
+        );
+        const ids = filteredLocations
+            .map((row) => row.id)
+            .filter((id) => !blocked.has(id));
         if (entry.direction === "location" && !ids.includes(entry.activeLocationId)) {
             ids.unshift(entry.activeLocationId);
         }
-        setSelectedLocationIds(ids);
+        setSelectedLocationIds([...new Set(ids)]);
+        setPreview(null);
     };
 
     const clearAll = () => {
         setSelectedLocationIds(
             entry.direction === "location" ? [entry.activeLocationId] : [],
         );
+        setPreview(null);
     };
 
-    const commitPrototype = () => {
-        const id =
-            entry.direction === "organization_program"
-                ? entry.programId
-                : locationMode === "create_new"
-                  ? `prototype-created:${slugifyProgramKey(createName) || "program"}`
-                  : (selectedProgramId ?? "unknown");
-        const result = applyPrototypeAvailability({
-            programId: id,
-            programLabel,
-            createdProgram: entry.direction === "location" && locationMode === "create_new",
-            rows,
-            selectedIds: selectedSet,
-        });
-        setApplyResult(result);
-        setStep("success");
+    const loadPreview = async () => {
+        if (!programRef || selectedLocationIds.length === 0) return;
+        syncIdempotencyKey(programRef, selectedLocationIds);
+        const seq = ++requestSeq.current;
+        setPreviewLoading(true);
+        setError(null);
+        try {
+            const next = await previewMakeProgramAvailableClient({
+                program: programRef,
+                locationIds: selectedLocationIds,
+                originatingLocationId:
+                    entry.direction === "location" ? entry.activeLocationId : null,
+                idempotencyKey: idempotencyKeyRef.current,
+                entryPoint,
+            });
+            if (seq !== requestSeq.current) return;
+            setPreview(next);
+            setStep("review");
+        } catch (cause) {
+            if (seq !== requestSeq.current) return;
+            setError(cause instanceof Error ? cause.message : "Preview failed.");
+        } finally {
+            if (seq === requestSeq.current) setPreviewLoading(false);
+        }
     };
 
-    const headerFacts =
-        step === "success" && applyResult
-            ? [
-                  applyResult.successCopy,
-                  prototype ? "Prototype — no production mutation" : "",
-              ].filter(Boolean)
-            : [
-                  PROGRAM_LOCATION_STATUS_LABEL.organizationDefinition,
-                  currentAvailableCount > 0
-                      ? `Available at ${currentAvailableCount} Location${currentAvailableCount === 1 ? "" : "s"}`
-                      : "Not yet available at Locations",
-                  prototype ? "Prototype preview" : "",
-              ].filter(Boolean);
+    const commit = async () => {
+        if (!programRef || selectedLocationIds.length === 0) return;
+        syncIdempotencyKey(programRef, selectedLocationIds);
+        const seq = ++requestSeq.current;
+        setBusy(true);
+        setError(null);
+        try {
+            const result = await commitMakeProgramAvailableClient({
+                program: programRef,
+                locationIds: selectedLocationIds,
+                originatingLocationId:
+                    entry.direction === "location" ? entry.activeLocationId : null,
+                idempotencyKey: idempotencyKeyRef.current,
+                entryPoint,
+            });
+            if (seq !== requestSeq.current) return;
+            applyMakeAvailableRefreshTargets({
+                orgId,
+                refreshTargets: result.refreshTargets,
+            });
+            setCommitResult(result);
+            setStep("success");
+        } catch (cause) {
+            if (seq !== requestSeq.current) return;
+            // Timeout / uncertain: keep same idempotency key for retry.
+            setError(
+                cause instanceof Error
+                    ? cause.message
+                    : "The request may still be processing. Retry uses the same operation key.",
+            );
+        } finally {
+            if (seq === requestSeq.current) setBusy(false);
+        }
+    };
+
+    const retryCommit = () => {
+        void commit();
+    };
 
     return (
         <div className="space-y-3" data-testid="program-location-availability-flow">
@@ -275,13 +363,23 @@ export function ProgramLocationAvailabilityFlow({
                 }
                 status={{
                     label:
-                        step === "success" ? "Complete"
+                        step === "success" ? (commitResult?.status === "committed" ? "Complete" : commitResult?.status === "partial" ? "Partial" : "Blocked")
                         : step === "review" ? "Review"
                         : step === "locations" ? "Choose Locations"
                         : "Program",
-                    tone: step === "success" ? "active" : "attention",
+                    tone:
+                        step === "success" && commitResult?.status === "committed"
+                            ? "active"
+                            : "attention",
                 }}
-                facts={headerFacts}
+                facts={[
+                    PROGRAM_LOCATION_STATUS_LABEL.organizationDefinition,
+                    programLabel,
+                    entry.direction === "organization_program"
+                        && entry.currentLocationCount != null
+                        ? `Available at ${entry.currentLocationCount} Location${entry.currentLocationCount === 1 ? "" : "s"}`
+                        : "",
+                ].filter(Boolean)}
                 actions={
                     step !== "success" ?
                         <ConfigurationSecondaryButton onClick={onCancel} data-testid="pla-flow-cancel">
@@ -291,16 +389,6 @@ export function ProgramLocationAvailabilityFlow({
                 }
                 testId="pla-flow-header"
             />
-
-            {prototype ?
-                <p
-                    className="rounded-lg border border-alloy-forge/10 bg-white px-3 py-2 text-[11px] text-alloy-midnight/55"
-                    data-testid="pla-flow-prototype-banner"
-                >
-                    Interactive prototype — Apply updates fixture state only. Production assignment is not
-                    written.
-                </p>
-            :   null}
 
             {step === "context" ?
                 <div className="space-y-3" data-testid="pla-flow-step-context">
@@ -312,32 +400,41 @@ export function ProgramLocationAvailabilityFlow({
                         >
                             <dl className="grid gap-2 text-sm sm:grid-cols-2">
                                 <div className="rounded-lg border border-alloy-forge/10 bg-white px-3 py-2">
-                                    <dt className="config-typo-field-label">Identity</dt>
-                                    <dd className="font-medium text-alloy-midnight">{entry.programLabel}</dd>
+                                    <dt className="config-typo-field-label">Lifecycle</dt>
+                                    <dd className="font-medium text-alloy-midnight">
+                                        {entry.publicationReady ? "Published" : (entry.lifecycleStatus ?? "Draft")}
+                                    </dd>
                                 </div>
                                 <div className="rounded-lg border border-alloy-forge/10 bg-white px-3 py-2">
                                     <dt className="config-typo-field-label">Currently available</dt>
                                     <dd className="font-medium text-alloy-midnight">
-                                        {currentAvailableCount} Location
-                                        {currentAvailableCount === 1 ? "" : "s"}
-                                    </dd>
-                                </div>
-                                <div className="rounded-lg border border-alloy-forge/10 bg-white px-3 py-2 sm:col-span-2">
-                                    <dt className="config-typo-field-label">Shared definition</dt>
-                                    <dd className="text-alloy-midnight/70">
-                                        {!entry.publicationReady
-                                            ? "Publish this Program before making it available at Locations."
-                                            : isProgramLocationAvailabilityPrototype()
-                                              ? "Prototype may proceed without a published revision — production will require publish."
-                                              : "Published Organization definition ready to make available."}
+                                        {entry.currentLocationCount ?? 0} Location
+                                        {(entry.currentLocationCount ?? 0) === 1 ? "" : "s"}
                                     </dd>
                                 </div>
                             </dl>
                             {!entry.publicationReady ?
-                                <p className="mt-2 text-sm text-alloy-ember" role="status">
-                                    Publish required before Add to Locations.
-                                </p>
-                            :   null}
+                                <div className="mt-3 space-y-2" data-testid="pla-flow-unpublished-block">
+                                    <p className="text-sm text-alloy-ember" role="status">
+                                        This Program must be published before it can be made available to Locations.
+                                    </p>
+                                    <Link
+                                        href={organizationProgramsHref(entry.programId, "publication")}
+                                        className="text-sm font-semibold text-alloy-bend-pine hover:underline"
+                                        data-testid="pla-flow-go-publish"
+                                    >
+                                        Open Publication
+                                    </Link>
+                                </div>
+                            :   <div className="mt-3">
+                                    <ConfigurationPrimaryButton
+                                        onClick={() => setStep("locations")}
+                                        data-testid="pla-flow-continue-locations"
+                                    >
+                                        Choose Locations
+                                    </ConfigurationPrimaryButton>
+                                </div>
+                            }
                         </ConfigEditorSection>
                     : locationMode === "choose" ?
                         <ConfigEditorSection
@@ -363,7 +460,7 @@ export function ProgramLocationAvailabilityFlow({
                     : locationMode === "use_existing" ?
                         <ConfigEditorSection
                             title="Organization Programs"
-                            description="Choose a Program to make available. Production requires a published revision; this prototype may list drafts when none are published."
+                            description="Only published Programs can be made available. Drafts are listed as unavailable."
                             testId="pla-flow-catalog"
                         >
                             <input
@@ -375,23 +472,34 @@ export function ProgramLocationAvailabilityFlow({
                                 data-testid="pla-flow-program-search"
                             />
                             {catalogLoading ?
-                                <p className="config-typo-sublabel mt-2">Loading published Programs…</p>
+                                <p className="config-typo-sublabel mt-2">Loading Programs…</p>
                             : catalogError ?
                                 <p className="mt-2 text-sm text-red-800" role="alert">{catalogError}</p>
                             :   <ul className="mt-2 max-h-56 divide-y divide-alloy-forge/10 overflow-y-auto rounded-lg border border-alloy-forge/10 bg-white">
-                                    {filteredPrograms.map((program) => {
+                                    {filteredCatalog.map((program) => {
                                         const already =
                                             associatedProgramIds?.has(program.id)
                                             || associatedProgramKeys?.has(program.key);
                                         return (
                                             <li key={program.id}>
-                                                <label className="flex cursor-pointer items-start gap-2 px-3 py-2.5 hover:bg-alloy-stone/[0.06]">
+                                                <label
+                                                    className={`flex items-start gap-2 px-3 py-2.5 ${
+                                                        program.published
+                                                            ? "cursor-pointer hover:bg-alloy-stone/[0.06]"
+                                                            : "cursor-not-allowed opacity-55"
+                                                    }`}
+                                                >
                                                     <input
                                                         type="radio"
                                                         name="pla-program-pick"
                                                         className="mt-1"
+                                                        disabled={!program.published}
                                                         checked={selectedProgramId === program.id}
-                                                        onChange={() => setSelectedProgramId(program.id)}
+                                                        onChange={() => {
+                                                            if (!program.published) return;
+                                                            setSelectedProgramId(program.id);
+                                                            setPreview(null);
+                                                        }}
                                                         data-testid={`pla-flow-pick-${program.id}`}
                                                     />
                                                     <span className="min-w-0">
@@ -400,6 +508,7 @@ export function ProgramLocationAvailabilityFlow({
                                                         </span>
                                                         <span className="config-typo-sublabel block font-mono">
                                                             {program.key}
+                                                            {program.published ? " · Published" : " · Draft — publish required"}
                                                             {already ? " · already available here" : ""}
                                                         </span>
                                                     </span>
@@ -409,7 +518,14 @@ export function ProgramLocationAvailabilityFlow({
                                     })}
                                 </ul>
                             }
-                            <div className="mt-2">
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                <ConfigurationPrimaryButton
+                                    disabled={!canContinueFromContext}
+                                    onClick={() => setStep("locations")}
+                                    data-testid="pla-flow-continue-locations"
+                                >
+                                    Choose Locations
+                                </ConfigurationPrimaryButton>
                                 <ConfigurationSecondaryButton onClick={() => setLocationMode("choose")}>
                                     Back
                                 </ConfigurationSecondaryButton>
@@ -417,7 +533,7 @@ export function ProgramLocationAvailabilityFlow({
                         </ConfigEditorSection>
                     :   <ConfigEditorSection
                             title="New Organization Program"
-                            description="Creates one Organization definition, then makes it available at selected Locations."
+                            description="Creates one Organization definition, publishes it, then makes it available at selected Locations."
                             testId="pla-flow-create-fields"
                         >
                             <label className="block space-y-1">
@@ -429,6 +545,7 @@ export function ProgramLocationAvailabilityFlow({
                                         const next = event.target.value;
                                         setCreateName(next);
                                         if (!keyTouched) setCreateKey(slugifyProgramKey(next));
+                                        setPreview(null);
                                     }}
                                     className="config-runtime-input"
                                     autoFocus
@@ -443,37 +560,33 @@ export function ProgramLocationAvailabilityFlow({
                                     onChange={(event) => {
                                         setKeyTouched(true);
                                         setCreateKey(event.target.value);
+                                        setPreview(null);
                                     }}
                                     className="config-runtime-input font-mono"
                                     data-testid="pla-flow-create-key"
                                 />
                             </label>
-                            <div className="mt-2">
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                <ConfigurationPrimaryButton
+                                    disabled={!canContinueFromContext}
+                                    onClick={() => setStep("locations")}
+                                    data-testid="pla-flow-continue-locations"
+                                >
+                                    Choose Locations
+                                </ConfigurationPrimaryButton>
                                 <ConfigurationSecondaryButton onClick={() => setLocationMode("choose")}>
                                     Back
                                 </ConfigurationSecondaryButton>
                             </div>
                         </ConfigEditorSection>
                     }
-
-                    {entry.direction === "location" && locationMode === "choose" ? null : (
-                        <div className="flex flex-wrap gap-2">
-                            <ConfigurationPrimaryButton
-                                disabled={!canContinueFromContext}
-                                onClick={() => setStep("locations")}
-                                data-testid="pla-flow-continue-locations"
-                            >
-                                Choose Locations
-                            </ConfigurationPrimaryButton>
-                        </div>
-                    )}
                 </div>
             :   null}
 
             {step === "locations" ?
                 <div className="space-y-3" data-testid="pla-flow-step-locations">
                     <ConfigEditorSection
-                        title={`Make available at Locations`}
+                        title="Make available at Locations"
                         description={`${programLabel} · ${selectedLocationIds.length} selected`}
                         testId="pla-flow-location-picker"
                     >
@@ -487,43 +600,36 @@ export function ProgramLocationAvailabilityFlow({
                                 data-testid="pla-flow-location-search"
                             />
                             <ConfigurationSecondaryButton
-                                onClick={selectAllEligible}
+                                onClick={selectAllVisibleEligible}
                                 data-testid="pla-flow-select-all"
                             >
-                                Select all eligible
+                                Select all visible
                             </ConfigurationSecondaryButton>
                             <ConfigurationSecondaryButton onClick={clearAll} data-testid="pla-flow-clear-all">
                                 Clear
                             </ConfigurationSecondaryButton>
                         </div>
-                        <p className="mb-2 text-[11px] text-alloy-midnight/55" data-testid="pla-flow-selection-summary">
-                            {preview.inheritsOrganization.length} will inherit Organization ·{" "}
-                            {preview.unchangedLocal.length} locally configured · {preview.blocked.length}{" "}
-                            blocked
-                        </p>
                         <ul className="max-h-72 divide-y divide-alloy-forge/10 overflow-y-auto rounded-lg border border-alloy-forge/10 bg-white">
                             {filteredLocations.map((row) => {
                                 const locked =
                                     entry.direction === "location"
                                     && row.id === entry.activeLocationId;
-                                const checked = selectedSet.has(row.id);
-                                const blocked = row.status === "blocked";
+                                const checked = selectedLocationIds.includes(row.id);
+                                const meta = locationMetaById.get(row.id);
                                 return (
                                     <li key={row.id}>
                                         <label
                                             className={`flex items-start gap-2 px-3 py-2.5 ${
                                                 locked
                                                     ? "bg-alloy-bend-pine/[0.04]"
-                                                    : blocked
-                                                      ? "cursor-not-allowed opacity-60"
-                                                      : "cursor-pointer hover:bg-alloy-stone/[0.06]"
+                                                    : "cursor-pointer hover:bg-alloy-stone/[0.06]"
                                             }`}
                                         >
                                             <input
                                                 type="checkbox"
                                                 className="mt-1"
                                                 checked={checked}
-                                                disabled={locked || blocked}
+                                                disabled={locked || busy}
                                                 onChange={() => toggleLocation(row.id)}
                                                 data-testid={`pla-flow-location-${row.id}`}
                                             />
@@ -532,18 +638,20 @@ export function ProgramLocationAvailabilityFlow({
                                                     <span className="text-sm font-medium text-alloy-midnight">
                                                         {row.label}
                                                     </span>
-                                                    <span className="rounded-full border border-alloy-forge/15 px-2 py-0.5 text-[10px] font-semibold text-alloy-midnight/55">
-                                                        {statusLabelForRow(row.status)}
-                                                    </span>
+                                                    {meta ?
+                                                        <span className="rounded-full border border-alloy-forge/15 px-2 py-0.5 text-[10px] font-semibold text-alloy-midnight/55">
+                                                            {meta.statusLabel}
+                                                        </span>
+                                                    :   null}
                                                     {locked ?
                                                         <span className="config-typo-sublabel">
                                                             · active Location
                                                         </span>
                                                     :   null}
                                                 </span>
-                                                {blocked && row.blockReason ?
+                                                {meta?.reason ?
                                                     <span className="config-typo-sublabel mt-0.5 block">
-                                                        {row.blockReason}
+                                                        {meta.reason}
                                                     </span>
                                                 :   null}
                                             </span>
@@ -553,13 +661,16 @@ export function ProgramLocationAvailabilityFlow({
                             })}
                         </ul>
                     </ConfigEditorSection>
+                    {error ?
+                        <p className="text-sm text-red-800" role="alert">{error}</p>
+                    :   null}
                     <div className="flex flex-wrap gap-2">
                         <ConfigurationPrimaryButton
-                            disabled={selectedLocationIds.length === 0}
-                            onClick={() => setStep("review")}
+                            disabled={selectedLocationIds.length === 0 || previewLoading || !programRef}
+                            onClick={() => void loadPreview()}
                             data-testid="pla-flow-continue-review"
                         >
-                            Review
+                            {previewLoading ? "Previewing…" : "Review"}
                         </ConfigurationPrimaryButton>
                         <ConfigurationSecondaryButton onClick={() => setStep("context")}>
                             Back
@@ -568,11 +679,15 @@ export function ProgramLocationAvailabilityFlow({
                 </div>
             :   null}
 
-            {step === "review" ?
+            {step === "review" && preview ?
                 <div className="space-y-3" data-testid="pla-flow-step-review">
                     <ConfigEditorSection
                         title="Review"
-                        description={preview.confirmationCopy}
+                        description={
+                            preview.program.willPublish
+                                ? `${preview.program.label} will be created and published, then made available at ${preview.impact.eligible} Location${preview.impact.eligible === 1 ? "" : "s"}.`
+                                : `${preview.program.label} will be made available at ${preview.newAssociations.length} new Location${preview.newAssociations.length === 1 ? "" : "s"}.`
+                        }
                         testId="pla-flow-review"
                     >
                         <ul className="space-y-2 text-sm text-alloy-midnight/75">
@@ -581,72 +696,113 @@ export function ProgramLocationAvailabilityFlow({
                                 new associations
                             </li>
                             <li>
+                                <strong className="text-alloy-midnight">{preview.alreadyAvailable.length}</strong>{" "}
+                                selected Locations already have access and will remain unchanged
+                            </li>
+                            <li>
                                 <strong className="text-alloy-midnight">
-                                    {preview.inheritsOrganization.length}
+                                    {preview.retainedLocalConfiguration.length}
                                 </strong>{" "}
-                                Locations will use the Organization definition
+                                Locations have local configuration that will be retained
                             </li>
                             <li>
-                                <strong className="text-alloy-midnight">{preview.unchangedLocal.length}</strong>{" "}
-                                Locations already have local configuration and will retain it
+                                <strong className="text-alloy-midnight">
+                                    {preview.blocked.filter((row) => row.locationId !== "*").length}
+                                </strong>{" "}
+                                Locations are blocked and will not be changed
                             </li>
-                            <li>
-                                <strong className="text-alloy-midnight">{preview.blocked.length}</strong>{" "}
-                                selected Locations are blocked and will not be changed
-                            </li>
-                            <li className="config-typo-sublabel">{preview.refreshExpectation}</li>
+                            {preview.program.willPublish ?
+                                <li className="font-medium text-alloy-midnight">
+                                    Publication will occur before Locations are associated.
+                                </li>
+                            :   null}
                         </ul>
-                        {preview.blocked.length > 0 ?
+                        {preview.blocked.filter((row) => row.locationId !== "*").length > 0 ?
                             <div className="mt-3 rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.04] px-3 py-2">
                                 <p className="text-[11px] font-semibold text-alloy-midnight">Blocked</p>
                                 <ul className="mt-1 space-y-1 text-[11px] text-alloy-midnight/60">
-                                    {preview.blocked.map((row) => (
-                                        <li key={row.id}>
-                                            {row.label} — {row.blockReason}
-                                        </li>
-                                    ))}
+                                    {preview.blocked
+                                        .filter((row) => row.locationId !== "*")
+                                        .map((row) => (
+                                            <li key={row.locationId}>
+                                                {row.locationLabel} — {row.reason}
+                                            </li>
+                                        ))}
                                 </ul>
                             </div>
                         :   null}
                     </ConfigEditorSection>
+                    {error ?
+                        <p className="text-sm text-red-800" role="alert" data-testid="pla-flow-commit-error">
+                            {error}
+                        </p>
+                    :   null}
                     <div className="flex flex-wrap gap-2">
-                        <ConfigurationPrimaryButton onClick={commitPrototype} data-testid="pla-flow-apply">
-                            Apply
+                        <ConfigurationPrimaryButton
+                            disabled={busy}
+                            onClick={() => void commit()}
+                            data-testid="pla-flow-apply"
+                        >
+                            {busy ? "Applying…" : "Confirm"}
                         </ConfigurationPrimaryButton>
-                        <ConfigurationSecondaryButton onClick={() => setStep("locations")}>
+                        <ConfigurationSecondaryButton
+                            disabled={busy}
+                            onClick={() => {
+                                setStep("locations");
+                                setError(null);
+                            }}
+                        >
                             Back
                         </ConfigurationSecondaryButton>
                     </div>
                 </div>
             :   null}
 
-            {step === "success" && applyResult ?
+            {step === "success" && commitResult ?
                 <div className="space-y-3" data-testid="pla-flow-step-success">
                     <ConfigEditorSection
-                        title={applyResult.successCopy}
+                        title={
+                            commitResult.status === "committed"
+                                ? `${programLabel} is now available at ${commitResult.associatedLocationIds.length} Location${commitResult.associatedLocationIds.length === 1 ? "" : "s"}.`
+                                : commitResult.status === "partial"
+                                  ? "Availability completed with partial results"
+                                  : "No Locations were changed"
+                        }
                         description={
-                            applyResult.createdProgram
-                                ? "Organization Program created in prototype session · associations recorded in fixture state only."
-                                : "Associations recorded in prototype session only."
+                            commitResult.createdProgram || commitResult.publishedProgram
+                                ? `Program ${commitResult.createdProgram ? "created" : "updated"}${commitResult.publishedProgram ? " and published" : ""}.`
+                                : commitResult.idempotentReplay
+                                  ? "Idempotent replay of the same operation."
+                                  : undefined
                         }
                         testId="pla-flow-success"
                     >
                         <ul className="space-y-1 text-sm text-alloy-midnight/75">
-                            <li>
-                                Affected: {applyResult.associatedLocationIds.length} Location
-                                {applyResult.associatedLocationIds.length === 1 ? "" : "s"}
-                            </li>
-                            <li>Skipped / blocked: {applyResult.blocked.length}</li>
-                            <li>Unchanged local configuration: {applyResult.unchangedLocationIds.length}</li>
-                            <li className="config-typo-sublabel">
-                                Status: {applyResult.status}
-                                {prototype ? " · retry will be wired in production Stage 3" : ""}
-                            </li>
+                            <li>Status: {commitResult.status}</li>
+                            <li>Associated: {commitResult.associatedLocationIds.length}</li>
+                            <li>Unchanged: {commitResult.unchangedLocationIds.length}</li>
+                            <li>Blocked: {commitResult.blocked.length}</li>
+                            <li>Failed: {commitResult.failed.length}</li>
+                            {commitResult.operationId ?
+                                <li className="config-typo-sublabel font-mono">
+                                    Operation {commitResult.operationId}
+                                </li>
+                            :   null}
                         </ul>
+                        {commitResult.failed.some((row) => row.retryable) ?
+                            <div className="mt-2">
+                                <ConfigurationSecondaryButton
+                                    onClick={retryCommit}
+                                    data-testid="pla-flow-retry"
+                                >
+                                    Retry failed targets
+                                </ConfigurationSecondaryButton>
+                            </div>
+                        :   null}
                     </ConfigEditorSection>
                     <div className="flex flex-wrap gap-2">
                         <ConfigurationPrimaryButton
-                            onClick={() => onDone(applyResult)}
+                            onClick={() => onDone(commitResult)}
                             data-testid="pla-flow-done"
                         >
                             Done

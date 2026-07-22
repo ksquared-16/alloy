@@ -604,22 +604,17 @@ export default function LocationsConfigurationPage({
                                 onCancel={() => setCreatingProgram(false)}
                                 onComplete={async ({ programId }) => {
                                     setCreatingProgram(false);
-                                    // Stage 1 prototype IDs are session fixtures — do not invalidate live projections.
-                                    if (
-                                        programId.startsWith("prototype-")
-                                        || programId.startsWith("__draft__")
-                                    ) {
-                                        return;
-                                    }
                                     if (orgId) {
-                                        invalidateProgramsCollection(orgId, "program-assigned-from-location", {
+                                        invalidateProgramsCollection(orgId, "program-make-available", {
                                             publishBus: true,
                                         });
-                                        invalidateLocationsCollection(orgId, "program-assigned-from-location", {
+                                        invalidateLocationsCollection(orgId, "program-make-available", {
                                             publishBus: true,
                                         });
                                     }
-                                    setPendingAssociatedProgramId(programId);
+                                    if (programId) {
+                                        setPendingAssociatedProgramId(programId);
+                                    }
                                     await refreshPrograms();
                                 }}
                             />

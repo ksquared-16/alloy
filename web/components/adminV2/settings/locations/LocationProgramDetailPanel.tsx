@@ -17,14 +17,8 @@ import {
     ConfigObjectHeader,
     type ConfigAttentionItem,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
-import { ConfigMutationScopeSelector } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigMutationScopeSelector";
 import { ConfigOwnershipSourceBadge } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigOwnershipSourceBadge";
-import { ProgramOwnershipEditPrototype } from "@/components/adminV2/settings/programs/ProgramOwnershipEditPrototype";
-import {
-    resolveProgramOfferingOwnership,
-    type ConfigurationMutationScope,
-} from "@/lib/configRuntime/organizationLocationScope";
-import { isProgramLocationAvailabilityPrototype } from "@/lib/configRuntime/programLocationAvailabilityPrototypeModel";
+import { resolveProgramOfferingOwnership } from "@/lib/configRuntime/organizationLocationScope";
 
 function readMeta(metadata: LocationProgramCategoryRow["metadata"], key: string): string {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return "";
@@ -125,8 +119,6 @@ export default function LocationProgramDetailPanel({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
-    const [ownershipPrototypeOpen, setOwnershipPrototypeOpen] = useState(false);
-    const [mutationScope, setMutationScope] = useState<ConfigurationMutationScope>("location_only");
 
     useEffect(() => {
         if (!program) return;
@@ -140,7 +132,6 @@ export default function LocationProgramDetailPanel({
         setActive(program.is_active !== false);
         setError(null);
         setEditing(false);
-        setMutationScope("location_only");
     }, [program]);
 
     const ageDisplay = summary?.ageRange ?? "Not set";
@@ -160,10 +151,6 @@ export default function LocationProgramDetailPanel({
         [program?.local_description_override, program?.program_revision_id],
     );
 
-    const organizationScopeDisabledReason = program?.program_revision_id
-        ? "This Location editor only changes offering state and permitted local overrides. Organization definition edits belong on the Programs workspace after an explicit Organization-default confirmation."
-        : "This row is a legacy local Program without an Organization definition link.";
-
     const beginEdit = () => setEditing(true);
     const cancelEdit = () => {
         if (!program) return;
@@ -177,7 +164,6 @@ export default function LocationProgramDetailPanel({
         setActive(program.is_active !== false);
         setError(null);
         setEditing(false);
-        setMutationScope("location_only");
     };
 
     const saveLocationOnly = async () => {
@@ -282,14 +268,10 @@ export default function LocationProgramDetailPanel({
                     <ConfigOwnershipSourceBadge source={ownershipSource} locationLabel={siteLabel} />
                 </div>
 
-                <ConfigMutationScopeSelector
-                    value={mutationScope}
-                    onChange={setMutationScope}
-                    locationLabel={siteLabel || "this Location"}
-                    organizationDisabled
-                    organizationDisabledReason={organizationScopeDisabledReason}
-                    testId="locations-program-mutation-scope"
-                />
+                <p className="text-xs text-alloy-midnight/55" data-testid="locations-program-location-only-note">
+                    This surface edits {siteLabel || "Location"} configuration only. Organization definition
+                    changes use Edit Organization definition on the summary view.
+                </p>
 
                 <div className="space-y-2.5" data-testid="locations-program-editor">
                     <ConfigEditorSection title="Identity" testId="locations-program-editor-identity">
@@ -468,7 +450,7 @@ export default function LocationProgramDetailPanel({
                     {canMutate ?
                         <div className="flex flex-wrap gap-2 pt-1">
                             <ConfigurationPrimaryButton
-                                disabled={saving || mutationScope !== "location_only"}
+                                disabled={saving}
                                 data-testid="locations-program-save"
                                 onClick={() => void saveLocationOnly()}
                             >
@@ -493,35 +475,32 @@ export default function LocationProgramDetailPanel({
                     ].filter(Boolean)}
                     actions={
                         canMutate ?
-                            isProgramLocationAvailabilityPrototype() ?
-                                <ConfigurationSecondaryButton
-                                    onClick={() => setOwnershipPrototypeOpen(true)}
-                                    data-testid={`locations-program-ownership-edit-${program.id}`}
-                                >
-                                    Edit configuration
-                                </ConfigurationSecondaryButton>
-                            :   <ConfigurationSecondaryButton
-                                    onClick={beginEdit}
-                                    data-testid={`locations-program-edit-${program.id}`}
-                                >
-                                    Edit program
-                                </ConfigurationSecondaryButton>
+                            <ConfigurationSecondaryButton
+                                onClick={beginEdit}
+                                data-testid={`locations-program-edit-${program.id}`}
+                            >
+                                Edit {siteLabel || "Location"} configuration
+                            </ConfigurationSecondaryButton>
                         :   null
                     }
                     testId="locations-program-header"
                 />
 
-                {ownershipPrototypeOpen ?
-                    <ProgramOwnershipEditPrototype
-                        programId={String(program.program_id ?? program.id)}
-                        programLabel={summary?.label ?? program.label}
-                        locationId={program.location_id}
-                        locationLabel={siteLabel}
-                        hasLocalDescription={Boolean(program.local_description_override?.trim())}
-                        organizationDescription=""
-                        onClose={() => setOwnershipPrototypeOpen(false)}
-                    />
-                :   null}
+                <div className="mb-2 flex flex-wrap gap-2">
+                    {canMutate && program.program_revision_id ?
+                        <ConfigurationSecondaryButton
+                            onClick={() => {
+                                const href = program.program_id
+                                    ? `/organization/programs?programId=${encodeURIComponent(program.program_id)}&section=definition`
+                                    : "/organization/programs";
+                                window.location.assign(href);
+                            }}
+                            data-testid={`locations-program-edit-org-${program.id}`}
+                        >
+                            Edit Organization definition
+                        </ConfigurationSecondaryButton>
+                    :   null}
+                </div>
 
                 <div className="flex flex-wrap gap-2" data-testid="locations-program-summary-ownership">
                     <ConfigOwnershipSourceBadge source={ownershipSource} locationLabel={siteLabel} />

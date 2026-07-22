@@ -1,14 +1,10 @@
 "use client";
 
-import {
-    ProgramLocationAvailabilityFlow,
-} from "@/components/adminV2/settings/programs/ProgramLocationAvailabilityFlow";
-import { isProgramLocationAvailabilityPrototype } from "@/lib/configRuntime/programLocationAvailabilityPrototypeModel";
+import { ProgramLocationAvailabilityFlow } from "@/components/adminV2/settings/programs/ProgramLocationAvailabilityFlow";
 
 /**
  * Location → Programs → Add Program entry.
- * Stage 1: shared non-mutating availability prototype.
- * Production mutation path remains in git history / Stage 3 restore via stage flag.
+ * Production: shared Make Available workflow (preview_make_available / make_available).
  */
 export default function LocationAddProgramPanel({
     activeLocationId,
@@ -27,9 +23,6 @@ export default function LocationAddProgramPanel({
     onCancel: () => void;
     onComplete: (result: { programId: string; targetLocationIds: string[] }) => Promise<void> | void;
 }) {
-    // Stage 1 always uses the prototype flow. Production mutations are deferred.
-    void isProgramLocationAvailabilityPrototype;
-
     return (
         <ProgramLocationAvailabilityFlow
             entry={{
@@ -38,7 +31,6 @@ export default function LocationAddProgramPanel({
                 activeLocationLabel,
             }}
             locations={locations}
-            alreadyAssociatedLocationIds={new Set()}
             associatedProgramIds={associatedProgramIds}
             associatedProgramKeys={associatedProgramKeys}
             onCancel={onCancel}
