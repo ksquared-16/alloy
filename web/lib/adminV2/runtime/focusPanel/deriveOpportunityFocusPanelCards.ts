@@ -483,6 +483,7 @@ export function buildSchedulingCardModel(record: Record<string, unknown>): Focus
             : count === 1
               ? "1 child · schedule not set"
               : `${count} children · schedule not set`;
+    void collection;
     return card({
         key: "scheduling",
         title: "Scheduling",
@@ -490,14 +491,12 @@ export function buildSchedulingCardModel(record: Record<string, unknown>): Focus
         tier: "reference",
         span: 2,
         density: "compact",
-        statusChip: count > 0 ? chip("needs a room") : null,
-        statusTone: count > 0 ? "due" : "neutral",
-        primaryAction: count > 0 ? { label: "Create schedule →", variant: "primary" } : null,
-        payload:
-            collection.items.length > 0
-                ? { collectionItems: collection.items, overflowCount: collection.overflowCount }
-                : undefined,
-        secondaryInsight: count > 0 ? "Set room and weekly pattern at Registration" : null,
+        statusChip: null,
+        statusTone: "neutral",
+        // The card component renders per-child status + opens the work surface on
+        // click; no card-level primary action or collection payload.
+        primaryAction: null,
+        secondaryInsight: count > 0 ? "Open a child to build their schedule" : null,
     });
 }
 
