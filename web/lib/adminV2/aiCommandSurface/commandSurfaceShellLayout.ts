@@ -103,6 +103,28 @@ export const PROGRAMS_RAIL_STARTER_SUGGESTIONS: readonly CommandSurfaceRailStart
     },
 ];
 
+/** Locations page — operator-facing; no configuration-engine or unpublished language. */
+export const LOCATIONS_RAIL_STARTER_SUGGESTIONS: readonly CommandSurfaceRailStarterSuggestion[] = [
+    {
+        title: "Summarize this Location",
+        description: "Explain the selected Location and what it offers",
+        prompt: "Summarize this Location",
+        icon: "summarize",
+    },
+    {
+        title: "Which Programs are offered here?",
+        description: "List active and scheduled Programs at this Location",
+        prompt: "Which Programs are offered here?",
+        icon: "missing",
+    },
+    {
+        title: "Show upcoming availability changes",
+        description: "List Programs scheduled to begin or end at this Location",
+        prompt: "Show upcoming availability changes at this Location",
+        icon: "insight",
+    },
+];
+
 /** Context-aware first starter title (presentation only — prompts unchanged). */
 export function resolveCommandSurfaceRailStarterSuggestions(args: {
     hasWorkUnitScope: boolean;
@@ -118,6 +140,13 @@ export function resolveCommandSurfaceRailStarterSuggestions(args: {
         || pathname.startsWith("/organization/programs/")
     ) {
         return PROGRAMS_RAIL_STARTER_SUGGESTIONS;
+    }
+    if (
+        pathname === "/organization/locations"
+        || pathname.startsWith("/organization/locations?")
+        || pathname.startsWith("/organization/locations/")
+    ) {
+        return LOCATIONS_RAIL_STARTER_SUGGESTIONS;
     }
     if (args.isConfigurationContext) return CONFIGURATION_RAIL_STARTER_SUGGESTIONS;
     const leadLabel =

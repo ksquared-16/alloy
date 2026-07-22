@@ -10,36 +10,37 @@ import {
     ConfigObjectHeader,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
-import {
-    serializeStaffingThresholds,
-    type StaffingThreshold,
-} from "@/lib/locations/locationWorkspaceModel";
+import { effectiveLocationProgramLabel } from "@/lib/locations/locationProgramCategories";
+import { writeRoomProgramsAndScheduleMetadata } from "@/lib/locations/roomOfferingMetadata";
+import type { SchedulePatternRow } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 import type { LocationRoomCreateInput } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
 
 export default function LocationRoomCreatePanel({
     siteLabel,
     programOptions,
-    ageUnitSelectOptions,
+    schedulePatterns,
     onCancel,
     onCreate,
 }: {
     siteLabel: string;
     programOptions: LocationProgramCategoryRow[];
-    ageUnitSelectOptions: readonly { value: string; label: string }[];
+    schedulePatterns: SchedulePatternRow[];
     onCancel: () => void;
     onCreate: (input: LocationRoomCreateInput) => Promise<void>;
 }) {
     const [label, setLabel] = useState("");
-    const [programKey, setProgramKey] = useState("");
+    const [supportedKeys, setSupportedKeys] = useState<string[]>([]);
     const [capacity, setCapacity] = useState("");
-    const [requiredStaff, setRequiredStaff] = useState("");
-    const [maxChildren, setMaxChildren] = useState("");
-    const [ageFrom, setAgeFrom] = useState("");
-    const [ageTo, setAgeTo] = useState("");
-    const [ageUnit, setAgeUnit] = useState("");
+    const [schedulePatternId, setSchedulePatternId] = useState("");
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const toggleProgram = (key: string) => {
+        setSupportedKeys((current) =>
+            current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key],
+        );
+    };
 
     return (
         <div className="space-y-3" data-testid="locations-room-create">
@@ -61,53 +62,18 @@ export default function LocationRoomCreatePanel({
             />
 
             <div className="space-y-2.5">
-                <ConfigEditorSection title="Identity" testId="locations-room-create-identity">
-                    <div className="grid gap-2.5 sm:grid-cols-2">
-                        <label className="block space-y-1">
-                            <span className="config-typo-field-label">Name</span>
-                            <input
-                                type="text"
-                                value={label}
-                                onChange={(event) => setLabel(event.target.value)}
-                                className="config-runtime-input"
-                                autoFocus
-                                data-testid="locations-room-create-name"
-                            />
-                        </label>
-                        <label className="block space-y-1">
-                            <span className="config-typo-field-label">Program</span>
-                            <select
-                                value={programKey}
-                                onChange={(event) => setProgramKey(event.target.value)}
-                                className="config-runtime-select"
-                                data-testid="locations-room-create-program"
-                            >
-                                <option value="">Not assigned yet</option>
-                                {programOptions.map((program) => (
-                                    <option key={program.id} value={program.key}>
-                                        {program.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                    </div>
-                    <label className="flex items-center gap-2">
+                <ConfigEditorSection title="Room" testId="locations-room-create-identity">
+                    <label className="block space-y-1">
+                        <span className="config-typo-field-label">Room name</span>
                         <input
-                            type="checkbox"
-                            checked={active}
-                            onChange={(event) => setActive(event.target.checked)}
-                            className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
-                            data-testid="locations-room-create-active"
+                            type="text"
+                            value={label}
+                            onChange={(event) => setLabel(event.target.value)}
+                            className="config-runtime-input"
+                            autoFocus
+                            data-testid="locations-room-create-name"
                         />
-                        <span className="config-typo-sublabel">Active room</span>
                     </label>
-                </ConfigEditorSection>
-
-                <ConfigEditorSection
-                    title="Capacity"
-                    description="How many children this room can hold."
-                    testId="locations-room-create-capacity-section"
-                >
                     <label className="block max-w-36 space-y-1">
                         <span className="config-typo-field-label">Capacity</span>
                         <input
@@ -119,79 +85,64 @@ export default function LocationRoomCreatePanel({
                             data-testid="locations-room-create-capacity"
                         />
                     </label>
+                    <label className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            checked={active}
+                            onChange={(event) => setActive(event.target.checked)}
+                            className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
+                            data-testid="locations-room-create-active"
+                        />
+                        <span className="config-typo-sublabel">Active</span>
+                    </label>
                 </ConfigEditorSection>
 
                 <ConfigEditorSection
-                    title="Staffing thresholds"
-                    description="The first staffing threshold for this room. More can be added after creation."
-                    testId="locations-room-create-staffing"
+                    title="Programs supported"
+                    description="Programs offered at this location that this room can serve."
+                    testId="locations-room-create-programs"
                 >
-                    <div className="grid max-w-md gap-2 sm:grid-cols-2">
-                        <label className="block space-y-1">
-                            <span className="config-typo-field-label">Staff members</span>
-                            <input
-                                type="number"
-                                min={1}
-                                value={requiredStaff}
-                                onChange={(event) => setRequiredStaff(event.target.value)}
-                                className="config-runtime-input"
-                                data-testid="locations-room-create-staff"
-                            />
-                        </label>
-                        <label className="block space-y-1">
-                            <span className="config-typo-field-label">Maximum children</span>
-                            <input
-                                type="number"
-                                min={1}
-                                value={maxChildren}
-                                onChange={(event) => setMaxChildren(event.target.value)}
-                                className="config-runtime-input"
-                                data-testid="locations-room-create-max-children"
-                            />
-                        </label>
-                    </div>
+                    {programOptions.length === 0 ?
+                        <p className="config-typo-sublabel">
+                            Offer Programs at this Location before assigning them to rooms.
+                        </p>
+                    :   <div className="space-y-2" data-testid="locations-room-create-program-list">
+                            {programOptions.map((program) => (
+                                <label key={program.id} className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={supportedKeys.includes(program.key)}
+                                        onChange={() => toggleProgram(program.key)}
+                                        className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
+                                        data-testid={`locations-room-create-program-${program.key}`}
+                                    />
+                                    <span className="text-sm text-alloy-midnight">
+                                        {effectiveLocationProgramLabel(program)}
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                    }
                 </ConfigEditorSection>
 
-                <ConfigEditorSection title="Age range" testId="locations-room-create-age">
-                    <div className="grid gap-2 sm:grid-cols-3">
-                        <input
-                            type="text"
-                            value={ageFrom}
-                            onChange={(event) => setAgeFrom(event.target.value)}
-                            placeholder="From"
-                            className="config-runtime-input"
-                            data-testid="locations-room-create-age-from"
-                        />
-                        <input
-                            type="text"
-                            value={ageTo}
-                            onChange={(event) => setAgeTo(event.target.value)}
-                            placeholder="To"
-                            className="config-runtime-input"
-                            data-testid="locations-room-create-age-to"
-                        />
+                <ConfigEditorSection title="Schedule pattern" testId="locations-room-create-schedule">
+                    <label className="block max-w-md space-y-1">
+                        <span className="config-typo-field-label">Pattern</span>
                         <select
-                            value={ageUnit}
-                            onChange={(event) => setAgeUnit(event.target.value)}
+                            value={schedulePatternId}
+                            onChange={(event) => setSchedulePatternId(event.target.value)}
                             className="config-runtime-select"
-                            data-testid="locations-room-create-age-unit"
+                            data-testid="locations-room-create-schedule-pattern"
                         >
-                            <option value="">Unit</option>
-                            {ageUnitSelectOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
+                            <option value="">None</option>
+                            {schedulePatterns.map((entry) => (
+                                <option key={entry.id} value={entry.id}>
+                                    {entry.label}
+                                    {!entry.is_active ? " (inactive)" : ""}
                                 </option>
                             ))}
                         </select>
-                    </div>
-                </ConfigEditorSection>
-
-                <ConfigEditorSection
-                    title="Hours / operating behavior"
-                    description="Rooms inherit the location’s recurring schedule."
-                    testId="locations-room-create-hours"
-                >
-                    <p className="text-sm text-alloy-midnight/75">Uses {siteLabel || "location"} hours</p>
+                    </label>
                 </ConfigEditorSection>
 
                 {error ?
@@ -209,33 +160,12 @@ export default function LocationRoomCreatePanel({
                                 setSaving(true);
                                 setError(null);
                                 try {
-                                    const hasPartialThreshold = Boolean(requiredStaff.trim() || maxChildren.trim());
-                                    const staffingThresholds: StaffingThreshold[] =
-                                        hasPartialThreshold ?
-                                            [{
-                                                requiredStaff: Number(requiredStaff),
-                                                maxChildren: Number(maxChildren),
-                                            }]
-                                        :   [];
-                                    if (
-                                        hasPartialThreshold &&
-                                        (!Number.isInteger(staffingThresholds[0]?.requiredStaff) ||
-                                            (staffingThresholds[0]?.requiredStaff ?? 0) <= 0 ||
-                                            !Number.isInteger(staffingThresholds[0]?.maxChildren) ||
-                                            (staffingThresholds[0]?.maxChildren ?? 0) <= 0)
-                                    ) {
-                                        throw new Error("Complete both staffing threshold values.");
-                                    }
-                                    const metadata: Record<string, unknown> = {};
-                                    if (programKey.trim()) metadata.category = programKey.trim();
-                                    if (capacity.trim()) metadata.capacity = capacity.trim();
-                                    if (ageFrom.trim()) metadata.age_range_from = ageFrom.trim();
-                                    if (ageTo.trim()) metadata.age_range_to = ageTo.trim();
-                                    if (ageUnit.trim()) metadata.age_range_unit = ageUnit.trim();
-                                    if (staffingThresholds.length > 0) {
-                                        metadata.student_teacher_ratio =
-                                            serializeStaffingThresholds(staffingThresholds);
-                                    }
+                                    const metadata = writeRoomProgramsAndScheduleMetadata({
+                                        existing: {},
+                                        supportedProgramKeys: supportedKeys,
+                                        schedulePatternId: schedulePatternId || null,
+                                        capacity: capacity.trim() || null,
+                                    });
                                     await onCreate({
                                         label: label.trim(),
                                         is_active: active,

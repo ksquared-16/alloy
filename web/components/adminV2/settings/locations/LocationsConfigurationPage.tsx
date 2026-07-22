@@ -20,7 +20,7 @@ import {
     ConfigScopeContextBar,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import LocationAddProgramPanel from "@/components/adminV2/settings/locations/LocationAddProgramPanel";
-import LocationProgramDetailPanel from "@/components/adminV2/settings/locations/LocationProgramDetailPanel";
+import LocationProgramsOfferedPanel from "@/components/adminV2/settings/locations/LocationProgramsOfferedPanel";
 import LocationRoomCreatePanel from "@/components/adminV2/settings/locations/LocationRoomCreatePanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
 import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
@@ -44,7 +44,6 @@ import { readLocationMetadataPresentation } from "@/lib/admin/location/locationM
 import { buildLocationsRailActions } from "@/lib/locations/buildLocationsRailActions";
 import {
     buildLocationWorkspaceModel,
-    buildLocationProgramOperationalSummaries,
     buildLocationsCollectionModel,
     LOCATION_WORKSPACE_TABS,
     locationsLandingHref,
@@ -67,6 +66,7 @@ import {
 import { invalidateLocationsCollection } from "@/lib/locations/locationsCollectionCache";
 import { invalidateProgramsCollection } from "@/lib/programs/programsCollectionCache";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
+import { formatSchedulePatternSummary } from "@/lib/locations/schedulePatternPresentation";
 
 export default function LocationsConfigurationPage({
     initialLocationId = null,
@@ -127,7 +127,6 @@ export default function LocationsConfigurationPage({
         refreshPrograms,
         roomCapacitySummaryForSite,
         programOptionsForSite,
-        ageUnitSelectOptions,
         setSchedulePatterns,
     } = useLocationsConfigurationSettings({
         initialLocationId,
@@ -245,16 +244,7 @@ export default function LocationsConfigurationPage({
             selectedScheduleId
         :   (selectedSchedules[0]?.id ?? null);
     const selectedRoom = selectedRooms.find((room) => room.id === effectiveRoomId) ?? null;
-    const selectedProgram = selectedPrograms.find((program) => program.id === effectiveProgramId) ?? null;
     const selectedSchedule = selectedSchedules.find((schedule) => schedule.id === effectiveScheduleId) ?? null;
-    const programSummaries = useMemo(
-        () =>
-            buildLocationProgramOperationalSummaries({
-                programs: selectedPrograms,
-                rooms: selectedRooms,
-            }),
-        [selectedPrograms, selectedRooms],
-    );
 
     // After in-context assign/create, select the Location LPC tied to the Organization program.
     useEffect(() => {
@@ -553,73 +543,60 @@ export default function LocationsConfigurationPage({
             );
         }
         if (activeTab === "programs") {
+            if (creatingProgram && selectedSite) {
+                return (
+                    <LocationAddProgramPanel
+                        activeLocationId={selectedSite.id}
+                        activeLocationLabel={model?.displayName ?? selectedSite.label ?? ""}
+                        locations={siteRows
+                            .filter((site) => site.is_active !== false)
+                            .map((site) => ({
+                                id: site.id,
+                                label: site.label?.trim() || siteLabelById.get(site.id) || "Location",
+                            }))}
+                        associatedProgramIds={
+                            new Set(
+                                selectedPrograms
+                                    .map((row) => String(row.program_id ?? "").trim())
+                                    .filter(Boolean),
+                            )
+                        }
+                        associatedProgramKeys={
+                            new Set(
+                                selectedPrograms
+                                    .map((row) => String(row.key ?? "").trim())
+                                    .filter(Boolean),
+                            )
+                        }
+                        onCancel={() => setCreatingProgram(false)}
+                        onComplete={async ({ programId }) => {
+                            setCreatingProgram(false);
+                            if (orgId) {
+                                invalidateProgramsCollection(orgId, "program-make-available", {
+                                    publishBus: true,
+                                });
+                                invalidateLocationsCollection(orgId, "program-make-available", {
+                                    publishBus: true,
+                                });
+                            }
+                            if (programId) {
+                                setPendingAssociatedProgramId(programId);
+                            }
+                            await refreshPrograms();
+                        }}
+                    />
+                );
+            }
             return (
-                <LocationProgramDetailPanel
-                    program={creatingProgram ? null : selectedProgram}
-                    summary={
-                        creatingProgram ? null : (
-                            programSummaries.find((summary) => summary.id === effectiveProgramId) ?? null
-                        )
-                    }
-                    summaries={programSummaries}
-                    siteLabel={model?.displayName ?? ""}
-                    locationHasSchedule={selectedSchedules.length > 0}
-                    scheduleSummary={scheduleSummary}
+                <LocationProgramsOfferedPanel
+                    orgId={orgId}
+                    locationId={selectedSite.id}
+                    locationLabel={model?.displayName ?? selectedSite.label ?? ""}
+                    offerings={selectedPrograms}
                     canMutate={canMutate}
-                    onSave={patchProgramCategory}
-                    programs={selectedPrograms}
-                    selectedProgramId={creatingProgram ? null : effectiveProgramId}
-                    onSelectProgram={(programId) => {
-                        setCreatingProgram(false);
-                        setSelectedProgramId(programId);
-                        navigate("programs", programId);
-                    }}
+                    onPatchOffering={patchProgramCategory}
+                    onRefresh={refreshPrograms}
                     onAddProgram={canMutate ? addProgram : undefined}
-                    ageUnitSelectOptions={ageUnitSelectOptions}
-                    createDetail={
-                        creatingProgram && selectedSite ?
-                            <LocationAddProgramPanel
-                                activeLocationId={selectedSite.id}
-                                activeLocationLabel={model?.displayName ?? selectedSite.label ?? ""}
-                                locations={siteRows
-                                    .filter((site) => site.is_active !== false)
-                                    .map((site) => ({
-                                        id: site.id,
-                                        label: site.label?.trim() || siteLabelById.get(site.id) || "Location",
-                                    }))}
-                                associatedProgramIds={
-                                    new Set(
-                                        selectedPrograms
-                                            .map((row) => String(row.program_id ?? "").trim())
-                                            .filter(Boolean),
-                                    )
-                                }
-                                associatedProgramKeys={
-                                    new Set(
-                                        selectedPrograms
-                                            .map((row) => String(row.key ?? "").trim())
-                                            .filter(Boolean),
-                                    )
-                                }
-                                onCancel={() => setCreatingProgram(false)}
-                                onComplete={async ({ programId }) => {
-                                    setCreatingProgram(false);
-                                    if (orgId) {
-                                        invalidateProgramsCollection(orgId, "program-make-available", {
-                                            publishBus: true,
-                                        });
-                                        invalidateLocationsCollection(orgId, "program-make-available", {
-                                            publishBus: true,
-                                        });
-                                    }
-                                    if (programId) {
-                                        setPendingAssociatedProgramId(programId);
-                                    }
-                                    await refreshPrograms();
-                                }}
-                            />
-                        :   undefined
-                    }
                 />
             );
         }
@@ -629,7 +606,7 @@ export default function LocationsConfigurationPage({
                     room={selectedRoom}
                     siteLabel={model?.displayName ?? ""}
                     programOptions={programOptionsForSite(selectedSite.id)}
-                    ageUnitSelectOptions={ageUnitSelectOptions}
+                    schedulePatterns={selectedSchedules}
                     canMutate={canMutate}
                     onSave={patchLocation}
                     rooms={selectedRooms}
@@ -639,14 +616,12 @@ export default function LocationsConfigurationPage({
                         navigate("rooms", roomId);
                     }}
                     onAddRoom={canMutate ? addRoom : undefined}
-                    locationHasSchedule={selectedSchedules.length > 0}
-                    scheduleSummary={scheduleSummary}
                     createDetail={
                         creatingRoom ?
                             <LocationRoomCreatePanel
                                 siteLabel={model?.displayName ?? ""}
                                 programOptions={programOptionsForSite(selectedSite.id)}
-                                ageUnitSelectOptions={ageUnitSelectOptions}
+                                schedulePatterns={selectedSchedules}
                                 onCancel={() => setCreatingRoom(false)}
                                 onCreate={async (input) => {
                                     const newId = await createRoomUnit(selectedSite.id, input);
@@ -691,7 +666,14 @@ export default function LocationsConfigurationPage({
                                             active={selected}
                                             muted={!schedule.is_active}
                                             title={schedule.label}
-                                            subtitle={`${schedule.is_active ? "Active" : "Inactive"} · ${formatWeekdaySelection(schedule.weekdays)}`}
+                                            subtitle={`${schedule.is_active ? "Active" : "Inactive"} · ${formatSchedulePatternSummary(
+                                                {
+                                                    label: schedule.label,
+                                                    scheduleTypeKey: schedule.schedule_type_key,
+                                                    weekdays: schedule.weekdays,
+                                                    metadata: schedule.metadata ?? null,
+                                                },
+                                            )}`}
                                             leading={
                                                 <span
                                                     className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
@@ -747,31 +729,6 @@ export default function LocationsConfigurationPage({
                                 />
                         }
                     />
-
-                    <section className="process-config-setup-card p-4" data-testid="locations-schedule-closures">
-                        <div className="flex items-start justify-between gap-3">
-                            <div>
-                                <h3 className="config-typo-workspace-title">Closures and exceptions</h3>
-                                <p className="config-typo-sublabel mt-1">
-                                    Date-specific changes stay distinct from recurring weekly patterns.
-                                </p>
-                            </div>
-                            <ConfigurationSecondaryButton
-                                disabled
-                                title="Closure records are not available in the current schedule provider."
-                                data-testid="locations-schedule-add-closure"
-                            >
-                                Add closure
-                            </ConfigurationSecondaryButton>
-                        </div>
-                        <div className="mt-4 rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.035] px-3 py-3">
-                            <p className="text-sm font-medium text-alloy-midnight">No closure provider available</p>
-                            <p className="config-typo-sublabel mt-1">
-                                Add Closure is unavailable until date-specific exceptions have an authoritative
-                                persistence source.
-                            </p>
-                        </div>
-                    </section>
                 </div>
             );
         }

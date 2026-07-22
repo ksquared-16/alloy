@@ -157,6 +157,7 @@ export async function createSchedulePattern(input: {
     weekdays: number[];
     sort_order?: number;
     is_active?: boolean;
+    metadata?: Record<string, unknown>;
 }): Promise<SchedulePatternRow> {
     const res = await fetch("/api/admin/schedule-patterns", {
         method: "POST",
@@ -178,6 +179,7 @@ export async function patchSchedulePattern(
         weekdays: number[];
         sort_order: number;
         is_active: boolean;
+        metadata: Record<string, unknown>;
     }>
 ): Promise<SchedulePatternRow> {
     const res = await fetch(`/api/admin/schedule-patterns/${patternId}`, {
