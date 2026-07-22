@@ -33,9 +33,9 @@ const EXEC_TIMEOUT_MS = 60000;
 const MAX_BUFFER = 4 * 1024 * 1024;
 const truncate = (s, n = 4000) => (typeof s === "string" && s.length > n ? s.slice(0, n) + "…[truncated]" : s || "");
 
-function runCli(binPath, argv) {
+function runCli(binPath, argv, cwd = TOOLKIT_DIR) {
   return new Promise((res) => {
-    execFile(binPath, argv, { timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, cwd: TOOLKIT_DIR, env: process.env, shell: false }, (err, stdout, stderr) => {
+    execFile(binPath, argv, { timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, cwd, env: process.env, shell: false }, (err, stdout, stderr) => {
       res({ exit: err ? (typeof err.code === "number" ? err.code : 1) : 0, stdout: stdout ?? "", stderr: stderr ?? "", timedOut: Boolean(err && err.killed) });
     });
   });
@@ -118,7 +118,9 @@ export async function runCommand(req, ctx) {
       return { ok: false, stage: "execute", code: "binary_missing", command: def.key, bin: def.bin };
     }
     const argv = def.buildArgv(value, snapshot);
-    const r = await runCli(binPath, argv);
+    // gh (unlike git) has no -C flag; a command may set its spawn cwd instead.
+    const runCwd = def.cwd ? def.cwd(value, snapshot) : TOOLKIT_DIR;
+    const r = await runCli(binPath, argv, runCwd || TOOLKIT_DIR);
     ok = r.exit === 0;
     result = { kind: "cli", bin: def.bin, args: argv, exit: r.exit, stdout: truncate(r.stdout), stderr: truncate(r.stderr), timed_out: r.timedOut };
   }

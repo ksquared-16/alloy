@@ -428,8 +428,18 @@ const COMMANDS = {
 // real fixed-argv adapters. NOT executed during QA (preview only) per safety.
 // --------------------------------------------------------------------------
 const branchOf = (snap, slot) => sprintBySlot(snap, slot)?.branch || null;
+const wtPath = (snap, slot) => `${process.env.HOME}/Code/alloy-worktrees/${sprintBySlot(snap, slot)?.worktree}`;
 
 Object.assign(COMMANDS, {
+  "repository.commit": {
+    key: "repository.commit", title: "Commit", risk: "consequential", execution: "cli", bin: "git", confirmation: "required",
+    input: { slot: { type: "slot", required: true }, message: { type: "text", required: true }, allow_empty: { type: "bool" } },
+    buildArgv: (v, snap) => ["-C", `${process.env.HOME}/Code/alloy-worktrees/${sprintBySlot(snap, v.slot)?.worktree}`, "commit", ...(v.allow_empty ? ["--allow-empty"] : ["-a"]), "-m", v.message],
+    resolveTarget: (v, snap) => target("repository", `commit on ${branchOf(snap, v.slot)}`, { slot: v.slot }),
+    eligibility: (t, snap, v) => (sprintBySlot(snap, v.slot) ? { eligible: true } : { eligible: false, reason: "slot not occupied" }),
+    preview: (v, t, snap) => ({ summary: `Create a commit on ${branchOf(snap, v.slot)}.`, authoritative_target: `git commit ${v.allow_empty ? "--allow-empty " : "-a "}-m "${v.message}"`, effects: [v.allow_empty ? "Creates an empty commit (no file changes) — safe for fixture certification." : "Commits all tracked changes in the worktree.", "Local only — does not push."] }),
+    refresh: ["snapshot"],
+  },
   "repository.push": {
     key: "repository.push", title: "Push branch", risk: "consequential", execution: "cli", bin: "git", confirmation: "required",
     input: { slot: { type: "slot", required: true } },
@@ -442,7 +452,8 @@ Object.assign(COMMANDS, {
   "promotion.open_pr": {
     key: "promotion.open_pr", title: "Open pull request (draft)", risk: "consequential", execution: "cli", bin: "gh", confirmation: "required",
     input: { slot: { type: "slot", required: true }, title: { type: "text", required: true } },
-    buildArgv: (v, snap) => ["-C", `${process.env.HOME}/Code/alloy-worktrees/${sprintBySlot(snap, v.slot)?.worktree}`, "pr", "create", "--draft", "--base", "staging", "--head", branchOf(snap, v.slot), "--title", v.title, "--body", "Opened from Vacilando control plane (draft; human review required)."],
+    cwd: (v, snap) => wtPath(snap, v.slot),
+    buildArgv: (v, snap) => ["pr", "create", "--draft", "--base", "staging", "--head", branchOf(snap, v.slot), "--title", v.title, "--body", "Opened from Vacilando control plane (draft; human review required)."],
     resolveTarget: (v, snap) => target("repository", `PR for ${branchOf(snap, v.slot)}`, { slot: v.slot }),
     eligibility: (t, snap, v) => (sprintBySlot(snap, v.slot) ? { eligible: true } : { eligible: false, reason: "slot not occupied" }),
     preview: (v, t, snap) => ({ summary: `Open a DRAFT PR: ${branchOf(snap, v.slot)} → staging.`, authoritative_target: `gh pr create --draft --base staging --head ${branchOf(snap, v.slot)}`, effects: ["Creates a draft pull request via the authenticated gh CLI.", "Draft only — not marked ready, not merged. Human review + explicit merge required."] }),
@@ -451,10 +462,21 @@ Object.assign(COMMANDS, {
   "merge.execute": {
     key: "merge.execute", title: "Merge pull request", risk: "consequential", execution: "cli", bin: "gh", confirmation: "required",
     input: { slot: { type: "slot", required: true } },
-    buildArgv: (v, snap) => ["-C", `${process.env.HOME}/Code/alloy-worktrees/${sprintBySlot(snap, v.slot)?.worktree}`, "pr", "merge", "--merge"],
+    cwd: (v, snap) => wtPath(snap, v.slot),
+    buildArgv: (v, snap) => ["pr", "merge", branchOf(snap, v.slot), "--merge"],
     resolveTarget: (v, snap) => target("repository", `merge PR for ${branchOf(snap, v.slot)}`, { slot: v.slot }),
     eligibility: (t, snap, v) => (sprintBySlot(snap, v.slot) ? { eligible: true } : { eligible: false, reason: "slot not occupied" }),
     preview: (v, t, snap) => ({ summary: `Merge the PR for ${branchOf(snap, v.slot)} into its base.`, authoritative_target: `gh pr merge --merge`, effects: ["Merges the pull request via gh (respects branch protection + required checks).", "Release/merge is never auto-approved — this requires your explicit confirmation."] }),
+    refresh: ["snapshot"],
+  },
+  "promotion.close_pr": {
+    key: "promotion.close_pr", title: "Close pull request", risk: "consequential", execution: "cli", bin: "gh", confirmation: "required",
+    input: { slot: { type: "slot", required: true } },
+    cwd: (v, snap) => wtPath(snap, v.slot),
+    buildArgv: (v, snap) => ["pr", "close", branchOf(snap, v.slot)],
+    resolveTarget: (v, snap) => target("repository", `close PR for ${branchOf(snap, v.slot)}`, { slot: v.slot }),
+    eligibility: (t, snap, v) => (sprintBySlot(snap, v.slot) ? { eligible: true } : { eligible: false, reason: "slot not occupied" }),
+    preview: (v, t, snap) => ({ summary: `Close the PR for ${branchOf(snap, v.slot)} WITHOUT merging.`, authoritative_target: `gh pr close ${branchOf(snap, v.slot)}`, effects: ["Closes the pull request without merging (no code lands).", "Safe for certification — nothing is promoted."] }),
     refresh: ["snapshot"],
   },
   "worktree.delete": {

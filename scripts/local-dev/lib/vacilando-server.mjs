@@ -187,7 +187,7 @@ export function createVacilandoServer() {
       const mode = path.endsWith("/preview") ? "preview" : "execute";
       const snapshot = await snapshotSafe();
       const out = await runCommand(
-        { command: body.value.command, input: body.value.input, confirm: body.value.confirm === true, mode, actor: body.value.actor || "operator" },
+        { command: body.value.command, input: body.value.input, confirm: body.value.confirm === true, confirm_text: body.value.confirm_text, mode, actor: body.value.actor || "operator" },
         { snapshot, refresh: forceSnapshot },
       );
       if (mode === "execute" && out.snapshot) broadcast(out.snapshot);
