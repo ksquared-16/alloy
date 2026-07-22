@@ -12,6 +12,7 @@ import { resolveOpportunityTourScheduleFromTruth } from "./resolveOpportunityTou
 import type { CurrentWorkActionVM } from "./currentWorkSurfaceTypes";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { prefetchTourSchedule } from "@/lib/tours/tourScheduleWarmCache";
+import { prefetchActiveDrawerFamilyWorkspace } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 
 /** Warm the data a single action's capability host will need, from operator intent. Best-effort. */
 export function warmCurrentWorkCapabilityOnIntent(
@@ -21,6 +22,12 @@ export function warmCurrentWorkCapabilityOnIntent(
     if (typeof window === "undefined") return;
     const surface = resolveCurrentWorkActionSurface(action);
     switch (surface) {
+        case "communications_composer": {
+            // The communication capability's host — warm the family workspace VM (recipients, thread,
+            // channel) so the composer opens with content instead of "Loading conversation…".
+            prefetchActiveDrawerFamilyWorkspace("opportunities", context.subject.id);
+            return;
+        }
         case "inline_form": {
             // The scheduling capability's declared host — warm bookings + availability + rules.
             const tour = resolveOpportunityTourScheduleFromTruth(context.truth);

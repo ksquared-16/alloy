@@ -90,8 +90,23 @@ test("whats-next review — buttons, owner nav, composer footer, instant tour", 
     // 3) Message composer — Send later + BOS Assist present.
     const msgBtn = card.locator('button', { hasText: /^Message$/ }).first();
     if (await msgBtn.count()) {
+        const msgClickAt = Date.now();
         await msgBtn.click({ timeout: 10_000 }).catch(() => {});
-        await page.waitForTimeout(2500);
+        // Measure time to a usable composer (recipient/compose visible) + whether the loading gate showed.
+        let composerReadyAt = 0;
+        let loadingSeen = false;
+        const msgPollEnd = Date.now() + 8000;
+        while (Date.now() < msgPollEnd) {
+            const t = (await page.locator('.alloy-os-currentwork__composer-host').first().innerText().catch(() => "")) as string;
+            if (/Loading conversation|once this record loads/i.test(t)) loadingSeen = true;
+            if (/Email|Write a new message|Add another email|Send/i.test(t)) { composerReadyAt = Date.now(); break; }
+            await page.waitForTimeout(120);
+        }
+        proof.message = {
+            clickToComposerMs: composerReadyAt ? composerReadyAt - msgClickAt : null,
+            loadingConversationShown: loadingSeen,
+        };
+        await page.waitForTimeout(1200);
         const composerText = (await page.locator('[data-work-action-surface="communications_composer"], .alloy-os-currentwork__composer-host').first().innerText().catch(() => "")) as string;
         const hostBox = await page.locator('.alloy-os-currentwork__composer-host').first().boundingBox().catch(() => null);
         const laterBox = await page.locator('[aria-label="Send later"]').first().boundingBox().catch(() => null);

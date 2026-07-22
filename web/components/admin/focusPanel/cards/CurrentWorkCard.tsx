@@ -37,7 +37,10 @@ import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContex
 import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
 import { stageWorkOutcomeEffectLines } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
-import { warmCurrentWorkCapabilitiesForActions } from "@/lib/adminV2/runtime/focusPanel/currentWork/warmCurrentWorkCapabilities";
+import {
+    warmCurrentWorkCapabilitiesForActions,
+    warmCurrentWorkCapabilityOnIntent,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/warmCurrentWorkCapabilities";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -230,6 +233,13 @@ export default function CurrentWorkCard({
             });
         }
     };
+
+    // Warm a capability's data on hover/focus of its action (extra lead time before the click) so the
+    // host opens with content already in hand. Keyed on the capability host — no action-name branching.
+    const warmAction = useCallback(
+        (action: CurrentWorkActionVM) => warmCurrentWorkCapabilityOnIntent(action, context),
+        [context],
+    );
 
     const invokeAction = (action: CurrentWorkActionVM) => {
         const plan = planCurrentWorkActionExecution(action);
@@ -424,6 +434,7 @@ export default function CurrentWorkCard({
             activityItems={activityPreviewItems}
             onChecklistItem={handleChecklistItem}
             onAction={invokeAction}
+            onWarm={warmAction}
             onSelectOutcome={(key) => {
                 clearError();
                 setPendingOutcomeKey(key);
@@ -478,6 +489,7 @@ export default function CurrentWorkCard({
                 surface={surface}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
+                onWarm={warmAction}
             />;
 
     // Shared hosted-capability mode: when a capability panel is active in the focused card, What's
@@ -524,10 +536,12 @@ function SummaryBody({
     surface,
     onChecklistItem,
     onAction,
+    onWarm,
 }: {
     surface: CurrentWorkSurfaceVM;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
+    onWarm: (action: CurrentWorkActionVM) => void;
 }) {
     // ONE shared derivation so the summary and the focused "View details" surface show the SAME
     // buttons — a dominant command (or outcome when outcome-led), two helpful actions, and Record
@@ -550,6 +564,8 @@ function SummaryBody({
                             data-work-primary-action={dominant.key}
                             data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
                             onClick={() => onAction(dominant)}
+                            onMouseEnter={() => onWarm(dominant)}
+                            onFocus={() => onWarm(dominant)}
                         >
                             {dominant.label}
                         </button>
@@ -560,6 +576,8 @@ function SummaryBody({
                                 className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
                                 data-work-supporting-action={action.key}
                                 onClick={() => onAction(action)}
+                                onMouseEnter={() => onWarm(action)}
+                                onFocus={() => onWarm(action)}
                             >
                                 {action.label}
                             </button>

@@ -47,6 +47,7 @@ type Props = {
     activityItems: CurrentWorkActivityPreviewItem[];
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
+    onWarm: (action: CurrentWorkActionVM) => void;
     onSelectOutcome: (outcomeKey: string) => void;
     onCancelOutcome: () => void;
     onConfirmOutcome: () => void;
@@ -65,6 +66,7 @@ export default function CurrentWorkFocusedSurface({
     activityItems,
     onChecklistItem,
     onAction,
+    onWarm,
     onSelectOutcome,
     onCancelOutcome,
     onConfirmOutcome,
@@ -209,6 +211,8 @@ export default function CurrentWorkFocusedSurface({
                                     data-work-primary-action={dominant.key}
                                     data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
                                     onClick={() => onActionButton(dominant)}
+                                    onMouseEnter={() => onWarm(dominant)}
+                                    onFocus={() => onWarm(dominant)}
                                 >
                                     {dominant.label}
                                 </button>
@@ -220,6 +224,8 @@ export default function CurrentWorkFocusedSurface({
                                     className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
                                     data-work-supporting-action={action.key}
                                     onClick={() => onActionButton(action)}
+                                    onMouseEnter={() => onWarm(action)}
+                                    onFocus={() => onWarm(action)}
                                 >
                                     {action.label}
                                 </button>
