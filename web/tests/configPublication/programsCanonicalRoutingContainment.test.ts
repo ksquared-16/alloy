@@ -25,10 +25,13 @@ describe("Programs workspace (Programs-only; Financials owns tool chapters)", ()
             "utf8",
         );
         const workspace = readFileSync(
-            resolve(process.cwd(), "components/adminV2/settings/programs/ProgramsPublicationWorkspace.tsx"),
+            resolve(process.cwd(), "components/adminV2/settings/programs/ProgramsConfigurationPage.tsx"),
             "utf8",
         );
         expect(page).toContain("organizationFinancialsChapterHref");
+        expect(page).toContain("ProgramsConfigurationPage");
         expect(workspace).not.toContain("ProgramsWorkspaceChapterSurface");
+        expect(workspace).not.toContain("Tuition");
+        expect(workspace).not.toContain("Delivery Options");
     });
 });

@@ -70,7 +70,7 @@ describe("Organization IA — Programs & Locations domain", () => {
         expect(read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx")).toContain(
             "locations-breadcrumb-programs-locations",
         );
-        expect(read("components/adminV2/settings/programs/ProgramsPublicationWorkspace.tsx")).toContain(
+        expect(read("components/adminV2/settings/programs/ProgramsConfigurationPage.tsx")).toContain(
             "programs-breadcrumb-programs-locations",
         );
     });

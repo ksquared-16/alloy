@@ -32,14 +32,18 @@ describe("Configuration Object Runtime — composition wiring", () => {
         // Harness must not enter operator Configuration Mode nav.
         expect(nav).not.toContain("configuration-object-harness");
         expect(nav).not.toContain("/dev/configuration-object-harness");
-        // Programs adopts ConfigurationObjectWorkspace inside ProgramsPublicationWorkspace.
-        expect(programsPage).toContain("ProgramsPublicationWorkspace");
+        // Programs product page uses the simplified operator surface (not ConfigurationObjectWorkspace tabs).
+        expect(programsPage).toContain("ProgramsConfigurationPage");
+        expect(programsPage).not.toContain("ProgramsPublicationWorkspace");
         const programsWorkspace = read(
-            "components/adminV2/settings/programs/ProgramsPublicationWorkspace.tsx",
+            "components/adminV2/settings/programs/ProgramsConfigurationPage.tsx",
         );
-        expect(programsWorkspace).toContain("ConfigurationObjectWorkspace");
-        expect(programsWorkspace).toContain("resolveProgramsSelection");
+        expect(programsWorkspace).toContain("ProgramsObjectSelector");
+        expect(programsWorkspace).toContain("ProgramSelectedWorkspace");
         expect(programsWorkspace).toContain("loadProgramsCollection");
+        expect(programsWorkspace).not.toContain("ConfigOperationalReadiness");
+        expect(programsWorkspace).not.toContain("Delivery Options");
+        expect(programsWorkspace).not.toContain("readiness");
     });
 
     it("keeps Programs adoption descriptor for Configuration Object Runtime", () => {

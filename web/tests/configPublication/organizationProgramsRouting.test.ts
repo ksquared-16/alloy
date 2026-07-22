@@ -51,10 +51,10 @@ describe("Organization Programs canonical routing", () => {
             resolve(process.cwd(), "app/adminV2/commercial/programs/page.tsx"),
             "utf8",
         );
-        expect(canonical).toContain("ProgramsPublicationWorkspace");
+        expect(canonical).toContain("ProgramsConfigurationPage");
         expect(legacySettings).toContain("redirect(organizationProgramsHref())");
         expect(legacyCommercial).toContain("redirect(organizationProgramsHref())");
-        expect(legacySettings).not.toContain("<ProgramsPublicationWorkspace");
-        expect(legacyCommercial).not.toContain("<ProgramsPublicationWorkspace");
+        expect(legacySettings).not.toContain("<ProgramsConfigurationPage");
+        expect(legacyCommercial).not.toContain("<ProgramsConfigurationPage");
     });
 });

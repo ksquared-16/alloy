@@ -491,7 +491,7 @@ export default function LocationProgramDetailPanel({
                         <ConfigurationSecondaryButton
                             onClick={() => {
                                 const href = program.program_id
-                                    ? `/organization/programs?programId=${encodeURIComponent(program.program_id)}&section=definition`
+                                    ? `/organization/programs?programId=${encodeURIComponent(program.program_id)}`
                                     : "/organization/programs";
                                 window.location.assign(href);
                             }}

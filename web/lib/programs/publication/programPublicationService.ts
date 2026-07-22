@@ -1028,3 +1028,209 @@ export async function retryProgramDistribution(input: {
         locationIds,
     });
 }
+
+async function loadProgramIdentityRow(
+    supabase: SupabaseClient,
+    orgId: string,
+    programId: string,
+): Promise<DbRow> {
+    const { data, error } = await supabase
+        .from("programs")
+        .select("id, org_id, program_key, lifecycle_status, retired_at")
+        .eq("org_id", orgId)
+        .eq("id", programId)
+        .maybeSingle();
+    assertNoError(error, "Load Program");
+    if (!data) throw new Error("Program not found.");
+    return data as DbRow;
+}
+
+/** Archive (retire) — operator Archive Program. */
+export async function retireProgram(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    actorUserId: string;
+    programId: string;
+}): Promise<void> {
+    await loadProgramIdentityRow(input.supabase, input.orgId, input.programId);
+    const { error } = await input.supabase
+        .from("programs")
+        .update({
+            lifecycle_status: "retired",
+            retired_at: new Date().toISOString(),
+        })
+        .eq("org_id", input.orgId)
+        .eq("id", input.programId);
+    assertNoError(error, "Archive Program");
+}
+
+/** Restore an archived Program. */
+export async function restoreProgram(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    actorUserId: string;
+    programId: string;
+}): Promise<void> {
+    await loadProgramIdentityRow(input.supabase, input.orgId, input.programId);
+    const { error } = await input.supabase
+        .from("programs")
+        .update({
+            lifecycle_status: "active",
+            retired_at: null,
+        })
+        .eq("org_id", input.orgId)
+        .eq("id", input.programId);
+    assertNoError(error, "Restore Program");
+}
+
+export type ProgramDeleteEligibility = {
+    allowed: boolean;
+    reason: string | null;
+};
+
+export async function evaluateProgramDeleteEligibility(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    programId: string;
+}): Promise<ProgramDeleteEligibility> {
+    await loadProgramIdentityRow(input.supabase, input.orgId, input.programId);
+
+    const { count: revisionCount, error: revisionError } = await input.supabase
+        .from("program_revisions")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", input.orgId)
+        .eq("program_id", input.programId);
+    assertNoError(revisionError, "Check Program history");
+    if ((revisionCount ?? 0) > 0) {
+        return {
+            allowed: false,
+            reason: "This Program is already in use and its history must be preserved.",
+        };
+    }
+
+    const { count: lpcCount, error: lpcError } = await input.supabase
+        .from("location_program_categories")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", input.orgId)
+        .eq("program_id", input.programId);
+    assertNoError(lpcError, "Check Program Locations");
+    if ((lpcCount ?? 0) > 0) {
+        return {
+            allowed: false,
+            reason: "This Program is already in use and its history must be preserved.",
+        };
+    }
+
+    return { allowed: true, reason: null };
+}
+
+/** Hard delete — only when never published and not associated to Locations. */
+export async function deleteProgram(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    actorUserId: string;
+    programId: string;
+}): Promise<void> {
+    const eligibility = await evaluateProgramDeleteEligibility(input);
+    if (!eligibility.allowed) {
+        throw new Error(eligibility.reason ?? "This Program cannot be deleted.");
+    }
+
+    const { error: draftError } = await input.supabase
+        .from("program_drafts")
+        .delete()
+        .eq("org_id", input.orgId)
+        .eq("program_id", input.programId);
+    assertNoError(draftError, "Delete Program draft");
+
+    const { error } = await input.supabase
+        .from("programs")
+        .delete()
+        .eq("org_id", input.orgId)
+        .eq("id", input.programId);
+    assertNoError(error, "Delete Program");
+}
+
+export type ProgramLocationRemovalResult = {
+    removedLocationIds: string[];
+    blocked: Array<{ locationId: string; locationLabel: string; reason: string }>;
+};
+
+/**
+ * Remove Program↔Location associations when safe.
+ * Blocks removal when enrollment/opportunity members still reference the LPC row.
+ */
+export async function removeProgramLocationAssociations(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    programId: string;
+    locationIds: readonly string[];
+    allowedSiteLocationIds: string[] | null;
+}): Promise<ProgramLocationRemovalResult> {
+    await loadProgramIdentityRow(input.supabase, input.orgId, input.programId);
+    const requested = [...new Set(input.locationIds.map(String).map((id) => id.trim()).filter(Boolean))];
+    if (requested.length === 0) {
+        return { removedLocationIds: [], blocked: [] };
+    }
+
+    let lpcQuery = input.supabase
+        .from("location_program_categories")
+        .select("id, location_id")
+        .eq("org_id", input.orgId)
+        .eq("program_id", input.programId)
+        .in("location_id", requested);
+    if (input.allowedSiteLocationIds != null) {
+        lpcQuery = lpcQuery.in("location_id", input.allowedSiteLocationIds);
+    }
+    const { data: lpcRows, error: lpcError } = await lpcQuery;
+    assertNoError(lpcError, "Load Program Locations");
+
+    const rows = (lpcRows ?? []) as Array<{ id: string; location_id: string }>;
+    const locationIds = rows.map((row) => stringValue(row.location_id)).filter(Boolean);
+    const labelById = new Map<string, string>();
+    if (locationIds.length > 0) {
+        const { data: locationRows, error: locationError } = await input.supabase
+            .from("locations")
+            .select("id, label")
+            .eq("org_id", input.orgId)
+            .in("id", locationIds);
+        assertNoError(locationError, "Load Location labels");
+        for (const location of (locationRows ?? []) as DbRow[]) {
+            labelById.set(stringValue(location.id), stringValue(location.label) || "Location");
+        }
+    }
+
+    const removedLocationIds: string[] = [];
+    const blocked: ProgramLocationRemovalResult["blocked"] = [];
+
+    for (const row of rows) {
+        const locationId = stringValue(row.location_id);
+        const locationLabel = labelById.get(locationId) ?? "Location";
+
+        const { count, error: usageError } = await input.supabase
+            .from("opportunity_customer_members")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", input.orgId)
+            .eq("program_category_id", row.id);
+        assertNoError(usageError, "Check Location Program use");
+
+        if ((count ?? 0) > 0) {
+            blocked.push({
+                locationId,
+                locationLabel,
+                reason: `This Program cannot be removed from ${locationLabel} because it has active enrollments.`,
+            });
+            continue;
+        }
+
+        const { error: deleteError } = await input.supabase
+            .from("location_program_categories")
+            .delete()
+            .eq("org_id", input.orgId)
+            .eq("id", row.id);
+        assertNoError(deleteError, "Remove Program from Location");
+        removedLocationIds.push(locationId);
+    }
+
+    return { removedLocationIds, blocked };
+}
