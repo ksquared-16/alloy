@@ -13,6 +13,10 @@ import {
     updateProgramDraft,
     validateProgramDraft,
 } from "@/lib/programs/publication/programPublicationService";
+import {
+    commitMakeProgramAvailable,
+    previewMakeProgramAvailable,
+} from "@/lib/programs/commands/makeProgramAvailable";
 
 type ActionBody = {
     action?: string;
@@ -21,7 +25,19 @@ type ActionBody = {
     runId?: string;
     key?: string;
     label?: string;
+    description?: string | null;
     targetIds?: string[];
+    locationIds?: string[];
+    originatingLocationId?: string;
+    idempotencyKey?: string;
+    entryPoint?: "organization_program" | "location" | "unknown";
+    program?: {
+        kind?: "existing" | "new";
+        programId?: string;
+        publicationId?: string;
+        revisionId?: string;
+        input?: { key?: string; label?: string; description?: string | null };
+    };
     patch?: Record<string, unknown>;
 };
 
@@ -55,6 +71,34 @@ function requiredString(value: unknown, label: string): string {
 function targetIds(value: unknown): string[] {
     if (!Array.isArray(value)) throw new Error("Choose at least one Location.");
     return value.map(String).map((id) => id.trim()).filter(Boolean);
+}
+
+function parseMakeAvailableProgram(body: ActionBody): {
+    kind: "existing";
+    programId: string;
+    publicationId?: string;
+    revisionId?: string;
+} | {
+    kind: "new";
+    input: { key: string; label: string; description?: string | null };
+} {
+    const nested = body.program;
+    if (nested?.kind === "new" || (!nested && body.key && body.label && !body.programId)) {
+        return {
+            kind: "new",
+            input: {
+                key: requiredString(nested?.input?.key ?? body.key, "Program key"),
+                label: requiredString(nested?.input?.label ?? body.label, "Program name"),
+                description: nested?.input?.description ?? body.description ?? null,
+            },
+        };
+    }
+    return {
+        kind: "existing",
+        programId: requiredString(nested?.programId ?? body.programId, "Program"),
+        publicationId: nested?.publicationId ?? body.publicationId,
+        revisionId: nested?.revisionId,
+    };
 }
 
 function operatorError(error: unknown): string {
@@ -192,6 +236,32 @@ export async function POST(request: NextRequest) {
                     publicationId: requiredString(body.publicationId, "Publication"),
                     targetIds: targetIds(body.targetIds),
                     allowedSiteLocationIds: context.allowedSiteLocationIds,
+                });
+                return NextResponse.json({ ok: true, result });
+            }
+            case "preview_make_available": {
+                const preview = await previewMakeProgramAvailable(supabase, {
+                    orgId: context.orgId,
+                    actorUserId: context.userId,
+                    program: parseMakeAvailableProgram(body),
+                    locationIds: targetIds(body.locationIds ?? body.targetIds),
+                    originatingLocationId: body.originatingLocationId ?? null,
+                    idempotencyKey: requiredString(body.idempotencyKey, "Idempotency key"),
+                    allowedSiteLocationIds: context.allowedSiteLocationIds,
+                    entryPoint: body.entryPoint ?? "unknown",
+                });
+                return NextResponse.json({ ok: true, preview });
+            }
+            case "make_available": {
+                const result = await commitMakeProgramAvailable(supabase, {
+                    orgId: context.orgId,
+                    actorUserId: context.userId,
+                    program: parseMakeAvailableProgram(body),
+                    locationIds: targetIds(body.locationIds ?? body.targetIds),
+                    originatingLocationId: body.originatingLocationId ?? null,
+                    idempotencyKey: requiredString(body.idempotencyKey, "Idempotency key"),
+                    allowedSiteLocationIds: context.allowedSiteLocationIds,
+                    entryPoint: body.entryPoint ?? "unknown",
                 });
                 return NextResponse.json({ ok: true, result });
             }

@@ -636,32 +636,60 @@ async function loadPublicationAndRevision(input: {
     return { publication, revision: mapRevision(revisionRow as DbRow) };
 }
 
-async function resolveProgramTargetContexts(input: {
+/** Resolve the active published revision for a Program, or null when unpublished. */
+export async function loadLatestProgramPublication(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    programId: string;
+}): Promise<{ publication: ConfigurationPublicationRecord; revision: ProgramRevision } | null> {
+    const { data: publicationRow, error: publicationError } = await input.supabase
+        .from("configuration_publications")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .eq("domain_key", "programs")
+        .eq("subject_id", input.programId)
+        .order("revision_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    assertNoError(publicationError, "Load latest Program publication");
+    if (!publicationRow) return null;
+    const publication = mapPublication(publicationRow as DbRow);
+    const { data: revisionRow, error: revisionError } = await input.supabase
+        .from("program_revisions")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .eq("id", publication.revision.id)
+        .single();
+    assertNoError(revisionError, "Load Program revision");
+    return { publication, revision: mapRevision(revisionRow as DbRow) };
+}
+
+export type SoftProgramTargetResolution = {
+    locationId: string;
+    locationLabel: string;
+    context: ProgramConsumerContext | null;
+    block?: { code: string; reason: string };
+};
+
+/**
+ * Soft eligibility resolve for Make Program Available.
+ * Missing / inactive / out-of-scope Locations become blocked rows — they do not throw.
+ */
+export async function resolveProgramTargetsSoft(input: {
     supabase: SupabaseClient;
     orgId: string;
     revision: ProgramRevision;
     targetIds: readonly string[];
     allowedSiteLocationIds: string[] | null;
-}): Promise<Array<{
-    target: { locationId: string; locationLabel: string };
-    context: ProgramConsumerContext;
-}>> {
+}): Promise<SoftProgramTargetResolution[]> {
     const uniqueIds = [...new Set(input.targetIds.map((id) => id.trim()).filter(Boolean))];
     if (uniqueIds.length === 0) throw new Error("Choose at least one Location.");
-    if (
-        input.allowedSiteLocationIds != null
-        && uniqueIds.some((id) => !input.allowedSiteLocationIds!.includes(id))
-    ) {
-        throw new Error("One or more selected Locations are outside your allowed scope.");
-    }
 
     const [locationsResult, categoriesResult, roomsResult] = await Promise.all([
         input.supabase
             .from("locations")
-            .select("id, label")
+            .select("id, label, is_active, location_type, org_id")
             .eq("org_id", input.orgId)
-            .eq("location_type", "site")
-            .eq("is_active", true)
             .in("id", uniqueIds),
         input.supabase
             .from("location_program_categories")
@@ -677,18 +705,67 @@ async function resolveProgramTargetContexts(input: {
             .eq("location_type", "unit")
             .in("parent_location_id", uniqueIds),
     ]);
-    assertNoError(locationsResult.error, "Resolve eligible Locations");
+    assertNoError(locationsResult.error, "Resolve Locations");
     assertNoError(categoriesResult.error, "Resolve Location Program offerings");
     assertNoError(roomsResult.error, "Resolve delivery-resource assignments");
-    const locations = (locationsResult.data ?? []) as DbRow[];
-    if (locations.length !== uniqueIds.length) {
-        throw new Error("One or more selected Locations are inactive, missing, or ineligible.");
-    }
+
+    const locationsById = new Map(
+        ((locationsResult.data ?? []) as DbRow[]).map((row) => [stringValue(row.id), row]),
+    );
     const categories = (categoriesResult.data ?? []) as DbRow[];
     const rooms = (roomsResult.data ?? []) as DbRow[];
 
-    return locations.map((location) => {
-        const locationId = stringValue(location.id);
+    return uniqueIds.map((locationId) => {
+        const location = locationsById.get(locationId);
+        if (!location) {
+            return {
+                locationId,
+                locationLabel: "Unknown Location",
+                context: null,
+                block: {
+                    code: "location_not_found",
+                    reason: "Location was not found in this Organization.",
+                },
+            };
+        }
+        const locationLabel = nullableString(location.label) ?? "Untitled Location";
+        if (stringValue(location.location_type) !== "site") {
+            return {
+                locationId,
+                locationLabel,
+                context: null,
+                block: {
+                    code: "location_not_site",
+                    reason: "Only site Locations can receive Program availability.",
+                },
+            };
+        }
+        if (location.is_active === false) {
+            return {
+                locationId,
+                locationLabel,
+                context: null,
+                block: {
+                    code: "location_inactive",
+                    reason: "This Location is inactive and cannot receive Program availability.",
+                },
+            };
+        }
+        if (
+            input.allowedSiteLocationIds != null
+            && !input.allowedSiteLocationIds.includes(locationId)
+        ) {
+            return {
+                locationId,
+                locationLabel,
+                context: null,
+                block: {
+                    code: "location_out_of_scope",
+                    reason: "This Location is outside your allowed site scope.",
+                },
+            };
+        }
+
         const category = categories.find(
             (row) =>
                 row.location_id === locationId
@@ -702,11 +779,10 @@ async function resolveProgramTargetContexts(input: {
                 room.parent_location_id === locationId
                 && nullableString(recordValue(room.metadata).category) === input.revision.programKey,
         ).length;
+
         return {
-            target: {
-                locationId,
-                locationLabel: nullableString(location.label) ?? "Untitled Location",
-            },
+            locationId,
+            locationLabel,
             context: {
                 currentRevisionId: category ? nullableString(category.program_revision_id) : null,
                 offeringExists: category != null,
@@ -721,6 +797,28 @@ async function resolveProgramTargetContexts(input: {
             },
         };
     });
+}
+
+async function resolveProgramTargetContexts(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    revision: ProgramRevision;
+    targetIds: readonly string[];
+    allowedSiteLocationIds: string[] | null;
+}): Promise<Array<{
+    target: { locationId: string; locationLabel: string };
+    context: ProgramConsumerContext;
+}>> {
+    const soft = await resolveProgramTargetsSoft(input);
+    const blocked = soft.filter((row) => row.block || !row.context);
+    if (blocked.length > 0) {
+        const first = blocked[0]!;
+        throw new Error(first.block?.reason ?? "One or more selected Locations are inactive, missing, or ineligible.");
+    }
+    return soft.map((row) => ({
+        target: { locationId: row.locationId, locationLabel: row.locationLabel },
+        context: row.context!,
+    }));
 }
 
 export async function previewProgramDistribution(input: {
