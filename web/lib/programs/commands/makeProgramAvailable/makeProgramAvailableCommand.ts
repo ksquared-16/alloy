@@ -413,11 +413,13 @@ async function loadIdempotentOperation(input: {
         .eq("idempotency_key", input.idempotencyKey)
         .maybeSingle();
     if (error) {
-        // Table may not exist yet in environments without migration — surface clearly.
-        if (error.message.toLowerCase().includes("configuration_command_operations")) {
-            throw new Error(
-                "configuration_command_operations is required for Make Program Available idempotency.",
-            );
+        const message = error.message.toLowerCase();
+        if (
+            message.includes("configuration_command_operations")
+            || message.includes("does not exist")
+            || message.includes("schema cache")
+        ) {
+            return null;
         }
         throw new Error(`Load command operation: ${error.message}`);
     }
@@ -443,17 +445,17 @@ async function upsertOperationStart(input: {
     idempotencyKey: string;
     requestFingerprint: string;
     entryPoint: string;
-}): Promise<{ id: string; replay: StoredOperation | null }> {
+}): Promise<{ id: string; replay: StoredOperation | null; durable: boolean }> {
     const existing = await loadIdempotentOperation({
         supabase: input.supabase,
         orgId: input.orgId,
         idempotencyKey: input.idempotencyKey,
     });
     if (existing?.status === "committed" || existing?.status === "partial" || existing?.status === "blocked") {
-        return { id: existing.id, replay: existing };
+        return { id: existing.id, replay: existing, durable: true };
     }
     if (existing) {
-        return { id: existing.id, replay: null };
+        return { id: existing.id, replay: null, durable: true };
     }
 
     const { data, error } = await input.supabase
@@ -471,7 +473,20 @@ async function upsertOperationStart(input: {
         .maybeSingle();
 
     if (error) {
-        if (error.message.toLowerCase().includes("duplicate")) {
+        const message = error.message.toLowerCase();
+        if (
+            message.includes("configuration_command_operations")
+            || message.includes("does not exist")
+            || message.includes("schema cache")
+        ) {
+            // Migration not applied yet — proceed without durable compound idempotency.
+            return {
+                id: `ephemeral:${input.idempotencyKey}`,
+                replay: null,
+                durable: false,
+            };
+        }
+        if (message.includes("duplicate")) {
             const again = await loadIdempotentOperation({
                 supabase: input.supabase,
                 orgId: input.orgId,
@@ -483,14 +498,14 @@ async function upsertOperationStart(input: {
                     || again.status === "partial"
                     || again.status === "blocked"
                 ) {
-                    return { id: again.id, replay: again };
+                    return { id: again.id, replay: again, durable: true };
                 }
-                return { id: again.id, replay: null };
+                return { id: again.id, replay: null, durable: true };
             }
         }
         throw new Error(`Create command operation: ${error.message}`);
     }
-    return { id: String((data as DbRow).id), replay: null };
+    return { id: String((data as DbRow).id), replay: null, durable: true };
 }
 
 async function finalizeOperation(input: {
@@ -498,7 +513,9 @@ async function finalizeOperation(input: {
     orgId: string;
     operationId: string;
     result: MakeProgramAvailableCommitResult;
+    durable: boolean;
 }): Promise<void> {
+    if (!input.durable || input.operationId.startsWith("ephemeral:")) return;
     const { error } = await input.supabase
         .from("configuration_command_operations")
         .update({
@@ -573,7 +590,7 @@ export async function commitMakeProgramAvailable(
         }),
     );
 
-    const { id: operationId, replay } = await upsertOperationStart({
+    const { id: operationId, replay, durable } = await upsertOperationStart({
         supabase,
         orgId: input.orgId,
         actorUserId: input.actorUserId,
@@ -649,15 +666,17 @@ export async function commitMakeProgramAvailable(
             publicationId = published.publication.id;
             revisionId = published.revision.id;
 
-            await supabase
-                .from("configuration_command_operations")
-                .update({
-                    program_id: programId,
-                    publication_id: publicationId,
-                    revision_id: revisionId,
-                })
-                .eq("org_id", input.orgId)
-                .eq("id", operationId);
+            if (durable && !operationId.startsWith("ephemeral:")) {
+                await supabase
+                    .from("configuration_command_operations")
+                    .update({
+                        program_id: programId,
+                        publication_id: publicationId,
+                        revision_id: revisionId,
+                    })
+                    .eq("org_id", input.orgId)
+                    .eq("id", operationId);
+            }
         }
     } else {
         const published = await loadLatestProgramPublication({
@@ -697,6 +716,7 @@ export async function commitMakeProgramAvailable(
                 orgId: input.orgId,
                 operationId,
                 result: blockedResult,
+                durable,
             });
             await writeGroupedAuditEvent({
                 supabase,
@@ -798,6 +818,7 @@ export async function commitMakeProgramAvailable(
         orgId: input.orgId,
         operationId,
         result,
+        durable,
     });
     await writeGroupedAuditEvent({
         supabase,

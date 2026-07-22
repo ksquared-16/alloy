@@ -25,11 +25,7 @@ export type ProgramCatalogSnapshot = {
 export type ProgramActionResult = {
     ok?: boolean;
     programId?: string;
-    result?: {
-        publication?: { id?: string };
-        revision?: { id?: string };
-        run?: { id?: string };
-    };
+    result?: Record<string, unknown>;
     preview?: unknown;
     errors?: string[];
     error?: unknown;
