@@ -51,6 +51,7 @@
       <span class="switch" id="project-switch">Alloy</span>
       <button class="cc-btn">Command Center</button>
       <div class="search">Search sprints, workers, PRs…</div>
+      <button class="refreshbtn" id="refresh-btn" title="Recompute the projection from authoritative sources">↻ Refresh</button>
       <span class="livepill" id="livepill"><span class="d"></span><span id="live-label">Connecting…</span></span>
     </div>
     <div class="content">
@@ -76,6 +77,8 @@
   <aside class="dock">
     <div class="dock-h"><span>Needs Your Attention</span><span class="b" id="attention-count">0</span></div>
     <div id="attention"></div>
+    <div class="gov" id="governed"></div>
+    <div class="auditc" id="auditc"></div>
     <details class="gaps" id="gaps-wrap"><summary>Known gaps</summary><ul id="gaps"></ul></details>
   </aside>
 </div>

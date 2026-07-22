@@ -6,15 +6,19 @@
  * It binds nothing externally reachable, never auto-starts, and serves the
  * Command Center SPA as a pure presentation layer that binds to `/api/state`.
  *
- * READ-ONLY in Phase 1: there is no command endpoint yet. The server projects;
- * it does not mutate. (The command allowlist is Phase 1's next increment and is
- * deliberately not present here — nothing can change state through this port.)
+ * Reads are projections; writes go ONLY through the fail-closed command
+ * registry (executor), which wraps existing alloy-* tooling — no shell, no
+ * request-supplied paths, consequential actions preview→confirm.
  *
  * Endpoints:
- *   GET /api/health   → liveness + schema
- *   GET /api/state    → the full Command Center snapshot
- *   GET /api/events   → SSE stream; a `snapshot` frame on connect and each tick
- *   GET /             → the SPA shell (static, path-traversal safe)
+ *   GET  /api/health          → liveness + schema
+ *   GET  /api/state           → the full Command Center snapshot
+ *   GET  /api/events          → SSE stream; a `snapshot` frame on connect + tick
+ *   GET  /api/commands        → the registered command catalog (+ unsupported)
+ *   GET  /api/audit           → recent execution audit events
+ *   POST /api/commands/preview→ resolve+evaluate+preview a command (never runs)
+ *   POST /api/commands        → confirm+execute a command through the registry
+ *   GET  /                    → the SPA shell (static, path-traversal safe)
  */
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
@@ -23,6 +27,9 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { composeSnapshot } from "./vacilando/compose.mjs";
+import { runCommand } from "./vacilando/commands/executor.mjs";
+import { listCommands } from "./vacilando/commands/registry.mjs";
+import { readAuditEvents } from "./vacilando/commands/audit.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const LOOPBACK_HOST = "127.0.0.1";
@@ -45,6 +52,21 @@ function sendJson(res, status, obj) {
   const body = JSON.stringify(obj);
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Content-Length": Buffer.byteLength(body), "Cache-Control": "no-store" });
   res.end(body);
+}
+
+/** Map a command lifecycle outcome to an HTTP status. */
+function statusForStage(out) {
+  switch (out.code) {
+    case "unknown_command": return 404;
+    case "unsupported": return 400;
+    case "invalid_input": return 400;
+    case "ineligible": return 409;
+    case "confirmation_required": return 428; // Precondition Required
+    case "binary_missing": return 500;
+    default: break;
+  }
+  if (out.stage === "execute") return 200; // executed; result.ok reflects the toolkit exit
+  return 400;
 }
 
 function serveStatic(res, urlPath) {
@@ -87,13 +109,52 @@ async function getSnapshot({ maxAgeMs = CACHE_TTL_MS } = {}) {
   return cache.inflight;
 }
 const snapshotSafe = () => getSnapshot();
+/** Force a fresh projection (bypass TTL) and update the cache. Used after a command. */
+const forceSnapshot = () => getSnapshot({ maxAgeMs: 0 });
+
+/** Read a small JSON body from a loopback POST. Fails closed on size/parse. */
+function readJsonBody(req, limit = 64 * 1024) {
+  return new Promise((res) => {
+    let data = "";
+    let tooBig = false;
+    req.on("data", (chunk) => {
+      data += chunk;
+      if (data.length > limit) { tooBig = true; req.destroy(); }
+    });
+    req.on("end", () => {
+      if (tooBig) return res({ ok: false, error: "body_too_large" });
+      if (!data) return res({ ok: true, value: {} });
+      try { res({ ok: true, value: JSON.parse(data) }); } catch { res({ ok: false, error: "invalid_json" }); }
+    });
+    req.on("error", () => res({ ok: false, error: "read_error" }));
+  });
+}
 
 export function createVacilandoServer() {
   const clients = new Set();
+  const broadcast = (snap) => {
+    const frame = `event: snapshot\ndata: ${JSON.stringify(snap)}\n\n`;
+    for (const r of clients) { try { r.write(frame); } catch { clients.delete(r); } }
+  };
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, `http://${LOOPBACK_HOST}`);
     const path = url.pathname;
+
+    // ---- command runtime (POST; inert JSON only, routed through the registry) ----
+    if (req.method === "POST" && (path === "/api/commands" || path === "/api/commands/preview")) {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, stage: "request", code: body.error });
+      const mode = path.endsWith("/preview") ? "preview" : "execute";
+      const snapshot = await snapshotSafe();
+      const out = await runCommand(
+        { command: body.value.command, input: body.value.input, confirm: body.value.confirm === true, mode, actor: body.value.actor || "operator" },
+        { snapshot, refresh: forceSnapshot },
+      );
+      if (mode === "execute" && out.snapshot) broadcast(out.snapshot);
+      const status = out.ok ? 200 : statusForStage(out);
+      return sendJson(res, status, out);
+    }
 
     if (req.method !== "GET") return sendJson(res, 405, { error: "method_not_allowed" });
 
@@ -102,6 +163,12 @@ export function createVacilandoServer() {
     }
     if (path === "/api/state" || path === "/api/snapshot") {
       return sendJson(res, 200, await snapshotSafe());
+    }
+    if (path === "/api/commands") {
+      return sendJson(res, 200, { commands: listCommands() });
+    }
+    if (path === "/api/audit") {
+      return sendJson(res, 200, { events: readAuditEvents(50) });
     }
     if (path === "/api/events") {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });

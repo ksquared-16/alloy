@@ -22,8 +22,14 @@ function ago(ms) {
   return `${(s / 86400) | 0}d ago`;
 }
 
+let lastGen = null;
 function render(s) {
   if (!s || !s.headline) return;
+  // Don't rebuild the DOM under an open dialog (would drop the interaction), and
+  // skip when the snapshot is unchanged (polling serves the same cached frame).
+  if (document.querySelector(".ov")) return;
+  if (s.generated_at && s.generated_at === lastGen) return;
+  lastGen = s.generated_at;
   // header
   $("project-name").textContent = "Vacilando Runtime";
   $("project-sub").textContent = `— ${s.project?.name || "Alloy"} · Engineering Runtime`;
@@ -78,9 +84,20 @@ function renderSprints(sprints) {
       `<div class="wk"><div class="w">${esc(sp.provider)}</div><div class="s">${sp.question_count ? "⚠ " + sp.question_count + " question(s)" : "evidence: " + sp.evidence_count}</div></div>` +
       `<div class="meta-c"><b>${esc(sp.branch ? sp.branch.replace(/^agent\/[^/]+\//, "") : sp.worktree)}</b>` +
         `<span class="u">git ${sp.git.state} · ↑${sp.git.ahead} ↓${sp.git.behind}</span></div>` +
-      `<div class="kebab">⋯</div>`;
+      `<div class="sp-actions" data-slot="${sp.slot}"></div>`;
     box.appendChild(row);
+    // Governed actions for this sprint (each maps to a registered command).
+    const acts = row.querySelector(".sp-actions");
+    acts.appendChild(actionButton("Diagnose", "worker.doctor", { slot: sp.slot }));
+    if (sp.status === "paused") acts.appendChild(actionButton("Resume", "worker.resume", { slot: sp.slot }, true));
+    else acts.appendChild(actionButton("Pause", "worker.pause", { slot: sp.slot }, true));
   }
+}
+
+function actionButton(label, command, input, warn) {
+  const b = el("button", "act-btn" + (warn ? " warn" : ""), esc(label));
+  b.addEventListener("click", () => startCommand(command, input));
+  return b;
 }
 
 function renderWorkers(workers) {
@@ -133,6 +150,90 @@ function renderGaps(gaps) {
   $("gaps-wrap").style.display = gaps.length ? "" : "none";
 }
 
+// ---- command runtime: preview → confirm → execute → audit → refresh ----
+async function api(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return { status: r.status, data: await r.json() };
+}
+
+async function startCommand(command, input) {
+  // 1. request eligibility + preview (never executes)
+  const { data: pv } = await api("/api/commands/preview", { command, input });
+  if (!pv.ok) { toast("err", `Can't ${command}`, pv.reason || (pv.errors || []).join("; ") || pv.code); return; }
+  // low-risk, no confirmation → execute immediately; consequential → confirm dialog
+  if (!pv.requires_confirmation) return execute(command, input, false);
+  showDialog(pv, () => execute(command, input, true));
+}
+
+async function execute(command, input, confirm) {
+  const { data } = await api("/api/commands", { command, input, confirm, actor: "operator" });
+  if (data.stage === "execute" && data.result?.kind === "internal" && command === "sprint.inspect") {
+    toast("ok", "Sprint inspected", JSON.stringify(data.result.data?.repository || {}, null, 0));
+  } else if (data.ok || data.stage === "execute") {
+    const ok = data.result ? (data.result.exit === undefined || data.result.exit === 0) : data.ok;
+    toast(ok ? "ok" : "err", `${command} ${ok ? "done" : "failed"}`,
+      (data.result?.stdout || data.result?.stderr || `audit ${data.audit?.id || ""}`).toString().split("\n").slice(0, 3).join("\n"));
+    if (data.snapshot) render(data.snapshot);
+    loadAudit();
+  } else {
+    toast("err", `${command} refused`, data.reason || (data.errors || []).join("; ") || data.code);
+  }
+}
+
+function showDialog(pv, onConfirm) {
+  const ov = el("div", "ov");
+  ov.innerHTML =
+    `<div class="dlg"><h3>${esc(pv.title || pv.command)}</h3>` +
+    `<span class="risk ${pv.risk || "low"}">${esc(pv.risk || "low")}</span>` +
+    `<div class="b">${esc(pv.preview?.summary || "")}` +
+    (pv.target ? `<div class="tgt">▸ ${esc(pv.target.label || "")}</div>` : "") +
+    (pv.preview?.effects?.length ? `<ul>${pv.preview.effects.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : "") +
+    (pv.will_run?.bin ? `<div class="willrun">runs: ${esc(pv.will_run.bin)} ${esc((pv.will_run.args || []).join(" "))}</div>` : "") +
+    `</div><div class="foot"><button class="cancel">Cancel</button>` +
+    `<button class="go ${pv.risk === "consequential" ? "warn" : ""}">Confirm</button></div></div>`;
+  ov.querySelector(".cancel").onclick = () => ov.remove();
+  ov.querySelector(".go").onclick = () => { ov.remove(); onConfirm(); };
+  ov.addEventListener("click", (e) => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
+let toastTimer = null;
+function toast(kind, title, msg) {
+  document.querySelector(".toast")?.remove();
+  const t = el("div", `toast ${kind}`, `${esc(title)}${msg ? `<div class="m">${esc(String(msg))}</div>` : ""}`);
+  document.body.appendChild(t);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.remove(), 6000);
+}
+
+async function loadCommands() {
+  try {
+    const r = await fetch("/api/commands"); const { commands } = await r.json();
+    const supported = commands.filter((c) => c.supported), unsupported = commands.filter((c) => !c.supported);
+    $("governed").innerHTML =
+      `<h4>Governed Actions</h4>` +
+      supported.map((c) => `<div class="cmd"><span class="k">${esc(c.key)}</span><span class="r ${c.risk}">${esc(c.risk)}</span></div>`).join("") +
+      `<div style="height:8px"></div>` +
+      unsupported.map((c) => `<div class="cmd unsup"><span class="k">${esc(c.key)}</span><span class="r">unsupported</span></div><div class="why">${esc(c.reason)}</div>`).join("");
+  } catch {}
+}
+async function loadAudit() {
+  try {
+    const r = await fetch("/api/audit"); const { events } = await r.json();
+    $("auditc").innerHTML = `<h4>Execution Audit</h4>` + (events.length
+      ? events.slice(0, 8).map((e) => `<div class="e"><span class="k">${esc(e.command)}</span>` +
+          `<span class="u" style="font-size:11px;color:var(--ink-4)">${e.occurred_at ? new Date(e.occurred_at).toLocaleTimeString() : ""}</span>` +
+          `<span class="o ${e.outcome}">${esc(e.outcome)}</span></div>`).join("")
+      : `<div class="why">No commands run yet.</div>`);
+  } catch {}
+}
+
+document.getElementById("refresh-btn").addEventListener("click", async (ev) => {
+  ev.target.disabled = true; ev.target.textContent = "↻ Refreshing…";
+  await execute("runtime.refresh", {}, false);
+  ev.target.disabled = false; ev.target.textContent = "↻ Refresh";
+});
+
 // ---- connection: SSE for liveness, polling as the reliable backbone ----
 let sseOk = false;
 function setLive(state) {
@@ -158,4 +259,7 @@ function connect() {
 }
 connect();
 poll();
+loadCommands();
+loadAudit();
 setInterval(poll, 4000); // always-on: guarantees refresh even if SSE is silent
+setInterval(loadAudit, 12000);
