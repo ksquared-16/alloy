@@ -97,9 +97,9 @@ export async function runCommand(req, ctx) {
   let result;
   let ok;
   if (def.execution === "internal") {
-    const data = def.run ? def.run(value, snapshot) : { done: true };
+    const data = def.run ? await def.run(value, snapshot, { nowMs }) : { done: true };
     result = { kind: "internal", data };
-    ok = true;
+    ok = data && data.ok === false ? false : true;
   } else {
     const binPath = join(TOOLKIT_DIR, def.bin);
     // Fixed path under the toolkit; never a request-supplied path.

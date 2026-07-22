@@ -18,6 +18,7 @@
  * promotion, merge, and destructive git are intentionally NOT executable
  * (declared unsupported with a reason) — the toolkit prints but never runs them.
  */
+import { routeInstruction } from "./director.mjs";
 
 // --------------------------------------------------------------------------
 // Declarative input validation (fail-closed).
@@ -48,9 +49,16 @@ function validateField(name, spec, raw) {
     }
     case "text": {
       const s = String(raw);
-      if (!s.trim() || s.length > 2000) return { ok: false, error: `${name}: 1–2000 chars` };
+      if (!s.trim() || s.length > 8000) return { ok: false, error: `${name}: 1–8000 chars` };
       return { ok: true, value: s };
     }
+    case "enum": {
+      const s = String(raw);
+      if (!Array.isArray(spec.options) || !spec.options.includes(s)) return { ok: false, error: `${name}: must be one of ${(spec.options || []).join(", ")}` };
+      return { ok: true, value: s };
+    }
+    case "bool":
+      return { ok: true, value: raw === true || raw === "true" };
     default:
       return { ok: false, error: `${name}: unknown field type` };
   }
@@ -251,6 +259,100 @@ const COMMANDS = {
     },
     refresh: ["snapshot"],
   },
+
+  "director.route": {
+    key: "director.route",
+    title: "Send instruction (Director)",
+    risk: "consequential",
+    execution: "internal",
+    confirmation: "required",
+    input: { slot: { type: "slot", required: true }, message: { type: "text", required: true } },
+    resolveTarget: (v, snap) => {
+      const s = sprintBySlot(snap, v.slot);
+      return s ? target("worker", `${s.provider} on slot ${s.slot} — ${s.title}`, { slot: v.slot, worktree: s.worktree }) : null;
+    },
+    eligibility: (t, snap, v) => (sprintBySlot(snap, v.slot) ? { eligible: true } : { eligible: false, reason: "slot is not occupied" }),
+    preview: (v, t, snap) => {
+      const s = sprintBySlot(snap, v.slot);
+      return {
+        summary: `Route this instruction to ${s ? s.provider : "the worker"} on slot ${v.slot}.`,
+        authoritative_target: `director log (slot ${v.slot}) + clipboard`,
+        effects: [
+          "Records the interaction and copies the instruction to the clipboard.",
+          "You paste it into the live session — Vacilando cannot inject into a running Claude/Cursor session (no governed API).",
+        ],
+      };
+    },
+    run: async (v, snap, ctx) => {
+      const s = sprintBySlot(snap, v.slot);
+      const r = await routeInstruction({ slot: v.slot, worktree: s?.worktree, provider: s?.provider, message: v.message, occurredAtMs: ctx?.nowMs });
+      return { ok: true, routed: true, ...r };
+    },
+    refresh: [],
+  },
+
+  "sprint.start": {
+    key: "sprint.start",
+    title: "Start work",
+    risk: "consequential",
+    execution: "cli",
+    bin: "alloy-sprint-start",
+    confirmation: "required",
+    input: {
+      name: { type: "key", required: true },
+      provider: { type: "enum", options: ["claude", "cursor"], required: true },
+      slot: { type: "slot" },
+      objective: { type: "text" },
+    },
+    buildArgv: (v) => [v.name, "--provider", v.provider, "--slot", v.slot ? String(v.slot) : "auto", "--without-server", ...(v.objective ? ["--objective", v.objective] : [])],
+    resolveTarget: (v) => target("slot", v.slot ? `slot ${v.slot}` : "auto slot", { slot: v.slot ?? null }),
+    eligibility: (t, snap, v) => {
+      const occupied = new Set((snap.sprints || []).map((s) => s.slot));
+      const free = [1, 2, 3, 4, 5, 6].filter((n) => !occupied.has(n));
+      if (v.slot && occupied.has(v.slot)) return { eligible: false, reason: `slot ${v.slot} is occupied` };
+      if (!free.length) return { eligible: false, reason: "all six slots are occupied — end a worker to free capacity" };
+      return { eligible: true };
+    },
+    preview: (v) => ({
+      summary: `Start a ${v.provider} worker for "${v.name}"${v.slot ? ` on slot ${v.slot}` : " on an auto-selected slot"}.`,
+      authoritative_target: `alloy-sprint-start ${v.name} --provider ${v.provider} --slot ${v.slot || "auto"}`,
+      effects: [
+        "Creates a managed worktree from origin/staging, installs deps, prepares env, opens the provider.",
+        "Long-running (dependency install). Server not started (--without-server).",
+      ],
+    }),
+    refresh: ["snapshot"],
+  },
+
+  "sprint.finish": {
+    key: "sprint.finish",
+    title: "End work — close session (keep worktree)",
+    risk: "consequential",
+    execution: "cli",
+    bin: "alloy-sprint-finish",
+    confirmation: "required",
+    input: { slot: { type: "slot", required: true }, acknowledge_uncommitted: { type: "bool" } },
+    buildArgv: (v) => [String(v.slot), ...(v.acknowledge_uncommitted ? ["--acknowledge-uncommitted"] : [])],
+    resolveTarget: (v, snap) => {
+      const s = sprintBySlot(snap, v.slot);
+      return s ? target("worker", `slot ${s.slot} — ${s.title}`, { slot: v.slot, worktree: s.worktree }) : null;
+    },
+    eligibility: (t, snap, v) => (sprintBySlot(snap, v.slot) ? { eligible: true } : { eligible: false, reason: "slot is not occupied" }),
+    preview: (v, t, snap) => {
+      const s = sprintBySlot(snap, v.slot);
+      const dirty = s && s.git?.state === "dirty";
+      return {
+        summary: `End work on slot ${v.slot}${s ? ` (${s.title})` : ""} — close the session, keep the worktree.`,
+        authoritative_target: `alloy-sprint-finish ${v.slot}${v.acknowledge_uncommitted ? " --acknowledge-uncommitted" : ""}`,
+        effects: [
+          "Stops managed processes, writes a continuation record, archives metadata, frees the slot.",
+          "NEVER deletes the worktree, pushes, merges, or promotes.",
+          dirty && !v.acknowledge_uncommitted ? "⚠ worktree is dirty — will refuse unless you acknowledge uncommitted changes." : "",
+        ].filter(Boolean),
+      };
+    },
+    refresh: ["snapshot"],
+  },
 };
 
 // --------------------------------------------------------------------------
@@ -260,7 +362,7 @@ export const UNSUPPORTED = {
   "promotion.promote": "Promotion is human-only. The toolkit PRINTS the push/PR commands but never executes them; there is no governed, previewable promotion command to wrap. Release is never auto-approved.",
   "repo.push": "Push is not an executable toolkit command (printed, never run). Requires explicit human action outside the control plane.",
   "repo.merge": "Merge is not an executable toolkit command. Landing happens through PR review into staging, by a human.",
-  "worktree.delete": "Destructive git/worktree deletion is out of Phase 1 policy. Even the guarded alloy-worktree-remove is not exposed; deletion requires explicit human action.",
+  "worktree.delete": "alloy-worktree-remove is guarded (refuses dirty/unmerged, never --force) but requires an INTERACTIVE TTY confirmation — it cannot run from the loopback server. Delete a worktree from a terminal: alloy-worktree-remove <worktree>.",
 };
 
 export function getCommand(key) {

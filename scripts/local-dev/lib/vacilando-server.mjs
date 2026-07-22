@@ -30,6 +30,9 @@ import { composeSnapshot } from "./vacilando/compose.mjs";
 import { runCommand } from "./vacilando/commands/executor.mjs";
 import { listCommands } from "./vacilando/commands/registry.mjs";
 import { readAuditEvents } from "./vacilando/commands/audit.mjs";
+import { collectResources } from "./vacilando/resources.mjs";
+import { workerOutputs, evidenceFilePath } from "./vacilando/outputs.mjs";
+import { readDirectorLog } from "./vacilando/commands/director.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const LOOPBACK_HOST = "127.0.0.1";
@@ -46,6 +49,8 @@ const MIME = {
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
+  ".md": "text/plain; charset=utf-8", ".txt": "text/plain; charset=utf-8", ".log": "text/plain; charset=utf-8",
 };
 
 function sendJson(res, status, obj) {
@@ -112,6 +117,18 @@ const snapshotSafe = () => getSnapshot();
 /** Force a fresh projection (bypass TTL) and update the cache. Used after a command. */
 const forceSnapshot = () => getSnapshot({ maxAgeMs: 0 });
 
+/** Resources are OS reads (incl. a bounded `du`); cache briefly so the board is snappy. */
+const resCache = { at: 0, data: null, inflight: null };
+async function resourcesCached() {
+  const now = Date.now();
+  if (resCache.data && now - resCache.at < 8000) return resCache.data;
+  if (resCache.inflight) return resCache.inflight;
+  resCache.inflight = collectResources()
+    .then((d) => { resCache.data = d; resCache.at = Date.now(); resCache.inflight = null; return d; })
+    .catch((e) => { resCache.inflight = null; return resCache.data || { workers: [], overall: {}, error: String(e.message || e) }; });
+  return resCache.inflight;
+}
+
 /** Read a small JSON body from a loopback POST. Fails closed on size/parse. */
 function readJsonBody(req, limit = 64 * 1024) {
   return new Promise((res) => {
@@ -169,6 +186,25 @@ export function createVacilandoServer() {
     }
     if (path === "/api/audit") {
       return sendJson(res, 200, { events: readAuditEvents(50) });
+    }
+    if (path === "/api/resources") {
+      return sendJson(res, 200, await resourcesCached());
+    }
+    if (path === "/api/outputs") {
+      const wt = url.searchParams.get("worktree") || "";
+      if (!/^[a-z0-9][a-z0-9._-]*$/i.test(wt)) return sendJson(res, 400, { error: "bad_worktree" });
+      return sendJson(res, 200, await workerOutputs(wt));
+    }
+    if (path === "/api/director") {
+      const slot = Number(url.searchParams.get("slot"));
+      if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
+      return sendJson(res, 200, { slot, log: readDirectorLog(slot) });
+    }
+    if (path === "/api/evidence") {
+      const full = evidenceFilePath(url.searchParams.get("worktree") || "", url.searchParams.get("file") || "");
+      if (!full) { res.writeHead(404); return res.end("not found"); }
+      res.writeHead(200, { "Content-Type": MIME[extname(full)] || "application/octet-stream", "Cache-Control": "no-store" });
+      return createReadStream(full).pipe(res);
     }
     if (path === "/api/events") {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
