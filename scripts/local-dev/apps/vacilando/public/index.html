@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vacilando Runtime — Command Center</title>
+<title>Vacilando Runtime — Control Plane</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -16,31 +16,35 @@
   <symbol id="g-bus" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="11" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M3.5 11h17M9 5v6"/><circle cx="7.5" cy="18" r="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="16.5" cy="18" r="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
   <symbol id="g-ruler" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M4 20L20 4M4 20h16V4"/><path stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M9 20v-3M14 20v-6M9 9h3M9 14h6"/></symbol>
   <symbol id="g-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></symbol>
+  <symbol id="i-sprints" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 6h16M4 12h16M4 18h10"/></symbol>
+  <symbol id="i-workers" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M3.5 19c.6-3 3-4.5 5.5-4.5S13.9 16 14.5 19M16 6.2a3 3 0 0 1 0 5.6"/></symbol>
+  <symbol id="i-repo" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 3v13m0 5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 0v3a4 4 0 0 1-4 4H8"/></symbol>
+  <symbol id="i-approvals" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 12.5l5 5 11-11"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3 8 4-16 3 8h4"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
 </defs></svg>
 
 <div class="app">
   <aside class="rail">
     <div class="brand"><div class="word">Vacilando<b>OS</b></div><div class="sub">Engineering Operating System</div></div>
-    <nav class="nav">
-      <a class="active" href="#">Command Center</a>
-      <a href="#">Sprints <span class="badge" id="nav-sprints">0</span></a>
-      <a href="#">Workers <span class="badge" id="nav-workers">0</span></a>
-      <a href="#">Repository</a>
-      <a href="#">Approvals <span class="badge" id="nav-approvals">0</span></a>
-      <a href="#">Activity</a>
-      <a href="#">Knowledge</a>
+    <nav class="nav" id="nav">
+      <a data-route="command"><svg class="ico"><use href="#i-home"/></svg>Command Center</a>
+      <a data-route="sprints"><svg class="ico"><use href="#i-sprints"/></svg>Sprints<span class="badge" id="nb-sprints">0</span></a>
+      <a data-route="workers"><svg class="ico"><use href="#i-workers"/></svg>Workers<span class="badge" id="nb-workers">0</span></a>
+      <a data-route="repository"><svg class="ico"><use href="#i-repo"/></svg>Repository</a>
+      <a data-route="approvals"><svg class="ico"><use href="#i-approvals"/></svg>Approvals<span class="badge" id="nb-approvals">0</span></a>
+      <a data-route="activity"><svg class="ico"><use href="#i-activity"/></svg>Activity</a>
     </nav>
     <div class="nav-sep"></div>
     <div class="desert">
-      <svg viewBox="0 0 236 130" width="100%" height="100%" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-        <defs>
-          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#173f2a"/><stop offset="1" stop-color="#c8794a"/></linearGradient>
-          <linearGradient id="d1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c06a3f"/><stop offset="1" stop-color="#a4512d"/></linearGradient>
-        </defs>
-        <rect width="236" height="130" fill="url(#sky)"/><circle cx="176" cy="58" r="24" fill="#f0b878" opacity=".92"/>
-        <path d="M0 92 Q60 66 120 84 T236 80 V130 H0 Z" fill="url(#d1)"/>
-        <path d="M0 112 Q70 92 140 108 T236 104 V130 H0 Z" fill="#8a4527"/>
-        <g fill="#14311f"><rect x="40" y="70" width="4" height="42" rx="2"/><path d="M42 72 q-16 -9 -26 -5 q13 -1 26 5 M42 72 q16 -9 26 -5 q-13 -1 -26 5 M42 71 q-8 -15 -20 -17 q10 5 20 17 M42 71 q8 -15 20 -17 q-10 5 -20 17"/></g>
+      <svg viewBox="0 0 212 104" width="100%" height="100%" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#173f2a"/><stop offset="1" stop-color="#c8794a"/></linearGradient>
+        <linearGradient id="d1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c06a3f"/><stop offset="1" stop-color="#a4512d"/></linearGradient></defs>
+        <rect width="212" height="104" fill="url(#sky)"/><circle cx="158" cy="46" r="20" fill="#f0b878" opacity=".92"/>
+        <path d="M0 74 Q54 52 108 68 T212 64 V104 H0 Z" fill="url(#d1)"/><path d="M0 90 Q64 72 128 86 T212 82 V104 H0 Z" fill="#8a4527"/>
+        <g fill="#14311f"><rect x="36" y="56" width="3.4" height="34" rx="2"/><path d="M37.7 58 q-14 -8 -23 -4 q11 -1 23 4 M37.7 58 q14 -8 23 -4 q-11 -1 -23 4 M37.7 57 q-7 -13 -18 -15 q9 5 18 15 M37.7 57 q7 -13 18 -15 q-9 5 -18 15"/></g>
       </svg>
     </div>
     <div class="ruser"><div class="av">JW</div><div><div class="nm">John Winters</div><div class="rl">Platform Owner</div></div></div>
@@ -48,39 +52,15 @@
 
   <main class="main">
     <div class="topbar">
-      <span class="switch" id="project-switch">Alloy</span>
-      <button class="cc-btn">Command Center</button>
-      <div class="search">Search sprints, workers, PRs…</div>
+      <div class="crumb" id="crumb">Command Center</div>
+      <div class="spacer"></div>
+      <div class="search">Search…</div>
       <button class="refreshbtn" id="refresh-btn" title="Recompute the projection from authoritative sources">↻ Refresh</button>
-      <span class="livepill" id="livepill"><span class="d"></span><span id="live-label">Connecting…</span></span>
+      <span class="livepill" id="livepill"><span class="d"></span><span id="live-label">…</span></span>
+      <span class="gen" id="gen"></span>
     </div>
-    <div class="content">
-      <div class="h1row">
-        <h1 id="project-name">Vacilando Runtime</h1>
-        <span class="rt" id="project-sub">— Engineering Runtime</span>
-        <span class="gen" id="generated-at"></span>
-      </div>
-      <div class="tiles" id="tiles"></div>
-
-      <section class="card">
-        <div class="card-h"><span class="lbl">Active Sprints</span><span class="rt" id="sprints-rt"></span></div>
-        <div class="sprints" id="sprints"></div>
-      </section>
-
-      <div class="tri">
-        <section class="card"><div class="mini-h">Worker Pool</div><div class="wpl" id="workers"></div></section>
-        <section class="card"><div class="mini-h">Activity — projected from git &amp; state</div><div class="act" id="activity"></div></section>
-      </div>
-    </div>
+    <div class="view" id="view"></div>
   </main>
-
-  <aside class="dock">
-    <div class="dock-h"><span>Needs Your Attention</span><span class="b" id="attention-count">0</span></div>
-    <div id="attention"></div>
-    <div class="gov" id="governed"></div>
-    <div class="auditc" id="auditc"></div>
-    <details class="gaps" id="gaps-wrap"><summary>Known gaps</summary><ul id="gaps"></ul></details>
-  </aside>
 </div>
 
 <script src="app.js"></script>
