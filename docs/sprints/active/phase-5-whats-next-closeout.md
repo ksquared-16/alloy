@@ -5,86 +5,72 @@ last_reviewed: 2026-07-22
 supersedes: []
 ---
 
-# Phase 5 — What's Next Configured-Work Runtime: Session Closeout
+# What's Next Configured-Work — Closeout & Handoff to the Runtime & Performance Session
 
-**Purpose:** hand a brand-new session the exact state at closeout. The configured-work architecture
-and capability contracts are **accepted**. What remains is (a) Kelly's authenticated localhost QA of
-the final presentation polish, and (b) Slice G (legacy workspace retirement), which is **not started**.
+**The configured-work product and capability contracts are ACCEPTED (visual QA, Wenc Family).** This
+session was presentation + capability build. The **next session is "Configured Capability Runtime &
+Performance"** — it must investigate the runtime issues in §3 with instrumentation, **not** guesses,
+and must not begin optimization until the cause is measured.
 
-**Worktree:** `/Users/Kelly/Code/alloy-worktrees/wt1-alloy-phase-5-product-realization` (managed slot 1, port 3011).
-**Branch:** `agent/claude/1-alloy-phase-5-product-realization`. **Base:** `origin/staging @ 2b554b4b4`.
-**Status:** 35 commits ahead, clean tree, **nothing pushed, nothing merged.** Do not push/merge without Kelly's word.
+## 1. State (the required return)
 
-Frozen inputs (do not reopen): the accepted engineering handoff `phase-5-whats-next-engineering-handoff.md`
-and the docs it links.
+- **Worktree:** `/Users/Kelly/Code/alloy-worktrees/wt1-alloy-phase-5-product-realization` (managed slot 1, port 3011).
+- **Branch:** `agent/claude/1-alloy-phase-5-product-realization`. **Base:** `origin/staging`.
+- **Ahead/Behind:** **37 / 15** (staging advanced to `0ad3e2f93` while this ran — a rebase/merge is needed at promotion; not done here).
+- **Tree:** clean. **Server:** running on http://localhost:3011 (HTTP 200). **Push/merge:** **not pushed, not merged.** Do not push/merge without Kelly's word.
+- **Final commit:** `f2ed8eb89` (shared hosted-capability compact-host). Full engineering arc (newest→oldest): `f2ed8eb89` compact-host · `1b02a5419` polish (composer/outcome/local-time) · `6ff2dbf34` form-delivery · `72de7bea5` QA-round (panel presentation/tour copy/outcome mode/transition integrity) · `125fc3430` Message-inline composer · `686053fc1` header dedupe + View details · `65096d20f` Slice A correction · `65e722d8b` Slice A · `ca3b61703` Slice D · `e93d95981` Slice F · `43ebd68b9` Slice E · `345fc53f8` Slice B.
+- **Authenticated screenshots:** Kelly captured + accepted them (the acceptance gate). No agent-captured evidence — a reproducible `alloy-agent-verify focused-spec` Playwright script (open Wenc → What's Next → each capability) is **not yet written**; it's the fastest way to automate future QA evidence.
 
----
+## 2. Final accepted product state (files)
 
-## 1. What shipped this session (all committed local, unpushed)
+- **What's Next summary card** — obligation-first; `SummaryBody` + `View details →` opens the drill-in. `CurrentWorkCard.tsx`.
+- **Centered configured-work surface** — `current_work` elevates as a centered Focus Card (`isFocusElevatingCard`) rendered through UniversalCard. `CurrentWorkFocusedSurface.tsx`, `focusPanelCoordinationModel.ts`, `OpportunityFocusPanelModeGrid.tsx`.
+- **Compact hosted-capability mode** — capability-active collapses the card to a compact context frame; content-sizes, capped, capability scrolls internally (no nested full-surface scrollbar). `CurrentWorkCard.tsx` (`data-capability-active`), `alloyOsRuntime.css`.
+- **Canonical communications composer** — inline via `CommunicationsDrawerSection` reusing the Activity embed contract. `CurrentWorkActionPanel.tsx`.
+- **Tour scheduling** — inline `OpportunityTourScheduleActionModal` (slot picker). `CurrentWorkActionPanel.tsx`.
+- **Generic form delivery** — `FormDeliverySurface.tsx`; `POST .../form-deliver`, `GET .../delivery-subjects`; interaction host `form_delivery` on `send_form`; reuses `executeCommunicationsSend` + `mintExistingRecordFormLinkForAdmin`.
+- **Focused outcome declaration** — dedicated mode; premium radio rows (label + configured effect) + Confirm. `CurrentWorkFocusedSurface.tsx`, resolutions from `buildCurrentWorkResolutions.ts`.
+- **Configured transitions** — generic `resolveOutgoingProcessTransitions` with referential-integrity filter (drops targets not in the process stage inventory).
+- **Grouped missing information** — ownership grouping (Slice E). `CurrentWorkReadinessSummary.tsx`, `resolveCurrentWorkRequirementOwner.ts`.
+- **Local-time formatting** — activity timestamps via canonical `formatActivityTimestamp({ timeZone })`, timezone from `useAdminViewerTimezone`. `resolveLeadActivityPreview.ts`, `buildCurrentWorkActivityPreviewItems.ts`.
+- **Recomposition** — capability success dispatches `adminv2:opportunity-updated`; inline VM reload (no reload).
 
-Accepted slice order was **B → E → F → D → A → G**. B/E/F/D/A are done; the send-form capability and a
-final presentation polish were added on Kelly's direction. **G is not started.**
+## 3. Unresolved runtime issues — for the next session (INSTRUMENT, don't guess)
 
-- `345fc53f8` **Slice B** — metadata-driven capability/host resolution (removed name shims).
-- `43ebd68b9` **Slice E** — ownership-driven requirement grouping ("Still needed" grouped by owner; internal-id suppression; replaced `inferWorkItemOwner` label regex on the surface path).
-- `e93d95981` **Slice F** — command integrity: resolved execution state (`executable|disabled|blocked|hidden|configuration_error`) on every action VM; no enabled no-op buttons.
-- `ca3b61703` **Slice D** — generic outcomes + transitions contract (`CurrentWorkResolutionVM`: label/handler/target/effect/confirmation/execution).
-- `65e722d8b` → `65096d20f` → `686053fc1` **Slice A** — centered configured-work Focus Card. v1 was REJECTED (reused legacy workspace body); corrected to a purpose-built single-column surface rendered through UniversalCard so the grid's centered elevation applies; then header-dedupe + summary "View details →".
-- `125fc3430` **#1 Message** → real communications composer inline (CommunicationsDrawerSection), not the legacy Compose modal.
-- `72de7bea5` **QA round** — panel presentation (composer/tour as primary content), tour dev-copy removed, outcome mode, transition **referential-integrity filter** (drops targets not in the process stage inventory → suppresses stale "Move to Qualification").
-- `6ff2dbf34` **Generic form-delivery capability** (send-form), v1 on existing comms infra — see §3.
-- `1b02a5419` **Final presentation polish** — see §2.
+Observed through authenticated localhost QA. Record findings from measurement; do not assume a cause.
 
-## 2. Final presentation polish (`1b02a5419`) — AWAITING KELLY'S AUTHENTICATED QA
+**3a. Duplicate loading on `workspace → work unit` navigation.** The Focus Panel / What's Next appears
+to initialize **twice**. Instrument mount/fetch counts and determine which of these it is (do not guess):
+duplicate component mounting · summary + focused surfaces mounting simultaneously · React Strict-Mode
+dev double-invoke · multiple runtime consumers · route/layout Suspense boundaries · repeated
+server/client fetches · cache-key mismatch.
 
-1. **Composer fit** — the communications composer reuses the Activity embed layout contract
-   (`.alloy-os-activity-cockpit__comms` → `.alloy-os-activity-workspace__embed` → `activity_embed`):
-   compact context header, capability body scrolls internally, Send / Send later / BOS Assist footer
-   stays visible; the whole focused card no longer scrolls (`data-has-panel` → fixed-height flex column).
-2. **Outcome decision mode** — default work mode shows a subordinate "Record outcome →" affordance
-   (not the full outcome collection); entering it swaps the command body for premium full-width radio
-   rows (label + configured effect) with "← Back to actions" and one dominant "Confirm outcome".
-3. **Local-time doctrine** — activity timestamps were rendering UTC because `resolveLeadActivityPreview`
-   called `formatActivityTimestamp` with no timezone. Fixed the shared path: viewer timezone
-   (`useAdminViewerTimezone`) threads CurrentWorkCard → buildCurrentWorkActivityPreviewItems →
-   resolveLeadActivityPreview → `formatActivityTimestamp({ timeZone })`. Tests cover UTC→local, DST,
-   date boundary, no raw UTC.
+**3b. Delayed capability opening.** Message / Schedule tour / Send form / Record outcome don't feel
+immediate. Current: `click → host waits/mounts → capability initializes → data loads → usable`. Target:
+`click → host shell appears immediately → warmed data renders → freshness verifies in background`.
+Instrument the click-to-usable timeline per capability.
 
-**Acceptance criteria (Wenc Family, http://localhost:3011):** (1) Message opens within viewport; (2) full
-compose fits; (3) Send later / BOS Assist / Send visible; (4) only inner regions scroll; (5) Record
-outcome enters a clean dedicated mode; (6) commands don't compete with outcomes; (7) outcome rows look
-premium; (8) returning restores commands; (9) recent activity shows correct local time; (10) no reload;
-(11) summary card unchanged; (12) Household/Children unchanged.
+**3c. Tour latency** — availability/booking checks load only after click (`OpportunityTourSlotSchedulePanel` fetches `/api/admin/tours/slots` + `availability-rules` on open).
+**3d. Form-delivery latency** — forms + recipients + related subjects fetch only after the surface opens (`FormDeliverySurface` `useEffect`).
+**3e. Communication latency** — recipient/thread context may initialize after the composer opens.
 
-## 3. Generic form-delivery capability (`6ff2dbf34`)
+Scope for the next session: prefetch/warm on intent, host-shell-first rendering, dedupe of mounts/fetches, cache-key correctness. **Do not start optimization until the duplicate-load and latency causes are instrumented and measured.**
 
-Answers which-form / who-receives / what-it-relates-to / how-delivered, no entity-type branching.
-New: `GET .../delivery-subjects`, `POST .../form-deliver`, `FormDeliverySurface`, interaction host
-`form_delivery` on `send_form`. Reuses `executeCommunicationsSend` (records comms + activity + recompose),
-`mintExistingRecordFormLinkForAdmin` (subjects in link metadata), `drawer-recipients`. **v1 limitation:**
-targeting persisted via comms recipients + link metadata (not dedicated `form_delivery` tables — the "full
-schema" option deferred). Link channel fully functional; email/SMS reuse the Message path (not
-provider-verifiable in dev).
+## 4. Remaining product/eng work (not perf)
 
-## 4. Remaining work / known limitations
+- **Slice G — legacy workspace retirement: NOT STARTED.** `CurrentWorkWorkspace.tsx` still exists but is no longer mounted in the focused path; retire after a capability-parity check.
+- **Composer footer (legacy comms path):** if the org runs legacy (non-comms-v2) communications, the Send footer sits in the composer's own scroll rather than hard-pinned; pinning needs a composer-internal (`DrawerMessagingComposer`/`MessagingComposerFrame`) change. V2 pins it.
+- **Tour loading** uses the existing compact skeleton; swapping in the canonical Alloy loader is a small tour-panel follow-up.
+- **§9-bis config** (labels/vocabulary/terminal-enroll; stale published-plan stage vocab like "qualification") — config/data re-seed, Product-gated.
 
-- **Slice G — legacy workspace retirement: NOT STARTED.** `CurrentWorkWorkspace.tsx` still exists but is no
-  longer mounted in the focused path. G retires it after a capability-parity check. Do it only after the
-  polish is QA-accepted.
-- **Pre-existing test drift:** `tests/adminV2/runtime + actions` = 81 failing tests / 34 files at the
-  baseline (staging drift, not this work). `tests/presentation` also has ~7 pre-existing failing files
-  (verified via stash — unrelated to these changes). Every slice validated by **delta vs a stashed
-  baseline** (zero net-new), never absolute green. Typecheck (`npm run typecheck`) is clean.
-- **"Move to Qualification"** is stale published-plan vocabulary; the referential-integrity filter drops it
-  when the org's process stage inventory is current. If it persists, the org's `processStages` inventory is
-  itself stale → a §9-bis config/plan re-seed (data, not code).
-- **§9-bis config** (labels/vocabulary/terminal-enroll) still pending Product/config for final Enrollment QA.
-- **QA tooling:** authenticated interaction QA is Kelly's localhost gate. Reproducible agent evidence needs a
-  `alloy-agent-verify focused-spec` Playwright script that opens Wenc → What's Next → Message / Record
-  outcome (not yet written).
+## 5. Tests & validation discipline
 
-## 5. How to run / QA
+- New: `currentWorkReadinessOwnership`, `currentWorkCommandIntegrity`, `currentWorkResolutions`, `currentWorkCenteredHost`, `currentWorkActivityTimezone` (+ updated `currentWorkFocusWorkspace`, `focusPanelCanvasFinalization`, `currentWorkProcessBuilderQa`, `projectCurrentWork`, `resolveCurrentWorkActionSurface`).
+- Validate by **delta vs a stashed baseline**, never absolute green: `tests/adminV2/runtime + actions` baseline = **81 failing tests / 34 files** (pre-existing staging drift); `tests/presentation` also has ~7 pre-existing failing files. Every commit this session held the baseline (zero net-new) with `npm run typecheck` clean.
 
-- Server: `alloy-dev-start wt1-alloy-phase-5-product-realization` (port 3011; 3-server limit — pause another slot if refused).
-- Validate a change by delta: stash, run `npx vitest run tests/adminV2/runtime tests/adminV2/actions` for the baseline, pop, re-run, compare failing-file sets. Never expect absolute green.
-- Do **not** push, merge, or begin runtime-performance work without Kelly's authorization.
+## 6. Next-session starting point
+
+1. Stay in this managed worktree/branch (slot 1, port 3011). Read this doc + `phase-5-whats-next-engineering-handoff.md`. Do not reopen the accepted product/contracts.
+2. First work item: **instrument §3a (duplicate load)** and **§3b (click-to-usable latency)** — measure before changing anything.
+3. Then warm-on-intent / host-shell-first per §3. Keep enrollment as the fixture; no capability-resolution / form-delivery / tour / outcome / transition contract changes.
+4. Do not push, merge, or promote without Kelly's authorization. Rebase onto current `origin/staging` (branch is 15 behind) at promotion time.
