@@ -1,10 +1,11 @@
 ---
 owner: engineering
-status: stage-4-e2e-certification-ready
+status: stage-4-e2e-certification-ready-paused
 last_reviewed: 2026-07-22
 sprint: org-runtime-realization
 slot: 4
 phase: configuration-assignment-e2e-stage-4
+closeout: 2026-07-22 — Stage 4 evidence complete; worker paused for operator QA; no push/merge/PR/sprint-finish
 ---
 
 # Configuration Assignment Reference — Programs → Locations
@@ -380,6 +381,19 @@ http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-
 ```
 
 Evidence pack: `.alloy-agent-evidence/program-assignment-production-stage4/`
+
+### Sprint closeout (2026-07-22)
+
+| Field | Value |
+|-------|--------|
+| Worktree | `/Users/Kelly/Code/alloy-worktrees/wt4-org-runtime-realization` |
+| Slot | 4 · branch `agent/cursor/4-org-runtime-realization` |
+| Ahead/behind vs `origin/staging` | **47 ahead / 23 behind** (rebase/reconcile required before promotion) |
+| Stage 4 tip commits | `7baa25483` (durable commit path fix) · `d98b21cfd` (Stage 4 evidence/docs) |
+| Promotion | **Not authorized** — do not push, merge, PR, deploy, or `alloy-sprint-finish` |
+| Worker | Paused after closeout; worktree retained |
+
+Uncommitted leftovers in this worktree are **unrelated** prior-slice evidence/docs (Financials / org-scope / programs-locations IA) — not part of Programs Assignment Stage 4. Leave or discard explicitly; do not mix into Assignment promotion.
 
 ---
 
