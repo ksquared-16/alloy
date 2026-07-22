@@ -1,12 +1,13 @@
 # Locations Phase 2 Correction — Closeout
 
 **Base:** `44af155b9`  
+**Correction commit:** `7f9b9ebe2`  
 **Sprint:** org-runtime-realization · slot 4 · branch `agent/cursor/4-org-runtime-realization`  
 **Local only:** not pushed / not promoted
 
 ## Commit
 
-See latest commit on this branch after this closeout (correction commit on top of Phase 2).
+`7f9b9ebe2` — `fix(locations): master-detail landing, schedule day/repeats, instant Tours`
 
 ## A–C. Master-detail (Programs parity)
 
