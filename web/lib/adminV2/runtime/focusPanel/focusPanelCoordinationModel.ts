@@ -154,6 +154,7 @@ const OPERATIONAL_TRUTH_CARDS: ReadonlySet<FocusPanelCardKey> = new Set<FocusPan
     "household",
     "children",
     "billing_preview",
+    "scheduling",
     "documents",
     "communications",
 ]);
