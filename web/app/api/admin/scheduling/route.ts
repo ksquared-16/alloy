@@ -96,6 +96,45 @@ function normalizeScheduleTimes(raw: unknown): {
 }
 
 /**
+ * Resolve the child's program category id: an operational placement first, else the
+ * pre-enrolled desired program on the opportunity member (by customer_member_id, else
+ * by ocm id). Shared by the billing preview and the placement-options recommendation
+ * (so the recommended room can weigh program/age eligibility, not headroom alone).
+ */
+async function resolveChildProgramCategoryId(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    customerMemberId: string
+): Promise<string> {
+    if (!customerMemberId) return "";
+    const { data: pl } = await supabase
+        .from("child_placements")
+        .select("program_category_id")
+        .eq("org_id", orgId)
+        .eq("customer_member_id", customerMemberId)
+        .in("status", ["planned", "active", "ending"])
+        .maybeSingle();
+    let programCategoryId = (pl as { program_category_id?: string | null } | null)?.program_category_id ?? "";
+    if (programCategoryId) return programCategoryId;
+    // customerMemberId may be a real member id (enrolled) or an OCM id (pre-enrolled).
+    const byMember = await supabase
+        .from("opportunity_customer_members")
+        .select("program_category_id")
+        .eq("org_id", orgId)
+        .eq("customer_member_id", customerMemberId)
+        .maybeSingle();
+    programCategoryId = (byMember.data as { program_category_id?: string | null } | null)?.program_category_id ?? "";
+    if (programCategoryId) return programCategoryId;
+    const byId = await supabase
+        .from("opportunity_customer_members")
+        .select("program_category_id")
+        .eq("org_id", orgId)
+        .eq("id", customerMemberId)
+        .maybeSingle();
+    return (byId.data as { program_category_id?: string | null } | null)?.program_category_id ?? "";
+}
+
+/**
  * Scheduling workspace read API (Milestone 1). Views:
  *   ?view=overview   &site_location_id=      → the unplaced-child (Place) queue
  *   ?view=options    &site_location_id=&child_agreement_id=&pattern_id=[&program_category_id=][&start_date=]
@@ -183,13 +222,18 @@ export async function GET(request: NextRequest) {
             const siteLocationId = param(request, "site_location_id");
             const childAgreementId = param(request, "child_agreement_id");
             const patternId = param(request, "pattern_id");
-            const programCategoryId = param(request, "program_category_id") || null;
             if (!siteLocationId || !childAgreementId || !patternId) {
                 return NextResponse.json(
                     { error: "site_location_id, child_agreement_id, and pattern_id are required", code: "invalid_input" },
                     { status: 400 }
                 );
             }
+            // Resolve the child's program category so the recommendation can weigh
+            // program/age eligibility — not just operational headroom.
+            const programCategoryId =
+                (param(request, "program_category_id") ||
+                    (await resolveChildProgramCategoryId(supabase, ctx.orgId, childAgreementId))) ||
+                null;
             let dateStart = param(request, "start_date");
             if (!dateStart) dateStart = await resolveOperationalEnrollmentTodayYmd(supabase, ctx.orgId);
             if (!ISO_DATE_RE.test(dateStart)) {
@@ -245,36 +289,7 @@ export async function GET(request: NextRequest) {
             // the pre-enrolled desired program on the opportunity member), then its key.
             let programCategoryId = param(request, "program_category_id");
             if (!programCategoryId && customerMemberId) {
-                const { data: pl } = await supabase
-                    .from("child_placements")
-                    .select("program_category_id")
-                    .eq("org_id", ctx.orgId)
-                    .eq("customer_member_id", customerMemberId)
-                    .in("status", ["planned", "active", "ending"])
-                    .maybeSingle();
-                programCategoryId = (pl as { program_category_id?: string | null } | null)?.program_category_id ?? "";
-                if (!programCategoryId) {
-                    // customerMemberId may be a real member id (enrolled) or an
-                    // opportunity_customer_member id (pre-enrolled) — try both.
-                    const byMember = await supabase
-                        .from("opportunity_customer_members")
-                        .select("program_category_id")
-                        .eq("org_id", ctx.orgId)
-                        .eq("customer_member_id", customerMemberId)
-                        .maybeSingle();
-                    programCategoryId =
-                        (byMember.data as { program_category_id?: string | null } | null)?.program_category_id ?? "";
-                    if (!programCategoryId) {
-                        const byId = await supabase
-                            .from("opportunity_customer_members")
-                            .select("program_category_id")
-                            .eq("org_id", ctx.orgId)
-                            .eq("id", customerMemberId)
-                            .maybeSingle();
-                        programCategoryId =
-                            (byId.data as { program_category_id?: string | null } | null)?.program_category_id ?? "";
-                    }
-                }
+                programCategoryId = await resolveChildProgramCategoryId(supabase, ctx.orgId, customerMemberId);
             }
             let programKey = "";
             if (programCategoryId) {

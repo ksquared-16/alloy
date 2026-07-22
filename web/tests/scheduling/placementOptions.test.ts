@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     classifyPlacementOptions,
+    DEFAULT_RECOMMENDATION_POLICY,
     type RoomOccupancyDelta,
 } from "@/lib/scheduling/options/generatePlacementOptions";
 
@@ -8,7 +9,8 @@ function delta(
     roomId: string,
     afterPeakOccupancy: number,
     blockers: string[] = [],
-    roomName = roomId
+    roomName = roomId,
+    extra: Partial<Pick<RoomOccupancyDelta, "programMatch" | "continuity">> = {}
 ): RoomOccupancyDelta {
     return {
         roomId,
@@ -16,6 +18,7 @@ function delta(
         beforePeakOccupancy: afterPeakOccupancy - 1,
         afterPeakOccupancy,
         blockers,
+        ...extra,
     };
 }
 
@@ -58,5 +61,54 @@ describe("classifyPlacementOptions", () => {
         const opts = classifyPlacementOptions([delta("bravo", 8), delta("alpha", 8)]);
         expect(opts[0].classification).toBe("recommended");
         expect(opts[0].roomId).toBe("alpha");
+    });
+
+    it("prefers the program/age-matched room over merely emptier rooms (headroom alone is not sufficient)", () => {
+        const opts = classifyPlacementOptions([
+            delta("empty_wrong_age", 3, [], "empty_wrong_age", { programMatch: false }),
+            delta("program_room", 9, [], "program_room", { programMatch: true }),
+        ]);
+        const rec = opts.find((o) => o.classification === "recommended")!;
+        expect(rec.roomId).toBe("program_room");
+        expect(rec.reason).toContain("Right room for the program");
+    });
+
+    it("prefers continuity when no program match distinguishes the rooms", () => {
+        const opts = classifyPlacementOptions([
+            delta("new_empty", 4, [], "new_empty", { continuity: false }),
+            delta("current_room", 7, [], "current_room", { continuity: true }),
+        ]);
+        const rec = opts.find((o) => o.classification === "recommended")!;
+        expect(rec.roomId).toBe("current_room");
+        expect(rec.reason).toContain("continuity");
+    });
+
+    it("never recommends a blocked room even when it is the program match", () => {
+        const opts = classifyPlacementOptions([
+            delta("program_full", 12, ["expected 12 exceeds capacity 11"], "program_full", { programMatch: true }),
+            delta("open_room", 8, [], "open_room", { programMatch: false }),
+        ]);
+        expect(opts.find((o) => o.roomId === "program_full")!.classification).toBe("blocked");
+        expect(opts.find((o) => o.classification === "recommended")!.roomId).toBe("open_room");
+    });
+
+    it("honors a configured policy that puts headroom first", () => {
+        const headroomFirst = { factors: ["headroom", "program_match", "continuity"] as const };
+        const opts = classifyPlacementOptions(
+            [
+                delta("program_room", 9, [], "program_room", { programMatch: true }),
+                delta("emptier", 3, [], "emptier", { programMatch: false }),
+            ],
+            { factors: [...headroomFirst.factors] }
+        );
+        expect(opts.find((o) => o.classification === "recommended")!.roomId).toBe("emptier");
+    });
+
+    it("default policy leads with program match, then continuity, then headroom", () => {
+        expect(DEFAULT_RECOMMENDATION_POLICY.factors).toEqual([
+            "program_match",
+            "continuity",
+            "headroom",
+        ]);
     });
 });

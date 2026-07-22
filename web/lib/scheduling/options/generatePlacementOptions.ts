@@ -22,6 +22,7 @@ import {
     loadOperationalExpectationInputs,
     type OperationalExpectationInputs,
 } from "@/lib/childcareOperational/expectations/loadOperationalExpectationInputs";
+import { loadExpectationAgeGroups } from "@/lib/childcareOperational/expectations/resolveExpectationAgeGroups";
 import type { ExpectedOccupancyEntry } from "@/lib/childcareOperational/expectations/scheduleExpectationCore";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 
@@ -38,27 +39,70 @@ export type PlacementOption = {
     blockers: string[];
 };
 
-/** Per-candidate occupancy delta + any hard warnings — the classifier's input. */
+/** Per-candidate occupancy delta + eligibility/continuity signals — the classifier's input. */
 export type RoomOccupancyDelta = {
     roomId: string;
     roomName: string | null;
     beforePeakOccupancy: number;
     afterPeakOccupancy: number;
     blockers: string[];
+    /** Room's age group matches the child's program/age eligibility (config-resolved). */
+    programMatch?: boolean;
+    /** Child already occupies this room (effective-dated continuity preference). */
+    continuity?: boolean;
+};
+
+/**
+ * Configured recommendation policy — the ORDERED factors that decide the room,
+ * strongest first. Operational headroom alone is not sufficient (V1 requirement),
+ * so the default leads with program/age eligibility, then continuity, then headroom
+ * as the tiebreak. A site may reorder/trim these; the resolver defaults to this.
+ */
+export type RecommendationFactor = "program_match" | "continuity" | "headroom";
+export type RecommendationPolicy = { factors: RecommendationFactor[] };
+export const DEFAULT_RECOMMENDATION_POLICY: RecommendationPolicy = {
+    factors: ["program_match", "continuity", "headroom"],
 };
 
 // ---------------------------------------------------------------------------
 // Pure decision logic (unit-tested)
 // ---------------------------------------------------------------------------
 
+/** Compare two eligible rooms by one factor: negative = `a` is the better pick. */
+function compareByFactor(a: RoomOccupancyDelta, b: RoomOccupancyDelta, factor: RecommendationFactor): number {
+    switch (factor) {
+        case "program_match":
+            return (b.programMatch ? 1 : 0) - (a.programMatch ? 1 : 0);
+        case "continuity":
+            return (b.continuity ? 1 : 0) - (a.continuity ? 1 : 0);
+        case "headroom":
+            return a.afterPeakOccupancy - b.afterPeakOccupancy;
+    }
+}
+
+/** The plain "why" for the recommended room, from the strongest factor it won on. */
+function recommendationReason(r: RoomOccupancyDelta, policy: RecommendationPolicy): string {
+    for (const factor of policy.factors) {
+        if (factor === "program_match" && r.programMatch)
+            return `Right room for the program — ${r.afterPeakOccupancy} scheduled after placement`;
+        if (factor === "continuity" && r.continuity)
+            return `Keeps continuity — the child's current room`;
+    }
+    return `Most headroom — ${r.afterPeakOccupancy} scheduled after placement`;
+}
+
 /**
  * Pure: classify each candidate and preselect at most one Recommended option.
- * A candidate with any blocker is Blocked. Among unblocked candidates the
- * Recommended one is the deterministic, safe choice — the most headroom (lowest
- * resulting occupancy), ties broken stably by room id. If none is unblocked,
- * nothing is recommended (the operator chooses / no valid room).
+ * A candidate with any blocker is Blocked (eligibility/capacity/schedule rules are
+ * enforced upstream by the expectation builder). Among unblocked candidates the
+ * Recommended one is chosen by the configured policy — program/age eligibility, then
+ * continuity, then operational headroom — never headroom alone. Ties break stably by
+ * room id. If none is unblocked, nothing is recommended.
  */
-export function classifyPlacementOptions(rooms: RoomOccupancyDelta[]): PlacementOption[] {
+export function classifyPlacementOptions(
+    rooms: RoomOccupancyDelta[],
+    policy: RecommendationPolicy = DEFAULT_RECOMMENDATION_POLICY,
+): PlacementOption[] {
     const options: PlacementOption[] = rooms.map((r) => ({
         roomId: r.roomId,
         roomName: r.roomName,
@@ -72,15 +116,18 @@ export function classifyPlacementOptions(rooms: RoomOccupancyDelta[]): Placement
         blockers: r.blockers,
     }));
 
-    const eligible = options.filter((o) => o.classification === "eligible");
-    if (eligible.length > 0) {
-        const recommended = eligible.reduce((best, o) => {
-            if (o.afterPeakOccupancy < best.afterPeakOccupancy) return o;
-            if (o.afterPeakOccupancy === best.afterPeakOccupancy && o.roomId < best.roomId) return o;
-            return best;
+    const eligibleDeltas = rooms.filter((r) => r.blockers.length === 0);
+    if (eligibleDeltas.length > 0) {
+        const best = eligibleDeltas.reduce((winner, r) => {
+            for (const factor of policy.factors) {
+                const cmp = compareByFactor(r, winner, factor);
+                if (cmp !== 0) return cmp < 0 ? r : winner;
+            }
+            return r.roomId < winner.roomId ? r : winner;
         });
+        const recommended = options.find((o) => o.roomId === best.roomId)!;
         recommended.classification = "recommended";
-        recommended.reason = `Most headroom — ${recommended.afterPeakOccupancy} scheduled after placement`;
+        recommended.reason = recommendationReason(best, policy);
     }
 
     // Stable order: recommended first, then eligible, then blocked; each group by room name/id.
@@ -129,11 +176,40 @@ export type BuildPlacementOptionsArgs = {
     candidateRooms: { id: string; name: string | null }[];
     dateStart: string;
     dateEnd: string;
+    /** Configured recommendation policy (defaults to program → continuity → headroom). */
+    policy?: RecommendationPolicy;
 };
+
+/**
+ * Rooms this child already occupies — the continuity signal. The loaded placements
+ * are already scoped to current/future operational rows (active/ending/planned), so
+ * any placement on the child's own agreement is a genuine continuity room.
+ */
+function continuityRoomIdsForChild(
+    placements: OperationalExpectationInputs["placements"],
+    childAgreementId: string,
+): Set<string> {
+    const ids = new Set<string>();
+    for (const p of placements) {
+        if (p.enrollment_agreement_id === childAgreementId && p.room_location_id) {
+            ids.add(p.room_location_id);
+        }
+    }
+    return ids;
+}
 
 /** Build options by injecting the child into each candidate room and re-running the builder. */
 export function buildPlacementOptions(args: BuildPlacementOptionsArgs): PlacementOption[] {
     const { inputs, childAgreementId } = args;
+
+    // Config-resolved program/age eligibility target: the age group the child's program
+    // maps to. A candidate room "matches the program" when its age group is the same.
+    const programAgeGroupId =
+        args.programCategoryId != null
+            ? inputs.ageGroupByProgramCategoryId?.[args.programCategoryId] ?? null
+            : null;
+    const ageGroupByRoom = inputs.ageGroupByRoomLocationId ?? {};
+    const continuityRoomIds = continuityRoomIdsForChild(inputs.placements, childAgreementId);
 
     const patternsById = new Map(inputs.patternsById);
     if (!patternsById.has(args.patternId)) {
@@ -198,10 +274,12 @@ export function buildPlacementOptions(args: BuildPlacementOptionsArgs): Placemen
             beforePeakOccupancy: peakOccupancyForRoom(baseline.expectedOccupancyByRoomDate, room.id),
             afterPeakOccupancy: peakOccupancyForRoom(after.expectedOccupancyByRoomDate, room.id),
             blockers: [...new Set(blockers)],
+            programMatch: programAgeGroupId != null && ageGroupByRoom[room.id] === programAgeGroupId,
+            continuity: continuityRoomIds.has(room.id),
         };
     });
 
-    return classifyPlacementOptions(deltas);
+    return classifyPlacementOptions(deltas, args.policy ?? DEFAULT_RECOMMENDATION_POLICY);
 }
 
 // ---------------------------------------------------------------------------
@@ -267,8 +345,28 @@ export async function generatePlacementOptions(
         input.siteLocationId
     );
 
+    // Age groups from existing placements don't cover the CANDIDATE rooms or the child's
+    // program (a lead child has no placement yet). Resolve them for the candidate rooms +
+    // this child's program so the recommendation can weigh program/age eligibility, and
+    // merge over the placement-derived maps.
+    const extraAgeGroups = await loadExpectationAgeGroups(supabase, input.orgId, {
+        programCategoryIds: input.programCategoryId ? [input.programCategoryId] : [],
+        roomLocationIds: candidateRooms.map((r) => r.id),
+    });
+    const inputsWithAgeGroups: OperationalExpectationInputs = {
+        ...inputs,
+        ageGroupByRoomLocationId: {
+            ...(inputs.ageGroupByRoomLocationId ?? {}),
+            ...extraAgeGroups.ageGroupByRoomLocationId,
+        },
+        ageGroupByProgramCategoryId: {
+            ...(inputs.ageGroupByProgramCategoryId ?? {}),
+            ...extraAgeGroups.ageGroupByProgramCategoryId,
+        },
+    };
+
     return buildPlacementOptions({
-        inputs,
+        inputs: inputsWithAgeGroups,
         childAgreementId: input.childAgreementId,
         programCategoryId: input.programCategoryId,
         patternId: input.patternId,

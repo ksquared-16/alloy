@@ -655,7 +655,7 @@ function RoomRow({ option, selected, recommended }: { option: PlacementOption; s
         >
             <span>
                 <span style={{ fontWeight: 600 }}>{option.roomName ?? option.roomId}</span>
-                <span style={{ color: "#98a2b3", marginLeft: 8, fontSize: 11.5 }}>{option.reason}</span>
+                <span data-room-reason={recommended ? "recommended" : undefined} style={{ color: "#98a2b3", marginLeft: 8, fontSize: 11.5 }}>{option.reason}</span>
             </span>
             <span style={{ fontSize: 10.5, fontWeight: 600, color: recommended ? "#00a283" : "#98a2b3" }}>
                 {recommended ? "Recommended" : option.classification}
