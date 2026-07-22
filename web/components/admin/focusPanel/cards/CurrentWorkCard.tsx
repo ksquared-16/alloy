@@ -443,17 +443,24 @@ export default function CurrentWorkCard({
                 onOpen={coordination?.openCurrentWorkWorkspace ? () => openWorkspace({ kind: "drill_in" }) : undefined}
             />;
 
+    // Shared hosted-capability mode: when a capability panel is active in the focused card, What's
+    // Next collapses to a COMPACT CONTEXT FRAME — the explanatory sentence is dropped and the card
+    // becomes a fill/scroll host so the capability's own footer stays visible. Driven by the
+    // presence of an active capability, never by action name.
+    const capabilityActive = isWorkspace && activePanelAction != null;
+
     return (
         <div
             className="alloy-os-household alloy-os-currentwork"
             data-work-card="true"
             data-work-card-perspective={stageWorkPending ? "pending" : evidence.isEmpty ? "empty" : isWorkspace ? "focused" : "summary"}
+            data-capability-active={capabilityActive ? "true" : undefined}
             data-current-work-surface="true"
         >
             <UniversalCard
                 title={vm.microLabel}
                 insight={surface.title}
-                supportingInsight={surface.description}
+                supportingInsight={capabilityActive ? null : surface.description}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype="status"

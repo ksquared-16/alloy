@@ -5758,26 +5758,45 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   max-height: min(68vh, calc(100dvh - 120px));
   overflow-y: auto;
 }
-/* #1: when a hosted capability (composer/tour) is active, the surface fills a fixed height and
- * does NOT scroll as a whole — the capability body scrolls internally, its footer stays visible. */
+/* Shared hosted-capability mode (#1, generic): when ANY capability is active the whole card is a
+ * fill/scroll host — the capability body scrolls internally, its footer stays pinned/visible, and
+ * NO nested full-surface scrollbar appears. Driven by data-capability-active, not by action name. */
+/* The card CONTENT-SIZES to the capability (capped) — short capabilities (forms/outcomes/tour
+ * loading) stay compact with no blank reserved region; tall ones (composer) cap and scroll inside
+ * their own region, never a nested full-surface scrollbar. */
+.alloy-os-currentwork[data-capability-active="true"] .alloy-os-ucard__body {
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 12px 10px;
+  display: flex;
+  flex-direction: column;
+}
+/* Compact context header: obligation + status only (the explanatory sentence is dropped in JS). */
+.alloy-os-currentwork[data-capability-active="true"] .alloy-os-ucard__header {
+  flex: 0 0 auto;
+  padding-bottom: 6px;
+}
+/* Cap the centered card to the viewport; height follows content (max-content on the base rule). */
+.alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-currentwork[data-capability-active="true"]
+  .alloy-os-ucard {
+  max-height: min(86vh, calc(100dvh - 40px));
+}
 .alloy-os-currentwork__focused[data-has-panel="true"] {
-  height: min(82vh, calc(100dvh - 72px));
+  min-height: 0;
   max-height: none;
   overflow: hidden;
   gap: 8px;
 }
-.alloy-os-currentwork__focused[data-has-panel="true"] .alloy-os-currentwork__focused-topbar {
-  flex: 0 0 auto;
-}
 .alloy-os-currentwork__focused-panel-host {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 .alloy-os-currentwork__focused-panel-host > * {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
 }
 .alloy-os-currentwork__focused-topbar {

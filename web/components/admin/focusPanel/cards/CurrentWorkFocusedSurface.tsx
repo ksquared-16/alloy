@@ -116,20 +116,26 @@ export default function CurrentWorkFocusedSurface({
             role="group"
             aria-label="What's Next"
         >
-            <div className="alloy-os-currentwork__focused-topbar">
-                {reason ?
-                    <p className="alloy-os-currentwork__focused-reason" data-work-focused-reason="true">{reason}</p>
-                :   <span />}
-                <button
-                    type="button"
-                    className="alloy-os-currentwork__focused-close"
-                    onClick={onClose}
-                    data-work-action="close-focused"
-                    aria-label="Close"
-                >
-                    ✕
-                </button>
-            </div>
+            {/* In capability mode the compact context is the UniversalCard header (obligation +
+                status); we drop the reason/close topbar so the capability gets the full height and
+                its own footer stays visible. The topbar returns in default/outcome mode. */}
+            {hasPanel ?
+                null
+            :   <div className="alloy-os-currentwork__focused-topbar">
+                    {reason ?
+                        <p className="alloy-os-currentwork__focused-reason" data-work-focused-reason="true">{reason}</p>
+                    :   <span />}
+                    <button
+                        type="button"
+                        className="alloy-os-currentwork__focused-close"
+                        onClick={onClose}
+                        data-work-action="close-focused"
+                        aria-label="Close"
+                    >
+                        ✕
+                    </button>
+                </div>
+            }
 
             {hasPanel ?
                 // Active capability (composer / tour) is the primary content: it fills the remaining
