@@ -66,7 +66,9 @@ export default function CurrentWorkFocusedSurface({
     actionPanel,
 }: Props) {
     // Engaging the outcome section recedes the commands (they stay available, just secondary).
-    const [emphasizeOutcome, setEmphasizeOutcome] = useState(false);
+    // Opening via "Record outcome" (select_result phase) starts in outcome-emphasis mode directly.
+    const [outcomeClicked, setOutcomeClicked] = useState(false);
+    const emphasizeOutcome = outcomeClicked || completionPhase === "select_result";
 
     const reason = surface.readiness.reasonLabel?.trim() || surface.description?.trim() || null;
 
@@ -91,7 +93,7 @@ export default function CurrentWorkFocusedSurface({
     const processing = completionPhase === "processing";
 
     const runCommand = (action: CurrentWorkActionVM) => {
-        setEmphasizeOutcome(false);
+        setOutcomeClicked(false);
         onAction(action);
     };
 
@@ -118,7 +120,11 @@ export default function CurrentWorkFocusedSurface({
                 </button>
             </div>
 
-            {confirming ?
+            {actionPanel ?
+                // An active capability panel (composer / tour / transition) IS the primary content —
+                // it replaces the command/outcome sections instead of appending below them.
+                <div className="alloy-os-currentwork__focused-panel-host">{actionPanel}</div>
+            : confirming ?
                 <div className="alloy-os-currentwork__focused-confirm" data-work-outcome-confirm="true">
                     <p className="alloy-os-currentwork__focused-section-title">Record outcome</p>
                     <p className="alloy-os-currentwork__focused-confirm-outcome">{pendingOutcome!.label}</p>
@@ -191,7 +197,7 @@ export default function CurrentWorkFocusedSurface({
                                 className="alloy-os-currentwork__focused-section-title alloy-os-currentwork__focused-outcomes-toggle"
                                 data-work-action="focus-outcomes"
                                 aria-pressed={emphasizeOutcome}
-                                onClick={() => setEmphasizeOutcome(true)}
+                                onClick={() => setOutcomeClicked(true)}
                             >
                                 What happened?
                             </button>
@@ -254,7 +260,6 @@ export default function CurrentWorkFocusedSurface({
             {error ?
                 <p className="alloy-os-currentwork__error" role="alert">{error}</p>
             :   null}
-            {actionPanel}
         </div>
     );
 }

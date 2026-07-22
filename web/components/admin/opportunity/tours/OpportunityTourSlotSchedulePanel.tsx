@@ -219,8 +219,7 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                     </div>
                 </div>
                 <div className="mt-1 text-[11px] text-alloy-midnight/50">
-                    {TOUR_SLOT_PAGE_DAYS}-day windows (UTC). Pick a day, then a time —{" "}
-                    <code className="rounded bg-alloy-stone/10 px-1">tour_bookings</code> stays the source of truth.
+                    Choose a day, then an available time to book the tour.
                 </div>
             </div>
             <div className="max-h-[70vh] space-y-3 overflow-auto px-5 py-4">
