@@ -145,12 +145,30 @@ describe("formsFieldSourceBinding round trip", () => {
 });
 
 describe("formsDocuments schema compatibility", () => {
-    it("existing operational fields produce unchanged field_source when authored from registry entry", () => {
+    it("adult (guardian) fields normalize to a canonical person binding; other fields keep registry vocabulary", () => {
+        // The Processing identity engine (extractBoundPerson) only maps fields whose
+        // field_source is a canonical PERSON binding, so adult/guardian fields are normalized
+        // at author time (see sourceFromEntry). Everything else keeps its registry vocabulary.
+        const PERSON_FIELD_KEY_BY_ID: Record<string, string> = {
+            guardian_first_name: "first_name",
+            guardian_last_name: "last_name",
+            guardian_email: "email",
+            guardian_phone: "phone",
+        };
         for (const entry of OPERATIONAL_FORM_SYSTEM_FIELDS) {
             if (entry.id === "enrollment_acknowledgement_signature") continue;
             const field = formFieldFromRegistryEntry(entry, {});
-            expect(field.field_source?.entity_type).toBe(entry.entity_type);
-            expect(field.field_source?.field_key).toBe(entry.field_key);
+            const personKey = PERSON_FIELD_KEY_BY_ID[entry.id];
+            if (personKey) {
+                expect(field.field_source?.entity_type).toBe("person");
+                expect(field.field_source?.field_key).toBe(personKey);
+                // The field id (entry.field_key, e.g. "guardian_email") is unchanged so
+                // intake-meta resolution by field id is unaffected.
+                expect(field.id).toBe(entry.field_key);
+            } else {
+                expect(field.field_source?.entity_type).toBe(entry.entity_type);
+                expect(field.field_source?.field_key).toBe(entry.field_key);
+            }
             if (entry.shared_value_key) {
                 expect(field.field_source?.shared_value_key).toBe(entry.shared_value_key);
             }
