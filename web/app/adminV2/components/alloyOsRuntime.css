@@ -2186,6 +2186,7 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-activity-cockpit__comms [data-cc-ws-column="composer"] > div:last-child {
   position: sticky;
   bottom: 0;
+  flex-wrap: wrap;
   justify-content: flex-end;
   background: var(--alloy-os-surface, #fff);
   padding-top: 6px;

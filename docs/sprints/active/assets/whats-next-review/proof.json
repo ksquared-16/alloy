@@ -23,7 +23,7 @@
   ],
   "focusedMatchesSummary": true,
   "tour": {
-    "clickToAvailabilityMs": 144,
+    "clickToAvailabilityMs": 478,
     "bootstrapLoaderShown": false
   },
   "composer": {
@@ -34,15 +34,15 @@
     "bosWithinComposer": false
   },
   "tourEvents": [
-    "+21022ms tour.prefetch.start miss",
-    "+24477ms tour.prefetch.reuse hit",
-    "+54955ms tour.prefetch.ready 24 slots · 0 bookings",
-    "+55053ms tour.prefetch.reuse hit",
-    "+58024ms tour.peek value ready",
-    "+58028ms tour.peek value ready",
-    "+58033ms tour.peek value ready",
-    "+58040ms tour.peek value ready",
-    "+58054ms tour.peek value ready",
-    "+58055ms tour.peek value ready"
+    "+21448ms tour.prefetch.start miss",
+    "+24286ms tour.prefetch.reuse hit",
+    "+24399ms tour.prefetch.ready 24 slots · 0 bookings",
+    "+24762ms tour.prefetch.reuse hit",
+    "+27996ms tour.peek value ready",
+    "+28004ms tour.peek value ready",
+    "+28009ms tour.peek value ready",
+    "+28016ms tour.peek value ready",
+    "+28026ms tour.peek value ready",
+    "+28027ms tour.peek value ready"
   ]
 }
