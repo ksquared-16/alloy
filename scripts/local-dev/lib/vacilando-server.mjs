@@ -37,6 +37,7 @@ import { readDirectorLog } from "./vacilando/commands/director.mjs";
 import { prForWorktree } from "./vacilando/github.mjs";
 import { collectPolicies } from "./vacilando/policies.mjs";
 import { collectUsage } from "./vacilando/usage.mjs";
+import { getProviderRuntime } from "./vacilando/provider-runtime.mjs";
 import { schedule } from "./vacilando/scheduler.mjs";
 import { readReviews } from "./vacilando/commands/review.mjs";
 
@@ -139,6 +140,15 @@ const snapshotSafe = () => getSnapshot();
 /** Force a fresh projection (bypass TTL) and update the cache. Used after a command. */
 const forceSnapshot = () => getSnapshot({ maxAgeMs: 0 });
 
+/** Assemble the (usage, worker-count) inputs the Provider Runtime needs, keyed by provider id. */
+function providerRuntimeInputs(snap, usage) {
+  const usageByProvider = {};
+  for (const p of (usage || collectUsage()).providers || []) usageByProvider[p.provider] = p;
+  const workersByProvider = {};
+  for (const s of snap?.sprints || []) { if (s.provider) workersByProvider[s.provider] = (workersByProvider[s.provider] || 0) + 1; }
+  return { usageByProvider, workersByProvider };
+}
+
 /** Resources are OS reads (incl. a bounded `du`); cache briefly so the board is snappy. */
 const resCache = { at: 0, data: null, inflight: null };
 async function resourcesCached() {
@@ -215,9 +225,15 @@ export function createVacilandoServer() {
     if (path === "/api/usage") {
       return sendJson(res, 200, collectUsage());
     }
+    if (path === "/api/providers") {
+      const snap = await snapshotSafe();
+      const rt = await getProviderRuntime(providerRuntimeInputs(snap));
+      return sendJson(res, 200, rt);
+    }
     if (path === "/api/dashboard") {
       const [snap, resrc] = await Promise.all([snapshotSafe(), resourcesCached()]);
       const usage = collectUsage();
+      const provider_runtime = await getProviderRuntime(providerRuntimeInputs(snap, usage));
       const sched = schedule(snap, resrc);
       const audit = readAuditEvents(300);
       const today = new Date().toISOString().slice(0, 10);
@@ -245,6 +261,7 @@ export function createVacilandoServer() {
         },
         machine: resrc.overall,
         providers: usage,
+        provider_runtime,
         scheduler: sched,
         throughput,
         operator_load,

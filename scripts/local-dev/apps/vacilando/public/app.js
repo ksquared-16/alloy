@@ -181,11 +181,19 @@ function dashboardCenter() {
         ${stat("Servers", m.running_servers ?? "—", "running")}</div>
         <div class="muted src">${esc(m.mem_source || "")}</div></div>
 
-      <div class="dsec"><div class="dsh">Provider usage</div>${(d.providers?.providers || []).length ? (d.providers.providers).map((p) => `
-        <div class="prov"><div class="prov-h"><b>${esc(p.provider)}</b> <span class="hpill ${p.auth_state === "authenticated" ? "healthy" : p.auth_state === "needs_auth" ? "attention" : "finished"}">${esc(p.auth_state)}</span></div>
-          <div class="prov-m">${p.calls} calls · ${p.calls_today} today · ${p.input_tokens}→${p.output_tokens} tok · ${p.avg_duration_ms != null ? (p.avg_duration_ms / 1000).toFixed(1) + "s avg" : "—"} · ${p.failures} fail</div>
-          <div class="prov-c">cost: ${p.cost.kind === "authoritative" ? `$${p.cost.value_usd} (authoritative)` : p.cost.kind === "estimate" ? `~$${p.cost.value_usd} (estimate)` : "unavailable"}</div></div>`).join("") : `<div class="muted">No provider round-trips yet. Use a worker's Director tab.</div>`}
-        <div class="muted src">${esc(d.providers?.cost_note || "")}</div></div>
+      <div class="dsec"><div class="dsh">Providers <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· authentication owned by Provider Runtime</span></div>
+        ${(d.provider_runtime?.providers || []).map((p) => `
+        <div class="prov"><div class="prov-h"><b>${esc(p.label)}</b>
+            <span class="hpill ${p.auth.state === "authenticated" ? "healthy" : p.auth.state === "needs_auth" ? "attention" : "finished"}">${esc(p.auth.label)}</span>
+            ${p.auth.state === "authenticated" ? `<span class="hpill healthy">${esc(p.health.label)}</span>` : ""}</div>
+          ${p.auth.state === "authenticated"
+            ? `<div class="prov-m">${p.active_workers} worker${p.active_workers === 1 ? "" : "s"} · ${p.usage.calls_today} today · ${(p.usage.input_tokens || 0)}→${(p.usage.output_tokens || 0)} tok · ${p.usage.last_success ? "last " + ago(Date.parse(p.usage.last_success)) + " ago" : "no requests yet"}</div>
+               <div class="prov-c">cost: ${p.usage.cost.kind === "authoritative" ? `$${p.usage.cost.value_usd}` : p.usage.cost.kind === "estimate" ? `~$${p.usage.cost.value_usd}` : "unavailable"} · last error: ${esc(p.last_error || "None")}</div>`
+            : p.auth.state === "not_configured"
+              ? `<div class="prov-m muted">${esc(p.auth.detail || "not configured")}</div>`
+              : `<div class="prov-auth"><span class="muted">${esc(p.auth.detail || "reconnect required")}</span> <button class="btn sm warn" data-prov-reconnect="${p.id}">Reconnect</button></div>`}
+        </div>`).join("")}
+        <div class="muted src">One reconnect fixes every worker — providers are shared infrastructure, not per-worker logins. Manage in Settings → Providers.</div></div>
     </div>
 
     <div class="dgrid2">
@@ -341,14 +349,13 @@ const capProvider = (p) => (p ? p.charAt(0).toUpperCase() + p.slice(1) : "—");
 // (2) the most recent real round-trip observed for THIS worker, then
 // (3) an honest "not yet checked" when we have no observation.
 function providerStatus(provider, slot) {
-  const p = (state._dash?.providers?.providers || []).find((x) => x.provider === provider);
-  if (p && p.auth_state === "authenticated") return { label: "Authenticated", k: "healthy" };
-  if (p && p.auth_state === "needs_auth") return { label: "Authentication required", k: "attention" };
+  // Authoritative: the Provider Runtime owns auth (real probe), not the worker.
+  const rt = providerRt(provider);
+  if (rt) return { label: rt.auth.label, k: rt.auth.state === "authenticated" ? "healthy" : rt.auth.state === "needs_auth" ? "attention" : rt.auth.state === "unavailable" ? "attention" : "idle" };
   const lastAsk = (state.director[slot] || []).find((m) => m.delivery === "provider-round-trip");
   if (lastAsk && lastAsk.response_ok) return { label: "Authenticated", k: "healthy" };
   if (lastAsk && /auth|oauth|expired|login|credential/i.test(lastAsk.response_error || "")) return { label: "Authentication required", k: "attention" };
-  if (lastAsk) return { label: "Unavailable", k: "finished" };
-  return { label: "Not yet checked", k: "idle" };
+  return { label: "Checking…", k: "idle" };
 }
 // Precise per-record delivery status (Slice 4).
 function directorStatus(m) {
@@ -363,7 +370,7 @@ function directorStatus(m) {
 function tabDirector(sp) {
   const log = state.director[sp.slot];
   if (log === undefined) { fetchDirector(sp.slot); }
-  if (!state._dash) fetchDashboard(); // provider status metadata
+  if (!state._providers) fetchProviders(); // authoritative provider status (Provider Runtime)
   const items = log || [];
   const ps = providerStatus(sp.provider, sp.slot);
   const draft = draftFor(sp.slot);
@@ -426,17 +433,48 @@ function viewHistory() {
       <td class="mono">${esc(e.command)}</td><td class="trunc" style="max-width:320px">${esc(e.target?.label || "—")}</td>
       <td><span class="o ${e.outcome}">${esc(e.outcome)}</span></td></tr>`).join("") : `<tr><td colspan="4"><div class="empty">No commands run yet.</div></td></tr>`}</tbody></table></section>`;
 }
-function viewSettings() {
-  if (!state._cmds) { fetchCommands(); return `<div class="muted" style="padding:14px">Loading…</div>`; }
-  const sup = state._cmds.filter((c) => c.supported), un = state._cmds.filter((c) => !c.supported);
-  return `<div class="cols2">
-    <div class="sec"><h5>Governed capabilities (wired)</h5>${sup.map((c) => `<div class="capline"><span class="mono">${esc(c.key)}</span><span class="chip ${c.risk === "consequential" ? "review" : "complete"}">${esc(c.risk)}</span></div>`).join("")}</div>
-    <div class="sec"><h5>Not available (honest gaps)</h5>${un.map((c) => `<div class="capline unsup"><span class="mono">${esc(c.key)}</span></div><div class="why">${esc(c.reason)}</div>`).join("")}
-      <div class="why" style="margin-top:8px"><b>Message injection:</b> no governed way to send text into a live Claude/Cursor session — Director routes via clipboard + manual paste.</div>
-      <div class="why"><b>Provider cost/tokens:</b> no usage source on staging (needs headless <span class="mono">claude -p</span> usage JSON).</div>
+const CAP_KEYS = ["start", "resume", "ask", "stream", "cost", "usage"];
+function providerCard(p) {
+  const authClass = p.auth.state === "authenticated" ? "healthy" : p.auth.state === "needs_auth" ? "attention" : "finished";
+  const caps = CAP_KEYS.map((k) => `<span class="cap ${p.capabilities[k] ? "on" : "off"}">${k}${p.capabilities[k] ? " ✓" : " —"}</span>`).join("");
+  const kv = (a, b) => `<div class="pm-row"><span class="pm-k">${a}</span><span class="pm-v">${b}</span></div>`;
+  const authed = p.auth.state === "authenticated";
+  return `<section class="card pm-card">
+    <div class="pm-h"><div class="pm-title">${esc(p.label)} <span class="pm-ver mono">${p.version ? "v" + esc(p.version) : "—"}</span></div>
+      <span class="hpill ${authClass}">${esc(p.auth.label)}</span>${authed ? `<span class="hpill healthy">${esc(p.health.label)}</span>` : ""}</div>
+    <div class="pm-grid">
+      ${kv("Authentication", `${esc(p.auth.label)}${p.auth.identity ? ` · <span class="mono">${esc(p.auth.identity)}</span>` : ""}`)}
+      ${kv("Detail", `<span class="muted">${esc(p.auth.detail || "—")}</span>`)}
+      ${kv("Auth location", `<span class="mono">${esc(p.auth.location)}</span>`)}
+      ${kv("Expires", p.auth.expires_at ? new Date(p.auth.expires_at).toLocaleString() : (authed ? "auto-refreshed" : "—"))}
+      ${kv("Last successful request", p.usage.last_success ? ago(Date.parse(p.usage.last_success)) + " ago" : "—")}
+      ${kv("Active workers", String(p.active_workers))}
+      ${kv("Executable", `<span class="mono">${esc(p.executable || "—")}</span>`)}
+      ${kv("Transport", esc(p.transport))}
     </div>
-    <div class="sec span2"><h5>Identity &amp; scope</h5><div class="muted">Loopback-only control plane · read-only projections + governed commands · warm Vacilando identity. No remote, mobile, notifications, autonomous answers, promotion, or merge.</div></div>
-  </div>`;
+    <div class="pm-caps"><span class="pm-k">Capabilities</span> ${caps}</div>
+    <div class="pm-btns">
+      <button class="btn sm" data-prov-verify="${p.id}">Verify</button>
+      <button class="btn sm ${authed ? "" : "warn"}" data-prov-reconnect="${p.id}">Reconnect</button>
+      <button class="btn sm" data-prov-diag="${p.id}">Diagnostics</button>
+      <button class="btn sm" data-prov-disconnect="${p.id}">Disconnect</button>
+    </div></section>`;
+}
+function viewSettings() {
+  if (!state._providers) fetchProviders();
+  if (!state._cmds) fetchCommands();
+  const rt = state._providers;
+  const facts = rt?.runtime;
+  const provHtml = rt ? rt.providers.map(providerCard).join("") : `<div class="muted" style="padding:14px">Loading providers…</div>`;
+  const cmds = state._cmds || [];
+  const sup = cmds.filter((c) => c.supported);
+  return `<div class="section-title">Provider Runtime <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· authentication is infrastructure owned by Vacilando — workers reference providers, never authenticate them</span></div>
+    ${facts ? `<div class="pm-runtime"><span class="pm-k">Runtime</span>
+      <span class="mono">node ${esc(facts.node)}</span> · <span class="mono">HOME ${esc(facts.home)}</span> · <span class="mono">pid ${facts.server_pid}</span> · ${facts.inside_claude_host ? '<span class="attn">inside a Claude Code host session</span>' : "standalone shell"}</div>` : ""}
+    <div class="pm-cards">${provHtml}</div>
+    <div class="section-title" style="margin-top:16px">Governed capabilities</div>
+    <div class="sec">${sup.map((c) => `<span class="capline"><span class="mono">${esc(c.key)}</span></span>`).join(" · ") || '<span class="muted">loading…</span>'}
+      <div class="muted" style="margin-top:8px;font-size:11px">Loopback-only control plane · read-only projections + governed commands. No remote, mobile, notifications, autonomous answers, promotion, or merge.</div></div>`;
 }
 
 // -------- selection + data --------
@@ -450,6 +488,9 @@ async function fetchCommands() { try { const r = await fetch("/api/commands"); s
 async function fetchPolicies() { try { const r = await fetch("/api/policies"); state._pol = await r.json(); render(true); } catch {} }
 async function fetchResources() { try { const r = await fetch("/api/resources"); state.res = await r.json(); render(); } catch {} }
 async function fetchDashboard() { try { const r = await fetch("/api/dashboard"); state._dash = await r.json(); render(true); } catch {} }
+async function fetchProviders() { try { const r = await fetch("/api/providers"); state._providers = await r.json(); render(true); } catch {} }
+// A worker's provider status is READ from the Provider Runtime (shared), never owned by the worker.
+function providerRt(id) { return (state._providers?.providers || state._dash?.provider_runtime?.providers || []).find((p) => p.id === id) || null; }
 
 function viewPolicies() {
   if (!state._pol) { fetchPolicies(); return `<div class="muted" style="padding:14px">Loading policies…</div>`; }
@@ -509,6 +550,51 @@ function showConfirm(pv, onConfirm) {
     <div class="foot"><button class="btn cancel">Cancel</button><button class="btn ${pv.risk === "consequential" ? "go" : "primary"} ok">Confirm</button></div></div>`;
   ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
   ov.querySelector(".ok").onclick = () => { ov.remove(); onConfirm(); };
+  ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
+  document.body.appendChild(ov);
+}
+async function verifyProviderUI(id) {
+  toast("ok", `Verifying ${id}…`, "re-checking authentication");
+  const { data } = await api("/api/commands", { command: "provider.verify", input: { provider: id }, actor: "operator" });
+  const r = data?.result?.data;
+  if (r?.ok) toast(r.state === "authenticated" ? "ok" : "err", `${id}: ${r.label}`, r.detail || "");
+  else toast("err", `Verify ${id} failed`, data?.reason || data?.code || "");
+  fetchProviders(); if (state._dash) fetchDashboard();
+}
+function showProviderAction(id, kind) {
+  const p = providerRt(id);
+  const cmd = kind === "disconnect" ? (p?.disconnect_cmd) : (p?.reconnect_cmd);
+  const title = kind === "disconnect" ? "Disconnect provider" : "Reconnect provider";
+  const lead = kind === "disconnect"
+    ? `Signing out clears the <b>shared</b> credential for <b>${esc(p?.label || id)}</b> — every worker using it is affected. Vacilando does not run this for you.`
+    : `Vacilando cannot perform an interactive OAuth sign-in from a headless command. Run this <b>once</b> in a terminal; the whole Provider Runtime — and every worker — then uses it.`;
+  const ov = el("div", "ov");
+  ov.innerHTML = `<div class="dlg"><h3>${title} · ${esc(p?.label || id)}</h3>
+    <div class="b">${lead}
+      <div class="ss-h">Run in a terminal</div>
+      <div class="willrun">${esc(cmd || "—")}</div>
+      <div class="muted note">Auth location: <span class="mono">${esc(p?.auth?.location || "—")}</span></div></div>
+    <div class="foot"><button class="btn cancel">Close</button>${kind === "reconnect" ? `<button class="btn go copyc">Copy command</button>` : ""}</div></div>`;
+  ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
+  ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
+  const cp = ov.querySelector(".copyc"); if (cp) cp.onclick = () => { navigator.clipboard?.writeText(cmd || "").then(() => toast("ok", "Copied", "reconnect command copied")); };
+  document.body.appendChild(ov);
+}
+async function showProviderDiagnostics(id) {
+  const { data } = await api("/api/commands", { command: "provider.diagnostics", input: { provider: id }, actor: "operator" });
+  const d = data?.result?.data;
+  const ov = el("div", "ov");
+  const row = (k, v) => `<div class="pm-row"><span class="pm-k">${k}</span><span class="pm-v">${v}</span></div>`;
+  const body = d?.ok
+    ? `${row("Provider", esc(d.label))}${row("Executable", `<span class="mono">${esc(d.executable || "—")}</span>`)}${row("Version", d.version ? "v" + esc(d.version) : "—")}
+       ${row("Auth", `${esc(d.auth.label)}${d.auth.identity ? " · " + esc(d.auth.identity) : ""}`)}${row("Location", `<span class="mono">${esc(d.auth.location)}</span>`)}${row("Reason", esc(d.auth.detail || d.auth.reason || "—"))}
+       ${row("Subscription", esc(d.auth.subscription || "—"))}${row("HOME", `<span class="mono">${esc(d.runtime.home)}</span>`)}${row("Node", esc(d.runtime.node))}${row("Inside Claude host", String(d.runtime.inside_claude_host))}
+       ${row("Reconnect", `<span class="mono">${esc(d.reconnect_cmd)}</span>`)}`
+    : `<div class="muted">Diagnostics unavailable.</div>`;
+  ov.innerHTML = `<div class="dlg"><h3>Diagnostics · ${esc(d?.label || id)}</h3><div class="b"><div class="pm-grid">${body}</div>
+    <div class="muted note">No secrets or tokens are read — presence, expiry, and identity only.</div></div>
+    <div class="foot"><button class="btn cancel">Close</button></div></div>`;
+  ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
   ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
   document.body.appendChild(ov);
 }
@@ -597,6 +683,10 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-review]"))) { showReview(n.dataset.review); return; }
   if ((n = t("[data-prcmd]"))) { e.stopPropagation(); showOpenPr(Number(n.dataset.slot)); return; }
   if ((n = t("[data-delcmd]"))) { e.stopPropagation(); showDelete(Number(n.dataset.delcmd)); return; }
+  if ((n = t("[data-prov-verify]"))) { e.stopPropagation(); verifyProviderUI(n.dataset.provVerify); return; }
+  if ((n = t("[data-prov-reconnect]"))) { e.stopPropagation(); showProviderAction(n.dataset.provReconnect, "reconnect"); return; }
+  if ((n = t("[data-prov-disconnect]"))) { e.stopPropagation(); showProviderAction(n.dataset.provDisconnect, "disconnect"); return; }
+  if ((n = t("[data-prov-diag]"))) { e.stopPropagation(); showProviderDiagnostics(n.dataset.provDiag); return; }
   if ((n = t("[data-nav]"))) { go(n.dataset.nav); return; }
   if ((n = t("[data-route]"))) { e.preventDefault(); go(n.dataset.route); return; }
   if ((n = t("[data-sel]"))) { select(Number(n.dataset.sel)); return; }

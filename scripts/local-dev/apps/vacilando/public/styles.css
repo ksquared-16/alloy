@@ -345,6 +345,22 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 .src{font-size:10px;color:var(--ink-4);margin-top:8px;font-family:var(--mono);}
 .prov{border-top:1px solid var(--line-soft);padding:7px 0;} .prov:first-of-type{border-top:none;}
 .prov-h{display:flex;align-items:center;gap:8px;font-size:13px;} .prov-m{font-size:11.5px;color:var(--ink-2);margin-top:2px;} .prov-c{font-size:11px;color:var(--ink-3);}
+.prov-auth{font-size:11.5px;margin-top:3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.attn{color:var(--blocked);font-weight:700;}
+/* ---- Provider Manager (Settings → Providers) ---- */
+.pm-runtime{font-size:11.5px;color:var(--ink-3);margin:-2px 0 12px;} .pm-runtime .pm-k{margin-right:8px;}
+.pm-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;}
+.pm-card{padding:13px 15px;}
+.pm-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+.pm-title{font-size:15px;font-weight:700;} .pm-ver{font-size:11px;color:var(--ink-4);font-weight:400;}
+.pm-grid{display:grid;grid-template-columns:1fr;gap:3px;}
+.pm-row{display:flex;gap:10px;font-size:12px;align-items:baseline;}
+.pm-k{color:var(--ink-3);min-width:132px;flex:none;font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;}
+.pm-v{color:var(--ink);word-break:break-word;}
+.pm-caps{margin-top:9px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.cap{font-size:10.5px;font-family:var(--mono);padding:2px 7px;border-radius:var(--pill);}
+.cap.on{background:var(--green-soft);color:var(--green-ink);} .cap.off{background:var(--idle-bg);color:var(--idle);}
+.pm-btns{margin-top:11px;display:flex;gap:7px;flex-wrap:wrap;}
 .srec{font-size:12px;padding:6px 9px;border-radius:8px;margin-bottom:5px;border-left:3px solid var(--ink-4);background:var(--card-2);}
 .srec.ok{border-left-color:var(--green);} .srec.caution{border-left-color:var(--review);} .srec.block{border-left-color:var(--blocked);color:var(--blocked);} .srec.reclaim{border-left-color:var(--terra);} .srec.info{border-left-color:var(--plan);}
 .pr.ok{background:var(--green-soft);color:var(--green-ink);} .pr.elevated{background:var(--review-bg);color:var(--review);} .pr.high{background:var(--blocked-bg);color:var(--blocked);}

@@ -23,7 +23,8 @@ import os from "node:os";
 import { join } from "node:path";
 
 import { routeInstruction, recordAsk } from "./director.mjs";
-import { sendInstruction, PROVIDERS } from "../providers.mjs";
+import { PROVIDERS } from "../providers.mjs";
+import { sendViaProvider, verifyProvider, reconnectInfo, providerDiagnostics, ADAPTERS } from "../provider-runtime.mjs";
 import { recordReview } from "./review.mjs";
 
 // --------------------------------------------------------------------------
@@ -420,10 +421,41 @@ const COMMANDS = {
     run: async (v, snap, ctx) => {
       const s = sprintBySlot(snap, v.slot);
       const cwd = s?.worktree ? `${process.env.HOME}/Code/alloy-worktrees/${s.worktree}` : null;
-      const response = await sendInstruction({ provider: s?.provider, message: v.message, cwd });
+      // Worker Runtime → Provider Runtime (single owner does the shared auth
+      // pre-check; the worker never authenticates the provider itself).
+      const response = await sendViaProvider({ provider: s?.provider, message: v.message, cwd });
       const rec = recordAsk({ slot: v.slot, worktree: s?.worktree, provider: s?.provider, message: v.message, response, occurredAtMs: ctx?.nowMs });
-      return { ok: response.ok, provider: s?.provider, response: response.text, response_ok: response.ok, error: response.error, usage: response.usage, session_id: response.session_id, audit_id: rec.id };
+      return { ok: response.ok, provider: s?.provider, response: response.text, response_ok: response.ok, error: response.error, usage: response.usage, session_id: response.session_id, auth_required: response.auth_required === true, reconnect_cmd: response.reconnect_cmd || null, audit_id: rec.id };
     },
+    refresh: [],
+  },
+
+  // ---- Provider Runtime commands (auth is infrastructure, owned centrally) ----
+  "provider.verify": {
+    key: "provider.verify", title: "Verify provider", risk: "read-only", execution: "internal", confirmation: "none",
+    input: { provider: { type: "name", required: true } },
+    resolveTarget: (v) => target("provider", `verify ${v.provider}`, { provider: v.provider }),
+    eligibility: (t, snap, v) => (ADAPTERS[v.provider] ? { eligible: true } : { eligible: false, reason: `unknown provider: ${v.provider}` }),
+    preview: (v) => ({ summary: `Re-check authentication + connection for ${v.provider}.`, authoritative_target: `probe ${v.provider} (no round-trip, no cost)`, effects: ["Forces a fresh auth/version probe of the provider.", "Read-only — no request is sent to the provider."] }),
+    run: async (v) => await verifyProvider(v.provider),
+    refresh: [],
+  },
+  "provider.reconnect": {
+    key: "provider.reconnect", title: "Reconnect provider", risk: "read-only", execution: "internal", confirmation: "none",
+    input: { provider: { type: "name", required: true } },
+    resolveTarget: (v) => target("provider", `reconnect ${v.provider}`, { provider: v.provider }),
+    eligibility: (t, snap, v) => (ADAPTERS[v.provider] ? { eligible: true } : { eligible: false, reason: `unknown provider: ${v.provider}` }),
+    preview: (v) => ({ summary: `Show how to reconnect ${v.provider}.`, authoritative_target: `reconnect instructions for ${v.provider}`, effects: ["Vacilando cannot perform interactive OAuth sign-in from a headless command.", "Returns the exact one-time operator command; the whole Provider Runtime then uses it."] }),
+    run: async (v) => reconnectInfo(v.provider),
+    refresh: [],
+  },
+  "provider.diagnostics": {
+    key: "provider.diagnostics", title: "Provider diagnostics", risk: "read-only", execution: "internal", confirmation: "none",
+    input: { provider: { type: "name", required: true } },
+    resolveTarget: (v) => target("provider", `diagnostics ${v.provider}`, { provider: v.provider }),
+    eligibility: (t, snap, v) => (ADAPTERS[v.provider] ? { eligible: true } : { eligible: false, reason: `unknown provider: ${v.provider}` }),
+    preview: (v) => ({ summary: `Full diagnostics for ${v.provider} (executable, version, auth, capabilities, runtime).`, authoritative_target: `diagnose ${v.provider}`, effects: ["Read-only. No secrets or tokens are read into the result."] }),
+    run: async (v) => await providerDiagnostics(v.provider),
     refresh: [],
   },
 
