@@ -446,6 +446,7 @@ export default function CurrentWorkCard({
                 surface={surface}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
+                onOpen={coordination?.openCurrentWorkWorkspace ? () => openWorkspace({ kind: "drill_in" }) : undefined}
             />;
 
     return (
@@ -485,10 +486,12 @@ function SummaryBody({
     surface,
     onChecklistItem,
     onAction,
+    onOpen,
 }: {
     surface: CurrentWorkSurfaceVM;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
+    onOpen?: () => void;
 }) {
     const primary =
         surface.primaryAction
@@ -554,6 +557,16 @@ function SummaryBody({
                     visually subordinate, and shows a concise "Still needed" readiness summary. Detailed
                     completeness is owned by the Required Information card and is not reproduced here. */}
                 <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
+                {onOpen ?
+                    <button
+                        type="button"
+                        className="alloy-os-currentwork__summary-open"
+                        data-work-action="open-focused"
+                        onClick={onOpen}
+                    >
+                        View details →
+                    </button>
+                :   null}
             </div>
         </div>
     );

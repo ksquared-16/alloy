@@ -4,18 +4,18 @@
  * Slice A — the purpose-built centered configured-work surface.
  *
  * The focused version of the What's Next card: a single-column composition over the GENERIC
- * View Model (Slices E/F/D). It is NOT the legacy two-column workspace body — no progress
- * meter, no requirement counts, no workspace columns, no workflow-engine headings, no legacy
- * navigation. Rendered inside the card's UniversalCard so the grid's centered elevation applies.
+ * View Model (Slices E/F/D). NOT the legacy two-column workspace body — no progress meter, no
+ * requirement counts, no workspace columns, no workflow headings, no legacy navigation. Rendered
+ * inside the card's UniversalCard so the grid's centered elevation applies; the UniversalCard
+ * header already shows What's Next / obligation / status, so this body does NOT repeat them.
  *
- * Anatomy (in order): What's Next → obligation → current state/reason → primary configured
- * action → secondary configured actions → grouped missing information (Slice E) → configured
- * outcomes (Slice D) → eligible configured transitions (Slice D) → relevant recent activity.
- *
- * All execution is runtime-derived: actions gate on the Slice F execution state and resolve to
- * their canonical capability host via the card's dispatcher — no action-name branches here.
+ * Anatomy: state/reason → primary configured action → secondary configured actions → grouped
+ * missing information (Slice E) → configured outcomes (Slice D) → eligible configured transitions
+ * (Slice D) → recent activity. Engaging the outcome section recedes the commands (they stay
+ * available, just visually secondary). All execution is runtime-derived (Slice F gating).
  */
 
+import { useState } from "react";
 import clsx from "clsx";
 
 import { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWorkReadinessSummary";
@@ -65,6 +65,9 @@ export default function CurrentWorkFocusedSurface({
     onClose,
     actionPanel,
 }: Props) {
+    // Engaging the outcome section recedes the commands (they stay available, just secondary).
+    const [emphasizeOutcome, setEmphasizeOutcome] = useState(false);
+
     const reason = surface.readiness.reasonLabel?.trim() || surface.description?.trim() || null;
 
     // Primary configured command (never invented from the work title). Outcomes lead on their own.
@@ -87,10 +90,23 @@ export default function CurrentWorkFocusedSurface({
     const confirming = completionPhase === "confirm" && pendingOutcome != null;
     const processing = completionPhase === "processing";
 
+    const runCommand = (action: CurrentWorkActionVM) => {
+        setEmphasizeOutcome(false);
+        onAction(action);
+    };
+
     return (
-        <div className="alloy-os-currentwork__focused" data-work-focused-surface="true" role="group" aria-label="What's Next">
-            <div className="alloy-os-currentwork__focused-header">
-                <p className="alloy-os-currentwork__focused-eyebrow">What&apos;s Next</p>
+        <div
+            className="alloy-os-currentwork__focused"
+            data-work-focused-surface="true"
+            data-emphasize-outcome={emphasizeOutcome ? "true" : undefined}
+            role="group"
+            aria-label="What's Next"
+        >
+            <div className="alloy-os-currentwork__focused-topbar">
+                {reason ?
+                    <p className="alloy-os-currentwork__focused-reason" data-work-focused-reason="true">{reason}</p>
+                :   <span />}
                 <button
                     type="button"
                     className="alloy-os-currentwork__focused-close"
@@ -101,10 +117,6 @@ export default function CurrentWorkFocusedSurface({
                     ✕
                 </button>
             </div>
-            <h3 className="alloy-os-currentwork__focused-title">{surface.title}</h3>
-            {reason ?
-                <p className="alloy-os-currentwork__focused-reason" data-work-focused-reason="true">{reason}</p>
-            :   null}
 
             {confirming ?
                 <div className="alloy-os-currentwork__focused-confirm" data-work-outcome-confirm="true">
@@ -142,13 +154,16 @@ export default function CurrentWorkFocusedSurface({
                 <p className="alloy-os-currentwork__focused-reason" aria-busy="true">Recording…</p>
             :   <>
                     {primary || secondary.length > 0 ?
-                        <div className="alloy-os-currentwork__focused-actions" data-work-focused-actions="true">
+                        <div
+                            className="alloy-os-currentwork__focused-actions"
+                            data-work-focused-actions="true"
+                        >
                             {primary ?
                                 <button
                                     type="button"
                                     className="alloy-os-currentwork__primary-action"
                                     data-work-primary-action={primary.key}
-                                    onClick={() => onAction(primary)}
+                                    onClick={() => runCommand(primary)}
                                 >
                                     {primary.label}
                                 </button>
@@ -159,7 +174,7 @@ export default function CurrentWorkFocusedSurface({
                                     type="button"
                                     className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
                                     data-work-supporting-action={action.key}
-                                    onClick={() => onAction(action)}
+                                    onClick={() => runCommand(action)}
                                 >
                                     {action.label}
                                 </button>
@@ -171,7 +186,15 @@ export default function CurrentWorkFocusedSurface({
 
                     {outcomes.length > 0 ?
                         <div className="alloy-os-currentwork__focused-outcomes" data-work-focused-outcomes="true">
-                            <p className="alloy-os-currentwork__focused-section-title">What happened?</p>
+                            <button
+                                type="button"
+                                className="alloy-os-currentwork__focused-section-title alloy-os-currentwork__focused-outcomes-toggle"
+                                data-work-action="focus-outcomes"
+                                aria-pressed={emphasizeOutcome}
+                                onClick={() => setEmphasizeOutcome(true)}
+                            >
+                                What happened?
+                            </button>
                             <div className="alloy-os-currentwork__focused-outcome-pills">
                                 {outcomes.map((outcome) => (
                                     <button
@@ -198,7 +221,7 @@ export default function CurrentWorkFocusedSurface({
                                         type="button"
                                         className="alloy-os-currentwork__focused-transition"
                                         data-work-transition-action={action.key}
-                                        onClick={() => onAction(action)}
+                                        onClick={() => runCommand(action)}
                                     >
                                         {action.label}
                                     </button>

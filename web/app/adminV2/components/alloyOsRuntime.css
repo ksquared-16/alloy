@@ -5667,6 +5667,23 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   padding: 2px 0;
 }
 
+/* Slice A (#7) — the summary card links into the centered drill-in ("view more"). */
+.alloy-os-currentwork__summary-open {
+  align-self: flex-start;
+  margin-top: 2px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 70%, var(--alloy-os-midnight, #273f52));
+}
+.alloy-os-currentwork__summary-open:hover {
+  text-decoration: underline;
+}
+
 /* Slice A — centered configured-work focused surface. Single column; the centered card frame
  * + elevation come from the elevated `.alloy-os-ucard` treatment, so this only owns internal
  * layout. No progress meter, no two-column workspace grid. */
@@ -5678,20 +5695,14 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   max-height: min(68vh, calc(100dvh - 120px));
   overflow-y: auto;
 }
-.alloy-os-currentwork__focused-header {
+.alloy-os-currentwork__focused-topbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-}
-.alloy-os-currentwork__focused-eyebrow {
-  margin: 0;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+  gap: 12px;
 }
 .alloy-os-currentwork__focused-close {
+  flex-shrink: 0;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -5704,16 +5715,26 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__focused-close:hover {
   background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
 }
-.alloy-os-currentwork__focused-title {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 650;
-  color: var(--alloy-os-midnight, #273f52);
-}
 .alloy-os-currentwork__focused-reason {
   margin: 0;
   font-size: 0.85rem;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 66%, #64748b);
+}
+/* The outcome-section header is a toggle button styled as a plain section label. */
+.alloy-os-currentwork__focused-outcomes-toggle {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+/* When the outcome section is engaged, commands stay available but recede to secondary. */
+.alloy-os-currentwork__focused[data-emphasize-outcome="true"] .alloy-os-currentwork__focused-actions {
+  opacity: 0.5;
+  transition: opacity 160ms ease;
+}
+.alloy-os-currentwork__focused[data-emphasize-outcome="true"] .alloy-os-currentwork__focused-outcome-pill {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
 }
 .alloy-os-currentwork__focused-section-title {
   margin: 0 0 6px;
