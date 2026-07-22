@@ -91,18 +91,19 @@ export function ReadinessSummary({
                     className="alloy-os-currentwork__readiness-owner-group"
                     data-work-readiness-owner={group.owner.key}
                 >
-                    <p className="alloy-os-currentwork__readiness-owner">{group.owner.label}</p>
-                    <ChecklistStepper items={group.items} onNavigate={onNavigate} />
+                    {/* The owner heading IS the navigation to its card (no separate "Open X →" link). */}
                     {group.owner.card ?
                         <button
                             type="button"
-                            className="alloy-os-currentwork__stepper-button alloy-os-currentwork__readiness-owner-link"
+                            className="alloy-os-currentwork__readiness-owner alloy-os-currentwork__readiness-owner--link"
                             data-work-readiness-owner-link={group.owner.key}
                             onClick={() => onNavigate(ownerHandoffItem(group.owner))}
                         >
-                            <span className="alloy-os-currentwork__stepper-target">Open {group.owner.label} →</span>
+                            {group.owner.label}
+                            <span className="alloy-os-currentwork__readiness-owner-arrow" aria-hidden>→</span>
                         </button>
-                    :   null}
+                    :   <p className="alloy-os-currentwork__readiness-owner">{group.owner.label}</p>}
+                    <ChecklistStepper items={group.items} onNavigate={onNavigate} />
                 </div>
             ))}
             {overflow > 0 ?

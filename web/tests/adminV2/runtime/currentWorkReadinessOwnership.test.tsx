@@ -113,9 +113,12 @@ describe("ReadinessSummary owner grouping", () => {
         expect(html).toContain('data-work-readiness-owner="household"');
         expect(html).toContain("Program selection");
         expect(html).toContain("Phone number");
-        // Per-owner handoff to the owning capability.
-        expect(html).toContain("Open Children →");
-        expect(html).toContain("Open Household →");
+        // Per-owner handoff: the owner heading ITSELF is the navigation to its card (no separate
+        // "Open X →" affordance stacked under the requirement group).
+        expect(html).toContain('data-work-readiness-owner-link="children"');
+        expect(html).toContain('data-work-readiness-owner-link="household"');
+        expect(html).not.toContain("Open Children →");
+        expect(html).not.toContain("Open Household →");
     });
 
     it("dedupes duplicate fields within an owner group", () => {

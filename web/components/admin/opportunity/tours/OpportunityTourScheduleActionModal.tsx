@@ -6,6 +6,7 @@ import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoade
 import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/actions/ScheduleTourActionFormModal";
 import { OpportunityTourSlotSchedulePanel } from "@/components/admin/opportunity/tours/OpportunityTourSlotSchedulePanel";
 import { ActionModalStatusMessage } from "@/components/admin/opportunity/actions/ActionModalStatusMessage";
+import { peekWarmTourSchedule, prefetchTourSchedule, invalidateWarmTourSchedule } from "@/lib/tours/tourScheduleWarmCache";
 
 export type OpportunityTourScheduleActionModalProps = {
     open: boolean;
@@ -92,11 +93,14 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
 
     const completeWithSuccess = useCallback(
         async (result: { booking?: TourBookingRow } | undefined, message: string) => {
+            // A booking changed the availability + active bookings — drop the warm entry so the next
+            // open re-verifies (the TTL would also expire it, but this keeps it correct immediately).
+            if (oid && loc) invalidateWarmTourSchedule(oid, loc);
             await onSlotBooked(result);
             setSuccessMessage(message);
             window.setTimeout(() => onClose(), SUCCESS_DISMISS_MS);
         },
-        [onClose, onSlotBooked]
+        [onClose, onSlotBooked, oid, loc]
     );
 
     const loadActiveBookings = useCallback(async () => {
@@ -142,9 +146,20 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
             setBootstrapErr(null);
             return;
         }
+        // Warm-first: if operator intent already warmed this work unit, resolve the duplicate-guard
+        // decision synchronously — the picker (with its warm availability) opens with no "Checking
+        // tour bookings…" gate. Cold opens fall back to the fetch (and warm the cache for next time).
+        const warm = peekWarmTourSchedule(oid, loc);
+        if (warm) {
+            setActiveBookings(warm.activeBookings);
+            setBootstrapErr(null);
+            setSlotPhase(warm.activeBookings.length > 0 ? "duplicate_guard" : "schedule");
+            return;
+        }
+        void prefetchTourSchedule(oid, loc);
         setSlotPhase("bootstrapping");
         void loadActiveBookings();
-    }, [open, hasSite, oid, loadActiveBookings]);
+    }, [open, hasSite, oid, loc, loadActiveBookings]);
 
     const primaryActive = useMemo(() => activeBookings[0] ?? null, [activeBookings]);
 

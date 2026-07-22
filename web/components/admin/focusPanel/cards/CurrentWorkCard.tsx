@@ -39,6 +39,7 @@ import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContex
 import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
 import { stageWorkOutcomeEffectLines } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
+import { warmCurrentWorkCapabilitiesForActions } from "@/lib/adminV2/runtime/focusPanel/currentWork/warmCurrentWorkCapabilities";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -74,6 +75,19 @@ export default function CurrentWorkCard({
             cache: cardPerspective === "pending" ? "miss" : undefined,
         });
     }, [opportunityId, cardPerspective]);
+
+    // Warm configured capabilities on intent: as soon as What's Next shows its actions, prefetch the
+    // data each capability's host will need (keyed on the capability host, never the action name) so
+    // the centered host opens with warmed content — e.g. Schedule tour shows availability instantly.
+    useEffect(() => {
+        if (context.stageWorkPending || evidence.isEmpty) return;
+        const actions = [
+            surface.primaryAction,
+            ...surface.supportingActions,
+            ...surface.communicationActions,
+        ].filter(Boolean) as CurrentWorkActionVM[];
+        warmCurrentWorkCapabilitiesForActions(actions, context);
+    }, [context, surface, evidence.isEmpty]);
     const { completeOutcome, busy, error, clearError } = useWorkIntentOutcomeCompletion(opportunityId);
     // Slice A: Current Work elevates as a centered Focus Card. It is "open" (focused) when the
     // coordination host marks it open (drill-in / requestFocus) — or, for back-compat, when a

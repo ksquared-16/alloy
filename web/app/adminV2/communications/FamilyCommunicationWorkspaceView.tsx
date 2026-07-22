@@ -31,6 +31,9 @@ import {
 } from "@/lib/presentation/adaptiveWorkspacePresentation";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
+import ComposerScheduleSendModal from "@/components/adminV2/messaging/ComposerScheduleSendModal";
+import ComposerBosEnhanceModal from "@/components/adminV2/messaging/ComposerBosEnhanceModal";
+import { resolveComposeNewScheduleContext } from "@/lib/adminV2/messaging/messagingComposerScheduleContext";
 import {
     insertTextareaLink,
     prefixTextareaLines,
@@ -171,6 +174,8 @@ export type FamilyCommunicationWorkspaceViewProps = {
     taskSaving?: boolean;
     taskError?: string | null;
     surfaceVariant?: FamilyWorkspaceSurfaceVariant;
+    /** Opportunity anchor for Send-later scheduling context (null when not opportunity-linked). */
+    anchorOpportunityId?: string | null;
     threads?: ThreadVM[];
     onNewMessage?: () => void;
     LIVE_WORKSPACE: boolean;
@@ -211,7 +216,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         attentionLabel, onTriage, triageBusy = false,
         noteDraft = "", onNoteDraftChange, onAddNote, noteSaving = false, noteError,
         taskTitleDraft = "", taskDueDraft = "", onTaskTitleChange, onTaskDueChange, onCreateTask, onCompleteTask, taskSaving = false, taskError,
-        surfaceVariant = "default", threads = [], onNewMessage,
+        surfaceVariant = "default", threads = [], onNewMessage, anchorOpportunityId = null,
         LIVE_WORKSPACE, selectedThreadId, selectedThread = null, messages, timelineMessages = [],
         liveRecipientGroups, selectedRecipientIds, liveChannel, subjectDraft, bodyDraft, sendResult, sendError, sending, assignBusy,
         onClaim, onAllMessages, onOpenThread, onToggleRecipient, onSubjectChange, onBodyChange, onSendNow, onConfirmSend, onDismissSend,
@@ -231,6 +236,13 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const [composerLocalEmails, setComposerLocalEmails] = useState<string[]>([]);
     const [composerCcEmails, setComposerCcEmails] = useState<string[]>([]);
     const [composerBccEmails, setComposerBccEmails] = useState<string[]>([]);
+    // Canonical composer footer controls (Send later / BOS Assist) — wired to the shared modals.
+    const [scheduleOpen, setScheduleOpen] = useState(false);
+    const [bosOpen, setBosOpen] = useState(false);
+    const scheduleContext = resolveComposeNewScheduleContext({
+        opportunityId: anchorOpportunityId,
+        recipientPersonIds: selectedRecipientIds,
+    });
     const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     const timelineScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -875,21 +887,29 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 ) : null}
                 <div className="mt-2.5 flex items-center gap-1.5">
                     <button type="button" disabled={sending || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send" : "Send reply"}</button>
-                    {!isNewMessageMode ? (
-                        <>
-                            <button type="button" aria-label="Send later" className={`inline-flex shrink-0 items-center gap-1 ${activitySecondaryBtnClass}`}><Clock className="h-3.5 w-3.5" />Send later</button>
-                            <button type="button" data-bos-assist-button="true" aria-label="BOS Assist" className={isActivityEmbed ? `${COMMS_ACTIVITY_SECONDARY_BTN_CLASS} min-w-[4.5rem]` : COMMS_BOS_HEADER_BTN_CLASS}>
-                                <BosMark size="sm" horizon />
-                                BOS Assist
-                            </button>
-                        </>
-                    ) : null}
+                    {/* Send later + BOS Assist are canonical composer controls in EVERY mode (incl. new
+                        message), matching Activity mode. Wired to the shared schedule/enhance modals. */}
+                    <button type="button" aria-label="Send later" onClick={() => setScheduleOpen(true)} className={`inline-flex shrink-0 items-center gap-1 ${activitySecondaryBtnClass}`}><Clock className="h-3.5 w-3.5" />Send later</button>
+                    <button type="button" data-bos-assist-button="true" aria-label="BOS Assist" onClick={() => setBosOpen(true)} className={isActivityEmbed ? `${COMMS_ACTIVITY_SECONDARY_BTN_CLASS} min-w-[4.5rem]` : COMMS_BOS_HEADER_BTN_CLASS}>
+                        <BosMark size="sm" horizon />
+                        BOS Assist
+                    </button>
                     {!isActivityEmbed ? (
                         <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />manual send only</span>
                     ) : null}
                 </div>
                 </>
                 ) : null}
+            <ComposerScheduleSendModal
+                open={scheduleOpen}
+                onClose={() => setScheduleOpen(false)}
+                channel={liveChannel === "sms" ? "sms" : "email"}
+                subject={subjectDraft}
+                body={bodyDraft}
+                scheduleContext={scheduleContext}
+                onScheduled={() => setScheduleOpen(false)}
+            />
+            <ComposerBosEnhanceModal open={bosOpen} onClose={() => setBosOpen(false)} draft={bodyDraft} />
         </div>
     );
 

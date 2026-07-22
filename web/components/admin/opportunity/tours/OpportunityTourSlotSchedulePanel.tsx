@@ -14,6 +14,7 @@ import {
     formatTourSlotWindowRangeLabel,
     tourSlotWindowBoundsUtc,
 } from "@/lib/tours/availability/tourSlotWindowPagination";
+import { peekWarmTourSchedule } from "@/lib/tours/tourScheduleWarmCache";
 
 /** Furthest page (0-based) — ~1 year of 14-day windows without unbounded queries. */
 const MAX_RANGE_PAGE_INDEX = 26;
@@ -32,10 +33,17 @@ export type OpportunityTourSlotSchedulePanelProps = {
 
 export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSchedulePanelProps) {
     const { opportunityId, locationId, mode, primaryBooking, onCancel, onSuccess, footerSlot } = props;
-    const [rulesById, setRulesById] = useState<Record<string, { approval_required: boolean }>>({});
-    const [slots, setSlots] = useState<AvailableTourSlot[]>([]);
-    const [slotsLoading, setSlotsLoading] = useState(true);
+    // Warm-first: if operator intent already warmed this work unit's initial availability, render it
+    // synchronously (no skeleton) and re-verify fresh in the background. Only the page-0 window is warm.
+    const warmInitial = mode === "schedule" ? peekWarmTourSchedule(opportunityId, locationId) : null;
+    const [rulesById, setRulesById] = useState<Record<string, { approval_required: boolean }>>(
+        warmInitial?.rulesById ?? {},
+    );
+    const [slots, setSlots] = useState<AvailableTourSlot[]>(warmInitial?.slots ?? []);
+    const [slotsLoading, setSlotsLoading] = useState(!warmInitial);
     const [slotsErr, setSlotsErr] = useState<string | null>(null);
+    // Mirror of `slots` so the background refresh never re-flashes the skeleton when warm data is shown.
+    const slotsRef = useRef<AvailableTourSlot[]>(warmInitial?.slots ?? []);
     const [selectedSlot, setSelectedSlot] = useState<AvailableTourSlot | null>(null);
     const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -55,7 +63,9 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
     const loadSlots = useCallback(async () => {
         const gen = ++loadGeneration.current;
         setSlotsErr(null);
-        setSlotsLoading(true);
+        // Only show the skeleton when there is nothing to show yet — a warm/background refresh keeps
+        // the current availability on screen (no skeleton flash) and swaps in fresh values silently.
+        setSlotsLoading(slotsRef.current.length === 0);
         setSelectedSlot(null);
         const qs = new URLSearchParams({
             location_id: locationId,
@@ -71,6 +81,7 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
             if (gen !== loadGeneration.current) return;
             const slotsJ = (await slotsRes.json()) as { slots?: AvailableTourSlot[]; error?: string };
             if (!slotsRes.ok) throw new Error(slotsJ.error ?? slotsRes.statusText);
+            slotsRef.current = slotsJ.slots ?? [];
             setSlots(slotsJ.slots ?? []);
 
             if (mode === "schedule") {
