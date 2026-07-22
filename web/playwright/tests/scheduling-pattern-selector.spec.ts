@@ -29,7 +29,9 @@ test("compact pattern chips + day pills as source of truth (Custom on deviation)
     await page.waitForTimeout(800);
 
     await page.locator("[data-scheduling-open]").first().click({ force: true });
-    await page.waitForTimeout(3500);
+    await page.locator('[data-schedule-surface="true"]').first().waitFor({ timeout: 20000 });
+    await page.locator('[data-pattern]').first().waitFor({ timeout: 20000 });
+    await page.waitForTimeout(600);
 
     const selector = page.locator('[data-pattern-selector="true"]');
     const chips = page.locator("[data-pattern]");

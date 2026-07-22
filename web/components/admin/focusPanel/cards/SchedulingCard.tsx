@@ -21,7 +21,8 @@ type Props = {
 };
 
 type Site = { id: string; name: string };
-type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string };
+type DailyHours = { arrive: string; depart: string };
+type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string; defaultHours: DailyHours | null };
 type Money = { amountCents: number; currency: string };
 type BillingProjection = {
     status: "resolved" | "pending" | "unconfigured" | "stale";
@@ -72,6 +73,7 @@ const WEEKDAYS = [
     { i: 6, l: "S" },
     { i: 0, l: "S" },
 ];
+const WEEKDAY_LABEL: Record<number, string> = { 0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat" };
 
 async function schedApi(path: string, init?: RequestInit): Promise<any> {
     const res = await fetch(`/api/admin/scheduling${path}`, {
@@ -215,6 +217,13 @@ function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChi
     const [effStart, setEffStart] = useState("");
     const [effEnd, setEffEnd] = useState("");
     const [openEnded, setOpenEnded] = useState(true);
+    // Daily time ranges — part of the schedule definition. A schedule-wide default
+    // (seeded from the pattern's configured hours when present) plus optional per-day
+    // overrides. Empty until set — never synthesized.
+    const [arrive, setArrive] = useState("");
+    const [depart, setDepart] = useState("");
+    const [perDayOpen, setPerDayOpen] = useState(false);
+    const [perDay, setPerDay] = useState<Record<number, DailyHours>>({});
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [done, setDone] = useState<string | null>(null);
@@ -254,8 +263,13 @@ function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChi
                 const o = await schedApi(`?view=overview&site_location_id=${encodeURIComponent(siteId)}`);
                 setPatterns(o.patterns ?? []);
                 if ((o.patterns ?? []).length && !patternId) {
-                    setPatternId(o.patterns[0].id);
-                    setDays(o.patterns[0].weekdays ?? []);
+                    const first = o.patterns[0] as Pattern;
+                    setPatternId(first.id);
+                    setDays(first.weekdays ?? []);
+                    if (first.defaultHours) {
+                        setArrive((a) => a || first.defaultHours!.arrive);
+                        setDepart((d) => d || first.defaultHours!.depart);
+                    }
                 }
             } catch (e) {
                 setError((e as Error).message);
@@ -268,7 +282,30 @@ function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChi
     function choosePattern(id: string) {
         setPatternId(id);
         const p = patterns.find((x) => x.id === id);
-        if (p) setDays(p.weekdays);
+        if (p) {
+            setDays(p.weekdays);
+            // Seed the schedule's daily hours from the pattern's configured default,
+            // but never overwrite hours the operator already entered.
+            if (p.defaultHours) {
+                setArrive((a) => a || p.defaultHours!.arrive);
+                setDepart((d) => d || p.defaultHours!.depart);
+            }
+        }
+    }
+
+    // The schedule-definition times payload sent on save. A default range (both ends
+    // valid + ordered) and per-day overrides restricted to the selected days.
+    const validRange = (r: DailyHours | undefined | null): r is DailyHours =>
+        !!r && !!r.arrive && !!r.depart && r.depart > r.arrive;
+    function buildTimesPayload(): { default: DailyHours | null; perDay: Record<string, DailyHours> } | null {
+        const def = validRange({ arrive, depart }) ? { arrive, depart } : null;
+        const pd: Record<string, DailyHours> = {};
+        if (perDayOpen) {
+            for (const [k, v] of Object.entries(perDay)) {
+                if (days.includes(Number(k)) && validRange(v)) pd[k] = v;
+            }
+        }
+        return def || Object.keys(pd).length ? { default: def, perDay: pd } : null;
     }
     function toggleDay(i: number) {
         setDays((d) => (d.includes(i) ? d.filter((x) => x !== i) : [...d, i].sort((a, b) => a - b)));
@@ -338,6 +375,7 @@ function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChi
                     room_location_id: roomId || null,
                     start_date: effStart || null,
                     end_date: openEnded ? null : effEnd || null,
+                    times: buildTimesPayload(),
                     site_location_id: siteId,
                     child_name: child.name,
                     room_label: chosen?.roomName ?? "",
@@ -424,6 +462,48 @@ function ScheduleWorkSurface({ child, opportunityId, onDone }: { child: SchedChi
                         );
                     })}
                 </div>
+            </section>
+
+            {/* 2b · Daily hours — part of the schedule definition (default + per-day) */}
+            <section data-daily-hours="true">
+                {sectionLabel("Daily hours")}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                    <label style={fieldLabelStyle}>
+                        <span style={{ fontSize: 10.5, color: "#98a2b3" }}>Arrive</span>
+                        <input type="time" value={arrive} onChange={(e) => setArrive(e.target.value)} data-arrive="true" style={{ ...selStyle, width: 130 }} />
+                    </label>
+                    <label style={fieldLabelStyle}>
+                        <span style={{ fontSize: 10.5, color: "#98a2b3" }}>Depart</span>
+                        <input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} data-depart="true" style={{ ...selStyle, width: 130 }} />
+                    </label>
+                    {days.length > 1 && (
+                        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#475467", marginTop: 14 }}>
+                            <input type="checkbox" checked={perDayOpen} onChange={(e) => setPerDayOpen(e.target.checked)} data-perday-toggle="true" />
+                            Different times per day
+                        </label>
+                    )}
+                </div>
+                {arrive && depart && depart <= arrive && (
+                    <div style={{ fontSize: 11, color: "#b42318", marginTop: 4 }}>Depart must be after arrive.</div>
+                )}
+                {perDayOpen && (
+                    <div style={{ display: "grid", gap: 5, marginTop: 8 }} data-perday-grid="true">
+                        {WEEKDAYS.filter((d) => days.includes(d.i)).map((d) => {
+                            const row = perDay[d.i] ?? { arrive: "", depart: "" };
+                            const setRow = (patch: Partial<DailyHours>) =>
+                                setPerDay((prev) => ({ ...prev, [d.i]: { ...row, ...patch } }));
+                            return (
+                                <div key={d.i} style={{ display: "flex", gap: 8, alignItems: "center" }} data-perday-row={d.i}>
+                                    <span style={{ width: 26, fontSize: 11.5, fontWeight: 600, color: "#475467" }}>{WEEKDAY_LABEL[d.i]}</span>
+                                    <input type="time" value={row.arrive} onChange={(e) => setRow({ arrive: e.target.value })} placeholder={arrive} style={{ ...selStyle, width: 120 }} />
+                                    <span style={{ color: "#98a2b3", fontSize: 11 }}>→</span>
+                                    <input type="time" value={row.depart} onChange={(e) => setRow({ depart: e.target.value })} placeholder={depart} style={{ ...selStyle, width: 120 }} />
+                                </div>
+                            );
+                        })}
+                        <span style={{ fontSize: 10.5, color: "#98a2b3" }}>Blank rows use the default hours above.</span>
+                    </div>
+                )}
             </section>
 
             {/* 3 · Site — a fact when context establishes it; a choice only when ambiguous */}

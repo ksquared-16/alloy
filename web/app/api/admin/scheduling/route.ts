@@ -30,6 +30,57 @@ function param(request: NextRequest, key: string): string {
     return (new URL(request.url).searchParams.get(key) ?? "").trim();
 }
 
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/; // HH:MM 24h
+
+function normTime(v: unknown): string | null {
+    const s = typeof v === "string" ? v.trim() : "";
+    return TIME_RE.test(s) ? s : null;
+}
+
+/** A daily time range, kept only when both ends are valid and ordered. */
+function normRange(v: unknown): { arrive: string; depart: string } | null {
+    if (!v || typeof v !== "object") return null;
+    const arrive = normTime((v as Record<string, unknown>).arrive);
+    const depart = normTime((v as Record<string, unknown>).depart);
+    if (!arrive || !depart || depart <= arrive) return null;
+    return { arrive, depart };
+}
+
+/**
+ * Read a pattern's configured default daily hours from schedule_patterns.metadata
+ * (the sanctioned time store). Accepts `default_hours: {arrive,depart}` or flat
+ * `defaultArrive/defaultDepart`. Returns null when unconfigured — never synthesized.
+ */
+function readPatternDefaultHours(metadata: Record<string, unknown> | null): { arrive: string; depart: string } | null {
+    if (!metadata) return null;
+    const nested = normRange(metadata.default_hours ?? metadata.defaultHours);
+    if (nested) return nested;
+    return normRange({ arrive: metadata.defaultArrive, depart: metadata.defaultDepart });
+}
+
+/**
+ * Normalize the builder's times payload into the shape stored WITH the schedule
+ * definition (assignment / OCM metadata): a schedule-wide default range plus optional
+ * per-weekday overrides. Invalid/empty ranges are dropped. Returns null when nothing valid.
+ */
+function normalizeScheduleTimes(raw: unknown): {
+    default: { arrive: string; depart: string } | null;
+    perDay: Record<string, { arrive: string; depart: string }>;
+} | null {
+    if (!raw || typeof raw !== "object") return null;
+    const src = raw as Record<string, unknown>;
+    const def = normRange(src.default);
+    const perDay: Record<string, { arrive: string; depart: string }> = {};
+    const perDaySrc = src.perDay && typeof src.perDay === "object" ? (src.perDay as Record<string, unknown>) : {};
+    for (const [k, v] of Object.entries(perDaySrc)) {
+        if (!/^[0-6]$/.test(k)) continue;
+        const range = normRange(v);
+        if (range) perDay[k] = range;
+    }
+    if (!def && Object.keys(perDay).length === 0) return null;
+    return { default: def, perDay };
+}
+
 /**
  * Scheduling workspace read API (Milestone 1). Views:
  *   ?view=overview   &site_location_id=      → the unplaced-child (Place) queue
@@ -87,18 +138,27 @@ export async function GET(request: NextRequest) {
             const unplaced = await detectUnplacedChildren(supabase, ctx.orgId, siteLocationId);
             const { data: patternData } = await supabase
                 .from("schedule_patterns")
-                .select("id, label, weekdays, schedule_type_key")
+                .select("id, label, weekdays, schedule_type_key, metadata")
                 .eq("org_id", ctx.orgId)
                 .eq("site_location_id", siteLocationId)
                 .eq("is_active", true)
                 .order("sort_order");
             const patterns = (
-                (patternData ?? []) as { id: string; label: string | null; weekdays: number[]; schedule_type_key: string | null }[]
+                (patternData ?? []) as {
+                    id: string;
+                    label: string | null;
+                    weekdays: number[];
+                    schedule_type_key: string | null;
+                    metadata: Record<string, unknown> | null;
+                }[]
             ).map((p) => ({
                 id: p.id,
                 label: p.label?.trim() || "Schedule",
                 weekdays: p.weekdays ?? [],
                 scheduleTypeKey: p.schedule_type_key ?? "",
+                // Config-driven default daily hours (schedule_patterns.metadata is the
+                // sanctioned time store — no synthesized source). Absent → operator sets them.
+                defaultHours: readPatternDefaultHours(p.metadata),
             }));
             return NextResponse.json({ view, siteLocationId, unplaced, patterns });
         }
@@ -289,6 +349,7 @@ export async function POST(request: NextRequest) {
                 schedulePatternId: String(body.schedule_pattern_id ?? "").trim(),
                 roomLocationId: String(body.room_location_id ?? "").trim() || null,
                 startDate: String(body.start_date ?? "").trim() || null,
+                times: normalizeScheduleTimes(body.times),
             });
             if (!proposed.ok) {
                 return NextResponse.json({ error: proposed.error, code: "propose_failed" }, { status: proposed.status });
@@ -348,6 +409,7 @@ async function proposeSchedule(
         schedulePatternId: string;
         roomLocationId: string | null;
         startDate: string | null;
+        times: { default: { arrive: string; depart: string } | null; perDay: Record<string, { arrive: string; depart: string }> } | null;
     }
 ): Promise<
     | { ok: true; result: { opportunity_customer_member_id: string; schedule_type: string | null } }
@@ -418,6 +480,18 @@ async function proposeSchedule(
     if (scheduleType) updates.schedule_type = scheduleType;
     if (input.roomLocationId) updates.program_room_cohort_key = input.roomLocationId;
     if (input.startDate) updates.start_date = input.startDate;
+    // Daily time ranges live WITH the schedule definition. On the proposed schedule
+    // that store is the OCM's metadata jsonb; merge (never clobber other keys).
+    if (input.times) {
+        const { data: existing } = await supabase
+            .from("opportunity_customer_members")
+            .select("metadata")
+            .eq("id", ocmId)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        const prevMeta = ((existing as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<string, unknown>;
+        updates.metadata = { ...prevMeta, scheduleTimes: input.times };
+    }
     if (Object.keys(updates).length === 0) {
         return { ok: false, error: "Nothing to propose (choose a pattern, room, or start date).", status: 400 };
     }
