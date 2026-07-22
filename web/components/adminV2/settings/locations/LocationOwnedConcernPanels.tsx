@@ -102,10 +102,12 @@ function placementStageLabel(workUnit: PlacementWorkUnit): string {
 }
 
 export function LocationToursPanel({
+    orgId,
     locationId,
     locationLabel,
     onMutationCommitted,
 }: {
+    orgId: string;
     locationId: string;
     locationLabel: string;
     onMutationCommitted?: () => void | Promise<void>;
@@ -116,6 +118,7 @@ export function LocationToursPanel({
                 Decide when families can visit and how each booking window works.
             </p>
             <TourAvailabilitySettingsClient
+                orgId={orgId}
                 locationId={locationId}
                 locationLabel={locationLabel}
                 embedded

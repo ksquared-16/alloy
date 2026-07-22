@@ -7,7 +7,6 @@ import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
     ConfigurationContext,
-    ConfigurationEmptyState,
     ConfigurationPrimaryButton,
     ConfigurationQueueItem,
     ConfigurationSecondaryButton,
@@ -61,6 +60,7 @@ import {
     loadLocationOwnedSetup,
     loadLocationAccessMembers,
     loadLocationPlacementPolicy,
+    loadLocationTourRules,
     peekLocationOwnedSetup,
 } from "@/lib/locations/locationConcernCache";
 import { invalidateLocationsCollection } from "@/lib/locations/locationsCollectionCache";
@@ -134,34 +134,9 @@ export default function LocationsConfigurationPage({
         retainedLocationId,
     });
 
-    // Retained Continuity restore → replace-sync URL (location + concern, no history loop).
+    // Retained Continuity must not restore selection against an empty URL (Programs parity).
+    // URL search params (page props) remain the selection authority for Back/Forward + soft-nav.
     useEffect(() => {
-        if (!shouldSyncRoute || !selectedId) return;
-        const retainedTab = parseLocationConcernTab(retainedConcernTab);
-        const item =
-            retainedTab === "rooms" || retainedTab === "programs" || retainedTab === "schedule"
-                ? retainedConcernItemId
-                : null;
-        setActiveTab(retainedTab);
-        if (retainedTab === "tours") setToursKeepAlive(true);
-        if (retainedTab === "placement") setPlacementKeepAlive(true);
-        if (retainedTab === "access") setAccessKeepAlive(true);
-        if (retainedTab === "rooms") setSelectedRoomId(item);
-        else if (retainedTab === "programs") setSelectedProgramId(item);
-        else if (retainedTab === "schedule") setSelectedScheduleId(item);
-        router.replace(locationConcernHref(selectedId, retainedTab, item));
-    }, [
-        shouldSyncRoute,
-        selectedId,
-        retainedConcernTab,
-        retainedConcernItemId,
-        router,
-    ]);
-
-    // Back/Forward + soft-nav query updates: URL props win via concern adapter.
-    // Skip while retained Continuity restore is still projecting into the URL.
-    useEffect(() => {
-        if (shouldSyncRoute) return;
         const active = resolveActiveLocationConcern(initialTab);
         const localItemId =
             activeTab === "rooms" ? selectedRoomId
@@ -187,8 +162,8 @@ export default function LocationsConfigurationPage({
             router.replace(locationConcernHref(selectedId, projected.tab, projected.itemId));
         }
         // Route props are authoritative; omit local tab/item from deps to avoid loops.
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- Checkpoint C history projection
-    }, [initialTab, initialItemId, initialLocationId, router, selectedId, shouldSyncRoute]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- history projection
+    }, [initialTab, initialItemId, initialLocationId, router, selectedId]);
 
     const visibleSites = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -336,13 +311,24 @@ export default function LocationsConfigurationPage({
         setCreatingRoom(false);
         setCreatingProgram(false);
         setCreatingSchedule(false);
-        if (tab === "tours") setToursKeepAlive(true);
+        // Prefetch Tours / Placement / Access so concern tabs paint immediately.
+        setToursKeepAlive(true);
         if (tab === "placement") setPlacementKeepAlive(true);
         if (tab === "access") setAccessKeepAlive(true);
         setActiveTab(tab);
         continuity?.rememberLocationSelection({ locationId, tab, itemId: null });
-        // Explicit operator selection — push so Back/Forward work across locations.
-        router.push(locationConcernHref(locationId, tab));
+        const href = locationConcernHref(locationId, tab);
+        router.push(href, { scroll: false });
+        if (typeof window !== "undefined") {
+            const current = `${window.location.pathname}${window.location.search}`;
+            if (current !== href) {
+                window.history.replaceState(window.history.state, "", href);
+            }
+        }
+        if (orgId) {
+            void loadLocationTourRules(orgId, locationId).catch(() => undefined);
+            void loadLocationOwnedSetup(orgId, locationId).catch(() => undefined);
+        }
     };
 
     const returnToLocations = () => {
@@ -353,7 +339,14 @@ export default function LocationsConfigurationPage({
         setCreatingSchedule(false);
         setActiveTab("overview");
         continuity?.rememberLocationSelection({ locationId: null, tab: null, itemId: null });
-        router.push(locationsLandingHref());
+        const href = locationsLandingHref();
+        router.push(href, { scroll: false });
+        if (typeof window !== "undefined") {
+            const current = `${window.location.pathname}${window.location.search}`;
+            if (current !== href) {
+                window.history.replaceState(window.history.state, "", href);
+            }
+        }
     };
 
     const navigate = useCallback(
@@ -798,15 +791,15 @@ export default function LocationsConfigurationPage({
                                     </li>
                                     <li>
                                         <strong className="font-semibold text-alloy-midnight">
-                                            {locationsCollection.averageSetupPercent}%
+                                            {locationsCollection.totalPrograms}
                                         </strong>{" "}
-                                        Average Readiness
+                                        Programs Offered
                                     </li>
                                     <li>
                                         <strong className="font-semibold text-alloy-midnight">
-                                            {locationsCollection.locationsNeedingAttention}
+                                            {locationsCollection.totalRooms}
                                         </strong>{" "}
-                                        Need Attention
+                                        Rooms
                                     </li>
                                 </ul>
                             </div>
@@ -826,11 +819,13 @@ export default function LocationsConfigurationPage({
 
             <ConfigurationShell testId="locations-configuration-shell">
                 {loading && siteRows.length === 0 && !error ?
-                    <ConfigurationEmptyState
-                        testId="locations-loading"
-                        title="Loading locations"
-                        description="Fetching locations and their owned configuration."
-                    />
+                    <div
+                        className="grid items-start gap-4 pb-4 xl:grid-cols-[20.5rem_minmax(0,1fr)]"
+                        data-testid="locations-loading"
+                    >
+                        <div className="hidden min-h-[24rem] rounded-xl border border-alloy-forge/10 bg-white/70 xl:block" />
+                        <div className="min-h-[16rem] rounded-xl border border-alloy-forge/10 bg-white/70" />
+                    </div>
                 : creatingSite ?
                     <LocationSiteCreatePanel
                         canMutate={canMutate}
@@ -847,34 +842,30 @@ export default function LocationsConfigurationPage({
                             return newId;
                         }}
                     />
-                :   <div
-                        className={`grid items-start gap-4 pb-4 ${
-                            selectedSite ? "xl:grid-cols-[20.5rem_minmax(0,1fr)]" : ""
-                        }`}
-                    >
-                        {selectedSite ?
-                            <LocationsObjectSelector
-                                sites={visibleSites}
-                                selectedId={selectedId}
-                                showInactive={showInactive}
-                                onShowInactiveChange={setShowInactive}
-                                search={search}
-                                onSearchChange={setSearch}
-                                canMutate={canMutate}
-                                onAddLocation={beginAddLocation}
-                                locationSummaryById={locationSummaryById}
-                                onSelect={(locationId) => {
-                                    setSelectedId(locationId);
-                                    setEditingSite(false);
-                                    continuity?.rememberLocationSelection({
-                                        locationId,
-                                        tab: activeTab,
-                                        itemId: null,
-                                    });
-                                    router.push(locationConcernHref(locationId, activeTab));
-                                }}
-                            />
-                        :   null}
+                : siteRows.length === 0 ?
+                    <LocationsLanding
+                        collection={locationsCollection}
+                        onOpenLocation={(locationId, tab) =>
+                            openLocation(locationId, tab === "general" || tab == null ? "overview" : tab)
+                        }
+                        onAddLocation={beginAddLocation}
+                        canMutate={canMutate}
+                    />
+                :   <div className="grid items-start gap-4 pb-4 xl:grid-cols-[20.5rem_minmax(0,1fr)]">
+                        <LocationsObjectSelector
+                            sites={visibleSites}
+                            selectedId={selectedId}
+                            showInactive={showInactive}
+                            onShowInactiveChange={setShowInactive}
+                            search={search}
+                            onSearchChange={setSearch}
+                            canMutate={canMutate}
+                            onAddLocation={beginAddLocation}
+                            locationSummaryById={locationSummaryById}
+                            onSelect={(locationId) => {
+                                openLocation(locationId, activeTab === "overview" ? "overview" : activeTab);
+                            }}
+                        />
 
                         <main
                             className="min-w-0 space-y-2.5"
@@ -890,14 +881,7 @@ export default function LocationsConfigurationPage({
                                         className="config-runtime-select mt-1"
                                         value={selectedSite.id}
                                         onChange={(event) => {
-                                            setSelectedId(event.target.value);
-                                            setEditingSite(false);
-                                            continuity?.rememberLocationSelection({
-                                                locationId: event.target.value,
-                                                tab: activeTab,
-                                                itemId: null,
-                                            });
-                                            router.push(locationConcernHref(event.target.value, activeTab));
+                                            openLocation(event.target.value, activeTab);
                                         }}
                                     >
                                         {siteRows.map((site) => (
@@ -912,10 +896,6 @@ export default function LocationsConfigurationPage({
                             {!selectedSite ?
                                 <LocationsLanding
                                     collection={locationsCollection}
-                                    showInactive={showInactive}
-                                    onShowInactiveChange={setShowInactive}
-                                    search={search}
-                                    onSearchChange={setSearch}
                                     onOpenLocation={(locationId, tab) =>
                                         openLocation(locationId, tab === "general" || tab == null ? "overview" : tab)
                                     }
@@ -989,6 +969,7 @@ export default function LocationsConfigurationPage({
                                         >
                                             <LocationToursPanel
                                                 key={selectedSite.id}
+                                                orgId={orgId}
                                                 locationId={selectedSite.id}
                                                 locationLabel={model?.displayName ?? ""}
                                                 onMutationCommitted={() => {

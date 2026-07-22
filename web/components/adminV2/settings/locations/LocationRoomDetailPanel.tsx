@@ -224,8 +224,8 @@ export default function LocationRoomDetailPanel({
                     </ConfigEditorSection>
 
                     <ConfigEditorSection
-                        title="Schedule pattern"
-                        description="Optional recurring pattern this room follows."
+                        title="Default schedule"
+                        description="Optional default Schedule Definition for this room. Enrollment still chooses from the Location catalog."
                         testId="locations-room-editor-schedule"
                     >
                         <label className="block max-w-md space-y-1">

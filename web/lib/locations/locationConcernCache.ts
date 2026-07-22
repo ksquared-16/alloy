@@ -1,7 +1,7 @@
 /**
  * Location concern-scoped caches — Checkpoint C.
  *
- * Owns Tours setup flags, Access members snapshot, and Placement policy
+ * Owns Tours setup flags + rules preview, Access members snapshot, and Placement policy
  * payloads for warm concern transitions. Not authoritative business truth.
  * Collection hierarchy/programs/schedules remain in locationsCollectionCache.
  */
@@ -10,11 +10,33 @@ import { publishConfigurationInvalidation } from "@/lib/configRuntime/configurat
 
 export const LOCATION_CONCERN_CACHE_TTL_MS = 60_000;
 
+export type LocationTourRulePreview = {
+    id: string;
+    location_id: string | null;
+    user_id: string | null;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    timezone: string;
+    slot_duration_minutes: number;
+    buffer_minutes: number;
+    max_bookings_per_slot: number;
+    approval_required: boolean;
+    is_active: boolean;
+};
+
 export type LocationOwnedSetupSnapshot = {
     orgId: string;
     locationId: string;
     toursConfigured: boolean | null;
     accessConfigured: boolean | null;
+    fetchedAtMs: number;
+};
+
+export type LocationTourRulesSnapshot = {
+    orgId: string;
+    locationId: string;
+    rules: LocationTourRulePreview[];
     fetchedAtMs: number;
 };
 
@@ -58,6 +80,9 @@ type CacheBucket<T> = {
 const ownedSetupCache = new Map<string, CacheBucket<LocationOwnedSetupSnapshot>>();
 const ownedSetupInflight = new Map<string, Promise<LocationOwnedSetupSnapshot>>();
 
+const tourRulesCache = new Map<string, CacheBucket<LocationTourRulesSnapshot>>();
+const tourRulesInflight = new Map<string, Promise<LocationTourRulesSnapshot>>();
+
 const accessCache = new Map<string, CacheBucket<LocationAccessMembersSnapshot>>();
 const accessInflight = new Map<string, Promise<LocationAccessMembersSnapshot>>();
 
@@ -66,6 +91,10 @@ const placementInflight = new Map<string, Promise<LocationPlacementPolicySnapsho
 
 function ownedSetupKey(orgId: string, locationId: string): string {
     return `loc-owned-setup:v1:${orgId.trim()}:${locationId.trim()}`;
+}
+
+function tourRulesKey(orgId: string, locationId: string): string {
+    return `loc-tour-rules:v1:${orgId.trim()}:${locationId.trim()}`;
 }
 
 function accessKey(orgId: string, locationId: string): string {
@@ -88,6 +117,14 @@ export function peekLocationOwnedSetup(
     return hit?.value ?? null;
 }
 
+export function peekLocationTourRules(
+    orgId: string,
+    locationId: string,
+): LocationTourRulesSnapshot | null {
+    const hit = tourRulesCache.get(tourRulesKey(orgId, locationId));
+    return hit?.value ?? null;
+}
+
 export function peekLocationAccessMembers(
     orgId: string,
     locationId: string,
@@ -101,22 +138,86 @@ export function peekLocationPlacementPolicy(orgId: string): LocationPlacementPol
     return hit?.value ?? null;
 }
 
+function putTourRulesSnapshot(snapshot: LocationTourRulesSnapshot): void {
+    tourRulesCache.set(tourRulesKey(snapshot.orgId, snapshot.locationId), {
+        value: snapshot,
+        fetchedAtMs: snapshot.fetchedAtMs,
+    });
+}
+
+async function fetchTourRulesNetwork(
+    orgId: string,
+    locationId: string,
+): Promise<LocationTourRulesSnapshot> {
+    const response = await fetch(
+        `/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`,
+        { credentials: "include" },
+    );
+    const json = (await response.json().catch(() => ({}))) as {
+        rules?: LocationTourRulePreview[];
+        error?: string;
+    };
+    if (!response.ok) {
+        throw new Error(json.error ?? "Tour availability could not be loaded.");
+    }
+    const rules = (json.rules ?? []).filter((rule) => rule.location_id === locationId);
+    return {
+        orgId,
+        locationId,
+        rules,
+        fetchedAtMs: Date.now(),
+    };
+}
+
+export async function loadLocationTourRules(
+    orgId: string,
+    locationId: string,
+    options?: { force?: boolean },
+): Promise<{ snapshot: LocationTourRulesSnapshot; cacheHit: boolean; inflightJoin: boolean }> {
+    const id = orgId.trim();
+    const loc = locationId.trim();
+    if (!id || !loc) throw new Error("orgId and locationId required for tour rules cache");
+    const key = tourRulesKey(id, loc);
+    const existing = tourRulesCache.get(key);
+    if (!options?.force && existing && isFresh(existing.fetchedAtMs)) {
+        return { snapshot: existing.value, cacheHit: true, inflightJoin: false };
+    }
+    const joined = tourRulesInflight.get(key);
+    if (joined) {
+        return { snapshot: await joined, cacheHit: false, inflightJoin: true };
+    }
+    const promise = fetchTourRulesNetwork(id, loc)
+        .then((snapshot) => {
+            putTourRulesSnapshot(snapshot);
+            // Keep owned-setup boolean aligned with the same payload.
+            ownedSetupCache.set(ownedSetupKey(id, loc), {
+                value: {
+                    orgId: id,
+                    locationId: loc,
+                    toursConfigured: snapshot.rules.some((rule) => rule.is_active !== false),
+                    accessConfigured: peekLocationOwnedSetup(id, loc)?.accessConfigured ?? null,
+                    fetchedAtMs: snapshot.fetchedAtMs,
+                },
+                fetchedAtMs: snapshot.fetchedAtMs,
+            });
+            return snapshot;
+        })
+        .finally(() => {
+            if (tourRulesInflight.get(key) === promise) tourRulesInflight.delete(key);
+        });
+    tourRulesInflight.set(key, promise);
+    return { snapshot: await promise, cacheHit: false, inflightJoin: false };
+}
+
 async function fetchOwnedSetupNetwork(
     orgId: string,
     locationId: string,
 ): Promise<LocationOwnedSetupSnapshot> {
     const [tours, access] = await Promise.all([
-        fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
-            credentials: "include",
-        })
-            .then(async (response) => {
-                if (!response.ok) return null;
-                const json = (await response.json().catch(() => ({}))) as {
-                    rules?: { location_id?: string | null; is_active?: boolean }[];
-                };
-                return (json.rules ?? []).some(
-                    (rule) => rule.location_id === locationId && rule.is_active !== false,
-                );
+        fetchTourRulesNetwork(orgId, locationId)
+            .then((snapshot) => {
+                putTourRulesSnapshot(snapshot);
+                return snapshot.rules.some((rule) => rule.is_active !== false);
             })
             .catch(() => null),
         fetch("/api/admin/settings/users-roles/members", { credentials: "include" })
@@ -313,6 +414,8 @@ export function invalidateLocationConcernCaches(
         if (locationId) {
             ownedSetupCache.delete(ownedSetupKey(id, locationId));
             ownedSetupInflight.delete(ownedSetupKey(id, locationId));
+            tourRulesCache.delete(tourRulesKey(id, locationId));
+            tourRulesInflight.delete(tourRulesKey(id, locationId));
             return;
         }
         for (const key of [...ownedSetupCache.keys()]) {
@@ -320,6 +423,12 @@ export function invalidateLocationConcernCaches(
         }
         for (const key of [...ownedSetupInflight.keys()]) {
             if (key.includes(`:${id}:`)) ownedSetupInflight.delete(key);
+        }
+        for (const key of [...tourRulesCache.keys()]) {
+            if (key.includes(`:${id}:`)) tourRulesCache.delete(key);
+        }
+        for (const key of [...tourRulesInflight.keys()]) {
+            if (key.includes(`:${id}:`)) tourRulesInflight.delete(key);
         }
     };
     const clearAccess = () => {
@@ -357,6 +466,8 @@ export function invalidateLocationConcernCaches(
 export function resetLocationConcernCachesForTests(): void {
     ownedSetupCache.clear();
     ownedSetupInflight.clear();
+    tourRulesCache.clear();
+    tourRulesInflight.clear();
     accessCache.clear();
     accessInflight.clear();
     placementCache.clear();

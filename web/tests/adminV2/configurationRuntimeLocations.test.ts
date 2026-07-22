@@ -88,20 +88,22 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).not.toContain("Choose a location, understand what needs attention");
         expect(landing).toContain("locations-landing");
         expect(page).toContain("locations-collection-posture");
+        expect(page).toContain("xl:grid-cols-[20.5rem_minmax(0,1fr)]");
         expect(landing).toContain("locations-landing-summary");
         expect(landing).toContain("Active Locations");
-        expect(landing).toContain("Locations Offering Programs");
+        expect(landing).toContain("Programs Offered");
+        expect(landing).toContain("Total Capacity");
+        expect(landing).toContain("Locations at a glance");
         expect(landing).toContain("locations-list-card");
         expect(landing).toContain("locations-row-");
         expect(landing).toContain("divide-y divide-alloy-forge/10");
-        expect(landing).toContain("max-h-[28rem]");
-        expect(landing).toContain("data-scroll-mode={");
         expect(landing).not.toContain("% ready");
         expect(landing).not.toContain("setupPercent");
         expect(landing).not.toContain("Needs attention");
         expect(landing).not.toContain("attentionHighlights");
         expect(landing).not.toContain("ConfigOperationalReadiness");
         expect(hook).toContain("Locations landing: never auto-open");
+        expect(hook).toContain("allowRetainedRestore: false");
         expect(hook).not.toContain("listItems[0]!.id");
         expect(model).toContain("buildLocationsCollectionModel");
         expect(model).toContain("locationsLandingHref");
@@ -313,7 +315,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(rankingEditor).toContain("Move down");
     });
 
-    it("supports multiple schedule patterns with hours/rotation metadata and shell-owned actions", () => {
+    it("supports Schedule Definitions with independent Day Type and Repeats", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         const rail = read("lib/locations/buildLocationsRailActions.ts");
         const create = read("components/adminV2/settings/locations/LocationSchedulePatternCreatePanel.tsx");
@@ -334,18 +336,22 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain('data-testid="locations-edit-location"');
         expect(create).toContain("locations-schedule-create-active");
         expect(create).toContain("is_active: active");
-        expect(create).toContain("locations-schedule-create-type");
-        expect(create).toContain("locations-schedule-create-opens-at");
-        expect(create).toContain("writeSchedulePatternMetadata");
+        expect(create).toContain("locations-schedule-create-day-type");
+        expect(create).toContain("locations-schedule-create-repeats");
+        expect(create).toContain("writeScheduleDefinitionMetadata");
         expect(create).toContain("border-alloy-bend-pine bg-alloy-bend-pine text-white");
         expect(detail).toContain("locations-schedule-edit");
         expect(detail).toContain("locations-schedule-weekdays-view");
-        expect(detail).toContain("locations-schedule-opens-at");
-        expect(detail).toContain("Rotating");
+        expect(detail).toContain("locations-schedule-day-type");
+        expect(detail).toContain("locations-schedule-repeats");
+        expect(detail).toContain("schedulePatternTypeLabel");
+        expect(detail).toContain("needsDayTypeReview");
         expect(detail).not.toContain("#00a283");
         expect(detail).not.toContain("#007d68");
         expect(presentation).toContain("toSchedulePatternSchedulingContract");
-        expect(presentation).toContain("resolveSchedulePatternWeekdays");
+        expect(presentation).toContain("resolveScheduleDefinitionWeekdays");
+        expect(presentation).toContain("migrateV1ScheduleMetadata");
+        expect(presentation).toContain("needsDayTypeReview");
         expect(service).toContain("is_active: input.isActive ?? true");
         expect(route).toContain('typeof body.is_active === "boolean"');
         expect(rail).toContain('id: "configure-capacity"');
@@ -359,6 +365,20 @@ describe("Configuration Runtime — Locations", () => {
             "More actions",
         );
         expect(page).not.toContain("Publish Communications");
+    });
+
+    it("warms Tours from location concern cache without literal Loading text", () => {
+        const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
+        const cache = read("lib/locations/locationConcernCache.ts");
+        const tours = read("app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient.tsx");
+        expect(page).toContain("loadLocationTourRules");
+        expect(page).toContain("setToursKeepAlive(true)");
+        expect(cache).toContain("peekLocationTourRules");
+        expect(cache).toContain("loadLocationTourRules");
+        expect(tours).toContain("peekLocationTourRules");
+        expect(tours).toContain("tours-availability-pending");
+        expect(tours).not.toContain("Loading…");
+        expect(tours).toContain("locations-tour-add-window");
     });
 
     it("uses shared typography tokens", () => {

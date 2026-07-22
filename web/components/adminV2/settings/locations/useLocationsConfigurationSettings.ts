@@ -261,6 +261,8 @@ export function useLocationsConfigurationSettings(options?: {
             routeLocationId: initialLocationId,
             retainedLocationId,
             validSiteIds: siteRows.map((s) => s.id),
+            // URL owns selection — empty locationId is a legitimate portfolio landing (Programs parity).
+            allowRetainedRestore: false,
         });
         setSelectedId(resolution.locationId);
         setSelectionSource(resolution.source);

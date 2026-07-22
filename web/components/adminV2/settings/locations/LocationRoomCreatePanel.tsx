@@ -125,7 +125,11 @@ export default function LocationRoomCreatePanel({
                     }
                 </ConfigEditorSection>
 
-                <ConfigEditorSection title="Schedule pattern" testId="locations-room-create-schedule">
+                <ConfigEditorSection
+                    title="Default schedule"
+                    description="Optional default Schedule Definition for this room."
+                    testId="locations-room-create-schedule"
+                >
                     <label className="block max-w-md space-y-1">
                         <span className="config-typo-field-label">Pattern</span>
                         <select
