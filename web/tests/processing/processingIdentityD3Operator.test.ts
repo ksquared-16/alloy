@@ -13,6 +13,7 @@ import {
     buildPlan,
     buildRecommendations,
     canExecute,
+    commitApprovedLeadForCase,
     deriveResolutionSetFromResolutions,
     executeApprovedPlanForCase,
     loadCaseReview,
@@ -340,6 +341,30 @@ describe("D3 operator workflow (service)", () => {
 
         state = await loadCaseReview(d, CASE);
         expect(state.readiness).toBe("committed");
+    });
+
+    it("commitApprovedLeadForCase composes build → approve → execute into one operator action (full lead + participation)", async () => {
+        const db = new FakeSupabase();
+        const counter = new Counter();
+        seedNewFamily(db);
+        const d = deps(db, counter);
+
+        const { plan, approval, attempt } = await commitApprovedLeadForCase(d, { caseId: CASE });
+
+        // One call performs the whole build → approve → execute chain.
+        expect(approval.planContentHash).toBe(plan.contentHash);
+        expect(attempt.outcome).toBe("committed");
+
+        // Full record set — NOT a person-only minimal handoff.
+        expect(counter.count("persons")).toBe(1);
+        expect(counter.count("customers")).toBe(1);
+        expect(counter.count("customer_members")).toBe(1);
+        expect(counter.count("opportunities")).toBe(1); // lead
+        expect(counter.count("process_instances")).toBe(1); // enrollment participation
+        const participationOp = attempt.operations.find((o) => o.commandKey === "create_process_participation");
+        expect(participationOp?.status).toBe("committed");
+
+        expect((await loadCaseReview(d, CASE)).readiness).toBe("committed");
     });
 
     it("fails execution without an approval and records an exception", async () => {
