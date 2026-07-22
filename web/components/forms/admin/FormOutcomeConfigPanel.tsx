@@ -36,6 +36,7 @@ import {
     intakeWorkspaceBtnPrimary,
     intakeWorkspaceBtnSecondary,
 } from "@/components/forms/workspace/IntakeWorkspaceHubView";
+import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
 
 type Props = {
     formId: string;
@@ -459,7 +460,9 @@ export function FormOutcomeConfigPanel({
                 {model.resolutionNote}
             </p>
             {labelsLoading ?
-                <p className={clsx("mt-1", opMutedMeta)}>Loading routing labels…</p>
+                <div className="mt-1">
+                    <BosExecutionLoader variant="inline" title="Loading routing labels" />
+                </div>
             :   null}
             {saveErr ?
                 <p className="mt-2 text-sm text-alloy-ember" data-testid="form-outcome-save-error">

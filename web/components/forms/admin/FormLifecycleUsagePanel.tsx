@@ -20,6 +20,7 @@ import {
     intakeWorkspaceBtnSecondary,
 } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 import { opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
+import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
 
 type DepartmentOption = {
     id: string;
@@ -198,11 +199,11 @@ export function FormLifecycleUsagePanel({
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">
-                        Lifecycle usage
+                        Business Process
                     </p>
                     <p className={clsx("mt-0.5 max-w-xl", opMutedMeta)}>
-                        Lifecycle coverage checks whether this form captures the information required to create or
-                        update records for the selected workflow stage.
+                        Checks whether this form captures the information required to create or update records for the
+                        selected business process stage.
                     </p>
                 </div>
                 {presentation ?
@@ -215,7 +216,7 @@ export function FormLifecycleUsagePanel({
 
             <div className="mt-3 grid gap-2 sm:grid-cols-3" data-testid="lifecycle-usage-selectors">
                 <label className="block space-y-1">
-                    <span className="text-xs font-medium text-alloy-midnight">Lifecycle</span>
+                    <span className="text-xs font-medium text-alloy-midnight">Business Process</span>
                     <select
                         className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm shadow-sm disabled:opacity-60"
                         value={departmentId}
@@ -223,7 +224,7 @@ export function FormLifecycleUsagePanel({
                         data-testid="lifecycle-usage-department"
                         onChange={(e) => setDepartmentId(e.target.value)}
                     >
-                        <option value="">Select department…</option>
+                        <option value="">Select process…</option>
                         {departments.map((d) => (
                             <option key={d.id} value={d.id}>
                                 {d.name}
@@ -274,7 +275,7 @@ export function FormLifecycleUsagePanel({
                         data-testid="lifecycle-usage-save"
                         onClick={() => void saveUsage()}
                     >
-                        {saving ? "Saving…" : "Save lifecycle usage"}
+                        {saving ? "Saving…" : "Save business process"}
                     </button>
                     <button
                         type="button"
@@ -295,7 +296,9 @@ export function FormLifecycleUsagePanel({
             :   null}
 
             {loading && !presentation ?
-                <p className={clsx("mt-3", opMetadata)}>Loading coverage…</p>
+                <div className="mt-3">
+                    <BosExecutionLoader variant="inline" title="Loading coverage" />
+                </div>
             : presentation ?
                 <div className="mt-3" data-testid="lifecycle-coverage-summary">
                     {selectedDepartmentName && presentation.stage_label && presentation.intent_label ?
@@ -375,6 +378,10 @@ export function FormLifecycleUsagePanel({
                         </div>
                     :   null}
                 </div>
+            : !error ?
+                <p className={clsx("mt-3", opMutedMeta)}>
+                    Coverage details appear once a business process and stage are selected.
+                </p>
             :   null}
         </div>
     );

@@ -18,6 +18,16 @@ import {
 } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 import { opMetadata, opMutedMeta, opSectionTitle } from "@/lib/operational/ui/operationalVisualTokens";
 
+/** Concise, business-language one-liner describing what each purpose does. */
+const INTENT_SUMMARY: Record<OperationalIntentKey, string> = {
+    enrollment_lead: "Creates or updates a lead through Processing.",
+    existing_family: "Attaches submissions to an existing family or record.",
+    operational_document: "Collects an operational document for review.",
+    waitlist: "Captures waitlist interest.",
+    packet_step: "Runs as one step in an intake packet.",
+    custom: "Uses your advanced intake settings.",
+};
+
 type Props = {
     formId: string;
     formKey: string;
@@ -139,7 +149,7 @@ export function FormOperationalIntentPicker({
         <div className="rounded-lg bg-white/95 px-3 py-2.5 ring-1 ring-alloy-midnight/[0.07]" data-testid="form-operational-intent-picker">
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                    <h3 className={opSectionTitle}>What is this form used for?</h3>
+                    <h3 className={opSectionTitle}>Form purpose</h3>
                     <p className={opMutedMeta}>Choose the operational purpose — Alloy configures intake behavior underneath.</p>
                 </div>
                 {effectiveIntent ?
@@ -152,6 +162,12 @@ export function FormOperationalIntentPicker({
                     </span>
                 :   null}
             </div>
+
+            {effectiveIntent ?
+                <p className={clsx("mt-2 text-sm text-alloy-midnight/70", opMetadata)} data-testid="form-operational-intent-summary">
+                    {INTENT_SUMMARY[effectiveIntent]}
+                </p>
+            :   null}
 
             {inferredLabel ?
                 <p className={clsx("mt-2", opMetadata)} data-testid="form-operational-intent-inferred-note">
