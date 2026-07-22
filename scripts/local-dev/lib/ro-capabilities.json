@@ -62,17 +62,78 @@
     ]
   },
   "read_only_subprocess_allowlist": {
-    "git": ["rev-parse", "status --porcelain", "rev-list --count", "remote get-url", "config --get", "symbolic-ref", "show-ref", "for-each-ref", "cat-file", "describe"],
-    "other": ["lsof (inspection)", "ps (inspection)", "stat", "find (type f listing)", "awk", "basename", "cut", "sort", "seq", "kill -0 (existence check; delivers no signal)", "node lib/manifest-io.mjs get (fixed toolkit JSON reader; parses a manifest field, never sources it, never writes)", "date -u (read the clock for an evaluated_at stamp)"]
+    "git": [
+      "rev-parse",
+      "status --porcelain",
+      "rev-list --count",
+      "remote get-url",
+      "config --get",
+      "symbolic-ref",
+      "show-ref",
+      "for-each-ref",
+      "cat-file",
+      "describe"
+    ],
+    "other": [
+      "lsof (inspection)",
+      "ps (inspection)",
+      "stat",
+      "find (type f listing)",
+      "awk",
+      "basename",
+      "cut",
+      "sort",
+      "seq",
+      "kill -0 (existence check; delivers no signal)",
+      "node lib/manifest-io.mjs get|project (fixed toolkit JSON reader; parses manifest fields, never sources, never writes)",
+      "node lib/engineering-io.mjs project-read (fixed toolkit JSON reader; reads initiative state.json, emits presentation-safe fields, never sources it, never writes)",
+      "date -u (read the clock for an evaluated_at stamp)"
+    ]
   },
   "runtime_access": {
-    "policy": "observe, never control — Runtime Registry & Inspection V1",
-    "docker_read_only": ["docker ps -a --format <field-restricted>", "docker stats --no-stream --format <field-restricted>"],
-    "docker_forbidden": ["start", "stop", "restart", "kill", "rm", "prune", "exec", "inspect", "top", "logs", "compose", "create"],
-    "fields_read": ["container id", "name", "image", "state", "status string", "published ports", "labels: com.supabase.cli.project / com.docker.compose.project / com.docker.compose.service", "MemUsage", "CPUPerc"],
+    "policy": "observe, never control \u2014 Runtime Registry & Inspection V1",
+    "docker_read_only": [
+      "docker ps -a --format <field-restricted>",
+      "docker stats --no-stream --format <field-restricted>"
+    ],
+    "docker_forbidden": [
+      "start",
+      "stop",
+      "restart",
+      "kill",
+      "rm",
+      "prune",
+      "exec",
+      "inspect",
+      "top",
+      "logs",
+      "compose",
+      "create"
+    ],
+    "fields_read": [
+      "container id",
+      "name",
+      "image",
+      "state",
+      "status string",
+      "published ports",
+      "labels: com.supabase.cli.project / com.docker.compose.project / com.docker.compose.service",
+      "MemUsage",
+      "CPUPerc"
+    ],
     "redaction": {
-      "guarantee": "secrets are physically unreachable — the field-restricted format never reads them",
-      "never_read_or_emitted": ["container Command/Args/Entrypoint", "environment variables", "arbitrary labels", "Supabase service keys / JWTs", "certificates", "private keys", "authorization headers", "mount paths", ".env file contents"]
+      "guarantee": "secrets are physically unreachable \u2014 the field-restricted format never reads them",
+      "never_read_or_emitted": [
+        "container Command/Args/Entrypoint",
+        "environment variables",
+        "arbitrary labels",
+        "Supabase service keys / JWTs",
+        "certificates",
+        "private keys",
+        "authorization headers",
+        "mount paths",
+        ".env file contents"
+      ]
     },
     "registry": {
       "location": "<runtime-root>/runtimes/<runtime-id>.env",
@@ -80,8 +141,8 @@
       "written_by": "alloy-runtime-register (explicit, mutating, OUTSIDE alloy-ro); alloy-ro never writes"
     },
     "intent_admission": {
-      "phase": "R2 — DECLARE (Runtime Intent & Admission Contract V1)",
-      "policy": "declare, never actuate — admission is NOT provisioning; an admitted runtime may not yet exist",
+      "phase": "R2 \u2014 DECLARE (Runtime Intent & Admission Contract V1)",
+      "policy": "declare, never actuate \u2014 admission is NOT provisioning; an admitted runtime may not yet exist",
       "posture_source": "<runtime-root>/manifests/<worktree>.json (canonical manifest; parsed via node lib/manifest-io.mjs get, never sourced)",
       "intent_artifact": {
         "location": "<runtime-root>/intents/<worktree>.env",
@@ -89,126 +150,313 @@
         "written_by": "alloy-runtime-intent (explicit, mutating, identity-checked, OUTSIDE alloy-ro); alloy-ro never writes",
         "reserves_capacity": false
       },
-      "does_not": ["provision", "start", "stop", "attach", "detach", "lease", "reclaim", "touch Docker", "touch Supabase", "reserve capacity"]
+      "does_not": [
+        "provision",
+        "start",
+        "stop",
+        "attach",
+        "detach",
+        "lease",
+        "reclaim",
+        "touch Docker",
+        "touch Supabase",
+        "reserve capacity"
+      ]
     }
   },
   "verbs": {
     "root": {
       "summary": "Classify a directory as canonical | managed-worktree | retired | unmanaged | outside and whether it is sanctioned.",
       "args": "[path]",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-paths": {
       "summary": "Print resolved runtime path names (never secrets). Does not create directories.",
       "args": "",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "worker-status": {
       "summary": "Six-slot managed sprint status table. Never fetches (no --refresh).",
       "args": "",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "agent-status": {
       "summary": "Managed agent/slot detail for all slots or one target.",
       "args": "[slot|name]",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "dev-status": {
       "summary": "Dev-server / tracked-port listener status per managed worktree.",
       "args": "[slot|name]",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "agent-evidence": {
       "summary": "List evidence artifact names/sizes/mtimes for a slot. Never reads artifact contents; missing directory reads as empty.",
       "args": "<slot|name>",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
+    },
+    "worker-detail": {
+      "summary": "Extended per-worker metadata (role, session id, created/opened/closed, pause/finish, sprint objective). KV parsed, never sourced. No credential/token fields.",
+      "args": "<slot|name>",
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
+    },
+    "sprint-manifest": {
+      "summary": "Sprint manifest stage + initiative link for a worktree, via the fixed reader manifest-io.mjs get. Absent manifest reads as present:false.",
+      "args": "<slot|name>",
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
+    },
+    "initiatives": {
+      "summary": "All initiatives: key, state, title, timestamps, open-decision count, via the fixed reader engineering-io.mjs project-read.",
+      "args": "",
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
+    },
+    "initiative": {
+      "summary": "One initiative: state, title, and presentation-safe human decisions, via the fixed reader engineering-io.mjs project-read. Invalid/unknown key fails closed.",
+      "args": "<key>",
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "capabilities": {
       "summary": "Emit this machine-readable capability declaration.",
       "args": "",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-list": {
       "summary": "Registered + discovered runtimes, reconciled. Observe only.",
       "args": "",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-status": {
       "summary": "One runtime: services, health, ports, inferred association.",
       "args": "<runtime-id|namespace>",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-capacity": {
       "summary": "Configured vs observed active runtimes + aggregate memory/cpu. Observational; enforces nothing.",
       "args": "",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-discover": {
       "summary": "Live Docker discovery of Supabase runtime stacks (registry not consulted).",
       "args": "",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-containers": {
       "summary": "Redacted container list for a runtime. Never emits command/env/secrets.",
       "args": "<runtime-id|namespace>",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-policy": {
       "summary": "Canonical posture->isolation mapping and admission policy (static + configured max). Declares, never actuates.",
       "args": "",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-admission": {
       "summary": "Live, ephemeral admission decision for a worktree from manifest posture + observed capacity. Admission is NOT provisioning; nothing is reserved, started, or attached.",
       "args": "<slot|name|worktree>",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-intent": {
       "summary": "Inspect a recorded runtime intent (parsed, never sourced) or report none. A recorded intent is a declaration, not a provisioned runtime.",
       "args": "<slot|name|worktree>",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-explain": {
       "summary": "Separate views: posture resolution, admission decision, and actual observed runtime state. Does not imply an admitted runtime exists.",
       "args": "<slot|name|worktree>",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-reservations": {
       "summary": "R3 capacity reservation records (control-plane claims). Read-only; the mutating executor alloy-runtime-actuate is OUTSIDE alloy-ro and never reachable here.",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-executions": {
       "summary": "R3 execution lifecycle records (state, typed result, retryable, desired-state-reached). Read-only; contains no secrets or provider output.",
       "args": "[execution-id]",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     },
     "runtime-actuation-capacity": {
       "summary": "Reservation-aware capacity overlay: configured max, observed active, held reservation units, effective remaining. R2 owns the max/active formula; R3 only subtracts live held reservations. Read-only.",
-      "reads": true, "writes": false, "network": false, "process_control": false,
-      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+      "reads": true,
+      "writes": false,
+      "network": false,
+      "process_control": false,
+      "git_mutation": false,
+      "deletion": false,
+      "arbitrary_execution": false,
+      "credential_access": false
     }
   },
   "excluded_from_surface": {
     "note": "These remain their own commands and continue to require explicit human approval. They are unreachable through alloy-ro.",
-    "deferred_pending_safe_extraction": ["health", "audit", "ai-health", "agent-ready", "initiative-status", "product-status", "product-decisions"],
-    "rejected_mutation_or_flag": ["clean (delete)", "manifest --set (write)", "worker-doctor --recover (process)", "cert-leak-clean (delete)", "* --refresh (network fetch)"]
+    "deferred_pending_safe_extraction": [
+      "health",
+      "audit",
+      "ai-health",
+      "agent-ready",
+      "initiative-status",
+      "product-status",
+      "product-decisions"
+    ],
+    "rejected_mutation_or_flag": [
+      "clean (delete)",
+      "manifest --set (write)",
+      "worker-doctor --recover (process)",
+      "cert-leak-clean (delete)",
+      "* --refresh (network fetch)"
+    ]
   }
 }

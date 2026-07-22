@@ -385,6 +385,42 @@ function main() {
       process.stdout.write("ok\n");
       break;
     }
+    case "project-read": {
+      // READ-ONLY projection of an initiative state.json for the canonical
+      // read boundary (consumed by alloy-ro `initiative` / `initiatives`).
+      // Emits only presentation-safe fields; never writes; never executes
+      // content. Missing/corrupt file → non-zero exit (fail closed).
+      const path = process.argv[3];
+      if (!path) die("project-read requires a state.json path");
+      let d;
+      try {
+        d = readJson(path);
+      } catch {
+        die(`unreadable initiative state: ${path}`);
+      }
+      const decisions = Array.isArray(d.human_decisions) ? d.human_decisions : [];
+      const out = {
+        key: d.key || null,
+        state: d.state || null,
+        title: d.title || null,
+        created_at: d.created_at || null,
+        updated_at: d.updated_at || null,
+        remediation_round: d.remediation_round || 0,
+        product_revision: d.product_revision ?? null,
+        approver: d.approver || null,
+        human_decisions: decisions.map((x) => ({
+          id: x.id || null,
+          question: x.question || "",
+          why_it_matters: x.why_it_matters || "",
+          options: Array.isArray(x.options) ? x.options : [],
+          recommendation: x.recommendation || null,
+          status: x.status || "open",
+          parallel_work_ok: x.parallel_work_ok === true,
+        })),
+      };
+      process.stdout.write(JSON.stringify(out) + "\n");
+      break;
+    }
     default:
       die(`unknown command: ${CMD}`);
   }

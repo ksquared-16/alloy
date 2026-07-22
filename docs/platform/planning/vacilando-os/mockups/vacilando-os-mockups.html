@@ -1,0 +1,592 @@
+<meta charset="utf-8">
+<title>Vacilando OS — Command Center</title>
+<style>
+  :root{
+    color-scheme: light;
+    /* Forest rail */
+    --rail-0:#15402c; --rail-1:#0e3323; --rail-2:#0b2a1c;
+    --rail-active:#1f5a3d; --rail-hover:#194832;
+    --rail-text:#d7e4da; --rail-text-lo:#8fae9c; --rail-line:rgba(255,255,255,.08);
+    /* Warm canvas */
+    --bg:#f6f2ea; --bg-tint:#efe9dd;
+    --card:#ffffff; --card-2:#fbf9f4;
+    --line:#ece5d8; --line-soft:#f1ece1; --line-strong:#e0d7c6;
+    /* Ink */
+    --ink:#1f2a24; --ink-2:#54605a; --ink-3:#8a938c; --ink-4:#aab1a9;
+    /* Brand */
+    --terra:#cf6f47; --terra-soft:#f4e2d7; --terra-line:#e8c3af;
+    --green:#3a8a5b; --green-soft:#e2f0e6; --green-ink:#2c7048;
+    --script:#d9825f;
+    /* Status */
+    --run:#3a76d8; --run-bg:#e6eefb;
+    --ready:#3a8a5b; --ready-bg:#e2f0e6;
+    --review:#c98a2e; --review-bg:#f8eed6;
+    --blocked:#cf5a3a; --blocked-bg:#f8e2da;
+    --done:#5a6b61; --done-bg:#eef0ec;
+    --plan:#5f7c9a; --plan-bg:#e9eff5;
+    --radius:14px; --radius-sm:10px; --pill:999px;
+    --shadow:0 1px 2px rgba(31,42,36,.04), 0 6px 18px rgba(31,42,36,.06);
+    --shadow-lg:0 20px 50px rgba(31,42,36,.22);
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif;
+    --script-face:"Snell Roundhand","Apple Chancery","Segoe Script","Bradley Hand",cursive;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  .page{padding:34px clamp(16px,4vw,56px) 72px;}
+  .doc-head{max-width:1180px;margin:0 auto 26px;}
+  .doc-eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--terra);font-weight:700;}
+  .doc-head h1{font-size:clamp(24px,3vw,34px);margin:.35em 0 .28em;letter-spacing:-.02em;text-wrap:balance;}
+  .doc-head p{margin:0;color:var(--ink-2);font-size:15px;line-height:1.55;max-width:70ch;}
+  .doc-head .meta{margin-top:12px;font-size:12.5px;color:var(--ink-3);font-family:var(--mono);}
+
+  .frame-cap{max-width:1180px;margin:38px auto 12px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+  .frame-cap .n{font-family:var(--mono);font-size:12px;color:var(--terra);font-weight:700;}
+  .frame-cap h2{font-size:17px;margin:0;letter-spacing:-.01em;}
+  .frame-cap span{color:var(--ink-3);font-size:13.5px;}
+
+  .frame{max-width:1500px;margin:0 auto;border-radius:20px;background:var(--bg);
+    border:1px solid var(--line-strong);box-shadow:var(--shadow-lg);overflow:hidden;}
+  .scroll{overflow-x:auto;}
+  .app{min-width:1420px;display:grid;grid-template-columns:236px 1fr 320px;position:relative;background:var(--bg);}
+
+  /* ------------ RAIL ------------ */
+  .rail{background:linear-gradient(180deg,var(--rail-0),var(--rail-1) 62%,var(--rail-2));
+    color:var(--rail-text);display:flex;flex-direction:column;position:relative;min-height:940px;}
+  .brand{padding:22px 22px 16px;}
+  .brand .word{font-family:var(--script-face);font-size:31px;color:var(--script);line-height:1;font-weight:500;}
+  .brand .word b{font-family:var(--sans);font-weight:600;font-style:normal;color:#eaf1ec;font-size:22px;letter-spacing:.02em;margin-left:6px;}
+  .brand .sub{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--rail-text-lo);margin-top:7px;}
+  .nav{padding:6px 12px;display:flex;flex-direction:column;gap:2px;}
+  .nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;color:var(--rail-text);
+    font-size:13.5px;font-weight:500;text-decoration:none;position:relative;}
+  .nav a .ico{width:17px;height:17px;opacity:.85;flex:none;}
+  .nav a.active{background:var(--rail-active);color:#fff;font-weight:600;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);}
+  .nav a:not(.active):hover{background:var(--rail-hover);}
+  .nav a .badge{margin-left:auto;background:var(--terra);color:#fff;font-size:11px;font-weight:700;
+    min-width:19px;height:19px;border-radius:999px;display:grid;place-items:center;font-family:var(--mono);padding:0 5px;}
+  .nav-sep{height:1px;background:var(--rail-line);margin:12px 22px;}
+  .projhead{display:flex;align-items:center;justify-content:space-between;padding:2px 24px 6px;
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--rail-text-lo);font-weight:700;}
+  .projhead button{background:none;border:none;color:var(--rail-text-lo);font-size:17px;cursor:pointer;line-height:1;}
+  .proj a{display:flex;align-items:center;gap:10px;padding:7px 12px;border-radius:9px;color:var(--rail-text);
+    font-size:13px;text-decoration:none;font-weight:500;}
+  .proj a .dot{width:7px;height:7px;border-radius:50%;background:var(--rail-text-lo);flex:none;}
+  .proj a.active{background:var(--rail-hover);color:#fff;}
+  .proj a.active .dot{background:var(--script);box-shadow:0 0 0 3px rgba(217,130,95,.2);}
+
+  .desert{margin-top:auto;height:150px;position:relative;overflow:hidden;}
+  .user{display:flex;align-items:center;gap:11px;padding:14px 18px;border-top:1px solid var(--rail-line);
+    background:var(--rail-2);}
+  .user .av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#c98a5e,#7a4a2e);flex:none;
+    display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;}
+  .user .nm{font-size:13px;color:#eef3ef;font-weight:600;line-height:1.2;}
+  .user .rl{font-size:11px;color:var(--rail-text-lo);}
+  .user .chev{margin-left:auto;color:var(--rail-text-lo);}
+
+  /* ------------ MAIN ------------ */
+  .main{display:flex;flex-direction:column;min-width:0;}
+  .topbar{display:flex;align-items:center;gap:14px;padding:14px 26px;border-bottom:1px solid var(--line);background:var(--bg);}
+  .switch{display:inline-flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line-strong);
+    border-radius:10px;padding:8px 13px;font-size:13.5px;font-weight:600;color:var(--ink);box-shadow:var(--shadow);}
+  .switch .g{width:16px;height:16px;color:var(--ink-3);}
+  .switch .cx{color:var(--ink-3);font-size:11px;margin-left:2px;}
+  .cc-btn{display:inline-flex;align-items:center;gap:8px;background:var(--rail-0);color:#fff;border:none;
+    border-radius:10px;padding:9px 15px;font-size:13.5px;font-weight:600;box-shadow:var(--shadow);cursor:pointer;}
+  .cc-btn .g{width:15px;height:15px;}
+  .search{flex:1;max-width:none;display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line-strong);
+    border-radius:10px;padding:9px 14px;color:var(--ink-3);font-size:13.5px;box-shadow:var(--shadow);}
+  .search .g{width:16px;height:16px;}
+  .search .kbd{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-4);border:1px solid var(--line-strong);
+    border-radius:6px;padding:2px 6px;background:var(--card-2);}
+  .bell{position:relative;width:38px;height:38px;border-radius:10px;background:var(--card);border:1px solid var(--line-strong);
+    display:grid;place-items:center;color:var(--ink-2);box-shadow:var(--shadow);}
+  .bell .b{position:absolute;top:-5px;right:-5px;background:var(--terra);color:#fff;font-size:10.5px;font-weight:700;
+    width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);border:2px solid var(--bg);}
+  .me{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#c98a5e,#7a4a2e);flex:none;
+    display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;box-shadow:var(--shadow);}
+
+  .content{padding:22px 26px 30px;display:flex;flex-direction:column;gap:20px;overflow:hidden;}
+  .h1row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .h1row h1{font-size:26px;margin:0;letter-spacing:-.02em;}
+  .h1row .rt{color:var(--ink-3);font-size:17px;font-weight:500;}
+  .live{display:inline-flex;align-items:center;gap:7px;color:var(--green-ink);font-size:13.5px;font-weight:600;}
+  .live .d{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px var(--green-soft);}
+
+  .tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:13px;}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;box-shadow:var(--shadow);}
+  .tile.flag{border-color:var(--terra-line);background:linear-gradient(180deg,#fff,#fdf6f1);}
+  .tile .tl{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-3);font-weight:600;margin-bottom:9px;}
+  .tile .tl .g{width:14px;height:14px;}
+  .tile .big{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;}
+  .tile .big .of{font-size:16px;color:var(--ink-4);font-weight:600;}
+  .tile .sub{font-size:12px;color:var(--ink-3);margin-top:7px;}
+  .tile .sub.up{color:var(--green-ink);font-weight:600;}
+  .tile .sub.warn{color:var(--terra);font-weight:600;}
+  .tile .big.ok{color:var(--green-ink);font-size:19px;}
+  .tile .big.small{font-size:19px;}
+  .delta{color:var(--green-ink);font-size:12px;font-weight:600;}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);}
+  .card-h{display:flex;align-items:center;justify-content:space-between;padding:15px 18px 11px;}
+  .card-h .lbl{font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);font-weight:700;}
+  .seg{display:inline-flex;align-items:center;gap:8px;}
+  .selbox{font-size:12.5px;color:var(--ink-2);border:1px solid var(--line-strong);border-radius:8px;padding:5px 10px;background:var(--card-2);font-weight:500;}
+  .iconbtn{width:30px;height:28px;border:1px solid var(--line-strong);border-radius:8px;background:var(--card-2);display:grid;place-items:center;color:var(--ink-3);}
+
+  /* sprint rows */
+  .sprints{display:flex;flex-direction:column;}
+  .srow{display:grid;grid-template-columns:minmax(250px,2.5fr) 82px minmax(112px,1fr) 132px 100px 30px;align-items:center;gap:14px;
+    padding:13px 18px 13px 20px;border-top:1px solid var(--line-soft);position:relative;}
+  .srow:first-of-type{border-top:none;}
+  .srow::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:4px;border-radius:0 3px 3px 0;background:var(--accent,var(--green));}
+  .srow.acc-green{--accent:var(--green);} .srow.acc-review{--accent:var(--review);}
+  .srow.acc-blocked{--accent:var(--blocked);} .srow.acc-plan{--accent:var(--plan);} .srow.acc-done{--accent:var(--done);}
+  .sp-main{display:flex;align-items:center;gap:13px;min-width:0;}
+  .sp-ic{width:40px;height:40px;border-radius:11px;background:var(--bg-tint);display:grid;place-items:center;flex:none;color:#2f6f4a;}
+  .sp-ic svg{width:22px;height:22px;}
+  .wpl .r .ic svg{width:17px;height:17px;color:#2f6f4a;}
+  .ph-sp .ic svg{width:16px;height:16px;color:#2f6f4a;}
+  .sp-tt{min-width:0;}
+  .sp-tt .t{display:flex;align-items:center;gap:9px;font-size:14.5px;font-weight:650;letter-spacing:-.01em;flex-wrap:wrap;}
+  .sp-tt .t .name{white-space:normal;}
+  .sp-tt .m{font-size:12px;color:var(--ink-3);margin-top:3px;}
+  .chip{font-size:11px;font-weight:700;letter-spacing:.02em;padding:3px 9px;border-radius:var(--pill);flex:none;}
+  .chip.impl{background:var(--green-soft);color:var(--green-ink);}
+  .chip.rev{background:var(--review-bg);color:var(--review);}
+  .chip.done{background:var(--done-bg);color:var(--done);}
+  .chip.plan{background:var(--plan-bg);color:var(--plan);}
+  .chip.blk{background:var(--blocked-bg);color:var(--blocked);}
+  .prog{display:flex;align-items:center;gap:10px;}
+  .bar{flex:1;height:7px;border-radius:5px;background:var(--bg-tint);overflow:hidden;}
+  .bar>i{display:block;height:100%;border-radius:5px;background:var(--fill,var(--green));}
+  .pct{font-size:13px;font-weight:700;color:var(--ink-2);font-variant-numeric:tabular-nums;min-width:34px;text-align:right;}
+  .wk{font-size:13px;}
+  .wk .w{display:flex;align-items:center;gap:7px;font-weight:600;}
+  .wk .w .qi{color:var(--ink-4);}
+  .wk .s{font-size:12px;margin-top:2px;display:flex;align-items:center;gap:6px;}
+  .wk .s .dot{width:7px;height:7px;border-radius:50%;flex:none;}
+  .s.run{color:var(--run);} .s.run .dot{background:var(--run);}
+  .s.rev{color:var(--review);}
+  .s.merged{color:var(--green-ink);}
+  .s.queued{color:var(--ink-3);}
+  .s.needs{color:var(--blocked);font-weight:600;}
+  .meta-c{font-size:13px;color:var(--ink-2);}
+  .meta-c b{font-weight:650;color:var(--ink);}
+  .meta-c .u{font-size:11.5px;color:var(--ink-4);display:block;margin-top:2px;}
+  .meta-c .deployed{color:var(--green-ink);font-weight:600;}
+  .meta-c .prr{color:var(--ink);font-weight:650;}
+  .kebab{color:var(--ink-4);text-align:center;font-weight:700;letter-spacing:1px;}
+
+  .tri{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+  .mini-h{font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);font-weight:700;padding:15px 18px 4px;}
+  .wpl{display:flex;flex-direction:column;padding:0 8px 8px;}
+  .wpl .r{display:grid;grid-template-columns:26px 1fr auto auto 18px;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;}
+  .wpl .r:hover{background:var(--card-2);}
+  .wpl .r .ic{font-size:16px;}
+  .wpl .r .nm{font-size:13px;font-weight:600;}
+  .wpl .r .st{font-size:12px;font-weight:600;}
+  .st-run{color:var(--run);} .st-rev{color:var(--review);} .st-needs{color:var(--blocked);} .st-arch{color:var(--plan);} .st-watch{color:var(--ink-3);}
+  .wpl .r .pc{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums;font-family:var(--mono);}
+  .wpl .r .kb{color:var(--ink-4);font-weight:700;letter-spacing:1px;font-size:13px;}
+  .spark{width:34px;height:16px;}
+  .addw{margin:6px 10px 4px;border:1px dashed var(--line-strong);border-radius:9px;background:none;color:var(--ink-2);
+    font-size:12.5px;font-weight:600;padding:8px;display:flex;align-items:center;justify-content:center;gap:7px;width:calc(100% - 20px);}
+
+  .act{display:flex;flex-direction:column;gap:2px;padding:2px 8px 10px;}
+  .act .r{display:grid;grid-template-columns:40px 1fr auto;align-items:start;gap:8px;padding:8px 10px;border-radius:9px;}
+  .act .r:hover{background:var(--card-2);}
+  .act .tm{font-size:11.5px;color:var(--ink-4);font-family:var(--mono);padding-top:1px;}
+  .act .tx{font-size:12.5px;color:var(--ink-2);line-height:1.45;}
+  .act .tx a{color:var(--terra);font-weight:600;text-decoration:none;}
+  .act .ck{width:16px;height:16px;border-radius:50%;background:var(--green-soft);color:var(--green-ink);display:grid;place-items:center;flex:none;margin-top:1px;}
+  .act .ck.q{background:var(--review-bg);color:var(--review);}
+  .viewall{margin:2px 10px;border-top:1px solid var(--line-soft);padding-top:11px;text-align:center;color:var(--terra);font-weight:600;font-size:12.5px;}
+
+  .qa{display:flex;flex-direction:column;padding:4px 10px 12px;gap:2px;}
+  .qa .r{display:flex;align-items:center;gap:12px;padding:10px 10px;border-radius:10px;}
+  .qa .r:hover{background:var(--card-2);}
+  .qa .qi{width:34px;height:34px;border-radius:9px;background:var(--bg-tint);display:grid;place-items:center;color:var(--rail-0);flex:none;}
+  .qa .r.hot .qi{background:var(--terra-soft);color:var(--terra);}
+  .qa .tt{font-size:13px;font-weight:650;}
+  .qa .ds{font-size:11.5px;color:var(--ink-3);margin-top:2px;}
+  .qa .cnt{margin-left:auto;background:var(--green);color:#fff;font-size:11px;font-weight:700;min-width:20px;height:20px;
+    border-radius:999px;display:grid;place-items:center;font-family:var(--mono);}
+
+  /* ------------ DOCK ------------ */
+  .dock{background:var(--bg-tint);border-left:1px solid var(--line);padding:18px 16px 30px;display:flex;flex-direction:column;gap:14px;}
+  .dock-h{display:flex;align-items:center;gap:9px;font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);font-weight:700;}
+  .dock-h .b{background:var(--terra);color:#fff;font-size:11px;font-weight:700;width:19px;height:19px;border-radius:50%;
+    display:grid;place-items:center;font-family:var(--mono);}
+  .dock-h .cl{margin-left:auto;color:var(--ink-4);}
+  .att{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:15px;box-shadow:var(--shadow);}
+  .att .top{display:flex;align-items:center;gap:9px;}
+  .att .sd{width:9px;height:9px;border-radius:50%;flex:none;}
+  .att .sd.red{background:var(--blocked);} .att .sd.green{background:var(--green);} .att .sd.blue{background:var(--run);}
+  .att .ti{font-size:14px;font-weight:700;}
+  .att .arw{margin-left:auto;color:var(--ink-4);}
+  .att .tags{display:flex;align-items:center;gap:8px;margin:8px 0 0;font-size:11.5px;}
+  .tag{font-weight:700;padding:2px 8px;border-radius:var(--pill);}
+  .tag.hi{background:var(--blocked-bg);color:var(--blocked);}
+  .tag.lo{background:var(--done-bg);color:var(--done);}
+  .att .ctx{color:var(--ink-3);font-size:11.5px;}
+  .att .body{font-size:13px;color:var(--ink-2);line-height:1.5;margin:11px 0 13px;}
+  .att .row2{display:flex;gap:9px;}
+  .btn{flex:1;border:none;border-radius:9px;padding:9px;font-size:13px;font-weight:650;cursor:pointer;}
+  .btn.pri{background:var(--rail-0);color:#fff;}
+  .btn.ghost{background:var(--card-2);color:var(--ink-2);border:1px solid var(--line-strong);}
+  .att .meta{font-size:12px;color:var(--ink-3);margin:9px 0 12px;}
+  .att .meta b{color:var(--ink);font-weight:650;}
+  .thumb{border:1px solid var(--line-strong);border-radius:10px;height:78px;background:
+    linear-gradient(180deg,#fff,#f4f0e8);display:grid;place-items:center;overflow:hidden;margin:10px 0 12px;position:relative;}
+  .thumb .mini{transform:scale(.9);opacity:.85;font-size:9px;color:var(--ink-4);text-align:center;line-height:1.4;}
+
+  /* ------------ PHONE ------------ */
+  .phone{position:absolute;right:26px;bottom:20px;width:238px;height:470px;background:#0b0b0d;border-radius:38px;
+    padding:9px;box-shadow:var(--shadow-lg),0 0 0 2px #26262a;z-index:5;}
+  .phscr{background:var(--bg);border-radius:30px;height:100%;overflow:hidden;display:flex;flex-direction:column;position:relative;}
+  .notch{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:74px;height:20px;background:#0b0b0d;border-radius:999px;z-index:3;}
+  .ph-top{padding:11px 15px 8px;display:flex;align-items:center;justify-content:space-between;}
+  .ph-time{font-size:11px;font-weight:700;font-family:var(--mono);}
+  .ph-sig{font-size:10px;color:var(--ink-3);}
+  .ph-brand{padding:2px 15px 8px;display:flex;align-items:center;gap:6px;}
+  .ph-brand .w{font-family:var(--script-face);font-size:18px;color:var(--script);}
+  .ph-brand .os{font-weight:700;font-size:13px;color:var(--rail-0);}
+  .ph-brand .bell{width:26px;height:26px;margin-left:auto;border-radius:8px;position:relative;}
+  .ph-brand .bell .b{width:14px;height:14px;font-size:9px;top:-3px;right:-3px;}
+  .ph-tabs{display:flex;gap:6px;padding:2px 13px 10px;}
+  .ph-tabs .tb{font-size:11px;font-weight:600;color:var(--ink-3);padding:6px 12px;border-radius:999px;}
+  .ph-tabs .tb.on{background:var(--rail-0);color:#fff;}
+  .ph-body{flex:1;overflow:hidden;padding:0 13px;}
+  .ph-sec{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin:8px 0 7px;display:flex;align-items:center;gap:6px;}
+  .ph-sec .b{background:var(--terra);color:#fff;font-size:9px;width:15px;height:15px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);}
+  .ph-sec .mo{margin-left:auto;color:var(--ink-4);font-weight:600;}
+  .ph-card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:9px 11px;margin-bottom:7px;
+    display:flex;align-items:center;gap:9px;box-shadow:var(--shadow);}
+  .ph-card .sd{width:7px;height:7px;border-radius:50%;flex:none;}
+  .ph-card .t{font-size:11.5px;font-weight:650;}
+  .ph-card .s{font-size:10px;color:var(--ink-3);margin-top:1px;}
+  .ph-card .tm{margin-left:auto;font-size:9.5px;color:var(--ink-4);font-family:var(--mono);}
+  .ph-card .ar{margin-left:auto;color:var(--ink-4);}
+  .ph-sp{display:flex;align-items:center;gap:8px;padding:6px 2px;}
+  .ph-sp .ic{font-size:14px;}
+  .ph-sp .t{font-size:11.5px;font-weight:600;flex:1;}
+  .ph-sp .pc{font-size:11px;font-weight:700;color:var(--ink-2);font-family:var(--mono);}
+  .ph-sp .ar{color:var(--ink-4);}
+  .ph-nav{display:flex;justify-content:space-around;padding:9px 0 12px;border-top:1px solid var(--line);background:var(--card);}
+  .ph-nav .it{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9px;color:var(--ink-3);font-weight:600;}
+  .ph-nav .it.on{color:var(--rail-0);}
+  .ph-nav .it .g{width:18px;height:18px;}
+
+  .foot{max-width:1180px;margin:30px auto 0;color:var(--ink-3);font-size:12.5px;line-height:1.6;border-top:1px solid var(--line-strong);padding-top:18px;}
+  .foot b{color:var(--ink-2);}
+  @media (max-width:900px){ .page{padding:22px 14px 60px;} }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-grid" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></symbol>
+    <symbol id="i-sprint" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10"/></symbol>
+    <symbol id="i-workers" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M3.5 19c.6-3 3-4.5 5.5-4.5S13.9 16 14.5 19M16 6.2a3 3 0 0 1 0 5.6M18 19c-.3-1.8-1.2-3-2.4-3.7"/></symbol>
+    <symbol id="i-repo" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 3v13m0 5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 0v3a4 4 0 0 1-4 4H8"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 12.5l5 5 11-11"/></symbol>
+    <symbol id="i-plans" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8 4h9a2 2 0 0 1 2 2v14l-4-2-4 2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12"/></symbol>
+    <symbol id="i-evidence" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-deploy" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 2l7 4v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></symbol>
+    <symbol id="i-knowledge" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2zM4 5v16"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M20 20l-4-4"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 20a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-q" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M9.2 9.2a3 3 0 0 1 5.6 1c0 2-3 2.3-3 4M12 17.5v.01"/></symbol>
+    <symbol id="i-cmd" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4M9 9h6v6H9z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-arr" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-promote" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 19V6M6 12l6-6 6 6M5 21h14"/></symbol>
+    <symbol id="i-merge" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="9" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 8.5v7M8.4 7.2A6 6 0 0 1 15.5 9.2"/></symbol>
+    <!-- sprint glyphs (desert motifs) -->
+    <symbol id="g-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.2 5.2l1.7 1.7M17.1 17.1l1.7 1.7M18.8 5.2l-1.7 1.7M6.9 17.1l-1.7 1.7"/></symbol>
+    <symbol id="g-cactus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 21v-9M12 12V7a2.5 2.5 0 0 1 5 0v2M12 14V12a2.5 2.5 0 0 0-5 0v1M9 21h6"/></symbol>
+    <symbol id="g-mountain" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 19l6-11 4 7 2-3 6 7z"/><path stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M7.5 12.5l1.5-2 1.3 2.2"/></symbol>
+    <symbol id="g-wave" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M2 9c2.2 0 2.2 2.4 4.5 2.4S8.7 9 11 9s2.2 2.4 4.5 2.4S17.7 9 20 9M2 15c2.2 0 2.2 2.4 4.5 2.4S8.7 15 11 15s2.2 2.4 4.5 2.4S17.7 15 20 15"/></symbol>
+    <symbol id="g-leaf" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M5 19c9 1 14-4 14-13 0 0-11-2-13 5-.8 3 .7 5.6 3 6.5M5 19c1.8-4 4-6 7-7.5"/></symbol>
+    <symbol id="g-bus" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="11" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M3.5 11h17M9 5v6"/><circle cx="7.5" cy="18" r="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="16.5" cy="18" r="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+    <symbol id="g-ruler" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M4 20L20 4l0 0 0 0M4 20h16V4"/><path stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M9 20v-3M14 20v-6M9 9h3M9 14h6"/></symbol>
+    <symbol id="g-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
+  </defs>
+</svg>
+
+<div class="page">
+
+  <div class="doc-head">
+    <div class="doc-eyebrow">Vacilando OS · Product Definition · Mockup</div>
+    <h1>Command Center — the operator's single pane</h1>
+    <p>The proposed product surface over the Alloy toolkit's six runtimes. One place to see every sprint, worker,
+      question, and approval across all projects — and to act on the few things that actually need you. Below is the
+      high-fidelity desktop Command Center with its mobile companion.</p>
+    <div class="meta">Identity: warm "vacilando" — forest rail · terracotta accent · desert horizon &nbsp;·&nbsp; single committed light theme &nbsp;·&nbsp; projection + command surface, never a parallel model</div>
+  </div>
+
+  <div class="frame-cap">
+    <span class="n">SCREEN 01</span>
+    <h2>Command Center — Alloy Platform</h2>
+    <span>All active sprints, the worker pool, and everything awaiting your decision, live.</span>
+  </div>
+
+  <div class="frame">
+   <div class="scroll">
+    <div class="app">
+
+      <!-- ============ RAIL ============ -->
+      <aside class="rail">
+        <div class="brand">
+          <div class="word">Vacilando<b>OS</b></div>
+          <div class="sub">Engineering Operating System</div>
+        </div>
+        <nav class="nav">
+          <a class="active" href="#"><svg class="ico"><use href="#i-grid"/></svg>Command Center</a>
+          <a href="#"><svg class="ico"><use href="#i-sprint"/></svg>Sprints</a>
+          <a href="#"><svg class="ico"><use href="#i-workers"/></svg>Workers</a>
+          <a href="#"><svg class="ico"><use href="#i-repo"/></svg>Repository</a>
+          <a href="#"><svg class="ico"><use href="#i-check"/></svg>Approvals<span class="badge">3</span></a>
+          <a href="#"><svg class="ico"><use href="#i-plans"/></svg>Plans / Epics</a>
+          <a href="#"><svg class="ico"><use href="#i-evidence"/></svg>Evidence</a>
+          <a href="#"><svg class="ico"><use href="#i-deploy"/></svg>Deployments</a>
+          <a href="#"><svg class="ico"><use href="#i-knowledge"/></svg>Knowledge</a>
+          <a href="#"><svg class="ico"><use href="#i-settings"/></svg>Settings</a>
+        </nav>
+        <div class="nav-sep"></div>
+        <div class="projhead"><span>Projects</span><button aria-label="Add project"><svg style="width:15px;height:15px" viewBox="0 0 24 24"><use href="#i-plus"/></svg></button></div>
+        <div class="nav proj">
+          <a class="active" href="#"><span class="dot"></span>Alloy Platform</a>
+          <a href="#"><span class="dot"></span>Alloy Marketing</a>
+          <a href="#"><span class="dot"></span>Personal Tools</a>
+          <a href="#"><span class="dot"></span>Sandbox / R&amp;D</a>
+        </div>
+        <div class="desert">
+          <svg viewBox="0 0 236 150" width="100%" height="100%" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+            <defs>
+              <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#173f2a"/><stop offset="1" stop-color="#c8794a"/>
+              </linearGradient>
+              <linearGradient id="dune1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c06a3f"/><stop offset="1" stop-color="#a4512d"/></linearGradient>
+              <linearGradient id="dune2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a4a29"/><stop offset="1" stop-color="#7d3a20"/></linearGradient>
+            </defs>
+            <rect width="236" height="150" fill="url(#sky)"/>
+            <circle cx="176" cy="70" r="26" fill="#f0b878" opacity="0.92"/>
+            <path d="M0 108 Q60 82 120 100 T236 96 V150 H0 Z" fill="url(#dune1)"/>
+            <path d="M0 128 Q70 108 140 124 T236 120 V150 H0 Z" fill="url(#dune2)"/>
+            <g fill="#14311f">
+              <rect x="40" y="86" width="4" height="46" rx="2"/>
+              <path d="M42 88 q-16 -9 -26 -5 q13 -1 26 5 M42 88 q16 -9 26 -5 q-13 -1 -26 5 M42 87 q-8 -15 -20 -17 q10 5 20 17 M42 87 q8 -15 20 -17 q-10 5 -20 17"/>
+            </g>
+            <g fill="#3f8f5f"><path d="M96 132 v-14 a4 4 0 0 1 8 0 v14 z"/><path d="M100 124 q-8 -2 -8 -10 q6 3 8 10 M100 122 q8 -2 8 -9 q-6 3 -8 9"/></g>
+          </svg>
+        </div>
+        <div class="user">
+          <div class="av">JW</div>
+          <div><div class="nm">John Winters</div><div class="rl">Platform Owner</div></div>
+          <svg class="chev" style="width:16px;height:16px" viewBox="0 0 24 24"><use href="#i-chev"/></svg>
+        </div>
+      </aside>
+
+      <!-- ============ MAIN ============ -->
+      <main class="main">
+        <div class="topbar">
+          <button class="switch"><svg class="g"><use href="#i-grid"/></svg>Alloy Platform <svg style="width:14px;height:14px;color:var(--ink-4)" viewBox="0 0 24 24"><use href="#i-chev"/></svg></button>
+          <button class="cc-btn"><svg class="g"><use href="#i-cmd"/></svg>Command Center</button>
+          <div class="search"><svg class="g"><use href="#i-search"/></svg>Search sprints, workers, PRs…<span class="kbd">⌘K</span></div>
+          <div class="bell"><svg style="width:19px;height:19px" viewBox="0 0 24 24"><use href="#i-bell"/></svg><span class="b">3</span></div>
+          <div class="me">JW</div>
+        </div>
+
+        <div class="content">
+          <div class="h1row">
+            <h1>Alloy Platform</h1><span class="rt">— Engineering Runtime</span>
+            <span class="live"><span class="d"></span>Live</span>
+          </div>
+
+          <!-- metric tiles -->
+          <div class="tiles">
+            <div class="tile"><div class="tl"><svg class="g" style="color:var(--green-ink)"><use href="#i-sprint"/></svg>Active Sprints</div><div class="big">6</div><div class="sub"><span class="delta">▲ 1</span> today</div></div>
+            <div class="tile"><div class="tl"><svg class="g" style="color:var(--run)"><use href="#i-workers"/></svg>Workers Running</div><div class="big">4<span class="of"> / 6</span></div><div class="sub">2 idle · 0 blocked</div></div>
+            <div class="tile flag"><div class="tl"><svg class="g" style="color:var(--terra)"><use href="#i-q"/></svg>Questions Pending</div><div class="big" style="color:var(--terra)">1</div><div class="sub warn">needs you</div></div>
+            <div class="tile"><div class="tl"><svg class="g" style="color:var(--green-ink)"><use href="#i-merge"/></svg>PRs Ready</div><div class="big">2</div><div class="sub">awaiting approval</div></div>
+            <div class="tile"><div class="tl"><svg class="g" style="color:var(--green-ink)"><use href="#i-check"/></svg>Tests Passing</div><div class="big ok" style="font-size:30px">98%</div><div class="sub">last run · 1h ago</div></div>
+            <div class="tile"><div class="tl"><svg class="g" style="color:var(--green-ink)"><use href="#i-deploy"/></svg>Staging Sync</div><div class="big small ok" style="margin-top:5px">Up to date</div><div class="sub">synced 23m ago</div></div>
+          </div>
+
+          <!-- active sprints -->
+          <section class="card">
+            <div class="card-h">
+              <span class="lbl">Active Sprints</span>
+              <div class="seg"><span class="selbox">View: All ▾</span><span class="iconbtn"><svg style="width:15px;height:15px" viewBox="0 0 24 24"><use href="#i-sprint"/></svg></span></div>
+            </div>
+            <div class="sprints">
+
+              <div class="srow acc-green">
+                <div class="sp-main"><div class="sp-ic"><svg><use href="#g-sun"/></svg></div><div class="sp-tt"><div class="t"><span class="name">Enrollment Runtime Polish</span><span class="chip impl">Implementation</span></div><div class="m">Phase 4 of 7 · started 2h ago by Claude-2</div></div></div>
+                <div class="prog"><div class="bar"><i style="width:72%;--fill:var(--green)"></i></div></div><div class="pct">72%</div>
+                <div class="wk"><div class="w"><svg class="qi" style="width:13px;height:13px" viewBox="0 0 24 24"><use href="#i-q"/></svg>Claude-2</div><div class="s run"><span class="dot"></span>Running</div></div>
+                <div class="meta-c"><b>wt-runtime-polish</b><span class="u">branch</span></div>
+                <div class="meta-c"><b>4 ahead</b><span class="u">commits</span></div>
+                <div class="kebab">⋯</div>
+              </div>
+
+              <div class="srow acc-green">
+                <div class="sp-main"><div class="sp-ic"><svg><use href="#g-cactus"/></svg></div><div class="sp-tt"><div class="t"><span class="name">Commercial Configuration Runtime</span><span class="chip impl">Implementation</span></div><div class="m">Phase 3 of 6 · started 1h ago by Cursor-1</div></div></div>
+                <div class="prog"><div class="bar"><i style="width:58%;--fill:#7a9a4e"></i></div></div><div class="pct">58%</div>
+                <div class="wk"><div class="w"><svg class="qi" style="width:13px;height:13px" viewBox="0 0 24 24"><use href="#i-q"/></svg>Cursor-1</div><div class="s run"><span class="dot"></span>Running</div></div>
+                <div class="meta-c"><b>wt-commercial-layout</b><span class="u">branch</span></div>
+                <div class="meta-c"><b>2 ahead</b><span class="u">commits</span></div>
+                <div class="kebab">⋯</div>
+              </div>
+
+              <div class="srow acc-review">
+                <div class="sp-main"><div class="sp-ic"><svg><use href="#g-mountain"/></svg></div><div class="sp-tt"><div class="t"><span class="name">Operational Intelligence (Metrics)</span><span class="chip rev">Review</span></div><div class="m">Phase 5 of 8 · waiting on your review</div></div></div>
+                <div class="prog"><div class="bar"><i style="width:90%;--fill:var(--review)"></i></div></div><div class="pct">90%</div>
+                <div class="wk"><div class="s rev" style="font-weight:700">Waiting Approval</div><div class="s" style="color:var(--ink-3);margin-top:3px">Cursor-2 · worker</div></div>
+                <div class="meta-c"><span class="prr">PR #142</span><span class="u">ready to merge</span></div>
+                <div class="meta-c"></div>
+                <div class="kebab">⋯</div>
+              </div>
+
+              <div class="srow acc-done">
+                <div class="sp-main"><div class="sp-ic"><svg><use href="#g-wave"/></svg></div><div class="sp-tt"><div class="t"><span class="name">Identity Runtime Docs</span><span class="chip done">Complete</span></div><div class="m">completed 1h ago · merged ✓</div></div></div>
+                <div class="prog"><div class="bar"><i style="width:100%;--fill:var(--green-ink)"></i></div></div><div class="pct">100%</div>
+                <div class="wk"><div class="s merged" style="font-weight:700"><svg style="width:13px;height:13px" viewBox="0 0 24 24"><use href="#i-merge"/></svg>Merged</div><div class="s" style="color:var(--ink-3);margin-top:3px">main · branch</div></div>
+                <div class="meta-c"><span class="deployed">Deployed</span><span class="u">staging</span></div>
+                <div class="meta-c"></div>
+                <div class="kebab">⋯</div>
+              </div>
+
+              <div class="srow acc-plan">
+                <div class="sp-main"><div class="sp-ic"><svg><use href="#g-leaf"/></svg></div><div class="sp-tt"><div class="t"><span class="name">Portal UX Polish</span><span class="chip plan">Planning</span></div><div class="m">Phase 1 of 5 · queued</div></div></div>
+                <div class="prog"><div class="bar"><i style="width:10%;--fill:var(--plan)"></i></div></div><div class="pct">10%</div>
+                <div class="wk"><div class="s queued">◷ Queued</div><div class="s" style="color:var(--ink-4);margin-top:3px">next in line</div></div>
+                <div class="meta-c">—<span class="u">branch</span></div>
+                <div class="meta-c">—<span class="u">commits</span></div>
+                <div class="kebab">⋯</div>
+              </div>
+
+              <div class="srow acc-blocked">
+                <div class="sp-main"><div class="sp-ic"><svg><use href="#g-bus"/></svg></div><div class="sp-tt"><div class="t"><span class="name">Scheduling Engine</span><span class="chip blk">Blocked</span></div><div class="m">Phase 2 of 7 · blocking: needs a decision</div></div></div>
+                <div class="prog"><div class="bar"><i style="width:25%;--fill:var(--blocked)"></i></div></div><div class="pct">25%</div>
+                <div class="wk"><div class="w"><svg class="qi" style="width:13px;height:13px" viewBox="0 0 24 24"><use href="#i-q"/></svg>Claude-1</div><div class="s needs">Needs Answer</div></div>
+                <div class="meta-c"><span style="color:var(--blocked);font-weight:650">1 question</span><span class="u">open</span></div>
+                <div class="meta-c"></div>
+                <div class="kebab">⋯</div>
+              </div>
+
+            </div>
+          </section>
+
+          <!-- three panels -->
+          <div class="tri">
+            <div class="card">
+              <div class="mini-h">Worker Pool</div>
+              <div class="wpl">
+                <div class="r"><span class="ic"><svg><use href="#g-sun"/></svg></span><span class="nm">Claude-2</span><span class="st st-run">Running</span><span class="pc">72%</span><span class="kb">⋯</span></div>
+                <div class="r"><span class="ic"><svg><use href="#g-cactus"/></svg></span><span class="nm">Cursor-1</span><span class="st st-run">Running</span><span class="pc">58%</span><span class="kb">⋯</span></div>
+                <div class="r"><span class="ic"><svg><use href="#g-mountain"/></svg></span><span class="nm">Cursor-2</span><span class="st st-rev">Waiting</span><span class="pc">90%</span><span class="kb">⋯</span></div>
+                <div class="r"><span class="ic"><svg><use href="#g-bus"/></svg></span><span class="nm">Claude-1</span><span class="st st-needs">Needs You</span><span class="pc">25%</span><span class="kb">⋯</span></div>
+                <div class="r"><span class="ic"><svg><use href="#g-ruler"/></svg></span><span class="nm">GPT Architect</span><span class="st st-arch">Advisory</span><span class="pc">—</span><span class="kb">⋯</span></div>
+                <div class="r"><span class="ic"><svg><use href="#g-compass"/></svg></span><span class="nm">Toolkit OS</span><span class="st st-watch">Watching</span><span class="pc">—</span><span class="kb">⋯</span></div>
+                <button class="addw"><svg style="width:14px;height:14px" viewBox="0 0 24 24"><use href="#i-plus"/></svg>Add Worker</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="mini-h">Recent Activity</div>
+              <div class="act">
+                <div class="r"><span class="tm">2m</span><span class="tx">Claude-2 committed 6 files to <b>wt-runtime-polish</b></span><span class="ck"><svg style="width:11px;height:11px" viewBox="0 0 24 24"><use href="#i-check"/></svg></span></div>
+                <div class="r"><span class="tm">5m</span><span class="tx">Cursor-1 pushed 3 commits to <b>wt-commercial-layout</b></span><span class="ck"><svg style="width:11px;height:11px" viewBox="0 0 24 24"><use href="#i-check"/></svg></span></div>
+                <div class="r"><span class="tm">8m</span><span class="tx">PR #142 opened by Cursor-2 · <a href="#">View PR</a></span><span class="ck"><svg style="width:11px;height:11px" viewBox="0 0 24 24"><use href="#i-check"/></svg></span></div>
+                <div class="r"><span class="tm">12m</span><span class="tx">Tests passed (47/48) · <a href="#">View results</a></span><span class="ck"><svg style="width:11px;height:11px" viewBox="0 0 24 24"><use href="#i-check"/></svg></span></div>
+                <div class="r"><span class="tm">18m</span><span class="tx">Question answered — commercial inheritance logic</span><span class="ck q"><svg style="width:11px;height:11px" viewBox="0 0 24 24"><use href="#i-q"/></svg></span></div>
+                <div class="r"><span class="tm">23m</span><span class="tx">Staging synced with <b>main</b></span><span class="ck"><svg style="width:11px;height:11px" viewBox="0 0 24 24"><use href="#i-check"/></svg></span></div>
+                <div class="viewall">View full activity →</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="mini-h">Quick Actions</div>
+              <div class="qa">
+                <div class="r"><span class="qi"><svg style="width:17px;height:17px" viewBox="0 0 24 24"><use href="#i-plus"/></svg></span><div><div class="tt">Start New Sprint</div><div class="ds">From an epic or plan</div></div></div>
+                <div class="r"><span class="qi"><svg style="width:17px;height:17px" viewBox="0 0 24 24"><use href="#i-knowledge"/></svg></span><div><div class="tt">Ask Toolkit / Architect</div><div class="ds">High-level question or guidance</div></div></div>
+                <div class="r hot"><span class="qi"><svg style="width:17px;height:17px" viewBox="0 0 24 24"><use href="#i-check"/></svg></span><div><div class="tt">Review &amp; Approve</div><div class="ds">3 items waiting</div></div><span class="cnt">3</span></div>
+                <div class="r"><span class="qi"><svg style="width:17px;height:17px" viewBox="0 0 24 24"><use href="#i-promote"/></svg></span><div><div class="tt">Promote to Staging</div><div class="ds">Ready to promote</div></div></div>
+                <div class="r"><span class="qi"><svg style="width:17px;height:17px" viewBox="0 0 24 24"><use href="#i-merge"/></svg></span><div><div class="tt">Merge Queue</div><div class="ds">2 PRs ready</div></div></div>
+                <div class="r"><span class="qi"><svg style="width:17px;height:17px" viewBox="0 0 24 24"><use href="#i-grid"/></svg></span><div><div class="tt">Generate Mockup</div><div class="ds">From current context</div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- ============ DOCK ============ -->
+      <aside class="dock">
+        <div class="dock-h"><span>Needs Your Attention</span><span class="b">1</span><svg class="cl" style="width:15px;height:15px" viewBox="0 0 24 24"><use href="#i-chev"/></svg></div>
+
+        <div class="att">
+          <div class="top"><span class="sd red"></span><span class="ti">Claude-1 · Question</span><svg class="arw" style="width:16px;height:16px" viewBox="0 0 24 24"><use href="#i-arr"/></svg></div>
+          <div class="tags"><span class="tag hi">High Priority</span><span class="ctx">Scheduling Engine</span></div>
+          <div class="body">Should we apply the new inheritance rule to existing records, or only to new ones going forward?</div>
+          <div class="row2"><button class="btn pri">Answer</button><button class="btn ghost">Snooze</button></div>
+        </div>
+
+        <div class="att">
+          <div class="top"><span class="sd green"></span><span class="ti">PR Ready to Merge</span><span class="tag lo" style="margin-left:auto">Low Risk</span></div>
+          <div class="meta"><b>PR #142</b> · Operational Intelligence · <b>47 files</b> changed · tests passing</div>
+          <button class="btn pri" style="width:100%">Approve Merge</button>
+        </div>
+
+        <div class="att">
+          <div class="top"><span class="sd blue"></span><span class="ti">Mockup Ready</span><svg class="arw" style="width:16px;height:16px" viewBox="0 0 24 24"><use href="#i-arr"/></svg></div>
+          <div class="meta" style="margin-bottom:2px">Portal Work-Unit Actions</div>
+          <div class="thumb"><div class="mini">▧ ▧ ▧<br>▤▤▤ ▤▤<br>▧ ▧ ▧</div></div>
+          <div class="row2"><button class="btn pri">View Mockup</button><button class="btn ghost">Share</button></div>
+        </div>
+      </aside>
+
+      <!-- ============ PHONE ============ -->
+      <div class="phone">
+        <div class="phscr">
+          <div class="notch"></div>
+          <div class="ph-top"><span class="ph-time">9:41</span><span class="ph-sig">● ● ● &nbsp;5G&nbsp; ▮</span></div>
+          <div class="ph-brand"><span class="w">Vacilando</span><span class="os">OS</span><div class="bell"><svg style="width:15px;height:15px;color:var(--ink-2)" viewBox="0 0 24 24"><use href="#i-bell"/></svg><span class="b" style="position:absolute;background:var(--terra);color:#fff;border-radius:50%;display:grid;place-items:center;font-family:var(--mono)">1</span></div></div>
+          <div class="ph-tabs"><span class="tb on">Today</span><span class="tb">Sprints</span><span class="tb">Approvals</span></div>
+          <div class="ph-body">
+            <div class="ph-sec">Needs You <span class="b">1</span></div>
+            <div class="ph-card"><span class="sd" style="background:var(--blocked)"></span><div><div class="t">Claude-1 · Question</div><div class="s">Scheduling Engine</div></div><span class="tm">2m</span></div>
+            <div class="ph-card"><span class="sd" style="background:var(--green)"></span><div><div class="t">PR Ready · #142</div><div class="s">Operational Intelligence</div></div><span class="tm">5m</span></div>
+            <div class="ph-sec" style="margin-top:12px">Active Sprints <span class="mo">See all</span></div>
+            <div class="ph-sp"><span class="ic"><svg><use href="#g-sun"/></svg></span><span class="t">Enrollment Polish</span><span class="pc">72%</span><svg class="ar" style="width:15px;height:15px" viewBox="0 0 24 24"><use href="#i-arr"/></svg></div>
+            <div class="ph-sp"><span class="ic"><svg><use href="#g-cactus"/></svg></span><span class="t">Commercial Config</span><span class="pc">58%</span><svg class="ar" style="width:15px;height:15px" viewBox="0 0 24 24"><use href="#i-arr"/></svg></div>
+            <div class="ph-sp"><span class="ic"><svg><use href="#g-mountain"/></svg></span><span class="t">Operational Intel</span><span class="pc">90%</span><svg class="ar" style="width:15px;height:15px" viewBox="0 0 24 24"><use href="#i-arr"/></svg></div>
+            <div class="ph-sp"><span class="ic"><svg><use href="#g-bus"/></svg></span><span class="t">Scheduling Engine</span><span class="pc" style="color:var(--blocked)">25%</span><svg class="ar" style="width:15px;height:15px" viewBox="0 0 24 24"><use href="#i-arr"/></svg></div>
+          </div>
+          <div class="ph-nav">
+            <div class="it on"><svg class="g"><use href="#i-grid"/></svg>Home</div>
+            <div class="it"><svg class="g"><use href="#i-workers"/></svg>Workers</div>
+            <div class="it"><svg class="g"><use href="#i-sprint"/></svg>Sprints</div>
+            <div class="it"><svg class="g"><use href="#i-check"/></svg>Approvals</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+   </div>
+  </div>
+
+  <div class="foot">
+    <b>Reading this mockup.</b> Every number, worker, and card is a <b>projection</b> of real toolkit state
+    (<span style="font-family:var(--mono)">~/.local/state/alloy-dev</span>) — the app owns no parallel model.
+    Each action (<b>Answer</b>, <b>Approve Merge</b>, <b>Start New Sprint</b>, <b>Promote to Staging</b>) maps to one
+    entry in a fixed, fail-closed command allowlist that calls the existing <span style="font-family:var(--mono)">alloy-*</span>
+    commands — consequential actions preview before they confirm, and release is never auto-approved.
+    &nbsp;·&nbsp; Desktop + mobile share one identity and one event stream. &nbsp;·&nbsp; Full rationale in
+    <b>PRODUCT-REVIEW.md</b>.
+  </div>
+
+</div>
