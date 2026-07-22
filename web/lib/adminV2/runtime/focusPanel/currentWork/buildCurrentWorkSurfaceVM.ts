@@ -25,6 +25,7 @@ import {
     type CurrentWorkTemplateConfigOverlay,
 } from "./currentWorkTemplateConfig";
 import { buildCurrentWorkExecutionVM } from "./buildCurrentWorkExecutionVM";
+import { resolveCurrentWorkActionExecution } from "./executeCurrentWorkAction";
 import type {
     CurrentWorkChecklistItemVM,
     CurrentWorkLastActivity,
@@ -721,6 +722,13 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
             ? workIntentProjectionForStageWorkItem(runtime, actionableWorkItem)
             : null;
 
+    // Command integrity (Slice F): thread each action's resolved execution state onto the VM so
+    // the card renders enabled only what is provably executable, and config errors stay observable.
+    const withActionExecution = <T extends CurrentWorkActionVM | null | undefined>(action: T): T =>
+        action ? ({ ...action, execution: resolveCurrentWorkActionExecution(action) } as T) : action;
+    const withActionExecutionAll = (actions: CurrentWorkActionVM[]): CurrentWorkActionVM[] =>
+        actions.map((action) => withActionExecution(action)!);
+
     return {
         id: `${recordId}:${workKey}`,
         recordId,
@@ -735,14 +743,14 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         readiness,
         progress,
         checklist,
-        primaryAction,
-        recordOutcomeAction,
+        primaryAction: withActionExecution(primaryAction),
+        recordOutcomeAction: withActionExecution(recordOutcomeAction),
         execution,
-        supportingActions,
-        alternatePaths,
-        administrativeActions: classified.administrative,
-        communicationActions,
-        bosRecommendations: classified.bosRecommendations,
+        supportingActions: withActionExecutionAll(supportingActions),
+        alternatePaths: withActionExecutionAll(alternatePaths),
+        administrativeActions: withActionExecutionAll(classified.administrative),
+        communicationActions: withActionExecutionAll(communicationActions),
+        bosRecommendations: withActionExecutionAll(classified.bosRecommendations),
         lastActivity: lastActivityFromContext(context, communicationSummary ?? null),
         showOutcomeCompletion,
         outcomeCompletionBlockReason: showOutcomeCompletion

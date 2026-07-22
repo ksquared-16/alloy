@@ -6,6 +6,7 @@ import type {
 } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { CurrentWorkExecutionVM } from "./buildCurrentWorkExecutionVM";
+import type { CurrentWorkActionExecution } from "./executeCurrentWorkAction";
 import type { CurrentWorkRequirementOwner } from "./resolveCurrentWorkRequirementOwner";
 
 export type { CurrentWorkRequirementOwner } from "./resolveCurrentWorkRequirementOwner";
@@ -42,7 +43,11 @@ export type CurrentWorkActionVM = {
     disabledReason?: string | null;
     /** Resolved registry action for client invoke — when available. */
     resolved?: ResolvedActionForClient | null;
+    /** Resolved execution state (Slice F) — every visible enabled action is provably executable. */
+    execution?: CurrentWorkActionExecution | null;
 };
+
+export type { CurrentWorkActionExecution, CurrentWorkActionExecutionStatus } from "./executeCurrentWorkAction";
 
 export type CurrentWorkChecklistStatus = "complete" | "missing" | "blocked";
 

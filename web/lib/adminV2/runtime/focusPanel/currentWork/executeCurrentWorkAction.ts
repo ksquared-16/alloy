@@ -9,6 +9,7 @@ import {
     type CurrentWorkActionSurface,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionSurface";
 import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
+import type { ActionBlocker } from "@/lib/adminV2/actions/actionTypes";
 
 export type CurrentWorkActionExecutionPlan =
     | { kind: "record_outcome" }
@@ -74,15 +75,69 @@ export function planCurrentWorkActionExecution(
     }
 }
 
-/** True when an action may render as an enabled control. */
-export function isCurrentWorkActionExecutable(action: CurrentWorkActionVM): boolean {
+/**
+ * Command integrity (Slice F) — the resolved execution state of a Current Work action.
+ *
+ * Every visible enabled action must be provably executable. This classifies the SYNC-derivable
+ * integrity of an action (capability resolution, host support, binding presence, transition
+ * destination, disabled flag). Full server-side eligibility (async, Supabase-backed
+ * `ActionEligibility`) still gates at execution time — this never duplicates that engine, it
+ * reuses its `ActionBlocker` vocabulary for the reasons.
+ *
+ * - `executable` — resolves to a supported host with a valid binding; may render enabled.
+ * - `disabled` — capability present but not currently available (no stated reason).
+ * - `blocked` — unavailable with a stated reason/handoff the operator can act on.
+ * - `configuration_error` — no runnable capability resolved (unsupported host / missing binding /
+ *   missing transition destination). Engineer/admin-observable; never shown to operators.
+ * - `hidden` — nothing to render (no key/label).
+ */
+export type CurrentWorkActionExecutionStatus =
+    | "executable"
+    | "disabled"
+    | "blocked"
+    | "hidden"
+    | "configuration_error";
+
+export type CurrentWorkActionExecution = {
+    status: CurrentWorkActionExecutionStatus;
+    /** Reuses the Action Runtime blocker vocabulary — not a parallel status system. */
+    blockers: ActionBlocker[];
+};
+
+/** Classify an action's resolved execution state from metadata + capability resolution only. */
+export function resolveCurrentWorkActionExecution(action: CurrentWorkActionVM): CurrentWorkActionExecution {
+    const key = action.key?.trim();
+    const label = action.label?.trim();
+    if (!key || !label) {
+        return { status: "hidden", blockers: [{ code: "no_binding", message: "Action has no key or label to render." }] };
+    }
+    if (action.disabled) {
+        const reason = action.disabledReason?.trim();
+        return reason
+            ? { status: "blocked", blockers: [{ code: "blocked", message: reason }] }
+            : { status: "disabled", blockers: [{ code: "disabled", message: "This action is not available right now." }] };
+    }
     const plan = planCurrentWorkActionExecution(action);
-    return (
-        plan.kind === "record_outcome"
-        || plan.kind === "open_workspace"
-        || plan.kind === "open_inline_panel"
-        || plan.kind === "communications_composer"
-        || plan.kind === "header_delegate"
-        || plan.kind === "process_transition"
-    );
+    switch (plan.kind) {
+        case "unsupported":
+            return {
+                status: "configuration_error",
+                blockers: [{ code: "unsupported_capability", message: plan.reason }],
+            };
+        case "blocked":
+            return { status: "blocked", blockers: [{ code: "blocked", message: plan.reason }] };
+        default:
+            return { status: "executable", blockers: [] };
+    }
+}
+
+/** Operators see actionable + clearly-unavailable-with-reason; config errors/hidden are engineer-only. */
+export function isOperatorVisibleActionStatus(status: CurrentWorkActionExecutionStatus): boolean {
+    return status === "executable" || status === "disabled" || status === "blocked";
+}
+
+/** True when an action may render as an enabled control. Prefers the VM-threaded state. */
+export function isCurrentWorkActionExecutable(action: CurrentWorkActionVM): boolean {
+    const status = action.execution?.status ?? resolveCurrentWorkActionExecution(action).status;
+    return status === "executable";
 }
