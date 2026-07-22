@@ -15,7 +15,50 @@ const STATUS_ACC = { running: "var(--run)", review: "var(--review)", blocked: "v
 function ago(ms) { if (!ms) return "—"; const s = Math.max(0, (Date.now() - ms) / 1000); if (s < 60) return `${s | 0}s`; if (s < 3600) return `${(s / 60) | 0}m`; if (s < 86400) return `${(s / 3600) | 0}h`; return `${(s / 86400) | 0}d`; }
 const shortBranch = (b, wt) => (b ? b.replace(/^agent\/[^/]+\//, "") : wt || "—");
 
-const state = { snap: null, res: null, sel: null, tab: "overview", outputs: {}, director: {} };
+const state = { snap: null, res: null, sel: null, tab: "overview", outputs: {}, director: {}, drafts: {} };
+
+// -------- Director draft state (per worker slot) --------
+// The draft is owned by application state (state.drafts[slot]), NOT the DOM, so
+// a background re-render never loses it. It is mirrored to sessionStorage for
+// reload recovery only (never localStorage, never the server) and cleared only
+// on a successfully completed send or an explicit clear.
+const DIRECTOR_MAX = 24000; // mirrors registry DIRECTOR_MESSAGE_MAX
+const DRAFT_KEY = (slot) => `vac.draft.${slot}`;
+function draftFor(slot) {
+  if (state.drafts[slot] == null) { try { state.drafts[slot] = sessionStorage.getItem(DRAFT_KEY(slot)) || ""; } catch { state.drafts[slot] = ""; } }
+  return state.drafts[slot];
+}
+function setDraft(slot, val) {
+  state.drafts[slot] = val;
+  try { if (val) sessionStorage.setItem(DRAFT_KEY(slot), val); else sessionStorage.removeItem(DRAFT_KEY(slot)); } catch { /* private mode */ }
+}
+function clearDraft(slot) {
+  setDraft(slot, "");
+  const t = document.getElementById("d-msg");
+  if (t && Number(t.dataset.slot) === slot) { t.value = ""; updateDraftCount(slot); }
+}
+function fmtCount(n) { return n.toLocaleString() + (n === 1 ? " character" : " characters"); }
+function updateDraftCount(slot) {
+  const c = document.getElementById("d-count");
+  if (!c) return;
+  const n = (state.drafts[slot] || "").length;
+  c.textContent = fmtCount(n);
+  c.classList.toggle("warn", n > DIRECTOR_MAX * 0.9);
+  c.classList.toggle("over", n > DIRECTOR_MAX);
+}
+// Live draft sync: keep application state current on every keystroke, and update
+// the count in place WITHOUT a re-render (so typing is never interrupted).
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (t && t.id === "d-msg" && t.dataset.slot != null) {
+    const slot = Number(t.dataset.slot);
+    // Invariant: the compose field always belongs to the selected worker. Ignore
+    // input from a stale/detached textarea so it can never cross-write a draft.
+    if (state.sel != null && slot !== state.sel) return;
+    setDraft(slot, t.value);
+    updateDraftCount(slot);
+  }
+});
 
 // -------- routing (Command Center / Work History / Settings) --------
 function parseRoute() { const p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean); return { name: p[0] || "command", sub: p[1], param: p[2] }; }
@@ -45,7 +88,16 @@ function render(force) {
   setActiveNav(r.name);
   const V = $("#view");
   if (!state.snap || !state.snap.headline) { V.innerHTML = `<div class="empty"><div class="big">Connecting to the runtime…</div></div>`; return; }
+  // Preserve caret/scroll of a focused text field across the innerHTML rebuild
+  // so a background refresh can never disturb an in-progress draft.
+  const ae = document.activeElement;
+  const savedFocus = ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT") && ae.id
+    ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd, top: ae.scrollTop } : null;
   V.innerHTML = ({ command: viewCommand, history: viewHistory, policies: viewPolicies, settings: viewSettings }[r.name] || viewCommand)();
+  if (savedFocus) {
+    const n = document.getElementById(savedFocus.id);
+    if (n) { try { n.focus({ preventScroll: true }); if (savedFocus.s != null) n.setSelectionRange(savedFocus.s, savedFocus.e); n.scrollTop = savedFocus.top; } catch { /* field gone */ } }
+  }
   $("#nb-needs").textContent = state.snap ? needsYou().length : 0;
 }
 
@@ -283,25 +335,71 @@ function outputCard(it, worktree) {
       ${it.evidence_file ? `<a class="btn sm" href="/api/evidence?worktree=${encodeURIComponent(worktree)}&file=${encodeURIComponent(it.evidence_file)}" target="_blank">Open</a>` : ""}</div></div>`;
 }
 
+const capProvider = (p) => (p ? p.charAt(0).toUpperCase() + p.slice(1) : "—");
+// Provider auth state is real metadata — derived, never hidden. Source order:
+// (1) aggregated usage across workers (/api/dashboard → usage.mjs), then
+// (2) the most recent real round-trip observed for THIS worker, then
+// (3) an honest "not yet checked" when we have no observation.
+function providerStatus(provider, slot) {
+  const p = (state._dash?.providers?.providers || []).find((x) => x.provider === provider);
+  if (p && p.auth_state === "authenticated") return { label: "Authenticated", k: "healthy" };
+  if (p && p.auth_state === "needs_auth") return { label: "Authentication required", k: "attention" };
+  const lastAsk = (state.director[slot] || []).find((m) => m.delivery === "provider-round-trip");
+  if (lastAsk && lastAsk.response_ok) return { label: "Authenticated", k: "healthy" };
+  if (lastAsk && /auth|oauth|expired|login|credential/i.test(lastAsk.response_error || "")) return { label: "Authentication required", k: "attention" };
+  if (lastAsk) return { label: "Unavailable", k: "finished" };
+  return { label: "Not yet checked", k: "idle" };
+}
+// Precise per-record delivery status (Slice 4).
+function directorStatus(m) {
+  if (m.delivery === "provider-round-trip") {
+    if (m.response_ok) return { label: "Worker responded", k: "ok" };
+    if (/auth|oauth|login|expired|credential/i.test(m.response_error || "")) return { label: "Authentication required", k: "auth" };
+    return { label: "Failed", k: "err" };
+  }
+  if (m.delivery === "clipboard+manual-paste") return { label: m.clipboard_ok ? "Copied for manual paste" : "Copy failed", k: "copied" };
+  return { label: m.delivery || "recorded", k: "muted" };
+}
 function tabDirector(sp) {
   const log = state.director[sp.slot];
   if (log === undefined) { fetchDirector(sp.slot); }
+  if (!state._dash) fetchDashboard(); // provider status metadata
   const items = log || [];
-  const msg = (m) => {
+  const ps = providerStatus(sp.provider, sp.slot);
+  const draft = draftFor(sp.slot);
+  const conv = (m) => {
+    const st = directorStatus(m);
+    const when = m.occurred_at ? new Date(m.occurred_at).toLocaleString() : "";
+    const head = `<div class="dc-head"><span class="dc-role op">Operator → Director</span><span class="dc-badge ${st.k}">${esc(st.label)}</span><span class="dc-time">${when}</span></div>
+      <div class="dc-msg">${esc(m.message)}</div>`;
     if (m.delivery === "provider-round-trip") {
-      return `<div class="dmsg ask"><div class="dm-h"><span class="who">You → ${esc(m.provider || "")} · slot ${m.slot}</span><span class="dt">${m.occurred_at ? new Date(m.occurred_at).toLocaleString() : ""}</span></div>
-        <div class="dm-b">${esc(m.message)}</div>
-        <div class="dm-resp ${m.response_ok ? "ok" : "err"}"><b>${esc(m.provider || "provider")}:</b> ${esc(m.response || m.response_error || "(no response)")}</div>
-        <div class="dm-f">round-trip${m.usage ? ` · ${m.usage.input_tokens ?? "?"}→${m.usage.output_tokens ?? "?"} tok${m.usage.cost_usd != null ? ` · $${m.usage.cost_usd}` : ""}` : ""}${m.duration_ms ? ` · ${(m.duration_ms / 1000).toFixed(1)}s` : ""}</div></div>`;
+      const u = m.usage || {};
+      const meta = `${esc(m.provider || "provider")} · ${u.input_tokens ?? "?"}→${u.output_tokens ?? "?"} tok · ${m.duration_ms ? (m.duration_ms / 1000).toFixed(1) + "s" : "—"} · ${u.cost_usd != null ? "$" + u.cost_usd : "cost unavailable"}`;
+      return `<div class="dconv">${head}
+        <div class="dc-resp ${st.k}"><span class="dc-role worker">Worker response</span><div class="dc-rtext">${esc(m.response || m.response_error || "(no response)")}</div></div>
+        <div class="dc-meta">${meta}</div></div>`;
     }
-    return `<div class="dmsg"><div class="dm-h"><span class="who">Director → slot ${m.slot}</span><span class="dt">${m.occurred_at ? new Date(m.occurred_at).toLocaleString() : ""}</span></div><div class="dm-b">${esc(m.message)}</div><div class="dm-f">${esc(m.delivery)}${m.clipboard_ok ? " · copied ✓" : ""}</div></div>`;
+    return `<div class="dconv">${head}
+      <div class="dc-note">Delivered to worker by clipboard / manual paste — Vacilando cannot inject into a running session.</div></div>`;
   };
   return `<div class="director">
-    <div class="dintro"><b>Ask</b> sends a real governed round-trip to <b>${esc(sp.provider)}</b> (headless, worktree context) and shows the reply. <b>Route</b> records the instruction and copies it to your clipboard to paste into the live editor. Injecting into the running editor buffer is not available.</div>
-    <div class="dlog">${items.length ? items.map(msg).join("") : `<div class="empty">No interactions yet.</div>`}</div>
-    <div class="dcompose"><textarea id="d-msg" placeholder="e.g. Summarize your latest change and list any blockers. Do not modify files."></textarea>
-      <div class="drow"><span class="muted" style="font-size:11px">preview → confirm → ${sp.provider} responds (may incur cost)</span>
-        <div style="display:flex;gap:7px"><button class="btn" data-director="${sp.slot}">Route (clipboard)</button><button class="btn go" data-ask="${sp.slot}">Ask ${esc(sp.provider)} →</button></div></div></div>
+    <div class="dhead">
+      <div class="dtitle">Director</div>
+      <div class="dctx">
+        <span>Selected worker: <b>Slot ${sp.slot}</b></span>
+        <span>Assigned provider: <b>${esc(capProvider(sp.provider))}</b></span>
+        <span>Provider status: <span class="hpill ${ps.k}">${esc(ps.label)}</span></span>
+      </div>
+      <div class="muted dmode">You talk to Director; Director routes work to the selected worker, whose runtime uses the assigned provider. <b>Send to Worker</b> = headless provider turn with worktree context. <b>Copy Instruction</b> = clipboard / manual paste. Injecting into a live editor session is not available.</div>
+    </div>
+    <div class="dlog">${items.length ? items.map(conv).join("") : `<div class="empty">No interactions yet.</div>`}</div>
+    <div class="dcompose">
+      <textarea id="d-msg" data-slot="${sp.slot}" maxlength="${DIRECTOR_MAX}" placeholder="Instruction for the worker — e.g. Summarize your latest change and list any blockers. Do not modify files.">${esc(draft)}</textarea>
+      <div class="dc-count"><span id="d-count">${fmtCount(draft.length)}</span><span class="muted"> / ${DIRECTOR_MAX.toLocaleString()} max</span></div>
+      <div class="drow"><span class="muted dhelp">Preview → confirm → worker request → response</span>
+        <div class="dbtns"><button class="btn" data-director="${sp.slot}">Copy Instruction</button><button class="btn go" data-ask="${sp.slot}">Send to Worker</button></div></div>
+      <div class="muted dsend-note">This sends a live request to the assigned worker. Usage will be shown after completion when reported by the provider.</div>
+    </div>
   </div>`;
 }
 
@@ -388,6 +486,11 @@ async function execute(command, input, confirm, confirmText) {
     else if (command === "director.route") msg = "recorded + copied to clipboard";
     else if (command === "review.resolve") msg = `review ${d?.disposition}`;
     toast(okc ? "ok" : "err", `${command.replace(/\./g, " ")} ${okc ? "done" : "failed"}`, String(msg).split("\n").slice(0, 4).join("\n"));
+    // Clear the draft ONLY on a genuinely completed send: a real worker response
+    // (director.ask) or a successful copy (director.route). Never on failure,
+    // authentication error, validation error, or a cancelled confirmation.
+    if (command === "director.ask" && d?.response_ok === true && input.slot != null) clearDraft(input.slot);
+    else if (command === "director.route" && okc && input.slot != null) clearDraft(input.slot);
     if (data.snapshot) { state.snap = data.snapshot; }
     if ((command === "director.route" || command === "director.ask") && input.slot) fetchDirector(input.slot);
     const sp = state.snap?.sprints.find((x) => x.slot === input.slot);

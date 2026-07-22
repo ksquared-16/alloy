@@ -55,7 +55,9 @@ function validateField(name, spec, raw) {
     }
     case "text": {
       const s = String(raw);
-      if (!s.trim() || s.length > 8000) return { ok: false, error: `${name}: 1–8000 chars` };
+      const max = spec.max ?? 8000; // per-field override (Director instructions allow much more)
+      if (!s.trim()) return { ok: false, error: `${name}: required` };
+      if (s.length > max) return { ok: false, error: `${name}: ${s.length} chars exceeds the ${max}-character limit` };
       return { ok: true, value: s };
     }
     case "enum": {
@@ -91,6 +93,11 @@ export function validateInput(schema, input) {
 // --------------------------------------------------------------------------
 const sprintBySlot = (snap, slot) => (snap?.sprints || []).find((s) => s.slot === slot) || null;
 const target = (kind, label, ref) => ({ kind, label, ref });
+
+// Director instructions are engineering-scale. Both provider CLIs read the
+// prompt from stdin (no ARG_MAX bound), so we allow well beyond the old 8k text
+// cap. No authoritative provider restriction requires a lower ceiling.
+export const DIRECTOR_MESSAGE_MAX = 24000;
 
 // Dev-server capacity: the toolkit caps concurrently running Next dev servers
 // (ALLOY_MAX_RUNNING_SERVERS, default 3). Starting one at capacity is blocked —
@@ -352,24 +359,24 @@ const COMMANDS = {
 
   "director.route": {
     key: "director.route",
-    title: "Send instruction (Director)",
+    title: "Copy Instruction",
     risk: "consequential",
     execution: "internal",
     confirmation: "required",
-    input: { slot: { type: "slot", required: true }, message: { type: "text", required: true } },
+    input: { slot: { type: "slot", required: true }, message: { type: "text", required: true, max: DIRECTOR_MESSAGE_MAX } },
     resolveTarget: (v, snap) => {
       const s = sprintBySlot(snap, v.slot);
-      return s ? target("worker", `${s.provider} on slot ${s.slot} — ${s.title}`, { slot: v.slot, worktree: s.worktree }) : null;
+      return s ? target("worker", `slot ${s.slot} — ${s.title}`, { slot: v.slot, worktree: s.worktree }) : null;
     },
     eligibility: (t, snap, v) => (sprintBySlot(snap, v.slot) ? { eligible: true } : { eligible: false, reason: "slot is not occupied" }),
     preview: (v, t, snap) => {
       const s = sprintBySlot(snap, v.slot);
       return {
-        summary: `Route this instruction to ${s ? s.provider : "the worker"} on slot ${v.slot}.`,
+        summary: `Copy this instruction for the worker on slot ${v.slot}.`,
         authoritative_target: `director log (slot ${v.slot}) + clipboard`,
         effects: [
-          "Records the interaction and copies the instruction to the clipboard.",
-          "You paste it into the live session — Vacilando cannot inject into a running Claude/Cursor session (no governed API).",
+          "Records the interaction and copies the instruction to the clipboard for manual paste.",
+          "Delivery mode: clipboard/manual paste — Vacilando has no governed API to inject into a running worker session.",
         ],
       };
     },
@@ -383,14 +390,14 @@ const COMMANDS = {
 
   "director.ask": {
     key: "director.ask",
-    title: "Ask worker (real round-trip)",
+    title: "Send to Worker",
     risk: "consequential",
     execution: "internal",
     confirmation: "required",
-    input: { slot: { type: "slot", required: true }, message: { type: "text", required: true } },
+    input: { slot: { type: "slot", required: true }, message: { type: "text", required: true, max: DIRECTOR_MESSAGE_MAX } },
     resolveTarget: (v, snap) => {
       const s = sprintBySlot(snap, v.slot);
-      return s ? target("worker", `${s.provider} on slot ${s.slot} — ${s.title}`, { slot: v.slot, worktree: s.worktree, provider: s.provider }) : null;
+      return s ? target("worker", `slot ${s.slot} — ${s.title}`, { slot: v.slot, worktree: s.worktree, provider: s.provider }) : null;
     },
     eligibility: (t, snap, v) => {
       const s = sprintBySlot(snap, v.slot);
@@ -401,11 +408,12 @@ const COMMANDS = {
     preview: (v, t, snap) => {
       const s = sprintBySlot(snap, v.slot);
       return {
-        summary: `Send a REAL message to ${s?.provider} for slot ${v.slot} and return its response.`,
-        authoritative_target: `${s?.provider === "cursor" ? "cursor-agent" : "claude"} -p (headless, worktree context)`,
+        summary: `Send this instruction to the worker on slot ${v.slot}${s ? ` (assigned provider: ${s.provider})` : ""}.`,
+        authoritative_target: `worker request → ${s?.provider === "cursor" ? "cursor-agent" : "claude"} -p (headless, prompt via stdin, worktree context)`,
         effects: [
-          "A governed headless provider round-trip with the worktree as context — may incur provider cost.",
-          "This is not injection into the live editor buffer; it is a fresh advisory query answered by the same provider.",
+          "This sends a live request to the assigned worker.",
+          "Delivery mode: headless provider turn with the worktree as context (not injection into a live editor buffer).",
+          "Usage will be shown after completion when reported by the provider.",
         ],
       };
     },

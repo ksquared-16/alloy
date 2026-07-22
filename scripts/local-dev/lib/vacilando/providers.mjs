@@ -3,9 +3,12 @@
  *
  * A governed adapter over the installed provider CLIs. FIXED argv only — no
  * request-supplied shell, no arbitrary executable paths. The operator's message
- * is passed as a single argv element (or via a fixed flag), never interpolated
- * into a shell. Structured JSON output is parsed; usage/cost surfaced when the
- * provider reports it.
+ * is delivered on the provider's STDIN (both `claude -p` and `cursor-agent -p`
+ * read the prompt from stdin), never as a command-line argument. This is
+ * deliberate: an argv-borne prompt would leak the full instruction into process
+ * listings (`ps`) and is bounded by ARG_MAX; stdin has neither problem and needs
+ * no temp file to clean up. Structured JSON output is parsed; usage/cost
+ * surfaced when the provider reports it.
  *
  * Recon (this machine):
  *   claude       2.1.210  — `claude -p --output-format json [--resume <id>]`
@@ -29,18 +32,26 @@ export const PROVIDERS = {
   cursor: { bin: CURSOR, label: "Cursor Agent" },
 };
 
-/** Run a provider CLI with a FIXED argv (message is a single element). */
-function runProvider(bin, args, { cwd, timeout = DEFAULT_TIMEOUT } = {}) {
+/**
+ * Run a provider CLI with a FIXED argv. The operator's prompt is written to the
+ * child's STDIN (never argv) — no ARG_MAX bound, no process-listing leak.
+ */
+function runProvider(bin, args, { cwd, timeout = DEFAULT_TIMEOUT, input = null } = {}) {
   return new Promise((res) => {
     const t0 = Date.now();
     let out = "", se = "", done = false;
-    const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"], cwd: cwd && existsSync(cwd) ? cwd : undefined });
+    const child = spawn(bin, args, { stdio: [input != null ? "pipe" : "ignore", "pipe", "pipe"], cwd: cwd && existsSync(cwd) ? cwd : undefined });
     const finish = (o) => { if (done) return; done = true; clearTimeout(timer); res({ ...o, duration_ms: Date.now() - t0 }); };
     const timer = setTimeout(() => { try { child.kill("SIGKILL"); } catch {} finish({ ok: false, timed_out: true, error: "provider timed out" }); }, timeout);
     child.on("error", (e) => finish({ ok: false, error: `spawn failed: ${e.code || e.message}` }));
     child.stdout.on("data", (d) => { out += d; });
     child.stderr.on("data", (d) => { se += d; });
     child.on("close", (code) => finish({ ok: code === 0, code, stdout: out, stderr: se }));
+    if (input != null) {
+      // Guard against EPIPE if the child exits before consuming stdin.
+      child.stdin.on("error", () => {});
+      try { child.stdin.write(input); child.stdin.end(); } catch { /* close handler reports the exit */ }
+    }
   });
 }
 
@@ -86,13 +97,14 @@ export async function sendInstruction({ provider, message, resume = null, cwd = 
   const p = PROVIDERS[provider];
   if (!p) return { ok: false, provider, error: `unknown provider: ${provider}`, supported: false };
   if (!message || typeof message !== "string") return { ok: false, provider, error: "message required" };
+  // Prompt goes on stdin (see runProvider) — argv carries only fixed flags.
   let args;
   if (provider === "claude") {
-    args = ["-p", message, "--output-format", "json", ...(resume ? ["--resume", resume] : [])];
+    args = ["-p", "--output-format", "json", ...(resume ? ["--resume", resume] : [])];
   } else {
-    args = ["-p", message, "--output-format", "json", "--trust", ...(resume ? ["--resume", resume] : [])];
+    args = ["-p", "--output-format", "json", "--trust", ...(resume ? ["--resume", resume] : [])];
   }
-  const r = await runProvider(p.bin, args, { cwd, timeout });
+  const r = await runProvider(p.bin, args, { cwd, timeout, input: message });
   return normalize(provider, r);
 }
 

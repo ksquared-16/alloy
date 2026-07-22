@@ -266,13 +266,39 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 
 /* director */
 .director{display:flex;flex-direction:column;gap:12px;}
-.dintro{font-size:12px;color:var(--ink-2);background:var(--bg-tint);border-radius:9px;padding:10px 12px;line-height:1.5;}
-.dlog{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto;}
-.dmsg{border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:var(--card);}
-.dm-h{display:flex;justify-content:space-between;font-size:11px;} .dm-h .who{color:var(--green-ink);font-weight:700;} .dm-h .dt{color:var(--ink-4);}
-.dm-b{font-size:12.5px;color:var(--ink);margin:5px 0;white-space:pre-wrap;line-height:1.45;} .dm-f{font-size:10px;color:var(--ink-4);font-family:var(--mono);}
-.dcompose textarea{width:100%;min-height:74px;border:1px solid var(--line-strong);border-radius:9px;padding:9px 11px;font-family:inherit;font-size:13px;resize:vertical;}
-.drow{display:flex;align-items:center;justify-content:space-between;margin-top:8px;}
+/* Director header + context metadata (provider is quiet metadata, not the action) */
+.dhead{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 14px;}
+.dtitle{font-size:16px;font-weight:700;letter-spacing:-.01em;color:var(--ink);}
+.dctx{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:7px;font-size:12px;color:var(--ink-2);align-items:center;}
+.dctx b{color:var(--ink);font-weight:700;}
+.dmode{font-size:11px;line-height:1.5;margin-top:9px;}
+.dlog{display:flex;flex-direction:column;gap:10px;max-height:340px;overflow:auto;}
+/* one conversation record */
+.dconv{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card);}
+.dc-head{display:flex;align-items:center;gap:8px;font-size:11px;flex-wrap:wrap;}
+.dc-role{font-weight:700;letter-spacing:.02em;}
+.dc-role.op{color:var(--green-ink);} .dc-role.worker{color:var(--terra);}
+.dc-time{color:var(--ink-4);margin-left:auto;}
+.dc-msg{font-size:12.5px;color:var(--ink);margin:6px 0;white-space:pre-wrap;line-height:1.45;word-break:break-word;}
+.dc-resp{margin:6px 0 4px;background:var(--card-2);border-radius:8px;padding:8px 10px;border-left:3px solid var(--green);}
+.dc-resp .dc-rtext{font-size:12.5px;color:var(--ink);white-space:pre-wrap;line-height:1.5;margin-top:3px;word-break:break-word;}
+.dc-resp.err,.dc-resp.auth{border-left-color:var(--blocked);} .dc-resp.err .dc-rtext,.dc-resp.auth .dc-rtext{color:var(--blocked);}
+.dc-meta{font-size:10.5px;color:var(--ink-4);font-family:var(--mono);}
+.dc-note{font-size:11px;color:var(--ink-3);margin-top:5px;line-height:1.45;}
+/* precise status badge */
+.dc-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:var(--pill);white-space:nowrap;}
+.dc-badge.ok{background:var(--green-soft);color:var(--green-ink);}
+.dc-badge.auth{background:var(--blocked-bg);color:var(--blocked);}
+.dc-badge.err{background:var(--blocked-bg);color:var(--blocked);}
+.dc-badge.copied{background:var(--bg-tint);color:var(--terra);}
+.dc-badge.muted{background:var(--idle-bg);color:var(--idle);}
+.dcompose textarea{width:100%;min-height:84px;border:1px solid var(--line-strong);border-radius:9px;padding:9px 11px;font-family:inherit;font-size:13px;resize:vertical;line-height:1.5;box-sizing:border-box;}
+.dc-count{font-size:11px;color:var(--ink-3);margin-top:5px;font-variant-numeric:tabular-nums;}
+.dc-count #d-count.warn{color:var(--paused);font-weight:700;} .dc-count #d-count.over{color:var(--blocked);font-weight:700;}
+.drow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;flex-wrap:wrap;}
+.dhelp{font-size:11px;}
+.dbtns{display:flex;gap:7px;}
+.dsend-note{font-size:11px;margin-top:7px;line-height:1.4;}
 
 /* needs you rail */
 .needs{position:sticky;top:52px;display:flex;flex-direction:column;gap:8px;}
