@@ -16,6 +16,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { peekWarmFormDelivery } from "@/lib/adminV2/runtime/focusPanel/currentWork/formDeliveryWarmCache";
+
 type Props = {
     opportunityId: string;
     onClose: () => void;
@@ -28,14 +30,20 @@ type SubjectOption = { id: string; label: string; entity_type: string };
 type DeliverChannel = "email" | "sms" | "link";
 
 export default function FormDeliverySurface({ opportunityId, onClose, onComplete }: Props) {
-    const [forms, setForms] = useState<FormOption[]>([]);
-    const [recipients, setRecipients] = useState<RecipientOption[]>([]);
-    const [subjects, setSubjects] = useState<SubjectOption[]>([]);
-    const [loading, setLoading] = useState(true);
+    // Warm-first: if operator intent warmed the delivery inputs, render them synchronously (no
+    // "Loading…" gate) and re-verify fresh in the background.
+    const warm = peekWarmFormDelivery(opportunityId);
+    const [forms, setForms] = useState<FormOption[]>(warm?.forms ?? []);
+    const [recipients, setRecipients] = useState<RecipientOption[]>(warm?.recipients ?? []);
+    const [subjects, setSubjects] = useState<SubjectOption[]>(warm?.subjects ?? []);
+    const [loading, setLoading] = useState(!warm);
     const [loadError, setLoadError] = useState<string | null>(null);
 
-    const [formId, setFormId] = useState<string>("");
-    const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(new Set());
+    const [formId, setFormId] = useState<string>(warm && warm.forms.length === 1 ? warm.forms[0]!.id : "");
+    const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(() => {
+        const suggested = (warm?.recipients ?? []).filter((r) => r.email);
+        return suggested.length > 0 ? new Set([suggested[0]!.person_id]) : new Set();
+    });
     const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(new Set());
     const [channel, setChannel] = useState<DeliverChannel>("email");
     const [sending, setSending] = useState(false);
@@ -45,7 +53,8 @@ export default function FormDeliverySurface({ opportunityId, onClose, onComplete
     useEffect(() => {
         let live = true;
         (async () => {
-            setLoading(true);
+            // Only show the loading gate when there is nothing warm to show yet; otherwise verify silently.
+            if (!peekWarmFormDelivery(opportunityId)) setLoading(true);
             setLoadError(null);
             try {
                 const [formsRes, recRes, subjRes] = await Promise.all([

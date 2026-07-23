@@ -13,6 +13,7 @@ import type { CurrentWorkActionVM } from "./currentWorkSurfaceTypes";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { prefetchTourSchedule } from "@/lib/tours/tourScheduleWarmCache";
 import { prefetchActiveDrawerFamilyWorkspace } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
+import { prefetchFormDelivery } from "./formDeliveryWarmCache";
 
 /** Warm the data a single action's capability host will need, from operator intent. Best-effort. */
 export function warmCurrentWorkCapabilityOnIntent(
@@ -32,6 +33,11 @@ export function warmCurrentWorkCapabilityOnIntent(
             // The scheduling capability's declared host — warm bookings + availability + rules.
             const tour = resolveOpportunityTourScheduleFromTruth(context.truth);
             prefetchTourSchedule(context.subject.id, tour.locationId);
+            return;
+        }
+        case "form_delivery": {
+            // The form-delivery host — warm configured forms + eligible recipients + related subjects.
+            prefetchFormDelivery(context.subject.id);
             return;
         }
         default:
