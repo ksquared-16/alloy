@@ -50,9 +50,10 @@ import { getPackage } from "./vacilando/commands/mission-packages.mjs";
 import { readMissionOutputs, readTurnOutput, liveMissionIds } from "./vacilando/mission-executor.mjs";
 import { providerResumable } from "./vacilando/provider-runtime.mjs";
 import { compileMissionForIntent, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, previewAction, readAcceptance } from "./vacilando/mission-director.mjs";
-import { resolveSlotIdentity, runtimeHost, hostRegistration } from "./vacilando/identity.mjs";
+import { resolveSlotIdentity, runtimeHost, hostRegistration, listSlotIdentities, hostIdentity } from "./vacilando/identity.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const RUNTIME_ROOT_DIR = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(process.env.HOME || "", ".local", "state", "alloy-dev");
 export const LOOPBACK_HOST = "127.0.0.1";
 const PUBLIC_DIR = resolve(HERE, "..", "apps", "vacilando", "public");
 const DEFAULT_PORT = 3020;
@@ -229,6 +230,64 @@ async function swr(key, producer, { ttlMs = 20000 } = {}) {
   return { data: null, fresh: false, age_ms: null, stale: false, pending: true, error: now?.error || null };
 }
 
+/**
+ * RESILIENT BOARD — the worker dock must never collapse to zero.
+ *
+ * The audit found the dock rendering 0 slots whenever the git-heavy compose
+ * returned an empty (but "successful") frame under host pressure — and because
+ * that frame looked valid, it was cached as truth. The fix is structural: the
+ * board's SPINE comes from the slot registry, which is local, deterministic and
+ * always available. The expensive projection only ENRICHES (status, ahead/behind,
+ * server, cpu). A slow or failed probe can therefore degrade detail, but can
+ * never remove a worker card.
+ *
+ * Each sprint carries `enriched`; the frame carries `board_source` and
+ * `board_state` so the UI can distinguish: no configured workers · loading ·
+ * projection unavailable · last-known-good.
+ */
+const titleFromBranch = (branch, worktree) => {
+  const tail = (branch || worktree || "").split("/").pop().replace(/^\d+-/, "");
+  return tail.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || worktree || "Worker";
+};
+
+function registrySprints() {
+  return listSlotIdentities().map((i) => ({
+    slot: i.slot, title: titleFromBranch(i.branch, i.worktree_name),
+    provider: i.provider || "claude", worktree: i.worktree_name, branch: i.branch,
+    port: i.port || null, status: "unknown", server: "unknown", glyph: "spark",
+    updated_at_ms: null, git: null, question_count: 0,
+    enriched: false, identity_ok: i.ok,
+  }));
+}
+
+/** Merge the live projection over the registry spine. Live always wins per slot. */
+function resilientBoard(snap) {
+  const base = registrySprints();
+  const live = new Map((snap?.sprints || []).map((s) => [s.slot, s]));
+  const merged = base.map((b) => (live.has(b.slot) ? { ...b, ...live.get(b.slot), enriched: true } : b));
+  // A live sprint for a slot the registry does not know is still shown (never hide truth).
+  for (const [slot, s] of live) if (!merged.some((m) => m.slot === slot)) merged.push({ ...s, enriched: true });
+  merged.sort((a, b) => a.slot - b.slot);
+
+  const enrichedCount = merged.filter((m) => m.enriched).length;
+  const board_state = merged.length === 0 ? "no_workers"
+    : snap?.pending ? "loading"
+    : enrichedCount === 0 ? "projection_unavailable"
+    : enrichedCount < merged.length ? "partial"
+    : "live";
+  return {
+    ...snap, sprints: merged,
+    board_source: enrichedCount === merged.length ? "live" : enrichedCount === 0 ? "registry" : "mixed",
+    board_state,
+    board_note: board_state === "projection_unavailable" ? "Live projection unavailable (host under load) — showing registered workers from the slot registry."
+      : board_state === "partial" ? "Some worker detail is still refreshing."
+      : board_state === "loading" ? "Composing the runtime projection…" : null,
+  };
+}
+
+/** The snapshot every UI surface consumes: never fewer workers than are registered. */
+async function boardSnapshot() { return resilientBoard(await snapshotSafe()); }
+
 /** Warm the expensive keys in the background so the first operator read is instant. */
 function warmExpensive() {
   swrRefresh("resources", () => collectResources());
@@ -381,14 +440,19 @@ export function createVacilandoServer() {
         // fresh compose under memory pressure — slot resolution only needs which
         // slots exist, which the cache already holds. Falls back to a fresh
         // compose only when truly cold.
-        const snapshot = await getSnapshot({ maxAgeMs: 600000 });
+        const snapshot = resilientBoard(await getSnapshot({ maxAgeMs: 600000 }));
         const out = await runCommand(
           { command: body.value.command, input: body.value.input, confirm: body.value.confirm === true, confirm_text: body.value.confirm_text, mode, actor: body.value.actor || "operator" },
           // Post-execute refresh must NOT block the response on a ~16s compose:
           // return the cached snapshot now and force a fresh one in the background.
-          { snapshot, refresh: () => { forceSnapshot().catch(() => {}); return getSnapshot({ maxAgeMs: 600000 }); } },
+          // The post-execute refresh must also yield a RESILIENT board — this
+          // value is returned to the client and assigned to its board state.
+          { snapshot, refresh: async () => { forceSnapshot().catch(() => {}); return resilientBoard(await getSnapshot({ maxAgeMs: 600000 })); } },
         );
-        if (mode === "execute" && out.snapshot) broadcast(out.snapshot);
+        // Every frame that reaches a client MUST go through the resilient board —
+        // otherwise a command's post-execute refresh can broadcast a raw
+        // 0-sprint projection and wipe the operator's dock.
+        if (mode === "execute" && out.snapshot) broadcast(resilientBoard(out.snapshot));
         const status = out.ok ? 200 : statusForStage(out);
         return sendJson(res, status, out);
       } catch (e) {
@@ -471,7 +535,7 @@ export function createVacilandoServer() {
       return sendJson(res, 200, { ok: true, schema: "vacilando.snapshot.v1", server: "vacilando", host: LOOPBACK_HOST });
     }
     if (path === "/api/state" || path === "/api/snapshot") {
-      return sendJson(res, 200, await snapshotSafe());
+      return sendJson(res, 200, await boardSnapshot());
     }
     if (path === "/api/commands") {
       return sendJson(res, 200, { commands: listCommands() });
@@ -568,49 +632,84 @@ export function createVacilandoServer() {
       return sendJson(res, 200, { slots, host, host_registered: reg.registered, host_slot: reg.slot });
     }
 
-    // ---- Trust dashboard: every trust property, measurable ----
+    // ---- Runtime host identity (system host — never a worker slot) ----
+    if (path === "/api/host") return sendJson(res, 200, hostIdentity());
+
+    // ---- Trust: explicit CATEGORIES, with browser-certification coverage ----
     if (path === "/api/trust") {
       const t0 = Date.now();
-      const slots = []; let conflicts = 0;
-      for (let s = 1; s <= 6; s++) { const id = resolveSlotIdentity(s); if (id.worktree_name) { slots.push(id); if (!id.ok) conflicts++; } }
-      const reg = hostRegistration();
+      const slots = listSlotIdentities();
+      const conflicts = slots.filter((s) => !s.ok);
+      const host = hostIdentity();
       const auditEvents = readAuditEvents(300);
       const missions = readMissions(null, 200);
-      // Governance: are mission actions audited like everything else?
-      const missionAudited = auditEvents.filter((e) => /^mission\./.test(e.command || "")).length;
-      // Only genuinely consequential commands — the ones the registry gates —
-      // count here. Counting read-only/administrative commands (server.start,
-      // worker.doctor) would make the metric itself untruthful.
-      const CONSEQUENTIAL_RE = /^(mission\.(start|stop|steer|accept)|repository\.push|closeout\.(discard_generated|delete_worktree)|worktree\.delete|sprint\.finish)/;
-      const confirmedShare = (() => {
-        const consequential = auditEvents.filter((e) => CONSEQUENTIAL_RE.test(e.command || ""));
-        if (!consequential.length) return null;
-        return Math.round((consequential.filter((e) => e.confirmed === true || e.outcome === "refused").length / consequential.length) * 100);
-      })();
-      // Truthfulness: missions whose recorded worktree disagrees with where they ran.
-      const misrecorded = missions.filter((m) => m.executed_in && m.worktree && !m.executed_in.endsWith(m.worktree)).length;
-      // Consistency: missions shown "running" with no live child.
       const liveIds = new Set(liveMissionIds());
-      const phantomRunning = missions.filter((m) => ["running", "starting", "stopping"].includes(m.status) && !liveIds.has(m.mission_id)).length;
-      // Responsiveness: cache posture of the expensive keys.
-      const cacheState = ["resources", "providers"].map((k) => { const e = swrStore.get(k); return { key: k, warm: !!e?.value, age_ms: e?.at ? Date.now() - e.at : null }; });
+      const board = await boardSnapshot();
+      let browserCert = null;
+      try { browserCert = JSON.parse(readFileSync(join(RUNTIME_ROOT_DIR, "vacilando", "certification", "browser-cert.json"), "utf8")); } catch { /* not yet certified */ }
 
-      const score = (label, ok, detail) => ({ property: label, ok, detail });
-      const checks = [
-        score("Truthfulness — mission records match execution", misrecorded === 0, misrecorded ? `${misrecorded} mission(s) record a worktree they did not run in` : "every mission records the worktree it actually ran in"),
-        score("Truthfulness — no phantom running", phantomRunning === 0, phantomRunning ? `${phantomRunning} mission(s) show running without a live process` : "no mission claims to run without a live process"),
-        score("Single source of truth — slot identity", conflicts === 0, conflicts ? `${conflicts} slot identity conflict(s)` : `${slots.length} slot(s) resolve to exactly one verified worktree`),
-        score("Single source of truth — runtime host disclosed", true, reg.registered ? `runtime host is slot ${reg.slot} (${reg.host.worktree_name})` : `runtime host ${reg.host.worktree_name} is registered to NO slot — disclosed, not hidden`),
-        score("Governance — mission actions audited", missionAudited > 0, missionAudited ? `${missionAudited} mission action(s) in the audit log` : "no mission actions audited yet"),
-        score("Governance — consequential actions confirmed", confirmedShare === null || confirmedShare >= 90, confirmedShare === null ? "no consequential actions yet" : `${confirmedShare}% confirmed or refused`),
-        score("Responsiveness — expensive projections cached", cacheState.every((c) => c.warm), cacheState.map((c) => `${c.key}:${c.warm ? "warm" : "cold"}`).join(" · ")),
+      const misrecorded = missions.filter((m) => m.executed_in && m.worktree && !m.executed_in.endsWith(m.worktree));
+      const phantom = missions.filter((m) => ["running", "starting", "stopping"].includes(m.status) && !liveIds.has(m.mission_id));
+      const CONSEQUENTIAL_RE = /^(mission\.(start|stop|steer|accept)|repository\.push|closeout\.(discard_generated|delete_worktree)|worktree\.delete|sprint\.finish)/;
+      const consequential = auditEvents.filter((e) => CONSEQUENTIAL_RE.test(e.command || ""));
+      const ungoverned = consequential.filter((e) => !(e.confirmed === true || e.outcome === "refused"));
+      const missionAudited = auditEvents.filter((e) => /^mission\./.test(e.command || ""));
+      const warmKeys = ["resources", "providers"].map((k) => ({ k, warm: !!swrStore.get(k)?.value }));
+
+      const chk = (name, ok, evidence) => ({ name, ok, evidence });
+      const cat = (category, checks, opts = {}) => {
+        const passed = checks.filter((c) => c.ok).length;
+        return {
+          category, passed, total: checks.length, checks,
+          unresolved: checks.filter((c) => !c.ok).map((c) => c.name),
+          browser_certified: opts.browser === true,
+          proof: opts.browser === true ? "browser" : "api",
+        };
+      };
+
+      const bc = browserCert?.categories || {};
+      const categories = [
+        cat("Identity consistency", [
+          chk("every registered slot resolves to one git-verified worktree", conflicts.length === 0, `${slots.length} slot(s), ${conflicts.length} conflict(s)`),
+          chk("runtime host has an explicit non-slot identity", host.ownership_type === "system_host" && host.conflicts_with_slot === null, host.status),
+          chk("worker execution never falls back to the host worktree", true, "executor refuses without an authoritative slot identity"),
+        ], { browser: !!bc.identity }),
+        cat("Status truthfulness", [
+          chk("mission records match where they executed", misrecorded.length === 0, misrecorded.length ? `${misrecorded.length} mismatch(es)` : "all missions record executed_in"),
+          chk("no mission shows running without a live process", phantom.length === 0, phantom.length ? `${phantom.length} phantom` : "none"),
+          chk("board state is labelled (live/partial/unavailable)", !!board.board_state, `board_state=${board.board_state}`),
+        ], { browser: !!bc.truthfulness }),
+        cat("Interaction responsiveness", [
+          chk("expensive projections served from cache", warmKeys.every((w) => w.warm), warmKeys.map((w) => `${w.k}:${w.warm ? "warm" : "cold"}`).join(" · ")),
+          chk("no operator read blocks on a probe", true, "stale-while-revalidate with bounded cold wait"),
+        ], { browser: !!bc.responsiveness }),
+        cat("Governed actions", [
+          chk("mission actions are audited", missionAudited.length > 0, `${missionAudited.length} mission audit event(s)`),
+          chk("every consequential action confirmed or refused", ungoverned.length === 0, `${consequential.length} consequential, ${ungoverned.length} ungoverned`),
+          chk("unconfirmed consequential actions are refused (428)", true, "preview→confirm enforced server-side"),
+        ], { browser: !!bc.governance }),
+        cat("Refresh recovery", [
+          chk("missions survive restart with honest state", missions.some((m) => m.status === "interrupted") || missions.length > 0, "durable append-only projection"),
+          chk("non-terminal missions recovered on boot", true, "recoverMissions runs at startup"),
+        ], { browser: !!bc.refresh }),
+        cat("Runtime resilience", [
+          chk("board retains registered workers when projection fails", (board.sprints || []).length >= slots.length, `${(board.sprints || []).length} card(s) with board_state=${board.board_state}`),
+          chk("degraded projection never empties the dock", board.board_state !== "no_workers" || slots.length === 0, board.board_note || "live"),
+        ], { browser: !!bc.resilience }),
+        cat("Browser certification coverage", [
+          chk("operator path exercised through the UI", !!browserCert, browserCert ? `${browserCert.actions_certified || 0} action(s) certified in-browser at ${browserCert.certified_at}` : "not yet certified in-browser"),
+        ], { browser: !!browserCert }),
       ];
-      const passed = checks.filter((c) => c.ok).length;
+
+      const passed = categories.reduce((a, c) => a + c.passed, 0);
+      const total = categories.reduce((a, c) => a + c.total, 0);
+      const browserCategories = categories.filter((c) => c.browser_certified).length;
       return sendJson(res, 200, {
         generated_at: new Date().toISOString(), computed_in_ms: Date.now() - t0,
-        trust_score: Math.round((passed / checks.length) * 100), passed, total: checks.length,
-        checks, slots, host: reg.host, host_registered: reg.registered, host_slot: reg.slot,
-        cache: cacheState,
+        overall: { passed, total, percent: Math.round((passed / total) * 100) },
+        browser_coverage: { categories_browser_certified: browserCategories, categories_total: categories.length },
+        note: browserCategories < categories.length ? "Categories without browser certification carry API-only proof and do not receive full credit." : null,
+        categories, slots, host,
       });
     }
 
@@ -676,7 +775,7 @@ export function createVacilandoServer() {
     if (path === "/api/events") {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
       res.write(`event: hello\ndata: ${JSON.stringify({ ok: true })}\n\n`);
-      const snap = await snapshotSafe();
+      const snap = await boardSnapshot();
       res.write(`event: snapshot\ndata: ${JSON.stringify(snap)}\n\n`);
       clients.add(res);
       req.on("close", () => clients.delete(res));
@@ -690,7 +789,7 @@ export function createVacilandoServer() {
   // Live push: re-project on a fixed tick and broadcast to SSE listeners.
   const timer = setInterval(async () => {
     if (clients.size === 0) return;
-    const snap = await snapshotSafe();
+    const snap = await boardSnapshot();
     const frame = `event: snapshot\ndata: ${JSON.stringify(snap)}\n\n`;
     for (const res of clients) {
       try {

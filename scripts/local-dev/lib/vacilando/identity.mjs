@@ -128,3 +128,38 @@ export function hostRegistration() {
 
 /** Invalidate cached identities (after a slot lifecycle change). */
 export function invalidateIdentity(slot) { if (slot == null) cache.clear(); else cache.delete(slot); }
+
+/** Every registered slot identity (the fast, always-available board spine). */
+export function listSlotIdentities() {
+  const out = [];
+  for (let s = 1; s <= 6; s++) { const i = resolveSlotIdentity(s); if (i.worktree_name) out.push(i); }
+  return out;
+}
+
+/**
+ * The RUNTIME HOST workspace — a first-class, explicitly-typed workspace that is
+ * NOT a worker slot.
+ *
+ * Decision (Part 2, option A): the worktree the Vacilando server runs from is
+ * declared a dedicated **system host** workspace. It is never assigned to a slot
+ * (silently or otherwise), and worker execution never falls back to it — the
+ * Worker Runtime refuses to run without an authoritative slot identity.
+ */
+export function hostIdentity() {
+  const h = runtimeHost();
+  const reg = hostRegistration();
+  return {
+    ownership_type: "system_host",
+    id: "host:" + h.worktree_name,
+    project_id: "alloy",
+    purpose: "Runs the Vacilando control-plane server (loopback 3020). Hosts no worker missions.",
+    repository: "alloy",
+    worktree_name: h.worktree_name,
+    worktree_path: h.worktree_path,
+    branch: h.branch,
+    // A system host being registered to a slot would be the anomaly — surface it.
+    conflicts_with_slot: reg.registered ? reg.slot : null,
+    status: reg.registered ? "conflict — this worktree is also a worker slot" : "ok — system host, owned by no slot",
+    executes_missions: false,
+  };
+}

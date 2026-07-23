@@ -206,10 +206,18 @@ function render(force) {
   }
   const key = location.hash + "|" + (state.snap?.generated_at || "") + "|" + state.sel + "|" + state.tab + "|" + Object.keys(state.outputs).length + "|" + Object.keys(state.director).length + "|" + Object.keys(state._pr || {}).length + "|" + (state._dash?.generated_at || "");
   if (!force && key === lastKey) return;
-  lastKey = key;
   setActiveNav(r.name);
   const V = $("#view");
-  if (!state.snap || !state.snap.headline) { V.innerHTML = `<div class="empty"><div class="big">Connecting to the runtime…</div></div>`; return; }
+  // Only a genuinely empty runtime blanks the app. A pending/degraded projection
+  // still has a registry-backed board, and must render it rather than hiding
+  // every worker behind "Connecting…".
+  if (!state.snap || (!state.snap.headline && !(state.snap.sprints || []).length)) {
+    // NOTE: lastKey is deliberately NOT set here. Marking this key as rendered
+    // would make the next identical key short-circuit, leaving the operator
+    // looking at a stale view — the "first click does nothing" defect.
+    V.innerHTML = `<div class="empty"><div class="big"><span class="spin"></span> ${esc(state.snap?.pending_note || "Connecting to the runtime…")}</div></div>`; return;
+  }
+  lastKey = key; // only a completed render counts as rendered
   // Preserve caret/scroll of a focused text field across the innerHTML rebuild
   // so a background refresh can never disturb an in-progress draft.
   const ae = document.activeElement;
@@ -228,26 +236,36 @@ async function fetchTrust() { try { const r = await fetch("/api/trust"); state._
 function viewTrust() {
   const t = state._trust;
   if (!t) { fetchTrust(); return `<div class="empty"><div class="big"><span class="spin"></span> Measuring runtime trust…</div></div>`; }
-  const scoreK = t.trust_score >= 90 ? "ok" : t.trust_score >= 70 ? "auth" : "err";
-  const checks = (t.checks || []).map((c) => `<div class="tchk ${c.ok ? "ok" : "bad"}">
-      <span class="tmark">${c.ok ? "✓" : "✗"}</span>
-      <div><div class="tprop">${esc(c.property)}</div><div class="tdet">${esc(c.detail)}</div></div></div>`).join("");
+  const o = t.overall || { passed: 0, total: 0, percent: 0 };
+  const scoreK = o.percent >= 90 ? "ok" : o.percent >= 70 ? "auth" : "err";
+  const cats = (t.categories || []).map((c) => `<div class="tcat">
+      <div class="tcat-h"><span class="tcat-name">${esc(c.category)}</span>
+        <span><span class="proofchip ${c.browser_certified ? "browser" : "api"}">${c.browser_certified ? "browser-certified" : "api-only"}</span>
+        <span class="mbadge ${c.passed === c.total ? "ok" : "err"}">${c.passed}/${c.total}</span></span></div>
+      <div class="tchecks">${(c.checks || []).map((k) => `<div class="tchk ${k.ok ? "ok" : "bad"}"><span class="tmark">${k.ok ? "✓" : "✗"}</span>
+        <div><div class="tprop">${esc(k.name)}</div><div class="tdet">${esc(k.evidence)}</div></div></div>`).join("")}</div>
+      ${c.unresolved?.length ? `<div class="m-blockers">Unresolved: ${c.unresolved.map(esc).join("; ")}</div>` : ""}
+    </div>`).join("");
   const slots = (t.slots || []).map((s) => `<tr><td>slot ${s.slot}</td><td class="mono">${esc(s.worktree_name || "—")}</td>
       <td class="mono">${esc(s.branch || "—")}</td>
       <td>${s.ok ? '<span class="mbadge ok">verified</span>' : `<span class="mbadge err">${esc(s.conflict?.kind || "conflict")}</span>`}</td></tr>`).join("");
+  const h = t.host || {};
   return `<div class="trustview">
     <div class="sec">
-      <div class="m-head"><h5>Runtime trust</h5><span class="mbadge ${scoreK}">${t.trust_score}% · ${t.passed}/${t.total}</span></div>
-      <div class="muted note">Every property the operator must be able to rely on, measured from live runtime state. Computed in ${t.computed_in_ms}ms.</div>
-      <div class="tchecks">${checks}</div>
+      <div class="m-head"><h5>Runtime trust</h5><span class="mbadge ${scoreK}">${o.passed}/${o.total} · ${o.percent}%</span></div>
+      <div class="muted note">Measured from live runtime state in ${t.computed_in_ms}ms. Browser coverage: <b>${t.browser_coverage?.categories_browser_certified ?? 0}/${t.browser_coverage?.categories_total ?? 0}</b> categories.${t.note ? " " + esc(t.note) : ""}</div>
+      ${cats}
     </div>
     <div class="sec">
-      <h5>Runtime host</h5>
+      <h5>Runtime host — ${esc(h.ownership_type || "?")}</h5>
       <dl class="kv">
-        <dt>This server runs from</dt><dd class="mono">${esc(t.host?.worktree_name || "—")}</dd>
-        <dt>Path</dt><dd class="mono">${esc(t.host?.worktree_path || "—")}</dd>
-        <dt>Branch</dt><dd class="mono">${esc(t.host?.branch || "—")}</dd>
-        <dt>Registered to a slot</dt><dd>${t.host_registered ? `yes — slot ${t.host_slot}` : '<b class="warnink">no — this worktree is owned by no slot</b>'}</dd>
+        <dt>Purpose</dt><dd>${esc(h.purpose || "—")}</dd>
+        <dt>Project</dt><dd>${esc(h.project_id || "—")} · repo ${esc(h.repository || "—")}</dd>
+        <dt>Worktree</dt><dd class="mono">${esc(h.worktree_name || "—")}</dd>
+        <dt>Path</dt><dd class="mono">${esc(h.worktree_path || "—")}</dd>
+        <dt>Branch</dt><dd class="mono">${esc(h.branch || "—")}</dd>
+        <dt>Executes missions</dt><dd>${h.executes_missions ? '<b class="warnink">yes — must not</b>' : "no — worker execution never falls back here"}</dd>
+        <dt>Status</dt><dd>${h.conflicts_with_slot ? `<b class="warnink">${esc(h.status)}</b>` : esc(h.status || "—")}</dd>
       </dl>
     </div>
     <div class="sec">
@@ -257,13 +275,27 @@ function viewTrust() {
   </div>`;
 }
 
+/**
+ * Board state banner — the operator always knows whether the dock is live,
+ * refreshing, or showing registered workers because the projection is degraded.
+ * A degraded projection never removes a worker card.
+ */
+function boardBanner() {
+  const s = state.snap || {};
+  if (!s.board_state || s.board_state === "live") return "";
+  const k = s.board_state === "projection_unavailable" ? "warn" : "idle";
+  const label = { loading: "Loading worker detail…", partial: "Refreshing worker detail…", projection_unavailable: "Live detail unavailable — showing registered workers", no_workers: "No workers configured" }[s.board_state] || s.board_state;
+  return `<div class="boardbanner ${k}">${s.board_state === "projection_unavailable" ? "" : '<span class="spin"></span>'}${esc(label)}</div>`;
+}
+
 // -------- Command Center: board | operating surface | rail --------
 function viewCommand() {
   const center = state.sel != null ? operatingSurface() : dashboardCenter();
   return `<div class="room">
     <section class="board">
       <div class="board-h"><span>Worker Dock</span><button class="btn primary sm" data-start>+ Start Work</button></div>
-      ${state.snap.sprints.map(workerCard).join("")}
+      ${boardBanner()}
+      ${state.snap.sprints.length ? state.snap.sprints.map(workerCard).join("") : `<div class="empty sm">No workers are configured.</div>`}
       ${resourcesCard()}
     </section>
     <section class="surface">${center}</section>
@@ -285,12 +317,12 @@ function workerCard(sp) {
   return `<div class="wcard ${sp.slot === state.sel ? "sel" : ""}" data-sel="${sp.slot}" style="--acc:${STATUS_ACC[sp.status] || "var(--green)"}">
     <div class="wc-top"><span class="gl">${glyph(sp.glyph)}</span>
       <div class="wc-id"><b>slot ${sp.slot}</b> · ${esc(sp.provider)}</div>
-      <span class="chip ${sp.status}">${esc(sp.status)}</span>${pend ? `<span class="pend">${pend}</span>` : ""}</div>
+      <span class="chip ${sp.enriched === false ? "idle" : sp.status}">${esc(sp.enriched === false ? "detail refreshing" : sp.status)}</span>${pend ? `<span class="pend">${pend}</span>` : ""}</div>
     <div class="wc-obj trunc">${esc(sp.title)}</div>
-    <div class="wc-meta trunc mono">${esc(shortBranch(sp.branch, sp.worktree))} · ↑${sp.git.ahead}↓${sp.git.behind}${sp.git.state === "dirty" ? "·dirty" : ""}</div>
+    <div class="wc-meta trunc mono">${esc(shortBranch(sp.branch, sp.worktree))}${sp.git ? ` · ↑${sp.git.ahead}↓${sp.git.behind}${sp.git.state === "dirty" ? "·dirty" : ""}` : ` · <span class="muted">git detail pending</span>`}</div>
     <div class="wc-res">${proc
       ? `<span title="cpu">◔ ${proc.cpu_pct}%</span><span title="mem">▤ ${proc.rss_mb}MB</span><span title="elapsed">◷ ${proc.elapsed}</span>${r.port ? `<span title="port">:${r.port}</span>` : ""}`
-      : `<span class="muted">no active process</span>`}<span class="wc-act">upd ${ago(sp.updated_at_ms)}</span></div>
+      : `<span class="muted">no active process</span>`}<span class="wc-act">${sp.updated_at_ms ? `upd ${ago(sp.updated_at_ms)}` : ""}</span></div>
     <div class="wc-ctl">
       ${sp.status === "paused" ? `<button class="btn sm warn" data-cmd="worker.resume" data-slot="${sp.slot}">Resume</button>` : `<button class="btn sm" data-cmd="worker.pause" data-slot="${sp.slot}">Pause</button>`}
       <button class="btn sm" data-cmd="worker.doctor" data-slot="${sp.slot}">Diagnose</button>
@@ -916,7 +948,7 @@ async function execute(command, input, confirm, confirmText) {
     // authentication error, validation error, or a cancelled confirmation.
     if (command === "director.ask" && d?.response_ok === true && input.slot != null) clearDraft(input.slot);
     else if (command === "director.route" && okc && input.slot != null) clearDraft(input.slot);
-    if (data.snapshot) { state.snap = data.snapshot; }
+    if (data.snapshot) { adoptSnapshot(data.snapshot); }
     if ((command === "director.route" || command === "director.ask") && input.slot) fetchDirector(input.slot);
     const sp = state.snap?.sprints.find((x) => x.slot === input.slot);
     if (sp) { fetchOutputs(sp.worktree); fetchPr(sp); }
@@ -1155,7 +1187,20 @@ window.addEventListener("hashchange", () => render(true));
 function chrome() { $("#gen").textContent = state.snap?.generated_at ? new Date(state.snap.generated_at).toLocaleTimeString() : ""; }
 let sseOk = false;
 function setLive(s) { const p = $("#livepill"), l = $("#live-label"); if (s === "live") { p.classList.remove("stale"); l.textContent = "Live"; } else if (s === "polling") { p.classList.add("stale"); l.textContent = "Polling"; } else { p.classList.add("stale"); l.textContent = "Offline"; } }
-function onSnap(s) { if (!s || !s.headline) return; state.snap = s; chrome(); render(); }
+/**
+ * Adopt a snapshot frame defensively: a frame carrying zero workers must never
+ * replace a board that currently has them (that is how the dock "collapsed").
+ * A frame with workers but no headline (degraded/pending) is still adopted —
+ * dropping it was what hid the registry-backed board.
+ */
+function adoptSnapshot(s) {
+  if (!s) return false;
+  const incoming = (s.sprints || []).length, current = (state.snap?.sprints || []).length;
+  if (incoming === 0 && current > 0) return false; // never blank a good board
+  if (!s.headline && incoming === 0) return false; // nothing useful to show
+  state.snap = s; return true;
+}
+function onSnap(s) { if (adoptSnapshot(s)) { chrome(); render(); } }
 async function poll() { try { const r = await fetch("/api/state", { cache: "no-store" }); onSnap(await r.json()); setLive(sseOk ? "live" : "polling"); } catch { setLive("offline"); } }
 function connect() { try { const es = new EventSource("/api/events"); es.addEventListener("snapshot", (ev) => { try { onSnap(JSON.parse(ev.data)); } catch {} sseOk = true; setLive("live"); }); es.addEventListener("hello", () => { sseOk = true; setLive("live"); }); es.onerror = () => { sseOk = false; }; } catch { sseOk = false; } }
 if (!location.hash) location.hash = "#/command";

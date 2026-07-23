@@ -430,3 +430,10 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .ttable th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);padding:6px 8px;border-bottom:1px solid var(--line);}
 .ttable td{padding:7px 8px;border-bottom:1px solid var(--line);}
 .warnink{color:var(--blocked);}
+.boardbanner{font-size:11px;padding:7px 10px;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;gap:4px;}
+.boardbanner.idle{background:var(--bg-tint);color:var(--ink-3);}
+.boardbanner.warn{background:var(--review-bg);color:var(--review);font-weight:600;}
+.empty.sm{padding:16px;font-size:12px;}
+.tcat{margin-bottom:12px;} .tcat-h{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.tcat-name{font-weight:700;font-size:13px;} .proofchip{font-size:9px;font-weight:800;text-transform:uppercase;padding:2px 7px;border-radius:999px;}
+.proofchip.browser{background:var(--green-soft);color:var(--green-ink);} .proofchip.api{background:var(--review-bg);color:var(--review);}
