@@ -13,6 +13,8 @@ import {
     useReportPerspective,
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import { allowedPatternWeekdays } from "@/lib/locations/locationSchedulingConfig";
+import { resolveVisibleDayPills } from "@/lib/scheduling/dayPills";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -86,6 +88,9 @@ type ChildProj = {
     proposed: ProjView | null;
 };
 
+type SchedTypeOpt = { key: string; label: string; behavior: "continuous" | "rotating" };
+/** The site's configured scheduling constraints + preloaded patterns, from first-paint. */
+type SchedConfig = { operatingDays: number[]; scheduleTypes: SchedTypeOpt[]; patterns: Pattern[] };
 type PlacementOption = { roomId: string; roomName: string | null; classification: "recommended" | "eligible" | "blocked"; reason: string };
 type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string; defaultHours: DailyHours | null; defaultOpenEnded: boolean };
 type SchedChild = { id: string; personId: string | null; name: string; imageUrl: string | null; dobAge: string | null };
@@ -202,6 +207,21 @@ export default function SchedulingCard({ model, context, receded = false, coordi
         return byMember;
     }, [context.truth]);
 
+    // The site's configured scheduling constraints (operating days + schedule types),
+    // resolved once per opportunity in first-paint — so the editor limits day pills and
+    // offers schedule types with no per-open fetch.
+    const schedConfig: SchedConfig = useMemo(() => {
+        const bag = (context.truth as Record<string, unknown>)?._scheduling_projection as
+            | { operatingDays?: unknown; scheduleTypes?: unknown; patterns?: unknown }
+            | undefined;
+        const operatingDays = Array.isArray(bag?.operatingDays)
+            ? (bag!.operatingDays as unknown[]).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+            : [];
+        const scheduleTypes = Array.isArray(bag?.scheduleTypes) ? (bag!.scheduleTypes as SchedTypeOpt[]) : [];
+        const patterns = Array.isArray(bag?.patterns) ? (bag!.patterns as Pattern[]) : [];
+        return { operatingDays, scheduleTypes, patterns };
+    }, [context.truth]);
+
     // Local overrides after a save (the prebuilt context does not re-compose on its own).
     const [overrides, setOverrides] = useState<Record<string, ChildProj>>({});
     const projById = useMemo(() => ({ ...prebuilt, ...overrides }), [prebuilt, overrides]);
@@ -252,6 +272,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                         child={activeChild}
                         opportunityId={opportunityId}
                         projection={projById[activeChild.id] ?? null}
+                        config={schedConfig}
                         reloadChild={() => reloadChild(activeChild.id, activeChild.name)}
                         onClose={() => setActiveChildId(null)}
                     />
@@ -300,12 +321,14 @@ function ScheduleWorkSurface({
     child,
     opportunityId,
     projection,
+    config,
     reloadChild,
     onClose,
 }: {
     child: SchedChild;
     opportunityId: string | null;
     projection: ChildProj | null;
+    config: SchedConfig;
     reloadChild: () => Promise<ChildProj | null>;
     onClose: () => void;
 }) {
@@ -352,7 +375,7 @@ function ScheduleWorkSurface({
         return (
             <div data-schedule-surface="true" data-schedule-ready="true">
                 {header}
-                <ScheduleDetail child={child} proj={proj} billing={detailBilling} onEdit={() => setMode("edit")} onCreate={() => setMode("create")} />
+                <ScheduleDetail child={child} proj={proj} billing={detailBilling} operatingDays={config.operatingDays} onEdit={() => setMode("edit")} onCreate={() => setMode("create")} />
             </div>
         );
     }
@@ -364,6 +387,7 @@ function ScheduleWorkSurface({
                 child={child}
                 opportunityId={opportunityId}
                 proj={proj}
+                config={config}
                 existing={mode === "edit" ? existing : null}
                 mode={mode}
                 onCancel={() => setMode(existing ? "detail" : "detail")}
@@ -412,12 +436,21 @@ function Region({ icon: Icon, label, children }: { icon: typeof CalendarDays; la
     );
 }
 
-/** Day cells — the schedule itself. Interactive in Edit, static in Detail (same visual). */
-function DayPills({ days, interactive, onToggle }: { days: number[]; interactive: boolean; onToggle?: (i: number) => void }) {
+/**
+ * Day cells — the schedule itself. Interactive in Edit, static in Detail (same visual).
+ * `allowed` (the site's operating days) HIDES non-operating weekdays entirely — closed
+ * days are never shown. A day that is already selected but now outside operating days
+ * still shows (so it stays removable).
+ */
+function DayPills({ days, interactive, allowed, onToggle }: { days: number[]; interactive: boolean; allowed?: number[]; onToggle?: (i: number) => void }) {
+    // Shared pure logic (unit-tested in tests/scheduling/dayPills.test.ts): operating
+    // days only, non-operating hidden, unselected grayed. Detail and Editor render the
+    // same set — the operating-days behavior lives in one place, not the component.
+    const pills = resolveVisibleDayPills(allowed, days);
     return (
         <div style={{ display: "flex", gap: 5 }}>
-            {WEEKDAYS.map((d, idx) => {
-                const on = days.includes(d.i);
+            {pills.map((d) => {
+                const on = d.selected;
                 const style: CSSProperties = {
                     width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center",
                     fontSize: 10.5, fontWeight: 600,
@@ -427,14 +460,14 @@ function DayPills({ days, interactive, onToggle }: { days: number[]; interactive
                 };
                 if (!interactive) {
                     return (
-                        <span key={idx} data-day={d.i} aria-pressed={on} style={{ ...style, opacity: on ? 1 : 0.55 }}>
-                            {d.l}
+                        <span key={d.weekday} data-day={d.weekday} aria-pressed={on} style={{ ...style, opacity: on ? 1 : 0.55 }}>
+                            {d.label}
                         </span>
                     );
                 }
                 return (
-                    <button key={idx} type="button" onClick={() => onToggle?.(d.i)} data-day={d.i} aria-pressed={on} style={{ ...style, cursor: "pointer" }}>
-                        {d.l}
+                    <button key={d.weekday} type="button" onClick={() => onToggle?.(d.weekday)} data-day={d.weekday} aria-pressed={on} style={{ ...style, cursor: "pointer" }}>
+                        {d.label}
                     </button>
                 );
             })}
@@ -484,7 +517,7 @@ function ScheduleRegions({
     hours: ReactNode;
     siteRoom: ReactNode;
     effective: ReactNode;
-    billing: ReactNode;
+    billing: BillingProjection | null;
     footer: ReactNode;
     surface: "detail" | "editor";
 }) {
@@ -496,7 +529,7 @@ function ScheduleRegions({
             <Region icon={Clock} label="Daily hours">{hours}</Region>
             <Region icon={DoorOpen} label="Site & room">{siteRoom}</Region>
             <Region icon={CalendarRange} label="Effective">{effective}</Region>
-            <BillingConsequence billing={billing as BillingProjection | null} />
+            <BillingConsequence billing={billing} />
             <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>{footer}</div>
         </div>
     );
@@ -507,12 +540,15 @@ function ScheduleDetail({
     child,
     proj,
     billing,
+    operatingDays,
     onEdit,
     onCreate,
 }: {
     child: SchedChild;
     proj: ChildProj | null;
     billing: BillingProjection | null;
+    /** The site's operating days — non-operating weekdays are hidden in the Days region. */
+    operatingDays: number[];
     onEdit: () => void;
     onCreate: () => void;
 }) {
@@ -521,6 +557,10 @@ function ScheduleDetail({
     const state = deriveScheduleState(proj);
     const hours = a?.arriveTime && a?.departTime ? `${fmtTime(a.arriveTime)} – ${fmtTime(a.departTime)}` : null;
     const roomText = a?.room.name ? (a.room.program ? `${a.room.name} · ${a.room.program}` : a.room.name) : null;
+    // Detail Days mirror the editor: show only the site's operating days (closed days
+    // hidden), with unselected operating days grayed. A selected day outside operating
+    // days still shows (so the schedule reads truthfully).
+    const allowedDays = allowedPatternWeekdays(operatingDays);
 
     return (
         <ScheduleRegions
@@ -528,7 +568,7 @@ function ScheduleDetail({
             child={child}
             state={state}
             billing={billing}
-            days={a?.weekdays.length ? <DayPills days={a.weekdays} interactive={false} /> : <Empty>No days set</Empty>}
+            days={a?.weekdays.length ? <DayPills days={a.weekdays} interactive={false} allowed={allowedDays} /> : <Empty>No days set</Empty>}
             hours={hours ? <Value>{hours}</Value> : <Empty>Not set</Empty>}
             siteRoom={
                 <div style={{ display: "grid", gap: 2 }}>
@@ -561,6 +601,7 @@ function ScheduleEditor({
     child,
     opportunityId,
     proj,
+    config,
     existing,
     mode,
     onCancel,
@@ -569,6 +610,7 @@ function ScheduleEditor({
     child: SchedChild;
     opportunityId: string | null;
     proj: ChildProj | null;
+    config: SchedConfig;
     existing: ProjView | null;
     mode: SurfaceMode;
     onCancel: () => void;
@@ -578,6 +620,8 @@ function ScheduleEditor({
     // Site is known from the projection — NO sites fetch, NO editor gate.
     const siteId = proj?.child.siteId ?? "";
     const siteName = proj?.child.siteName ?? "Site";
+    // Operating days constrain which weekday pills can be selected (empty ⇒ all seven).
+    const allowedDays = allowedPatternWeekdays(config.operatingDays);
 
     // Edit model initialized SYNCHRONOUSLY from the prebuilt projection.
     const [days, setDays] = useState<number[]>(mode === "edit" && ex?.weekdays.length ? [...ex.weekdays] : []);
@@ -596,17 +640,17 @@ function ScheduleEditor({
     const [roomPicking, setRoomPicking] = useState(false);
     const [patternPicking, setPatternPicking] = useState(false);
 
-    // Deferred dependencies (Scope 3): patterns load ONLY when the operator invokes
-    // "Use a schedule pattern" (or lazily at save, to resolve the pattern id); billing
-    // patches in once a schedule type is known. None gates the editor's first paint.
-    const [patterns, setPatterns] = useState<Pattern[] | null>(null);
-    const patternsReqRef = useRef<Promise<Pattern[]> | null>(null);
+    // Patterns are PRELOADED via first-paint (config.patterns), so the shortcut opens
+    // instantly with no "Loading patterns…". A per-site fetch is only a fallback when
+    // first-paint carried none. Billing patches in once a schedule type is known.
+    const [patterns, setPatterns] = useState<Pattern[] | null>(config.patterns.length ? config.patterns : null);
+    const patternsReqRef = useRef<Promise<Pattern[]> | null>(config.patterns.length ? Promise.resolve(config.patterns) : null);
     const [billing, setBilling] = useState<BillingProjection | null>(null);
 
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    /** Load site patterns once, on demand. Shared by the shortcut and save(). */
+    /** Resolve site patterns once (preloaded if first-paint carried them). */
     const ensurePatterns = useCallback((): Promise<Pattern[]> => {
         if (patternsReqRef.current) return patternsReqRef.current;
         const p = (async () => {
@@ -641,10 +685,12 @@ function ScheduleEditor({
     }, [siteId, scheduleType, start, child.id]);
 
     function toggleDay(i: number) {
-        setDays((d) => (d.includes(i) ? d.filter((x) => x !== i) : [...d, i].sort((a, b) => a - b)));
+        // Cannot add a day the site is not open (operating days); removal is always allowed.
+        setDays((d) => (d.includes(i) ? d.filter((x) => x !== i) : allowedDays.includes(i) ? [...d, i].sort((a, b) => a - b) : d));
     }
     function applyPattern(p: Pattern) {
-        setDays([...p.weekdays]);
+        // A pattern sets the whole schedule, but never onto a day the site is closed.
+        setDays(p.weekdays.filter((d) => allowedDays.includes(d)));
         if (p.defaultHours) {
             setArrive(p.defaultHours.arrive);
             setDepart(p.defaultHours.depart);
@@ -731,7 +777,7 @@ function ScheduleEditor({
                 billing={billing}
                 days={
                     <div style={{ display: "grid", gap: 8 }}>
-                        <DayPills days={days} interactive onToggle={toggleDay} />
+                        <DayPills days={days} interactive allowed={allowedDays} onToggle={toggleDay} />
                         <button type="button" onClick={openPatternPicker} data-pattern-shortcut="true" style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine, width: "fit-content" }}>
                             Use a schedule pattern →
                         </button>
@@ -754,9 +800,9 @@ function ScheduleEditor({
                 hours={
                     <div style={{ display: "grid", gap: 6 }}>
                         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                            <input type="time" value={arrive} onChange={(e) => setArrive(e.target.value)} data-arrive="true" style={timeStyle} />
+                            <input type="time" value={arrive} onChange={(e) => setArrive(e.target.value)} data-arrive="true" className="alloy-os-sched-input" style={{ width: 118 }} />
                             <span style={{ color: T.mid40 }}>–</span>
-                            <input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} data-depart="true" style={timeStyle} />
+                            <input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} data-depart="true" className="alloy-os-sched-input" style={{ width: 118 }} />
                         </div>
                         {arrive && depart && depart <= arrive && <div style={{ fontSize: 11, color: T.ember }}>Depart must be after arrive.</div>}
                         {days.length > 1 && (
@@ -773,9 +819,9 @@ function ScheduleEditor({
                                     return (
                                         <div key={d.i} style={{ display: "flex", gap: 8, alignItems: "center" }} data-perday-row={d.i}>
                                             <span style={{ width: 30, fontSize: 11.5, fontWeight: 600, color: T.slate }}>{WEEKDAY_LABEL[d.i]}</span>
-                                            <input type="time" value={row.arrive} onChange={(e) => setRow({ arrive: e.target.value })} style={timeStyle} />
+                                            <input type="time" value={row.arrive} onChange={(e) => setRow({ arrive: e.target.value })} className="alloy-os-sched-input" style={{ width: 118 }} />
                                             <span style={{ color: T.mid40, fontSize: 11 }}>–</span>
-                                            <input type="time" value={row.depart} onChange={(e) => setRow({ depart: e.target.value })} style={timeStyle} />
+                                            <input type="time" value={row.depart} onChange={(e) => setRow({ depart: e.target.value })} className="alloy-os-sched-input" style={{ width: 118 }} />
                                         </div>
                                     );
                                 })}
@@ -787,8 +833,10 @@ function ScheduleEditor({
                     <div style={{ display: "grid", gap: 6 }}>
                         <div data-schedule-site-context="true" style={{ fontSize: 13, fontWeight: 600, color: T.forge }}>{siteName}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span data-room-value="true" style={{ fontSize: 12.5, fontWeight: 600, color: roomName ? T.slate : T.muted }}>{roomName ?? "Room pending"}</span>
-                            {roomFromRec && <RecTag />}
+                            {roomName ? (
+                                <span data-room-value="true" style={{ fontSize: 12.5, fontWeight: 600, color: T.slate }}>{roomName}</span>
+                            ) : null}
+                            {roomName && roomFromRec ? <RecTag /> : null}
                             <button
                                 type="button"
                                 onClick={() => {
@@ -800,7 +848,7 @@ function ScheduleEditor({
                                 data-room-change="true"
                                 style={{ all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.pine }}
                             >
-                                Change →
+                                {roomName ? "Change →" : "Select a room →"}
                             </button>
                         </div>
                     </div>
@@ -810,11 +858,11 @@ function ScheduleEditor({
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                             <label style={{ display: "grid", gap: 3 }}>
                                 <span style={{ fontSize: 10, color: T.mid40 }}>Start</span>
-                                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} style={{ ...selStyle, width: 150 }} />
+                                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="alloy-os-sched-input" style={{ width: 156 }} />
                             </label>
                             <label style={{ display: "grid", gap: 3 }}>
                                 <span style={{ fontSize: 10, color: T.mid40 }}>End</span>
-                                <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} style={{ ...selStyle, width: 150, opacity: openEnded ? 0.5 : 1 }} />
+                                <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} className="alloy-os-sched-input" style={{ width: 156 }} />
                             </label>
                             <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: T.slate, cursor: "pointer", paddingBottom: 7 }}>
                                 <AlloyCheck checked={openEnded} onChange={setOpenEnded} data-open-ended={openEnded ? "true" : "false"} />
@@ -981,6 +1029,4 @@ const rowBtnStyle: CSSProperties = {
     padding: "8px 12px",
     background: "#fff",
 };
-const selStyle: CSSProperties = { fontSize: 13, padding: "6px 9px", borderRadius: 8, border: `1px solid ${T.border}`, background: "#fff", color: T.forge, boxSizing: "border-box" };
-const timeStyle: CSSProperties = { ...selStyle, width: 118 };
 const patternChip: CSSProperties = { all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.slate, background: T.stone, border: `1px solid ${T.border}`, borderRadius: 999, padding: "6px 11px" };

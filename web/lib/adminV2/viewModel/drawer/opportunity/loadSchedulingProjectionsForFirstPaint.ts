@@ -9,22 +9,51 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveOperationalEnrollmentTodayYmd } from "@/lib/childcareOperational/operationalEnrollmentApi";
 import { loadSchedulingProjectionForChild } from "@/lib/scheduling/projection/buildSchedulingProjection";
 import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
+import { readLocationSchedulingConfig } from "@/lib/locations/locationSchedulingConfig";
+import { loadEditorPatternsForSite, type EditorPattern } from "@/lib/scheduling/editorPatterns";
+
+/** Slim schedule-type option (recurrence behaviour) surfaced to the editor. */
+export type SchedulingConfigScheduleType = { key: string; label: string; behavior: "continuous" | "rotating" };
 
 export type SchedulingProjectionFirstPaint = {
     byMemberId: Record<string, ChildScheduling>;
     asOf: string;
+    /**
+     * The opportunity site's configured scheduling constraints (from
+     * `locations.metadata.location_scheduling_v1`), resolved ONCE per opportunity so
+     * the editor can limit day pills to operating days and offer schedule types with
+     * no per-open fetch. `operatingDays` empty ⇒ all seven weekdays allowed.
+     */
+    operatingDays: number[];
+    scheduleTypes: SchedulingConfigScheduleType[];
+    /** The site's schedule patterns, PRELOADED so the pattern shortcut opens instantly. */
+    patterns: EditorPattern[];
 };
 
-/** Resolve the opportunity site's display label once (shared across all children). */
-async function resolveSiteLabel(supabase: SupabaseClient, orgId: string, siteLocationId: string): Promise<string | null> {
+/**
+ * Resolve the opportunity site's label + scheduling config ONCE (shared across all
+ * children). The scheduling config (operating days, schedule types) lives on
+ * `locations.metadata.location_scheduling_v1` and has no runtime API, so we read it
+ * here and hand it to the editor via first-paint.
+ */
+async function resolveSiteConfig(
+    supabase: SupabaseClient,
+    orgId: string,
+    siteLocationId: string,
+): Promise<{ siteName: string | null; operatingDays: number[]; scheduleTypes: SchedulingConfigScheduleType[] }> {
     const { data } = await supabase
         .from("locations")
-        .select("label")
+        .select("label, metadata")
         .eq("org_id", orgId)
         .eq("id", siteLocationId)
         .maybeSingle();
-    const label = (data as { label?: string | null } | null)?.label;
-    return label != null ? String(label).trim() || null : null;
+    const row = data as { label?: string | null; metadata?: Record<string, unknown> | null } | null;
+    const siteName = row?.label != null ? String(row.label).trim() || null : null;
+    const cfg = readLocationSchedulingConfig(row?.metadata ?? null);
+    const scheduleTypes = cfg.scheduleTypes
+        .filter((t) => t.isActive)
+        .map((t) => ({ key: t.key, label: t.label, behavior: t.behavior }));
+    return { siteName, operatingDays: cfg.operatingDays, scheduleTypes };
 }
 
 function childIdentity(row: Record<string, unknown>): { id: string; name: string } | null {
@@ -55,14 +84,17 @@ export async function loadSchedulingProjectionsForFirstPaint(
     const byMemberId: Record<string, ChildScheduling> = {};
     if (children.length === 0 || !siteLocationId) {
         const asOf = await resolveOperationalEnrollmentTodayYmd(supabase, orgId).catch(() => "");
-        return { byMemberId, asOf };
+        return { byMemberId, asOf, operatingDays: [], scheduleTypes: [], patterns: [] };
     }
     const todayYmd = await resolveOperationalEnrollmentTodayYmd(supabase, orgId);
     const computedAt = `${todayYmd}T00:00:00.000Z`;
     const identities = children.map(childIdentity).filter((x): x is { id: string; name: string } => x != null);
-    // The site is opportunity-level — resolve its label ONCE and pass it to every
-    // child projection, rather than each re-querying `locations` for the same id.
-    const siteName = await resolveSiteLabel(supabase, orgId, siteLocationId);
+    // The site is opportunity-level — resolve its label + scheduling config + patterns
+    // ONCE and reuse across children, rather than each re-querying for the same id.
+    const [{ siteName, operatingDays, scheduleTypes }, patterns] = await Promise.all([
+        resolveSiteConfig(supabase, orgId, siteLocationId),
+        loadEditorPatternsForSite(supabase, orgId, siteLocationId),
+    ]);
     const results = await Promise.all(
         identities.map((c) =>
             loadSchedulingProjectionForChild(supabase, orgId, {
@@ -80,5 +112,5 @@ export async function loadSchedulingProjectionsForFirstPaint(
     results.forEach((child, i) => {
         if (child) byMemberId[identities[i].id] = child;
     });
-    return { byMemberId, asOf: todayYmd };
+    return { byMemberId, asOf: todayYmd, operatingDays, scheduleTypes, patterns };
 }

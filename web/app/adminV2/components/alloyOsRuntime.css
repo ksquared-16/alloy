@@ -3280,6 +3280,40 @@ html[data-alloy-os-runtime-split="true"]
   max-height: calc(88vh - 104px);
 }
 
+/* Scheduling editor inputs (date + time) — a calm, consistent field with a Pine focus
+ * ring, matching the app's input doctrine (no rich date picker exists to adopt). */
+.alloy-os-sched-input {
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid #e5e9ef;
+  background: #fff;
+  color: #273f52;
+  box-sizing: border-box;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.alloy-os-sched-input:hover:not(:disabled) {
+  border-color: #cfd6e0;
+}
+.alloy-os-sched-input:focus,
+.alloy-os-sched-input:focus-visible {
+  outline: none;
+  border-color: rgba(0, 162, 131, 0.5);
+  box-shadow: 0 0 0 3px rgba(0, 162, 131, 0.12);
+}
+.alloy-os-sched-input:disabled {
+  background: #f6f8fa;
+  color: #98a2b3;
+}
+.alloy-os-sched-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.12s ease;
+}
+.alloy-os-sched-input:hover::-webkit-calendar-picker-indicator {
+  opacity: 0.9;
+}
+
 /* Shared identity drill-in — fully opaque elevated surface (no canvas bleed-through). */
 
 /* Composer edit mode: fully obscure non-elevated cards and lock elevated stack. */
