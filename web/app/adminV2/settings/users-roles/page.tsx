@@ -4,6 +4,7 @@ import { canManageUsersAndRoles } from "@/lib/admin/canManageUsersAndRoles";
 import UsersRolesConfigurationPage from "@/components/adminV2/settings/usersRoles/UsersRolesConfigurationPage";
 import OrganizationDomainLanding from "@/components/adminV2/settings/organization/OrganizationDomainLanding";
 import { buildAccessLandingModel } from "@/lib/configRuntime/accessLandingModel";
+import { normalizeAccessWorkspaceChapter } from "@/lib/access/accessChapterRoutes";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +20,9 @@ export default async function UsersRolesSettingsPage({ searchParams }: PageProps
 
     const resolved = searchParams ? await searchParams : {};
     const raw = Array.isArray(resolved.section) ? resolved.section[0] : resolved.section;
-    const section = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-    const initialTab = section === "roles" ? "roles" : section === "users" ? "users" : null;
+    const section = normalizeAccessWorkspaceChapter(typeof raw === "string" ? raw : "");
 
-    if (!initialTab) {
+    if (!section) {
         return (
             <OrganizationDomainLanding
                 model={buildAccessLandingModel()}
@@ -35,7 +35,7 @@ export default async function UsersRolesSettingsPage({ searchParams }: PageProps
     return (
         <UsersRolesConfigurationPage
             canManageUsersRoles={canManageUsersAndRoles(access)}
-            initialTab={initialTab}
+            initialTab={section}
         />
     );
 }

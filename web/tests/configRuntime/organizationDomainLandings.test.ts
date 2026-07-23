@@ -30,10 +30,12 @@ describe("organization domain landings", () => {
 
     it("builds Access tiles without inheritance vocabulary", () => {
         const model = buildAccessLandingModel();
-        expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "departments"]);
-        expect(model.purpose.toLowerCase()).toContain("not a configuration inheritance domain");
+        expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "scopes", "security"]);
+        expect(model.summaryCards).toEqual([]);
+        expect(model.ownershipNote.toLowerCase()).toContain("not configuration inheritance");
         expect(model.tiles.find((t) => t.id === "users")?.href).toContain("section=users");
-        expect(model.tiles.find((t) => t.id === "departments")?.href).toContain("/settings/departments");
+        expect(model.tiles.find((t) => t.id === "scopes")?.href).toContain("section=scopes");
+        expect(model.tiles.find((t) => t.id === "security")?.href).toContain("section=security");
     });
 
     it("builds Business Processes and Surfaces section deep-links", () => {

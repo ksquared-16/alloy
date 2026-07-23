@@ -35,8 +35,9 @@ describe("Configuration Runtime settings rollout", () => {
     it("priority rollout surfaces use Platform Configuration shell primitives", () => {
         expect(read("components/adminV2/settings/fields/FieldsConfigurationPage.tsx")).toContain("ConfigurationShell");
         expect(read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx")).toContain(
-            "SettingsConfigurationSurfaceShell",
+            "AccessWorkspaceSurface",
         );
+        expect(read("components/adminV2/settings/access/AccessWorkspaceSurface.tsx")).toContain("ConfigurationShell");
         expect(read("components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx")).toContain(
             "SettingsConfigurationSurfaceShell",
         );
@@ -51,9 +52,12 @@ describe("Configuration Runtime settings rollout", () => {
         expect(fieldsPage).toContain("fields-configuration-entity-queue");
     });
 
-    it("Users & Roles and Communications embed existing workspace clients under configuration shell", () => {
+    it("Access (Users & Roles) and Communications embed their product workspaces under configuration shell", () => {
         expect(read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx")).toContain(
-            "UsersRolesSettingsClient",
+            "AccessWorkspaceSurface",
+        );
+        expect(read("components/adminV2/settings/access/AccessWorkspaceSurface.tsx")).toContain(
+            "AccessUsersConfigurationPage",
         );
         expect(read("components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx")).toContain(
             "CommunicationsSetupClient",
@@ -64,6 +68,11 @@ describe("Configuration Runtime settings rollout", () => {
         for (const component of [
             "components/adminV2/settings/fields/FieldsConfigurationPage.tsx",
             "components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx",
+            "components/adminV2/settings/access/AccessWorkspaceSurface.tsx",
+            "components/adminV2/settings/access/AccessUsersConfigurationPage.tsx",
+            "components/adminV2/settings/access/AccessRolesConfigurationPage.tsx",
+            "components/adminV2/settings/access/AccessScopesPage.tsx",
+            "components/adminV2/settings/access/AccessSecurityPage.tsx",
             "components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx",
             "components/adminV2/settings/entities/EntitiesConfigurationPage.tsx",
         ]) {

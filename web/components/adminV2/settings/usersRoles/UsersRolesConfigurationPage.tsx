@@ -1,27 +1,19 @@
 "use client";
 
-import UsersRolesSettingsClient from "@/app/adminV2/settings/users-roles/UsersRolesSettingsClient";
-import SettingsConfigurationSurfaceShell from "@/components/adminV2/settings/configurationRuntime/SettingsConfigurationSurfaceShell";
+import AccessWorkspaceSurface from "@/components/adminV2/settings/access/AccessWorkspaceSurface";
+import type { AccessWorkspaceChapter } from "@/lib/access/accessChapterRoutes";
 
-const USERS_ROLES_SUBTITLE = "Org members, role assignment, and permission grants.";
-
+/**
+ * Thin wrapper — `/settings/users-roles?section=…` now renders the Access product workspace
+ * (Collection → Selected → Focused Workspace) instead of the legacy technical-tab client.
+ * Kept as a named entrypoint so the route file and any deep links into this module stay stable.
+ */
 export default function UsersRolesConfigurationPage({
     canManageUsersRoles,
     initialTab = "users",
 }: {
     canManageUsersRoles: boolean;
-    initialTab?: "users" | "roles";
+    initialTab?: AccessWorkspaceChapter;
 }) {
-    return (
-        <SettingsConfigurationSurfaceShell
-            title="Users & Roles"
-            subtitle={USERS_ROLES_SUBTITLE}
-            testId="settings-users-roles-page"
-        >
-            <UsersRolesSettingsClient
-                canManageUsersRoles={canManageUsersRoles}
-                initialTab={initialTab}
-            />
-        </SettingsConfigurationSurfaceShell>
-    );
+    return <AccessWorkspaceSurface canManage={canManageUsersRoles} section={initialTab} />;
 }
