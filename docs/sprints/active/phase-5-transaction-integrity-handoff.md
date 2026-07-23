@@ -160,9 +160,9 @@ The ghost-transaction class is **systemic**. Audit verdicts:
 |---|---|
 | **Worktree** | `/Users/Kelly/Code/alloy-worktrees/wt1-alloy-phase-5-product-realization` (managed slot 1) |
 | **Branch** | `agent/claude/1-alloy-phase-5-product-realization` |
-| **Commits ahead / behind** | **50 ahead / 71 behind** `origin/staging` (rebase required at promotion) |
+| **Commits ahead / behind** | **51 ahead / 96 behind** `origin/staging` at close (staging advanced during the session) — a rebase is required at promotion and it will not be trivial |
 | **Tree** | clean (`web/next-env.d.ts` regenerates during dev — `git restore` it) |
-| **Server** | slot 1 dev server on `http://localhost:3011`; volatile this session (repeatedly paused/stopped; toolkit caps at 3 concurrent servers) |
+| **Server** | slot 1 dev server **stopped/unreachable at close** (`:3011` → no response). Volatile all session: repeatedly paused/stopped, and the toolkit caps at 3 concurrent dev servers. Restart with `alloy-worker-resume 1`, which may be refused until a sibling slot frees. |
 | **Push state** | **not pushed** |
 | **Merge state** | **not merged** |
 
