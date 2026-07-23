@@ -135,6 +135,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const anyOk = delivered.some((d) => d.ok);
     if (!anyOk) {
+        // COMPENSATION: nobody received anything, so the minted public link is an orphaned LIVE
+        // credential (is_active, no expiry). Deactivate it so a failed delivery leaves Before == After
+        // instead of accumulating reachable form tokens on every failure.
+        const { error: compErr } = await supabase
+            .from("form_public_links")
+            .update({ is_active: false })
+            .eq("id", mint.data.public_link_id)
+            .eq("org_id", ctx.orgId);
+        if (compErr) {
+            // eslint-disable-next-line no-console -- integrity breach must be observable, never silent
+            console.error(
+                `form_public_links: COMPENSATION FAILED for link ${mint.data.public_link_id} (org ${ctx.orgId}) — an orphaned live form link may exist: ${compErr.message}`,
+            );
+        }
         return jsonError(delivered[0]?.error ?? "Form delivery failed for all recipients.", 502);
     }
 

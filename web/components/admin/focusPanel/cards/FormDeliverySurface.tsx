@@ -132,20 +132,41 @@ export default function FormDeliverySurface({ opportunityId, onClose, onComplete
                     channel,
                 }),
             });
-            const j = (await res.json().catch(() => ({}))) as { data?: { channel?: string; embed_url?: string; delivered?: unknown[] }; error?: string };
+            const j = (await res.json().catch(() => ({}))) as {
+                data?: {
+                    channel?: string;
+                    embed_url?: string;
+                    delivered?: Array<{ person_id: string; ok: boolean; error?: string }>;
+                };
+                error?: string;
+            };
             if (!res.ok) throw new Error(j.error ?? res.statusText);
-            const result = j.data ?? (j as { channel?: string });
+            const result = j.data ?? {};
+            const rows = result.delivered ?? [];
+            const failed = rows.filter((r) => !r.ok);
+            const sent = rows.length - failed.length;
+
+            // Report what ACTUALLY happened — never a blanket "Form sent." A link-only result is not a
+            // delivery, and a partial delivery is not a completed send (the operator must be able to
+            // tell, and retry the recipients that failed).
             if (channel === "link") {
-                setDoneNote("Form link ready.");
+                setDoneNote("Form link created — nothing was sent. Copy the link to share it.");
+            } else if (failed.length > 0) {
+                setSendError(
+                    `Sent to ${sent} of ${rows.length}. Failed: ${failed
+                        .map((f) => f.error ?? "unknown error")
+                        .join("; ")}`,
+                );
             } else {
-                setDoneNote("Form sent.");
+                setDoneNote(`Form sent to ${sent} recipient${sent === 1 ? "" : "s"}.`);
             }
-            // Recompose the What's Next surface (same signal the comms/tour paths use).
-            if (typeof window !== "undefined") {
+
+            // Recompose whenever real canonical work happened (a link mint or any successful send).
+            if (typeof window !== "undefined" && (channel === "link" || sent > 0)) {
                 window.dispatchEvent(new CustomEvent("adminv2:opportunity-updated", { detail: { id: opportunityId, action_key: "send_form" } }));
             }
-            void result;
-            onComplete();
+            // Only close the capability when nothing is left for the operator to act on.
+            if (failed.length === 0) onComplete();
         } catch (e) {
             setSendError(e instanceof Error ? e.message : String(e));
         } finally {
