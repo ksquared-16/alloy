@@ -64,9 +64,14 @@ export function startMission({ mission_id, sprint }) {
   if (isLive(mission_id)) return { ok: false, error: "already_running" };
   const provider = sprint?.provider || mission.provider || "claude";
   const worktree = sprint?.worktree || mission.worktree;
-  // Fire-and-forget: the Worker Runtime owns the turn; the browser never waits.
-  runMissionTurn(mission, pkg, { provider, worktree }).catch((e) => {
-    updateMission(mission_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e) });
+  // Defer the ENTIRE turn to the next event-loop tick so the HTTP response flushes
+  // first — runMissionTurn has a synchronous prefix (git baseline) that must never
+  // block the "started in <1s" acceptance. The Worker Runtime owns the turn.
+  updateMission(mission_id, { status: "starting" });
+  setImmediate(() => {
+    runMissionTurn(mission, pkg, { provider, worktree }).catch((e) => {
+      updateMission(mission_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e) });
+    });
   });
   return { ok: true, mission_id, status: "starting" };
 }
@@ -82,9 +87,11 @@ export function steerMission({ mission_id, instruction, sprint }) {
   const provider = sprint?.provider || mission.provider || "claude";
   const worktree = sprint?.worktree || mission.worktree;
   // Clear the prior wait state; a new turn is starting.
-  updateMission(mission_id, { pending_question: null });
-  runMissionTurn({ ...mission, pending_question: null }, pkg, { provider, worktree, resume, instruction }).catch((e) => {
-    updateMission(mission_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e) });
+  updateMission(mission_id, { pending_question: null, status: "starting" });
+  setImmediate(() => {
+    runMissionTurn({ ...mission, pending_question: null }, pkg, { provider, worktree, resume, instruction }).catch((e) => {
+      updateMission(mission_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e) });
+    });
   });
   return { ok: true, mission_id, status: "starting", resumed: Boolean(resume) };
 }

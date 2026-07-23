@@ -132,9 +132,14 @@ export async function requestStatus({ provider, cwd, resume } = {}) {
  * executor can register the live child (for Stop) before the turn resolves.
  */
 function missionArgs(provider, resume) {
-  // `-p --output-format stream-json` requires --verbose in print mode.
+  // `-p --output-format stream-json` requires --verbose in print mode. A headless
+  // worker cannot answer interactive permission prompts, so it runs in
+  // `acceptEdits` mode — file edits/writes are auto-approved (the worker must be
+  // able to produce its declared deliverables) but Bash and other tools are NOT
+  // auto-granted. Mission scope is bounded by the package prompt + governance
+  // (no push/merge/promote); the operator gates start/stop.
   if (provider === "claude") {
-    return ["-p", "--output-format", "stream-json", "--verbose", ...(resume ? ["--resume", resume] : [])];
+    return ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", ...(resume ? ["--resume", resume] : [])];
   }
   return ["-p", "--output-format", "stream-json", "--verbose", "--trust", ...(resume ? ["--resume", resume] : [])];
 }

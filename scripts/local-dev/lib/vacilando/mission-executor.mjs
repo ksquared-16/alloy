@@ -171,6 +171,16 @@ export async function runMissionTurn(mission, pkg, { provider, worktree, resume 
     return;
   }
 
+  // Prepare the environment: ensure declared deliverable directories exist so the
+  // worker's write of a bounded doc path never needs an ad-hoc mkdir (which
+  // acceptEdits would not auto-approve). Only creates dirs under the worktree.
+  for (const d of pkg.expected_deliverables || []) {
+    if (d.path && cwd) {
+      const abs = join(cwd, d.path);
+      if (abs.startsWith(cwd)) { try { mkdirSync(join(abs, ".."), { recursive: true }); } catch { /* best-effort */ } }
+    }
+  }
+
   let base = serializePackagePrompt(pkg);
   if (instruction) base = `[OPERATOR STEERING / ANSWER]\n${instruction}\n\n${base}`;
 
