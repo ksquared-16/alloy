@@ -42,11 +42,6 @@ export function liveMissionIds() { return [...live.keys()]; }
 export function isLive(mission_id) { return live.has(mission_id); }
 
 function outDir(mission_id) { const d = join(OUT_ROOT, mission_id); if (!existsSync(d)) mkdirSync(d, { recursive: true }); return d; }
-// V1: a mission executes in the runtime's OWN worktree (where the server, the
-// durable state, and the capability's code/docs live) — never a sibling worktree
-// (governance: do not modify sibling worktrees). The `worktree` name is recorded
-// on the mission for provenance, but the execution cwd is always REPO_ROOT.
-function worktreePath(_worktree) { return REPO_ROOT; }
 export { REPO_ROOT };
 
 /** Capture the set of already-dirty paths so Acceptance can attribute changes to the mission. */
@@ -154,11 +149,22 @@ export function readTurnOutput(mission_id, turn) {
  * `opts.resume` continues the provider session; `opts.instruction` is an operator
  * steering/answer prepended for a continuation turn.
  */
-export async function runMissionTurn(mission, pkg, { provider, worktree, resume = null, instruction = null } = {}) {
+export async function runMissionTurn(mission, pkg, { provider, identity, resume = null, instruction = null } = {}) {
   const mid = mission.mission_id;
   const turn = (mission.turn_count || 0) + 1;
-  const cwd = worktreePath(worktree);
   const t0 = Date.now();
+
+  // SINGLE SOURCE OF TRUTH: a mission executes in its slot's authoritative
+  // worktree — never the runtime host's worktree, and never a name we merely
+  // recorded. If the identity is in conflict we refuse rather than guess.
+  if (!identity?.ok || !identity.worktree_path) {
+    updateMission(mid, { status: "blocked", error_code: "identity_conflict", error_message: identity?.conflict?.detail || "Slot identity could not be resolved authoritatively; refusing to execute.", current_phase: null });
+    return;
+  }
+  const cwd = identity.worktree_path;
+  // Record where execution ACTUALLY happens, so the record can never disagree
+  // with reality (the defect this replaces).
+  updateMission(mid, { worktree: identity.worktree_name, executed_in: cwd, branch: identity.branch });
 
   // Baseline the already-dirty tree ONCE (first turn) so Acceptance attributes
   // only mission-caused changes — the worktree carries unrelated dev work.

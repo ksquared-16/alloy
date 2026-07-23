@@ -2,15 +2,15 @@
  * Vacilando — Director orchestration (mission pipeline).
  *
  * The DETERMINISTIC conductor. It owns workflow, routing, gates, and mission
- * lifecycle — it never reasons, retrieves, or generates itself. It routes an
- * operator intent through the runtimes:
+ * lifecycle — it never reasons, retrieves, or generates itself.
  *
- *   intent → Capability Runtime (retrieve) → Knowledge Runtime (retrieve, scoped)
- *          → Mission Compiler (assemble package) → [operator approval gate]
- *          → Worker Runtime (execute) → Acceptance Runtime (evaluate)
- *          → [operator final QA gate]
- *
- * Each step delegates to a specialist runtime; Director only sequences and gates.
+ * Trustworthiness contract (V1 hardening):
+ *   - SINGLE SOURCE OF TRUTH: every action resolves the slot's authoritative
+ *     identity and refuses to act on a conflicted identity (fail closed).
+ *   - GOVERNED: every consequential action follows the SAME lifecycle as the
+ *     command registry — preview → confirm → queued → running → terminal → audit.
+ *   - DURABLE: a mission turn is a first-class Director request (active_request_id),
+ *     so it appears in the same request timeline as every other worker instruction.
  */
 import { retrieveCapability, getCapability, updateCapability } from "./capability.mjs";
 import { retrieveForCapability } from "./knowledge.mjs";
@@ -19,110 +19,228 @@ import { createMission, getMission, updateMission } from "./commands/missions.mj
 import { getPackage, packageForMission } from "./commands/mission-packages.mjs";
 import { checkStartPreconditions, runMissionTurn, stopMission, isLive } from "./mission-executor.mjs";
 import { evaluateMission, readAcceptance } from "./acceptance.mjs";
+import { writeAuditEvent } from "./commands/audit.mjs";
+import { createRequest, updateRequest } from "./commands/director-requests.mjs";
+import { resolveSlotIdentity } from "./identity.mjs";
+
+/** Consequential mission actions require explicit confirmation, like every other. */
+const CONSEQUENTIAL = new Set(["start", "steer", "stop", "accept"]);
+
+const audit = (action, target, outcome, extra = {}) =>
+  writeAuditEvent({
+    actor: extra.actor || "operator", command: `mission.${action}`,
+    input: extra.input || null, target,
+    preview_summary: extra.summary || null, confirmed: extra.confirmed === true,
+    outcome, error: extra.error || null,
+  }, Date.now());
+
+const targetOf = (mission, identity) => ({
+  kind: "mission", id: mission?.mission_id || null,
+  label: mission?.title || "(mission)",
+  slot: mission?.worker_slot ?? identity?.slot ?? null,
+  worktree: identity?.worktree_name || mission?.worktree || null,
+});
+
+/** Resolve identity + fail closed on conflict. */
+function identityFor(slot) {
+  const id = resolveSlotIdentity(slot);
+  if (!id.ok) return { ok: false, error: "identity_conflict", conflict: id.conflict, identity: id };
+  return { ok: true, identity: id };
+}
 
 /**
  * Stage 1–4: intent → Capability → Knowledge → Compiler → Draft Package.
- * Returns { ok, mission, package, capability, snapshot } or an escalation
- * { ok:false, reason:"no_capability", known } so Director can ask to register one.
+ * Compilation is durable but not destructive; it is audited, not gated.
  */
-export function compileMissionForIntent({ slot, intent, sprint }) {
-  // Stage 1 — Capability Retrieval (never rediscover).
-  const cap = retrieveCapability(intent);
-  if (!cap.ok) return { ok: false, stage: "capability", reason: "no_capability", intent, known: cap.known };
-  const capability = cap.capability;
+export function compileMissionForIntent({ slot, intent }) {
+  const idr = identityFor(slot);
+  if (!idr.ok) {
+    audit("compile", { kind: "slot", label: `slot ${slot}` }, "blocked", { error: idr.conflict?.detail });
+    return { ok: false, stage: "identity", reason: "identity_conflict", conflict: idr.conflict };
+  }
+  const identity = idr.identity;
 
-  // Stage 2 — Knowledge Retrieval (scoped by the capability object).
+  const cap = retrieveCapability(intent);
+  if (!cap.ok) {
+    audit("compile", { kind: "slot", label: `slot ${slot}` }, "blocked", { error: `no capability for "${intent}"` });
+    return { ok: false, stage: "capability", reason: "no_capability", intent, known: cap.known };
+  }
+  const capability = cap.capability;
   const snapshot = retrieveForCapability(capability);
 
-  // Create the durable mission identity (draft) BEFORE compiling — the package binds to it.
   const mission = createMission({
-    slot, worktree: sprint?.worktree, branch: sprint?.branch || null, provider: sprint?.provider || "claude",
-    title: `${capability.name} V2`, objective: `(compiling from ${capability.capability_id})`,
-    status: "draft",
+    slot, worktree: identity.worktree_name, branch: identity.branch, provider: identity.provider || "claude",
+    title: `${capability.name} V2`, objective: `(compiling from ${capability.capability_id})`, status: "draft",
   });
 
-  // Stage 4 — Mission Compilation (deterministic assembly).
   const { package: pkg } = compile({ capability, snapshot, mission });
-
-  // Bind the package to the mission; mission becomes ready iff the package is ready.
   updateMission(mission.mission_id, {
     title: pkg.title, objective: pkg.objective, capability_id: capability.capability_id,
     package_id: pkg.package_id, package_version: pkg.version,
     status: pkg.readiness_status === "ready" ? "ready" : "draft",
   });
 
-  return { ok: true, mission: getMission(mission.mission_id), package: pkg, capability, snapshot };
+  const m = getMission(mission.mission_id);
+  audit("compile", targetOf(m, identity), "succeeded", { summary: `compiled ${pkg.package_id} (${pkg.readiness_status})`, input: { intent } });
+  return { ok: true, mission: m, package: pkg, capability, snapshot, identity };
 }
 
-/** Operator approval gate → Worker Runtime start. Enforces start preconditions. */
-export function startMission({ mission_id, sprint }) {
+/** Build a preview for a consequential mission action (pure; never executes). */
+export function previewAction(action, mission_id) {
   const mission = getMission(mission_id);
   if (!mission) return { ok: false, error: "unknown_mission" };
+  const idr = identityFor(mission.worker_slot);
+  const identity = idr.identity;
+  const pkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
+  const base = { ok: true, action, mission_id, requires_confirmation: CONSEQUENTIAL.has(action), identity, target: targetOf(mission, identity) };
+
+  if (!idr.ok) return { ...base, ok: false, error: "identity_conflict", conflict: identity.conflict, effects: [] };
+
+  if (action === "start") {
+    const pre = checkStartPreconditions(pkg);
+    return { ...base, ok: pre.ok, blockers: pre.blockers,
+      summary: `Start "${mission.title}" — runs a ${identity.provider || "claude"} turn in ${identity.worktree_name}`,
+      effects: [
+        `Spawns a provider process in ${identity.worktree_path}`,
+        `The worker may create/modify files in that worktree`,
+        `Governance: no push, no merge, no promote, no scope broadening`,
+      ] };
+  }
+  if (action === "stop") return { ...base, summary: `Stop "${mission.title}"`, effects: ["Terminates the provider process", "Preserves all mission state and outputs"] };
+  if (action === "steer") return { ...base, summary: `Send a steering instruction to "${mission.title}"`, effects: [`Resumes provider session ${mission.provider_session_id || "(none — a fresh turn)"}`, `Runs another turn in ${identity.worktree_name}`] };
+  if (action === "accept") return { ...base, summary: `Accept "${mission.title}"`, effects: ["Runs the acceptance gate", "Marks the mission completed (operator sign-off)", "Writes the mission into capability history"] };
+  return { ...base, ok: false, error: "unknown_action" };
+}
+
+/** Operator approval gate → Worker Runtime start. */
+export function startMission({ mission_id, confirm }) {
+  const mission = getMission(mission_id);
+  if (!mission) return { ok: false, error: "unknown_mission" };
+  const idr = identityFor(mission.worker_slot);
+  if (!idr.ok) {
+    audit("start", targetOf(mission, idr.identity), "blocked", { error: idr.conflict?.detail });
+    return { ok: false, error: "identity_conflict", conflict: idr.conflict };
+  }
+  const identity = idr.identity;
   const pkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
   const pre = checkStartPreconditions(pkg);
-  if (!pre.ok) return { ok: false, error: "not_ready", blockers: pre.blockers };
+  if (!pre.ok) {
+    audit("start", targetOf(mission, identity), "blocked", { error: "package not ready", confirmed: confirm === true });
+    return { ok: false, error: "not_ready", blockers: pre.blockers };
+  }
   if (isLive(mission_id)) return { ok: false, error: "already_running" };
-  const provider = sprint?.provider || mission.provider || "claude";
-  const worktree = sprint?.worktree || mission.worktree;
-  // Defer the ENTIRE turn to the next event-loop tick so the HTTP response flushes
-  // first — runMissionTurn has a synchronous prefix (git baseline) that must never
-  // block the "started in <1s" acceptance. The Worker Runtime owns the turn.
-  updateMission(mission_id, { status: "starting" });
-  setImmediate(() => {
-    runMissionTurn(mission, pkg, { provider, worktree }).catch((e) => {
-      updateMission(mission_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e) });
-    });
+  if (confirm !== true) {
+    audit("start", targetOf(mission, identity), "refused", { error: "confirmation_required" });
+    return { ok: false, error: "confirmation_required", preview: previewAction("start", mission_id) };
+  }
+
+  // Durable request: a mission turn is a first-class Director request.
+  const req = createRequest({
+    slot: mission.worker_slot, worktree: identity.worktree_name, provider: identity.provider || mission.provider,
+    instruction: `[mission] ${mission.title}`, request_type: "worker-instruction", mission_id,
   });
-  return { ok: true, mission_id, status: "starting" };
+  updateMission(mission_id, { active_request_id: req.request_id, status: "starting" });
+  updateRequest(req.request_id, { status: "starting", started_at: new Date().toISOString() });
+
+  setImmediate(() => {
+    runMissionTurn(mission, pkg, { provider: identity.provider || mission.provider || "claude", identity })
+      .then(() => {
+        const after = getMission(mission_id);
+        updateRequest(req.request_id, { status: after?.status === "failed" ? "failed" : "worker-responded", completed_at: new Date().toISOString() });
+      })
+      .catch((e) => {
+        updateMission(mission_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e) });
+        updateRequest(req.request_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e), failed_at: new Date().toISOString() });
+      });
+  });
+
+  audit("start", targetOf(mission, identity), "succeeded", { confirmed: true, summary: `started in ${identity.worktree_name}`, input: { mission_id } });
+  return { ok: true, mission_id, status: "starting", request_id: req.request_id, worktree: identity.worktree_name };
 }
 
 /** Steering / answer → a continuation turn resuming the SAME provider session. */
-export function steerMission({ mission_id, instruction, sprint }) {
+export function steerMission({ mission_id, instruction, confirm }) {
   const mission = getMission(mission_id);
   if (!mission) return { ok: false, error: "unknown_mission" };
+  const idr = identityFor(mission.worker_slot);
+  if (!idr.ok) { audit("steer", targetOf(mission, idr.identity), "blocked", { error: idr.conflict?.detail }); return { ok: false, error: "identity_conflict", conflict: idr.conflict }; }
+  const identity = idr.identity;
   if (isLive(mission_id)) return { ok: false, error: "mid_turn", detail: "The mission is executing a turn. Stop it or wait until it waits for you." };
   const pkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
   if (!pkg) return { ok: false, error: "no_package" };
+  if (confirm !== true) {
+    audit("steer", targetOf(mission, identity), "refused", { error: "confirmation_required" });
+    return { ok: false, error: "confirmation_required", preview: previewAction("steer", mission_id) };
+  }
+
   const resume = mission.provider_session_id || null;
-  const provider = sprint?.provider || mission.provider || "claude";
-  const worktree = sprint?.worktree || mission.worktree;
-  // Clear the prior wait state; a new turn is starting.
-  updateMission(mission_id, { pending_question: null, status: "starting" });
-  setImmediate(() => {
-    runMissionTurn({ ...mission, pending_question: null }, pkg, { provider, worktree, resume, instruction }).catch((e) => {
-      updateMission(mission_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e) });
-    });
+  const req = createRequest({
+    slot: mission.worker_slot, worktree: identity.worktree_name, provider: identity.provider || mission.provider,
+    instruction, request_type: "worker-instruction", mission_id,
   });
-  return { ok: true, mission_id, status: "starting", resumed: Boolean(resume) };
+  updateMission(mission_id, { pending_question: null, status: "starting", active_request_id: req.request_id });
+  updateRequest(req.request_id, { status: "starting", started_at: new Date().toISOString() });
+
+  setImmediate(() => {
+    runMissionTurn({ ...mission, pending_question: null }, pkg, { provider: identity.provider || mission.provider || "claude", identity, resume, instruction })
+      .then(() => {
+        const after = getMission(mission_id);
+        updateRequest(req.request_id, { status: after?.status === "failed" ? "failed" : "worker-responded", completed_at: new Date().toISOString() });
+      })
+      .catch((e) => {
+        updateMission(mission_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e) });
+        updateRequest(req.request_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e), failed_at: new Date().toISOString() });
+      });
+  });
+
+  audit("steer", targetOf(mission, identity), "succeeded", { confirmed: true, summary: resume ? "resumed session" : "fresh turn", input: { mission_id } });
+  return { ok: true, mission_id, status: "starting", resumed: Boolean(resume), request_id: req.request_id };
 }
 
-export function stop({ mission_id }) { return stopMission(mission_id); }
+export function stop({ mission_id, confirm }) {
+  const mission = getMission(mission_id);
+  if (!mission) return { ok: false, error: "unknown_mission" };
+  const identity = resolveSlotIdentity(mission.worker_slot);
+  if (confirm !== true) {
+    audit("stop", targetOf(mission, identity), "refused", { error: "confirmation_required" });
+    return { ok: false, error: "confirmation_required", preview: previewAction("stop", mission_id) };
+  }
+  const r = stopMission(mission_id);
+  if (mission.active_request_id) updateRequest(mission.active_request_id, { status: "cancelled", failed_at: new Date().toISOString() });
+  audit("stop", targetOf(mission, identity), r.ok ? "succeeded" : "failed", { confirmed: true, summary: r.was_live ? "terminated a live turn" : "no live turn; state preserved" });
+  return r;
+}
 
-/** Acceptance evaluation gate (does not accept — surfaces the verdict). */
+/** Acceptance evaluation (read-only gate; surfaces the verdict, accepts nothing). */
 export function evaluate({ mission_id }) {
   const mission = getMission(mission_id);
   if (!mission) return { ok: false, error: "unknown_mission" };
+  const identity = resolveSlotIdentity(mission.worker_slot);
   const pkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
   if (!pkg) return { ok: false, error: "no_package" };
-  const result = evaluateMission(mission, pkg);
+  const result = evaluateMission(mission, pkg, { worktreePath: identity.worktree_path });
   updateMission(mission_id, { acceptance_gate: result.gate, acceptance_at: result.evaluated_at });
+  audit("evaluate", targetOf(mission, identity), "succeeded", { summary: `gate=${result.gate}` });
   return { ok: true, result };
 }
 
-/**
- * Operator final acceptance. Runs (or refreshes) the gate; refuses on hard fail.
- * On accept: mission → completed + capability write-back (the learning loop:
- * Director orchestrates, Capability Runtime records — no new runtime).
- */
-export function accept({ mission_id }) {
+/** Operator final acceptance (consequential → confirmed + audited). */
+export function accept({ mission_id, confirm }) {
   const mission = getMission(mission_id);
   if (!mission) return { ok: false, error: "unknown_mission" };
+  const identity = resolveSlotIdentity(mission.worker_slot);
   const pkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
   if (!pkg) return { ok: false, error: "no_package" };
-  const result = evaluateMission(mission, pkg);
-  if (result.gate === "fail") return { ok: false, error: "gate_failed", result };
+  if (confirm !== true) {
+    audit("accept", targetOf(mission, identity), "refused", { error: "confirmation_required" });
+    return { ok: false, error: "confirmation_required", preview: previewAction("accept", mission_id) };
+  }
+  const result = evaluateMission(mission, pkg, { worktreePath: identity.worktree_path });
+  if (result.gate === "fail") {
+    audit("accept", targetOf(mission, identity), "blocked", { confirmed: true, error: "gate failed" });
+    return { ok: false, error: "gate_failed", result };
+  }
   updateMission(mission_id, { status: "completed", completed_at: new Date().toISOString(), acceptance_gate: result.gate, pending_approval: null });
-  // Learning write-back: move the mission into capability history.
   try {
     if (mission.capability_id) {
       const cap = getCapability(mission.capability_id);
@@ -132,6 +250,7 @@ export function accept({ mission_id }) {
       });
     }
   } catch { /* write-back best-effort; acceptance already recorded */ }
+  audit("accept", targetOf(mission, identity), "succeeded", { confirmed: true, summary: `accepted (gate=${result.gate})` });
   return { ok: true, result, status: "completed" };
 }
 

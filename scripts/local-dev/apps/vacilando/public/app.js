@@ -52,7 +52,16 @@ const MISSION_LIVE = new Set(["starting", "running", "stopping"]);
 const READY_K = { ready: "ok", draft: "muted", blocked: "err", awaiting_operator: "auth", superseded: "muted" };
 
 async function fetchMissions(slot) { try { const r = await fetch(`/api/missions?slot=${slot}`); state.missions[slot] = (await r.json()).missions || []; render(true); } catch { /* keep last */ } }
-async function fetchMissionDetail(id) { try { const r = await fetch(`/api/mission?id=${encodeURIComponent(id)}`); state.mission[id] = await r.json(); render(true); } catch { /* keep last */ } }
+// Loading is explicit: while a mission's detail is in flight we render a loading
+// state — never another record's data (the "what am I looking at?" defect).
+async function fetchMissionDetail(id) {
+  state.missionLoading = state.missionLoading || {};
+  state.missionLoading[id] = true; render(true);
+  try { const r = await fetch(`/api/mission?id=${encodeURIComponent(id)}`); state.mission[id] = await r.json(); }
+  catch { /* keep last */ }
+  finally { state.missionLoading[id] = false; render(true); }
+}
+async function fetchIdentity(slot) { try { const r = await fetch(`/api/identity?slot=${slot}`); (state.identity = state.identity || {})[slot] = await r.json(); render(true); } catch {} }
 
 async function compileMission(slot) {
   const intent = (state.missionIntent[slot] || "").trim();
@@ -71,15 +80,50 @@ async function compileMission(slot) {
   toast("ok", "Package compiled", `${data.package.title} · ${data.package.readiness_status}`);
 }
 
+/**
+ * Every consequential mission action runs the SAME governed lifecycle as the
+ * command registry: preview → confirm → queued → running → terminal → audit.
+ * The server refuses an unconfirmed consequential action (428), so the operator
+ * always sees what will happen before it happens.
+ */
+const MISSION_CONSEQUENTIAL = new Set(["start", "stop", "steer", "accept"]);
+
 async function missionAct(action, id, extra = {}, okMsg) {
+  if (MISSION_CONSEQUENTIAL.has(action) && extra.confirm !== true) {
+    const { data: pv } = await api("/api/missions/preview", { mission_id: id, action });
+    return showMissionConfirm(action, id, pv, extra, okMsg);
+  }
+  toast("idle", `${action}…`, "sent"); // immediate acknowledgement, always
   const { data } = await api(`/api/missions/${action}`, { mission_id: id, ...extra });
   if (!data.ok && data.error) {
     const blockers = (data.blockers || []).map((b) => b.message).join("; ");
-    toast("err", `Cannot ${action}`, blockers || data.detail || data.error);
+    toast("err", `Cannot ${action}`, blockers || data.conflict?.detail || data.detail || data.error);
   } else if (okMsg) toast("ok", okMsg, "");
   fetchMissionDetail(id);
   if (state.sel) fetchMissions(state.sel);
   return data;
+}
+
+/** Preview dialog for a consequential mission action (effects + blockers). */
+function showMissionConfirm(action, id, pv, extra, okMsg) {
+  const ov = document.createElement("div"); ov.className = "ov";
+  const blockers = (pv?.blockers || []).map((b) => `<li class="bad">${esc(b.message)}</li>`).join("");
+  const effects = (pv?.effects || []).map((e) => `<li>${esc(e)}</li>`).join("");
+  const wt = pv?.identity?.worktree_name;
+  ov.innerHTML = `<div class="dlg"><h3>${esc(action[0].toUpperCase() + action.slice(1))} mission</h3>
+    <span class="risk consequential">consequential</span>
+    <div class="mconf-sum">${esc(pv?.summary || "")}</div>
+    ${wt ? `<div class="mconf-wt">Worktree <b>${esc(wt)}</b> <span class="mono">${esc(pv.identity.worktree_path || "")}</span></div>` : ""}
+    ${blockers ? `<div class="m-blockers"><b>Blocked:</b><ul>${blockers}</ul></div>` : ""}
+    ${effects ? `<div class="mconf-eff"><b>This will:</b><ul>${effects}</ul></div>` : ""}
+    <div class="dbtns"><button class="btn" data-close>Cancel</button>
+      <button class="btn go" data-go ${pv?.ok === false ? "disabled" : ""}>${esc(action === "accept" ? "Accept" : action[0].toUpperCase() + action.slice(1))}</button></div></div>`;
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); render(true); };
+  ov.querySelector("[data-close]").onclick = close;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  const go = ov.querySelector("[data-go]");
+  if (go) go.onclick = () => { ov.remove(); missionAct(action, id, { ...extra, confirm: true }, okMsg); };
 }
 
 // Poll a non-terminal selected mission while the Mission tab is open.
@@ -142,7 +186,7 @@ document.addEventListener("input", (e) => {
 function parseRoute() { const p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean); return { name: p[0] || "command", sub: p[1], param: p[2] }; }
 function route() { return parseRoute().name; }
 function go(r) { location.hash = "#/" + r; }
-const CRUMBS = { command: "Command Center", history: "Work History", policies: "Policies", settings: "Settings" };
+const CRUMBS = { command: "Command Center", history: "Work History", policies: "Policies", settings: "Settings", trust: "Runtime Trust" };
 function setActiveNav(name) {
   document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === name));
   $("#crumb").textContent = CRUMBS[name] || "Command Center";
@@ -171,12 +215,46 @@ function render(force) {
   const ae = document.activeElement;
   const savedFocus = ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT") && ae.id
     ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd, top: ae.scrollTop } : null;
-  V.innerHTML = ({ command: viewCommand, history: viewHistory, policies: viewPolicies, settings: viewSettings }[r.name] || viewCommand)();
+  V.innerHTML = ({ command: viewCommand, history: viewHistory, policies: viewPolicies, settings: viewSettings, trust: viewTrust }[r.name] || viewCommand)();
   if (savedFocus) {
     const n = document.getElementById(savedFocus.id);
     if (n) { try { n.focus({ preventScroll: true }); if (savedFocus.s != null) n.setSelectionRange(savedFocus.s, savedFocus.e); n.scrollTop = savedFocus.top; } catch { /* field gone */ } }
   }
   $("#nb-needs").textContent = state.snap ? needsYou().length : 0;
+}
+
+// -------- Runtime Trust: every trust property, measurable --------
+async function fetchTrust() { try { const r = await fetch("/api/trust"); state._trust = await r.json(); render(true); } catch { /* keep last */ } }
+function viewTrust() {
+  const t = state._trust;
+  if (!t) { fetchTrust(); return `<div class="empty"><div class="big"><span class="spin"></span> Measuring runtime trust…</div></div>`; }
+  const scoreK = t.trust_score >= 90 ? "ok" : t.trust_score >= 70 ? "auth" : "err";
+  const checks = (t.checks || []).map((c) => `<div class="tchk ${c.ok ? "ok" : "bad"}">
+      <span class="tmark">${c.ok ? "✓" : "✗"}</span>
+      <div><div class="tprop">${esc(c.property)}</div><div class="tdet">${esc(c.detail)}</div></div></div>`).join("");
+  const slots = (t.slots || []).map((s) => `<tr><td>slot ${s.slot}</td><td class="mono">${esc(s.worktree_name || "—")}</td>
+      <td class="mono">${esc(s.branch || "—")}</td>
+      <td>${s.ok ? '<span class="mbadge ok">verified</span>' : `<span class="mbadge err">${esc(s.conflict?.kind || "conflict")}</span>`}</td></tr>`).join("");
+  return `<div class="trustview">
+    <div class="sec">
+      <div class="m-head"><h5>Runtime trust</h5><span class="mbadge ${scoreK}">${t.trust_score}% · ${t.passed}/${t.total}</span></div>
+      <div class="muted note">Every property the operator must be able to rely on, measured from live runtime state. Computed in ${t.computed_in_ms}ms.</div>
+      <div class="tchecks">${checks}</div>
+    </div>
+    <div class="sec">
+      <h5>Runtime host</h5>
+      <dl class="kv">
+        <dt>This server runs from</dt><dd class="mono">${esc(t.host?.worktree_name || "—")}</dd>
+        <dt>Path</dt><dd class="mono">${esc(t.host?.worktree_path || "—")}</dd>
+        <dt>Branch</dt><dd class="mono">${esc(t.host?.branch || "—")}</dd>
+        <dt>Registered to a slot</dt><dd>${t.host_registered ? `yes — slot ${t.host_slot}` : '<b class="warnink">no — this worktree is owned by no slot</b>'}</dd>
+      </dl>
+    </div>
+    <div class="sec">
+      <h5>Slot identity — one slot, one verified worktree</h5>
+      <table class="ttable"><thead><tr><th>Slot</th><th>Worktree</th><th>Branch (verified via git)</th><th>Identity</th></tr></thead><tbody>${slots}</tbody></table>
+    </div>
+  </div>`;
 }
 
 // -------- Command Center: board | operating surface | rail --------
@@ -571,6 +649,10 @@ function tabMission(sp) {
     ${missions.length ? `<div class="m-list">${missions.slice(0, 8).map((x) => `<button class="chip ${x.mission_id === selId ? "on" : ""}" data-msel="${x.mission_id}">${esc(x.title)} · ${(MISSION_STATUS[x.status] || {}).label || x.status}</button>`).join("")}</div>` : ""}
   </div>`;
 
+  // LOADING is explicit and never shows another record's data.
+  if (selId && (state.missionLoading?.[selId] || !d)) {
+    return `<div class="mission">${compileBox}<div class="m-loading"><span class="spin"></span> Loading mission <span class="mono">${esc(selId)}</span>…</div></div>`;
+  }
   if (!m || !pkg) return `<div class="mission">${compileBox}<div class="empty">No compiled mission yet — enter an intent and Compile.</div></div>`;
 
   const rk = READY_K[pkg.readiness_status] || "muted";
@@ -579,6 +661,13 @@ function tabMission(sp) {
   const ready = pkg.readiness_status === "ready";
   const live = MISSION_LIVE.has(m.status);
   const elapsed = m.started_at && live ? ` · ${Math.round((Date.now() - new Date(m.started_at)) / 1000)}s` : "";
+  // Controls reflect reality: a completed/running mission is not startable, an
+  // interrupted mission with a captured session is resumable.
+  const canStart = ready && m.status === "ready";
+  const canResume = m.status === "interrupted" && !!m.provider_session_id;
+  const canSteer = !live && ["waiting_for_operator", "waiting_for_acceptance", "blocked", "interrupted"].includes(m.status);
+  const canAccept = m.status === "waiting_for_acceptance";
+  const nOut = (d.outputs || []).length, nEv = (d.acceptance || []).length;
 
   const pkgPanel = `<div class="sec">
     <div class="m-head"><h5>Mission Package</h5><span class="mbadge ${rk}">${pkg.readiness_status}</span></div>
@@ -596,11 +685,12 @@ function tabMission(sp) {
     </dl>
     <div class="dbtns">
       <button class="btn" data-mreview="${m.mission_id}">Review Package</button>
-      <button class="btn go" data-mstart="${m.mission_id}" ${ready && !live ? "" : "disabled"} title="${ready ? "Start execution" : "Package is not ready"}">Start Mission</button>
+      <button class="btn go" data-mstart="${m.mission_id}" ${canStart ? "" : "disabled"} title="${canStart ? "Start execution" : ready ? `Not startable while ${st.label}` : "Package is not ready"}">Start Mission</button>
+      ${canResume ? `<button class="btn go" data-mresume="${m.mission_id}" title="Resume the captured provider session">Resume Mission</button>` : ""}
       <button class="btn warn" data-mstop="${m.mission_id}" ${live ? "" : "disabled"}>Stop Mission</button>
-      <button class="btn" data-msteer="${m.mission_id}">Send Steering Instruction</button>
-      <button class="btn" data-mout="${m.mission_id}">View Outputs</button>
-      <button class="btn" data-mevidence="${m.mission_id}">View Evidence</button>
+      <button class="btn" data-msteer="${m.mission_id}" ${canSteer ? "" : "disabled"} title="${canSteer ? "" : live ? "Mission is mid-turn" : "Not awaiting input"}">Send Steering Instruction</button>
+      <button class="btn" data-mout="${m.mission_id}" ${nOut ? "" : "disabled"} title="${nOut ? nOut + " output(s)" : "No outputs yet"}">View Outputs${nOut ? ` (${nOut})` : ""}</button>
+      <button class="btn" data-mevidence="${m.mission_id}" ${nEv ? "" : "disabled"} title="${nEv ? "" : "Run Evaluate Acceptance first"}">View Evidence</button>
     </div>
   </div>`;
 
@@ -609,6 +699,7 @@ function tabMission(sp) {
     <div class="m-head"><h5>Execution</h5><span class="dc-badge ${st.k}${live ? " live" : ""}">${st.label}${elapsed}</span></div>
     <dl class="kv">
       <dt>Mission ID</dt><dd class="mono">${esc(m.mission_id)}</dd>
+      <dt>Worktree</dt><dd>${esc(m.worktree || "—")}${m.executed_in ? ` · ran in <span class="mono">${esc(m.executed_in)}</span>` : ""}</dd>
       <dt>Provider</dt><dd>${esc(m.provider || "—")}${m.provider_session_id ? ` · session <span class="mono">${esc(String(m.provider_session_id).slice(0, 12))}…</span>` : ""}</dd>
       <dt>Phase</dt><dd>${esc(m.current_phase || "—")}</dd>
       <dt>Last activity</dt><dd>${m.last_activity_at ? ago(new Date(m.last_activity_at).getTime()) + " ago" : "—"}</dd>
@@ -617,9 +708,9 @@ function tabMission(sp) {
       ${m.pending_question ? `<dt>Needs you</dt><dd class="m-q">${esc(m.pending_question)}</dd>` : ""}
       ${m.error_message ? `<dt>Note</dt><dd class="m-err">${esc(m.error_message)}</dd>` : ""}
     </dl>
-    ${m.status === "waiting_for_acceptance" || gate ? `<div class="m-accept">
+    ${canAccept || gate ? `<div class="m-accept">
       <button class="btn" data-mevaluate="${m.mission_id}">Evaluate Acceptance</button>
-      <button class="btn go" data-maccept="${m.mission_id}">Accept (final QA)</button>
+      <button class="btn go" data-maccept="${m.mission_id}" ${canAccept ? "" : "disabled"} title="${canAccept ? "Operator final QA" : "Mission is not awaiting acceptance"}">Accept (final QA)</button>
       ${gate ? `<div class="m-gate ${gate.gate === "pass" ? "ok" : gate.gate === "fail" ? "err" : "auth"}">Gate: <b>${gate.gate}</b> — ${gate.criteria.map((c) => `${c.criterion_id}:${c.status}`).join(" · ")}</div>` : ""}
     </div>` : ""}
   </div>`;
@@ -641,7 +732,10 @@ function showSteer(id) {
   document.body.appendChild(ov);
   const close = () => { ov.remove(); render(true); };
   ov.querySelector("[data-close]").onclick = close;
-  ov.querySelector("[data-send]").onclick = () => { const v = ov.querySelector("#m-steer").value.trim(); if (!v) { toast("err", "Empty instruction"); return; } ov.remove(); missionAct("steer", id, { instruction: v }, "Steering sent"); };
+  // The composer IS the confirmation for steering: the operator typed the exact
+  // instruction and pressed Send, so we pass confirm through rather than
+  // stacking a second dialog on the same decision.
+  ov.querySelector("[data-send]").onclick = () => { const v = ov.querySelector("#m-steer").value.trim(); if (!v) { toast("err", "Empty instruction"); return; } ov.remove(); missionAct("steer", id, { instruction: v, confirm: true }, "Steering sent"); };
   ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
 }
 async function showMissionOutputs(id) {
@@ -994,6 +1088,7 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-mstart]"))) { missionAct("start", n.dataset.mstart, {}, "Mission starting"); return; }
   if ((n = t("[data-mstop]"))) { missionAct("stop", n.dataset.mstop, {}, "Mission stopped"); return; }
   if ((n = t("[data-msteer]"))) { showSteer(n.dataset.msteer); return; }
+  if ((n = t("[data-mresume]"))) { missionAct("steer", n.dataset.mresume, { instruction: "Resume this mission from where it was interrupted. Re-read the mission package above and continue." }, "Mission resuming"); return; }
   if ((n = t("[data-mout]"))) { showMissionOutputs(n.dataset.mout); return; }
   if ((n = t("[data-mevidence]"))) { showMissionEvidence(n.dataset.mevidence); return; }
   if ((n = t("[data-mreview]"))) { showPackageReview(n.dataset.mreview); return; }

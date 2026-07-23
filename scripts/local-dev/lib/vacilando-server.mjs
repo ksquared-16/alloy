@@ -47,9 +47,10 @@ import { schedule } from "./vacilando/scheduler.mjs";
 import { readReviews } from "./vacilando/commands/review.mjs";
 import { readMissions, getMission, recoverMissions } from "./vacilando/commands/missions.mjs";
 import { getPackage } from "./vacilando/commands/mission-packages.mjs";
-import { readMissionOutputs, readTurnOutput } from "./vacilando/mission-executor.mjs";
+import { readMissionOutputs, readTurnOutput, liveMissionIds } from "./vacilando/mission-executor.mjs";
 import { providerResumable } from "./vacilando/provider-runtime.mjs";
-import { compileMissionForIntent, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, readAcceptance } from "./vacilando/mission-director.mjs";
+import { compileMissionForIntent, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, previewAction, readAcceptance } from "./vacilando/mission-director.mjs";
+import { resolveSlotIdentity, runtimeHost, hostRegistration } from "./vacilando/identity.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const LOOPBACK_HOST = "127.0.0.1";
@@ -134,9 +135,26 @@ function serveStatic(res, urlPath) {
 const CACHE_TTL_MS = 8000;
 const cache = { at: 0, snap: null, inflight: null };
 
-async function getSnapshot({ maxAgeMs = CACHE_TTL_MS } = {}) {
+async function getSnapshot({ maxAgeMs = CACHE_TTL_MS, allowStale = true } = {}) {
   const now = Date.now();
   if (cache.snap && now - cache.at < maxAgeMs) return cache.snap;
+  // STALE-WHILE-REVALIDATE: once we have ANY snapshot, never make the operator
+  // wait on a recompose (measured 12s). Serve the last-good frame instantly and
+  // refresh behind them. Only a cold start blocks.
+  if (cache.snap && allowStale) {
+    if (!cache.inflight) { getSnapshot({ maxAgeMs: 0, allowStale: false }).catch(() => {}); }
+    return cache.snap;
+  }
+  // COLD START: a full compose costs 8–24s on a loaded host. Never hold the
+  // operator for it — start it, wait briefly, then answer a `pending` frame the
+  // UI renders as a loading state. The SSE tick delivers the real snapshot the
+  // moment it lands.
+  if (!cache.snap && allowStale) {
+    if (!cache.inflight) { getSnapshot({ maxAgeMs: 0, allowStale: false }).catch(() => {}); }
+    const raced = await Promise.race([cache.inflight, new Promise((r) => setTimeout(() => r(undefined), COLD_WAIT_MS))]);
+    if (raced) return raced;
+    return { schema_version: "vacilando.snapshot.v1", pending: true, headline: null, sprints: [], workers: [], approvals: { total: 0, counts: {} }, activity: [], gaps: [], project: {}, pending_note: "Composing the runtime projection — this view refreshes automatically." };
+  }
   if (cache.inflight) return cache.inflight;
   cache.inflight = composeSnapshot()
     .then((s) => {
@@ -159,6 +177,63 @@ async function getSnapshot({ maxAgeMs = CACHE_TTL_MS } = {}) {
 const snapshotSafe = () => getSnapshot();
 /** Force a fresh projection (bypass TTL) and update the cache. Used after a command. */
 const forceSnapshot = () => getSnapshot({ maxAgeMs: 0 });
+
+/**
+ * Stale-while-revalidate cache — the fix for head-of-line blocking.
+ *
+ * The audit measured `/api/providers` at 23s standalone (it shells out to
+ * `security`, `claude --version`, `cursor-agent status`) and 40s under load,
+ * `/api/resources` at 6s and `/api/closeout` at 4s. Because the server is
+ * single-threaded, those starved trivial reads: `/api/missions` costs 0.04s
+ * alone but was measured at 11s queued behind a probe.
+ *
+ * Contract: a warm key ALWAYS answers immediately from cache (stale is fine and
+ * is labelled as such) and refreshes in the background. Only a cold key waits,
+ * and even then it is bounded — past the bound we answer `pending` rather than
+ * block the operator. No operator read ever waits on a probe again.
+ */
+const swrStore = new Map(); // key -> { at, value, inflight, error }
+const COLD_WAIT_MS = 1200;
+
+function swrRefresh(key, producer) {
+  const e = swrStore.get(key) || { at: 0, value: null, inflight: null, error: null };
+  if (!e.inflight) {
+    e.inflight = Promise.resolve()
+      .then(producer)
+      .then((v) => { e.value = v; e.at = Date.now(); e.error = null; return v; })
+      .catch((err) => { e.error = String(err?.message || err); return e.value; })
+      .finally(() => { e.inflight = null; });
+    swrStore.set(key, e);
+  }
+  return e;
+}
+
+/**
+ * Serve `key` immediately. Returns { data, fresh, age_ms, stale, pending }.
+ * Never blocks longer than COLD_WAIT_MS.
+ */
+async function swr(key, producer, { ttlMs = 20000 } = {}) {
+  const e = swrStore.get(key) || { at: 0, value: null, inflight: null, error: null };
+  const age = e.at ? Date.now() - e.at : Infinity;
+  const stale = age > ttlMs;
+
+  if (e.value != null) {
+    if (stale) swrRefresh(key, producer); // refresh behind the operator's back
+    return { data: e.value, fresh: !stale, age_ms: e.at ? age : null, stale, pending: false, error: e.error || null };
+  }
+  // Cold: wait briefly, then answer `pending` rather than hold the operator.
+  const started = swrRefresh(key, producer);
+  const raced = await Promise.race([started.inflight, new Promise((r) => setTimeout(() => r(undefined), COLD_WAIT_MS))]);
+  const now = swrStore.get(key);
+  if (raced !== undefined && now?.value != null) return { data: now.value, fresh: true, age_ms: 0, stale: false, pending: false, error: now.error || null };
+  return { data: null, fresh: false, age_ms: null, stale: false, pending: true, error: now?.error || null };
+}
+
+/** Warm the expensive keys in the background so the first operator read is instant. */
+function warmExpensive() {
+  swrRefresh("resources", () => collectResources());
+  swrRefresh("providers", async () => getProviderRuntime(providerRuntimeInputs(await snapshotSafe())));
+}
 
 /**
  * Resolve a slot's worker from the snapshot, falling back to the slot metadata
@@ -352,9 +427,9 @@ export function createVacilandoServer() {
         const slot = v.slot, intent = v.intent;
         if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { ok: false, error: "bad_slot" });
         if (typeof intent !== "string" || !intent.trim()) return sendJson(res, 400, { ok: false, error: "empty_intent" });
-        const sprint = await sprintForSlot(slot);
-        if (!sprint) return sendJson(res, 409, { ok: false, error: "slot_not_occupied" });
-        const out = compileMissionForIntent({ slot, intent, sprint });
+        // Identity is resolved inside the Director (single source of truth) —
+        // no snapshot dependency, so compile never waits on a starved projection.
+        const out = compileMissionForIntent({ slot, intent });
         return sendJson(res, out.ok ? 200 : 422, out);
       }
 
@@ -364,20 +439,28 @@ export function createVacilandoServer() {
       if (!mission) return sendJson(res, 404, { ok: false, error: "unknown_mission" });
       const sprint = await sprintForMission(mission);
 
+      // Preview: pure, never executes — the same first stage every other
+      // consequential action uses.
+      if (path === "/api/missions/preview") {
+        return sendJson(res, 200, previewAction(v.action || "start", mid));
+      }
       if (path === "/api/missions/start") {
-        const out = directorStart({ mission_id: mid, sprint });
-        return sendJson(res, out.ok ? 202 : 409, out);
+        const out = directorStart({ mission_id: mid, confirm: v.confirm === true });
+        return sendJson(res, out.ok ? 202 : (out.error === "confirmation_required" ? 428 : 409), out);
       }
       if (path === "/api/missions/steer") {
         if (typeof v.instruction !== "string" || !v.instruction.trim()) return sendJson(res, 400, { ok: false, error: "empty_instruction" });
-        const out = directorSteer({ mission_id: mid, instruction: v.instruction, sprint });
-        return sendJson(res, out.ok ? 202 : 409, out);
+        const out = directorSteer({ mission_id: mid, instruction: v.instruction, confirm: v.confirm === true });
+        return sendJson(res, out.ok ? 202 : (out.error === "confirmation_required" ? 428 : 409), out);
       }
-      if (path === "/api/missions/stop") return sendJson(res, 200, directorStop({ mission_id: mid }));
+      if (path === "/api/missions/stop") {
+        const out = directorStop({ mission_id: mid, confirm: v.confirm === true });
+        return sendJson(res, out.ok ? 200 : (out.error === "confirmation_required" ? 428 : 409), out);
+      }
       if (path === "/api/missions/evaluate") return sendJson(res, 200, directorEvaluate({ mission_id: mid }));
       if (path === "/api/missions/accept") {
-        const out = directorAccept({ mission_id: mid });
-        return sendJson(res, out.ok ? 200 : 422, out);
+        const out = directorAccept({ mission_id: mid, confirm: v.confirm === true });
+        return sendJson(res, out.ok ? 200 : (out.error === "confirmation_required" ? 428 : 422), out);
       }
       return sendJson(res, 404, { ok: false, error: "unknown_mission_action" });
     }
@@ -397,23 +480,28 @@ export function createVacilandoServer() {
       return sendJson(res, 200, { events: readAuditEvents(50) });
     }
     if (path === "/api/resources") {
-      return sendJson(res, 200, await resourcesCached());
+      const r = await swr("resources", () => collectResources(), { ttlMs: 15000 });
+      return sendJson(res, 200, { ...(r.data || { workers: [], overall: {} }), _cache: { fresh: r.fresh, age_ms: r.age_ms, pending: r.pending } });
     }
     if (path === "/api/usage") {
       return sendJson(res, 200, collectUsage());
     }
     if (path === "/api/providers") {
-      const snap = await snapshotSafe();
-      const rt = await getProviderRuntime(providerRuntimeInputs(snap));
-      return sendJson(res, 200, rt);
+      // Never block an operator read on an auth probe (measured 23s standalone).
+      const r = await swr("providers", async () => getProviderRuntime(providerRuntimeInputs(await snapshotSafe())), { ttlMs: 25000 });
+      if (r.pending) return sendJson(res, 200, { pending: true, providers: [], generated_at: null, _cache: { pending: true }, note: "Provider probe is running — this view refreshes automatically." });
+      return sendJson(res, 200, { ...r.data, _cache: { fresh: r.fresh, age_ms: r.age_ms, stale: r.stale } });
     }
     if (path === "/api/memory") {
       return sendJson(res, 200, await refreshMemory());
     }
     if (path === "/api/dashboard") {
-      const [snap, resrc] = await Promise.all([snapshotSafe(), resourcesCached()]);
+      // Dashboard must never block on the provider probe or the resource scan.
+      const [snap, resrcC] = await Promise.all([snapshotSafe(), swr("resources", () => collectResources(), { ttlMs: 15000 })]);
+      const resrc = resrcC.data || { workers: [], overall: {} };
       const usage = collectUsage();
-      const provider_runtime = await getProviderRuntime(providerRuntimeInputs(snap, usage));
+      const provider_runtime = (await swr("providers", async () => getProviderRuntime(providerRuntimeInputs(await snapshotSafe(), collectUsage())), { ttlMs: 25000 })).data
+        || { providers: [], pending: true };
       const sched = schedule(snap, resrc);
       const audit = readAuditEvents(300);
       const today = new Date().toISOString().slice(0, 10);
@@ -465,6 +553,67 @@ export function createVacilandoServer() {
       if (slot != null && (!Number.isInteger(slot) || slot < 1 || slot > 6)) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, requests: readRequests(slot) });
     }
+    // ---- Single source of truth: who is this slot, and where does this runtime live? ----
+    if (path === "/api/identity") {
+      const slotParam = url.searchParams.get("slot");
+      const host = runtimeHost();
+      const reg = hostRegistration();
+      if (slotParam != null) {
+        const slot = Number(slotParam);
+        if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
+        return sendJson(res, 200, { identity: resolveSlotIdentity(slot), host, host_registered: reg.registered, host_slot: reg.slot });
+      }
+      const slots = [];
+      for (let s = 1; s <= 6; s++) slots.push(resolveSlotIdentity(s));
+      return sendJson(res, 200, { slots, host, host_registered: reg.registered, host_slot: reg.slot });
+    }
+
+    // ---- Trust dashboard: every trust property, measurable ----
+    if (path === "/api/trust") {
+      const t0 = Date.now();
+      const slots = []; let conflicts = 0;
+      for (let s = 1; s <= 6; s++) { const id = resolveSlotIdentity(s); if (id.worktree_name) { slots.push(id); if (!id.ok) conflicts++; } }
+      const reg = hostRegistration();
+      const auditEvents = readAuditEvents(300);
+      const missions = readMissions(null, 200);
+      // Governance: are mission actions audited like everything else?
+      const missionAudited = auditEvents.filter((e) => /^mission\./.test(e.command || "")).length;
+      // Only genuinely consequential commands — the ones the registry gates —
+      // count here. Counting read-only/administrative commands (server.start,
+      // worker.doctor) would make the metric itself untruthful.
+      const CONSEQUENTIAL_RE = /^(mission\.(start|stop|steer|accept)|repository\.push|closeout\.(discard_generated|delete_worktree)|worktree\.delete|sprint\.finish)/;
+      const confirmedShare = (() => {
+        const consequential = auditEvents.filter((e) => CONSEQUENTIAL_RE.test(e.command || ""));
+        if (!consequential.length) return null;
+        return Math.round((consequential.filter((e) => e.confirmed === true || e.outcome === "refused").length / consequential.length) * 100);
+      })();
+      // Truthfulness: missions whose recorded worktree disagrees with where they ran.
+      const misrecorded = missions.filter((m) => m.executed_in && m.worktree && !m.executed_in.endsWith(m.worktree)).length;
+      // Consistency: missions shown "running" with no live child.
+      const liveIds = new Set(liveMissionIds());
+      const phantomRunning = missions.filter((m) => ["running", "starting", "stopping"].includes(m.status) && !liveIds.has(m.mission_id)).length;
+      // Responsiveness: cache posture of the expensive keys.
+      const cacheState = ["resources", "providers"].map((k) => { const e = swrStore.get(k); return { key: k, warm: !!e?.value, age_ms: e?.at ? Date.now() - e.at : null }; });
+
+      const score = (label, ok, detail) => ({ property: label, ok, detail });
+      const checks = [
+        score("Truthfulness — mission records match execution", misrecorded === 0, misrecorded ? `${misrecorded} mission(s) record a worktree they did not run in` : "every mission records the worktree it actually ran in"),
+        score("Truthfulness — no phantom running", phantomRunning === 0, phantomRunning ? `${phantomRunning} mission(s) show running without a live process` : "no mission claims to run without a live process"),
+        score("Single source of truth — slot identity", conflicts === 0, conflicts ? `${conflicts} slot identity conflict(s)` : `${slots.length} slot(s) resolve to exactly one verified worktree`),
+        score("Single source of truth — runtime host disclosed", true, reg.registered ? `runtime host is slot ${reg.slot} (${reg.host.worktree_name})` : `runtime host ${reg.host.worktree_name} is registered to NO slot — disclosed, not hidden`),
+        score("Governance — mission actions audited", missionAudited > 0, missionAudited ? `${missionAudited} mission action(s) in the audit log` : "no mission actions audited yet"),
+        score("Governance — consequential actions confirmed", confirmedShare === null || confirmedShare >= 90, confirmedShare === null ? "no consequential actions yet" : `${confirmedShare}% confirmed or refused`),
+        score("Responsiveness — expensive projections cached", cacheState.every((c) => c.warm), cacheState.map((c) => `${c.key}:${c.warm ? "warm" : "cold"}`).join(" · ")),
+      ];
+      const passed = checks.filter((c) => c.ok).length;
+      return sendJson(res, 200, {
+        generated_at: new Date().toISOString(), computed_in_ms: Date.now() - t0,
+        trust_score: Math.round((passed / checks.length) * 100), passed, total: checks.length,
+        checks, slots, host: reg.host, host_registered: reg.registered, host_slot: reg.slot,
+        cache: cacheState,
+      });
+    }
+
     if (path === "/api/missions") {
       const slot = url.searchParams.get("slot") != null ? Number(url.searchParams.get("slot")) : null;
       if (slot != null && (!Number.isInteger(slot) || slot < 1 || slot > 6)) return sendJson(res, 400, { error: "bad_slot" });
@@ -486,12 +635,28 @@ export function createVacilandoServer() {
     if (path === "/api/closeout") {
       const slot = Number(url.searchParams.get("slot"));
       if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
-      const sprint = sprintFromMetadata(slot) || resolveSprint(await snapshotSafe(), slot);
-      if (!sprint) return sendJson(res, 404, { error: "slot_not_occupied" });
-      // Cheap dev-server check (dev-status, no git/compose).
-      const running = await (async () => { try { return (await runningDevServers()).some((s) => s.slot === slot); } catch { return false; } })();
-      const co = await computeCloseout(sprint, { devServerRunning: running, providerRunning: false, pendingRequests: pendingCount(slot) });
-      return sendJson(res, 200, co);
+      // SINGLE SOURCE OF TRUTH: closeout describes the slot's AUTHORITATIVE
+      // worktree, and says which one — never an inferred or stale name.
+      const identity = resolveSlotIdentity(slot);
+      if (!identity.worktree_name) return sendJson(res, 404, { error: "slot_not_occupied", identity });
+      if (!identity.ok) {
+        // Fail closed: an unverifiable identity can never read "safe to close".
+        return sendJson(res, 200, {
+          ok: false, slot, identity, blocked_by_identity: true,
+          decision: { result: "identity-conflict", label: "Identity conflict — cannot certify closeout", next: "Resolve the slot identity", reasons: [identity.conflict.detail] },
+          can_delete: false,
+        });
+      }
+      const r = await swr(`closeout:${slot}`, async () => {
+        const running = await (async () => { try { return (await runningDevServers()).some((s) => s.slot === slot); } catch { return false; } })();
+        const co = await computeCloseout(
+          { slot, worktree: identity.worktree_name, branch: identity.branch, provider: identity.provider, port: identity.port },
+          { devServerRunning: running, providerRunning: false, pendingRequests: pendingCount(slot) },
+        );
+        return { ...co, identity };
+      }, { ttlMs: 12000 });
+      if (r.pending) return sendJson(res, 200, { pending: true, slot, identity, note: "Computing closeout from the repository — this view refreshes automatically." });
+      return sendJson(res, 200, { ...r.data, _cache: { fresh: r.fresh, age_ms: r.age_ms, stale: r.stale } });
     }
     if (path === "/api/pr") {
       const wt = url.searchParams.get("worktree") || "";
@@ -557,6 +722,11 @@ export function createVacilandoServer() {
   // Warm the cache immediately so the first request isn't a cold ~8s compute.
   getSnapshot().catch(() => {});
   refreshMemory({ act: true }).catch(() => {});
+  // Warm the EXPENSIVE keys too (providers ~23s, resources ~6s) so the operator's
+  // first read of those surfaces is served from cache instead of blocking.
+  warmExpensive();
+  const warmTimer = setInterval(warmExpensive, 30000);
+  warmTimer.unref?.();
 
   return { server, clients, close: () => { clearInterval(timer); clearInterval(memTimer); server.close(); } };
 }

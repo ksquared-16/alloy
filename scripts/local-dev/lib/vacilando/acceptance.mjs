@@ -26,8 +26,6 @@ const LEDGER = join(DIR, "ledger.jsonl");
 const ALLOWED_CHANGE_PREFIX = "docs/platform/planning/vacilando-os/qa/vertical-slice-v1/";
 
 function ensureDir() { if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true }); }
-// V1 executes in the runtime's own worktree (see mission-executor); evaluate there.
-function worktreePath(_worktree) { return REPO_ROOT; }
 function dirtyPaths(cwd) {
   if (!cwd || !existsSync(cwd)) return [];
   try { return execFileSync("git", ["-C", cwd, "status", "--porcelain"], { encoding: "utf8", timeout: 15000, maxBuffer: 4 * 1024 * 1024 }).split("\n").filter(Boolean).map((l) => l.slice(3).trim()).filter(Boolean); }
@@ -81,8 +79,10 @@ function checkEvidence(kind, { pkg, mission, cwd }) {
  * durable ledger entry. Does not mutate the mission — the caller decides the
  * next mission state from the gate.
  */
-export function evaluateMission(mission, pkg, { nowMs } = {}) {
-  const cwd = worktreePath(mission.worktree || pkg.worktree);
+export function evaluateMission(mission, pkg, { nowMs, worktreePath } = {}) {
+  // Evaluate in the SAME authoritative worktree the mission executed in — never
+  // an inferred path. `executed_in` is what the Worker Runtime actually used.
+  const cwd = worktreePath || mission.executed_in || REPO_ROOT;
   const criteria = (pkg.acceptance_criteria || []).map((c) => {
     const kinds = c.evidence_required?.length ? c.evidence_required : ["operator_review"];
     const results = kinds.map((k) => ({ kind: k, ...checkEvidence(k, { pkg, mission, cwd }) }));
