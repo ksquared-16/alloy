@@ -100,6 +100,8 @@ export const FOCUS_PANEL_CARD_KEYS = [
     "household",
     /** @grain case — children roster (read-only; child facts are case-grain display) */
     "children",
+    /** @grain case — per-child scheduling state (room · weekly pattern · dates); Create/Change via configured command */
+    "scheduling",
     /** @grain case — outreach / scheduled sends status (action-only) */
     "communications",
     /** @grain case — uploaded documents */

@@ -23,6 +23,7 @@ import type {
 import type { OperationalCalculationFamily } from "@/lib/operationalCalculations/resultContract";
 import { RESOURCE_AND_CAPACITY_DEFINITIONS } from "@/lib/operationalCalculations/families/resourceRequirementsAndCapacity";
 import { SCHEDULING_DEFINITIONS } from "@/lib/operationalCalculations/families/scheduling";
+import { PLACEMENT_DEFINITIONS } from "@/lib/operationalCalculations/families/placement";
 
 /**
  * The registered families, in registration order. Future families are appended
@@ -31,6 +32,7 @@ import { SCHEDULING_DEFINITIONS } from "@/lib/operationalCalculations/families/s
 const REGISTERED_DEFINITIONS: readonly OperationalCalculationDefinition[] = [
     ...RESOURCE_AND_CAPACITY_DEFINITIONS,
     ...SCHEDULING_DEFINITIONS,
+    ...PLACEMENT_DEFINITIONS,
 ];
 
 function buildRegistry(

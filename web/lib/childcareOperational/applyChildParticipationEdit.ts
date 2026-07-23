@@ -14,6 +14,9 @@ import { getOperationalAgreementForMemberSite } from "@/lib/childcareOperational
 import { getOperationalPlacementForAgreement } from "@/lib/childcareOperational/childPlacementService";
 import { getOperationalScheduleAssignmentForAgreement } from "@/lib/childcareOperational/scheduleAssignmentService";
 
+/** A daily time range persisted with the schedule draft. */
+export type DailyHoursRange = { arrive: string; depart: string };
+
 /** Participation facts an operator can edit inline. `outcome_status_key` (disposition) is NOT here. */
 export type ChildParticipationPatch = {
     program_category_id?: string | null;
@@ -23,6 +26,10 @@ export type ChildParticipationPatch = {
     schedule_type?: string | null;
     start_date?: string | null;
     notes?: string | null;
+    /** Schedule-draft extensions carried on the participation metadata (pre-materialization). */
+    end_date?: string | null;
+    weekdays?: number[] | null;
+    scheduleTimes?: { default: DailyHoursRange | null; perDay: Record<string, DailyHoursRange> } | null;
 };
 
 export type ChildParticipationEditResult = {
@@ -43,10 +50,13 @@ const PARTICIPATION_KEYS: (keyof ChildParticipationPatch)[] = [
     "notes",
 ];
 
+/** Schedule-draft keys carried on participation metadata (pre-materialization only). */
+const DRAFT_META_KEYS: (keyof ChildParticipationPatch)[] = ["end_date", "weekdays", "scheduleTimes"];
+
 function cleanPatch(patch: ChildParticipationPatch): ChildParticipationPatch {
     const out: ChildParticipationPatch = {};
-    for (const k of PARTICIPATION_KEYS) {
-        if (k in patch) out[k] = patch[k] ?? null;
+    for (const k of [...PARTICIPATION_KEYS, ...DRAFT_META_KEYS]) {
+        if (k in patch) (out as Record<string, unknown>)[k] = patch[k] ?? null;
     }
     return out;
 }
@@ -89,10 +99,11 @@ export async function applyChildParticipationEdit(
         : null;
 
     if (!agreement) {
-        // Pre-materialization → merge into process-instance metadata (draft participation facts).
+        // Pre-materialization → merge into process-instance metadata (draft participation facts,
+        // incl. the schedule-draft extensions: end date, weekdays, per-day times).
         const nextMeta: Record<string, unknown> = { ...meta };
         const updated: string[] = [];
-        for (const k of PARTICIPATION_KEYS) {
+        for (const k of [...PARTICIPATION_KEYS, ...DRAFT_META_KEYS]) {
             if (k in patch) {
                 nextMeta[k] = patch[k];
                 updated.push(k);

@@ -27,6 +27,7 @@ export type FocusPanelCardFootprint = "narrow" | "medium" | "wide" | "full";
 export const SYSTEM5_CARD_FOOTPRINT: Partial<Record<FocusPanelCardKey, FocusPanelCardFootprint>> = {
     household: "wide",
     children: "wide",
+    scheduling: "wide",
     current_work: "narrow",
     readiness_kpi: "medium",
     tour_summary: "narrow",
@@ -74,6 +75,7 @@ export const SYSTEM5_CARD_ICON: Partial<Record<FocusPanelCardKey, string>> = {
     tour_summary: "Calendar",
     household: "Home",
     children: "Baby",
+    scheduling: "CalendarDays",
     communications: "MessageSquare",
     documents: "FileText",
     work_launcher: "Rocket",
@@ -109,6 +111,7 @@ export const SYSTEM5_DEFAULT_CARD_ACTIONS: Partial<
     tour_summary: { label: "Schedule tour →", variant: "primary" },
     household: { label: "View household →", variant: "secondary" },
     children: { label: "View children →", variant: "secondary" },
+    scheduling: { label: "Create schedule →", variant: "primary" },
     communications: { label: "View communications →", variant: "secondary" },
     documents: { label: "View documents →", variant: "secondary" },
 };
