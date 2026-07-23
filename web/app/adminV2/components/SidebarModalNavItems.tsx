@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { ClipboardList, Inbox, ListChecks, BarChart3, Layers } from "lucide-react";
+import { ClipboardList, Inbox, ListChecks, BarChart3, Layers, CalendarRange } from "lucide-react";
 
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
@@ -21,6 +21,7 @@ import {
     dispatchAdminV2OpenTasksPanel,
     dispatchAdminV2OpenAnalyticsModal,
     dispatchAdminV2OpenProcessingModal,
+    dispatchAdminV2OpenSchedulingModal,
 } from "@/lib/adminV2/workspaceModalEvents";
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
@@ -285,6 +286,25 @@ export function SidebarFormsNavItem({ collapsed }: { collapsed: boolean }) {
             label="Forms"
             active={active}
             icon={<ClipboardList size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+        />
+    );
+}
+
+/** Scheduling — rooms, ratios, and placements; opens as a workspace modal. */
+export function SidebarSchedulingNavItem({ collapsed }: { collapsed: boolean }) {
+    const activeModal = useActiveAdminV2WorkspaceModal();
+    return (
+        <SidebarModalNavButton
+            collapsed={collapsed}
+            title="Scheduling — rooms, ratios, and placements"
+            label="Scheduling"
+            icon={<CalendarRange size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+            badge={null}
+            active={activeModal === "scheduling"}
+            dataAttr="scheduling"
+            onClick={() => {
+                dispatchAdminV2OpenSchedulingModal();
+            }}
         />
     );
 }

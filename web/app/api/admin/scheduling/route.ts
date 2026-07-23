@@ -18,6 +18,11 @@ import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
 import { validateScheduleCreatePayload } from "@/lib/scheduling/commands/scheduleCreateInputs";
 import { applyChildParticipationEdit } from "@/lib/childcareOperational/applyChildParticipationEdit";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { buildRosterReadModel, type RosterReadModel } from "@/lib/scheduling/roster/buildRosterReadModel";
+import { detectStartsInWindow } from "@/lib/scheduling/problems/detectStartsThisWeek";
+import { computeTodayActivity } from "@/lib/scheduling/activity/todayActivity";
+import { listOperationalCalculationDefinitions } from "@/lib/operationalCalculations";
+import { readLocationSchedulingConfig } from "@/lib/locations/locationSchedulingConfig";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -26,6 +31,96 @@ function addDaysYmd(ymd: string, days: number): string {
     const dt = new Date(Date.UTC(y, m - 1, d));
     dt.setUTCDate(dt.getUTCDate() + days);
     return dt.toISOString().slice(0, 10);
+}
+
+/** Monday (operating week start) of the week containing `ymd`. */
+function mondayYmd(ymd: string): string {
+    const [y, m, d] = ymd.split("-").map(Number);
+    const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun..6=Sat
+    return addDaysYmd(ymd, -((wd + 6) % 7));
+}
+
+const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function fmtMonthDay(ymd: string): string {
+    const [, m, d] = ymd.split("-").map(Number);
+    if (!m || !d) return ymd;
+    return `${MONTH_SHORT[m - 1]} ${d}`;
+}
+
+type RosterTone = "pine" | "gold" | "ember";
+
+/**
+ * Map the raw roster read-model to the surface's presentation shape. Tone / health /
+ * label decisions are presentation-only and live here, never in the read-model.
+ */
+function presentRoster(model: RosterReadModel) {
+    const days = model.days.map((d) => ({
+        key: String(d.weekday),
+        label: DAY_SHORT[d.weekday],
+        isToday: d.date === model.todayYmd,
+    }));
+
+    const rooms = model.rooms.map((room) => {
+        let anyBreach = false;
+        let anyTight = false;
+        let breachDay: number | null = null;
+
+        const cells = room.cells.map((cell) => {
+            const breach = cell.capacityExceeded || cell.ratioBreach;
+            const pct = cell.capacity != null && cell.capacity > 0 ? Math.round((cell.occupancy / cell.capacity) * 100) : 0;
+            const tight = !breach && pct >= 85;
+            if (breach) {
+                anyBreach = true;
+                if (breachDay == null) breachDay = cell.weekday;
+            }
+            if (tight) anyTight = true;
+            const tone: RosterTone = breach ? "ember" : tight ? "gold" : "pine";
+            const ratioLabel =
+                cell.requiredStaff != null
+                    ? `${cell.requiredStaff} staff`
+                    : cell.capacity != null
+                        ? `${cell.occupancy}/${cell.capacity}`
+                        : "—";
+            return {
+                dayKey: String(cell.weekday),
+                dayLabel: DAY_SHORT[cell.weekday],
+                occupancy: cell.occupancy,
+                capacity: cell.capacity,
+                pct,
+                ratioLabel,
+                tone,
+                state: breach ? ("breach" as const) : undefined,
+                isToday: cell.date === model.todayYmd,
+            };
+        });
+
+        const healthTone: RosterTone = anyBreach ? "ember" : anyTight ? "gold" : "pine";
+        const healthLabel = anyBreach
+            ? `Over${breachDay != null ? ` ${DAY_SHORT[breachDay]}` : ""}`
+            : anyTight
+                ? "Tight"
+                : "Healthy";
+
+        const metaParts: string[] = [];
+        const groupHint = room.ageGroupCompat ?? room.ageBandLabel;
+        if (groupHint) metaParts.push(groupHint);
+        if (room.capacity != null) metaParts.push(`holds ${room.capacity}`);
+
+        return {
+            roomId: room.roomId,
+            roomName: room.roomName,
+            meta: metaParts.join(" · "),
+            health: { tone: healthTone, label: healthLabel },
+            cells,
+        };
+    });
+
+    const isCurrentWeek = model.weekStart === mondayYmd(model.todayYmd);
+    const weekLabel = isCurrentWeek ? "This week" : `${fmtMonthDay(model.weekStart)}–${fmtMonthDay(model.weekEnd)}`;
+
+    return { weekStart: model.weekStart, weekEnd: model.weekEnd, weekLabel, days, rooms };
 }
 
 function param(request: NextRequest, key: string): string {
@@ -64,30 +159,6 @@ function normalizeDraftTimes(raw: unknown): { default: { arrive: string; depart:
     return { default: def, perDay };
 }
 
-/**
- * Read a pattern's configured default daily hours from schedule_patterns.metadata
- * (the sanctioned time store). Accepts `default_hours: {arrive,depart}` or flat
- * `defaultArrive/defaultDepart`. Returns null when unconfigured — never synthesized.
- */
-function readPatternDefaultHours(metadata: Record<string, unknown> | null): { arrive: string; depart: string } | null {
-    if (!metadata) return null;
-    const nested = normRange(metadata.default_hours ?? metadata.defaultHours);
-    if (nested) return nested;
-    return normRange({ arrive: metadata.defaultArrive, depart: metadata.defaultDepart });
-}
-
-/**
- * Whether schedules from this pattern default to open-ended. Config-driven from
- * schedule_patterns.metadata (`default_open_ended` / `openEndedDefault`); when
- * unconfigured, open-ended is the default simple case per schedule-lifecycle §3.
- */
-function readPatternDefaultOpenEnded(metadata: Record<string, unknown> | null): boolean {
-    if (!metadata) return true;
-    const raw = metadata.default_open_ended ?? metadata.openEndedDefault;
-    if (typeof raw === "boolean") return raw;
-    if (typeof raw === "string") return raw.trim().toLowerCase() !== "false";
-    return true;
-}
 
 
 /**
@@ -182,33 +253,88 @@ export async function GET(request: NextRequest) {
                 return NextResponse.json({ error: "site_location_id is required", code: "invalid_input" }, { status: 400 });
             }
             const unplaced = await detectUnplacedChildren(supabase, ctx.orgId, siteLocationId);
-            const { data: patternData } = await supabase
-                .from("schedule_patterns")
-                .select("id, label, weekdays, schedule_type_key, metadata")
+            const todayYmd = await resolveOperationalEnrollmentTodayYmd(supabase, ctx.orgId);
+            const startsThisWeek = await detectStartsInWindow(
+                supabase,
+                ctx.orgId,
+                siteLocationId,
+                mondayYmd(todayYmd),
+                addDaysYmd(mondayYmd(todayYmd), 6)
+            );
+            const activity = await computeTodayActivity(supabase, ctx.orgId, siteLocationId, todayYmd);
+            return NextResponse.json({ view, siteLocationId, unplaced, startsThisWeek, activity });
+        }
+
+        if (view === "roster") {
+            const siteLocationId = param(request, "site_location_id");
+            if (!siteLocationId) {
+                return NextResponse.json({ error: "site_location_id is required", code: "invalid_input" }, { status: 400 });
+            }
+            const todayYmd = await resolveOperationalEnrollmentTodayYmd(supabase, ctx.orgId);
+            const weekOf = param(request, "week_of") && ISO_DATE_RE.test(param(request, "week_of"))
+                ? param(request, "week_of")
+                : todayYmd;
+            const model = await buildRosterReadModel(supabase, {
+                orgId: ctx.orgId,
+                siteLocationId,
+                weekOf,
+                todayYmd,
+            });
+            return NextResponse.json({ view, roster: presentRoster(model) });
+        }
+
+        if (view === "studio_config") {
+            // Option data the Studio pattern editor needs: the site's operating days,
+            // schedule (day) types, and programs. Read-only config resolution — the same
+            // config the Locations Schedule tab administers, surfaced for in-place editing.
+            const siteLocationId = param(request, "site_location_id");
+            if (!siteLocationId) {
+                return NextResponse.json({ error: "site_location_id is required", code: "invalid_input" }, { status: 400 });
+            }
+            const { data: siteRow } = await supabase
+                .from("locations")
+                .select("metadata")
                 .eq("org_id", ctx.orgId)
-                .eq("site_location_id", siteLocationId)
-                .eq("is_active", true)
+                .eq("id", siteLocationId)
+                .maybeSingle();
+            const cfg = readLocationSchedulingConfig((siteRow as { metadata?: Record<string, unknown> } | null)?.metadata ?? null);
+            const scheduleTypes = cfg.scheduleTypes
+                .filter((t) => t.isActive)
+                .map((t) => ({ key: t.key, label: t.label, behavior: t.behavior }));
+            const { data: programRows } = await supabase
+                .from("location_program_categories")
+                .select("key, label, is_active, sort_order")
+                .eq("org_id", ctx.orgId)
+                .eq("location_id", siteLocationId)
                 .order("sort_order");
-            const patterns = (
-                (patternData ?? []) as {
-                    id: string;
-                    label: string | null;
-                    weekdays: number[];
-                    schedule_type_key: string | null;
-                    metadata: Record<string, unknown> | null;
-                }[]
-            ).map((p) => ({
-                id: p.id,
-                label: p.label?.trim() || "Schedule",
-                weekdays: p.weekdays ?? [],
-                scheduleTypeKey: p.schedule_type_key ?? "",
-                // Config-driven default daily hours (schedule_patterns.metadata is the
-                // sanctioned time store — no synthesized source). Absent → operator sets them.
-                defaultHours: readPatternDefaultHours(p.metadata),
-                // Config-driven open-ended default (metadata policy, else the simple case).
-                defaultOpenEnded: readPatternDefaultOpenEnded(p.metadata),
+            const programs = ((programRows ?? []) as { key: string; label: string | null; is_active: boolean }[])
+                .filter((p) => p.is_active)
+                .map((p) => ({ key: p.key, label: p.label?.trim() || p.key }));
+            return NextResponse.json({
+                view,
+                config: {
+                    operatingDays: cfg.operatingDays,
+                    scheduleTypes,
+                    programs,
+                },
+            });
+        }
+
+        if (view === "calculations") {
+            // Read-only: the Scheduling Workspace CONSUMES the Operational Calculations
+            // registry — it never owns or mutates it. Studio surfaces this catalogue so
+            // operators can see which governed calculations power the workspace.
+            const calculations = listOperationalCalculationDefinitions().map((d) => ({
+                key: d.key,
+                family: d.family,
+                purpose: d.purpose,
+                resultKind: d.resultKind,
+                status: d.status,
+                logicOwner: d.logicOwner,
+                consumers: d.consumers,
+                expectationBindable: d.expectationBindable,
             }));
-            return NextResponse.json({ view, siteLocationId, unplaced, patterns });
+            return NextResponse.json({ view, calculations });
         }
 
         if (view === "options") {
