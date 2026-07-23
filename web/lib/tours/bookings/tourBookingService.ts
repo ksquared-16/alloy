@@ -144,22 +144,37 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
     if (error) throw new Error(`tour_bookings insert: ${error.message}`);
     const row = toRow(data);
 
-    if (row.status_key === "confirmed") {
-        await applyTourBookingOpportunityIntegration(supabase, {
-            booking: row,
-            kind: "confirmed_mirror",
-            actorUserId: input.requestedByUserId ?? null,
-            correlationId: input.correlationId ?? null,
-        });
+    // ATOMICITY (operator trust): everything below is part of the SAME transaction the operator
+    // initiated. Previously a failure here (e.g. the opportunity mirror) left the tour_bookings row
+    // COMMITTED while the route returned an error — the operator saw a failure next to a booking that
+    // actually existed ("ghost booking"). Any failure now COMPENSATES by removing the booking, so the
+    // transaction is all-or-nothing: it either completed, or nothing changed.
+    const ctx = { correlation_id: input.correlationId ?? null, actor_user_id: input.requestedByUserId ?? null };
+    try {
+        if (row.status_key === "confirmed") {
+            await applyTourBookingOpportunityIntegration(supabase, {
+                booking: row,
+                kind: "confirmed_mirror",
+                actorUserId: input.requestedByUserId ?? null,
+                correlationId: input.correlationId ?? null,
+            });
+        }
+
+        if (status === "requested") {
+            await emitTourBookingLifecycleEvent(supabase, "tour_requested", row, { previous_status_key: null }, ctx);
+        } else if (status === "pending_approval") {
+            await emitTourBookingLifecycleEvent(supabase, "tour_booking_pending", row, { previous_status_key: null }, ctx);
+        } else {
+            await emitTourBookingLifecycleEvent(supabase, "tour_confirmed", row, { previous_status_key: null }, ctx);
+        }
+    } catch (e) {
+        await compensateFailedTourBookingInsert(supabase, orgId, row.id);
+        throw e;
     }
 
-    const ctx = { correlation_id: input.correlationId ?? null, actor_user_id: input.requestedByUserId ?? null };
-    if (status === "requested") {
-        await emitTourBookingLifecycleEvent(supabase, "tour_requested", row, { previous_status_key: null }, ctx);
-    } else if (status === "pending_approval") {
-        await emitTourBookingLifecycleEvent(supabase, "tour_booking_pending", row, { previous_status_key: null }, ctx);
-    } else {
-        await emitTourBookingLifecycleEvent(supabase, "tour_confirmed", row, { previous_status_key: null }, ctx);
+    // Downstream + explicitly best-effort: a comms/notification failure must NEVER roll back a booking
+    // the operator already completed (it is not part of the booking transaction).
+    if (status !== "requested" && status !== "pending_approval") {
         await afterTourBookingComms("create_confirmed", () =>
             orchestrateTourBookingConfirmed(supabase, {
                 orgId,
@@ -170,6 +185,25 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
     }
 
     return row;
+}
+
+/**
+ * Compensating delete for a booking whose in-transaction follow-up failed. Best-effort: if the
+ * compensation itself fails we surface that alongside the original error rather than silently
+ * leaving a ghost booking.
+ */
+async function compensateFailedTourBookingInsert(
+    supabase: SupabaseClient,
+    orgId: string,
+    bookingId: string
+): Promise<void> {
+    const { error } = await supabase.from("tour_bookings").delete().eq("id", bookingId).eq("org_id", orgId);
+    if (error) {
+        // eslint-disable-next-line no-console -- integrity breach must be observable, never silent
+        console.error(
+            `tour_bookings: COMPENSATION FAILED for booking ${bookingId} (org ${orgId}) — a ghost booking may exist: ${error.message}`
+        );
+    }
 }
 
 export async function confirmTourBooking(
