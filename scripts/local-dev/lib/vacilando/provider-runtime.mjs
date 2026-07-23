@@ -232,6 +232,34 @@ export async function sendViaProvider({ provider, message, cwd, resume = null, t
   return r;
 }
 
+/**
+ * Shared auth pre-check for a MISSION turn — the same fail-closed gate
+ * sendViaProvider applies, but WITHOUT dispatching a turn (the executor owns
+ * the streaming child). Returns { ok:true } when it is safe to start a turn, or
+ * a clean auth/unsupported refusal. An inconclusive "unknown" probe proceeds
+ * (the real turn decides), so a starved probe never false-fails a mission.
+ */
+export async function precheckProvider(provider) {
+  const a = ADAPTERS[provider];
+  if (!a) return { ok: false, error: `unknown provider: ${provider}`, unsupported: true };
+  if (a.transport !== "cli" || !TRANSPORT[provider]) {
+    return { ok: false, error: `${a.label} is declared but not wired for mission turns in V1`, unsupported: true };
+  }
+  const pr = await probe(provider);
+  if (pr.state === "needs_auth" || pr.state === "unavailable" || pr.state === "not_configured") {
+    return { ok: false, auth_required: true, auth_state: pr.state, error: `${a.label} needs to reconnect`, detail: pr.detail || null, reconnect_cmd: a.reconnect_cmd };
+  }
+  return { ok: true, provider, auth_state: pr.state };
+}
+
+/** An auth error surfaced by a live turn means the shared credential turned over. */
+export function invalidateProviderProbe(provider) { cache.delete(provider); }
+
+/** Whether the provider adapter DECLARES resume (--resume) support. */
+export function providerResumable(provider) {
+  return Boolean(ADAPTERS[provider]?.capabilities?.resume);
+}
+
 /** Verify: force a fresh probe (the "Verify" button). No round-trip cost. */
 export async function verifyProvider(id) {
   if (!ADAPTERS[id]) return { ok: false, error: `unknown provider: ${id}` };

@@ -15,7 +15,7 @@ const STATUS_ACC = { running: "var(--run)", review: "var(--review)", blocked: "v
 function ago(ms) { if (!ms) return "—"; const s = Math.max(0, (Date.now() - ms) / 1000); if (s < 60) return `${s | 0}s`; if (s < 3600) return `${(s / 60) | 0}m`; if (s < 86400) return `${(s / 3600) | 0}h`; return `${(s / 86400) | 0}d`; }
 const shortBranch = (b, wt) => (b ? b.replace(/^agent\/[^/]+\//, "") : wt || "—");
 
-const state = { snap: null, res: null, sel: null, tab: "overview", outputs: {}, director: {}, drafts: {}, requests: {} };
+const state = { snap: null, res: null, sel: null, tab: "overview", outputs: {}, director: {}, drafts: {}, requests: {}, missions: {}, mission: {}, missionSel: {}, missionIntent: {} };
 
 // -------- Director durable requests (server-owned; the browser is never the source of truth) --------
 const REQ_STATUS = {
@@ -37,6 +37,60 @@ async function sendDirector(slot, request_type, instruction, retry_of = null) {
   render(true);
   fetchRequests(slot);
 }
+
+// -------- Mission pipeline (Capability → Knowledge → Compiler → Worker → Acceptance) --------
+const MISSION_STATUS = {
+  draft: { label: "Draft", k: "muted" }, ready: { label: "Ready", k: "ok" },
+  starting: { label: "Starting", k: "idle" }, running: { label: "Running", k: "run" },
+  waiting_for_operator: { label: "Waiting for operator", k: "auth" },
+  waiting_for_acceptance: { label: "Waiting for acceptance", k: "auth" },
+  blocked: { label: "Blocked", k: "err" }, stopping: { label: "Stopping", k: "idle" },
+  stopped: { label: "Stopped", k: "muted" }, completed: { label: "Completed", k: "ok" },
+  failed: { label: "Failed", k: "err" }, interrupted: { label: "Interrupted", k: "err" },
+};
+const MISSION_LIVE = new Set(["starting", "running", "stopping"]);
+const READY_K = { ready: "ok", draft: "muted", blocked: "err", awaiting_operator: "auth", superseded: "muted" };
+
+async function fetchMissions(slot) { try { const r = await fetch(`/api/missions?slot=${slot}`); state.missions[slot] = (await r.json()).missions || []; render(true); } catch { /* keep last */ } }
+async function fetchMissionDetail(id) { try { const r = await fetch(`/api/mission?id=${encodeURIComponent(id)}`); state.mission[id] = await r.json(); render(true); } catch { /* keep last */ } }
+
+async function compileMission(slot) {
+  const intent = (state.missionIntent[slot] || "").trim();
+  if (!intent) { toast("err", "Enter a mission intent"); return; }
+  toast("idle", "Compiling…", intent);
+  const { status, data } = await api("/api/missions/compile", { slot, intent });
+  if (!data.ok) {
+    if (data.reason === "no_capability") toast("err", "No capability", `Director found no capability for “${intent}”. Known: ${(data.known || []).map((c) => c.name).join(", ") || "none"}. Register it first.`);
+    else toast("err", "Compile failed", data.error || status);
+    return;
+  }
+  state.missionSel[slot] = data.mission.mission_id;
+  state.mission[data.mission.mission_id] = { mission: data.mission, package: data.package, outputs: [], acceptance: [] };
+  state.missionIntent[slot] = "";
+  await fetchMissions(slot);
+  toast("ok", "Package compiled", `${data.package.title} · ${data.package.readiness_status}`);
+}
+
+async function missionAct(action, id, extra = {}, okMsg) {
+  const { data } = await api(`/api/missions/${action}`, { mission_id: id, ...extra });
+  if (!data.ok && data.error) {
+    const blockers = (data.blockers || []).map((b) => b.message).join("; ");
+    toast("err", `Cannot ${action}`, blockers || data.detail || data.error);
+  } else if (okMsg) toast("ok", okMsg, "");
+  fetchMissionDetail(id);
+  if (state.sel) fetchMissions(state.sel);
+  return data;
+}
+
+// Poll a non-terminal selected mission while the Mission tab is open.
+setInterval(() => {
+  if (state.tab !== "mission" || !state.sel) return;
+  const id = state.missionSel[state.sel];
+  if (!id) return;
+  const d = state.mission[id];
+  const st = d?.mission?.status;
+  if (!st || !["completed", "failed", "stopped"].includes(st)) fetchMissionDetail(id);
+}, 3000);
 
 // -------- Director draft state (per worker slot) --------
 // The draft is owned by application state (state.drafts[slot]), NOT the DOM, so
@@ -78,6 +132,9 @@ document.addEventListener("input", (e) => {
     if (state.sel != null && slot !== state.sel) return;
     setDraft(slot, t.value);
     updateDraftCount(slot);
+  }
+  if (t && t.id === "m-intent" && t.dataset.slot != null) {
+    state.missionIntent[Number(t.dataset.slot)] = t.value; // persist so a poll re-render never wipes typing
   }
 });
 
@@ -267,8 +324,9 @@ function operatingSurface() {
   if (!sp) return `<div class="empty">Select a worker.</div>`;
   const w = state.snap.workers.find((x) => x.slot === sp.slot);
   const r = resFor(sp.slot);
-  const tabs = ["work", "director", "closeout", "outputs", "resources", "repository", "history"];
-  const tabContent = state.tab === "director" ? tabDirector(sp)
+  const tabs = ["work", "mission", "director", "closeout", "outputs", "resources", "repository", "history"];
+  const tabContent = state.tab === "mission" ? tabMission(sp)
+    : state.tab === "director" ? tabDirector(sp)
     : state.tab === "closeout" ? tabCloseout(sp)
     : state.tab === "outputs" ? tabOutputs(sp)
     : state.tab === "resources" ? tabResources(sp, w, r)
@@ -495,6 +553,116 @@ function reqCard(r) {
     <div class="dc-msg">${esc(r.instruction)}</div>${body}
     <div class="dc-meta muted">${meta}</div></div>`;
 }
+function tabMission(sp) {
+  const slot = sp.slot;
+  if (state.missions[slot] === undefined) fetchMissions(slot);
+  const missions = state.missions[slot] || [];
+  const selId = state.missionSel[slot] || missions[0]?.mission_id || null;
+  if (selId && state.mission[selId] === undefined) fetchMissionDetail(selId);
+  const d = selId ? state.mission[selId] : null;
+  const m = d?.mission, pkg = d?.package;
+  const intent = state.missionIntent[slot] || "";
+
+  const compileBox = `<div class="sec">
+    <h5>Mission intent</h5>
+    <div class="muted note">Kelly enters one line. Director retrieves the capability, retrieves scoped knowledge, and the Mission Compiler assembles a Mission Package — no manual authoring.</div>
+    <input id="m-intent" data-slot="${slot}" class="m-intent" placeholder="e.g. Build Access & Roles V2" value="${esc(intent)}" />
+    <div class="dbtns"><button class="btn go" data-compile="${slot}">Compile Mission</button></div>
+    ${missions.length ? `<div class="m-list">${missions.slice(0, 8).map((x) => `<button class="chip ${x.mission_id === selId ? "on" : ""}" data-msel="${x.mission_id}">${esc(x.title)} · ${(MISSION_STATUS[x.status] || {}).label || x.status}</button>`).join("")}</div>` : ""}
+  </div>`;
+
+  if (!m || !pkg) return `<div class="mission">${compileBox}<div class="empty">No compiled mission yet — enter an intent and Compile.</div></div>`;
+
+  const rk = READY_K[pkg.readiness_status] || "muted";
+  const findings = (pkg.readiness_findings || []).filter((f) => f.severity === "block");
+  const st = MISSION_STATUS[m.status] || { label: m.status, k: "muted" };
+  const ready = pkg.readiness_status === "ready";
+  const live = MISSION_LIVE.has(m.status);
+  const elapsed = m.started_at && live ? ` · ${Math.round((Date.now() - new Date(m.started_at)) / 1000)}s` : "";
+
+  const pkgPanel = `<div class="sec">
+    <div class="m-head"><h5>Mission Package</h5><span class="mbadge ${rk}">${pkg.readiness_status}</span></div>
+    ${findings.length ? `<div class="m-blockers">${findings.map((f) => "⛔ " + esc(f.message)).join("<br>")}</div>` : ""}
+    <dl class="kv">
+      <dt>Objective</dt><dd>${esc(pkg.objective)}</dd>
+      <dt>In scope</dt><dd>${(pkg.scope_included || []).map(esc).join("<br>") || "—"}</dd>
+      <dt>Excluded</dt><dd>${(pkg.scope_excluded || []).map(esc).join("<br>") || "—"}</dd>
+      <dt>Criteria</dt><dd>${(pkg.acceptance_criteria || []).length}</dd>
+      <dt>Unresolved Qs</dt><dd>${(pkg.unresolved_questions || []).length}</dd>
+      <dt>Operator gates</dt><dd>${(pkg.operator_decision_gates || []).length}</dd>
+      <dt>QA plan</dt><dd>${(pkg.QA_plan || []).length} steps</dd>
+      <dt>Expected outputs</dt><dd>${(pkg.expected_deliverables || []).map((x) => esc(x.description)).join("<br>") || "—"}</dd>
+      <dt>Capability</dt><dd>${esc(pkg.capability_id || "—")} · knowledge <span class="mono">${esc(pkg.knowledge_snapshot?.snapshot_id || "—")}</span></dd>
+    </dl>
+    <div class="dbtns">
+      <button class="btn" data-mreview="${m.mission_id}">Review Package</button>
+      <button class="btn go" data-mstart="${m.mission_id}" ${ready && !live ? "" : "disabled"} title="${ready ? "Start execution" : "Package is not ready"}">Start Mission</button>
+      <button class="btn warn" data-mstop="${m.mission_id}" ${live ? "" : "disabled"}>Stop Mission</button>
+      <button class="btn" data-msteer="${m.mission_id}">Send Steering Instruction</button>
+      <button class="btn" data-mout="${m.mission_id}">View Outputs</button>
+      <button class="btn" data-mevidence="${m.mission_id}">View Evidence</button>
+    </div>
+  </div>`;
+
+  const gate = d.acceptance && d.acceptance[0];
+  const statusPanel = `<div class="sec">
+    <div class="m-head"><h5>Execution</h5><span class="dc-badge ${st.k}${live ? " live" : ""}">${st.label}${elapsed}</span></div>
+    <dl class="kv">
+      <dt>Mission ID</dt><dd class="mono">${esc(m.mission_id)}</dd>
+      <dt>Provider</dt><dd>${esc(m.provider || "—")}${m.provider_session_id ? ` · session <span class="mono">${esc(String(m.provider_session_id).slice(0, 12))}…</span>` : ""}</dd>
+      <dt>Phase</dt><dd>${esc(m.current_phase || "—")}</dd>
+      <dt>Last activity</dt><dd>${m.last_activity_at ? ago(new Date(m.last_activity_at).getTime()) + " ago" : "—"}</dd>
+      <dt>Turns</dt><dd>${m.turn_count || 0}</dd>
+      ${m.latest_summary ? `<dt>Latest</dt><dd>${esc(m.latest_summary)}</dd>` : ""}
+      ${m.pending_question ? `<dt>Needs you</dt><dd class="m-q">${esc(m.pending_question)}</dd>` : ""}
+      ${m.error_message ? `<dt>Note</dt><dd class="m-err">${esc(m.error_message)}</dd>` : ""}
+    </dl>
+    ${m.status === "waiting_for_acceptance" || gate ? `<div class="m-accept">
+      <button class="btn" data-mevaluate="${m.mission_id}">Evaluate Acceptance</button>
+      <button class="btn go" data-maccept="${m.mission_id}">Accept (final QA)</button>
+      ${gate ? `<div class="m-gate ${gate.gate === "pass" ? "ok" : gate.gate === "fail" ? "err" : "auth"}">Gate: <b>${gate.gate}</b> — ${gate.criteria.map((c) => `${c.criterion_id}:${c.status}`).join(" · ")}</div>` : ""}
+    </div>` : ""}
+  </div>`;
+
+  return `<div class="mission">${compileBox}${pkgPanel}${statusPanel}</div>`;
+}
+
+// Read-only mission overlay (package review / outputs / evidence).
+function showMissionDoc(title, text) {
+  const ov = document.createElement("div"); ov.className = "ov";
+  ov.innerHTML = `<div class="dlg wide"><h3>${esc(title)}</h3><pre class="m-doc">${esc(text || "(empty)")}</pre><div class="dbtns"><button class="btn" data-close>Close</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector("[data-close]").onclick = () => { ov.remove(); render(true); };
+  ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
+}
+function showSteer(id) {
+  const ov = document.createElement("div"); ov.className = "ov";
+  ov.innerHTML = `<div class="dlg"><h3>Steering instruction</h3><div class="muted">Resumes the same provider session as a continuation turn.</div><textarea id="m-steer" placeholder="e.g. Also cover the audit-trail roadmap item in the proposal."></textarea><div class="dbtns"><button class="btn" data-close>Cancel</button><button class="btn go" data-send>Send</button></div></div>`;
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); render(true); };
+  ov.querySelector("[data-close]").onclick = close;
+  ov.querySelector("[data-send]").onclick = () => { const v = ov.querySelector("#m-steer").value.trim(); if (!v) { toast("err", "Empty instruction"); return; } ov.remove(); missionAct("steer", id, { instruction: v }, "Steering sent"); };
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+}
+async function showMissionOutputs(id) {
+  const d = state.mission[id] || (await fetch(`/api/mission?id=${encodeURIComponent(id)}`).then((r) => r.json()));
+  const outs = d.outputs || [];
+  if (!outs.length) { toast("idle", "No outputs yet", ""); return; }
+  const last = outs[outs.length - 1];
+  const t = await fetch(`/api/mission/output?id=${encodeURIComponent(id)}&turn=${last.turn}`).then((r) => r.json());
+  showMissionDoc(`Mission output — turn ${last.turn}`, t.text);
+}
+function showMissionEvidence(id) {
+  const d = state.mission[id]; const a = d?.acceptance?.[0];
+  if (!a) { toast("idle", "No acceptance evaluation yet", "Run Evaluate Acceptance first."); return; }
+  const lines = a.criteria.map((c) => `${c.criterion_id} [${c.status}] ${c.statement}\n` + c.evidence.map((e) => `    · ${e.kind}: ${e.status} — ${e.detail}`).join("\n")).join("\n\n");
+  showMissionDoc(`Acceptance evidence — gate: ${a.gate}`, lines);
+}
+function showPackageReview(id) {
+  const pkg = state.mission[id]?.package; if (!pkg) return;
+  showMissionDoc(`Mission Package — ${pkg.title}`, JSON.stringify(pkg, null, 2));
+}
+
 function tabDirector(sp) {
   if (state.requests[sp.slot] === undefined) fetchRequests(sp.slot);
   const log = state.director[sp.slot];
@@ -821,6 +989,16 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-director]"))) { const msg = document.getElementById("d-msg")?.value?.trim(); if (!msg) { toast("err", "Empty instruction"); return; } startCommand("director.route", { slot: Number(n.dataset.director), message: msg }); return; }
   if ((n = t("[data-send-worker]"))) { showSendConfirm(Number(n.dataset.sendWorker), "worker-instruction"); return; }
   if ((n = t("[data-quick-ask]"))) { showSendConfirm(Number(n.dataset.quickAsk), "quick-ask"); return; }
+  if ((n = t("[data-compile]"))) { compileMission(Number(n.dataset.compile)); return; }
+  if ((n = t("[data-msel]"))) { if (state.sel) state.missionSel[state.sel] = n.dataset.msel; fetchMissionDetail(n.dataset.msel); render(true); return; }
+  if ((n = t("[data-mstart]"))) { missionAct("start", n.dataset.mstart, {}, "Mission starting"); return; }
+  if ((n = t("[data-mstop]"))) { missionAct("stop", n.dataset.mstop, {}, "Mission stopped"); return; }
+  if ((n = t("[data-msteer]"))) { showSteer(n.dataset.msteer); return; }
+  if ((n = t("[data-mout]"))) { showMissionOutputs(n.dataset.mout); return; }
+  if ((n = t("[data-mevidence]"))) { showMissionEvidence(n.dataset.mevidence); return; }
+  if ((n = t("[data-mreview]"))) { showPackageReview(n.dataset.mreview); return; }
+  if ((n = t("[data-mevaluate]"))) { missionAct("evaluate", n.dataset.mevaluate, {}, "Acceptance evaluated"); return; }
+  if ((n = t("[data-maccept]"))) { missionAct("accept", n.dataset.maccept, {}, "Mission accepted"); return; }
   if ((n = t("[data-retry]"))) { const rid = n.dataset.retry; const slot = state.sel; const orig = (state.requests[slot] || []).find((r) => r.request_id === rid); if (orig) sendDirector(slot, orig.request_type || "worker-instruction", orig.instruction, rid); return; }
   if ((n = t("[data-discardcmd]"))) { showDiscard(Number(n.dataset.discardcmd)); return; }
   if ((n = t("[data-nav-tab]"))) { state.tab = n.dataset.navTab; render(true); return; }

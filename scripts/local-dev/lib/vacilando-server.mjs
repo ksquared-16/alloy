@@ -45,6 +45,11 @@ import { getProviderRuntime } from "./vacilando/provider-runtime.mjs";
 import { computeReclaim, memoryPressure, runningDevServers } from "./vacilando/memory-manager.mjs";
 import { schedule } from "./vacilando/scheduler.mjs";
 import { readReviews } from "./vacilando/commands/review.mjs";
+import { readMissions, getMission, recoverMissions } from "./vacilando/commands/missions.mjs";
+import { getPackage } from "./vacilando/commands/mission-packages.mjs";
+import { readMissionOutputs, readTurnOutput } from "./vacilando/mission-executor.mjs";
+import { providerResumable } from "./vacilando/provider-runtime.mjs";
+import { compileMissionForIntent, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, readAcceptance } from "./vacilando/mission-director.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const LOOPBACK_HOST = "127.0.0.1";
@@ -334,6 +339,49 @@ export function createVacilandoServer() {
       return sendJson(res, 202, { ok: true, request_id: rec.request_id, status: "queued", created_at: rec.created_at, request_type: rec.request_type });
     }
 
+    // ---- Mission pipeline (Director orchestration over the runtimes) ----
+    if (req.method === "POST" && path.startsWith("/api/missions")) {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      const v = body.value || {};
+      const sprintForSlot = async (slot) => sprintFromMetadata(slot) || resolveSprint(await snapshotSafe(), slot);
+      const sprintForMission = async (m) => (m ? await sprintForSlot(m.worker_slot) : null);
+
+      // Compile: intent → capability → knowledge → package (Director stages 1–4).
+      if (path === "/api/missions/compile") {
+        const slot = v.slot, intent = v.intent;
+        if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { ok: false, error: "bad_slot" });
+        if (typeof intent !== "string" || !intent.trim()) return sendJson(res, 400, { ok: false, error: "empty_intent" });
+        const sprint = await sprintForSlot(slot);
+        if (!sprint) return sendJson(res, 409, { ok: false, error: "slot_not_occupied" });
+        const out = compileMissionForIntent({ slot, intent, sprint });
+        return sendJson(res, out.ok ? 200 : 422, out);
+      }
+
+      // The remaining actions target a mission_id.
+      const mid = v.mission_id;
+      const mission = mid ? getMission(mid) : null;
+      if (!mission) return sendJson(res, 404, { ok: false, error: "unknown_mission" });
+      const sprint = await sprintForMission(mission);
+
+      if (path === "/api/missions/start") {
+        const out = directorStart({ mission_id: mid, sprint });
+        return sendJson(res, out.ok ? 202 : 409, out);
+      }
+      if (path === "/api/missions/steer") {
+        if (typeof v.instruction !== "string" || !v.instruction.trim()) return sendJson(res, 400, { ok: false, error: "empty_instruction" });
+        const out = directorSteer({ mission_id: mid, instruction: v.instruction, sprint });
+        return sendJson(res, out.ok ? 202 : 409, out);
+      }
+      if (path === "/api/missions/stop") return sendJson(res, 200, directorStop({ mission_id: mid }));
+      if (path === "/api/missions/evaluate") return sendJson(res, 200, directorEvaluate({ mission_id: mid }));
+      if (path === "/api/missions/accept") {
+        const out = directorAccept({ mission_id: mid });
+        return sendJson(res, out.ok ? 200 : 422, out);
+      }
+      return sendJson(res, 404, { ok: false, error: "unknown_mission_action" });
+    }
+
     if (req.method !== "GET") return sendJson(res, 405, { error: "method_not_allowed" });
 
     if (path === "/api/health") {
@@ -417,6 +465,24 @@ export function createVacilandoServer() {
       if (slot != null && (!Number.isInteger(slot) || slot < 1 || slot > 6)) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, requests: readRequests(slot) });
     }
+    if (path === "/api/missions") {
+      const slot = url.searchParams.get("slot") != null ? Number(url.searchParams.get("slot")) : null;
+      if (slot != null && (!Number.isInteger(slot) || slot < 1 || slot > 6)) return sendJson(res, 400, { error: "bad_slot" });
+      return sendJson(res, 200, { slot, missions: readMissions(slot) });
+    }
+    if (path === "/api/mission") {
+      const id = url.searchParams.get("id") || "";
+      const mission = getMission(id);
+      if (!mission) return sendJson(res, 404, { error: "unknown_mission" });
+      const pkg = mission.package_id ? getPackage(mission.package_id) : null;
+      return sendJson(res, 200, { mission, package: pkg, outputs: readMissionOutputs(id), acceptance: readAcceptance(id) });
+    }
+    if (path === "/api/mission/output") {
+      const id = url.searchParams.get("id") || "";
+      const turn = Number(url.searchParams.get("turn") || 0);
+      if (!getMission(id)) return sendJson(res, 404, { error: "unknown_mission" });
+      return sendJson(res, 200, { id, turn, text: readTurnOutput(id, turn) });
+    }
     if (path === "/api/closeout") {
       const slot = Number(url.searchParams.get("slot"));
       if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
@@ -479,6 +545,14 @@ export function createVacilandoServer() {
   // Any Director request left non-terminal died with a previous process — mark it
   // interrupted honestly rather than showing a fake "running".
   try { const n = recoverInterrupted(); if (n) console.log(`[director] recovered ${n} interrupted request(s)`); } catch { /* best-effort */ }
+
+  // Any mission left in a LIVE state (starting/running/stopping) lost its owning
+  // child with the previous process — project an honest interrupted/resumable
+  // state. Never show "running" without a live tracked child.
+  try {
+    const rec = recoverMissions({ providerResumable });
+    if (rec.length) console.log(`[missions] recovered ${rec.length} interrupted mission(s) (${rec.filter((r) => r.resumable).length} resumable)`);
+  } catch { /* best-effort */ }
 
   // Warm the cache immediately so the first request isn't a cold ~8s compute.
   getSnapshot().catch(() => {});
