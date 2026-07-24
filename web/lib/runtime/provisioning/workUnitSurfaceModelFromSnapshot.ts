@@ -30,9 +30,13 @@ import type {
     WorkViewLinkModel,
 } from "@/lib/presentation/runtime/types";
 import { queueRowModelFromQueueItem } from "@/lib/presentation/runtime/types";
-import { resolveQueueRowVariant } from "@/lib/presentation/runtime/resolveQueueRowVariant";
 import { mapQueueRowSurfaceToCompactConfig, type CompactRowSlots } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
+import {
+    queueRowVariantMatchInputFromContext,
+} from "@/lib/presentation/runtime/queueRowVariantResolve";
+import { resolveQueueRowVariant } from "@/lib/presentation/runtime/resolveQueueRowVariant";
 import type { QueueRowVariant, QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutV3";
+import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { WorkspaceHeaderKpiVm, WorkspaceHeaderPresentationModel } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import type { ProcessCardIcon, ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import type { ProvisioningAnswer } from "./workUnitProvisioningAnswer";
@@ -42,6 +46,10 @@ import type { OperationalPresentation } from "./operationalPresentation";
  * P2-B — resolve the applicable published row variant for one row's context. Returns the variant's
  * compact slots when a variant matches (Work View / stage / status / grain / process / row type), or
  * undefined so the caller keeps the queue-level default. Pure; never throws.
+ *
+ * Match input MUST come from {@link queueRowVariantMatchInputFromContext} (nested QueueRowContext
+ * paths) — flat keys like `stage_key` / `grain` are not present on frozen row context.
+ * Empty variant columns inherit Default (return undefined → queue-level `rowConfig`).
  */
 function resolveRowVariantSlots(
     context: unknown,
@@ -51,18 +59,18 @@ function resolveRowVariantSlots(
     processKey: string | null,
 ): CompactRowSlots | undefined {
     if (variants.length === 0 || !fixedControls) return undefined;
-    const ctx = (context ?? {}) as Record<string, unknown>;
-    const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
-    const matched = resolveQueueRowVariant(variants, {
-        stageKey: str("stage_key") ?? str("row_stage"),
-        statusKey: str("status_key") ?? str("status"),
-        grain: str("grain") ?? str("row_grain"),
+    const rowContext = (context ?? {}) as QueueRowContext;
+    const input = queueRowVariantMatchInputFromContext(rowContext, {
         workViewId,
-        workViewKey: str("work_view_key"),
-        processKey: str("process_key") ?? processKey,
-        rowType: str("row_type"),
+        workViewKey: null,
     });
+    if (!input.processKey && processKey) {
+        input.processKey = processKey;
+    }
+    const matched = resolveQueueRowVariant(variants, input);
     if (!matched) return undefined;
+    // Starter / incomplete variants ship empty columns — inherit Default rather than blanking the row.
+    if (!matched.columns.length) return undefined;
     return mapQueueRowSurfaceToCompactConfig({
         variant: "operational-row",
         version: 3,
@@ -202,6 +210,7 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
                 surfaceId: p.provenance.queueRowSurfaceId,
                 resolvedSource: p.provenance.queueRowResolvedSource,
                 variant: p.provenance.queueRowVariant,
+                ineffectiveFieldKeys: p.provenance.queueRowIneffectiveFieldKeys,
             },
         },
         activeWorkViewId: snapshot.activeWorkView.id,

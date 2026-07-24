@@ -37,7 +37,7 @@ export function queueRowVariantMatchInputFromContext(
 /**
  * Resolve the compact slots for a single row. Picks the matching variant (else the top-level
  * Default columns) and maps to the fixed compact anatomy. Null config → generic-context slots.
- * Pure; never throws.
+ * Empty matched variant columns inherit Default (never blank the row). Pure; never throws.
  */
 export function resolveQueueRowCompactSlots(
     config: QueueRecordLayoutConfigV3 | null,
@@ -45,7 +45,8 @@ export function resolveQueueRowCompactSlots(
 ): CompactRowSlots {
     if (!config) return mapQueueRowSurfaceToCompactConfig(null).slots;
     const variant = resolveQueueRowVariant(config.variants, input);
-    const effective = variant ? { ...config, columns: variant.columns } : config;
+    const effective =
+        variant && variant.columns.length > 0 ? { ...config, columns: variant.columns } : config;
     return mapQueueRowSurfaceToCompactConfig(effective).slots;
 }
 
@@ -53,7 +54,7 @@ export function resolveQueueRowCompactSlots(
  * Resolve the full per-row presentation in ONE variant pass: the compact slots (columns) AND the
  * Subject Focus. Focus applies ONLY when the matched variant explicitly declares subjectFocus —
  * otherwise `focus` is null and the row keeps its frozen-context rendering (graceful fallback).
- * Pure; never throws.
+ * Empty matched variant columns inherit Default columns. Pure; never throws.
  */
 export function resolveQueueRowPresentation(
     config: QueueRecordLayoutConfigV3 | null,
@@ -64,7 +65,8 @@ export function resolveQueueRowPresentation(
         return { rowConfig: mapQueueRowSurfaceToCompactConfig(null).slots, focus: null };
     }
     const variant = resolveQueueRowVariant(config.variants, input);
-    const effective = variant ? { ...config, columns: variant.columns } : config;
+    const effective =
+        variant && variant.columns.length > 0 ? { ...config, columns: variant.columns } : config;
     const rowConfig = mapQueueRowSurfaceToCompactConfig(effective).slots;
     const focus =
         variant?.subjectFocus != null ? resolveQueueRowSubjectFocus(context, variant.subjectFocus) : null;

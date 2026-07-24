@@ -76,4 +76,21 @@ describe("resolveQueueRowCompactSlots", () => {
         expect(slots.status.label).toBeNull();
         expect(slots.status.visible).toBe(true);
     });
+
+    it("empty matched variant columns inherit Default (do not blank the row)", () => {
+        const withEmptyVariant: QueueRecordLayoutConfigV3 = {
+            ...CONFIG,
+            variants: [
+                {
+                    id: "v-empty",
+                    label: "Tour",
+                    priority: 10,
+                    appliesWhen: { stage_key: ["tour_scheduled"] },
+                    columns: [],
+                },
+            ],
+        };
+        const slots = resolveQueueRowCompactSlots(withEmptyVariant, { stageKey: "tour_scheduled" });
+        expect(slots.status.label).toBe("Default Status");
+    });
 });

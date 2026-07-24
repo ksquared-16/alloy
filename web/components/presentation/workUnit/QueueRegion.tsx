@@ -219,6 +219,11 @@ export function QueueRegion({
             data-queue-surface-id={queue.provenance?.surfaceId ?? undefined}
             data-queue-row-resolved-source={queue.provenance?.resolvedSource ?? undefined}
             data-queue-row-variant={queue.provenance?.variant ?? undefined}
+            data-queue-row-ineffective-fields={
+                queue.provenance?.ineffectiveFieldKeys?.length
+                    ? queue.provenance.ineffectiveFieldKeys.join(",")
+                    : undefined
+            }
         >
             {showFilterControls ? (
                 <div

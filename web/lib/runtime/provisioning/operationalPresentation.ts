@@ -177,6 +177,11 @@ export type OperationalPresentationProvenance = {
     queueRowResolvedSource: string | null;
     /** The compact row anatomy variant the queue renders in (mirrors queue.rowVariant). */
     queueRowVariant: string;
+    /**
+     * Published field keys that CondensedQueueRow cannot render — explicit diagnostic for older
+     * invalid saved configurations (never silently omit without a signal).
+     */
+    queueRowIneffectiveFieldKeys: readonly string[];
 };
 
 export type OperationalPresentation = {
@@ -297,6 +302,7 @@ export async function resolveOperationalPresentation(args: {
             queueRowSurfaceId: args.queueRowSurfaceId ?? null,
             queueRowResolvedSource: args.queueRowResolvedSource ?? null,
             queueRowVariant: queue.rowVariant,
+            queueRowIneffectiveFieldKeys: compact.ineffectiveFieldKeys,
         },
     };
 }

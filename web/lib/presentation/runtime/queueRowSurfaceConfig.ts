@@ -89,6 +89,11 @@ export type CompactRowConfig = {
     slots: CompactRowSlots;
     /** Slots with NO published field mapped (fell back to generic-context behavior). */
     fallbackSlots: (keyof CompactRowSlots)[];
+    /**
+     * Published field keys that are NOT compact-row effective — older invalid saved configs.
+     * Runtime surfaces these as an explicit diagnostic rather than silently omitting content.
+     */
+    ineffectiveFieldKeys: string[];
 };
 
 /** Person contact refKeys — render on the compact row contact line (line 2). */
@@ -368,6 +373,7 @@ export function mapQueueRowSurfaceToCompactConfig(
                 groupCount: genericSlot(),
             },
             fallbackSlots: [...SLOT_KEYS],
+            ineffectiveFieldKeys: [],
         };
     }
 
@@ -375,6 +381,14 @@ export function mapQueueRowSurfaceToCompactConfig(
     const operatorAssigned = slotsFromBuilderAssignment(config);
     const slots = {} as CompactRowSlots;
     const fallbackSlots: (keyof CompactRowSlots)[] = [];
+    const ineffectiveFieldKeys: string[] = [];
+
+    for (const [, field] of byKey) {
+        const key = field.fieldKey.trim();
+        if (key && !COMPACT_ROW_EFFECTIVE_FIELD_KEYS.has(key) && !ineffectiveFieldKeys.includes(key)) {
+            ineffectiveFieldKeys.push(key);
+        }
+    }
 
     for (const slot of SLOT_KEYS) {
         const operatorSlot = operatorAssigned[slot];
@@ -391,8 +405,13 @@ export function mapQueueRowSurfaceToCompactConfig(
             fallbackSlots.push(slot);
             continue;
         }
-        slots[slot] = slotConfigFromPublishedFields(slot, mappedFields);
+        // SLOT_FIELD_KEYS order is authoritative — first present mapped key wins (label + fieldKeys).
+        slots[slot] = slotConfigFromPublishedFields(slot, [mappedFields[0]]);
     }
 
-    return { slots: routePersonContactFieldsToContactSlot(slots), fallbackSlots };
+    return {
+        slots: routePersonContactFieldsToContactSlot(slots),
+        fallbackSlots,
+        ineffectiveFieldKeys: ineffectiveFieldKeys.sort(),
+    };
 }

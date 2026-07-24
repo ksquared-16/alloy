@@ -53,6 +53,10 @@ import {
     QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE,
     type QueueRowSurfaceEnvelope,
 } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
+import {
+    diagnoseIneffectiveQueueRowFieldKeys,
+    QUEUE_ROW_PUBLISH_INEFFECTIVE_FIELD_MESSAGE,
+} from "@/lib/layout/runtime/validateQueueRecordLayoutConfig";
 
 
 
@@ -158,6 +162,23 @@ export async function POST(
 
     if (!queueRowSurfaceHasConfiguredColumns(envelope.layout)) {
         return NextResponse.json({ error: QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE }, { status: 400 });
+    }
+
+    // Compact CondensedQueueRow contract — reject fields the Work View row cannot render.
+    // Full allow-list validation stays on the visual editor path; Surfaces publish must not
+    // silently accept non-compact keys (e.g. child.date_of_birth) that omit at runtime.
+    const ineffective = diagnoseIneffectiveQueueRowFieldKeys(envelope.layout);
+    if (ineffective.length > 0) {
+        return NextResponse.json(
+            {
+                error: `${QUEUE_ROW_PUBLISH_INEFFECTIVE_FIELD_MESSAGE} (field: ${ineffective[0]})`,
+                details: ineffective.map((fieldKey) => ({
+                    path: `fieldKey:${fieldKey}`,
+                    message: `${QUEUE_ROW_PUBLISH_INEFFECTIVE_FIELD_MESSAGE} (field: ${fieldKey})`,
+                })),
+            },
+            { status: 400 },
+        );
     }
 
     const placementOverrideEnabled = body.placementOverrideEnabled === true;
