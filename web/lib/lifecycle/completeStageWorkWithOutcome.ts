@@ -270,7 +270,7 @@ export async function completeStageWorkWithOutcome(
                 steps.push({
                     name: "contact_outcome_trace",
                     stage: "activity",
-                    run: async () => {
+                    run: async (ctx) => {
                         const traced = await recordStageWorkContactOutcomeTrace({
                             supabase: input.supabase,
                             orgId: input.orgId,
@@ -284,6 +284,8 @@ export async function completeStageWorkWithOutcome(
                             plan,
                             departmentMetadata,
                             declaration: input.declaration,
+                            // One id across click → transaction → database → activity.
+                            correlationId: ctx.correlationId,
                         });
                         // Previously the return was discarded, so an outcome could be recorded
                         // with no activity trace and the operator would never know.

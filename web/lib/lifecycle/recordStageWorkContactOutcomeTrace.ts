@@ -47,6 +47,12 @@ export async function recordStageWorkContactOutcomeTrace(input: {
     plan: StageOperatingPlanV1;
     departmentMetadata?: Record<string, unknown> | null;
     declaration?: { provenance: "integrated" | "external_manual"; channel?: string | null } | null;
+    /**
+     * The transaction's correlation id, stamped onto the activity row so the click, the writes
+     * and the activity record are tied together by ONE id. Without it an activity row cannot be
+     * traced back to the transaction that produced it.
+     */
+    correlationId?: string | null;
 }): Promise<{ logged: boolean; event_id?: string; error?: string }> {
     if (
         !workOutcomeRequiresCommunicationTrace({
@@ -81,6 +87,7 @@ export async function recordStageWorkContactOutcomeTrace(input: {
                 actor_user_id: input.userId,
                 contact_provenance: input.declaration?.provenance ?? null,
                 contact_channel: input.declaration?.channel ?? null,
+                correlation_id: input.correlationId ?? null,
             },
         });
 

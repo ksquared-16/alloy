@@ -60,11 +60,18 @@ export async function POST(request: NextRequest) {
 
     const headers = { [CORRELATION_ID_HEADER]: result.correlation_id ?? correlationId };
 
+    // The rollback plan is internal machinery, not part of the operator-facing result. Its
+    // closures serialize to hollow objects and only bloat the response.
+    const outcomeExecution =
+        result.outcome_execution ?
+            (({ undo: _undo, ...rest }) => rest)(result.outcome_execution)
+        :   undefined;
+
     if (!result.ok) {
         return NextResponse.json(
             {
                 error: result.error ?? "Failed",
-                outcome_execution: result.outcome_execution,
+                outcome_execution: outcomeExecution,
                 // The operator's question is "did anything change?" — answer it explicitly.
                 changed: result.changed ?? false,
                 integrity_breach: result.integrity_breach,
@@ -80,7 +87,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
         {
             ok: true,
-            outcome_execution: result.outcome_execution,
+            outcome_execution: outcomeExecution,
             queue_refresh_opportunity_id: result.outcome_execution?.queue_refresh_opportunity_id,
             transaction: result.transaction,
             correlation_id: result.correlation_id ?? correlationId,
