@@ -19,10 +19,24 @@ import {
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 export type ApplyConfiguredStageAutomationRulesResult = {
+    /** Rules whose targets ALL succeeded. A rule that errored is never reported as applied. */
     applied_rule_keys: string[];
+    /** Rules that were matched and attempted but did not fully apply. */
+    failed_rule_keys: string[];
     errors: string[];
+    /** Declared out-of-boundary effects that did not run. */
+    degraded: string[];
     needs_attention_set: boolean;
     status_updated: boolean;
+};
+
+const EMPTY_RESULT: ApplyConfiguredStageAutomationRulesResult = {
+    applied_rule_keys: [],
+    failed_rule_keys: [],
+    errors: [],
+    degraded: [],
+    needs_attention_set: false,
+    status_updated: false,
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -51,11 +65,14 @@ async function applyMatchedRules(
         opportunity_id: params.opportunityId,
     };
     const applied_rule_keys: string[] = [];
+    const failed_rule_keys: string[] = [];
     const errors: string[] = [];
+    const degraded: string[] = [];
     let needs_attention_set = false;
     let status_updated = false;
 
     for (const { stageKey, plan, rule } of params.matched) {
+        let ruleFailed = false;
         for (const target of rule.targets) {
             const result = await applyStageOutcomeRuleTarget(supabase, {
                 orgId: params.orgId,
@@ -66,14 +83,20 @@ async function applyMatchedRules(
                 subject,
                 target,
             });
-            applied_rule_keys.push(rule.rule_key);
-            if (result.error) errors.push(result.error);
+            if (result.error) {
+                errors.push(result.error);
+                ruleFailed = true;
+            }
+            if (result.degraded) degraded.push(result.degraded);
             if (result.needs_attention) needs_attention_set = true;
             if (result.status_updated) status_updated = true;
         }
+        // Report the rule with the status it earned — a matched rule is not an applied rule.
+        if (ruleFailed) failed_rule_keys.push(rule.rule_key);
+        else applied_rule_keys.push(rule.rule_key);
     }
 
-    return { applied_rule_keys, errors, needs_attention_set, status_updated };
+    return { applied_rule_keys, failed_rule_keys, errors, degraded, needs_attention_set, status_updated };
 }
 
 async function loadDepartmentMetadata(
@@ -104,7 +127,7 @@ export async function applyConfiguredStageRulesForStatusEntry(input: {
     const opportunityId = input.opportunityId.trim();
     const nextStatusKey = trimOrNull(input.nextStatusKey);
     if (!orgId || !opportunityId || !nextStatusKey) {
-        return { applied_rule_keys: [], errors: [], needs_attention_set: false, status_updated: false };
+        return EMPTY_RESULT;
     }
 
     const departmentId = await resolveEnrollmentDepartmentForOpportunity({
@@ -113,12 +136,12 @@ export async function applyConfiguredStageRulesForStatusEntry(input: {
         opportunityId,
     });
     if (!departmentId) {
-        return { applied_rule_keys: [], errors: [], needs_attention_set: false, status_updated: false };
+        return EMPTY_RESULT;
     }
 
     const departmentMetadata = await loadDepartmentMetadata(input.supabase, orgId, departmentId);
     if (!departmentMetadata) {
-        return { applied_rule_keys: [], errors: [], needs_attention_set: false, status_updated: false };
+        return EMPTY_RESULT;
     }
 
     const matched: Array<{ stageKey: string; plan: StageOperatingPlanV1; rule: StageOutcomeRuleV1 }> = [];
@@ -129,7 +152,7 @@ export async function applyConfiguredStageRulesForStatusEntry(input: {
     }
 
     if (!matched.length) {
-        return { applied_rule_keys: [], errors: [], needs_attention_set: false, status_updated: false };
+        return EMPTY_RESULT;
     }
 
     return applyMatchedRules(input.supabase, {
@@ -155,7 +178,7 @@ export async function applyConfiguredStageRulesForDomainSignal(input: {
     const domain = trimOrNull(input.domain);
     const signal = trimOrNull(input.signal);
     if (!orgId || !opportunityId || !domain || !signal) {
-        return { applied_rule_keys: [], errors: [], needs_attention_set: false, status_updated: false };
+        return EMPTY_RESULT;
     }
 
     const departmentId = await resolveEnrollmentDepartmentForOpportunity({
@@ -164,12 +187,12 @@ export async function applyConfiguredStageRulesForDomainSignal(input: {
         opportunityId,
     });
     if (!departmentId) {
-        return { applied_rule_keys: [], errors: [], needs_attention_set: false, status_updated: false };
+        return EMPTY_RESULT;
     }
 
     const departmentMetadata = await loadDepartmentMetadata(input.supabase, orgId, departmentId);
     if (!departmentMetadata) {
-        return { applied_rule_keys: [], errors: [], needs_attention_set: false, status_updated: false };
+        return EMPTY_RESULT;
     }
 
     const matched: Array<{ stageKey: string; plan: StageOperatingPlanV1; rule: StageOutcomeRuleV1 }> = [];
@@ -180,7 +203,7 @@ export async function applyConfiguredStageRulesForDomainSignal(input: {
     }
 
     if (!matched.length) {
-        return { applied_rule_keys: [], errors: [], needs_attention_set: false, status_updated: false };
+        return EMPTY_RESULT;
     }
 
     return applyMatchedRules(input.supabase, {

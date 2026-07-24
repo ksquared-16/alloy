@@ -308,10 +308,10 @@ export default function IdentityReviewPanel({
     const eligibilityByRef = new Map((state.subjectEligibility ?? []).map((e) => [e.subjectRef, e]));
 
     return (
-        <section className="mb-5 rounded-lg border border-emerald-200 bg-white p-3.5 shadow-sm">
+        <section className="mb-5 rounded-lg border border-alloy-bend-pine/25 bg-white p-3.5 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">Identity review</span>
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-alloy-bend-pine">Identity review</span>
+                <span className="rounded-full bg-alloy-bend-pine/[0.08] px-2 py-0.5 text-[11px] font-medium text-alloy-bend-pine">
                     {READINESS_LABEL[readiness]}
                 </span>
             </div>
@@ -363,9 +363,9 @@ export default function IdentityReviewPanel({
                                     <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10.5px] text-stone-600">{r.subject_role}</span>
                                     <span className="min-w-0 flex-1 truncate text-[12.5px] text-stone-800">{r.subject_ref}</span>
                                     {el?.state ? (
-                                        <span className={`text-[10.5px] ${blocking ? "text-amber-800" : "text-emerald-700"}`}>{el.state}</span>
+                                        <span className={`text-[10.5px] ${blocking ? "text-amber-800" : "text-alloy-bend-pine"}`}>{el.state}</span>
                                     ) : r.decision_action ? (
-                                        <span className="text-[10.5px] text-emerald-700">{r.decision_action}</span>
+                                        <span className="text-[10.5px] text-alloy-bend-pine">{r.decision_action}</span>
                                     ) : (
                                         <span className="text-[10.5px] text-amber-700">undecided</span>
                                     )}
@@ -390,7 +390,7 @@ export default function IdentityReviewPanel({
                                             <button
                                                 type="button"
                                                 disabled={busy !== null}
-                                                className="mt-1 text-[10.5px] font-medium text-emerald-700 hover:underline disabled:opacity-50"
+                                                className="mt-1 text-[10.5px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
                                                 onClick={() => decideWithPrompt(r, "link_existing", c.recordId ?? null)}
                                             >
                                                 Choose this record
@@ -418,7 +418,7 @@ export default function IdentityReviewPanel({
                                             }
                                             className={`rounded-md border px-2 py-0.5 text-[11px] font-medium disabled:opacity-50 ${
                                                 r.decision_action === opt.value
-                                                    ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+                                                    ? "border-alloy-bend-pine/50 bg-alloy-bend-pine/[0.08] text-alloy-bend-pine"
                                                     : "border-stone-300 text-stone-600 hover:bg-stone-50"
                                             }`}
                                         >
@@ -467,7 +467,7 @@ export default function IdentityReviewPanel({
                                         <span className="text-stone-800">{op.label}</span>
                                         {op.reason ? <span className="text-stone-400"> · {op.reason}</span> : null}
                                     </span>
-                                    {op.atomicGroup ? <span className="text-[9.5px] text-emerald-700">{op.atomicGroup}</span> : null}
+                                    {op.atomicGroup ? <span className="text-[9.5px] text-alloy-bend-pine">{op.atomicGroup}</span> : null}
                                     <span className="text-[9.5px] text-stone-400">{op.risk}</span>
                                 </li>
                             ))}
@@ -491,7 +491,7 @@ export default function IdentityReviewPanel({
                         <span
                             className={
                                 latestAttempt.outcome === "committed"
-                                    ? "text-emerald-700"
+                                    ? "text-alloy-bend-pine"
                                     : latestAttempt.outcome === "partially_committed"
                                       ? "text-amber-700"
                                       : "text-red-700"
@@ -507,7 +507,7 @@ export default function IdentityReviewPanel({
                         {latestAttempt.operations.map((o) => (
                             <li key={o.opId} className="flex items-center gap-2 text-[11px] text-stone-600">
                                 <span className="min-w-0 flex-1 truncate">{o.opId}</span>
-                                <span className={o.status === "committed" ? "text-emerald-700" : "text-amber-700"}>{o.status}</span>
+                                <span className={o.status === "committed" ? "text-alloy-bend-pine" : "text-amber-700"}>{o.status}</span>
                                 {o.error ? <span className="text-red-700">{o.error}</span> : null}
                             </li>
                         ))}
@@ -521,7 +521,7 @@ export default function IdentityReviewPanel({
                     type="button"
                     disabled={!plan || !canApprove || busy !== null}
                     onClick={() => plan && void approve(plan.planId, blockingConflictIds)}
-                    className="rounded-md border border-emerald-300 px-3 py-1.5 text-[12.5px] font-medium text-emerald-800 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-md border border-alloy-bend-pine/40 px-3 py-1.5 text-[12.5px] font-medium text-alloy-bend-pine hover:bg-alloy-bend-pine/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
                     title={canApprove ? "Approve this exact plan version" : "Plan is not ready for approval"}
                 >
                     {busy === "approve" ? "Approving…" : "Approve plan"}
@@ -571,7 +571,7 @@ function FactItem({
                                 onCorrect(fact.id, value);
                                 setEditing(false);
                             }}
-                            className="text-emerald-700 hover:underline disabled:opacity-50"
+                            className="text-alloy-bend-pine hover:underline disabled:opacity-50"
                         >
                             Save
                         </button>
@@ -584,7 +584,7 @@ function FactItem({
                         <span className="min-w-0 flex-1 truncate font-medium text-stone-800">
                             {fact.normalized_value ?? fact.raw_value ?? "—"}
                         </span>
-                        {fact.corrected_from ? <span className="text-[9.5px] text-emerald-700">corrected</span> : null}
+                        {fact.corrected_from ? <span className="text-[9.5px] text-alloy-bend-pine">corrected</span> : null}
                         <button
                             type="button"
                             disabled={disabled}

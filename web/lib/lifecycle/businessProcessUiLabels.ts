@@ -15,16 +15,24 @@ export const BUSINESS_PROCESS_CATALOG_CREATE = "Create Process";
 export const BUSINESS_PROCESS_CATALOG_SELECT_ARIA = "Select business process";
 export const BUSINESS_PROCESS_CATALOG_BACK = "All processes";
 
-/** Process-level workspace navigation sections. */
+/**
+ * Process-level workspace navigation sections.
+ * "overview" and "history" are Selected-Process header tabs only — they are deliberately
+ * excluded from `CONFIGURATION_PROCESS_QUEUE_SECTIONS` (the frozen 5-item internal Configure/
+ * Process/Health nav) so existing doctrine tests for that nav stay unchanged.
+ */
 export type BusinessProcessWorkspaceSection =
+    | "overview"
     | "stages"
     | "participation"
     | "work-views"
     | "presentation"
     | "actions"
     | "automation"
-    | "health";
+    | "health"
+    | "history";
 
+export const BUSINESS_PROCESS_NAV_OVERVIEW = "Overview";
 export const BUSINESS_PROCESS_NAV_PARTICIPATION = "Participation";
 export const BUSINESS_PROCESS_NAV_STAGES = "Stages";
 export const BUSINESS_PROCESS_NAV_WORK_VIEWS = "Work Views";
@@ -32,8 +40,87 @@ export const BUSINESS_PROCESS_NAV_PRESENTATION = "Presentation";
 export const BUSINESS_PROCESS_NAV_ACTIONS = "Actions";
 export const BUSINESS_PROCESS_NAV_AUTOMATION = "Automation";
 export const BUSINESS_PROCESS_NAV_HEALTH = "Configuration Health";
+export const BUSINESS_PROCESS_NAV_HISTORY = "History";
 export const BUSINESS_PROCESS_CONFIGURATION_HEALTH_SUMMARY =
     "Checks whether this process is ready for operators.";
+
+/** Selected-Process header tab order (product IA) — overview and history bracket the existing five. */
+export const BUSINESS_PROCESS_HEADER_TABS: readonly {
+    key: BusinessProcessWorkspaceSection;
+    label: string;
+}[] = [
+    { key: "overview", label: BUSINESS_PROCESS_NAV_OVERVIEW },
+    { key: "stages", label: BUSINESS_PROCESS_NAV_STAGES },
+    { key: "work-views", label: BUSINESS_PROCESS_NAV_WORK_VIEWS },
+    { key: "actions", label: BUSINESS_PROCESS_NAV_ACTIONS },
+    { key: "automation", label: BUSINESS_PROCESS_NAV_AUTOMATION },
+    { key: "health", label: "Health" },
+    { key: "history", label: BUSINESS_PROCESS_NAV_HISTORY },
+];
+
+/** Deep-link section values `/settings/processes?section=` accepts — prior names included. */
+const BUSINESS_PROCESS_DEEP_LINK_SECTIONS: readonly BusinessProcessWorkspaceSection[] = [
+    "overview",
+    "stages",
+    "work-views",
+    "actions",
+    "automation",
+    "health",
+    "history",
+];
+
+/**
+ * Normalizes a raw `?section=` query value into a valid Selected-Process header tab.
+ * Unknown or absent values default to "overview" (the collection-first entry point).
+ */
+export function normalizeBusinessProcessSection(raw: string | null | undefined): BusinessProcessWorkspaceSection {
+    const value = (raw ?? "").trim().toLowerCase();
+    const match = BUSINESS_PROCESS_DEEP_LINK_SECTIONS.find((section) => section === value);
+    return match ?? "overview";
+}
+
+/** Business Processes collection rail (left of Selected Process workspace). */
+export const BUSINESS_PROCESS_COLLECTION_TITLE = "Business Processes";
+export const BUSINESS_PROCESS_COLLECTION_SUBTITLE = "Manage how operational work moves through Alloy.";
+export const BUSINESS_PROCESS_COLLECTION_NEW = "New Business Process";
+export const BUSINESS_PROCESS_COLLECTION_SEARCH_PLACEHOLDER = "Search processes\u2026";
+export const BUSINESS_PROCESS_COLLECTION_EMPTY_SEARCH = "No processes match this search.";
+
+export const BUSINESS_PROCESS_NO_SELECTION_TITLE = "Choose a Business Process";
+export const BUSINESS_PROCESS_NO_SELECTION_DESCRIPTION =
+    "Select a Process to configure its stages, work views, actions, automation, and health.";
+
+export const BUSINESS_PROCESS_EDIT_ACTION = "Edit Process";
+export const BUSINESS_PROCESS_MORE_ACTION = "More";
+
+/** Honest health hint for the collection rail — derived from catalog workspace runtime truth. */
+export const BUSINESS_PROCESS_HEALTH_HINT_HEALTHY = "Healthy";
+export const BUSINESS_PROCESS_HEALTH_HINT_ATTENTION = "Needs attention";
+export const BUSINESS_PROCESS_HEALTH_HINT_NOT_VISIBLE = "Not visible";
+
+/** Overview tab (presentation only — no fabricated history or invented data). */
+export const BUSINESS_PROCESS_OVERVIEW_SNAPSHOT_TITLE = "Process Snapshot";
+export const BUSINESS_PROCESS_OVERVIEW_JOURNEY_TITLE = "Journey";
+export const BUSINESS_PROCESS_OVERVIEW_JOURNEY_EMPTY = "Add a stage to begin the journey for this process.";
+export const BUSINESS_PROCESS_OVERVIEW_OPERATOR_EXPERIENCE_TITLE = "Operator Experience";
+export const BUSINESS_PROCESS_OVERVIEW_READINESS_TITLE = "Configuration Readiness";
+export const BUSINESS_PROCESS_OVERVIEW_READINESS_REVIEW = "Review Health";
+export const BUSINESS_PROCESS_OVERVIEW_AVAILABILITY_LABEL = "Availability";
+export const BUSINESS_PROCESS_OVERVIEW_AVAILABILITY_VALUE = "Organization definition";
+export const BUSINESS_PROCESS_OVERVIEW_AVAILABILITY_NOTE =
+    "This process is defined once for the organization. Location-level availability overrides are Planned — none are invented here.";
+export const BUSINESS_PROCESS_OVERVIEW_OPEN_STAGES = "Open Stages";
+export const BUSINESS_PROCESS_OVERVIEW_OPEN_WORK_VIEWS = "Open Work Views";
+export const BUSINESS_PROCESS_OVERVIEW_OPEN_ACTIONS = "Open Actions";
+
+/** History tab — Planned, no fabricated events. */
+export const BUSINESS_PROCESS_HISTORY_TITLE = "History";
+export const BUSINESS_PROCESS_HISTORY_PLANNED =
+    "Process configuration history will appear here when available. No events are fabricated.";
+
+/** Automation tab — calm Planned placeholder copy (existing BusinessProcessAutomationShell). */
+export const BUSINESS_PROCESS_AUTOMATION_PLANNED_BODY =
+    "Automation is Planned for this process. When available, you'll configure workflow triggers and platform-driven actions here.";
 
 export const BUSINESS_PROCESS_WORK_VIEWS_INTRO =
     "Work Views define how operators focus on work in this process.";

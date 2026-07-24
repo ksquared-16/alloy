@@ -228,7 +228,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
 
     return (
         <div
-            className="rounded-xl bg-gradient-to-br from-alloy-stone/[0.08] via-white to-alloy-blue/[0.04] px-4 py-3.5 ring-1 ring-alloy-midnight/[0.08]"
+            className="rounded-xl bg-gradient-to-br from-alloy-stone/[0.08] via-white to-alloy-bend-pine/[0.04] px-4 py-3.5 ring-1 ring-alloy-midnight/[0.08]"
             data-testid="form-intake-runtime-orchestration"
             id="lifecycle-orchestration"
         >
@@ -258,13 +258,13 @@ export function FormIntakeRuntimeOrchestrationPanel({
 
             {shareCreationBlocked && vm.recordCreatingShareBlockMessage ?
                 <p
-                    className="mt-2 rounded-lg border border-amber-100 bg-amber-50/80 px-3 py-2 text-sm text-amber-900"
+                    className="mt-2 rounded-lg border border-alloy-ember/25 bg-alloy-ember/[0.06] px-3 py-2 text-sm text-alloy-ember"
                     data-testid="lifecycle-record-share-block-banner"
                 >
                     {vm.recordCreatingShareBlockMessage}
                 </p>
             : recordCreationGate?.readiness === "ready_with_recommended_gaps" ?
-                <p className="mt-2 rounded-lg border border-alloy-blue/10 bg-alloy-blue/[0.04] px-3 py-2 text-sm text-alloy-midnight" data-testid="lifecycle-record-share-recommended-banner">
+                <p className="mt-2 rounded-lg border border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.06] px-3 py-2 text-sm text-alloy-midnight" data-testid="lifecycle-record-share-recommended-banner">
                     {recordCreationGate.setupHeadline}
                 </p>
             : recordCreationGate?.readiness === "not_configured" && recordCreationGate.applies ?
@@ -274,7 +274,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
             :   null}
 
             {vm.linkSetupIncompleteMessage ?
-                <p className="mt-2 rounded-lg border border-amber-100 bg-amber-50/80 px-3 py-2 text-sm text-amber-900" data-testid="link-setup-incomplete-banner">
+                <p className="mt-2 rounded-lg border border-alloy-ember/25 bg-alloy-ember/[0.06] px-3 py-2 text-sm text-alloy-ember" data-testid="link-setup-incomplete-banner">
                     {vm.linkSetupIncompleteMessage}
                 </p>
             :   null}
@@ -410,12 +410,12 @@ export function FormIntakeRuntimeOrchestrationPanel({
                             :   null}
                             {vm.runtimeMismatch ?
                                 <div className="mt-2" data-testid="runtime-mismatch-warning">
-                                    <p className="text-xs font-semibold text-amber-900">{vm.runtimeMismatch.title}</p>
+                                    <p className="text-xs font-semibold text-alloy-ember">{vm.runtimeMismatch.title}</p>
                                     <p className={clsx("mt-0.5 text-xs leading-snug", opMetadata)}>{vm.runtimeMismatch.body}</p>
                                     {vm.runtimeMismatch.lastSubmissionLinkId ?
                                         <button
                                             type="button"
-                                            className="mt-1.5 text-xs font-semibold text-alloy-blue hover:underline"
+                                            className="mt-1.5 text-xs font-semibold text-alloy-bend-pine hover:underline"
                                             data-testid="runtime-switch-to-last-submission-link"
                                             onClick={() => handleLinkChange(vm.runtimeMismatch!.lastSubmissionLinkId!)}
                                         >
@@ -472,7 +472,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
                                 </code>
                                 <button
                                     type="button"
-                                    className="mt-2 text-xs font-semibold text-alloy-blue hover:underline"
+                                    className="mt-2 text-xs font-semibold text-alloy-bend-pine hover:underline"
                                     data-testid="orchestration-copy-embed-code"
                                     onClick={() => onCopy("orchestration-embed-code", embedSnippet)}
                                 >
@@ -526,8 +526,8 @@ export function FormIntakeRuntimeOrchestrationPanel({
                                 <p
                                     className={clsx(
                                         "mt-1 text-sm font-semibold",
-                                        vm.lastTestConfirmation.tone === "success" ? "text-emerald-800"
-                                        : vm.lastTestConfirmation.tone === "warning" ? "text-amber-900"
+                                        vm.lastTestConfirmation.tone === "success" ? "text-alloy-bend-pine"
+                                        : vm.lastTestConfirmation.tone === "warning" ? "text-alloy-ember"
                                         : "text-alloy-midnight"
                                     )}
                                 >

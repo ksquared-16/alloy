@@ -5,8 +5,6 @@ import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operat
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import { usePathname } from "next/navigation";
 import {
-    ADMIN_FORMS_HREF,
-    isCanonicalFormsPath,
     isCanonicalWorkspacePath,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
@@ -28,6 +26,7 @@ import {
     ADMINV2_OPEN_QUICK_MESSAGE_EVENT,
     type QuickMessageLaunchSeed,
 } from "@/lib/adminV2/quickMessageLaunch";
+import type { OpenProcessingModalDetail, ProcessingModalIntent } from "@/lib/adminV2/workspaceModalEvents";
 import {
     closeWorkspaceModal,
     openWorkspaceModal,
@@ -44,7 +43,7 @@ function normalizeAdminPath(pathname: string): string {
 }
 
 function isWorkspaceOperatorPath(normalizedPath: string): boolean {
-  return isCanonicalWorkspacePath(normalizedPath) || isCanonicalFormsPath(normalizedPath);
+  return isCanonicalWorkspacePath(normalizedPath);
 }
 
 /** Fixed-width reserve so location chrome does not jump when bootstrap revalidates. */
@@ -127,6 +126,7 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
 export default function TopNavBar() {
   const pathname = usePathname();
   const [quickMessageSeed, setQuickMessageSeed] = useState<QuickMessageModalSeed | null>(null);
+  const [processingIntent, setProcessingIntent] = useState<ProcessingModalIntent | null>(null);
   const activeWorkspaceModal = useSyncExternalStore(
     subscribeAdminV2WorkspaceModal,
     () => getAdminV2WorkspaceModalSnapshot().active,
@@ -176,7 +176,9 @@ export default function TopNavBar() {
     const onOpenAnalytics = () => {
       openWorkspaceModal("analytics");
     };
-    const onOpenProcessing = () => {
+    const onOpenProcessing = (ev: Event) => {
+      const detail = (ev as CustomEvent<OpenProcessingModalDetail>).detail;
+      setProcessingIntent(detail?.intent ?? null);
       void warmProcessingQueueCache();
       openWorkspaceModal("processing");
     };
@@ -245,7 +247,14 @@ export default function TopNavBar() {
       <MyTasksModal open={tasksModalOpen} onClose={() => closeWorkspaceModal("tasks")} />
       <InboxModal open={inboxModalOpen} onClose={() => closeWorkspaceModal("inbox")} />
       <AnalyticsModal open={analyticsModalOpen} onClose={() => closeWorkspaceModal("analytics")} />
-      <ProcessingModal open={processingModalOpen} onClose={() => closeWorkspaceModal("processing")} />
+      <ProcessingModal
+        open={processingModalOpen}
+        intent={processingIntent}
+        onClose={() => {
+          closeWorkspaceModal("processing");
+          setProcessingIntent(null);
+        }}
+      />
       <SchedulingModal open={schedulingModalOpen} onClose={() => closeWorkspaceModal("scheduling")} />
     </header>
   );

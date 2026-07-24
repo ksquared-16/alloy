@@ -20,11 +20,17 @@ import {
     listPersonIdsByEmail,
     listPersonIdsByPhone,
 } from "@/lib/forms/intake/intakeIdentityLookups";
+import { readStoredOperationalIntent, type OperationalIntentKey } from "@/lib/forms/operationalIntentTemplates";
+import { enrichCandidateDetail, type CandidateDetail } from "./candidateDetail";
 
 export type FormSubmissionRecommendation =
     | {
           supported: true;
           recommendation: IntakeRecommendation;
+          /** Configured operational intent of the source form — drives operator-facing decision language. */
+          intent: OperationalIntentKey | null;
+          /** Identifying detail for each existing-match candidate (§3), keyed by candidate id. */
+          candidateDetails: CandidateDetail[];
           source: { kind: "form_submission"; hasEmailBinding: boolean; mappedPersonValues: number };
       }
     | { supported: false; reason: string };
@@ -32,7 +38,9 @@ export type FormSubmissionRecommendation =
 export async function recommendationFromFormSubmission(
     supabase: SupabaseClient,
     orgId: string,
-    submissionId: string
+    submissionId: string,
+    /** Enrich candidates with identifying detail (§3) — only for the per-case view, not the queue. */
+    options?: { enrichCandidates?: boolean }
 ): Promise<FormSubmissionRecommendation> {
     const { data: sub, error: subErr } = await supabase
         .from("form_submissions")
@@ -51,15 +59,31 @@ export async function recommendationFromFormSubmission(
             : {};
 
     let schemaJson: unknown = null;
+    let formDefinitionId: string | null = null;
     if (subRow.form_definition_version_id) {
         const { data: ver, error: verErr } = await supabase
             .from("form_definition_versions")
-            .select("schema_json")
+            .select("schema_json, form_definition_id")
             .eq("org_id", orgId)
             .eq("id", subRow.form_definition_version_id)
             .maybeSingle();
         if (verErr) throw new Error(verErr.message);
-        schemaJson = (ver as { schema_json?: unknown } | null)?.schema_json ?? null;
+        const verRow = ver as { schema_json?: unknown; form_definition_id?: string | null } | null;
+        schemaJson = verRow?.schema_json ?? null;
+        formDefinitionId = verRow?.form_definition_id ?? null;
+    }
+
+    // The form's configured operational intent (Purpose / Business Process) — decides the business
+    // noun + action the operator sees ("enrollment lead" vs "waitlist opportunity" …).
+    let intent: OperationalIntentKey | null = null;
+    if (formDefinitionId) {
+        const { data: form } = await supabase
+            .from("form_definitions")
+            .select("metadata")
+            .eq("org_id", orgId)
+            .eq("id", formDefinitionId)
+            .maybeSingle();
+        intent = readStoredOperationalIntent((form as { metadata?: Record<string, unknown> } | null)?.metadata);
     }
 
     const bound = extractBoundPerson(schemaJson, values);
@@ -75,10 +99,20 @@ export async function recommendationFromFormSubmission(
         person: { email: bound.email, phone: bound.phone, firstName: bound.firstName, lastName: bound.lastName },
     });
 
+    // Enrich each existing-match candidate with identifying context (§3). Usually 0–1 candidates.
+    // Skipped on the queue path (compact summary only) to avoid per-row joins.
+    const candidateDetails = options?.enrichCandidates
+        ? await Promise.all(
+              recommendation.candidates.map((c) => enrichCandidateDetail(supabase, orgId, { id: c.id, matchReason: c.matchReason }))
+          )
+        : [];
+
     const mappedPersonValues = [bound.email, bound.phone, bound.firstName, bound.lastName].filter(Boolean).length;
     return {
         supported: true,
         recommendation,
+        intent,
+        candidateDetails,
         source: { kind: "form_submission", hasEmailBinding: bound.hasEmailBinding, mappedPersonValues },
     };
 }

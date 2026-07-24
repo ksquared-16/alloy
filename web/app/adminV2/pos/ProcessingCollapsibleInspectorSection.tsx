@@ -6,6 +6,7 @@ import clsx from "clsx";
 export default function ProcessingCollapsibleInspectorSection({
     title,
     subtitle,
+    summary,
     defaultOpen = false,
     open: controlledOpen,
     onOpenChange,
@@ -15,6 +16,7 @@ export default function ProcessingCollapsibleInspectorSection({
 }: {
     title: string;
     subtitle?: string;
+    summary?: ReactNode;
     defaultOpen?: boolean;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
@@ -46,7 +48,9 @@ export default function ProcessingCollapsibleInspectorSection({
                     >
                         {title}
                     </span>
-                    {subtitle ? (
+                    {!open && summary != null ? (
+                        <span className="mt-0.5 block truncate text-[11px] leading-snug text-alloy-midnight/55">{summary}</span>
+                    ) : subtitle ? (
                         <span className="mt-0.5 block text-[11px] leading-snug text-alloy-midnight/45">{subtitle}</span>
                     ) : null}
                 </span>

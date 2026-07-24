@@ -13,44 +13,72 @@ function read(rel: string): string {
 }
 
 describe("organization domain landings", () => {
-    it("builds Data Model tiles to existing settings routes", () => {
+    it("builds Data Model tiles into the organization shell without ceremony cards", () => {
         const model = buildDataModelLandingModel();
         expect(model.tiles.map((t) => t.id)).toEqual([
             "entities",
             "fields",
             "statuses",
-            "calculations",
             "option-sets",
             "relationships",
+            "calculations",
         ]);
-        expect(model.tiles.find((t) => t.id === "entities")?.href).toContain("/settings/entities?section=entities");
-        expect(model.tiles.find((t) => t.id === "fields")?.href).toContain("/settings/fields");
+        expect(model.summaryCards).toEqual([]);
+        expect(model.tiles.find((t) => t.id === "entities")?.href).toContain(
+            "/organization/data-model?section=entities",
+        );
+        expect(model.tiles.find((t) => t.id === "fields")?.href).toContain(
+            "/organization/data-model?section=fields",
+        );
         expect(model.ownershipNote.toLowerCase()).toContain("organization");
     });
 
     it("builds Access tiles without inheritance vocabulary", () => {
         const model = buildAccessLandingModel();
-        expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "departments"]);
-        expect(model.purpose.toLowerCase()).toContain("not a configuration inheritance domain");
+        expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "scopes", "security"]);
+        expect(model.summaryCards).toEqual([]);
+        expect(model.ownershipNote.toLowerCase()).toContain("not configuration inheritance");
         expect(model.tiles.find((t) => t.id === "users")?.href).toContain("section=users");
-        expect(model.tiles.find((t) => t.id === "departments")?.href).toContain("/settings/departments");
+        expect(model.tiles.find((t) => t.id === "scopes")?.href).toContain("section=scopes");
+        expect(model.tiles.find((t) => t.id === "security")?.href).toContain("section=security");
     });
 
-    it("builds Business Processes and Surfaces section deep-links", () => {
+    it("builds a collection-first Business Processes model and Surfaces section deep-links", () => {
         const processes = buildBusinessProcessesLandingModel();
-        expect(processes.tiles.some((t) => t.href.includes("section=stages"))).toBe(true);
-        expect(processes.tiles.some((t) => t.href.includes("section=automation"))).toBe(true);
+        expect(processes.summaryCards).toEqual([]);
+        expect(processes.purpose).toBe("Create and manage how operational work moves through Alloy.");
 
         const surfaces = buildSurfacesLandingModel();
+        expect(surfaces.summaryCards).toEqual([]);
+        expect(surfaces.purpose).toBe("Configure the presentation operators use across Alloy.");
         expect(surfaces.tiles.map((t) => t.id)).toContain("focus-panels");
-        expect(surfaces.tiles.find((t) => t.id === "queue-rows")?.href).toContain("section=queue-rows");
+        expect(surfaces.tiles.find((t) => t.id === "queue-rows")?.href).toContain(
+            "/organization/surfaces?section=queue-rows",
+        );
     });
 
-    it("wires page entrypoints to landing when section is absent", () => {
-        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("OrganizationDomainLanding");
+    it("wires Data Model to the organization workspace and Access landing when section is absent", () => {
+        expect(read("app/adminV2/settings/organization/data-model/page.tsx")).toContain(
+            "DataModelWorkspaceSurface",
+        );
+        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("dataModelSectionHref");
         expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("buildAccessLandingModel");
-        expect(read("app/adminV2/settings/processes/page.tsx")).toContain("buildBusinessProcessesLandingModel");
-        expect(read("app/adminV2/settings/surfaces/page.tsx")).toContain("buildSurfacesLandingModel");
+    });
+
+    it("always mounts the Business Processes collection workspace (no landing-tile default)", () => {
+        const page = read("app/adminV2/settings/processes/page.tsx");
+        expect(page).toContain("ProcessesConfigurationPage");
+        expect(page).not.toContain("OrganizationDomainLanding");
+        expect(page).toContain("normalizeBusinessProcessSection");
+    });
+
+    it("mounts SurfacesPublicationWorkspace — tile landing when bare, category workspace when ?section=", () => {
+        const page = read("app/adminV2/settings/surfaces/page.tsx");
+        expect(page).toContain("SurfacesPublicationWorkspace");
+        expect(page).not.toContain("OrganizationDomainLanding");
+        const workspace = read("components/adminV2/settings/surfaces/SurfacesPublicationWorkspace.tsx");
+        expect(workspace).toContain("SurfacesLanding");
+        expect(workspace).toContain("hideCategoryRail");
     });
 
     it("keeps Location Add Program in-context (no Programs peer redirect)", () => {

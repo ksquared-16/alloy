@@ -1,29 +1,25 @@
 import ProcessesConfigurationPage from "@/components/adminV2/settings/businessProcess/ProcessesConfigurationPage";
-import OrganizationDomainLanding from "@/components/adminV2/settings/organization/OrganizationDomainLanding";
-import { buildBusinessProcessesLandingModel } from "@/lib/configRuntime/businessProcessesLandingModel";
+import { normalizeBusinessProcessSection } from "@/lib/lifecycle/businessProcessUiLabels";
 
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-    searchParams?: Promise<{ section?: string | string[] }>;
+    searchParams?: Promise<{ section?: string | string[]; processId?: string | string[] }>;
 };
 
-const PROCESS_SECTIONS = new Set(["stages", "work-views", "actions", "automation", "health"]);
-
+/**
+ * Business Processes settings entry point.
+ * Always mounts the Collection → Selected Process → Focused Workspace surface
+ * (`ProcessesConfigurationPage`) — the org-landing tile page is no longer the default.
+ * `?section=` and `?processId=` support deep links into a specific process/tab.
+ */
 export default async function AdminV2SettingsProcessesPage({ searchParams }: PageProps) {
     const resolved = searchParams ? await searchParams : {};
-    const raw = Array.isArray(resolved.section) ? resolved.section[0] : resolved.section;
-    const section = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    const rawSection = Array.isArray(resolved.section) ? resolved.section[0] : resolved.section;
+    const rawProcessId = Array.isArray(resolved.processId) ? resolved.processId[0] : resolved.processId;
 
-    if (PROCESS_SECTIONS.has(section)) {
-        return <ProcessesConfigurationPage initialSection={section} />;
-    }
+    const initialSection = normalizeBusinessProcessSection(rawSection);
+    const initialProcessId = typeof rawProcessId === "string" && rawProcessId.trim() ? rawProcessId.trim() : undefined;
 
-    return (
-        <OrganizationDomainLanding
-            model={buildBusinessProcessesLandingModel()}
-            icon="workflow"
-            testIdPrefix="business-processes"
-        />
-    );
+    return <ProcessesConfigurationPage initialSection={initialSection} initialProcessId={initialProcessId} />;
 }

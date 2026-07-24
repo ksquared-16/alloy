@@ -99,7 +99,7 @@ function OpenDocumentButton({ documentId }: { documentId: string }) {
                 type="button"
                 disabled={busy}
                 onClick={() => void open()}
-                className="text-[11.5px] font-medium text-emerald-700 underline-offset-2 hover:underline disabled:opacity-50"
+                className="text-[11.5px] font-medium text-alloy-bend-pine underline-offset-2 hover:underline disabled:opacity-50"
             >
                 {busy ? "Opening…" : "Open document"}
             </button>
@@ -174,9 +174,9 @@ function FormDraftSection({
     const readyFormId = localCreatedId ?? created?.form_id ?? null;
 
     return (
-        <section className="mb-5 rounded-lg border border-emerald-200 bg-white p-3.5 shadow-sm">
+        <section className="mb-5 rounded-lg border border-alloy-bend-pine/25 bg-white p-3.5 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">Set up this document</span>
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-alloy-bend-pine">Set up this document</span>
                 {draft ? (
                     <span className="text-[10px] text-stone-400">
                         {draft.generator_version} · {formatWhen(draft.generated_at)}
@@ -194,7 +194,7 @@ function FormDraftSection({
                         >
                             Open in Studio
                         </button>
-                        <span className="text-[11px] text-emerald-700">Form created — continue in Studio Form Builder.</span>
+                        <span className="text-[11px] text-alloy-bend-pine">Form created — continue in Studio Form Builder.</span>
                     </>
                 ) : (
                     <>
@@ -652,12 +652,12 @@ export default function ProcessingCaseDetailContent({
     return (
         <div className="flex h-full min-h-0 flex-col">
             {/* Context header */}
-            <div className="shrink-0 border-l-2 border-alloy-juniper bg-emerald-50/60 px-4 py-3">
+            <div className="shrink-0 border-l-2 border-alloy-juniper bg-alloy-bend-pine/[0.07] px-4 py-3">
                 <div className="flex items-center gap-2">
                     <span className="truncate text-[15px] font-medium text-stone-900">
                         {primary?.display.label ?? "Processing case"}
                     </span>
-                    <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+                    <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-alloy-bend-pine">
                         {statusLabel(detail.status)}
                     </span>
                 </div>
@@ -782,7 +782,7 @@ export default function ProcessingCaseDetailContent({
                             {proposed.length > 0 ? ` · ${proposed.length} proposed value${proposed.length === 1 ? "" : "s"}` : ""}
                         </div>
                         {isClosed ? (
-                            <div className="text-emerald-700">
+                            <div className="text-alloy-bend-pine">
                                 {statusLabel(detail.status)} · {formatWhen(detail.updatedAt ?? detail.createdAt)}
                                 {approveResult?.recordId
                                     ? ` · ${approveResult.created ? "created" : "linked"} ${RECORD_TYPE_LABELS[approveResult.recordType ?? ""] ?? approveResult.recordType} ${approveResult.recordId}`
@@ -797,7 +797,7 @@ export default function ProcessingCaseDetailContent({
             <div className="shrink-0 border-t border-stone-200 bg-stone-50/80 px-4 py-3">
                 {isClosed ? (
                     <div className="flex items-center gap-2 text-[12.5px] text-stone-700">
-                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">✓</span>
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-alloy-bend-pine/[0.14] text-alloy-bend-pine">✓</span>
                         <span>
                             {statusLabel(detail.status)}
                             {approveResult?.recordId
@@ -811,7 +811,7 @@ export default function ProcessingCaseDetailContent({
                     <>
                         <div className="mb-2 flex items-center justify-between gap-2">
                             <div className="text-[12.5px] text-stone-800">
-                                <span className="text-[10.5px] font-medium uppercase tracking-wide text-emerald-700">Operator decision</span>
+                                <span className="text-[10.5px] font-medium uppercase tracking-wide text-alloy-bend-pine">Operator decision</span>
                                 <div>
                                     {recommendedActionLabel
                                         ? `Alloy recommends “${recommendedActionLabel}” — approve to execute, or choose another.`

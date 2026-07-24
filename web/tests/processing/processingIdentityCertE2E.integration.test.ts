@@ -69,6 +69,9 @@ describe.skipIf(!certSupabaseConfigured())("processing identity cert — Manual 
         expect(afterCommit.persons).toBeGreaterThan(afterIntake.persons);
         expect(afterCommit.customers).toBeGreaterThan(afterIntake.customers);
         expect(afterCommit.opportunities).toBeGreaterThan(afterIntake.opportunities);
+        // Each committed child is enrolled (enrollment process_instance), the same as the
+        // public-form path — both intake channels converge on an advanceable lead.
+        expect(afterCommit.processInstances).toBeGreaterThan(afterIntake.processInstances);
     });
 
     it("conflicting DOB: contradiction visible, unsafe commit blocked", async () => {
@@ -359,6 +362,9 @@ describe.skipIf(!certSupabaseConfigured())("processing identity cert — Public 
 
         const afterCommit = await countOrgIdentityRecords(admin, CERT_ORG_A);
         expect(afterCommit.persons).toBeGreaterThan(afterIntake.persons);
+        // The committed child is enrolled: an enrollment process_instance is created, so the
+        // public-form lead is advanceable (materialization / packet launch hang off this).
+        expect(afterCommit.processInstances).toBeGreaterThan(afterIntake.processInstances);
     });
 
     it("existing household: reuses seeded family on commit", async () => {

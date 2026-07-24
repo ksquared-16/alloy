@@ -1,0 +1,6 @@
+# Runtime artifacts — the platform is reproducible from config + scripts, not these.
+.run/
+.auth/
+evidence/
+supabase/.temp/
+supabase/.branches/

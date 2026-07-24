@@ -178,4 +178,111 @@ describe("mergePublicLinkMetadataForCreate with location", () => {
         expect(out.label).toBe("Website Inquiry — Riverbend Campus");
         expect(out.lead_capture).toBe(true);
     });
+
+    it("merges intake routing into Studio processing_intake links (per-campus Share by location)", async () => {
+        // Regression: the Studio mint stamps form_context_mode=processing_intake. That used to
+        // short-circuit the intent merge, so per-campus links minted with no lead_capture and no
+        // default_vertical_id — public submits then skipped intake (skipped_intake_disabled) and
+        // nothing reached the Mailroom. Routing must merge underneath; client keys still win.
+        const { mergePublicLinkMetadataForCreate } = await import("@/lib/forms/intake/defaultPublicLinkMetadata");
+        const { vi } = await import("vitest");
+        const ORG = "93667019-bd28-49b5-a688-acc9bb1e0a19";
+        const VERTICAL = "1000d719-2248-4816-8ff6-cbdeee8e91ce";
+
+        const DEFAULT_LOC = "11111111-1111-4111-8111-111111111111";
+        const supabase = {
+            from: vi.fn((table: string) => {
+                if (table === "verticals") {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                eq: () => ({ maybeSingle: async () => ({ data: { id: VERTICAL }, error: null }) }),
+                                order: () => ({
+                                    limit: () => ({ maybeSingle: async () => ({ data: { id: VERTICAL }, error: null }) }),
+                                }),
+                            }),
+                        }),
+                    };
+                }
+                if (table === "locations") {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                eq: () => ({
+                                    eq: () => ({
+                                        order: () => ({
+                                            limit: () => ({
+                                                maybeSingle: async () => ({ data: { id: DEFAULT_LOC }, error: null }),
+                                            }),
+                                        }),
+                                    }),
+                                }),
+                            }),
+                        }),
+                    };
+                }
+                if (table === "departments") {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                eq: () => ({
+                                    eq: () => ({
+                                        maybeSingle: async () => ({
+                                            data: { id: "04958a78-32ca-4091-bcd3-4bbaef3fee4b" },
+                                            error: null,
+                                        }),
+                                    }),
+                                    order: () => ({
+                                        limit: () => ({
+                                            maybeSingle: async () => ({
+                                                data: { id: "04958a78-32ca-4091-bcd3-4bbaef3fee4b" },
+                                                error: null,
+                                            }),
+                                        }),
+                                    }),
+                                }),
+                            }),
+                        }),
+                    };
+                }
+                if (table === "work_units") {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                eq: () => ({
+                                    eq: () => ({
+                                        order: () => ({
+                                            limit: () => ({ maybeSingle: async () => ({ data: { id: WU }, error: null }) }),
+                                        }),
+                                    }),
+                                }),
+                            }),
+                        }),
+                    };
+                }
+                throw new Error(`unexpected ${table}`);
+            }),
+        };
+
+        const out = await mergePublicLinkMetadataForCreate(supabase as never, {
+            orgId: ORG,
+            formKey: "website_inquiry",
+            formMetadata: { intake_intent: "enrollment_lead" },
+            clientMetadata: {
+                ...buildLocationSpecificLinkMetadata({
+                    formName: "Website Inquiry",
+                    locationId: LOC_A,
+                    locationName: "North Campus",
+                }),
+                form_context_mode: "processing_intake",
+            },
+        });
+
+        // Intake actually runs for this link now.
+        expect(out.lead_capture).toBe(true);
+        expect(out.default_vertical_id).toBe(VERTICAL);
+        // Client-owned keys are preserved (mode + campus scope).
+        expect(out.form_context_mode).toBe("processing_intake");
+        expect(out.default_location_id).toBe(LOC_A);
+    });
 });

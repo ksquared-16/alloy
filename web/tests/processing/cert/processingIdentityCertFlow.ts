@@ -103,18 +103,20 @@ export async function approveWithoutExecute(deps: OperatorReviewDeps, caseId: st
 export async function countOrgIdentityRecords(
     supabase: SupabaseClient,
     orgId: string,
-): Promise<{ persons: number; customers: number; members: number; opportunities: number }> {
-    const [p, c, m, o] = await Promise.all([
+): Promise<{ persons: number; customers: number; members: number; opportunities: number; processInstances: number }> {
+    const [p, c, m, o, pi] = await Promise.all([
         supabase.from("persons").select("id", { count: "exact", head: true }).eq("org_id", orgId),
         supabase.from("customers").select("id", { count: "exact", head: true }).eq("org_id", orgId),
         supabase.from("customer_members").select("id", { count: "exact", head: true }).eq("org_id", orgId),
         supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+        supabase.from("process_instances").select("id", { count: "exact", head: true }).eq("org_id", orgId),
     ]);
     return {
         persons: p.count ?? 0,
         customers: c.count ?? 0,
         members: m.count ?? 0,
         opportunities: o.count ?? 0,
+        processInstances: pi.count ?? 0,
     };
 }
 

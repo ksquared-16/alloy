@@ -9,6 +9,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { WorkUnitHeader } from "@/components/presentation/workUnit/WorkUnitHeader";
 import type { WorkspaceHeaderBuilderField } from "@/components/presentation/workspace/WorkspaceHeader";
+import { SurfaceBuilderInspectorRail } from "@/components/adminV2/settings/surfaces/SurfaceBuilderInspectorRail";
+import { useRegisterSurfaceBuilderChrome } from "@/components/adminV2/settings/surfaces/SurfaceBuilderChromeContext";
+import { WORK_UNIT_HEADER_SURFACE_OBJECT } from "@/components/adminV2/settings/surfaces/useSurfacesConfigurationSettings";
 import { PROCESS_CARD_ACCENT_LABELS } from "@/lib/presentation/runtime/processCardAccentStyles";
 import {
     PROCESS_CARD_ACCENTS,
@@ -83,7 +86,7 @@ export type WorkUnitHeaderSurfaceEditorProps = {
 };
 
 export default function WorkUnitHeaderSurfaceEditor({
-    onBack,
+    onBack: _onBack,
     fallbackTitle = "Enrollment",
     fallbackSubtitle = "Active Pipeline",
 }: WorkUnitHeaderSurfaceEditorProps) {
@@ -181,56 +184,27 @@ export default function WorkUnitHeaderSurfaceEditor({
         });
     }, []);
 
+    useRegisterSurfaceBuilderChrome({
+        surfaceId: WORK_UNIT_HEADER_SURFACE_OBJECT.id,
+        publicationLabel: publishedAt ? "Published" : null,
+        dirty,
+        publishing,
+        showSaveDraft: false,
+        showHistoryControls: false,
+        onPublish: () => void handlePublish(),
+        publishDisabled: publishing || !dirty || loading,
+    });
+
     return (
         <div className="flex h-full min-h-0 flex-col" data-work-unit-header-builder data-testid="work-unit-header-builder">
-            <header className="shrink-0 border-b border-alloy-stone/10 pb-4">
-                <button
-                    type="button"
-                    onClick={onBack}
-                    data-testid="work-unit-header-back"
-                    className="mb-2 text-[11px] font-medium text-alloy-midnight/50 transition-colors hover:text-alloy-bend-pine"
-                >
-                    ← Surfaces
-                </button>
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                            Work Unit Header
-                        </p>
-                        <h2 className="text-lg font-semibold text-alloy-midnight" data-work-unit-header-builder-title>
-                            Title, subtitle, and work unit KPIs
-                        </h2>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        {publishedAt ? (
-                            <span className="text-xs font-medium text-alloy-bend-pine" data-work-unit-header-published>
-                                Published
-                            </span>
-                        ) : null}
-                        {dirty && !publishing ? (
-                            <span className="text-xs text-alloy-midnight/45">Unpublished changes</span>
-                        ) : null}
-                        {error ? <span className="text-xs text-alloy-ember">{error}</span> : null}
-                        <button
-                            type="button"
-                            onClick={handlePublish}
-                            disabled={publishing || !dirty || loading}
-                            data-work-unit-header-publish
-                            data-testid="work-unit-header-publish"
-                            className="rounded-md bg-alloy-bend-pine px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-40"
-                        >
-                            {publishing ? "Publishing…" : "Publish"}
-                        </button>
-                    </div>
-                </div>
-            </header>
+            {error ? <p className="mb-3 text-xs text-alloy-ember">{error}</p> : null}
 
             {loading ? (
-                <div className="mt-6 h-40 animate-pulse rounded-xl border border-alloy-stone/12 bg-alloy-stone/5" />
+                <div className="mt-2 h-40 animate-pulse rounded-xl border border-alloy-stone/12 bg-alloy-stone/5" />
             ) : (
-                <div className="mt-5 grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-auto lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="flex min-h-0 flex-1 overflow-hidden">
                     <div
-                        className="flex min-h-[12rem] flex-col items-center justify-start px-4 py-2"
+                        className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-start overflow-auto px-4 py-2"
                         data-work-unit-header-canvas
                     >
                         <p className="mb-4 w-full max-w-3xl text-center text-xs text-alloy-midnight/45">
@@ -255,7 +229,12 @@ export default function WorkUnitHeaderSurfaceEditor({
                         </div>
                     </div>
 
-                    <div ref={inspectorRef} className="flex flex-col gap-3 pb-6" data-work-unit-header-inspector>
+                    <SurfaceBuilderInspectorRail
+                        widthClassName="w-[320px]"
+                        testId="work-unit-header-inspector-rail"
+                        aria-label="Work Unit Header configuration"
+                    >
+                    <div ref={inspectorRef} className="flex flex-col gap-3 p-3 pb-6" data-work-unit-header-inspector>
                         <InspectorSection title="Identity" testId="identity">
                             <label className="flex flex-col gap-1" data-inspector-field="title">
                                 <FieldLabel>Header title</FieldLabel>
@@ -423,6 +402,7 @@ export default function WorkUnitHeaderSurfaceEditor({
                             );
                         })}
                     </div>
+                    </SurfaceBuilderInspectorRail>
                 </div>
             )}
         </div>

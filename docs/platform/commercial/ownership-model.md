@@ -1,7 +1,7 @@
 ---
 owner: commercial
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-22
 supersedes: []
 ---
 
@@ -25,6 +25,26 @@ location_program_categories (program_key)
        └─ program_offering_variants  (quantity: 2 days/week, 5 days/week, or transparent default)
             └─ commercial_tuition_rates  (variant_id × cadence_key × payer_type × location_id)
 ```
+
+## Operator product presentation (Tuition Plans)
+
+Organization Financials → Tuition presents this hierarchy as:
+
+| Operator concept | Persistence |
+|---|---|
+| **Tuition Plan** | `program_offerings` (one row; e.g. Infant Full Day) |
+| **Enrollment Commitment** | `program_offering_variants` |
+| **Billing Frequency (plan primary)** | `offering.metadata.tuition_billing_frequency_key` (rates remain cadence-keyed underneath) |
+| **Revenue GL Code (plan)** | `offering.metadata.tuition_revenue_category_id` → `commercial_revenue_categories` |
+| **Price history periods** | Prior amounts in `commercial_tuition_rates.metadata.priceHistory` when superseding (unique cell key prevents multi-row history) |
+
+Route: `/organization/financials?chapter=tuition&planId=<offering_id>&tab=overview|options|locations|upcoming|history`.
+
+Tuition setup sub-sections (same chapter): `?chapter=tuition&setup=plans|commitments|frequencies` (default `plans`).
+
+Financials product surfaces (2026-07): Catalog, Policies, and GL Codes use collection → selected workspace pages under `/organization/financials?chapter=catalog|policies|accounting`.
+
+Attendance, Funding, Billing posting, and invoice state remain outside Tuition.
 
 ## Why variants exist
 

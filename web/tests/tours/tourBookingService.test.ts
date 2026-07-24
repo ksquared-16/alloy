@@ -74,6 +74,76 @@ describe("createTourBooking", () => {
         } as never;
     }
 
+    it("ATOMICITY: a post-insert failure compensates (deletes the booking) — no ghost booking", async () => {
+        const row = {
+            id: "b-ghost",
+            org_id: "org-1",
+            opportunity_id: "opp-1",
+            location_id: "loc-1",
+            primary_person_id: null,
+            primary_contact_id: null,
+            requested_by_user_id: null,
+            start_at: "2026-05-11T14:00:00.000Z",
+            end_at: "2026-05-11T15:00:00.000Z",
+            timezone: "UTC",
+            status_key: "confirmed",
+            source: "admin",
+            form_submission_id: null,
+            form_public_link_id: null,
+            canceled_at: null,
+            canceled_by: null,
+            cancel_reason: null,
+            rescheduled_from_booking_id: null,
+            metadata: {},
+            created_at: "2026-05-11T12:00:00.000Z",
+            updated_at: "2026-05-11T12:00:00.000Z",
+        };
+        const deleted: { id: string | null } = { id: null };
+        const idChain = {
+            eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+        const insertChain = {
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: row, error: null }),
+        };
+        const deleteChain: Record<string, unknown> = {
+            eq: vi.fn((col: string, val: string) => {
+                if (col === "id") deleted.id = val;
+                return deleteChain;
+            }),
+            then: (resolve: (v: { error: null }) => unknown) => resolve({ error: null }),
+        };
+        const supabase = {
+            from: vi.fn(() => ({
+                select: vi.fn((cols?: string) => (cols === "id" ? idChain : insertChain)),
+                insert: vi.fn(() => insertChain),
+                delete: vi.fn(() => deleteChain),
+            })),
+        } as never;
+
+        // The opportunity mirror fails AFTER the booking row is committed.
+        vi.mocked(applyTourBookingOpportunityIntegration).mockRejectedValueOnce(new Error("mirror exploded"));
+
+        const input: CreateTourBookingInput = {
+            orgId: "org-1",
+            opportunityId: "opp-1",
+            locationId: "loc-1",
+            startAt: new Date("2026-05-11T14:00:00.000Z"),
+            endAt: new Date("2026-05-11T15:00:00.000Z"),
+            timezone: "UTC",
+            source: "admin",
+            approvalRequired: false,
+        };
+
+        await expect(createTourBooking(supabase, input)).rejects.toThrow("mirror exploded");
+        // Before == After: the committed booking is rolled back, so the operator's error is truthful.
+        expect(deleted.id).toBe("b-ghost");
+        // And no confirmation comms go out for a booking that no longer exists.
+        expect(mockOrchestrateConfirmed).not.toHaveBeenCalled();
+    });
+
     it("inserts confirmed booking and emits tour_confirmed when approval not required", async () => {
         const row = {
             id: "b-new",

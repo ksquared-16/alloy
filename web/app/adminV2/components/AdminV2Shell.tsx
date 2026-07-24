@@ -32,7 +32,6 @@ import type { DepartmentKey } from "@/lib/departmentColors";
 import { AdminV2NavigationTransitionRibbon } from "@/components/admin/workspace/AdminV2NavigationTransitionRibbon";
 import {
     isCanonicalAiActivityPath,
-    isCanonicalFormsPath,
     isCanonicalSettingsPath,
     isCanonicalWorkflowsPath,
     isCanonicalWorkspacePath,
@@ -108,7 +107,6 @@ function AdminV2ShellInner({
   const isAiActivityRoute = isCanonicalAiActivityPath(pathname);
   const isSettingsRoute = isCanonicalSettingsPath(pathname);
   const isWorkflowsRoute = isCanonicalWorkflowsPath(pathname);
-  const isFormsRoute = isCanonicalFormsPath(pathname);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readAdminV2SidebarCollapsed() ?? true);
   const toggleSidebarCollapsed = useCallback(() => {
@@ -182,7 +180,7 @@ function AdminV2ShellInner({
     );
   }
 
-  if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute) {
+  if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute) {
     return (
       <GlobalAssistantProvider>
         {/*
@@ -225,7 +223,7 @@ function AdminV2ShellInner({
                     data-adaptive-region="primary"
                   >
                     <AdminV2NavigationTransitionRibbon />
-                    {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ?
+                    {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute ?
                       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                         {children}
                       </main>

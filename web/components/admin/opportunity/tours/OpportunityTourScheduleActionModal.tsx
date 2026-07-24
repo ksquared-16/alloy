@@ -6,6 +6,7 @@ import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoade
 import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/actions/ScheduleTourActionFormModal";
 import { OpportunityTourSlotSchedulePanel } from "@/components/admin/opportunity/tours/OpportunityTourSlotSchedulePanel";
 import { ActionModalStatusMessage } from "@/components/admin/opportunity/actions/ActionModalStatusMessage";
+import { peekWarmTourSchedule, prefetchTourSchedule, invalidateWarmTourSchedule } from "@/lib/tours/tourScheduleWarmCache";
 
 export type OpportunityTourScheduleActionModalProps = {
     open: boolean;
@@ -92,11 +93,14 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
 
     const completeWithSuccess = useCallback(
         async (result: { booking?: TourBookingRow } | undefined, message: string) => {
+            // A booking changed the availability + active bookings — drop the warm entry so the next
+            // open re-verifies (the TTL would also expire it, but this keeps it correct immediately).
+            if (oid && loc) invalidateWarmTourSchedule(oid, loc);
             await onSlotBooked(result);
             setSuccessMessage(message);
             window.setTimeout(() => onClose(), SUCCESS_DISMISS_MS);
         },
-        [onClose, onSlotBooked]
+        [onClose, onSlotBooked, oid, loc]
     );
 
     const loadActiveBookings = useCallback(async () => {
@@ -142,9 +146,26 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
             setBootstrapErr(null);
             return;
         }
-        setSlotPhase("bootstrapping");
+        // Warm-first: if operator intent already warmed this work unit, resolve the duplicate-guard
+        // decision synchronously — the picker (with its warm availability) opens with no "Checking
+        // tour bookings…" gate. Cold opens fall back to the fetch (and warm the cache for next time).
+        const warm = peekWarmTourSchedule(oid, loc);
+        if (warm) {
+            setActiveBookings(warm.activeBookings);
+            setBootstrapErr(null);
+            setSlotPhase(warm.activeBookings.length > 0 ? "duplicate_guard" : "schedule");
+            return;
+        }
+        // Host-shell-first: open STRAIGHT to the slot picker (its warm slots render instantly; a cold
+        // window shows the local availability skeleton) — never a blocking "Checking tour bookings…"
+        // gate. The duplicate-guard check runs in parallel and only surfaces if an active booking
+        // exists (rare on a fresh schedule; the server blocks duplicate bookings regardless).
+        void prefetchTourSchedule(oid, loc);
+        setActiveBookings([]);
+        setBootstrapErr(null);
+        setSlotPhase("schedule");
         void loadActiveBookings();
-    }, [open, hasSite, oid, loadActiveBookings]);
+    }, [open, hasSite, oid, loc, loadActiveBookings]);
 
     const primaryActive = useMemo(() => activeBookings[0] ?? null, [activeBookings]);
 
@@ -161,7 +182,7 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                 <div className="flex justify-end pt-1">
                     <button
                         type="button"
-                        className="rounded-lg bg-alloy-midnight px-3 py-2 text-sm font-medium text-white"
+                        className="rounded-lg bg-alloy-bend-pine px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-alloy-bend-pine/90"
                         onClick={onClose}
                     >
                         Done
@@ -199,11 +220,12 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
     const scheduleBody = (
             <>
                 {showSlotChrome && slotPhase === "bootstrapping" ? (
-                    <div className="px-5 py-6" aria-busy="true">
+                    // #3 — canonical LOCAL loading treatment: a compact inline loader inside the stable
+                    // scheduling shell, never a large reserved panel. (Part 2 warms this so it rarely shows.)
+                    <div className="px-5 py-4" aria-busy="true">
                         <BosExecutionLoader
-                            variant="panel"
+                            variant="inline"
                             title="Checking tour bookings…"
-                            subtitle="Verifying existing reservations before scheduling."
                             data-testid="schedule-tour-bootstrap-loader"
                         />
                     </div>
@@ -232,12 +254,16 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                                 <div className="mt-0.5 text-[11px] text-alloy-midnight/50">{primaryActive.timezone}</div>
                             </div>
                             <div className="flex flex-wrap justify-end gap-2 border-t border-alloy-stone/10 pt-3">
-                                <button type="button" className="rounded-lg border px-3 py-1.5 text-xs" onClick={onClose}>
+                                <button
+                                    type="button"
+                                    className="rounded-lg border border-alloy-stone/30 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight transition-colors hover:bg-alloy-stone/5"
+                                    onClick={onClose}
+                                >
                                     Close
                                 </button>
                                 <button
                                     type="button"
-                                    className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-xs font-semibold text-white"
+                                    className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-alloy-bend-pine/90"
                                     onClick={() => setSlotPhase("reschedule")}
                                 >
                                     Reschedule tour
@@ -342,9 +368,11 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
     );
 
     if (isEmbedded) {
+        // #3 — when hosted (e.g. the What's Next capability host), fill the host's stable dimensions
+        // and scroll internally rather than nesting a bordered/elevated box-in-box; the host frames it.
         return (
             <div
-                className="max-h-[min(70vh,520px)] w-full overflow-auto rounded-xl border border-alloy-stone/25 bg-white shadow-sm"
+                className="flex h-full min-h-0 w-full flex-col overflow-auto rounded-lg border border-alloy-stone/20 bg-white"
                 data-tour-schedule-inline="true"
             >
                 {scheduleBody}

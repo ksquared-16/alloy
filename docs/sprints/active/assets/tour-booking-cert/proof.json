@@ -1,0 +1,7 @@
+{
+  "alreadyBooked": false,
+  "statusDefinitionErrorShown": false,
+  "successShown": false,
+  "bookingResponses": [],
+  "reopenReflectsReservation": true
+}

@@ -13,6 +13,7 @@
  * K2 fetch normally.
  */
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 
 /**
  * How long a prefetched answer may serve a subsequent click. Raised from 15s: a proactively PREPARED
@@ -56,8 +57,12 @@ export function prefetchWorkUnitProvisioning(
     const url = provisioningAnswerUrl(slug, opts.lens, opts.subject);
     const now = opts.now ?? Date.now();
     const existing = cache.get(url);
-    if (existing && isFresh(existing, now)) return existing.promise; // already warm / in-flight
+    if (existing && isFresh(existing, now)) {
+        logCurrentWorkInit("provisioning.prefetch.warm-reuse", { cacheKey: url, cache: "hit", preloadSource: "prefetch" });
+        return existing.promise; // already warm / in-flight
+    }
 
+    logCurrentWorkInit("provisioning.prefetch.fetch", { cacheKey: url, cache: "miss", preloadSource: "prefetch", note: "intent-warm network fetch" });
     const promise = fetch(url, { headers: { accept: "application/json" }, credentials: "include" })
         .then(async (res) => {
             if (!res.ok) throw new Error(`prefetch failed HTTP ${res.status}`);
@@ -76,6 +81,53 @@ export function prefetchWorkUnitProvisioning(
     // so callers can chain off the answer — e.g. to prepare its default subject's VM — without a second
     // fetch or a second cache identity.
     return promise;
+}
+
+export type ProvisioningFetchResult =
+    | { ok: true; answer: ProvisioningAnswer }
+    | { ok: false; status: number };
+
+/** In-flight coalescing map for the K2 cold-path entry fetch (separate from the intent-warm cache). */
+const inflightEntry = new Map<string, Promise<ProvisioningFetchResult>>();
+
+/**
+ * K2 cold-path provisioning fetch with IN-FLIGHT de-duplication. When two identical entry fetches
+ * overlap — the common case being React Strict Mode's dev double-invoke of the entry effect, or a
+ * fast unmount→remount — the second call reuses the first's in-flight promise instead of issuing a
+ * second identical network request. The entry is dropped the instant it settles, so this only
+ * coalesces genuinely concurrent identical requests and can never serve a stale answer. The response
+ * body is parsed once and shared (a Response stream can only be read by one consumer).
+ *
+ * This is the owning-lifecycle fix for the measured `provisioning-answer` double-fetch — not a
+ * boolean/timeout guard. A superseded caller's result is discarded downstream by K2's generation
+ * guard, so dropping the per-caller AbortSignal here (the fetch is a fast, idempotent GET) is safe.
+ */
+export function fetchProvisioningEntryDeduped(url: string): Promise<ProvisioningFetchResult> {
+    const existing = inflightEntry.get(url);
+    if (existing) {
+        logCurrentWorkInit("provisioning.cold.dedup-hit", { cacheKey: url, cache: "hit", preloadSource: "live", note: "coalesced concurrent entry fetch" });
+        return existing;
+    }
+    logCurrentWorkInit("provisioning.cold.fetch", { cacheKey: url, cache: "miss", preloadSource: "live", note: "cold entry network fetch" });
+    const promise: Promise<ProvisioningFetchResult> = fetch(url, {
+        headers: { accept: "application/json" },
+        credentials: "include",
+    })
+        .then(async (res) =>
+            res.ok
+                ? ({ ok: true, answer: (await res.json()) as ProvisioningAnswer } as const)
+                : ({ ok: false, status: res.status } as const),
+        )
+        .finally(() => {
+            inflightEntry.delete(url);
+        });
+    inflightEntry.set(url, promise);
+    return promise;
+}
+
+/** @internal test seam */
+export function clearInflightProvisioningEntriesForTests(): void {
+    inflightEntry.clear();
 }
 
 /**

@@ -41,10 +41,12 @@ function truncate(text: string, max = 100): string {
     return `${trimmed.slice(0, max - 1).trim()}…`;
 }
 
-function formatAt(raw: unknown): string | null {
+function formatAt(raw: unknown, timeZone?: string): string | null {
     const text = pickLine(raw);
     if (!text) return null;
-    return formatActivityTimestamp(text) || text;
+    // Canonical local-time doctrine: route through the platform formatter WITH the resolved
+    // operator timezone. Without it, `formatActivityTimestamp` defaults to UTC (the bug).
+    return formatActivityTimestamp(text, timeZone ? { timeZone } : undefined) || text;
 }
 
 function readOpenTasks(record: ProofRuntimeRecord): InquirySummaryTaskPreviewRow[] {
@@ -88,9 +90,14 @@ function pushUnique(entries: LeadActivityPreviewEntry[], entry: LeadActivityPrev
 }
 
 /** Build activity preview entries from available record fields (newest-first heuristic). */
-export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActivityPreviewEntry[] {
+export function resolveLeadActivityPreview(
+    record: ProofRuntimeRecord,
+    timeZone?: string,
+): LeadActivityPreviewEntry[] {
     const overview = overviewRecord(record);
     const entries: LeadActivityPreviewEntry[] = [];
+    // Every timestamp in this preview renders in the resolved operator timezone.
+    const fmtAt = (raw: unknown): string | null => formatAt(raw, timeZone);
 
     const followUp = pickLine(record.follow_up_notes, overview.follow_up_notes);
     if (followUp) {
@@ -111,7 +118,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
                 kind: "note",
                 label: pickLine(note.title, note.label) ?? "Note",
                 detail: truncate(body),
-                at: formatAt(note.created_at ?? note.at),
+                at: fmtAt(note.created_at ?? note.at),
             });
         }
     }
@@ -125,7 +132,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
                 kind: "communication",
                 label: pickLine(item.channel, item.type) ?? "Communication",
                 detail: truncate(primary),
-                at: formatAt(item.at ?? item.when ?? item.sent_at ?? item.created_at),
+                at: fmtAt(item.at ?? item.when ?? item.sent_at ?? item.created_at),
             });
         }
     }
@@ -137,7 +144,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             kind: "task",
             label: "Open task",
             detail: truncate(task.title ?? "Task"),
-            at: formatAt(task.due_at),
+            at: fmtAt(task.due_at),
         });
     }
 
@@ -160,7 +167,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             kind: "activity",
             label: "Last activity",
             detail: activitySummary ? truncate(activitySummary) : null,
-            at: formatAt(activityAt),
+            at: fmtAt(activityAt),
         });
     }
 
@@ -191,7 +198,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             kind: "activity",
             label: "Status",
             detail: truncate(formatStatusPreviewDetail(statusLabelRaw)),
-            at: formatAt(statusAt),
+            at: fmtAt(statusAt),
         });
     }
 
@@ -201,7 +208,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             kind: "created",
             label: "Created",
             detail: null,
-            at: formatAt(createdRaw),
+            at: fmtAt(createdRaw),
         });
     }
 
@@ -211,7 +218,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             kind: "updated",
             label: "Updated",
             detail: null,
-            at: formatAt(updatedRaw),
+            at: fmtAt(updatedRaw),
         });
     }
 

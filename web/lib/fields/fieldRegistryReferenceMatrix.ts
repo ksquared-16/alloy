@@ -67,6 +67,9 @@ export function canonicalRefKey(ref: CanonicalRegistryRef): string {
 export function fieldDefinitionEntityTypeFromFormsEntity(entityType: string): string | null {
     const t = entityType.trim().toLowerCase();
     if (t === "guardian") return "person";
+    // Adult fields authored with the canonical person binding (see sourceFromEntry) persist
+    // entity_type "person" directly; resolve it 1:1 so publish binding validation still passes.
+    if (t === "person") return "person";
     if (t === "child" || t === "enrollment") return "inquiry_child";
     if (t === "opportunity") return "opportunity";
     if (t === "customer") return "customer";

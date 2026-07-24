@@ -195,7 +195,7 @@ export function resolveLayoutEditorWidgetToneTitleClass(tone: LayoutEditorWidget
 export function resolveLayoutEditorWidgetToneHeaderWashClass(tone: LayoutEditorWidgetRuntimeTone | undefined): string {
     switch (tone ?? "neutral") {
         case "green":
-            return "bg-gradient-to-r from-emerald-50/75 via-emerald-50/25 to-white";
+            return "bg-white";
         case "blue":
             return "bg-gradient-to-r from-sky-50/75 via-sky-50/25 to-white";
         case "amber":

@@ -61,6 +61,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
     if (body.location_id !== undefined) patch.location_id = body.location_id != null ? String(body.location_id).trim() || null : null;
     if (body.program_key !== undefined) patch.program_key = body.program_key != null ? String(body.program_key).trim() || null : null;
+    if (body.metadata !== undefined && typeof body.metadata === "object" && !Array.isArray(body.metadata)) {
+        patch.metadata = body.metadata;
+    }
 
     if (Object.keys(patch).length <= 1) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
 

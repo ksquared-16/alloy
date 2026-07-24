@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { LIFECYCLE_STAGE_LABELS, LIFECYCLE_STAGE_ORDER, type LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import { type LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import type { FormLifecycleCoveragePresentation } from "@/lib/forms/lifecycle/buildFormLifecycleCoveragePresentation";
 import {
     defaultLifecycleUsageIntent,
@@ -15,15 +15,35 @@ import {
     readStoredOperationalIntent,
     type OperationalIntentKey,
 } from "@/lib/forms/operationalIntentTemplates";
-import {
-    intakeWorkspaceBtnPrimary,
-    intakeWorkspaceBtnSecondary,
-} from "@/components/forms/workspace/IntakeWorkspaceHubView";
+import { intakeWorkspaceBtnSecondary } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 import { opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
+import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
+
+/** Alloy pine primary — matches the coherent inspector-rail accent (not the legacy blue). */
+const BUSINESS_PROCESS_SAVE_BTN =
+    "rounded-lg bg-alloy-bend-pine px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40";
+
+/** The single canonical business process a form serves in this release. */
+const BUSINESS_PROCESS_LABEL = "Enrollment";
+
+/**
+ * Stage options for the Enrollment business process, in operator-facing order.
+ * Keys stay within the coverage engine's stage vocabulary (LifecycleOperatorStage) so
+ * requirement coverage + persistence keep working; labels and curation come from the
+ * canonical Enrollment process — the stale generic "Qualification" stage is omitted.
+ */
+const ENROLLMENT_STAGE_OPTIONS: { key: LifecycleOperatorStage; label: string }[] = [
+    { key: "lead", label: "New Lead" },
+    { key: "tour", label: "Tour" },
+    { key: "waitlist", label: "Waitlist" },
+    { key: "enrollment", label: "Enrolling" },
+    { key: "enrolled", label: "Enrolled" },
+];
 
 type DepartmentOption = {
     id: string;
     name: string;
+    key?: string | null;
 };
 
 type CoveragePayload = {
@@ -93,7 +113,13 @@ export function FormLifecycleUsagePanel({
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok || cancelled) return;
                 const items = (json as { items?: DepartmentOption[] }).items ?? [];
-                setDepartments(items.map((d) => ({ id: d.id, name: d.name })));
+                const mapped = items.map((d) => ({ id: d.id, name: d.name, key: d.key ?? null }));
+                setDepartments(mapped);
+                // Business Process is the single Enrollment process — auto-bind its department
+                // so the operator never has to pick "Enrollment A/B".
+                setDepartmentId(
+                    (prev) => prev || mapped.find((d) => d.key === "enrollment")?.id || mapped[0]?.id || ""
+                );
             } catch {
                 /* optional — selectors stay empty */
             }
@@ -120,14 +146,14 @@ export function FormLifecycleUsagePanel({
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
-                throw new Error((json as { error?: string }).error ?? "Could not load lifecycle coverage");
+                throw new Error((json as { error?: string }).error ?? "Could not load business process coverage");
             }
             const data = (json as { data?: CoveragePayload }).data;
             if (data?.presentation) {
                 setPresentation(data.presentation);
             }
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Could not load lifecycle coverage");
+            setError(e instanceof Error ? e.message : "Could not load business process coverage");
         } finally {
             setLoading(false);
         }
@@ -156,7 +182,7 @@ export function FormLifecycleUsagePanel({
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
-                throw new Error((json as { error?: string }).error ?? "Could not save lifecycle usage");
+                throw new Error((json as { error?: string }).error ?? "Could not save business process");
             }
             const data = json as {
                 data?: {
@@ -174,21 +200,27 @@ export function FormLifecycleUsagePanel({
             }
             onCoverageSaved?.();
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Could not save lifecycle usage");
+            setError(e instanceof Error ? e.message : "Could not save business process");
         } finally {
             setSaving(false);
         }
     }, [canMutate, departmentId, stageKey, intent, formId, onFormMetadataUpdated, loadCoverage, onCoverageSaved]);
 
-    const selectedDepartmentName =
-        departments.find((d) => d.id === departmentId)?.name ??
-        presentation?.lifecycle_label ??
-        null;
+    // Show the canonical process name, not the underlying department (e.g. "Enrollment A").
+    const selectedDepartmentName = BUSINESS_PROCESS_LABEL;
+    const selectedStageLabel =
+        ENROLLMENT_STAGE_OPTIONS.find((s) => s.key === stageKey)?.label ?? presentation?.stage_label ?? null;
 
     const showDetails =
         presentation &&
         presentation.status !== "empty" &&
         presentation.entity_groups.some((g) => g.rows.length > 0);
+
+    // A brand-new form (no fields yet) shouldn't read as a record-blocking error. R1 now
+    // configures the business process by default, so an empty form would otherwise show
+    // "Missing required fields — cannot create a Lead" before the operator adds anything.
+    // Present a neutral, actionable state until at least one field exists.
+    const emptyForm = !hasSchema;
 
     return (
         <div
@@ -198,38 +230,30 @@ export function FormLifecycleUsagePanel({
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">
-                        Lifecycle usage
+                        Business Process
                     </p>
                     <p className={clsx("mt-0.5 max-w-xl", opMutedMeta)}>
-                        Lifecycle coverage checks whether this form captures the information required to create or
-                        update records for the selected workflow stage.
+                        Checks whether this form captures the information required to create or update records for the
+                        selected business process stage.
                     </p>
                 </div>
                 {presentation ?
                     <StatusBadge
-                        label={presentation.status_headline}
-                        variant={statusBadgeVariant(presentation.status)}
+                        label={emptyForm ? "No fields yet" : presentation.status_headline}
+                        variant={emptyForm ? "neutral" : statusBadgeVariant(presentation.status)}
                     />
                 :   null}
             </div>
 
-            <div className="mt-3 grid gap-2 sm:grid-cols-3" data-testid="lifecycle-usage-selectors">
+            <div className="mt-3 grid gap-2" data-testid="lifecycle-usage-selectors">
                 <label className="block space-y-1">
-                    <span className="text-xs font-medium text-alloy-midnight">Lifecycle</span>
-                    <select
-                        className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm shadow-sm disabled:opacity-60"
-                        value={departmentId}
-                        disabled={!canMutate || saving}
-                        data-testid="lifecycle-usage-department"
-                        onChange={(e) => setDepartmentId(e.target.value)}
+                    <span className="text-xs font-medium text-alloy-midnight">Business Process</span>
+                    <div
+                        className="w-full rounded-lg border border-alloy-midnight/10 bg-alloy-stone/[0.15] px-2.5 py-1.5 text-sm text-alloy-midnight"
+                        data-testid="lifecycle-usage-business-process"
                     >
-                        <option value="">Select department…</option>
-                        {departments.map((d) => (
-                            <option key={d.id} value={d.id}>
-                                {d.name}
-                            </option>
-                        ))}
-                    </select>
+                        {BUSINESS_PROCESS_LABEL}
+                    </div>
                 </label>
                 <label className="block space-y-1">
                     <span className="text-xs font-medium text-alloy-midnight">Stage</span>
@@ -240,9 +264,9 @@ export function FormLifecycleUsagePanel({
                         data-testid="lifecycle-usage-stage"
                         onChange={(e) => setStageKey(e.target.value as LifecycleOperatorStage)}
                     >
-                        {LIFECYCLE_STAGE_ORDER.map((stage) => (
-                            <option key={stage} value={stage}>
-                                {LIFECYCLE_STAGE_LABELS[stage]}
+                        {ENROLLMENT_STAGE_OPTIONS.map((stage) => (
+                            <option key={stage.key} value={stage.key}>
+                                {stage.label}
                             </option>
                         ))}
                     </select>
@@ -269,12 +293,12 @@ export function FormLifecycleUsagePanel({
                 <div className="mt-2 flex flex-wrap gap-2">
                     <button
                         type="button"
-                        className={intakeWorkspaceBtnPrimary}
+                        className={BUSINESS_PROCESS_SAVE_BTN}
                         disabled={saving || !departmentId.trim()}
                         data-testid="lifecycle-usage-save"
                         onClick={() => void saveUsage()}
                     >
-                        {saving ? "Saving…" : "Save lifecycle usage"}
+                        {saving ? "Saving…" : "Save business process"}
                     </button>
                     <button
                         type="button"
@@ -295,23 +319,24 @@ export function FormLifecycleUsagePanel({
             :   null}
 
             {loading && !presentation ?
-                <p className={clsx("mt-3", opMetadata)}>Loading coverage…</p>
+                <div className="mt-3">
+                    <BosExecutionLoader variant="inline" title="Loading coverage" />
+                </div>
             : presentation ?
                 <div className="mt-3" data-testid="lifecycle-coverage-summary">
-                    {selectedDepartmentName && presentation.stage_label && presentation.intent_label ?
+                    {selectedDepartmentName && selectedStageLabel && presentation.intent_label ?
                         <p className={clsx("text-sm text-alloy-midnight", opMetadata)}>
-                            {selectedDepartmentName} · {presentation.stage_label} · {presentation.intent_label}
+                            {selectedDepartmentName} · {selectedStageLabel} · {presentation.intent_label}
                         </p>
                     :   null}
 
                     <p
-                        className={clsx(
-                            "mt-2 text-sm",
-                            presentation.status === "missing_required" ? "text-amber-900/90" : "text-alloy-midnight"
-                        )}
+                        className="mt-2 text-sm text-alloy-midnight/80"
                         data-testid="lifecycle-coverage-message"
                     >
-                        {presentation.status_message}
+                        {emptyForm ?
+                            "Add the fields this stage needs — a parent name plus an email or phone — and this form will be ready to create a Lead."
+                        :   presentation.status_message}
                     </p>
 
                     {!hasSchema && presentation.status === "empty" ?
@@ -324,7 +349,7 @@ export function FormLifecycleUsagePanel({
                         <div className="mt-2">
                             <button
                                 type="button"
-                                className="text-xs font-semibold text-alloy-blue hover:underline"
+                                className="text-xs font-semibold text-alloy-bend-pine hover:underline"
                                 data-testid="lifecycle-coverage-details-toggle"
                                 onClick={() => setDetailsOpen((v) => !v)}
                             >
@@ -356,7 +381,7 @@ export function FormLifecycleUsagePanel({
                                                                 row.status_label === "Satisfied" ?
                                                                     "text-alloy-pine"
                                                                 : row.status_label === "Missing" ?
-                                                                    "text-red-800/85"
+                                                                    "text-alloy-ember"
                                                                 :   "text-alloy-midnight/50"
                                                             )}
                                                             data-lifecycle-coverage-row-status={row.status_label}
@@ -375,6 +400,10 @@ export function FormLifecycleUsagePanel({
                         </div>
                     :   null}
                 </div>
+            : !error ?
+                <p className={clsx("mt-3", opMutedMeta)}>
+                    Coverage details appear once a business process and stage are selected.
+                </p>
             :   null}
         </div>
     );

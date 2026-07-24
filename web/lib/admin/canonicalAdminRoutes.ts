@@ -48,6 +48,39 @@ export const CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF =
  */
 export const CANONICAL_ORGANIZATION_FINANCIALS_HREF = `${CANONICAL_ORGANIZATION_BASE}/financials` as const;
 
+/** Canonical Organization Surfaces (Focus Panels, Queue Rows, Workspaces, Work Units, OI). */
+export const CANONICAL_ORGANIZATION_SURFACES_HREF = `${CANONICAL_ORGANIZATION_BASE}/surfaces` as const;
+
+/** Canonical Organization Access (Users, Roles, Scopes, Security). */
+export const CANONICAL_ORGANIZATION_ACCESS_HREF = `${CANONICAL_ORGANIZATION_BASE}/access` as const;
+
+/** Canonical Organization Business Processes. */
+export const CANONICAL_ORGANIZATION_PROCESSES_HREF = `${CANONICAL_ORGANIZATION_BASE}/processes` as const;
+
+/** Canonical Organization Data Model (Entities, Fields, Statuses, Option Sets, Relationships, Calculations). */
+export const CANONICAL_ORGANIZATION_DATA_MODEL_HREF = `${CANONICAL_ORGANIZATION_BASE}/data-model` as const;
+
+/**
+ * Settings subpaths that have been productized under `/organization/{slug}`.
+ * `adminSettingsSubpathHref` emits the organization URL for these so call sites
+ * do not keep inventing `/settings/…` bookmarks for completed domains.
+ */
+const ORGANIZATION_CONFIG_SUBPATH_ALIASES: Record<string, string> = {
+    surfaces: "surfaces",
+    financials: "financials",
+    programs: "programs",
+    locations: "locations",
+    "programs-locations": "programs-locations",
+    access: "access",
+    /** Legacy Access route slug → `/organization/access`. */
+    "users-roles": "access",
+    processes: "processes",
+    "business-processes": "processes",
+    "data-model": "data-model",
+    /** Legacy Data Model landing slug → `/organization/data-model` (default Entities). */
+    entities: "data-model",
+};
+
 /** Legacy admin implementation base (financials, old list pages, unmigrated system). */
 export const LEGACY_ADMIN_BASE = "/legacy-admin" as const;
 
@@ -75,7 +108,6 @@ export const CANONICAL_ADMIN_PATH_PREFIXES = [
     `${CANONICAL_ADMIN_BASE}/settings`,
     CANONICAL_ORGANIZATION_BASE,
     `${CANONICAL_SETTINGS_BASE}`,
-    `${CANONICAL_ADMIN_BASE}/forms`,
     `${CANONICAL_ADMIN_BASE}/workflows`,
     `${CANONICAL_ADMIN_BASE}/messages`,
     `${CANONICAL_ADMIN_BASE}/ai-activity`,
@@ -301,10 +333,6 @@ export function isCanonicalWorkflowsPath(pathname: string): boolean {
     return matchesCanonicalPrefix(pathname, `${CANONICAL_ADMIN_BASE}/workflows`);
 }
 
-export function isCanonicalFormsPath(pathname: string): boolean {
-    return matchesCanonicalPrefix(pathname, `${CANONICAL_ADMIN_BASE}/forms`);
-}
-
 export function isCanonicalAiActivityPath(pathname: string): boolean {
     return matchesCanonicalPrefix(pathname, `${CANONICAL_ADMIN_BASE}/ai-activity`);
 }
@@ -319,7 +347,6 @@ export function isCanonicalDrawerHostPath(pathname: string | null | undefined): 
     if (p === CANONICAL_OPERATOR_BASE || p.startsWith(`${CANONICAL_OPERATOR_BASE}/`)) return true;
     if (isCanonicalWorkspacePath(p)) return true;
     if (isCanonicalSettingsPath(p)) return true;
-    if (isCanonicalFormsPath(p)) return true;
     // POS-FP4: Processing Workspace hosts the read-only Processing Case detail drawer.
     if (p === `${CANONICAL_ADMIN_BASE}/processing` || p.startsWith(`${CANONICAL_ADMIN_BASE}/processing/`)) return true;
     if (p.startsWith(`${LEGACY_ADMIN_BASE}/workspace`)) return true;
@@ -344,9 +371,6 @@ export function isPublicMarketingChromeSuppressedPath(pathname: string | null | 
     return isCanonicalWorkspacePath(p) || isCanonicalSettingsPath(p);
 }
 
-/** Product nav — forms module base. */
-export const ADMIN_FORMS_HREF = `${CANONICAL_ADMIN_BASE}/forms` as const;
-
 /** Product nav — workflows module base. */
 export const ADMIN_WORKFLOWS_HREF = `${CANONICAL_ADMIN_BASE}/workflows` as const;
 
@@ -357,19 +381,25 @@ export const ADMIN_AI_ACTIVITY_HREF = `${CANONICAL_ADMIN_BASE}/ai-activity` as c
 export const ADMIN_SETTINGS_SUBPATH_PREFIX = CANONICAL_SETTINGS_BASE;
 
 /** Product nav — Settings → Surfaces (Experience Builder / Design Surfaces). */
-export const SURFACES_SETTINGS_HREF = `${ADMIN_SETTINGS_SUBPATH_PREFIX}/surfaces` as const;
+export const SURFACES_SETTINGS_HREF = CANONICAL_ORGANIZATION_SURFACES_HREF;
 
 /**
  * @deprecated Product IA renamed Layouts → Surfaces. Repointed to the canonical
- * `/settings/surfaces` route; prefer `SURFACES_SETTINGS_HREF`. Kept so existing
+ * `/organization/surfaces` route; prefer `SURFACES_SETTINGS_HREF`. Kept so existing
  * imports keep linking to the canonical surface (no `/settings/layouts` in nav).
  */
 export const LAYOUTS_SETTINGS_HREF = SURFACES_SETTINGS_HREF;
 
-/** Build `/settings/:subpath` for product nav (never `/adminV2/settings/...`). */
+/**
+ * Build a config href for a settings subpath.
+ * Completed Organization domains resolve to `/organization/{slug}`; remaining
+ * domains stay on `/settings/{subpath}` until they are productized.
+ */
 export function adminSettingsSubpathHref(subpath: string): string {
     const trimmed = subpath.trim().replace(/^\//, "").replace(/^settings\/?/, "");
     if (!trimmed || trimmed === "organization") return CANONICAL_ADMIN_CONFIG_LANDING;
+    const orgSlug = ORGANIZATION_CONFIG_SUBPATH_ALIASES[trimmed];
+    if (orgSlug) return `${CANONICAL_ORGANIZATION_BASE}/${orgSlug}`;
     return `${ADMIN_SETTINGS_SUBPATH_PREFIX}/${trimmed}`;
 }
 

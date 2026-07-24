@@ -22,8 +22,8 @@ const STATUS_STYLE: Record<PosPacketStatus, { label: string; cls: string }> = {
     ready: { label: "Ready", cls: "bg-stone-100 text-stone-600" },
     shared: { label: "Shared", cls: "bg-sky-50 text-sky-700" },
     in_progress: { label: "In progress", cls: "bg-amber-50 text-amber-700" },
-    submitted: { label: "Submitted", cls: "bg-emerald-50 text-emerald-700" },
-    approved: { label: "Approved", cls: "bg-emerald-100 text-emerald-800" },
+    submitted: { label: "Submitted", cls: "bg-alloy-bend-pine/[0.08] text-alloy-bend-pine" },
+    approved: { label: "Approved", cls: "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine" },
     rejected: { label: "Rejected", cls: "bg-rose-50 text-rose-700" },
     needs_changes: { label: "Needs changes", cls: "bg-orange-50 text-orange-700" },
     cancelled: { label: "Cancelled", cls: "bg-stone-100 text-stone-500" },
@@ -243,8 +243,8 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
                 </div>
 
                 {showCreate ? (
-                    <div className="mb-3 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
-                        <div className="text-[11px] font-semibold text-emerald-900">Build a packet</div>
+                    <div className="mb-3 space-y-3 rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.05] p-3">
+                        <div className="text-[11px] font-semibold text-alloy-midnight">Build a packet</div>
 
                         {/* 1. Forms */}
                         <div>
@@ -336,8 +336,8 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
 
                         {composeErr ? <p className="text-[11px] text-amber-700">{composeErr}</p> : null}
                         {composeResult ? (
-                            <div className="rounded border border-emerald-200 bg-white p-2">
-                                <div className="text-[11px] font-semibold text-emerald-900">{composeResult.name} · {composeResult.form_count} form{composeResult.form_count === 1 ? "" : "s"} · {composeResult.shares.length} link{composeResult.shares.length === 1 ? "" : "s"}</div>
+                            <div className="rounded border border-alloy-bend-pine/25 bg-white p-2">
+                                <div className="text-[11px] font-semibold text-alloy-midnight">{composeResult.name} · {composeResult.form_count} form{composeResult.form_count === 1 ? "" : "s"} · {composeResult.shares.length} link{composeResult.shares.length === 1 ? "" : "s"}</div>
                                 {composeResult.warnings.map((w, i) => <p key={i} className="mt-0.5 text-[10px] text-amber-600">{w}</p>)}
                                 <ul className="mt-1 space-y-1">
                                     {composeResult.shares.map((s) => (
@@ -345,8 +345,8 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
                                             <span className="min-w-0 flex-1 truncate font-mono text-stone-600">{s.url ?? s.error ?? "—"}</span>
                                             {s.url ? (
                                                 <>
-                                                    <button type="button" onClick={() => copy(s.pair_key, s.url!)} className="shrink-0 rounded border border-emerald-200 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-50">{copiedId === s.pair_key ? "Copied" : "Copy"}</button>
-                                                    <a href={s.url} target="_blank" rel="noreferrer" className="shrink-0 rounded border border-emerald-200 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-50">Open</a>
+                                                    <button type="button" onClick={() => copy(s.pair_key, s.url!)} className="shrink-0 rounded border border-alloy-bend-pine/25 px-1.5 py-0.5 text-alloy-bend-pine hover:bg-alloy-bend-pine/[0.08]">{copiedId === s.pair_key ? "Copied" : "Copy"}</button>
+                                                    <a href={s.url} target="_blank" rel="noreferrer" className="shrink-0 rounded border border-alloy-bend-pine/25 px-1.5 py-0.5 text-alloy-bend-pine hover:bg-alloy-bend-pine/[0.08]">Open</a>
                                                 </>
                                             ) : null}
                                         </li>
@@ -411,8 +411,8 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
 }
 
 function ShareRow({ share }: { share: PosPacketShareRow }) {
-    const linkStatus = !share.is_active ? { label: "Inactive", cls: "bg-stone-100 text-stone-500" } : share.expired ? { label: "Expired", cls: "bg-rose-50 text-rose-700" } : { label: "Active", cls: "bg-emerald-50 text-emerald-700" };
-    const progress = share.submitted ? { label: "Submitted", cls: "bg-emerald-100 text-emerald-800" } : share.opened ? { label: "Opened", cls: "bg-amber-50 text-amber-700" } : { label: "Not opened", cls: "bg-stone-100 text-stone-500" };
+    const linkStatus = !share.is_active ? { label: "Inactive", cls: "bg-stone-100 text-stone-500" } : share.expired ? { label: "Expired", cls: "bg-rose-50 text-rose-700" } : { label: "Active", cls: "bg-alloy-bend-pine/[0.08] text-alloy-bend-pine" };
+    const progress = share.submitted ? { label: "Submitted", cls: "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine" } : share.opened ? { label: "Opened", cls: "bg-amber-50 text-amber-700" } : { label: "Not opened", cls: "bg-stone-100 text-stone-500" };
     return (
         <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2 py-1.5 text-[11px]">
             <span className="font-medium text-stone-700">{share.child_label ?? (share.child_id ? "Child" : "—")}</span>

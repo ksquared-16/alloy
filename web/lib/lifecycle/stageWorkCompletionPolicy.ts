@@ -2,11 +2,33 @@
  * Completion policy helpers for stage_operating_plan_v1 work templates.
  */
 
-import type { StageWorkCompletionPolicyV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type {
+    StageWorkCompletionPolicyV1,
+    StageWorkSufficientCommandResultV1,
+    StageWorkTemplateV1,
+} from "@/lib/lifecycle/stageOperatingPlanV1";
 
 function finiteInt(value: unknown): number | null {
     if (typeof value !== "number" || !Number.isFinite(value)) return null;
     return Math.max(0, Math.floor(value));
+}
+
+function normalizeSufficientCommandResults(
+    raw: unknown,
+): StageWorkSufficientCommandResultV1[] | undefined {
+    if (!Array.isArray(raw)) return undefined;
+    const out: StageWorkSufficientCommandResultV1[] = [];
+    for (const entry of raw) {
+        if (entry == null || typeof entry !== "object") continue;
+        const e = entry as Record<string, unknown>;
+        const capability = typeof e.capability === "string" ? e.capability.trim() : "";
+        const result = typeof e.result === "string" ? e.result.trim() : "";
+        const satisfies =
+            typeof e.satisfies_outcome_key === "string" ? e.satisfies_outcome_key.trim() : "";
+        if (!capability || !result || !satisfies) continue;
+        out.push({ capability, result, satisfies_outcome_key: satisfies });
+    }
+    return out.length ? out : undefined;
 }
 
 export function normalizeCompletionPolicy(
@@ -25,6 +47,10 @@ export function normalizeCompletionPolicy(
     if (window != null && window > 0) policy.window_days = window;
     if (raw.repeat_until_outcome === true) policy.repeat_until_outcome = true;
     if (repeatDue != null && repeatDue > 0) policy.repeat_due_days = repeatDue;
+    const sufficient = normalizeSufficientCommandResults(
+        (raw as { sufficient_command_results?: unknown }).sufficient_command_results,
+    );
+    if (sufficient) policy.sufficient_command_results = sufficient;
 
     if (!Object.keys(policy).length) return undefined;
     if (policy.min_attempts != null && policy.max_attempts != null && policy.min_attempts > policy.max_attempts) {
@@ -78,6 +104,32 @@ export function completionPolicyForWorkTemplate(
     template: Pick<StageWorkTemplateV1, "completion_policy"> | null | undefined,
 ): StageWorkCompletionPolicyV1 | undefined {
     return normalizeCompletionPolicy(template?.completion_policy);
+}
+
+/**
+ * Resolve the authored outcome that an objective capability result satisfies for a
+ * work template (R2). Returns null when configuration does not declare this result
+ * sufficient — in which case a successful command must NOT auto-complete the work.
+ * Keyed on the objective result, so a "failed" result can never resolve a "sent"
+ * mapping, and an operator declaration can never arrive through this path.
+ */
+export function resolveSufficientCommandResultOutcome(
+    template: Pick<StageWorkTemplateV1, "completion_policy"> | null | undefined,
+    capability: string,
+    result: string,
+): string | null {
+    const policy = completionPolicyForWorkTemplate(template);
+    const entries = policy?.sufficient_command_results;
+    if (!entries?.length) return null;
+    const cap = capability.trim();
+    const res = result.trim();
+    if (!cap || !res) return null;
+    for (const entry of entries) {
+        if (entry.capability === cap && entry.result === res) {
+            return entry.satisfies_outcome_key;
+        }
+    }
+    return null;
 }
 
 export function shouldRepeatWorkAfterRetryOutcome(

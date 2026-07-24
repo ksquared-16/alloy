@@ -3,34 +3,18 @@ import type { OrganizationDomainLandingModel } from "@/lib/configRuntime/organiz
 
 const PROCESSES_BASE = adminSettingsSubpathHref("processes");
 
-/** Business Processes landing — Organization definition + activation; overrides unproven. */
+/**
+ * Business Processes landing model — retained for deep-link tile hrefs only.
+ * `/settings/processes` now always mounts the Collection → Selected Process → Focused Workspace
+ * surface (`ProcessesConfigurationPage`); this model is no longer the page's default render path.
+ */
 export function buildBusinessProcessesLandingModel(): OrganizationDomainLandingModel {
     return {
         domainKey: "business-processes",
         title: "Business Processes",
-        purpose:
-            "Organization-owned process definitions, stages, work views, and action placement. Location activation exists where the builder already supports it — overrides are not claimed without evidence.",
+        purpose: "Create and manage how operational work moves through Alloy.",
         ownershipNote: "Organization definition + Location activation/assignment when present in the process builder.",
-        summaryCards: [
-            {
-                id: "ownership",
-                label: "Ownership",
-                value: "Organization",
-                detail: "Process definitions are authored centrally.",
-            },
-            {
-                id: "activation",
-                label: "Location",
-                value: "Activation / availability",
-                detail: "Operational contexts choose availability — not a fabricated override layer.",
-            },
-            {
-                id: "entry",
-                label: "How to start",
-                value: "Open a section",
-                detail: "Tiles enter the existing process builder — no redesign in this sprint.",
-            },
-        ],
+        summaryCards: [],
         tiles: [
             {
                 id: "stages",

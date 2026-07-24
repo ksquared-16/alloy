@@ -4,6 +4,7 @@
  * @see docs/system/configuration-ownership-doctrine.md
  */
 import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
+import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
 
 const settings = adminSettingsSubpathHref;
 
@@ -78,28 +79,42 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         description: "Define the language Alloy uses to operate.",
         items: [
             {
-                href: settings("entities"),
+                href: dataModelSectionHref("entities"),
                 label: "Entities",
                 description: "Configure entity names, labels, and terminology.",
                 icon: "entities",
                 testId: "config-mode-nav-entities",
             },
             {
-                href: settings("fields"),
+                href: dataModelSectionHref("fields"),
                 label: "Fields",
                 description: "Manage field definitions, types, validation, and rules.",
                 icon: "fields",
                 testId: "config-mode-nav-fields",
             },
             {
-                href: settings("statuses"),
+                href: dataModelSectionHref("statuses"),
                 label: "Statuses",
                 description: "Status vocabulary and lifecycle presentation.",
                 icon: "statuses",
                 testId: "config-mode-nav-statuses",
             },
             {
-                href: settings("calculations"),
+                href: dataModelSectionHref("option-sets"),
+                label: "Option Sets",
+                description: "Reusable option vocabularies for configured fields.",
+                icon: "fields",
+                testId: "config-mode-nav-option-sets",
+            },
+            {
+                href: dataModelSectionHref("relationships"),
+                label: "Relationships",
+                description: "Canonical edges and relationship-role vocabulary.",
+                icon: "entities",
+                testId: "config-mode-nav-relationships",
+            },
+            {
+                href: dataModelSectionHref("calculations"),
                 label: "Operational Calculations",
                 description: "Metrics, formulas, targets, and derived values.",
                 icon: "analytics",
@@ -173,9 +188,26 @@ export const CONFIGURATION_MODE_HUB_TITLE = "Platform Configuration";
 export const CONFIGURATION_MODE_HUB_SUBTITLE =
     "Configure Alloy across your organization, data model, operational workflows, and business modules.";
 
-export function configurationModeNavItemActive(href: string, path: string): boolean {
+export function configurationModeNavItemActive(
+    href: string,
+    path: string,
+    search: string = "",
+): boolean {
     const h = href.replace(/\/$/, "");
     const p = path.replace(/\/$/, "");
+    const hrefUrl = (() => {
+        try {
+            return new URL(h, "http://local.invalid");
+        } catch {
+            return null;
+        }
+    })();
+    const hrefPath = (hrefUrl?.pathname ?? h).replace(/\/$/, "");
+    const hrefSection = hrefUrl?.searchParams.get("section") ?? "";
+    const pathSection = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get(
+        "section",
+    );
+
     if (h === "/admin/workflows") return p === h || p.startsWith(`${h}/`);
     // Programs & Locations domain — highlight for landing and both collections.
     if (h === "/organization/programs-locations") {
@@ -195,17 +227,57 @@ export function configurationModeNavItemActive(href: string, path: string): bool
     if (h === "/organization/financials") {
         return p === h || p.startsWith(`${h}/`);
     }
-    if (h === settings("processes")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/business-processes");
-    if (h === settings("surfaces")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/layouts");
-    if (h === settings("entities")) {
+    if (h === "/organization/access" || h === settings("users-roles") || h === settings("access")) {
+        return (
+            p === "/organization/access"
+            || p.startsWith("/organization/access/")
+            || p === "/settings/users-roles"
+            || p.startsWith("/settings/users-roles/")
+        );
+    }
+    if (h === settings("processes")) {
         return (
             p === h
             || p.startsWith(`${h}/`)
+            || p.startsWith("/settings/processes")
+            || p.startsWith("/settings/business-processes")
+        );
+    }
+    if (h === settings("surfaces")) {
+        return (
+            p === h
+            || p.startsWith(`${h}/`)
+            || p.startsWith("/settings/surfaces")
+            || p.startsWith("/settings/layouts")
+        );
+    }
+    if (hrefPath === "/organization/data-model" || hrefPath.includes("/settings/entities")) {
+        const onDataModel =
+            p === "/organization/data-model"
+            || p.startsWith("/organization/data-model")
+            || p === "/settings/entities"
+            || p.startsWith("/settings/entities")
+            || p === "/settings/fields"
+            || p.startsWith("/settings/fields")
+            || p === "/settings/statuses"
+            || p.startsWith("/settings/statuses")
+            || p === "/settings/option-sets"
+            || p.startsWith("/settings/option-sets")
+            || p === "/settings/relationships"
+            || p.startsWith("/settings/relationships")
+            || p === "/settings/calculations"
+            || p.startsWith("/settings/calculations")
+            || p === "/settings/analytics"
+            || p.startsWith("/settings/analytics")
             || p === settings("entity-labels")
             || p.startsWith(`${settings("entity-labels")}/`)
             || p === settings("label-entities")
-            || p.startsWith(`${settings("label-entities")}/`)
-        );
+            || p.startsWith(`${settings("label-entities")}/`);
+        if (!onDataModel) return false;
+        if (!hrefSection) return true;
+        // Default Data Model section is entities when bare.
+        const effective = pathSection || (p === "/organization/data-model" ? "entities" : pathSection);
+        return effective === hrefSection;
     }
     return p === h || p.startsWith(`${h}/`);
 }

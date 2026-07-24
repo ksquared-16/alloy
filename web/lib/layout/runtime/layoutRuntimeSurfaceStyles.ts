@@ -38,7 +38,7 @@ export const LAYOUT_RUNTIME_SECTION_SURFACE =
     "overflow-hidden rounded-lg border border-admin-border border-l-[3px] border-l-[rgb(0,162,131)] bg-white shadow-[0_1px_3px_rgba(24,39,58,0.05)]";
 
 export const LAYOUT_RUNTIME_SECTION_HEADER =
-    "border-b border-alloy-stone/10 bg-gradient-to-r from-emerald-50/70 via-emerald-50/35 to-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/75";
+    "border-b border-alloy-stone/10 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/75";
 
 /** Primary workspace centerpiece section (e.g. Children & Enrollment). */
 export const LAYOUT_RUNTIME_PRIMARY_WORKSPACE_SECTION =
@@ -91,13 +91,13 @@ export const LAYOUT_RUNTIME_COMPOSITION_SECTION_TITLE =
     "text-[13px] font-semibold tracking-tight text-alloy-midnight";
 
 export const LAYOUT_RUNTIME_COMPOSITION_SECTION_HEADER =
-    "shrink-0 flex flex-col gap-0.5 border-b border-alloy-stone/12 bg-gradient-to-r from-emerald-50/70 via-emerald-50/35 to-white px-3 py-2.5";
+    "shrink-0 flex flex-col gap-0.5 border-b border-alloy-stone/12 bg-white px-3 py-2.5";
 
 /** Primary enrollment centerpiece — same composition card chrome as household/activity. */
 export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_SURFACE = LAYOUT_RUNTIME_COMPOSITION_SECTION_SURFACE;
 
 export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_HEADER =
-    "flex flex-col gap-0.5 border-b border-alloy-stone/10 bg-gradient-to-r from-emerald-50/70 via-emerald-50/35 to-white px-3 py-2";
+    "flex flex-col gap-0.5 border-b border-alloy-stone/10 bg-white px-3 py-2";
 
 export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_BODY = "px-0 pb-0 pt-0";
 

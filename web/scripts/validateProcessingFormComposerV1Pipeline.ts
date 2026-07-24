@@ -13,7 +13,6 @@ import {
     seedReviewQuestionFromDraftField,
 } from "../lib/pos/processingCase/formDraft/questionResolutionModel";
 import { detectionModeLabel, resolveDetectionMode } from "../lib/pos/processingCase/formDraft/detectionModeLabel";
-import { formAuthoringWorkspacePath } from "../lib/admin/forms/formAuthoringWorkspacePath";
 
 dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 
@@ -189,7 +188,7 @@ async function main() {
     }
     const createData = (createRes.json as { data?: { form_id?: string; builder_path?: string } }).data;
     const formId = createData?.form_id ?? null;
-    const builderPath = createData?.builder_path ?? (formId ? formAuthoringWorkspacePath(formId) : null);
+    const builderPath = createData?.builder_path ?? null;
     if (!formId || !builderPath?.includes("/adminV2/forms/")) {
         failed.push(`Rich builder handoff failed: ${builderPath}`);
     } else {
@@ -210,12 +209,8 @@ async function main() {
         if (schemaLabels.some((l) => /routing code/i.test(l))) failed.push("routing_code in published schema");
     }
 
-    // Rich builder page loads
-    if (formId) {
-        const pageRes = await fetch(`${base}${formAuthoringWorkspacePath(formId)}`, { headers: { cookie } });
-        if (pageRes.ok) detectedCleanly.push("Rich builder route returns 200");
-        else failed.push(`Rich builder route failed: ${pageRes.status}`);
-    }
+    // NOTE: the standalone form-authoring route (`/adminV2/forms/[id]`) was retired — form authoring
+    // now lives in the Digital Mailroom, so there is no standalone builder page to fetch/assert here.
 
     writeReport(caseId, formId);
     console.log(`Report written to ${REPORT}`);

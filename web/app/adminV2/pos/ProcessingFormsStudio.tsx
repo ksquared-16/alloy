@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import ProcessingCreateFormDialog from "./ProcessingCreateFormDialog";
 import ProcessingFormsAssetLibrary, { type FormAssetFilter } from "./ProcessingFormsAssetLibrary";
 import ProcessingFormBuilder from "./ProcessingFormBuilder";
+import ProcessingPacketsStudio from "./ProcessingPacketsStudio";
 import ProcessingStudioShell, { ProcessingStudioPlaceholder, type ProcessingStudioTab } from "./ProcessingStudioShell";
 import { useProcessingFormApi } from "./useProcessingFormApi";
 
@@ -101,10 +102,7 @@ export default function ProcessingFormsStudio({
                         focusFolderId={focusFolderId}
                     />
                 ) : studioTab === "packets" ? (
-                    <ProcessingStudioPlaceholder
-                        title="Packets"
-                        body="Packets are a first-class Studio capability, but Packet Composer is intentionally deferred. Existing form assets and builder workflows remain available in Forms."
-                    />
+                    <ProcessingPacketsStudio />
                 ) : studioTab === "fields" ? (
                     <ProcessingStudioPlaceholder
                         title="Fields"

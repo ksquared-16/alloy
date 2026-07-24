@@ -1,19 +1,18 @@
 "use client";
 
 /**
- * Organization Financials workspace — Locations-quality shell around existing
- * Tuition / Catalog / Policies / Accounting / Simulator / Funding panels.
- * Controls and mutations are unchanged; only route ownership + chrome translate.
+ * Organization Financials workspace — Locations-quality shell around Tuition / Catalog /
+ * Policies / Accounting / Simulator / Funding panels.
  */
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Banknote } from "lucide-react";
-import CommercialPoliciesPanel from "@/components/adminV2/commercial/CommercialPoliciesPanel";
 import CommercialSimulatorPanel from "@/components/adminV2/commercial/CommercialSimulatorPanel";
-import { CommercialCatalogPanel, AccountingReferencePanel } from "@/components/adminV2/commercial/CommercialConfigWorkspace";
-import { TuitionGridWorkspace } from "@/components/adminV2/commercial/TuitionGridWorkspace";
+import TuitionPlansConfigurationPage from "@/components/adminV2/settings/financials/tuitionPlans/TuitionPlansConfigurationPage";
+import GlCodesConfigurationPage from "@/components/adminV2/settings/financials/accounting/GlCodesConfigurationPage";
+import CatalogConfigurationPage from "@/components/adminV2/settings/financials/catalog/CatalogConfigurationPage";
+import PoliciesConfigurationPage from "@/components/adminV2/settings/financials/policies/PoliciesConfigurationPage";
 import {
     ConfigurationContext,
     ConfigurationShell,
@@ -25,7 +24,7 @@ import {
     organizationFinancialsChapterHref,
     type FinancialsWorkspaceChapter,
 } from "@/lib/commercial/commercialChapterRoutes";
-import { sortProducts, type CommercialCategory, type CommercialProduct, type CommercialRevenueCategory } from "@/lib/commercial/commercialProducts";
+import { type CommercialCategory, type CommercialProduct, type CommercialRevenueCategory } from "@/lib/commercial/commercialProducts";
 import type { BillingCadence } from "@/lib/commercial/billingCadences";
 import {
     loadProgramsChapterContext,
@@ -33,7 +32,6 @@ import {
 } from "@/lib/programs/programsChapterContextCache";
 import { useConfigurationContinuityOptional } from "@/components/adminV2/settings/configurationRuntime/ConfigurationContinuityProvider";
 import { prepareConfigurationSoftNavTarget } from "@/lib/configRuntime/configurationContinuity";
-import { CANONICAL_ORGANIZATION_BASE } from "@/lib/admin/canonicalAdminRoutes";
 
 function ChapterTabs({
     active,
@@ -59,7 +57,7 @@ function ChapterTabs({
                         aria-selected={selected}
                         data-testid={`financials-workspace-chapter-${chapter}`}
                         onClick={() => onSelect(chapter)}
-                        className={`px-3 py-2 text-[12px] -mb-px border-b-2 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/35 rounded-sm ${
+                        className={`px-3 py-1.5 text-[12px] -mb-px border-b-2 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/35 rounded-sm ${
                             selected
                                 ? "border-alloy-bend-pine text-alloy-bend-pine font-semibold"
                                 : "border-transparent text-alloy-midnight/55 hover:text-alloy-midnight"
@@ -81,7 +79,13 @@ export default function FinancialsWorkspaceSurface({
     orgId: string;
 }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const continuity = useConfigurationContinuityOptional();
+    const tuitionPlanId = searchParams.get("planId");
+    const tuitionTab = searchParams.get("tab");
+    const tuitionSetup = searchParams.get("setup");
+    const catalogSetup = searchParams.get("setup");
+    const catalogItemId = searchParams.get("itemId");
     const peeked = orgId ? peekProgramsChapterContext(orgId) : null;
     const [loading, setLoading] = useState(!peeked);
     const [error, setError] = useState<string | null>(null);
@@ -153,87 +157,62 @@ export default function FinancialsWorkspaceSurface({
                 subtitle={meta.description}
                 testId="financials-configuration-context"
             >
-                <div
-                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-alloy-stone/25 pt-2"
-                    data-testid="financials-collection-posture"
-                >
-                    <ul
-                        className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-alloy-midnight/52"
-                        aria-label="Financials breadcrumb"
-                    >
-                        <li>
-                            <Link href={CANONICAL_ORGANIZATION_BASE} className="font-medium hover:text-alloy-bend-pine">
-                                Organization
-                            </Link>
-                            <span className="mx-1.5 text-alloy-midnight/35" aria-hidden>
-                                ›
-                            </span>
-                            <span className="font-semibold text-alloy-midnight/70">Financials</span>
-                            <span className="mx-1.5 text-alloy-midnight/35" aria-hidden>
-                                ›
-                            </span>
-                            <span className="font-semibold text-alloy-bend-pine">{meta.label}</span>
-                        </li>
-                    </ul>
-                </div>
-                <div className="mt-2">
+                <div className="mt-1.5">
                     <ChapterTabs active={chapter} onSelect={selectChapter} />
                 </div>
             </ConfigurationContext>
 
             <ConfigurationShell testId={`financials-chapter-shell-${chapter}`}>
-                {error ?
-                    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
-                        {error}
-                    </p>
-                : loading ?
-                    <p className="p-4 text-sm text-alloy-midnight/55">Loading {meta.label}…</p>
-                : chapter === "tuition" ?
-                    <ConfigWorkspaceCard
-                        title="Tuition rates"
-                        description="Organization defaults and Location overrides for Program offerings."
-                        testId="financials-chapter-tuition"
-                    >
-                        <TuitionGridWorkspace canManage embedded={false} />
-                    </ConfigWorkspaceCard>
+                {chapter === "tuition" ?
+                    <div data-testid="financials-chapter-tuition">
+                        <TuitionPlansConfigurationPage
+                            initialPlanId={tuitionPlanId}
+                            initialTab={tuitionTab}
+                            initialSetup={tuitionSetup}
+                        />
+                    </div>
+                : chapter === "accounting" ?
+                    <div data-testid="financials-chapter-accounting">
+                        <GlCodesConfigurationPage />
+                    </div>
+                : chapter === "policies" ?
+                    <div data-testid="financials-chapter-policies">
+                        <PoliciesConfigurationPage programs={programs} locations={locations} />
+                    </div>
                 : chapter === "catalog" ?
                     <div data-testid="financials-chapter-catalog">
-                        <CommercialCatalogPanel
+                        <CatalogConfigurationPage
                             products={products}
                             categories={categories}
                             revenueCategories={revenueCategories}
                             locations={locations}
                             programs={programs}
-                            loading={false}
-                            canManage
+                            cadences={cadences}
+                            loading={loading}
+                            initialSetup={catalogSetup}
+                            initialItemId={catalogItemId}
+                            onCategoriesChanged={setCategories}
                             onProductCreated={(product) =>
-                                setProducts((current) => sortProducts([...current, product]))
-                            }
-                            onProductUpdated={(product) =>
                                 setProducts((current) =>
-                                    sortProducts(current.map((item) => (item.id === product.id ? product : item))),
+                                    current.some((row) => row.id === product.id) ? current : [...current, product],
                                 )
                             }
-                            onProductDeleted={(id) =>
-                                setProducts((current) => current.filter((item) => item.id !== id))
+                            onProductUpdated={(product) =>
+                                setProducts((current) => current.map((row) => (row.id === product.id ? product : row)))
                             }
                             onCategoryCreated={(category) =>
-                                setCategories((current) => [...current, category])
+                                setCategories((current) =>
+                                    current.some((row) => row.id === category.id) ? current : [...current, category],
+                                )
                             }
                         />
                     </div>
-                : chapter === "policies" ?
-                    <ConfigWorkspaceCard
-                        title="Commercial policies"
-                        description="Organization-authored discount, deposit, and commercial rules."
-                        testId="financials-chapter-policies"
-                    >
-                        <CommercialPoliciesPanel programs={programs} locations={locations} />
-                    </ConfigWorkspaceCard>
-                : chapter === "accounting" ?
-                    <div data-testid="financials-chapter-accounting">
-                        <AccountingReferencePanel products={products} loading={false} />
-                    </div>
+                : error ?
+                    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+                        {error}
+                    </p>
+                : loading ?
+                    <p className="p-4 text-sm text-alloy-midnight/55">Loading {meta.label}…</p>
                 : chapter === "simulator" ?
                     <ConfigWorkspaceCard
                         title="Commercial simulator"

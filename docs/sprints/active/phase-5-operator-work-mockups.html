@@ -1,0 +1,664 @@
+<title>Operator Work — Composition Mockups</title>
+<style>
+  :root {
+    --ground: #f6f7f9;
+    --surface: #ffffff;
+    --surface-sunk: #f0f2f5;
+    --ink: #1b2230;
+    --ink-muted: #59616f;
+    --ink-faint: #8b93a1;
+    --hairline: #e3e7 ec;
+    --hairline: #e3e7ec;
+    --hairline-strong: #cfd5de;
+    --accent: #1f7a6d;
+    --accent-soft: #e4f1ee;
+    --accent-ink: #145c52;
+    --ready: #3f8f5b;
+    --ready-soft: #e6f2ea;
+    --blocked: #b1544a;
+    --blocked-soft: #f6e7e4;
+    --waiting: #7b8494;
+    --waiting-soft: #eceef2;
+    --radius: 10px;
+    --radius-sm: 7px;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, "Cascadia Mono", "Roboto Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0f141b;
+      --surface: #161d27;
+      --surface-sunk: #10161e;
+      --ink: #e7ebf1;
+      --ink-muted: #a3acbb;
+      --ink-faint: #6c7686;
+      --hairline: #263040;
+      --hairline-strong: #33404f;
+      --accent: #4fb3a4;
+      --accent-soft: #14312d;
+      --accent-ink: #7fd2c5;
+      --ready: #5cb079;
+      --ready-soft: #16281d;
+      --blocked: #d67d70;
+      --blocked-soft: #2e1c19;
+      --waiting: #8791a1;
+      --waiting-soft: #1b232e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0f141b; --surface: #161d27; --surface-sunk: #10161e;
+    --ink: #e7ebf1; --ink-muted: #a3acbb; --ink-faint: #6c7686;
+    --hairline: #263040; --hairline-strong: #33404f;
+    --accent: #4fb3a4; --accent-soft: #14312d; --accent-ink: #7fd2c5;
+    --ready: #5cb079; --ready-soft: #16281d; --blocked: #d67d70; --blocked-soft: #2e1c19;
+    --waiting: #8791a1; --waiting-soft: #1b232e;
+  }
+  :root[data-theme="light"] {
+    --ground: #f6f7f9; --surface: #ffffff; --surface-sunk: #f0f2f5;
+    --ink: #1b2230; --ink-muted: #59616f; --ink-faint: #8b93a1;
+    --hairline: #e3e7ec; --hairline-strong: #cfd5de;
+    --accent: #1f7a6d; --accent-soft: #e4f1ee; --accent-ink: #145c52;
+    --ready: #3f8f5b; --ready-soft: #e6f2ea; --blocked: #b1544a; --blocked-soft: #f6e7e4;
+    --waiting: #7b8494; --waiting-soft: #eceef2;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .page {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.5;
+    padding: clamp(20px, 4vw, 56px) clamp(16px, 4vw, 56px) 72px;
+    max-width: 1180px;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- masthead ---------- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(28px, 4.4vw, 44px);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    font-weight: 680;
+    margin: 0 0 14px;
+    text-wrap: balance;
+    max-width: 20ch;
+  }
+  .lede {
+    font-size: clamp(15px, 1.6vw, 17px);
+    color: var(--ink-muted);
+    max-width: 62ch;
+    margin: 0;
+  }
+  .masthead { border-bottom: 1px solid var(--hairline); padding-bottom: 30px; margin-bottom: 30px; }
+
+  /* ---------- legend ---------- */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 10px 22px;
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-muted);
+    margin-top: 22px;
+  }
+  .legend b { color: var(--ink); font-weight: 600; }
+  .legend .swatch { display: inline-flex; align-items: center; gap: 7px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .dot.evolves { background: var(--accent); }
+  .dot.frozen { background: var(--hairline-strong); }
+  .dot.ready { background: var(--ready); }
+  .dot.blocked { background: var(--blocked); }
+  .dot.waiting { background: var(--waiting); }
+
+  /* ---------- plate ---------- */
+  .plate {
+    margin-top: 40px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .plate-head {
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--hairline);
+    background: linear-gradient(0deg, transparent, color-mix(in srgb, var(--accent-soft) 40%, transparent));
+  }
+  .plate-no {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    color: var(--accent-ink); letter-spacing: 0.08em;
+    border: 1px solid var(--hairline-strong); border-radius: 5px;
+    padding: 2px 8px; background: var(--surface);
+  }
+  .plate-title { font-size: 17px; font-weight: 640; letter-spacing: -0.01em; margin: 0; }
+  .plate-cap { font-size: 13.5px; color: var(--ink-muted); margin: 0; flex-basis: 100%; }
+
+  /* ---------- focus panel wireframe ---------- */
+  .focus {
+    padding: 20px;
+    background: var(--surface-sunk);
+  }
+  .frame {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--surface);
+    border: 1px dashed var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    padding: 11px 14px; margin-bottom: 16px;
+  }
+  .frame .frame-tag {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-faint); white-space: nowrap; padding-top: 2px;
+  }
+  .frame .frame-text { font-size: 14px; color: var(--ink); }
+  .frame .frame-text b { color: var(--accent-ink); font-weight: 640; }
+
+  .grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .col { display: flex; flex-direction: column; gap: 16px; }
+
+  /* card shell */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    padding: 14px 15px;
+  }
+  .card.frozen { opacity: 0.94; }
+  .card.frozen .card-name { color: var(--ink-muted); }
+  .card.owner {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--hairline));
+    box-shadow: inset 3px 0 0 var(--accent);
+    padding-left: 17px;
+  }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 11px;
+  }
+  .card-name { font-size: 13px; font-weight: 650; letter-spacing: 0.005em; }
+  .tag {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 20px; white-space: nowrap;
+  }
+  .tag.evolves { color: var(--accent-ink); background: var(--accent-soft); }
+  .tag.frozen { color: var(--ink-faint); background: var(--surface-sunk); border: 1px solid var(--hairline); }
+
+  /* generic wire lines for frozen cards */
+  .wire { height: 8px; border-radius: 4px; background: var(--hairline); }
+  .wire.s { width: 45%; } .wire.m { width: 68%; } .wire.l { width: 86%; }
+  .stack { display: flex; flex-direction: column; gap: 8px; }
+  .person-row { display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--surface-sunk); border: 1px solid var(--hairline-strong); flex: none; }
+  .person-meta { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .kid-line { display:flex; align-items:center; justify-content: space-between; gap: 8px; }
+  .kid-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .kid-stage { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); }
+
+  /* ---- Operator Work internals ---- */
+  .work-item {
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    padding: 12px 13px;
+    background: var(--surface);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .work-item + .work-item { margin-top: 10px; }
+  .work-item.primary { border-color: color-mix(in srgb, var(--accent) 40%, var(--hairline)); background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface)); }
+  .work-item.secondary { background: var(--surface-sunk); }
+  .work-item.settled { border-style: dashed; opacity: 0.9; }
+
+  .wi-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .wi-obl { font-size: 14.5px; font-weight: 640; letter-spacing: -0.01em; line-height: 1.3; }
+  .wi-obl .child-name {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    color: var(--accent-ink); background: var(--accent-soft);
+    padding: 1px 6px; border-radius: 5px; margin-left: 2px; letter-spacing: 0.02em;
+    vertical-align: 1px;
+  }
+  .pill {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 20px; white-space: nowrap; font-weight: 600;
+  }
+  .pill.ready { color: var(--ready); background: var(--ready-soft); }
+  .pill.blocked { color: var(--blocked); background: var(--blocked-soft); }
+  .pill.waiting { color: var(--waiting); background: var(--waiting-soft); }
+  .pill.primary { color: var(--accent-ink); background: var(--accent-soft); }
+  .pill.done { color: var(--ready); background: var(--ready-soft); }
+
+  .checklist { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .checklist li { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--ink-muted); }
+  .box { width: 13px; height: 13px; border-radius: 4px; border: 1.5px solid var(--hairline-strong); flex: none; position: relative; }
+  .box.checked { background: var(--accent); border-color: var(--accent); }
+  .box.checked::after { content: ""; position: absolute; left: 3.5px; top: 1px; width: 3px; height: 6.5px; border: solid #fff; border-width: 0 1.6px 1.6px 0; transform: rotate(42deg); }
+  @media (prefers-color-scheme: dark) { .box.checked::after { border-color: #0f141b; } }
+  :root[data-theme="dark"] .box.checked::after { border-color: #0f141b; }
+
+  .cmd-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--sans); font-size: 12.5px; font-weight: 600;
+    padding: 7px 13px; border-radius: 7px; border: 1px solid transparent; cursor: default;
+  }
+  .btn.primary { background: var(--accent); color: #fff; }
+  @media (prefers-color-scheme: dark) { .btn.primary { color: #08110f; } }
+  :root[data-theme="dark"] .btn.primary { color: #08110f; }
+  .btn.ghost { background: var(--surface); color: var(--ink-muted); border-color: var(--hairline-strong); }
+  .btn.disabled { background: var(--surface-sunk); color: var(--ink-faint); border-color: var(--hairline); }
+  .handoff {
+    font-family: var(--mono); font-size: 11px; color: var(--accent-ink);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .handoff::after { content: "›"; font-size: 14px; line-height: 1; }
+
+  .outcomes { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
+  .outcome {
+    font-size: 11.5px; color: var(--ink-muted);
+    border: 1px solid var(--hairline-strong); border-radius: 20px;
+    padding: 3px 10px; background: var(--surface);
+  }
+  .outcome.chosen { color: var(--ready); border-color: var(--ready); background: var(--ready-soft); font-weight: 600; }
+  .micro { font-size: 11.5px; color: var(--ink-faint); }
+  .blocker-reason {
+    display: flex; gap: 9px; align-items: flex-start;
+    background: var(--blocked-soft); border: 1px solid color-mix(in srgb, var(--blocked) 30%, var(--hairline));
+    border-radius: 7px; padding: 9px 11px; font-size: 12.5px; color: var(--ink);
+  }
+  .blocker-reason .b-ic { color: var(--blocked); font-weight: 700; font-family: var(--mono); }
+
+  .header-band {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 14px; padding: 8px 11px;
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-sm);
+  }
+  .header-band .hb-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-faint); margin-right: 4px; }
+  .chip-cmd { font-size: 11.5px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--hairline-strong); background: var(--surface-sunk); color: var(--ink-muted); }
+  .chip-cmd.active { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); font-weight: 600; }
+
+  .empty {
+    display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+    padding: 8px 2px;
+  }
+  .empty .e-head { font-size: 14px; font-weight: 600; }
+  .empty .e-wait { font-size: 13px; color: var(--ink-muted); }
+  .empty .e-wait b { color: var(--accent-ink); font-weight: 640; }
+
+  .tour-mini { display: flex; align-items: center; gap: 10px; }
+  .tour-when { font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
+
+  /* preview / confirm mini surface */
+  .preview {
+    border: 1px solid var(--hairline-strong); border-radius: 7px; background: var(--surface);
+    padding: 11px 12px; display: flex; flex-direction: column; gap: 9px;
+  }
+  .preview .pv-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-faint); }
+  .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+  .field .f-key { color: var(--ink-muted); }
+  .field .f-val { font-weight: 600; color: var(--ink); font-family: var(--mono); font-size: 12px; }
+  .pv-preview-line { font-size: 12px; color: var(--ink-muted); border-top: 1px dashed var(--hairline); padding-top: 8px; }
+  .pv-preview-line b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- composition note strip ---------- */
+  .note {
+    display: grid; grid-template-columns: auto 1fr; gap: 12px 16px;
+    padding: 15px 20px; border-top: 1px solid var(--hairline);
+    background: var(--surface);
+    font-size: 12.5px;
+  }
+  .note dt {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-faint); padding-top: 2px; white-space: nowrap;
+  }
+  .note dd { margin: 0; color: var(--ink-muted); }
+  .note dd b { color: var(--ink); font-weight: 600; }
+  .note dd .own { color: var(--accent-ink); font-weight: 600; }
+
+  footer {
+    margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--hairline);
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint);
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <p class="eyebrow">Phase 5 · Product Office · Operator Work Realization</p>
+    <h1>Operator Work as a composition</h1>
+    <p class="lede">Six operator states, each drawn on the existing Focus Panel layout. Only the <b>Operator Work</b> card
+      evolves — Household and Children are shown exactly as they ship. These are low-fidelity mockups: their job is to
+      validate <em>composition and ownership</em>, not pixels.</p>
+    <div class="legend" aria-label="legend">
+      <span class="swatch"><span class="dot evolves"></span><b>Operator Work</b>&nbsp;— evolves</span>
+      <span class="swatch"><span class="dot frozen"></span><b>Household / Children</b>&nbsp;— unchanged</span>
+      <span class="swatch"><span class="dot ready"></span>ready</span>
+      <span class="swatch"><span class="dot blocked"></span>blocked</span>
+      <span class="swatch"><span class="dot waiting"></span>waiting</span>
+    </div>
+  </header>
+
+  <!-- ============ PLATE 1 — FAMILY WORK ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-no">01</span>
+      <h2 class="plate-title">Family work</h2>
+      <p class="plate-cap">Maria opens the Rivera record from her queue. One obligation, and the Frame says why before she scans.</p>
+    </div>
+    <div class="focus">
+      <div class="frame">
+        <span class="frame-tag">Frame · why</span>
+        <span class="frame-text">New inquiry — the <b>Riveras</b> asked about fall enrollment 2 days ago and no one has reached out.</span>
+      </div>
+      <div class="grid">
+        <div class="col">
+          <div class="card owner">
+            <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
+            <div class="work-item primary">
+              <div class="wi-top">
+                <span class="wi-obl">Contact the Rivera family</span>
+                <span class="pill primary">Do now</span>
+              </div>
+              <ul class="checklist">
+                <li><span class="box"></span> Introduce the program</li>
+                <li><span class="box"></span> Offer a tour</li>
+              </ul>
+              <div class="cmd-row">
+                <span class="btn primary">Contact Family</span>
+                <span class="micro">closes when you report the result</span>
+              </div>
+              <div class="outcomes">
+                <span class="outcome">Reached — booked tour</span>
+                <span class="outcome">Left message</span>
+                <span class="outcome">Wrong number</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
+            <div class="person-row">
+              <span class="avatar"></span>
+              <div class="person-meta"><span class="kid-name">Rivera household · Maria &amp; Luis</span><span class="wire m"></span></div>
+            </div>
+            <div class="stack" style="margin-top:11px"><span class="wire l"></span><span class="wire s"></span></div>
+          </div>
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
+            <div class="kid-line"><span class="kid-name">1 child · on the inquiry</span><span class="kid-stage">lead</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <dl class="note">
+      <dt>Owns</dt><dd><span class="own">Operator Work</span> owns the obligation, its command, and its outcome vocabulary.</dd>
+      <dt>References</dt><dd>Household for who to reach; Children for who the inquiry is about. Neither is restated.</dd>
+      <dt>Reads as</dt><dd>why → what → how, top to bottom, before Maria interprets anything.</dd>
+    </dl>
+  </section>
+
+  <!-- ============ PLATE 2 — MULTI-CHILD WORK ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-no">02</span>
+      <h2 class="plate-title">Multi-child work</h2>
+      <p class="plate-cap">The family split at the decision point. Two children, different work, different readiness, different stages.</p>
+    </div>
+    <div class="focus">
+      <div class="frame">
+        <span class="frame-tag">Frame · why</span>
+        <span class="frame-text">The <b>Riveras</b> are mid-enrollment — <b>Mia</b> tours next week, <b>Noah</b> has an offer pending.</span>
+      </div>
+      <div class="grid">
+        <div class="col">
+          <div class="card owner">
+            <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
+            <div class="work-item primary">
+              <div class="wi-top">
+                <span class="wi-obl">Confirm the tour <span class="child-name">Mia</span></span>
+                <span class="pill ready">Ready</span>
+              </div>
+              <div class="cmd-row"><span class="btn primary">Confirm tour</span><span class="micro">Tue 10:00 · booked</span></div>
+            </div>
+            <div class="work-item secondary">
+              <div class="wi-top">
+                <span class="wi-obl">Extend the offer <span class="child-name">Noah</span></span>
+                <span class="pill blocked">Blocked</span>
+              </div>
+              <div class="micro">agreement unsigned — see Children</div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
+            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="kid-name">Rivera household</span><span class="wire m"></span></div></div>
+          </div>
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
+            <div class="stack">
+              <div class="kid-line"><span class="kid-name">Mia Rivera · age 4</span><span class="kid-stage">tour</span></div>
+              <div class="kid-line"><span class="kid-name">Noah Rivera · age 2</span><span class="kid-stage">offer</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <dl class="note">
+      <dt>Belongs to OW</dt><dd><span class="own">The verbs</span> — one work item per child, the child named <b>in the work</b>, readiness on the obligation.</dd>
+      <dt>Belongs to Children</dt><dd><b>The nouns</b> — Mia and Noah as people: names, ages, identity, per-child emergency contacts.</dd>
+      <dt>Never duplicated</dt><dd>Operator Work names a child; it never grows a second child roster.</dd>
+    </dl>
+  </section>
+
+  <!-- ============ PLATE 3 — BLOCKED WORK ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-no">03</span>
+      <h2 class="plate-title">Blocked work</h2>
+      <p class="plate-cap">Maria tries to move Noah forward and can't. A reason, not an error — and a resolving move that lives in the owner card.</p>
+    </div>
+    <div class="focus">
+      <div class="frame">
+        <span class="frame-tag">Frame · why</span>
+        <span class="frame-text"><b>Noah</b> is ready for an offer — but the enrollment can't advance until one thing is resolved.</span>
+      </div>
+      <div class="grid">
+        <div class="col">
+          <div class="card owner">
+            <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
+            <div class="work-item primary">
+              <div class="wi-top">
+                <span class="wi-obl">Extend the offer <span class="child-name">Noah</span></span>
+                <span class="pill blocked">Blocked</span>
+              </div>
+              <div class="blocker-reason"><span class="b-ic">!</span><span>Can’t extend the offer — <b>Noah’s enrollment agreement isn’t signed.</b></span></div>
+              <div class="cmd-row">
+                <span class="btn primary">Send agreement for signature</span>
+                <span class="handoff">Fix in Children</span>
+              </div>
+              <div class="cmd-row"><span class="btn disabled">Extend offer</span><span class="micro">available once the agreement is signed</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
+            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="kid-name">Rivera household</span><span class="wire m"></span></div></div>
+          </div>
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged · resolves here</span></div>
+            <div class="kid-line"><span class="kid-name">Noah Rivera · age 2</span><span class="pill blocked">agreement</span></div>
+            <div class="micro" style="margin-top:8px">Agreement &amp; signature live on the child record.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <dl class="note">
+      <dt>Blocker</dt><dd><span class="own">Operator Work states it</span> — the single named factor, in plain language, with the affordance gated (not hidden).</dd>
+      <dt>Resolution</dt><dd>The missing fact <b>hands off to its owner</b> — a household fact → Household, a child fact → Children. Never resolved inside Operator Work.</dd>
+      <dt>Not a dead end</dt><dd>Blocked always offers the next move.</dd>
+    </dl>
+  </section>
+
+  <!-- ============ PLATE 4 — COMMAND EXECUTION ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-no">04</span>
+      <h2 class="plate-title">Command execution</h2>
+      <p class="plate-cap">Maria schedules Mia’s tour. The command is offered in the workspace header band and inline; input previews, she confirms.</p>
+    </div>
+    <div class="focus">
+      <div class="header-band">
+        <span class="hb-label">Commands</span>
+        <span class="chip-cmd active">Schedule tour</span>
+        <span class="chip-cmd">Send form</span>
+        <span class="chip-cmd">Quick message</span>
+        <span class="micro" style="margin-left:auto">one command runtime · same meaning everywhere</span>
+      </div>
+      <div class="grid">
+        <div class="col">
+          <div class="card owner">
+            <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
+            <div class="work-item primary">
+              <div class="wi-top">
+                <span class="wi-obl">Schedule a tour <span class="child-name">Mia</span></span>
+                <span class="pill primary">In progress</span>
+              </div>
+              <div class="preview">
+                <span class="pv-label">Preview · confirm</span>
+                <div class="field"><span class="f-key">When</span><span class="f-val">Tue · 10:00 AM</span></div>
+                <div class="field"><span class="f-key">With</span><span class="f-val">Maria (you)</span></div>
+                <div class="pv-preview-line">On confirm: <b>tour is booked</b> and this work advances — one intent, not two clicks.</div>
+              </div>
+              <div class="cmd-row"><span class="btn primary">Confirm</span><span class="btn ghost">Cancel</span></div>
+              <div class="outcomes">
+                <span class="micro">closes as →</span>
+                <span class="outcome">Tour scheduled</span>
+                <span class="outcome">Family declined</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
+            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="kid-name">Rivera household</span><span class="wire m"></span></div></div>
+          </div>
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
+            <div class="kid-line"><span class="kid-name">Mia Rivera · age 4</span><span class="kid-stage">tour</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <dl class="note">
+      <dt>Where</dt><dd>Commands appear in exactly two places — the <b>header control band</b> (full set) and the work item’s <b>primary action</b> (the relevant one).</dd>
+      <dt>One path</dt><dd><span class="own">Both route through the one Command Runtime</span>: a command means the same thing wherever it’s launched.</dd>
+      <dt>Referenced input</dt><dd>An existing input surface (the tour modal) may collect details; its result returns into Operator Work as one continuous intent.</dd>
+    </dl>
+  </section>
+
+  <!-- ============ PLATE 5 — WORK COMPLETED ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-no">05</span>
+      <h2 class="plate-title">Work completed</h2>
+      <p class="plate-cap">The command succeeds and Maria declares the outcome. The surface becomes true under her hand — only where reality changed.</p>
+    </div>
+    <div class="focus">
+      <div class="frame">
+        <span class="frame-tag">Frame · why</span>
+        <span class="frame-text"><b>Mia</b>’s tour is confirmed — the next step for her is ready.</span>
+      </div>
+      <div class="grid">
+        <div class="col">
+          <div class="card owner">
+            <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves · recomposed</span></div>
+            <div class="work-item primary">
+              <div class="wi-top">
+                <span class="wi-obl">Prepare the enrollment offer <span class="child-name">Mia</span></span>
+                <span class="pill primary">Do now</span>
+              </div>
+              <div class="cmd-row"><span class="btn primary">Draft offer</span><span class="micro">next obligation, surfaced automatically</span></div>
+            </div>
+            <div class="work-item settled">
+              <div class="wi-top">
+                <span class="wi-obl">Confirm the tour <span class="child-name">Mia</span></span>
+                <span class="pill done">✓ Done</span>
+              </div>
+              <div class="outcomes"><span class="outcome chosen">Tour confirmed</span><span class="micro">just now · settled in place</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Stable — no change</span></div>
+            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="kid-name">Rivera household</span><span class="wire m"></span></div></div>
+          </div>
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Stable — no change</span></div>
+            <div class="kid-line"><span class="kid-name">Mia Rivera · age 4</span><span class="kid-stage">tour → offer</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <dl class="note">
+      <dt>Recomposes</dt><dd><span class="own">Only what changed</span> — the item settles with its outcome, the next obligation surfaces, readiness &amp; timeline update, the queue moves.</dd>
+      <dt>Holds stable</dt><dd>The Frame, Household, Children identity — every card not downstream of the outcome stays put.</dd>
+      <dt>Feels alive</dt><dd>Same action, no reload; the card answers under her hand, precisely where reality moved and nowhere else.</dd>
+    </dl>
+  </section>
+
+  <!-- ============ PLATE 6 — NO CURRENT WORK ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-no">06</span>
+      <h2 class="plate-title">No current work</h2>
+      <p class="plate-cap">Nothing is Maria’s to do right now. The card stays calm and names what the Subject is waiting on.</p>
+    </div>
+    <div class="focus">
+      <div class="frame">
+        <span class="frame-tag">Frame · why</span>
+        <span class="frame-text">The <b>Riveras</b> are progressing — the ball is in the family’s court.</span>
+      </div>
+      <div class="grid">
+        <div class="col">
+          <div class="card owner">
+            <div class="card-head"><span class="card-name">Operator Work</span><span class="tag evolves">Evolves</span></div>
+            <div class="empty">
+              <span class="e-head">Nothing to do now.</span>
+              <span class="e-wait">Waiting on the family to <b>confirm the tour</b> — booked Tue 10:00.</span>
+              <div class="tour-mini" style="margin-top:4px">
+                <span class="pill waiting">Waiting</span>
+                <span class="tour-when">auto-updates when they respond</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Household</span><span class="tag frozen">Unchanged</span></div>
+            <div class="person-row"><span class="avatar"></span><div class="person-meta"><span class="kid-name">Rivera household</span><span class="wire m"></span></div></div>
+          </div>
+          <div class="card frozen">
+            <div class="card-head"><span class="card-name">Children</span><span class="tag frozen">Unchanged</span></div>
+            <div class="kid-line"><span class="kid-name">Mia Rivera · age 4</span><span class="kid-stage">tour</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <dl class="note">
+      <dt>Calm, not blank</dt><dd><span class="own">Operator Work</span> never shows an empty void or a spinner.</dd>
+      <dt>Names the wait</dt><dd>It states what the Subject is waiting on, so “nothing to do” still reads as a known state.</dd>
+      <dt>Ready to wake</dt><dd>When the family responds, the next obligation recomposes into place — no reload.</dd>
+    </dl>
+  </section>
+
+  <footer>
+    <span>Phase 5 · Operator Work · low-fidelity composition mockups</span>
+    <span>Reuses the Focus Panel layout · Household &amp; Children unchanged</span>
+  </footer>
+</div>

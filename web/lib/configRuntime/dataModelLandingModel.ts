@@ -1,34 +1,15 @@
-import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
 import type { OrganizationDomainLandingModel } from "@/lib/configRuntime/organizationDomainLandingModel";
+import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
 
-/** Data Model landing — tiles use existing settings routes only. */
+/** Data Model landing model — tiles deep-link into the Category workspace (no ceremony cards). */
 export function buildDataModelLandingModel(): OrganizationDomainLandingModel {
     return {
         domainKey: "data-model",
         title: "Data Model",
         purpose:
-            "Organization vocabulary shared by records, processes, and configured surfaces — entities, fields, statuses, and derived calculations.",
+            "Configure the shared vocabulary, fields, statuses, relationships, and derived values used across Alloy.",
         ownershipNote: "Organization-owned definitions. Not a Location inheritance domain.",
-        summaryCards: [
-            {
-                id: "ownership",
-                label: "Ownership",
-                value: "Organization",
-                detail: "Definitions apply org-wide; Locations do not author a second vocabulary.",
-            },
-            {
-                id: "entry",
-                label: "How to start",
-                value: "Choose a section",
-                detail: "Open Entities, Fields, Statuses, or Calculations — no invented readiness score.",
-            },
-            {
-                id: "scope",
-                label: "Scope model",
-                value: "Organization only",
-                detail: "Assignment and override layers do not apply to the Data Model vocabulary.",
-            },
-        ],
+        summaryCards: [],
         tiles: [
             {
                 id: "entities",
@@ -37,7 +18,7 @@ export function buildDataModelLandingModel(): OrganizationDomainLandingModel {
                 capabilities: ["Entity labels", "Hub terminology", "Operator-facing names"],
                 kind: "configuration",
                 postureLabel: "Organization definition",
-                href: `${adminSettingsSubpathHref("entities")}?section=entities`,
+                href: dataModelSectionHref("entities"),
             },
             {
                 id: "fields",
@@ -46,16 +27,34 @@ export function buildDataModelLandingModel(): OrganizationDomainLandingModel {
                 capabilities: ["Field definitions", "Categories", "Relationships tab in Fields"],
                 kind: "configuration",
                 postureLabel: "Organization definition",
-                href: adminSettingsSubpathHref("fields"),
+                href: dataModelSectionHref("fields"),
             },
             {
                 id: "statuses",
                 label: "Statuses",
-                summary: "Status vocabulary and lifecycle presentation.",
-                capabilities: ["Status definitions", "Lifecycle presentation"],
+                summary: "Status vocabulary owned by explicit subject domains.",
+                capabilities: ["Status domains", "Status values", "Lifecycle presentation"],
                 kind: "configuration",
                 postureLabel: "Organization definition",
-                href: adminSettingsSubpathHref("statuses"),
+                href: dataModelSectionHref("statuses"),
+            },
+            {
+                id: "option-sets",
+                label: "Option Sets",
+                summary: "Reusable option vocabularies for configured fields.",
+                capabilities: ["Option set catalog", "Per-set values"],
+                kind: "configuration",
+                postureLabel: "Organization definition",
+                href: dataModelSectionHref("option-sets"),
+            },
+            {
+                id: "relationships",
+                label: "Relationships",
+                summary: "Canonical edges between Entities and relationship-role vocabulary.",
+                capabilities: ["Family roles", "Person relationships"],
+                kind: "configuration",
+                postureLabel: "Organization definition",
+                href: dataModelSectionHref("relationships"),
             },
             {
                 id: "calculations",
@@ -64,25 +63,7 @@ export function buildDataModelLandingModel(): OrganizationDomainLandingModel {
                 capabilities: ["Operational metrics", "Derived values"],
                 kind: "configuration",
                 postureLabel: "Organization definition",
-                href: adminSettingsSubpathHref("calculations"),
-            },
-            {
-                id: "option-sets",
-                label: "Option sets",
-                summary: "Reusable option vocabularies for configured fields.",
-                capabilities: ["Option set catalog", "Per-set editing"],
-                kind: "configuration",
-                postureLabel: "Organization definition",
-                href: adminSettingsSubpathHref("option-sets"),
-            },
-            {
-                id: "relationships",
-                label: "Relationships",
-                summary: "Person and family relationship configuration.",
-                capabilities: ["Family roles", "Person relationships"],
-                kind: "configuration",
-                postureLabel: "Organization definition",
-                href: adminSettingsSubpathHref("relationships"),
+                href: dataModelSectionHref("calculations"),
             },
         ],
     };

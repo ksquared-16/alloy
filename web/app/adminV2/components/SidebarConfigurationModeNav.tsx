@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Home } from "lucide-react";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import {
@@ -26,7 +26,9 @@ function workspaceHref(path: string): string {
 
 export default function SidebarConfigurationModeNav({ collapsed }: { collapsed: boolean }) {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
     const path = useMemo(() => normalizeToCanonicalAdminPath(pathname), [pathname]);
+    const search = searchParams.toString();
     const homeHref = workspaceHref(CANONICAL_OPERATOR_BASE);
 
     useEffect(() => {
@@ -55,7 +57,7 @@ export default function SidebarConfigurationModeNav({ collapsed }: { collapsed: 
     const configGroupLinks = CONFIGURATION_MODE_NAV_GROUPS.map((group, groupIndex) => {
         const groupItems = group.items.map((item) => {
             const Icon = configurationModeNavLucideIcon(item.icon);
-            const active = configurationModeNavItemActive(item.href, path);
+            const active = configurationModeNavItemActive(item.href, path, search);
 
             if (collapsed) {
                 return (

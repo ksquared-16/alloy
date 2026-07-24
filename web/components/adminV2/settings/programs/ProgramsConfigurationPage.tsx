@@ -374,7 +374,7 @@ export default function ProgramsConfigurationPage({
                     }
                 >
                     <ul
-                        className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-alloy-stone/25 pt-2 text-[11px] text-alloy-midnight/52"
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-alloy-stone/20 pt-1.5 text-[11px] text-alloy-midnight/52"
                         aria-label="Programs breadcrumb"
                     >
                         <li>

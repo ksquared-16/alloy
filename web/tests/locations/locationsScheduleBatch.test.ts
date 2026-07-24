@@ -19,7 +19,7 @@ afterEach(() => {
 
 describe("Locations schedule N+1 collapse", () => {
     it("fetchSchedulePatternsForOrg issues one org-scoped GET", async () => {
-        const fetchMock = vi.fn(async () =>
+        const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
             new Response(JSON.stringify({ patterns: [{ id: "p1" }] }), {
                 status: 200,
                 headers: { "Content-Type": "application/json" },
@@ -81,7 +81,7 @@ describe("Locations schedule N+1 collapse", () => {
     });
 
     it("site-scoped helper remains available for targeted reads", async () => {
-        const fetchMock = vi.fn(async () =>
+        const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
             new Response(JSON.stringify({ patterns: [] }), {
                 status: 200,
                 headers: { "Content-Type": "application/json" },

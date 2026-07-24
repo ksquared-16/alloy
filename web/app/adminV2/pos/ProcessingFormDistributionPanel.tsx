@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ProcessingCollapsibleInspectorSection from "./ProcessingCollapsibleInspectorSection";
+import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
 import {
     deriveProcessingFormPublishStatus,
     isProcessingIntakeLink,
@@ -45,6 +46,8 @@ type Props = {
     defaultOpen?: boolean;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
+    /** Render inner content without the own collapsible wrapper (for composing under a parent section). */
+    bare?: boolean;
 };
 
 const STATUS_LABELS = {
@@ -78,6 +81,7 @@ export default function ProcessingFormDistributionPanel({
     defaultOpen = false,
     open,
     onOpenChange,
+    bare = false,
 }: Props) {
     const [links, setLinks] = useState<ProcessingFormPublicLinkRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -235,17 +239,8 @@ export default function ProcessingFormDistributionPanel({
         setSelectedSiteIds((prev) => (prev.includes(siteId) ? prev.filter((id) => id !== siteId) : [...prev, siteId]));
     };
 
-    return (
-        <ProcessingCollapsibleInspectorSection
-            title="Distribution"
-            subtitle="Share links after publish — separate from publishing the form"
-            accent
-            defaultOpen={defaultOpen || publishStatus === "published" || publishJustSucceeded}
-            open={open}
-            onOpenChange={onOpenChange}
-            testId="processing-form-distribution-panel"
-        >
-            <div className="space-y-3">
+    const body = (
+        <div className="space-y-3" data-testid="processing-form-distribution-panel">
                 <div className="flex flex-wrap items-center gap-2">
                     <span
                         className="rounded-full bg-alloy-stone/[0.12] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/60"
@@ -273,9 +268,9 @@ export default function ProcessingFormDistributionPanel({
                     </div>
                 ) : null}
 
-                {loading ? <p className="text-[11px] text-alloy-midnight/45">Loading links…</p> : null}
+                {loading ? <BosExecutionLoader variant="inline" title="Loading links" /> : null}
                 {err ? <p className="text-[11px] text-rose-700">{err}</p> : null}
-                {copyWarn ? <p className="text-[11px] text-amber-800">{copyWarn}</p> : null}
+                {copyWarn ? <p className="text-[11px] text-alloy-ember">{copyWarn}</p> : null}
 
                 {!hasPublishedVersion ? (
                     <p className="text-[11px] text-alloy-midnight/45">
@@ -310,7 +305,7 @@ export default function ProcessingFormDistributionPanel({
                         {distributionScope === "selected_sites" ? (
                             <div className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] px-3 py-2">
                                 {sitesLoading ? (
-                                    <p className="text-[11px] text-alloy-midnight/45">Loading sites…</p>
+                                    <BosExecutionLoader variant="inline" title="Loading sites" />
                                 ) : sites.length === 0 ? (
                                     <p className="text-[11px] text-alloy-midnight/45">No sites available for this organization.</p>
                                 ) : (
@@ -413,7 +408,7 @@ export default function ProcessingFormDistributionPanel({
 
                 {minted && mintedShareUrl ? (
                     <div
-                        className="rounded-lg bg-amber-50/80 px-3 py-2 ring-1 ring-amber-200/60"
+                        className="rounded-lg bg-alloy-ember/[0.06] px-3 py-2 ring-1 ring-alloy-ember/20"
                         data-testid="processing-form-one-time-link"
                     >
                         <p className="text-[11px] font-semibold text-alloy-midnight">Copy this link now</p>
@@ -424,7 +419,7 @@ export default function ProcessingFormDistributionPanel({
                             <code className="break-all rounded bg-white px-2 py-1 font-mono text-[10px]">{mintedShareUrl}</code>
                             <button
                                 type="button"
-                                className="text-[10px] font-semibold text-alloy-blue hover:underline"
+                                className="text-[10px] font-semibold text-alloy-bend-pine hover:underline"
                                 onClick={() => void copyText("url", mintedShareUrl)}
                                 data-testid="processing-form-copy-url"
                             >
@@ -434,7 +429,7 @@ export default function ProcessingFormDistributionPanel({
                                 href={mintedShareUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[10px] font-semibold text-alloy-blue hover:underline"
+                                className="text-[10px] font-semibold text-alloy-bend-pine hover:underline"
                                 data-testid="processing-form-open-minted"
                             >
                                 Open
@@ -478,6 +473,20 @@ export default function ProcessingFormDistributionPanel({
                     ) : null}
                 </div>
             </div>
+    );
+
+    if (bare) return body;
+
+    return (
+        <ProcessingCollapsibleInspectorSection
+            title="Distribution"
+            subtitle="Share links after publish — separate from publishing the form"
+            accent
+            defaultOpen={defaultOpen || publishStatus === "published" || publishJustSucceeded}
+            open={open}
+            onOpenChange={onOpenChange}
+        >
+            {body}
         </ProcessingCollapsibleInspectorSection>
     );
 }

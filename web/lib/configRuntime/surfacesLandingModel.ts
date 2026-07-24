@@ -1,83 +1,84 @@
-import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
+/**
+ * Surfaces landing — category launch tiles (Financials-style).
+ *
+ * Canonical routes:
+ *   `/organization/surfaces` — landing (no section)
+ *   `/organization/surfaces?section=<category>` — collection + selected Surface workspace
+ */
+
+import {
+    CANONICAL_ORGANIZATION_SURFACES_HREF,
+} from "@/lib/admin/canonicalAdminRoutes";
 import type { OrganizationDomainLandingModel } from "@/lib/configRuntime/organizationDomainLandingModel";
+import type { SurfaceConfigSectionKey } from "@/components/adminV2/settings/surfaces/useSurfacesConfigurationSettings";
+import { sectionLabel, sectionSubtitle } from "@/lib/adminV2/settings/surfaces/surfacesNavigationModel";
 
-const SURFACES_BASE = adminSettingsSubpathHref("surfaces");
+export const SURFACES_LANDING_HREF = CANONICAL_ORGANIZATION_SURFACES_HREF;
 
-/** Surfaces landing — Organization definition + assignment; overrides only if proven. */
+export const SURFACES_LANDING_SECTIONS = [
+    "focus-panels",
+    "queue-rows",
+    "workspaces",
+    "work-units",
+    "operational-intelligence",
+] as const satisfies readonly SurfaceConfigSectionKey[];
+
+const SECTION_CAPABILITIES: Record<SurfaceConfigSectionKey, readonly string[]> = {
+    "focus-panels": ["Focus Panel composition", "Modes and cards", "Published panel layouts"],
+    "queue-rows": ["Queue row presentation", "Fields and widgets", "Process-bound rows"],
+    workspaces: ["Workspace header", "Process summaries", "Org-level KPIs"],
+    "work-units": ["Work Unit header", "Header metrics", "Attention placement"],
+    "operational-intelligence": ["Indicators and playbooks", "Metric placement", "OI surface builder"],
+};
+
+export function surfacesSectionHref(section: SurfaceConfigSectionKey | null | undefined): string {
+    if (!section) return SURFACES_LANDING_HREF;
+    return `${SURFACES_LANDING_HREF}?section=${encodeURIComponent(section)}`;
+}
+
+export type SurfacesLandingSectionTile = {
+    id: SurfaceConfigSectionKey;
+    label: string;
+    summary: string;
+    capabilities: readonly string[];
+    kind: "configuration";
+    postureLabel: string;
+    href: string;
+};
+
+export function buildSurfacesLandingSections(): SurfacesLandingSectionTile[] {
+    return SURFACES_LANDING_SECTIONS.map((id) => ({
+        id,
+        label: sectionLabel(id),
+        summary: sectionSubtitle(id),
+        capabilities: SECTION_CAPABILITIES[id],
+        kind: "configuration" as const,
+        postureLabel: "Organization definition",
+        href: surfacesSectionHref(id),
+    }));
+}
+
+/**
+ * Surfaces landing model — tiles drive the Financials-style launch grid.
+ * Summary/conceptual KPI cards stay empty (same compact landing doctrine).
+ */
 export function buildSurfacesLandingModel(): OrganizationDomainLandingModel {
+    const tiles = buildSurfacesLandingSections();
     return {
         domainKey: "surfaces",
         title: "Surfaces",
-        purpose:
-            "Organization presentation definitions — Focus Panels, queue rows, workspaces, and work unit chrome. Publication and assignment remain on existing contracts.",
+        purpose: "Configure the presentation operators use across Alloy.",
         ownershipNote:
             "Organization-owned surfaces with Location/process assignment where the Surfaces workspace already supports it. Location override is not fabricated.",
-        summaryCards: [
-            {
-                id: "ownership",
-                label: "Ownership",
-                value: "Organization",
-                detail: "Surface definitions are authored centrally.",
-            },
-            {
-                id: "assignment",
-                label: "Assignment",
-                value: "Process / workspace binding",
-                detail: "Where current Surfaces workspace already binds presentation.",
-            },
-            {
-                id: "entry",
-                label: "How to start",
-                value: "Choose a category",
-                detail: "Tiles open the existing Surfaces workspace — no Surface Builder redesign.",
-            },
-        ],
-        tiles: [
-            {
-                id: "focus-panels",
-                label: "Focus Panels",
-                summary: "Focus Panel composition and summary surfaces.",
-                capabilities: ["Focus Panel editor", "Published panel layouts"],
-                kind: "configuration",
-                postureLabel: "Organization definition",
-                href: `${SURFACES_BASE}?section=focus-panels`,
-            },
-            {
-                id: "queue-rows",
-                label: "Queue Rows",
-                summary: "Queue row presentation for process catalogs.",
-                capabilities: ["Queue row builder", "Process-bound rows"],
-                kind: "configuration",
-                postureLabel: "Organization definition",
-                href: `${SURFACES_BASE}?section=queue-rows`,
-            },
-            {
-                id: "workspaces",
-                label: "Workspaces",
-                summary: "Workspace header and process summary surfaces.",
-                capabilities: ["Workspace header", "Process summaries"],
-                kind: "configuration",
-                postureLabel: "Organization definition",
-                href: `${SURFACES_BASE}?section=workspaces`,
-            },
-            {
-                id: "work-units",
-                label: "Work Units",
-                summary: "Work unit header presentation.",
-                capabilities: ["Work unit header"],
-                kind: "configuration",
-                postureLabel: "Organization definition",
-                href: `${SURFACES_BASE}?section=work-units`,
-            },
-            {
-                id: "operational-intelligence",
-                label: "Operational Intelligence",
-                summary: "Operational intelligence surface composition.",
-                capabilities: ["OI surface builder"],
-                kind: "configuration",
-                postureLabel: "Organization definition",
-                href: `${SURFACES_BASE}?section=operational-intelligence`,
-            },
-        ],
+        summaryCards: [],
+        tiles: tiles.map((tile) => ({
+            id: tile.id,
+            label: tile.label,
+            summary: tile.summary,
+            capabilities: [...tile.capabilities],
+            kind: tile.kind,
+            postureLabel: tile.postureLabel,
+            href: tile.href,
+        })),
     };
 }
