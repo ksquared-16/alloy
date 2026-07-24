@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import CommercialPoliciesPanel from "@/components/adminV2/commercial/CommercialPoliciesPanel";
 import CommercialSimulatorPanel from "@/components/adminV2/commercial/CommercialSimulatorPanel";
 import {
@@ -11,6 +12,13 @@ import {
     ConfigurationDetailCard,
     ConfigurationEmptyState,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import { organizationProgramsHref } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    commercialCompatChapterToSection,
+    isProgramsOwnedCommercialChapter,
+    normalizeCommercialCompatChapter,
+    type CommercialWorkspaceSection,
+} from "@/lib/commercial/commercialChapterRoutes";
 import {
     type TuitionRateRow,
     formatRateCents,
@@ -73,9 +81,8 @@ import {
 
 type SiteLocation = { id: string; name: string };
 type ProgramEntry = { key: string; label: string; siteCount: number };
-type SecondaryTab = "programs" | "tuition";
 type PayerTab = "private" | "subsidy" | "corporate";
-type SectionTab = "programs_tuition" | "fees" | "accounting" | "policies" | "simulator" | "funding";
+type SectionTab = CommercialWorkspaceSection;
 
 type RatePayload = {
     rate_cents?: number;
@@ -88,8 +95,8 @@ type OnSave = (variantId: string, cadenceKey: string, payload: RatePayload) => P
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const SECTION_TABS = [
-    { key: "programs_tuition" as const, label: "Programs & tuition", available: true },
-    { key: "fees" as const, label: "Catalog", available: true },
+    { key: "tuition" as const, label: "Tuition", available: true },
+    { key: "catalog" as const, label: "Catalog", available: true },
     { key: "policies" as const, label: "Policies", available: true },
     { key: "accounting" as const, label: "Accounting", available: true },
     { key: "simulator" as const, label: "Simulator", available: true },
@@ -1002,7 +1009,7 @@ const GL_ACCOUNT_TYPES: { key: string; label: string }[] = [
     { key: "equity", label: "Equity" },
 ];
 
-function AccountingReferencePanel({ products, loading }: {
+export function AccountingReferencePanel({ products, loading }: {
     products: CommercialProduct[];
     loading: boolean;
 }) {
@@ -1916,6 +1923,10 @@ export function CommercialCatalogPanel({
 // ─── CommercialConfigWorkspace ─────────────────────────────────────────────────
 
 export function CommercialConfigWorkspace() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const chapterParam = searchParams.get("chapter");
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -1928,8 +1939,9 @@ export function CommercialConfigWorkspace() {
     const [cadences, setCadences] = useState<BillingCadence[]>([]);
     const [rates, setRates] = useState<TuitionRateRow[]>([]);
 
-    const [activeSection, setActiveSection] = useState<SectionTab>("programs_tuition");
-    const [secondaryTab, setSecondaryTab] = useState<SecondaryTab>("programs");
+    const [activeSection, setActiveSection] = useState<SectionTab>(() =>
+        commercialCompatChapterToSection(normalizeCommercialCompatChapter(chapterParam)),
+    );
     const [selectedProgramKey, setSelectedProgramKey] = useState<string | null>(null);
     const [selectedScopeId, setSelectedScopeId] = useState<string | null>(null);
     const [payerTab, setPayerTab] = useState<PayerTab>("private");
@@ -2031,8 +2043,23 @@ export function CommercialConfigWorkspace() {
     }, [selectedProgramKey, reloadOfferingsAndVariants]);
 
     useEffect(() => {
-        if (activeSection === "fees" || activeSection === "accounting") void loadFeesData();
+        if (activeSection === "catalog" || activeSection === "accounting") void loadFeesData();
     }, [activeSection, loadFeesData]);
+
+    useEffect(() => {
+        // Legacy Programs ownership under Commercial → canonical Organization Programs.
+        const chapter =
+            chapterParam
+            ?? (typeof window !== "undefined"
+                ? new URLSearchParams(window.location.search).get("chapter")
+                : null);
+        if (isProgramsOwnedCommercialChapter(chapter)) {
+            router.replace(organizationProgramsHref());
+            return;
+        }
+        const next = commercialCompatChapterToSection(normalizeCommercialCompatChapter(chapter));
+        setActiveSection((prev) => (prev === next ? prev : next));
+    }, [chapterParam, router]);
 
     // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -2053,25 +2080,6 @@ export function CommercialConfigWorkspace() {
     const variantsByOffering = groupVariantsByOffering(variants);
 
     // ── Mutations ─────────────────────────────────────────────────────────────
-
-    async function addProgram(label: string, key: string) {
-        try {
-            await Promise.all(locations.map((site) => fetch("/api/admin/location-program-categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location_id: site.id, label, key, sort_order: suggestNextLocationProgramCategorySortOrder(categories.filter((c) => c.location_id === site.id), site.id) }) })));
-            await reloadCategories();
-            setSelectedProgramKey(key);
-        } catch (e) { setError(String(e)); }
-    }
-
-    async function toggleSiteForProgram(siteId: string) {
-        if (!selectedProgramKey || !selectedProgram) return;
-        const existing = categories.find((c) => c.location_id === siteId && c.key === selectedProgramKey);
-        if (!existing) {
-            await fetch("/api/admin/location-program-categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location_id: siteId, label: selectedProgram.label, key: selectedProgramKey, sort_order: suggestNextLocationProgramCategorySortOrder(categories.filter((c) => c.location_id === siteId), siteId) }) });
-        } else {
-            await fetch("/api/admin/location-program-categories", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ updates: [{ id: existing.id, is_active: existing.is_active === false }] }) });
-        }
-        await reloadCategories();
-    }
 
     async function addOffering(fields: { attendance_type: AttendanceType; label: string }) {
         if (!selectedProgramKey) return;
@@ -2146,29 +2154,48 @@ export function CommercialConfigWorkspace() {
     if (loading) return <div className="flex items-center justify-center h-64"><p className="text-sm text-alloy-midnight/40">Loading…</p></div>;
 
     const programQueueColumn = (
-        <ConfigurationQueue title="Programs">
+        <ConfigurationQueue title="Programs for tuition">
             {programs.map((prog) => (
                 <ConfigurationQueueItem key={prog.key} active={selectedProgramKey === prog.key} title={prog.label} subtitle={`${prog.siteCount} ${prog.siteCount === 1 ? "site" : "sites"}`} onClick={() => setSelectedProgramKey(prog.key)} />
             ))}
             {programs.length === 0 && <p className="px-4 py-3 text-xs text-alloy-midnight/40">No programs yet.</p>}
-            <AddProgramForm onAdd={addProgram} />
         </ConfigurationQueue>
     );
 
     return (
-        <div className="config-runtime-shell flex flex-col min-h-0 flex-1">
+        <div className="config-runtime-shell flex flex-col min-h-0 flex-1" data-testid="commercial-compat-workspace">
             <div className="flex items-end border-b border-alloy-stone/20 bg-white px-6 flex-shrink-0">
                 {SECTION_TABS.map((tab) => (
                     <button
                         key={tab.key}
                         type="button"
                         disabled={!tab.available}
-                        onClick={() => { if (tab.available) setActiveSection(tab.key); }}
+                        onClick={() => {
+                            if (!tab.available) return;
+                            setActiveSection(tab.key);
+                            const href =
+                                tab.key === "catalog"
+                                    ? "/settings/commercial?chapter=catalog"
+                                    : `/settings/commercial?chapter=${tab.key}`;
+                            router.replace(href, { scroll: false });
+                        }}
                         className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40 rounded-sm ${activeSection === tab.key ? "border-alloy-bend-pine text-alloy-bend-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/60 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/45 cursor-not-allowed"}`}
+                        data-testid={`commercial-chapter-${tab.key}`}
                     >
                         {tab.label}
                     </button>
                 ))}
+            </div>
+
+            <div className="mx-6 mt-3 rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.04] px-3 py-2 text-[12px] text-alloy-midnight/60">
+                Programs are owned by Organization.{" "}
+                <Link
+                    href={organizationProgramsHref()}
+                    className="font-semibold text-alloy-bend-pine hover:underline"
+                    data-testid="commercial-open-canonical-programs"
+                >
+                    Open Programs →
+                </Link>
             </div>
 
             {error && (
@@ -2197,7 +2224,7 @@ export function CommercialConfigWorkspace() {
                 </div>
             ) : activeSection === "accounting" ? (
                 <AccountingReferencePanel products={products} loading={feesLoading} />
-            ) : activeSection === "fees" ? (
+            ) : activeSection === "catalog" ? (
                 <CommercialCatalogPanel
                     products={products}
                     categories={commercialCategories}
@@ -2213,53 +2240,26 @@ export function CommercialConfigWorkspace() {
             ) : (
                 <ConfigurationShell queueColumn={programQueueColumn}>
                     {selectedProgram ? (
-                        <div className="flex flex-col min-h-0 flex-1">
-                            <div className="flex border-b border-alloy-stone/15 px-6 bg-white flex-shrink-0">
-                                {(["programs", "tuition"] as const).map((tab) => (
-                                    <button key={tab} type="button" onClick={() => setSecondaryTab(tab)} className={`px-3 py-2.5 text-sm capitalize -mb-px border-b-2 transition-colors ${secondaryTab === tab ? "border-alloy-bend-pine text-alloy-bend-pine font-medium" : "border-transparent text-alloy-midnight/55 hover:text-alloy-midnight"}`}>
-                                        {tab}
-                                    </button>
-                                ))}
-                            </div>
-                            {secondaryTab === "programs" ? (
-                                <ProgramsPanel
-                                    program={selectedProgram}
-                                    locations={locations}
-                                    categories={categories}
-                                    offerings={offerings}
-                                    variants={variants}
-                                    rates={rates}
-                                    onToggleSite={toggleSiteForProgram}
-                                    onAddOffering={addOffering}
-                                    onUpdateOffering={updateOffering}
-                                    onDeleteOffering={deleteOffering}
-                                    onAddVariants={addVariants}
-                                    onUpdateVariant={updateVariant}
-                                    onDeleteVariant={deleteVariant}
-                                />
-                            ) : (
-                                <TuitionPanel
-                                    program={selectedProgram}
-                                    offerings={offerings}
-                                    variantsByOffering={variantsByOffering}
-                                    cadences={cadences}
-                                    locations={locations}
-                                    selectedScopeId={selectedScopeId}
-                                    onScopeChange={setSelectedScopeId}
-                                    payerTab={payerTab}
-                                    onPayerTabChange={setPayerTab}
-                                    rateMap={rateMap}
-                                    orgOnlyMap={orgOnlyMap}
-                                    locationId={locationId}
-                                    onSave={saveCell}
-                                    onClear={clearCell}
-                                    onCopyOrgToLocation={bulkCopyOrgToLocation}
-                                    bulkCopying={bulkCopying}
-                                />
-                            )}
-                        </div>
+                        <TuitionPanel
+                            program={selectedProgram}
+                            offerings={offerings}
+                            variantsByOffering={variantsByOffering}
+                            cadences={cadences}
+                            locations={locations}
+                            selectedScopeId={selectedScopeId}
+                            onScopeChange={setSelectedScopeId}
+                            payerTab={payerTab}
+                            onPayerTabChange={setPayerTab}
+                            rateMap={rateMap}
+                            orgOnlyMap={orgOnlyMap}
+                            locationId={locationId}
+                            onSave={saveCell}
+                            onClear={clearCell}
+                            onCopyOrgToLocation={bulkCopyOrgToLocation}
+                            bulkCopying={bulkCopying}
+                        />
                     ) : (
-                        <ConfigurationEmptyState title="Select a program" description="Choose a program from the left to configure it, or add a new one." />
+                        <ConfigurationEmptyState title="Select a program" description="Choose a program from the left to configure tuition rates." />
                     )}
                 </ConfigurationShell>
             )}

@@ -39,6 +39,7 @@ export type OpportunityDrawerFirstPaintDependencyKey =
     | "tasks_preview"
     | "scheduled_sends"
     | "inquiry_children"
+    | "scheduling_projection"
     | "attention_bundle";
 
 export type OpportunityDrawerFirstPaintDependencyState =

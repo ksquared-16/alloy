@@ -29,12 +29,13 @@ describe("bosRailPresentation", () => {
         expect(suggestions[0]?.title).toBe("Summarize this lead");
     });
 
-    it("uses Configuration-native starters on Configuration routes", () => {
+    it("uses Configuration-native starters on generic Configuration routes", () => {
         const suggestions = resolveCommandSurfaceRailStarterSuggestions({
             hasWorkUnitScope: false,
             hasOpportunityContext: false,
             opportunitySingular: "Inquiry",
             isConfigurationContext: true,
+            pathname: "/organization/financials",
         });
         expect(suggestions.map((suggestion) => suggestion.title)).toEqual([
             "Explain this configuration",
@@ -42,5 +43,37 @@ describe("bosRailPresentation", () => {
             "Review unpublished changes",
         ]);
         expect(suggestions.map((suggestion) => suggestion.title).join(" ")).not.toContain("queue");
+    });
+
+    it("uses Locations-native starters without unpublished-changes copy", () => {
+        const suggestions = resolveCommandSurfaceRailStarterSuggestions({
+            hasWorkUnitScope: false,
+            hasOpportunityContext: false,
+            opportunitySingular: "Inquiry",
+            isConfigurationContext: true,
+            pathname: "/organization/locations",
+        });
+        expect(suggestions.map((suggestion) => suggestion.title)).toEqual([
+            "Summarize this Location",
+            "Which Programs are offered here?",
+            "Show upcoming availability changes",
+        ]);
+        expect(suggestions.map((suggestion) => suggestion.title).join(" ")).not.toMatch(/unpublished|configuration/i);
+    });
+
+    it("uses Programs-native starters without unpublished-changes copy", () => {
+        const suggestions = resolveCommandSurfaceRailStarterSuggestions({
+            hasWorkUnitScope: false,
+            hasOpportunityContext: false,
+            opportunitySingular: "Inquiry",
+            isConfigurationContext: true,
+            pathname: "/organization/programs",
+        });
+        expect(suggestions.map((suggestion) => suggestion.title)).toEqual([
+            "Summarize this Program",
+            "Which Locations offer this Program?",
+            "What changed recently?",
+        ]);
+        expect(suggestions.map((suggestion) => suggestion.title).join(" ")).not.toMatch(/unpublished/i);
     });
 });

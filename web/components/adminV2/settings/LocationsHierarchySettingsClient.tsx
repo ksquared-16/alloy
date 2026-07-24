@@ -104,7 +104,9 @@ export default function LocationsHierarchySettingsClient() {
         void (async () => {
             const init = { credentials: "include" as const };
             const [categories, unitItems] = await Promise.all([
-                fetchLocationProgramCategories(init, { includeInactive: true }),
+                fetchLocationProgramCategories(init, { includeInactive: true }).catch(
+                    () => [] as LocationProgramCategoryRow[],
+                ),
                 fetchOptionSetItemsBySetKey("location_age_range_unit", init),
             ]);
             if (cancelled) return;

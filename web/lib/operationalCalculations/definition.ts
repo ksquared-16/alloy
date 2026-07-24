@@ -54,6 +54,10 @@ export const SUPPORTED_RULE_SHAPES = [
     // placements) are not config-rule shaped. Added as the Scheduling family
     // registered (doc: the closed set extends in code as new families register).
     "schedule_derived",
+    // Hard pass/fail eligibility gates (age band, program compatibility, room
+    // active, schedule/day compatibility, capacity) applied before ranking.
+    // Added as the Placement family registered (room fit).
+    "eligibility_gate",
 ] as const;
 
 export type CalculationRuleShape = (typeof SUPPORTED_RULE_SHAPES)[number];

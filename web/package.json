@@ -39,6 +39,7 @@
         "dev:clean:legacy-waitlist-demo": "tsx --tsconfig tsconfig.json scripts/cleanLegacyWaitlistDemo.ts",
         "dev:clean:processing-composer-e2e": "tsx --tsconfig tsconfig.json scripts/cleanProcessingFormComposerE2eArtifacts.ts",
         "dev:backfill:placement-candidates": "tsx --tsconfig tsconfig.json scripts/backfillPlacementCandidatesV1.ts",
+        "dev:backfill:organization-programs-from-lpc": "tsx --tsconfig tsconfig.json scripts/backfillOrganizationProgramsFromLpc.ts",
         "dev:repair:placement-candidates": "tsx --tsconfig tsconfig.json scripts/repairPlacementCandidatesFromOcm.ts",
         "audit:ocm-lifecycle-strict": "tsx --tsconfig tsconfig.json scripts/auditOcmLifecycleStrictModeReadiness.ts",
         "dev:backfill:ocm-lifecycle": "tsx --tsconfig tsconfig.json scripts/backfillOcmLifecycleFromRecommendations.ts",

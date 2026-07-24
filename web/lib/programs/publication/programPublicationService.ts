@@ -35,6 +35,7 @@ export type ProgramCatalogItem = {
     id: string;
     key: string;
     lifecycleStatus: "active" | "retired";
+    createdAt: string | null;
     draft: ProgramDraft;
     revisions: ProgramRevision[];
     publications: ConfigurationPublicationRecord[];
@@ -67,6 +68,9 @@ export type ProgramAvailability = {
     consumedRevisionId: string | null;
     localDescriptionOverride: string | null;
     localAuthorizationEvidence: string | null;
+    localDisplayName: string | null;
+    availableFrom: string | null;
+    availableThrough: string | null;
     metadata: Record<string, unknown>;
 };
 
@@ -283,12 +287,12 @@ export async function loadProgramPublicationSnapshot(
     }
     let availabilityQuery = supabase
         .from("location_program_categories")
-        .select("id, program_id, key, location_id, is_active, program_revision_id, local_description_override, local_authorization_evidence, metadata")
+        .select("id, program_id, key, location_id, is_active, program_revision_id, local_description_override, local_authorization_evidence, local_display_name, available_from, available_through, metadata")
         .eq("org_id", orgId);
     if (options.allowedSiteLocationIds != null && options.allowedSiteLocationIds.length > 0) {
         availabilityQuery = availabilityQuery.in("location_id", options.allowedSiteLocationIds);
     }
-    const [programRows, locationsResult, evidence, availabilityResult, offeringsResult, policiesResult, productsResult] = await Promise.all([
+    const [programRows, locationsResult, evidence, availabilityFirst, offeringsResult, policiesResult, productsResult] = await Promise.all([
         loadProgramRows(supabase, orgId),
         options.allowedSiteLocationIds?.length === 0
             ? Promise.resolve({ data: [], error: null })
@@ -320,8 +324,32 @@ export async function loadProgramPublicationSnapshot(
             .not("program_key", "is", null)
             .order("name"),
     ]);
+    let availabilityResult: { data: DbRow[] | null; error: { message?: string } | null } = availabilityFirst as {
+        data: DbRow[] | null;
+        error: { message?: string } | null;
+    };
+    if (
+        availabilityResult.error
+        && /local_display_name|available_from|available_through/i.test(String(availabilityResult.error.message ?? ""))
+    ) {
+        let fallbackQuery = supabase
+            .from("location_program_categories")
+            .select("id, program_id, key, location_id, is_active, program_revision_id, local_description_override, local_authorization_evidence, metadata")
+            .eq("org_id", orgId);
+        if (options.allowedSiteLocationIds != null && options.allowedSiteLocationIds.length > 0) {
+            fallbackQuery = fallbackQuery.in("location_id", options.allowedSiteLocationIds);
+        }
+        const fallback =
+            options.allowedSiteLocationIds?.length === 0
+                ? { data: [] as DbRow[], error: null }
+                : await fallbackQuery;
+        availabilityResult = fallback as { data: DbRow[] | null; error: { message?: string } | null };
+    }
     assertNoError(locationsResult.error, "Load Locations");
-    assertNoError(availabilityResult.error, "Load Program availability");
+    assertNoError(
+        availabilityResult.error ? { message: String(availabilityResult.error.message ?? "unknown") } : null,
+        "Load Program availability",
+    );
     assertNoError(offeringsResult.error, "Load Program offerings");
     assertNoError(policiesResult.error, "Load Program policies");
     assertNoError(productsResult.error, "Load Program products");
@@ -344,6 +372,7 @@ export async function loadProgramPublicationSnapshot(
             id: programId,
             key: stringValue(program.program_key),
             lifecycleStatus: program.lifecycle_status === "retired" ? "retired" : "active",
+            createdAt: nullableString(program.created_at),
             draft: mapDraft(program, draftRow),
             revisions,
             publications,
@@ -410,6 +439,9 @@ export async function loadProgramPublicationSnapshot(
             consumedRevisionId: nullableString(row.program_revision_id),
             localDescriptionOverride: nullableString(row.local_description_override),
             localAuthorizationEvidence: nullableString(row.local_authorization_evidence),
+            localDisplayName: nullableString(row.local_display_name),
+            availableFrom: nullableString(row.available_from),
+            availableThrough: nullableString(row.available_through),
             metadata: recordValue(row.metadata),
         })),
         offerings,
@@ -636,32 +668,60 @@ async function loadPublicationAndRevision(input: {
     return { publication, revision: mapRevision(revisionRow as DbRow) };
 }
 
-async function resolveProgramTargetContexts(input: {
+/** Resolve the active published revision for a Program, or null when unpublished. */
+export async function loadLatestProgramPublication(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    programId: string;
+}): Promise<{ publication: ConfigurationPublicationRecord; revision: ProgramRevision } | null> {
+    const { data: publicationRow, error: publicationError } = await input.supabase
+        .from("configuration_publications")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .eq("domain_key", "programs")
+        .eq("subject_id", input.programId)
+        .order("revision_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    assertNoError(publicationError, "Load latest Program publication");
+    if (!publicationRow) return null;
+    const publication = mapPublication(publicationRow as DbRow);
+    const { data: revisionRow, error: revisionError } = await input.supabase
+        .from("program_revisions")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .eq("id", publication.revision.id)
+        .single();
+    assertNoError(revisionError, "Load Program revision");
+    return { publication, revision: mapRevision(revisionRow as DbRow) };
+}
+
+export type SoftProgramTargetResolution = {
+    locationId: string;
+    locationLabel: string;
+    context: ProgramConsumerContext | null;
+    block?: { code: string; reason: string };
+};
+
+/**
+ * Soft eligibility resolve for Make Program Available.
+ * Missing / inactive / out-of-scope Locations become blocked rows — they do not throw.
+ */
+export async function resolveProgramTargetsSoft(input: {
     supabase: SupabaseClient;
     orgId: string;
     revision: ProgramRevision;
     targetIds: readonly string[];
     allowedSiteLocationIds: string[] | null;
-}): Promise<Array<{
-    target: { locationId: string; locationLabel: string };
-    context: ProgramConsumerContext;
-}>> {
+}): Promise<SoftProgramTargetResolution[]> {
     const uniqueIds = [...new Set(input.targetIds.map((id) => id.trim()).filter(Boolean))];
     if (uniqueIds.length === 0) throw new Error("Choose at least one Location.");
-    if (
-        input.allowedSiteLocationIds != null
-        && uniqueIds.some((id) => !input.allowedSiteLocationIds!.includes(id))
-    ) {
-        throw new Error("One or more selected Locations are outside your allowed scope.");
-    }
 
     const [locationsResult, categoriesResult, roomsResult] = await Promise.all([
         input.supabase
             .from("locations")
-            .select("id, label")
+            .select("id, label, is_active, location_type, org_id")
             .eq("org_id", input.orgId)
-            .eq("location_type", "site")
-            .eq("is_active", true)
             .in("id", uniqueIds),
         input.supabase
             .from("location_program_categories")
@@ -677,18 +737,67 @@ async function resolveProgramTargetContexts(input: {
             .eq("location_type", "unit")
             .in("parent_location_id", uniqueIds),
     ]);
-    assertNoError(locationsResult.error, "Resolve eligible Locations");
+    assertNoError(locationsResult.error, "Resolve Locations");
     assertNoError(categoriesResult.error, "Resolve Location Program offerings");
     assertNoError(roomsResult.error, "Resolve delivery-resource assignments");
-    const locations = (locationsResult.data ?? []) as DbRow[];
-    if (locations.length !== uniqueIds.length) {
-        throw new Error("One or more selected Locations are inactive, missing, or ineligible.");
-    }
+
+    const locationsById = new Map(
+        ((locationsResult.data ?? []) as DbRow[]).map((row) => [stringValue(row.id), row]),
+    );
     const categories = (categoriesResult.data ?? []) as DbRow[];
     const rooms = (roomsResult.data ?? []) as DbRow[];
 
-    return locations.map((location) => {
-        const locationId = stringValue(location.id);
+    return uniqueIds.map((locationId) => {
+        const location = locationsById.get(locationId);
+        if (!location) {
+            return {
+                locationId,
+                locationLabel: "Unknown Location",
+                context: null,
+                block: {
+                    code: "location_not_found",
+                    reason: "Location was not found in this Organization.",
+                },
+            };
+        }
+        const locationLabel = nullableString(location.label) ?? "Untitled Location";
+        if (stringValue(location.location_type) !== "site") {
+            return {
+                locationId,
+                locationLabel,
+                context: null,
+                block: {
+                    code: "location_not_site",
+                    reason: "Only site Locations can receive Program availability.",
+                },
+            };
+        }
+        if (location.is_active === false) {
+            return {
+                locationId,
+                locationLabel,
+                context: null,
+                block: {
+                    code: "location_inactive",
+                    reason: "This Location is inactive and cannot receive Program availability.",
+                },
+            };
+        }
+        if (
+            input.allowedSiteLocationIds != null
+            && !input.allowedSiteLocationIds.includes(locationId)
+        ) {
+            return {
+                locationId,
+                locationLabel,
+                context: null,
+                block: {
+                    code: "location_out_of_scope",
+                    reason: "This Location is outside your allowed site scope.",
+                },
+            };
+        }
+
         const category = categories.find(
             (row) =>
                 row.location_id === locationId
@@ -702,11 +811,10 @@ async function resolveProgramTargetContexts(input: {
                 room.parent_location_id === locationId
                 && nullableString(recordValue(room.metadata).category) === input.revision.programKey,
         ).length;
+
         return {
-            target: {
-                locationId,
-                locationLabel: nullableString(location.label) ?? "Untitled Location",
-            },
+            locationId,
+            locationLabel,
             context: {
                 currentRevisionId: category ? nullableString(category.program_revision_id) : null,
                 offeringExists: category != null,
@@ -721,6 +829,28 @@ async function resolveProgramTargetContexts(input: {
             },
         };
     });
+}
+
+async function resolveProgramTargetContexts(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    revision: ProgramRevision;
+    targetIds: readonly string[];
+    allowedSiteLocationIds: string[] | null;
+}): Promise<Array<{
+    target: { locationId: string; locationLabel: string };
+    context: ProgramConsumerContext;
+}>> {
+    const soft = await resolveProgramTargetsSoft(input);
+    const blocked = soft.filter((row) => row.block || !row.context);
+    if (blocked.length > 0) {
+        const first = blocked[0]!;
+        throw new Error(first.block?.reason ?? "One or more selected Locations are inactive, missing, or ineligible.");
+    }
+    return soft.map((row) => ({
+        target: { locationId: row.locationId, locationLabel: row.locationLabel },
+        context: row.context!,
+    }));
 }
 
 export async function previewProgramDistribution(input: {
@@ -819,12 +949,17 @@ export async function assignProgramDistribution(input: {
             org_id: input.orgId,
             publication_id: publication.id,
             domain_key: "programs",
+            subject_key: publication.subjectId,
+            revision_id: revision.id,
+            revision_number: revision.revisionNumber,
+            revision_checksum: revision.payloadChecksum,
             provider_key: plan.providerKey,
             provider_version: plan.providerVersion,
             idempotency_key: plan.idempotencyKey,
             target_set_checksum: plan.targetSetChecksum,
             status: "running",
-            created_by: input.actorUserId,
+            requested_by: input.actorUserId,
+            requested_by_label: "Programs Make Available",
             started_at: new Date().toISOString(),
         })
         .select("id")
@@ -839,6 +974,8 @@ export async function assignProgramDistribution(input: {
             .from("configuration_distribution_runs")
             .select("id")
             .eq("org_id", input.orgId)
+            .eq("domain_key", "programs")
+            .eq("subject_key", publication.subjectId)
             .eq("idempotency_key", plan.idempotencyKey)
             .single();
         assertNoError(existingError, "Reload distribution run");
@@ -852,10 +989,16 @@ export async function assignProgramDistribution(input: {
             targets.map((target) => ({
                 org_id: input.orgId,
                 run_id: runId,
+                domain_key: "programs",
+                subject_key: publication.subjectId,
                 location_id: target.locationId,
+                target_kind: "location",
+                target_key: target.locationId,
+                target_label: target.locationLabel.slice(0, 240) || "Location",
                 status: "pending",
+                provider_result: {},
             })),
-            { onConflict: "run_id,location_id", ignoreDuplicates: true },
+            { onConflict: "run_id,target_kind,target_key", ignoreDuplicates: true },
         );
     assertNoError(targetError, "Persist distribution targets");
 
@@ -916,4 +1059,210 @@ export async function retryProgramDistribution(input: {
         ...input,
         locationIds,
     });
+}
+
+async function loadProgramIdentityRow(
+    supabase: SupabaseClient,
+    orgId: string,
+    programId: string,
+): Promise<DbRow> {
+    const { data, error } = await supabase
+        .from("programs")
+        .select("id, org_id, program_key, lifecycle_status, retired_at")
+        .eq("org_id", orgId)
+        .eq("id", programId)
+        .maybeSingle();
+    assertNoError(error, "Load Program");
+    if (!data) throw new Error("Program not found.");
+    return data as DbRow;
+}
+
+/** Archive (retire) — operator Archive Program. */
+export async function retireProgram(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    actorUserId: string;
+    programId: string;
+}): Promise<void> {
+    await loadProgramIdentityRow(input.supabase, input.orgId, input.programId);
+    const { error } = await input.supabase
+        .from("programs")
+        .update({
+            lifecycle_status: "retired",
+            retired_at: new Date().toISOString(),
+        })
+        .eq("org_id", input.orgId)
+        .eq("id", input.programId);
+    assertNoError(error, "Archive Program");
+}
+
+/** Restore an archived Program. */
+export async function restoreProgram(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    actorUserId: string;
+    programId: string;
+}): Promise<void> {
+    await loadProgramIdentityRow(input.supabase, input.orgId, input.programId);
+    const { error } = await input.supabase
+        .from("programs")
+        .update({
+            lifecycle_status: "active",
+            retired_at: null,
+        })
+        .eq("org_id", input.orgId)
+        .eq("id", input.programId);
+    assertNoError(error, "Restore Program");
+}
+
+export type ProgramDeleteEligibility = {
+    allowed: boolean;
+    reason: string | null;
+};
+
+export async function evaluateProgramDeleteEligibility(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    programId: string;
+}): Promise<ProgramDeleteEligibility> {
+    await loadProgramIdentityRow(input.supabase, input.orgId, input.programId);
+
+    const { count: revisionCount, error: revisionError } = await input.supabase
+        .from("program_revisions")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", input.orgId)
+        .eq("program_id", input.programId);
+    assertNoError(revisionError, "Check Program history");
+    if ((revisionCount ?? 0) > 0) {
+        return {
+            allowed: false,
+            reason: "This Program is already in use and its history must be preserved.",
+        };
+    }
+
+    const { count: lpcCount, error: lpcError } = await input.supabase
+        .from("location_program_categories")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", input.orgId)
+        .eq("program_id", input.programId);
+    assertNoError(lpcError, "Check Program Locations");
+    if ((lpcCount ?? 0) > 0) {
+        return {
+            allowed: false,
+            reason: "This Program is already in use and its history must be preserved.",
+        };
+    }
+
+    return { allowed: true, reason: null };
+}
+
+/** Hard delete — only when never published and not associated to Locations. */
+export async function deleteProgram(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    actorUserId: string;
+    programId: string;
+}): Promise<void> {
+    const eligibility = await evaluateProgramDeleteEligibility(input);
+    if (!eligibility.allowed) {
+        throw new Error(eligibility.reason ?? "This Program cannot be deleted.");
+    }
+
+    const { error: draftError } = await input.supabase
+        .from("program_drafts")
+        .delete()
+        .eq("org_id", input.orgId)
+        .eq("program_id", input.programId);
+    assertNoError(draftError, "Delete Program draft");
+
+    const { error } = await input.supabase
+        .from("programs")
+        .delete()
+        .eq("org_id", input.orgId)
+        .eq("id", input.programId);
+    assertNoError(error, "Delete Program");
+}
+
+export type ProgramLocationRemovalResult = {
+    removedLocationIds: string[];
+    blocked: Array<{ locationId: string; locationLabel: string; reason: string }>;
+};
+
+/**
+ * Remove Program↔Location associations when safe.
+ * Blocks removal when enrollment/opportunity members still reference the LPC row.
+ */
+export async function removeProgramLocationAssociations(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    programId: string;
+    locationIds: readonly string[];
+    allowedSiteLocationIds: string[] | null;
+}): Promise<ProgramLocationRemovalResult> {
+    await loadProgramIdentityRow(input.supabase, input.orgId, input.programId);
+    const requested = [...new Set(input.locationIds.map(String).map((id) => id.trim()).filter(Boolean))];
+    if (requested.length === 0) {
+        return { removedLocationIds: [], blocked: [] };
+    }
+
+    let lpcQuery = input.supabase
+        .from("location_program_categories")
+        .select("id, location_id")
+        .eq("org_id", input.orgId)
+        .eq("program_id", input.programId)
+        .in("location_id", requested);
+    if (input.allowedSiteLocationIds != null) {
+        lpcQuery = lpcQuery.in("location_id", input.allowedSiteLocationIds);
+    }
+    const { data: lpcRows, error: lpcError } = await lpcQuery;
+    assertNoError(lpcError, "Load Program Locations");
+
+    const rows = (lpcRows ?? []) as Array<{ id: string; location_id: string }>;
+    const locationIds = rows.map((row) => stringValue(row.location_id)).filter(Boolean);
+    const labelById = new Map<string, string>();
+    if (locationIds.length > 0) {
+        const { data: locationRows, error: locationError } = await input.supabase
+            .from("locations")
+            .select("id, label")
+            .eq("org_id", input.orgId)
+            .in("id", locationIds);
+        assertNoError(locationError, "Load Location labels");
+        for (const location of (locationRows ?? []) as DbRow[]) {
+            labelById.set(stringValue(location.id), stringValue(location.label) || "Location");
+        }
+    }
+
+    const removedLocationIds: string[] = [];
+    const blocked: ProgramLocationRemovalResult["blocked"] = [];
+
+    for (const row of rows) {
+        const locationId = stringValue(row.location_id);
+        const locationLabel = labelById.get(locationId) ?? "Location";
+
+        const { count, error: usageError } = await input.supabase
+            .from("opportunity_customer_members")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", input.orgId)
+            .eq("program_category_id", row.id);
+        assertNoError(usageError, "Check Location Program use");
+
+        if ((count ?? 0) > 0) {
+            blocked.push({
+                locationId,
+                locationLabel,
+                reason: `This Program cannot be removed from ${locationLabel} because it has active enrollments.`,
+            });
+            continue;
+        }
+
+        const { error: deleteError } = await input.supabase
+            .from("location_program_categories")
+            .delete()
+            .eq("org_id", input.orgId)
+            .eq("id", row.id);
+        assertNoError(deleteError, "Remove Program from Location");
+        removedLocationIds.push(locationId);
+    }
+
+    return { removedLocationIds, blocked };
 }

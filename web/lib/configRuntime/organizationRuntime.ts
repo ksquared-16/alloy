@@ -6,7 +6,12 @@
  * distribution behavior here; they keep their own authoritative storage.
  */
 
-import { CANONICAL_ORGANIZATION_PROGRAMS_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    CANONICAL_ORGANIZATION_FINANCIALS_HREF,
+    CANONICAL_ORGANIZATION_PROGRAMS_HREF,
+    CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF,
+} from "@/lib/admin/canonicalAdminRoutes";
+import { ORGANIZATION_LOCATIONS_PATH } from "@/lib/admin/canonicalLocationSettingsRoutes";
 
 export type ConfigurationAuthority = "platform" | "organization" | "location";
 export type ConfigurationInheritanceKind = "value" | "availability" | "none";
@@ -23,6 +28,8 @@ export type ConfigurationHealthState = "ready" | "attention" | "not_assessed";
 export type OrganizationConfigurationDomainIcon =
     | "locations"
     | "programs"
+    | "programs-locations"
+    | "financials"
     | "access"
     | "communications"
     | "data-model"
@@ -129,59 +136,68 @@ export type OrganizationGovernanceSummary = {
 
 const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
     {
-        key: "locations",
-        label: "Locations",
-        description: "Consumers of organization configuration and owners of local delivery resources.",
-        href: "/settings/locations",
-        icon: "locations",
+        key: "programs-locations",
+        label: "Programs & Locations",
+        description:
+            "Two perspectives on one operational system — reusable Organization services, and the places that deliver them.",
+        href: CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF,
+        icon: "programs-locations",
         publisherLabel: "Organization",
-        configurationOwner: "Locations",
-        runtimeOwner: "Location and operational runtimes",
-        consumers: ["Location Runtime", "Operational Runtime"],
-        inheritance: {
-            kind: "none",
-            path: ["organization", "location"],
-            label: "Locations own local delivery configuration",
-        },
-        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
-        override: { state: "not_allowed", label: "Local objects are authoritative" },
-        health: {
-            state: "not_assessed",
-            label: "Not assessed",
-            detail: "Location readiness remains authoritative in Locations.",
-        },
-        distributionMode: "none",
-        ownedConfiguration: ["Sites", "Programs offered", "Rooms & delivery resources", "Local schedules"],
-    },
-    {
-        key: "programs",
-        internalRuntimeKey: "commercial",
-        label: "Programs",
-        description: "Reusable service catalog published by the organization for every business vertical.",
-        href: CANONICAL_ORGANIZATION_PROGRAMS_HREF,
-        icon: "programs",
-        publisherLabel: "Organization",
-        configurationOwner: "Programs",
-        runtimeOwner: "Programs and Commercial Runtime",
-        consumers: ["Locations", "Enrollment", "Commercial", "Billing"],
+        configurationOwner: "Programs & Locations",
+        runtimeOwner: "Programs and Location runtimes",
+        consumers: ["Locations", "Enrollment", "Financials", "Operational Runtime"],
         inheritance: {
             kind: "availability",
             path: ["organization", "location"],
-            label: "Organization publishes; Locations choose what they offer",
+            label: "Programs are authored once; Locations consume and deliver them",
         },
-        publication: { mode: "explicit", status: "publish_required", label: "Publish required" },
-        override: { state: "available", label: "Locations control availability, not Program identity" },
+        publication: { mode: "immediate", status: "live_on_save", label: "Collections remain authoritative" },
+        override: {
+            state: "available",
+            label: "Locations own local delivery; Programs own reusable definition",
+        },
         health: {
             state: "not_assessed",
             label: "Not assessed",
-            detail: "Programs will report health from its authoritative catalog.",
+            detail: "Readiness remains owned by Programs and Locations collections.",
         },
         distributionMode: "assignment",
         ownedConfiguration: [
-            "Catalog & categories",
-            "Eligibility & licensing",
-            "Required resource types",
-            "Commercial, funding, and billing defaults",
+            "Organization Program definitions",
+            "Location delivery of Programs",
+            "Rooms, schedules, and local capacity",
+            "Program ↔ Location assignment",
+        ],
+    },
+    {
+        key: "financials",
+        label: "Financials",
+        description:
+            "Configure tuition, billable items, funding, financial rules, and accounting relationships.",
+        href: CANONICAL_ORGANIZATION_FINANCIALS_HREF,
+        icon: "financials",
+        publisherLabel: "Organization",
+        configurationOwner: "Financials",
+        runtimeOwner: "Commercial and billing runtimes",
+        consumers: ["Enrollment", "Billing", "Locations", "Processing"],
+        inheritance: {
+            kind: "value",
+            path: ["organization", "location"],
+            label: "Organization defaults inherit; Locations may override tuition cells",
+        },
+        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+        override: { state: "available", label: "Location tuition overrides are supported" },
+        health: {
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Financials health remains owned by rate, catalog, and policy surfaces.",
+        },
+        distributionMode: "inherit",
+        ownedConfiguration: [
+            "Tuition rates and cadence",
+            "Fees, add-ons, and catalog",
+            "Discount policies",
+            "Accounting mappings",
         ],
     },
     {
@@ -361,6 +377,74 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
     },
 ] as const;
 
+/**
+ * Programs remains a configuration domain for runtime/publication lookups and
+ * `/organization/programs` compatibility — it is not an Organization landing peer.
+ * Peer entry is Programs & Locations.
+ */
+export const PROGRAMS_CONFIGURATION_DOMAIN: OrganizationConfigurationDomain = {
+    key: "programs",
+    internalRuntimeKey: "commercial",
+    label: "Programs",
+    description: "Reusable service catalog published by the organization for every business vertical.",
+    href: CANONICAL_ORGANIZATION_PROGRAMS_HREF,
+    icon: "programs",
+    publisherLabel: "Organization",
+    configurationOwner: "Programs",
+    runtimeOwner: "Programs and Commercial Runtime",
+    consumers: ["Locations", "Enrollment", "Commercial", "Billing"],
+    inheritance: {
+        kind: "availability",
+        path: ["organization", "location"],
+        label: "Organization publishes; Locations choose what they offer",
+    },
+    publication: { mode: "explicit", status: "publish_required", label: "Publish required" },
+    override: { state: "available", label: "Locations control availability, not Program identity" },
+    health: {
+        state: "not_assessed",
+        label: "Not assessed",
+        detail: "Programs will report health from its authoritative catalog.",
+    },
+    distributionMode: "assignment",
+    ownedConfiguration: [
+        "Catalog & categories",
+        "Eligibility & licensing",
+        "Required resource types",
+        "Delivery Options and Location assignment",
+    ],
+};
+
+/**
+ * Locations collection remains available for lookups and Continuity — not a landing peer.
+ * Peer entry is Programs & Locations.
+ */
+export const LOCATIONS_CONFIGURATION_DOMAIN: OrganizationConfigurationDomain = {
+    key: "locations",
+    label: "Locations",
+    description: "Consumers of organization configuration and owners of local delivery resources.",
+    href: ORGANIZATION_LOCATIONS_PATH,
+    icon: "locations",
+    publisherLabel: "Organization",
+    configurationOwner: "Locations",
+    runtimeOwner: "Location and operational runtimes",
+    consumers: ["Location Runtime", "Operational Runtime"],
+    inheritance: {
+        kind: "none",
+        path: ["organization", "location"],
+        label: "Locations own local delivery configuration",
+    },
+    publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+    override: { state: "not_allowed", label: "Local objects are authoritative" },
+    health: {
+        state: "not_assessed",
+        label: "Not assessed",
+        detail: "Location readiness remains authoritative in Locations.",
+    },
+    distributionMode: "none",
+    ownedConfiguration: ["Sites", "Programs offered", "Rooms & delivery resources", "Local schedules"],
+};
+
+/** Peer domains shown on `/organization` — Programs and Locations are not separate peers. */
 export function organizationConfigurationDomains(): readonly OrganizationConfigurationDomain[] {
     return CONFIGURATION_DOMAINS;
 }
@@ -368,6 +452,15 @@ export function organizationConfigurationDomains(): readonly OrganizationConfigu
 export function organizationConfigurationDomain(
     domainKey: string,
 ): OrganizationConfigurationDomain | null {
+    if (
+        domainKey === PROGRAMS_CONFIGURATION_DOMAIN.key
+        || domainKey === PROGRAMS_CONFIGURATION_DOMAIN.internalRuntimeKey
+    ) {
+        return PROGRAMS_CONFIGURATION_DOMAIN;
+    }
+    if (domainKey === LOCATIONS_CONFIGURATION_DOMAIN.key) {
+        return LOCATIONS_CONFIGURATION_DOMAIN;
+    }
     return (
         CONFIGURATION_DOMAINS.find(
             (domain) => domain.key === domainKey || domain.internalRuntimeKey === domainKey,

@@ -110,6 +110,7 @@ export default function LifecycleActivationBoard({
     identity,
     catalog = [],
     creatingNew = false,
+    initialSection = "stages",
     onIdentityChange,
     onCatalogRefresh,
     onWorkspaceBust,
@@ -127,6 +128,7 @@ export default function LifecycleActivationBoard({
     identity: LifecycleRuntimeIdentity | null;
     catalog?: LifecycleCatalogEntry[];
     creatingNew?: boolean;
+    initialSection?: BusinessProcessWorkspaceSection;
     onIdentityChange: (identity: LifecycleRuntimeIdentity) => void;
     onCatalogRefresh?: () => void | Promise<void>;
     onWorkspaceBust?: () => void;
@@ -174,7 +176,7 @@ export default function LifecycleActivationBoard({
     const [stageSaveState, setStageSaveState] = useState<LifecycleStageSaveUiState>("idle");
     const [stageSaveError, setStageSaveError] = useState<string | null>(null);
     const [readyCheckRevision, setReadyCheckRevision] = useState(0);
-    const [processSection, setProcessSection] = useState<BusinessProcessWorkspaceSection>("stages");
+    const [processSection, setProcessSection] = useState<BusinessProcessWorkspaceSection>(initialSection);
     const [selectedActionKey, setSelectedActionKey] = useState<LifecycleBaseActionKey | null>(null);
     const workspaceHandleRef = useRef<StageEditorV2Handle | null>(null);
     const stageDirtyRef = useRef(false);

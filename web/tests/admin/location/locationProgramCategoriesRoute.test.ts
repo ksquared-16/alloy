@@ -60,6 +60,36 @@ describe("location program category PATCH contract", () => {
         });
     });
 
+    it("accepts local display name and availability dates", () => {
+        expect(
+            buildProgramCategoryPatch(
+                {
+                    local_display_name: " Young Infants ",
+                    available_from: "2027-03-01",
+                    available_through: "",
+                },
+                "2026-07-22T00:00:00.000Z",
+            ),
+        ).toEqual({
+            ok: true,
+            patch: {
+                local_display_name: "Young Infants",
+                available_from: "2027-03-01",
+                available_through: null,
+                updated_at: "2026-07-22T00:00:00.000Z",
+            },
+        });
+        expect(
+            buildProgramCategoryPatch({
+                available_from: "2027-03-01",
+                available_through: "2027-02-01",
+            }),
+        ).toEqual({
+            ok: false,
+            error: "Available through must be on or after Available from.",
+        });
+    });
+
     it("rejects invalid metadata and non-numeric sort order", () => {
         expect(buildProgramCategoryPatch({ metadata: [] })).toEqual({
             ok: false,

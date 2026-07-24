@@ -96,9 +96,9 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
         description: "Who uses the system and where.",
         items: [
             {
-                href: settings("locations"),
-                label: "Locations",
-                description: "Sites, Programs offered, delivery resources, and local schedules.",
+                href: "/organization/programs-locations",
+                label: "Programs & Locations",
+                description: "Reusable services and the places that deliver them.",
             },
             {
                 href: settings("users-roles"),
@@ -218,13 +218,13 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
     },
     {
         id: "commercial",
-        label: "Programs",
-        description: "Reusable services and their organization defaults.",
+        label: "Business",
+        description: "Business configuration modules.",
         items: [
             {
-                href: "/organization/programs",
-                label: "Programs",
-                description: "Service catalog, categories, eligibility, requirements, and defaults.",
+                href: "/organization/financials",
+                label: "Financials",
+                description: "Tuition, fees, catalog, policies, accounting, and commercial simulation.",
             },
         ],
     },

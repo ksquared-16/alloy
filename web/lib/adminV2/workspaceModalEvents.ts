@@ -32,6 +32,10 @@ export function dispatchAdminV2OpenProcessingModal(): void {
     openWorkspaceModal("processing");
 }
 
+export function dispatchAdminV2OpenSchedulingModal(): void {
+    openWorkspaceModal("scheduling");
+}
+
 export function dispatchAdminV2OpenInboxModal(): void {
     openWorkspaceModal("inbox");
 }

@@ -3,147 +3,72 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { DoorOpen } from "lucide-react";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
-import { mergeLocationMetadataField } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
+import { effectiveLocationProgramLabel } from "@/lib/locations/locationProgramCategories";
 import {
-    formatStaffingThreshold,
-    parseStaffingThresholds,
-    serializeStaffingThresholds,
-    type StaffingThreshold,
-} from "@/lib/locations/locationWorkspaceModel";
+    readRoomSchedulePatternId,
+    readRoomSupportedProgramKeys,
+    writeRoomProgramsAndScheduleMetadata,
+} from "@/lib/locations/roomOfferingMetadata";
+import {
+    formatSchedulePatternSummary,
+} from "@/lib/locations/schedulePatternPresentation";
+import type { SchedulePatternRow } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 import {
     ConfigurationEmptyState,
-    ConfigurationInlineButton,
     ConfigurationPrimaryButton,
-    ConfigurationQueueItem,
     ConfigurationSecondaryButton,
+    ConfigurationQueueItem,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
     CONFIG_OBJECT_CELL,
-    ConfigAttentionPanel,
     ConfigChildObjectMasterDetail,
-    ConfigConsequenceLine,
     ConfigEditorSection,
     ConfigObjectHeader,
-    type ConfigAttentionItem,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
-
-function roomAttention(params: {
-    capacity: string;
-    programKey: string;
-    thresholds: StaffingThreshold[];
-    ageFrom: string;
-    ageTo: string;
-    locationHasSchedule: boolean;
-}): ConfigAttentionItem[] {
-    const items: ConfigAttentionItem[] = [];
-    if (!params.capacity.trim()) {
-        items.push({
-            key: "capacity",
-            grade: "fix",
-            label: "Capacity is not set",
-            consequence: "This room cannot count toward location inventory.",
-            nextLabel: "Set capacity",
-        });
-    }
-    if (!params.programKey.trim()) {
-        items.push({
-            key: "program",
-            grade: "fix",
-            label: "No program assigned",
-            consequence: "Placement cannot route children into this room.",
-            nextLabel: "Assign program",
-        });
-    }
-    if (params.thresholds.length === 0) {
-        items.push({
-            key: "staffing",
-            grade: "fix",
-            label: "Staffing thresholds are missing",
-            consequence: "Ratio guidance stays incomplete for this room.",
-            nextLabel: "Add staffing",
-        });
-    }
-    if (!params.ageFrom.trim() && !params.ageTo.trim()) {
-        items.push({
-            key: "age",
-            grade: "improve",
-            label: "Age range is not set",
-            consequence: "Operators cannot confirm who this room serves.",
-            nextLabel: "Set age range",
-        });
-    }
-    if (!params.locationHasSchedule) {
-        items.push({
-            key: "hours",
-            grade: "improve",
-            label: "Location hours are not set",
-            consequence: "This room has no recurring operating pattern to inherit.",
-            nextLabel: "Set location hours",
-        });
-    }
-    return items;
-}
 
 export default function LocationRoomDetailPanel({
     room,
     siteLabel,
     programOptions,
-    ageUnitSelectOptions,
+    schedulePatterns,
     canMutate,
     onSave,
     rooms,
     selectedRoomId,
     onSelectRoom,
     onAddRoom,
-    locationHasSchedule,
-    scheduleSummary,
     createDetail,
 }: {
     room: LocationHierarchyRow | null;
     siteLabel: string;
     programOptions: LocationProgramCategoryRow[];
-    ageUnitSelectOptions: readonly { value: string; label: string }[];
+    schedulePatterns: SchedulePatternRow[];
     canMutate: boolean;
     onSave: (id: string, body: Record<string, unknown>) => Promise<void>;
     rooms: LocationHierarchyRow[];
     selectedRoomId: string | null;
     onSelectRoom: (roomId: string) => void;
     onAddRoom?: () => void;
-    locationHasSchedule: boolean;
-    scheduleSummary: string;
     createDetail?: ReactNode;
 }) {
     const [label, setLabel] = useState("");
     const [capacity, setCapacity] = useState("");
-    const [programKey, setProgramKey] = useState("");
-    const [ageFrom, setAgeFrom] = useState("");
-    const [ageTo, setAgeTo] = useState("");
-    const [ageUnit, setAgeUnit] = useState("");
-    const [staffingThresholds, setStaffingThresholds] = useState<{ requiredStaff: string; maxChildren: string }[]>([]);
+    const [supportedKeys, setSupportedKeys] = useState<string[]>([]);
+    const [schedulePatternId, setSchedulePatternId] = useState("");
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
 
     const hydrateFromRoom = (next: LocationHierarchyRow) => {
-        const md = readLocationMetadataPresentation(next.metadata);
+        const md = (next.metadata ?? {}) as Record<string, unknown>;
+        const capacityMd = readLocationMetadataPresentation(next.metadata);
         setLabel((next.label ?? "").trim());
-        setCapacity(md.capacity ?? "");
-        setProgramKey(md.category ?? "");
-        setAgeFrom(md.age_range_from ?? "");
-        setAgeTo(md.age_range_to ?? "");
-        setAgeUnit(md.age_range_unit ?? "");
-        const parsedThresholds = parseStaffingThresholds(md.student_teacher_ratio);
-        setStaffingThresholds(
-            parsedThresholds.length > 0 ?
-                parsedThresholds.map((threshold) => ({
-                    requiredStaff: String(threshold.requiredStaff),
-                    maxChildren: String(threshold.maxChildren),
-                }))
-            :   [{ requiredStaff: "1", maxChildren: "" }],
-        );
+        setCapacity(capacityMd.capacity ?? "");
+        setSupportedKeys(readRoomSupportedProgramKeys(md));
+        setSchedulePatternId(readRoomSchedulePatternId(md) ?? "");
         setActive(next.is_active !== false);
         setError(null);
     };
@@ -154,49 +79,35 @@ export default function LocationRoomDetailPanel({
         setEditing(false);
     }, [room]);
 
-    const configuredThresholds = staffingThresholds
-        .map((threshold) => ({
-            requiredStaff: Number(threshold.requiredStaff),
-            maxChildren: Number(threshold.maxChildren),
-        }))
-        .filter(
-            (threshold): threshold is StaffingThreshold =>
-                Number.isInteger(threshold.requiredStaff) &&
-                threshold.requiredStaff > 0 &&
-                Number.isInteger(threshold.maxChildren) &&
-                threshold.maxChildren > 0,
-        )
-        .sort((a, b) => a.requiredStaff - b.requiredStaff);
-
-    const attention = roomAttention({
-        capacity,
-        programKey,
-        thresholds: configuredThresholds,
-        ageFrom,
-        ageTo,
-        locationHasSchedule,
-    });
-    const programLabel =
-        programOptions.find((program) => program.key === programKey)?.label ??
-        (programKey ? programKey : null);
-    const ageDisplay =
-        ageFrom || ageTo ?
-            `${[ageFrom, ageTo].filter(Boolean).join("–")}${ageUnit ? ` ${ageUnit}` : ""}`
-        :   "Not set";
-    const statusLabel =
-        !active ? "Inactive"
-        : attention.some((item) => item.grade === "fix") ? "Needs setup"
-        :   "Active · ready";
-    const statusTone =
-        !active ? "inactive"
-        : attention.some((item) => item.grade === "fix") ? "attention"
-        :   "active";
+    const programLabels = supportedKeys
+        .map((key) => {
+            const match = programOptions.find((program) => program.key === key);
+            return match ? effectiveLocationProgramLabel(match) : key;
+        })
+        .filter(Boolean);
+    const pattern = schedulePatterns.find((entry) => entry.id === schedulePatternId) ?? null;
+    const patternSummary =
+        pattern ?
+            formatSchedulePatternSummary({
+                label: pattern.label,
+                scheduleTypeKey: pattern.schedule_type_key,
+                weekdays: pattern.weekdays,
+                metadata: pattern.metadata ?? null,
+            })
+        :   null;
+    const statusLabel = active ? "Active" : "Inactive";
 
     const beginEdit = () => setEditing(true);
     const cancelEdit = () => {
         if (!room) return;
         hydrateFromRoom(room);
         setEditing(false);
+    };
+
+    const toggleProgram = (key: string) => {
+        setSupportedKeys((current) =>
+            current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key],
+        );
     };
 
     const detail =
@@ -206,7 +117,7 @@ export default function LocationRoomDetailPanel({
                 <ConfigurationEmptyState
                     testId="locations-room-workspace-empty"
                     title="No rooms yet"
-                    description="Add a room to begin tracking capacity for this location."
+                    description="Add a room to track capacity for this location."
                     actions={
                         canMutate && onAddRoom ?
                             <ConfigurationPrimaryButton
@@ -222,7 +133,7 @@ export default function LocationRoomDetailPanel({
             :   <ConfigurationEmptyState
                     testId="locations-room-workspace-empty"
                     title="Select a room"
-                    description="Choose a classroom to see what it can serve and what still needs setup."
+                    description="Choose a room to review capacity, programs, and schedule pattern."
                 />
         : editing ?
             <div className="space-y-3" data-testid="locations-room-edit">
@@ -230,7 +141,7 @@ export default function LocationRoomDetailPanel({
                     size="hero"
                     name={label.trim() || "Untitled room"}
                     status={{ label: "Editing", tone: "attention" }}
-                    facts={[programLabel ?? "", siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
+                    facts={[siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
                     actions={
                         <ConfigurationSecondaryButton
                             onClick={cancelEdit}
@@ -243,9 +154,9 @@ export default function LocationRoomDetailPanel({
                 />
 
                 <div className="space-y-2.5" data-testid="locations-room-editor">
-                    <ConfigEditorSection title="Identity" testId="locations-room-editor-identity">
+                    <ConfigEditorSection title="Room" testId="locations-room-editor-identity">
                         <label className="block max-w-md space-y-1">
-                            <span className="config-typo-field-label">Name</span>
+                            <span className="config-typo-field-label">Room name</span>
                             <input
                                 type="text"
                                 value={label}
@@ -255,6 +166,18 @@ export default function LocationRoomDetailPanel({
                                 data-testid="locations-room-name"
                             />
                         </label>
+                        <label className="block max-w-36 space-y-1">
+                            <span className="config-typo-field-label">Capacity</span>
+                            <input
+                                type="number"
+                                min={0}
+                                value={capacity}
+                                disabled={!canMutate}
+                                onChange={(e) => setCapacity(e.target.value)}
+                                className="config-runtime-input"
+                                data-testid="locations-room-capacity"
+                            />
+                        </label>
                         <label className="flex items-center gap-2">
                             <input
                                 type="checkbox"
@@ -262,193 +185,67 @@ export default function LocationRoomDetailPanel({
                                 disabled={!canMutate}
                                 onChange={(e) => setActive(e.target.checked)}
                                 className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
+                                data-testid="locations-room-active"
                             />
-                            <span className="config-typo-sublabel">Active room</span>
+                            <span className="config-typo-sublabel">Active</span>
                         </label>
                     </ConfigEditorSection>
 
                     <ConfigEditorSection
-                        title="Program participation"
-                        description="The program this room serves."
-                        testId="locations-room-editor-program"
+                        title="Programs supported"
+                        description="Programs offered at this location that this room can serve."
+                        testId="locations-room-editor-programs"
                     >
-                        <label className="block max-w-md space-y-1">
-                            <span className="config-typo-field-label">Program</span>
-                            <select
-                                value={programKey}
-                                disabled={!canMutate}
-                                onChange={(e) => setProgramKey(e.target.value)}
-                                className="config-runtime-select"
-                                data-testid="locations-room-program"
-                            >
-                                <option value="">Not assigned</option>
-                                {programOptions.map((program) => (
-                                    <option key={program.id} value={program.key}>
-                                        {program.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                    </ConfigEditorSection>
-
-                    <ConfigEditorSection
-                        title="Capacity"
-                        description="How many children this room can hold."
-                        testId="locations-room-editor-capacity"
-                    >
-                        <label className="block max-w-36 space-y-1">
-                                <span className="config-typo-field-label">Capacity</span>
-                                <input
-                                    type="number"
-                                    min={0}
-                                    value={capacity}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setCapacity(e.target.value)}
-                                    className="config-runtime-input"
-                                    data-testid="locations-room-capacity"
-                                />
-                        </label>
-                    </ConfigEditorSection>
-
-                    <ConfigEditorSection
-                        title="Staffing thresholds"
-                        description="How staffing scales with the number of children."
-                        testId="locations-room-editor-staffing"
-                    >
-                        <div className="space-y-2" data-testid="locations-room-ratio-thresholds">
-                                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                    <span className="config-typo-field-label">Staffing thresholds</span>
-                                    <span className="config-typo-meta">Staff → max children</span>
-                                </div>
-                                {staffingThresholds.map((threshold, index) => (
-                                    <div
-                                        key={index}
-                                        className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-                                    >
-                                        <label className="block space-y-1">
-                                            <span className="config-typo-meta">Staff members</span>
+                        {programOptions.length === 0 ?
+                            <p className="config-typo-sublabel">
+                                Offer Programs at this Location before assigning them to rooms.
+                            </p>
+                        :   <div className="space-y-2" data-testid="locations-room-programs">
+                                {programOptions.map((program) => {
+                                    const checked = supportedKeys.includes(program.key);
+                                    return (
+                                        <label key={program.id} className="flex items-center gap-2">
                                             <input
-                                                type="number"
-                                                min={1}
-                                                value={threshold.requiredStaff}
+                                                type="checkbox"
+                                                checked={checked}
                                                 disabled={!canMutate}
-                                                onChange={(event) =>
-                                                    setStaffingThresholds((current) =>
-                                                        current.map((item, itemIndex) =>
-                                                            itemIndex === index ?
-                                                                {
-                                                                    ...item,
-                                                                    requiredStaff: event.target.value,
-                                                                }
-                                                            :   item,
-                                                        ),
-                                                    )
-                                                }
-                                                className="config-runtime-input"
-                                                data-testid={`locations-room-ratio-${index}-staff`}
+                                                onChange={() => toggleProgram(program.key)}
+                                                className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
+                                                data-testid={`locations-room-program-${program.key}`}
                                             />
+                                            <span className="text-sm text-alloy-midnight">
+                                                {effectiveLocationProgramLabel(program)}
+                                            </span>
                                         </label>
-                                        <label className="block space-y-1">
-                                            <span className="config-typo-meta">Maximum children</span>
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                value={threshold.maxChildren}
-                                                disabled={!canMutate}
-                                                onChange={(event) =>
-                                                    setStaffingThresholds((current) =>
-                                                        current.map((item, itemIndex) =>
-                                                            itemIndex === index ?
-                                                                {
-                                                                    ...item,
-                                                                    maxChildren: event.target.value,
-                                                                }
-                                                            :   item,
-                                                        ),
-                                                    )
-                                                }
-                                                className="config-runtime-input"
-                                                data-testid={`locations-room-ratio-${index}-children`}
-                                            />
-                                        </label>
-                                        {staffingThresholds.length > 1 ?
-                                            <button
-                                                type="button"
-                                                className="rounded-md border border-alloy-forge/15 px-2 py-2 text-xs text-alloy-midnight/60"
-                                                disabled={!canMutate}
-                                                onClick={() =>
-                                                    setStaffingThresholds((current) =>
-                                                        current.filter((_, itemIndex) => itemIndex !== index),
-                                                    )
-                                                }
-                                            >
-                                                Remove
-                                            </button>
-                                        :   null}
-                                    </div>
-                                ))}
-                                <ConfigurationInlineButton
-                                    disabled={!canMutate}
-                                    onClick={() =>
-                                        setStaffingThresholds((current) => [
-                                            ...current,
-                                            {
-                                                requiredStaff: String(current.length + 1),
-                                                maxChildren: "",
-                                            },
-                                        ])
-                                    }
-                                    data-testid="locations-room-ratio-add-threshold"
-                                >
-                                    + Add staffing threshold
-                                </ConfigurationInlineButton>
-                        </div>
-                    </ConfigEditorSection>
-
-                    <ConfigEditorSection title="Age range" testId="locations-room-editor-age">
-                        <div className="grid gap-2 sm:grid-cols-3">
-                            <input
-                                type="text"
-                                value={ageFrom}
-                                disabled={!canMutate}
-                                onChange={(e) => setAgeFrom(e.target.value)}
-                                placeholder="From"
-                                className="config-runtime-input"
-                            />
-                            <input
-                                type="text"
-                                value={ageTo}
-                                disabled={!canMutate}
-                                onChange={(e) => setAgeTo(e.target.value)}
-                                placeholder="To"
-                                className="config-runtime-input"
-                            />
-                            <select
-                                value={ageUnit}
-                                disabled={!canMutate}
-                                onChange={(e) => setAgeUnit(e.target.value)}
-                                className="config-runtime-select"
-                            >
-                                <option value="">Unit</option>
-                                {ageUnitSelectOptions.map((o) => (
-                                    <option key={o.value} value={o.value}>
-                                        {o.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                                    );
+                                })}
+                            </div>
+                        }
                     </ConfigEditorSection>
 
                     <ConfigEditorSection
-                        title="Hours / operating rules"
-                        description="Rooms follow this location’s weekly hours."
+                        title="Default schedule"
+                        description="Optional default Schedule Definition for this room. Enrollment still chooses from the Location catalog."
                         testId="locations-room-editor-schedule"
                     >
-                        <p className="text-sm text-alloy-midnight/75">
-                            {locationHasSchedule ?
-                                `Uses ${siteLabel} hours · ${scheduleSummary}`
-                            :   "Location hours are not set up yet"}
-                        </p>
+                        <label className="block max-w-md space-y-1">
+                            <span className="config-typo-field-label">Pattern</span>
+                            <select
+                                value={schedulePatternId}
+                                disabled={!canMutate}
+                                onChange={(e) => setSchedulePatternId(e.target.value)}
+                                className="config-runtime-select"
+                                data-testid="locations-room-schedule-pattern"
+                            >
+                                <option value="">None</option>
+                                {schedulePatterns.map((entry) => (
+                                    <option key={entry.id} value={entry.id}>
+                                        {entry.label}
+                                        {!entry.is_active ? " (inactive)" : ""}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
                     </ConfigEditorSection>
 
                     {error ?
@@ -461,60 +258,19 @@ export default function LocationRoomDetailPanel({
                         <div className="flex flex-wrap gap-2 pt-1">
                             <ConfigurationPrimaryButton
                                 className="config-primary-btn--sm"
-                                disabled={saving}
+                                disabled={saving || !label.trim()}
                                 data-testid="locations-room-save"
                                 onClick={() => {
                                     void (async () => {
                                         setSaving(true);
                                         setError(null);
                                         try {
-                                            if (configuredThresholds.length === 0) {
-                                                throw new Error("Add at least one complete staffing threshold.");
-                                            }
-                                            if (
-                                                configuredThresholds.some(
-                                                    (threshold, index) =>
-                                                        index > 0 &&
-                                                        (threshold.requiredStaff <=
-                                                            configuredThresholds[index - 1]!.requiredStaff ||
-                                                            threshold.maxChildren <=
-                                                                configuredThresholds[index - 1]!.maxChildren),
-                                                )
-                                            ) {
-                                                throw new Error(
-                                                    "Each staffing threshold must increase both staff and maximum children.",
-                                                );
-                                            }
-                                            let metadata = mergeLocationMetadataField(
-                                                room.metadata,
-                                                "capacity",
-                                                capacity.trim() || null,
-                                            );
-                                            metadata = mergeLocationMetadataField(
-                                                metadata,
-                                                "category",
-                                                programKey.trim() || null,
-                                            );
-                                            metadata = mergeLocationMetadataField(
-                                                metadata,
-                                                "age_range_from",
-                                                ageFrom.trim() || null,
-                                            );
-                                            metadata = mergeLocationMetadataField(
-                                                metadata,
-                                                "age_range_to",
-                                                ageTo.trim() || null,
-                                            );
-                                            metadata = mergeLocationMetadataField(
-                                                metadata,
-                                                "age_range_unit",
-                                                ageUnit.trim() || null,
-                                            );
-                                            metadata = mergeLocationMetadataField(
-                                                metadata,
-                                                "student_teacher_ratio",
-                                                serializeStaffingThresholds(configuredThresholds) || null,
-                                            );
+                                            const metadata = writeRoomProgramsAndScheduleMetadata({
+                                                existing: (room.metadata ?? {}) as Record<string, unknown>,
+                                                supportedProgramKeys: supportedKeys,
+                                                schedulePatternId: schedulePatternId || null,
+                                                capacity: capacity.trim() || null,
+                                            });
                                             await onSave(room.id, {
                                                 label: label.trim() || null,
                                                 is_active: active,
@@ -531,10 +287,7 @@ export default function LocationRoomDetailPanel({
                             >
                                 {saving ? "Saving…" : "Save room"}
                             </ConfigurationPrimaryButton>
-                            <ConfigurationSecondaryButton
-                                onClick={cancelEdit}
-                                disabled={saving}
-                            >
+                            <ConfigurationSecondaryButton onClick={cancelEdit} disabled={saving}>
                                 Cancel
                             </ConfigurationSecondaryButton>
                         </div>
@@ -545,8 +298,8 @@ export default function LocationRoomDetailPanel({
                 <ConfigObjectHeader
                     size="hero"
                     name={label.trim() || "Untitled room"}
-                    status={{ label: statusLabel, tone: statusTone }}
-                    facts={[programLabel ?? "", siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
+                    status={{ label: statusLabel, tone: active ? "active" : "inactive" }}
+                    facts={[siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
                     actions={
                         canMutate ?
                             <ConfigurationSecondaryButton
@@ -560,65 +313,28 @@ export default function LocationRoomDetailPanel({
                     testId="locations-room-header"
                 />
 
-                <ConfigConsequenceLine testId="locations-room-consequence">
-                    {capacity.trim() ?
-                        `Holds ${capacity.trim()} children${
-                            configuredThresholds.length > 0 ?
-                                ` — staffing ${configuredThresholds.map(formatStaffingThreshold).join(", ")}`
-                            :   " — add staffing thresholds to finish capacity"
-                        }.`
-                    :   "Capacity is not set up yet — this room cannot be counted in location inventory."}
-                </ConfigConsequenceLine>
-
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-room-ops">
                     {[
                         {
                             key: "capacity",
                             label: "Capacity",
-                            value: capacity.trim() ? capacity.trim() : "Not set",
-                            hint: capacity.trim() ? "Children this room can hold" : "Required for inventory",
-                            tone: capacity.trim() ? "ready" : "attention",
+                            value: capacity.trim() || "Not set",
                         },
                         {
-                            key: "staffing",
-                            label: "Staffing",
-                            value:
-                                configuredThresholds.length > 0 ?
-                                    configuredThresholds.map(formatStaffingThreshold).join(", ")
-                                :   "Not set",
-                            hint: "Staff → max children",
-                            tone: configuredThresholds.length > 0 ? "ready" : "attention",
+                            key: "programs",
+                            label: "Programs",
+                            value: programLabels.length > 0 ? programLabels.join(", ") : "None",
                         },
                         {
-                            key: "program",
-                            label: "Program",
-                            value: programLabel ?? "Not assigned",
-                            hint: "Participation",
-                            tone: programLabel ? "ready" : "attention",
-                        },
-                        {
-                            key: "age",
-                            label: "Age range",
-                            value: ageDisplay,
-                            hint: "Who this room serves",
-                            tone: ageDisplay === "Not set" ? "attention" : "ready",
-                        },
-                        {
-                            key: "hours",
-                            label: "Hours",
-                            value: locationHasSchedule ? "Location hours" : "Not set",
-                            hint:
-                                locationHasSchedule ?
-                                    `${scheduleSummary} · uses ${siteLabel} hours`
-                                :   "Set recurring location hours",
-                            tone: locationHasSchedule ? "ready" : "attention",
+                            key: "schedule",
+                            label: "Schedule pattern",
+                            value: pattern?.label ?? "None",
+                            hint: patternSummary && pattern ? patternSummary.replace(`${pattern.label} · `, "") : undefined,
                         },
                         {
                             key: "status",
                             label: "Status",
                             value: statusLabel,
-                            hint: active ? "Participates in placement" : "Not active",
-                            tone: statusTone === "attention" ? "attention" : "ready",
                         },
                     ].map((card) => (
                         <div
@@ -629,25 +345,15 @@ export default function LocationRoomDetailPanel({
                             <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
                                 {card.label}
                             </p>
-                            <p
-                                className={`mt-0.5 text-base font-semibold leading-tight ${
-                                    card.tone === "attention" ? "text-alloy-ember" : "text-alloy-midnight"
-                                }`}
-                            >
+                            <p className="mt-0.5 text-base font-semibold leading-tight text-alloy-midnight">
                                 {card.value}
                             </p>
-                            <p className="mt-0.5 text-[11px] text-alloy-midnight/50">{card.hint}</p>
+                            {"hint" in card && card.hint ?
+                                <p className="mt-0.5 text-[11px] text-alloy-midnight/50">{card.hint}</p>
+                            :   null}
                         </div>
                     ))}
                 </div>
-
-                <ConfigAttentionPanel
-                    items={attention}
-                    compact
-                    embedded
-                    testId="locations-room-attention"
-                    onResolve={beginEdit}
-                />
             </div>;
 
     return (
@@ -669,21 +375,23 @@ export default function LocationRoomDetailPanel({
             list={
                 rooms.length > 0 ?
                     rooms.map((entry) => {
-                        const md = readLocationMetadataPresentation(entry.metadata);
+                        const md = (entry.metadata ?? {}) as Record<string, unknown>;
+                        const capacityMd = readLocationMetadataPresentation(entry.metadata);
                         const inactive = entry.is_active === false;
                         const selected = entry.id === selectedRoomId;
-                        const setupSignal =
-                            !md.capacity ? "Needs capacity"
-                            : !md.category ? "Needs program"
-                            : !md.student_teacher_ratio ? "Needs staffing"
-                            :   `${md.capacity} capacity`;
+                        const keys = readRoomSupportedProgramKeys(md);
+                        const subtitleParts = [
+                            inactive ? "Inactive" : "Active",
+                            capacityMd.capacity ? `${capacityMd.capacity} capacity` : null,
+                            keys.length > 0 ? `${keys.length} program${keys.length === 1 ? "" : "s"}` : null,
+                        ].filter(Boolean);
                         return (
                             <ConfigurationQueueItem
                                 key={entry.id}
                                 variant="rail"
                                 active={selected}
                                 title={String(entry.label ?? "").trim() || "Untitled room"}
-                                subtitle={`${inactive ? "Inactive" : "Active"} · ${setupSignal}`}
+                                subtitle={subtitleParts.join(" · ")}
                                 muted={inactive}
                                 leading={
                                     <span

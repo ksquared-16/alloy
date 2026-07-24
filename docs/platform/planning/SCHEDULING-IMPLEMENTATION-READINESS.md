@@ -119,6 +119,8 @@ No product was redesigned; nothing new was invented.
 | Concern | Canonical doc |
 |---------|---------------|
 | **Entry / freeze** | **this doc** |
+| **Bottom-up build validation** (readiness matrix · dependency map · risk · freeze · kickoff) | [`SCHEDULING-IMPLEMENTATION-VALIDATION.md`](./SCHEDULING-IMPLEMENTATION-VALIDATION.md) |
+| **Implementation handoff** (built + verified state · OCM blocker · remaining work · resume) | [`SCHEDULING-IMPLEMENTATION-HANDOFF.md`](./SCHEDULING-IMPLEMENTATION-HANDOFF.md) |
 | Product, states, scope, workspace, Roster, BOS | `scheduling-product-spec.md` |
 | Focus Panel composition (Identity/Work/Commands) | `scheduling-focus-panel-composition.md` (+ `scheduling-focus-panel-spec.md` detail) |
 | Canonical projection (the read model) | `scheduling-projection-contract.md` |
