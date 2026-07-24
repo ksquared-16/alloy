@@ -79,6 +79,16 @@ const TYPE_LABEL: Record<string, string> = {
     file_ref: "File upload",
 };
 
+/** Field types an operator can assign before the form is created (config-free draft types). */
+const EDITABLE_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
+    { value: "text", label: "Text" },
+    { value: "date", label: "Date" },
+    { value: "number", label: "Number" },
+    { value: "boolean", label: "Checkbox" },
+    { value: "file_ref", label: "File upload" },
+    { value: "signature", label: "Signature" },
+];
+
 type Props = {
     questions: ReviewQuestionInput[];
     selectedId: string | null;
@@ -295,7 +305,12 @@ function ReviewQuestionInspector({
     return (
         <div className="mt-1.5 space-y-2 border-t border-alloy-stone/[0.08] pt-1.5" data-testid={`review-inspector-${question.id}`}>
             <InspectorRow label="Answer type">
-                <span className="text-[10px] text-alloy-midnight/70">{TYPE_LABEL[question.type] ?? question.type}</span>
+                <AlloySelect
+                    value={EDITABLE_TYPE_OPTIONS.some((o) => o.value === question.type) ? question.type : "text"}
+                    onChange={(value) => onUpdate(question.id, { type: value })}
+                    options={EDITABLE_TYPE_OPTIONS}
+                    testId={`review-type-${question.id}`}
+                />
             </InspectorRow>
 
             <InspectorRow label="Store answer in">
