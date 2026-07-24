@@ -513,9 +513,19 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .cvgo{font-size:12px;color:var(--terra);font-weight:600;white-space:nowrap;}
 /* workspace grid */
 .cvgrid{display:grid;grid-template-columns:1.15fr 1.25fr .9fr;gap:14px;align-items:start;}
-.cvcol{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;}
-.cvcol-h{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-4);margin-bottom:12px;}
+/* Each column is bounded to the viewport and scrolls internally, so a long
+   transcript, package, or decision never grows the page without end. */
+.cvcol{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;max-height:calc(100vh - 150px);display:flex;flex-direction:column;min-height:0;}
+.cvprep,.cvinsights{overflow-y:auto;}
+.cvhistory{overflow:hidden;} /* the thread scrolls; the composer stays pinned */
+.cvhistory .cvthread{flex:1 1 auto;min-height:60px;overflow-y:auto;}
+.cvhistory .cvcompose{flex:none;}
+.cvcol-h{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-4);margin-bottom:12px;flex:none;}
 .cvthread{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+.cvbub{overflow-wrap:anywhere;} /* long unbroken text wraps instead of overflowing */
+.cvmsg .cvbub{max-height:340px;overflow-y:auto;} /* one huge message scrolls in place */
+.su-item .su-line span,.su-why{overflow-wrap:anywhere;}
+@media(max-width:900px){.cvcol{max-height:none;}}
 .cvmsg{display:flex;}
 .cvmsg.you{justify-content:flex-end;}
 .cvbub{max-width:88%;font-size:13px;line-height:1.5;padding:8px 12px;border-radius:14px;}
