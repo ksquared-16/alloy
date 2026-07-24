@@ -76,7 +76,7 @@ function seedAccessRoles(nowMs) {
       { to: "pd_programs", kind: "adjacent" },
     ],
     referenced_documents: [
-      { uri: "web/app/adminV2/settings/users-roles/UsersRolesSettingsClient.tsx", title: "Users & Roles settings client", kind: "code" },
+      { uri: "web/components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx", title: "Users & Roles configuration page", kind: "code" },
     ],
     operator_notes: [
       { note: "V1 role model + permission taxonomy are settled; V2 is a delta, not a redesign.", actor: "operator", at: "2026-06-15T00:00:00.000Z" },

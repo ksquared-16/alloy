@@ -58,7 +58,7 @@ function seedAccessRoles(nowMs) {
     ],
     active_missions: [], mission_history: [],
     current_implementation: {
-      code_paths: ["web/app/adminV2/settings/users-roles/UsersRolesSettingsClient.tsx"],
+      code_paths: ["web/components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx"],
       entry_points: ["/adminV2/settings/users-roles"],
       runtime_behavior_note: "Users & Roles settings surface manages user↔role assignment in adminV2.",
       last_verified_at: iso(now),
@@ -71,7 +71,7 @@ function seedAccessRoles(nowMs) {
     documentation_index: [
       { uri: "docs/platform/planning/vacilando-os/MISSION-RUNTIMES-ARCHITECTURE-V1.md", title: "Mission Runtimes Architecture", kind: "architecture" },
       { uri: "docs/platform/planning/vacilando-os/CAPABILITY-RUNTIME-V1.md", title: "Capability Runtime V1", kind: "architecture" },
-      { uri: "web/app/adminV2/settings/users-roles/UsersRolesSettingsClient.tsx", title: "Users & Roles settings client", kind: "code" },
+      { uri: "web/components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx", title: "Users & Roles configuration page", kind: "code" },
     ],
     // accepted_decisions + rejected_patterns are OWNED by the Product Definition
     // Runtime (pd_access_roles) and hydrated onto this object at read time — they
