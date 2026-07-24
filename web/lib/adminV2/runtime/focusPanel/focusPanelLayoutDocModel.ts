@@ -27,6 +27,10 @@ import {
 import { focusPanelCardCatalogLabel, normalizeFocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
 import type { FocusPanelCardConfig } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { isFocusPanelCardConfigEmpty } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
+import {
+    normalizeFocusPanelCardVisibility,
+    type FocusPanelCardVisibility,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardVisibility";
 import type { LayoutSection } from "@/lib/layout/layoutV2";
 
 /** Reused storage identity for the Focus Panel Summary design surface. */
@@ -53,6 +57,14 @@ export type FocusPanelCardSectionMeta = {
     tier: FocusPanelCardTier;
     /** Grid row index (0-based) used to reconstruct the responsive grid. */
     gridRow: number;
+    /**
+     * Runtime composition visibility:
+     *   visible — initial Focus Panel composition
+     *   linked  — navigable / link destination; not initially rendered
+     *   hidden  — library only; never loaded or linked
+     * Absent → `"visible"` (safe migration for existing published layouts).
+     */
+    visibility?: FocusPanelCardVisibility;
     /** Optional per-card content/appearance config (Inspector output). */
     config?: FocusPanelCardConfig;
 };
@@ -103,6 +115,7 @@ export function readFocusPanelCardSectionMeta(
 
     const instanceId = typeof meta.instanceId === "string" && meta.instanceId.trim() ? meta.instanceId : key;
     const config = readFocusPanelCardConfig(section);
+    const visibility = normalizeFocusPanelCardVisibility(meta.visibility);
 
     return {
         key,
@@ -111,6 +124,7 @@ export function readFocusPanelCardSectionMeta(
         density,
         tier,
         gridRow: Math.trunc(gridRow),
+        ...(visibility !== "visible" ? { visibility } : {}),
         ...(config ? { config } : {}),
     };
 }
@@ -134,6 +148,7 @@ export function readFocusPanelCardConfig(section: LayoutSection): FocusPanelCard
 export function buildFocusPanelCardSection(meta: FocusPanelCardSectionMeta): LayoutSection {
     const instanceId = meta.instanceId && meta.instanceId.trim() ? meta.instanceId : meta.key;
     const persistConfig = !isFocusPanelCardConfigEmpty(meta.config);
+    const visibility = normalizeFocusPanelCardVisibility(meta.visibility);
     return {
         id: `fp-card-${instanceId}`,
         key: meta.key,
@@ -147,6 +162,7 @@ export function buildFocusPanelCardSection(meta: FocusPanelCardSectionMeta): Lay
                 density: meta.density,
                 tier: meta.tier,
                 gridRow: meta.gridRow,
+                ...(visibility !== "visible" ? { visibility } : {}),
             },
             ...(persistConfig ? { [FOCUS_PANEL_CARD_CONFIG_KEY]: meta.config } : {}),
         },

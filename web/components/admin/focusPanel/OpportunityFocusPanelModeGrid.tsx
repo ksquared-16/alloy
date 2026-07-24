@@ -218,6 +218,11 @@ export default function OpportunityFocusPanelModeGrid({
         setCurrentWorkWorkspace({ open: false, intent: null });
     }, [drawerId]);
 
+    // In-panel depth layer: a card reports when it opens deep (focused / edit). The
+    // host raises that card and recedes the rest — no route, no drawer, no modal.
+    // Declared before requestFocus so Linked-card opens can elevate immediately.
+    const [activeDepth, setActiveDepth] = useState<FocusPanelActiveDepth | null>(null);
+
     const emitFocus = useCallback((card: FocusPanelCardKey, focus: string | null) => {
         focusNonceRef.current += 1;
         setFocusRequest({ card, focus, nonce: focusNonceRef.current });
@@ -244,9 +249,19 @@ export default function OpportunityFocusPanelModeGrid({
             if (currentWorkWorkspace.open) {
                 closeCurrentWorkWorkspace();
             }
+            // Linked cards are not in the initial grid — host them as an elevated overlay.
+            if (summaryInputs?.visibilityByCardKey.get(card) === "linked") {
+                setActiveDepth({ card, level: "focused" });
+            }
             emitFocus(card, focus);
         },
-        [closeCurrentWorkWorkspace, currentWorkWorkspace.open, emitFocus, openCurrentWorkWorkspace],
+        [
+            closeCurrentWorkWorkspace,
+            currentWorkWorkspace.open,
+            emitFocus,
+            openCurrentWorkWorkspace,
+            summaryInputs?.visibilityByCardKey,
+        ],
     );
     const back = useCallback(() => {
         if (currentWorkWorkspace.open) {
@@ -259,29 +274,49 @@ export default function OpportunityFocusPanelModeGrid({
         depthHistoryRef.current = stack.slice(0, -1);
         setPreviousFocus(depthHistoryRef.current[depthHistoryRef.current.length - 1] ?? null);
         if (prev.card === "current_work") {
+            setActiveDepth(null);
             openCurrentWorkWorkspace({ kind: "drill_in" });
             return;
         }
+        // Leaving a Linked host for a Visible card must clear the overlay; returning
+        // to another Linked card re-hosts it.
+        if (summaryInputs?.visibilityByCardKey.get(prev.card) === "linked") {
+            setActiveDepth({ card: prev.card, level: "focused" });
+        } else {
+            setActiveDepth(null);
+        }
         emitFocus(prev.card, prev.focus);
-    }, [closeCurrentWorkWorkspace, currentWorkWorkspace.open, emitFocus, openCurrentWorkWorkspace]);
-
-    // In-panel depth layer: a card reports when it opens deep (focused / edit). The
-    // host raises that card and recedes the rest — no route, no drawer, no modal.
-    const [activeDepth, setActiveDepth] = useState<FocusPanelActiveDepth | null>(null);
+    }, [
+        closeCurrentWorkWorkspace,
+        currentWorkWorkspace.open,
+        emitFocus,
+        openCurrentWorkWorkspace,
+        summaryInputs?.visibilityByCardKey,
+    ]);
     const reportPerspective = useCallback<NonNullable<FocusPanelCoordination["reportPerspective"]>>(
         (card, level) => {
             setActiveDepth((prev) => {
-                if (isElevatedLevel(level)) return { card, level };
+                const isLinked = summaryInputs?.visibilityByCardKey.get(card) === "linked";
+                if (isElevatedLevel(level)) {
+                    // Linked overlays are opened only by requestFocus. Ignore self-reports
+                    // that would reopen after dismiss while the card still has local focus.
+                    if (isLinked) return prev?.card === card ? { card, level } : prev;
+                    return { card, level };
+                }
+                // Linked host: ignore mount-time "base" (focus applies in an effect).
+                // dismiss() clears activeDepth explicitly after the close animation.
+                if (isLinked && prev?.card === card) return prev;
                 // Receding/leaving: only clear if this card owned the active layer.
                 return prev?.card === card ? null : prev;
             });
         },
-        [],
+        [summaryInputs?.visibilityByCardKey],
     );
     // Return-to-base: backdrop click / ESC asks the active card to collapse. To play
     // the reverse-zoom, we hold the card elevated for one depth duration (`closing`)
     // BEFORE resetting it — so the focused card flies back to its cell instead of
-    // snapping. After the window the card resets → reports "base" → activeDepth clears.
+    // snapping. After the window the card resets; dismiss clears activeDepth (Linked
+    // hosts ignore "base" reports, so the host must clear depth explicitly).
     const [dismissed, setDismissed] = useState<FocusPanelDismissSignal | null>(null);
     const [closing, setClosing] = useState(false);
     const dismissNonceRef = useRef(0);
@@ -294,6 +329,7 @@ export default function OpportunityFocusPanelModeGrid({
             dismissNonceRef.current += 1;
             setDismissed({ card, nonce: dismissNonceRef.current });
             setClosing(false);
+            setActiveDepth((prev) => (prev?.card === card ? null : prev));
             // Returning to the base panel ends the handoff chain.
             depthHistoryRef.current = [];
             setPreviousFocus(null);
@@ -392,8 +428,12 @@ export default function OpportunityFocusPanelModeGrid({
                 if (cardReadiness.get(typeKey) === "ready") set.add(typeKey);
             }
         }
+        // Linked cards are navigable destinations even though they are not in the initial grid.
+        for (const linkedKey of summaryInputs?.linkedCardKeys ?? []) {
+            if (cardReadiness.get(linkedKey) === "ready") set.add(linkedKey);
+        }
         return set;
-    }, [gridRows, cellResolution, cardReadiness, publishedLayout]);
+    }, [gridRows, cellResolution, cardReadiness, publishedLayout, summaryInputs?.linkedCardKeys]);
 
     const resolveCommsAction = useCallback(
         () => resolveCommunicationsComposerAction(commands),
@@ -462,8 +502,20 @@ export default function OpportunityFocusPanelModeGrid({
     }
 
     // Slice A: Current Work no longer replaces the canvas. When opened it elevates as a
-    // centered Focus Card through the standard activeDepth/elevatedCellKey path below — its
-    // grid cell reports "focused" and FocusPanelCardGrid raises it (backdrop + centered).
+    // top-pinned Focus Card through the standard activeDepth/elevatedCellKey path below — its
+    // grid cell reports "focused" and FocusPanelCardGrid raises it (backdrop + top-aligned).
+
+    // Linked cards are not in the Visible grid — when focused, host them in a transient
+    // top-pinned overlay (same workspace feel; does not permanently insert into layout).
+    const linkedHostCard =
+        activeDepth
+        && summaryInputs?.visibilityByCardKey.get(activeDepth.card) === "linked"
+            ? activeDepth.card
+            : null;
+    const linkedHostModel = linkedHostCard ? cards.get(linkedHostCard) : null;
+    const linkedHostResolution = linkedHostCard
+        ? cellResolution.get(linkedHostCard) ?? { typeKey: linkedHostCard, config: null }
+        : null;
 
     return (
         <div
@@ -483,7 +535,7 @@ export default function OpportunityFocusPanelModeGrid({
                 compositionOverrides={compositionOverrides}
                 className={mode === "work" ? "alloy-os-focus-panel-grid--work" : undefined}
                 dataFocusPanelSplitLayout={mode === "work" ? "true" : undefined}
-                elevatedCellKey={elevatedCellKey}
+                elevatedCellKey={linkedHostCard ? null : elevatedCellKey}
                 closing={closing}
                 onBackdropClick={() => {
                     if (activeDepth) dismiss(activeDepth.card);
@@ -519,6 +571,38 @@ export default function OpportunityFocusPanelModeGrid({
                     );
                 }}
             />
+            {linkedHostCard && linkedHostModel && linkedHostResolution ?
+                <div
+                    className="alloy-os-focus-panel-linked-host"
+                    data-fp-linked-host="true"
+                    data-fp-elevated="true"
+                    data-fp-closing={closing ? "true" : undefined}
+                >
+                    <button
+                        type="button"
+                        className="alloy-os-focus-panel-linked-host__backdrop"
+                        aria-label="Close linked card"
+                        onClick={() => dismiss(linkedHostCard)}
+                    />
+                    <div
+                        className="alloy-os-focus-panel-linked-host__card"
+                        data-focus-panel-grid-cell={linkedHostCard}
+                    >
+                        <FocusPanelCardRenderer
+                            model={composeEffectiveCardModel(
+                                linkedHostModel,
+                                linkedHostResolution.config,
+                                record,
+                            )}
+                            context={operationalContext}
+                            focusPanelMode={mode}
+                            coordination={coordination}
+                            mutation={mutation}
+                            compat={{ onSelectTab }}
+                        />
+                    </div>
+                </div>
+            :   null}
         </div>
     );
 }

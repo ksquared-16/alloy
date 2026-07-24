@@ -1604,7 +1604,7 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-queue-row-card {
   border-color: var(--alloy-os-queue-row-border, var(--alloy-os-fp-card-border));
   border-radius: var(--alloy-os-fp-card-radius, 14px);
-  background: var(--alloy-os-surface, #fff);
+  background: var(--alloy-os-queue-row-surface, #fff);
   box-shadow: var(--alloy-os-queue-row-shadow, var(--alloy-os-fp-card-shadow));
   transition:
     box-shadow var(--alloy-os-motion-hover, 80ms) ease,
@@ -3217,7 +3217,8 @@ html[data-alloy-os-runtime-split="true"]
   --alloy-os-fp-overlay-offset: 6px;/* gap between a card and its inline overlay */
   /* Shared Focus Panel card chrome — soft stone perimeter + restrained layered elevation.
    * All Universal Cards share this shell; prominence is content-only (no unique chrome). */
-  --alloy-os-fp-card-border: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #dde3eb));
+  /* ~8% stronger perimeter contrast vs prior mix (cards separate from canvas). */
+  --alloy-os-fp-card-border: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #dde3eb));
   /* Near edge + ambient lift — one level above the Focus Panel canvas. */
   --alloy-os-fp-card-shadow:
     0 1px 2px rgba(20, 25, 34, 0.07),
@@ -3227,10 +3228,17 @@ html[data-alloy-os-runtime-split="true"]
     0 1px 2px rgba(20, 25, 34, 0.08),
     0 6px 18px -4px rgba(20, 25, 34, 0.14),
     0 18px 32px -14px rgba(20, 25, 34, 0.16);
-  /* Queue rows share the same soft depth language as Focus Panel cards. */
-  --alloy-os-queue-row-border: var(--alloy-os-fp-card-border);
-  --alloy-os-queue-row-shadow: var(--alloy-os-fp-card-shadow);
-  --alloy-os-queue-row-shadow-hover: var(--alloy-os-fp-card-shadow-hover);
+  /* Queue rows share soft-depth language with Focus Panel, ~30% lighter shade. */
+  --alloy-os-queue-row-border: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #dde3eb));
+  --alloy-os-queue-row-surface: #fff;
+  --alloy-os-queue-row-shadow:
+    0 1px 2px rgba(20, 25, 34, 0.05),
+    0 3px 10px -4px rgba(20, 25, 34, 0.08),
+    0 10px 20px -14px rgba(20, 25, 34, 0.10);
+  --alloy-os-queue-row-shadow-hover:
+    0 1px 2px rgba(20, 25, 34, 0.06),
+    0 4px 12px -4px rgba(20, 25, 34, 0.10),
+    0 12px 22px -12px rgba(20, 25, 34, 0.11);
   --alloy-os-fp-overlay-shadow:
     0 1px 0 0 rgba(255, 255, 255, 0.8) inset,
     0 2px 6px -2px rgba(15, 23, 42, 0.12),
@@ -4850,10 +4858,17 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-card-avatar[data-card-avatar="image"] { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08); }
 
 /* ── Children Summary: scannable per-child mini-profile (details stack) ── */
-.alloy-os-children__roster { display: flex; flex-direction: column; gap: 4px; }
+.alloy-os-children__roster { display: flex; flex-direction: column; gap: 1px; }
 .alloy-os-children__summary-row {
-  display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
-  padding: 9px 8px; border: 0; border-radius: 10px; background: transparent; cursor: pointer;
+  display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left;
+  padding: 4px 6px; border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+}
+.alloy-os-children__roster .identity-record-summary {
+  padding: 2px 0;
+  gap: 4px;
+}
+.alloy-os-children__roster .identity-record-summary__title-block {
+  gap: 2px;
 }
 .alloy-os-children__summary-row:hover { background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 5%, #fff); }
 .alloy-os-children__summary-main { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; }
@@ -5122,7 +5137,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   inset: 0;
 }
 /* Re-parent elevated drill-ins to the visible composer body (not the tall grid) so
- * vertical centering uses the builder viewport — same centered-focus read as runtime. */
+ * top-pinning uses the builder viewport — same top-aligned Focus Card as runtime. */
 [data-fp-composer-depth-active="true"]
   .alloy-os-fp-composer__body
   .alloy-os-focus-panel-grid[data-fp-depth="active"] {
@@ -5160,16 +5175,17 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard {
-  top: 50%;
-  left: 50%;
-  right: auto;
-  margin-inline: 0;
-  transform: translate(-50%, -50%);
+  /* Top-pin under the composer chrome — not vertically centered. */
+  top: 12px;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  transform: none;
   width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
   max-width: var(--alloy-os-focus-panel-max-width, 720px);
   /* Body-anchored bounds — card stays fully inside the visible builder canvas. */
   min-height: min(280px, calc(100% - 48px));
-  max-height: min(75vh, calc(100% - 32px), calc(100dvh - 120px));
+  max-height: min(75vh, calc(100% - 24px), calc(100dvh - 120px));
   animation: none;
 }
 [data-fp-composer-depth-active="true"]
@@ -5219,8 +5235,9 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   position: absolute;
   top: 0;
   left: 34px;
-  right: 104px;
-  height: 28px;
+  /* Leave clear space for the top-right Configure toolbar so drag doesn't steal hits. */
+  right: 156px;
+  height: 34px;
   z-index: 6;
   cursor: grab;
   touch-action: none;
@@ -5251,26 +5268,60 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   outline-offset: 2px;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 12%, transparent);
 }
+/* Stable top-right chrome: Configure is always reachable; Remove sits beside it. */
+.alloy-os-fp-composer-cell__toolbar {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
 .alloy-os-fp-composer-cell__configure,
 .alloy-os-fp-composer-cell__grip,
 .alloy-os-fp-composer-cell__remove {
-  position: absolute; top: 6px; display: flex; align-items: center; justify-content: center;
-  height: 22px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 80%, transparent);
-  background: color-mix(in srgb, #fff 92%, transparent); color: var(--alloy-os-text-tertiary, #9ca3af);
-  pointer-events: auto; opacity: 0; transition: opacity 100ms;
-  z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  height: 28px; border-radius: 7px; border: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 80%, transparent);
+  background: color-mix(in srgb, #fff 96%, transparent); color: var(--alloy-os-text-tertiary, #9ca3af);
+  pointer-events: auto; transition: opacity 100ms, background 100ms, border-color 100ms, box-shadow 100ms;
+  box-shadow: 0 1px 2px color-mix(in srgb, #0f172a 8%, transparent);
 }
 .alloy-os-fp-composer-cell__configure {
-  right: 34px; padding: 0 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
-  text-transform: uppercase; cursor: pointer; color: var(--alloy-os-accent, #2f6f4f);
+  position: relative;
+  padding: 0 12px;
+  min-width: 84px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  color: var(--alloy-os-accent, #2f6f4f);
+  /* Always visible at a subtle level so users don't chase a fleeting hover target. */
+  opacity: 0.78;
 }
-.alloy-os-fp-composer-cell__grip { left: 6px; width: 22px; cursor: grab; touch-action: none; }
-.alloy-os-fp-composer-cell__remove { right: 6px; width: 22px; cursor: pointer; }
+.alloy-os-fp-composer-cell__configure:hover,
+.alloy-os-fp-composer-cell__configure:focus-visible {
+  opacity: 1;
+  background: #fff;
+  border-color: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 45%, transparent);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 18%, transparent);
+}
+.alloy-os-fp-composer-cell__grip {
+  position: absolute; top: 6px; left: 6px; width: 28px; z-index: 12;
+  cursor: grab; touch-action: none; opacity: 0;
+}
+.alloy-os-fp-composer-cell__remove {
+  position: relative; width: 28px; cursor: pointer; opacity: 0;
+}
 .alloy-os-fp-composer-cell__remove:hover { color: var(--alloy-os-danger, #b91c1c); border-color: color-mix(in srgb, var(--alloy-os-danger, #b91c1c) 40%, transparent); }
 .alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__configure,
+.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__configure {
+  opacity: 1;
+}
 .alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__grip,
 .alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__remove,
-.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__configure,
 .alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__grip,
 .alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__remove,
 .alloy-os-fp-composer-cell.is-arranging .alloy-os-fp-composer-cell__grip,
@@ -5280,7 +5331,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   position: absolute; background: transparent; transition: background 100ms;
   touch-action: none; pointer-events: auto; opacity: 0; z-index: 6;
 }
-.alloy-os-fp-composer-cell__handle--w { top: 0; right: 0; width: 8px; height: 100%; cursor: col-resize; }
+/* Keep the right resize strip below the Configure toolbar so it doesn't steal clicks. */
+.alloy-os-fp-composer-cell__handle--w { top: 40px; right: 0; width: 8px; height: calc(100% - 40px); cursor: col-resize; }
 .alloy-os-fp-composer-cell__handle--h { left: 0; bottom: 0; height: 8px; width: 100%; cursor: row-resize; }
 .alloy-os-fp-composer-cell__handle--corner { right: 0; bottom: 0; width: 12px; height: 12px; cursor: nwse-resize; }
 .alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__handle,
@@ -5694,6 +5746,21 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   gap: 10px;
 }
 
+/* Extra breath between Description (header supporting) → actions → Still Needed. */
+.alloy-os-ucard[data-universal-card-key="current_work"] .alloy-os-ucard__supporting {
+  margin-bottom: 2px;
+}
+
+.alloy-os-ucard[data-universal-card-key="current_work"] .alloy-os-ucard__body {
+  padding-top: 6px;
+}
+
+.alloy-os-currentwork__summary-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .alloy-os-currentwork__header-meta {
   display: inline-flex;
   align-items: baseline;
@@ -5795,8 +5862,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 4px;
-  padding-top: 9px;
+  margin-top: 2px;
+  padding-top: 12px;
   border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
 }
 
@@ -5862,7 +5929,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  gap: 8px;
+  gap: 0;
 }
 .alloy-os-currentwork__composer-header {
   flex: 0 0 auto;
@@ -5870,6 +5937,71 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__composer-host > .alloy-os-activity-cockpit__comms {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* Mode panel hosts Linked overlays relative to the Focus Panel column. */
+[data-focus-panel-mode="summary"],
+[data-focus-panel-mode="work"] {
+  position: relative;
+}
+
+/* Linked card host — transient elevated overlay (not inserted into Visible layout).
+ * Pin to the TOP of the Focus Panel workspace (flush under Work/Activity), matching
+ * elevated Visible cards (`top: 22px`). Vertical centering wasted room and clipped tall
+ * detail surfaces (e.g. Scheduling → Recurring Tuition). */
+.alloy-os-focus-panel-linked-host {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  align-items: start;
+  padding: 12px 12px 16px;
+  pointer-events: none;
+}
+.alloy-os-focus-panel-linked-host__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
+  pointer-events: auto;
+}
+.alloy-os-focus-panel-linked-host__card {
+  position: relative;
+  z-index: 1;
+  width: min(560px, calc(100% - 24px));
+  /* Bound to the host content box (FP workspace under Work/Activity), not the viewport. */
+  max-height: 100%;
+  overflow: auto;
+  pointer-events: auto;
+}
+
+/* Capability compose: Close sits on the What's Next header (top-right), not under the title. */
+.alloy-os-currentwork[data-capability-active="true"] {
+  position: relative;
+}
+.alloy-os-currentwork__capability-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 3;
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
+}
+.alloy-os-currentwork__capability-close:hover,
+.alloy-os-currentwork__capability-close:focus-visible {
+  color: var(--alloy-os-bend-pine, #00a283);
 }
 
 /* Generic form-delivery surface (send-form capability). */
@@ -5963,6 +6095,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork[data-capability-active="true"] .alloy-os-ucard__header {
   flex: 0 0 auto;
   padding-bottom: 6px;
+  padding-right: 52px; /* room for capability Close */
 }
 /* Cap the centered card to the viewport; height follows content (max-content on the base rule). */
 .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
@@ -6387,7 +6520,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__summary {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .alloy-os-currentwork__guidance-label {
@@ -7344,9 +7477,9 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .identity-field-value__value-row {
   display: inline-flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 5px;
   min-width: 0;
   max-width: 100%;
 }
@@ -7384,12 +7517,39 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .identity-field-value__value--linked {
   cursor: pointer;
-  color: var(--alloy-pine, #2f5d50);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  max-width: 100%;
+  color: var(--alloy-os-midnight, #273f52);
+  text-decoration: none;
+}
+
+.identity-field-value__linked-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity-field-value__nav-cue {
+  flex: 0 0 auto;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  font-weight: 600;
+  font-size: 0.95em;
+  transition: color var(--alloy-os-motion-hover, 80ms) ease, transform var(--alloy-os-motion-hover, 80ms) ease;
 }
 
 .identity-field-value--linked:hover .identity-field-value__value--linked,
 .identity-field-value--linked:focus-within .identity-field-value__value--linked {
-  text-decoration: underline;
+  text-decoration: none;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.identity-field-value--linked:hover .identity-field-value__nav-cue,
+.identity-field-value--linked:focus-within .identity-field-value__nav-cue {
+  color: var(--alloy-os-bend-pine, #00a283);
+  transform: translateX(1px);
 }
 
 .identity-field-value__value--clickable {
@@ -7473,9 +7633,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .identity-record-summary__open-details:hover,
 .identity-record-summary__open-details:focus-visible {
-  color: var(--alloy-os-accent, #24634f);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  color: var(--alloy-os-bend-pine, #00a283);
+  text-decoration: none;
 }
 
 .identity-record-summary__activate:hover,
@@ -7556,6 +7715,30 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   min-width: 0;
 }
 
+/* Compact contact lines: one horizontal icon+value row (no stacked icon above). */
+.identity-field-value:not(:has(.identity-field-value__label)) {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+}
+
+.identity-field-value:not(:has(.identity-field-value__label)) .identity-field-value__value-row {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 5px;
+  min-width: 0;
+  width: 100%;
+}
+
+.identity-field-value:not(:has(.identity-field-value__label)) .identity-field-value__icon--solo {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+}
+
 .identity-field-value__label {
   display: inline-flex;
   align-items: center;
@@ -7575,6 +7758,12 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   width: 12px;
   height: 12px;
   flex: 0 0 auto;
+}
+
+/* Compact summary: icon sits inline with the value, not stacked above it. */
+.identity-field-value__icon--solo {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  align-self: center;
 }
 
 .identity-field-value__value {

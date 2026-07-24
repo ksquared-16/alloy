@@ -264,7 +264,14 @@ export default function SchedulingCard({ model, context, receded = false, coordi
     }, [requestNonce, children]);
 
     const activeChild = children.find((c) => c.id === activeChildId) ?? null;
-    useReportPerspective(coordination, "scheduling", activeChild ? "focused" : "base");
+    // While the Linked host elevates Scheduling, keep reporting focused even before
+    // the request effect resolves activeChildId (avoids a mount-time "base" flash).
+    const hostElevated = coordination?.activeDepth?.card === "scheduling";
+    useReportPerspective(
+        coordination,
+        "scheduling",
+        activeChild || hostElevated ? "focused" : "base",
+    );
     useDismissSignal(coordination, "scheduling", () => setActiveChildId(null));
 
     const insight = children.length === 0 ? "No children to schedule" : children.length === 1 ? "1 child" : `${children.length} children`;

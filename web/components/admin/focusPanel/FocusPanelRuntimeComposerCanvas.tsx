@@ -120,7 +120,9 @@ export default function FocusPanelRuntimeComposerCanvas({
 
     const cols = grid.columns || FOCUS_PANEL_GRID_COLUMNS;
     const placed = new Set(cardsInGrid(grid));
-    const tray = catalog.filter((c) => !placed.has(c.key));
+    // Tray = library only (not yet in order). Linked/Hidden stay in visibility zones, not tray.
+    const inOrder = new Set(order.map((entry) => entry.key));
+    const tray = catalog.filter((c) => !placed.has(c.key) && !inOrder.has(c.key));
 
     const applyGrid = useCallback(
         (next: FocusPanelGridLayout) => {
@@ -129,6 +131,29 @@ export default function FocusPanelRuntimeComposerCanvas({
         },
         [onLayoutChange],
     );
+
+    // Visible/Linked/Hidden changes must relocate cards on the composer canvas immediately.
+    // Linked/Hidden leave the Visible grid; returning to Visible re-adds them.
+    const onLayoutChangeRef = useRef(onLayoutChange);
+    onLayoutChangeRef.current = onLayoutChange;
+    useEffect(() => {
+        const visibleKeys = order
+            .filter((entry) => (entry.visibility ?? "visible") === "visible")
+            .map((entry) => entry.key);
+        const visibleSet = new Set(visibleKeys);
+        setGrid((prev) => {
+            const placedKeys = cardsInGrid(prev);
+            const placedSet = new Set(placedKeys);
+            const toRemove = placedKeys.filter((key) => !visibleSet.has(key));
+            const toAdd = visibleKeys.filter((key) => !placedSet.has(key));
+            if (toRemove.length === 0 && toAdd.length === 0) return prev;
+            let next = prev;
+            for (const key of toRemove) next = removeArea(next, key);
+            for (const key of toAdd) next = addCardToGrid(next, key);
+            onLayoutChangeRef.current?.(buildPublishedLayoutFromGrid(next));
+            return next;
+        });
+    }, [order]);
 
     const publishedLayout = useMemo(() => buildPublishedLayoutFromGrid(grid), [grid]);
 
@@ -614,18 +639,6 @@ function ComposerCellShell({
                 />
             :   null}
             <div className="alloy-os-fp-composer-cell__chrome" aria-hidden={!selected}>
-                <button
-                    type="button"
-                    className="alloy-os-fp-composer-cell__configure"
-                    aria-label={`Configure ${cardKey} card`}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onSelect();
-                        onEnterDrillIn?.();
-                    }}
-                >
-                    Configure
-                </button>
                 {onStartMove ?
                     <button
                         type="button"
@@ -639,19 +652,34 @@ function ComposerCellShell({
                         <GripVertical className="h-3.5 w-3.5" aria-hidden />
                     </button>
                 :   null}
-                {onRemove ?
+                {/* Stable top-right toolbar — Configure first (easy hit), Remove beside it. */}
+                <div className="alloy-os-fp-composer-cell__toolbar">
+                    {onRemove ?
+                        <button
+                            type="button"
+                            className="alloy-os-fp-composer-cell__remove"
+                            aria-label={`Remove ${cardKey} card`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onRemove();
+                            }}
+                        >
+                            <X className="h-3.5 w-3.5" aria-hidden />
+                        </button>
+                    :   null}
                     <button
                         type="button"
-                        className="alloy-os-fp-composer-cell__remove"
-                        aria-label={`Remove ${cardKey} card`}
+                        className="alloy-os-fp-composer-cell__configure"
+                        aria-label={`Configure ${cardKey} card`}
                         onClick={(e) => {
                             e.stopPropagation();
-                            onRemove();
+                            onSelect();
+                            onEnterDrillIn?.();
                         }}
                     >
-                        <X className="h-3 w-3" aria-hidden />
+                        Configure
                     </button>
-                :   null}
+                </div>
                 {onStartResize ?
                     <>
                         <div
