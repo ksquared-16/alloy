@@ -17,6 +17,7 @@ import { getCapability } from "./capability.mjs";
 import { getProductDefinitionForCapability } from "./product-definition.mjs";
 import { readAcceptance } from "./acceptance.mjs";
 import { composeCounsel } from "./counsel.mjs";
+import { composeUnderstanding } from "./shared-understanding.mjs";
 
 const firstSentence = (s) => { const t = String(s || "").trim(); const i = t.search(/[.!?]/); return i > 0 ? t.slice(0, i) : t; };
 const time = (x) => (x ? new Date(x).getTime() : 0);
@@ -79,6 +80,10 @@ export function assembleConversation(mission_id) {
   // composed from signals already computed and frozen on the package.
   const counsel = composeCounsel({ mission: m, capability: cap, package: pkg, capabilityMissions, capName: title });
 
+  // The visible Shared Understanding — the curated reliance surface, projected
+  // from the SAME durable state (one source of truth with the counsel above).
+  const understanding = composeUnderstanding({ mission: m, capability: cap, package: pkg, capabilityMissions, capName: title });
+
   // ---- narrative transcript (a story, from real facts) ----
   const opening = [];
   opening.push({ from: "you", kind: "intent", text: intent, at: m.created_at });
@@ -122,6 +127,7 @@ export function assembleConversation(mission_id) {
     conversation_id: mission_id, mission_id, title, intent,
     state: st, verdict: V, capability_id: m.capability_id || null,
     messages, insights: { goal: intent, knows, needs },
+    understanding,
     package: pkg || null, mission: m,
     acceptance: readAcceptance(mission_id),
   };

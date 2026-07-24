@@ -1207,6 +1207,47 @@ function conversationInbox() {
   </div>`;
 }
 
+// The visible Shared Understanding — the curated reliance surface. Each claim
+// carries its epistemic status × authorship in a small voice tag (You decided /
+// Settled / Must / Approach / Open / Needs a decision), so a recommendation can
+// never masquerade as a decision, an assumption never as a fact, and an open
+// question never disappears behind a green verdict. Curated and load-bearing:
+// superseded claims live under "Set aside", never in the active surface.
+const CARRY_LABEL = { tradeoff: "Accepted tradeoff", accepted_imperfection: "Accepted gap", risk: "Risk" };
+function sharedUnderstanding(c) {
+  const u = c.understanding;
+  if (!u) return `<div class="cvcol cvinsights"><div class="cvcol-h">Shared understanding</div><span class="muted">—</span></div>`;
+  const tag = (t, cls) => `<span class="su-tag ${cls || ""}">${esc(t)}</span>`;
+  const why = (w) => (w ? `<div class="su-why">${esc(w)}</div>` : "");
+  const claim = (voiceTag, text, whyText) => `<div class="su-item"><div class="su-line">${voiceTag}<span>${esc(text)}</span></div>${why(whyText)}</div>`;
+
+  const reliedCls = (r) => r.kind === "decision" ? (r.settled_from_prior ? "settled" : "decided") : r.kind === "constraint" ? "must" : "approach";
+  const relied = u.relied_upon.length
+    ? u.relied_upon.map((r) => claim(tag(r.voice, reliedCls(r)), r.text, r.why)).join("")
+    : (u.nothing_settled ? `<span class="muted">Nothing is settled yet — this is still being shaped.</span>` : `<span class="muted">—</span>`);
+  const thin = u.is_thin ? `<div class="su-thin">Resting on limited evidence so far.</div>` : "";
+
+  const frontier = u.frontier.length
+    ? u.frontier.map((f) => claim(tag(f.blocks_execution ? "Needs a decision" : "Open", f.blocks_execution ? "blocks" : "open"), f.question, f.why)).join("")
+    : `<span class="muted">Nothing load-bearing is unresolved.</span>`;
+
+  const carrying = u.carrying.length
+    ? `<div class="cvins"><div class="dlabel">Knowingly carrying</div>${u.carrying.map((k) => claim(tag(CARRY_LABEL[k.kind] || "Carrying", "carry"), k.text, k.why)).join("")}</div>` : "";
+  const advises = u.advises
+    ? `<div class="cvins"><div class="dlabel">Director advises</div>${claim(tag("Not yet decided", "advise"), u.advises.headline, null)}</div>` : "";
+  const basis = u.basis
+    ? `<div class="cvins"><div class="dlabel">Continuing from</div><p class="su-basis">${esc(u.basis.continuation)}</p></div>` : "";
+  const aside = u.set_aside.length
+    ? `<div class="cvins"><div class="dlabel">Set aside</div>${u.set_aside.map((s) => `<div class="su-aside"><span>${esc(s.text)}</span>${s.revisit_if ? `<div class="su-why">Revisit if ${esc(s.revisit_if)}</div>` : ""}</div>`).join("")}</div>` : "";
+
+  return `<div class="cvcol cvinsights"><div class="cvcol-h">Shared understanding</div>
+    <div class="cvins"><div class="dlabel">What we're doing</div><p class="cvgoal">${esc(u.intent || "—")}</p></div>
+    <div class="cvins"><div class="dlabel">What we're relying on</div>${relied}${thin}</div>
+    <div class="cvins"><div class="dlabel">What's still open</div>${frontier}</div>
+    ${carrying}${advises}${basis}${aside}
+  </div>`;
+}
+
 // Selecting a conversation opens the workspace: left history, center preparation,
 // right insights. One window — the operator never bounces between pages.
 function conversationWorkspace(id) {
@@ -1241,13 +1282,10 @@ function conversationWorkspace(id) {
       </div></div>` : `<div class="muted">Director is still pulling this together.</div>`}
   </div>`;
 
-  // RIGHT — Director's read: goal, what it knows, what it still needs.
-  const ins = c.insights;
-  const right = `<div class="cvcol cvinsights"><div class="cvcol-h">Director's read</div>
-    <div class="cvins"><div class="dlabel">What we're doing</div><p class="cvgoal">${esc(ins.goal || "—")}</p></div>
-    <div class="cvins"><div class="dlabel">What Director knows</div>${list(ins.knows, (x) => x)}</div>
-    <div class="cvins"><div class="dlabel">What Director still needs</div>${ins.needs.length ? `<ul class="dul need">${ins.needs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<span class="muted">Nothing — ready for your review.</span>`}</div>
-  </div>`;
+  // RIGHT — Shared Understanding: the curated reliance surface (what we rely on,
+  // what's open, what we're knowingly carrying, and why), projected from durable
+  // state — so the operator sees the engineering state without reading the package.
+  const right = sharedUnderstanding(c);
 
   return `<div class="dwrap wide">
     <div class="dmhead"><button class="btn sm" data-dback>← Conversations</button>

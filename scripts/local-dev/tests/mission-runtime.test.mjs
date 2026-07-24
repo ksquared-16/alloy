@@ -23,6 +23,7 @@ const { analyzeGap } = await import("../lib/vacilando/gap-analysis.mjs");
 const { checkStartPreconditions, serializePackagePrompt, parseOutcome } = await import("../lib/vacilando/mission-executor.mjs");
 const { composeCounsel, selectFrontier, attemptCounsel, readinessCounsel, frontierPhrase } = await import("../lib/vacilando/counsel.mjs");
 const { assembleConversation } = await import("../lib/vacilando/conversation.mjs");
+const { composeUnderstanding } = await import("../lib/vacilando/shared-understanding.mjs");
 
 test("readiness is computed: a complete package is ready", () => {
   const cap = retrieveCapability("Build Access & Roles V2");
@@ -529,4 +530,165 @@ test("wiring: assembleConversation reads the real mission store, not the static 
   assert.match(reviewed.text, /two earlier attempts/i); // real count (2 priors), not "1 past mission"
   const closing = convo.messages.filter((x) => x.from === "director").slice(-1)[0].text;
   assert.match(closing, /line up well|pick up|in progress/i); // strong readiness + continuation counsel
+});
+
+// ============================================================================
+// Shared Understanding surface (Product Realization V1, Phase 2) — the visible
+// reliance surface. Curated, typed by status × authorship, superseded demoted,
+// projected from durable state, agreeing with Phase-1 counsel.
+// ============================================================================
+
+const decision = (id, statement, extra = {}) => ({ id, statement, rationale: extra.why ?? null, decided_at: "2026-06-01T00:00:00.000Z", provenance: extra.provenance || "operator", supersedes: extra.supersedes || null });
+const pdWith = (o = {}) => ({ accepted_decisions: o.decisions || [], constraints: o.constraints || [], patterns: o.patterns || [], rejected_patterns: o.rejected || [], known_tradeoffs: o.tradeoffs || [] });
+const capWith = (o = {}) => ({ name: o.name || "Cap", description: o.description || "", known_issues: o.known_issues || [], product_definition: o.pd || pdWith() });
+const pkgU = (o = {}) => ({ readiness_verdict: o.verdict || readyV(1.0), gap_report: gapWith(o.findings || {}), suggested_acceptance_criteria: o.suggested || [] });
+const U = (o = {}) => composeUnderstanding({ mission: { mission_id: o.mid || "cur", intent: o.intent ?? "Cap V2" }, capability: o.capability || capWith(), package: o.pkg || pkgU(), capabilityMissions: o.missions || [], capName: (o.capability?.name) || "Cap" });
+
+// ---- Claim visibility ------------------------------------------------------
+
+test("SU: an accepted active decision appears, carrying its authorship and why", () => {
+  const u = U({ capability: capWith({ pd: pdWith({ decisions: [decision("ad1", "Roles are the unit of grant.", { why: "Auditable." })] }) }) });
+  const d = u.relied_upon.find((r) => r.kind === "decision");
+  assert.ok(d, "decision is visible");
+  assert.equal(d.voice, "You decided");
+  assert.equal(d.why, "Auditable.");
+});
+
+test("SU: a superseded decision is NOT active — it is demoted to history", () => {
+  const pd = pdWith({ decisions: [decision("ad1", "Old direction"), decision("ad2", "New direction", { supersedes: "ad1" })] });
+  const u = U({ capability: capWith({ pd }) });
+  const activeText = u.relied_upon.map((r) => r.text);
+  assert.ok(activeText.includes("New direction"));
+  assert.ok(!activeText.includes("Old direction"), "superseded claim must not appear active");
+  assert.ok(u.set_aside.some((s) => s.text === "Old direction"), "superseded claim is retained in history");
+});
+
+test("SU: a Director recommendation stays distinguishable from a decision", () => {
+  const u = U({ pkg: pkgU({ suggested: [{ statement: "cover roadmap item" }, { statement: "address ki1" }] }) });
+  assert.ok(u.advises, "recommendation is present");
+  assert.match(JSON.stringify(u.advises), /criteria|criterion/i);
+  // it is NOT in the relied-upon (decided) set
+  assert.ok(!u.relied_upon.some((r) => /criteria|criterion/i.test(r.text)));
+});
+
+test("SU: an assumption/constraint does not present as a fact", () => {
+  const u = U({ capability: capWith({ pd: pdWith({ constraints: [{ statement: "Checks evaluate locally.", hard: true }] }) }) });
+  const c = u.relied_upon.find((r) => r.kind === "constraint");
+  assert.equal(c.voice, "Must"); // a bound, voiced as such — not stated as an established fact
+});
+
+test("SU: an unknown remains visible even when execution is permissible (Ready)", () => {
+  const u = U({ pkg: pkgU({ verdict: readyV(0.4), findings: { unknowns: [{ id: "u_maturity", question: "v2 but new?", blocking: false }] } }) });
+  assert.equal(u.frontier.length, 1);
+  assert.equal(u.frontier[0].blocks_execution, false); // open but non-blocking — still shown
+});
+
+test("SU: historical volume does not become visual volume (curation cap)", () => {
+  const many = Array.from({ length: 12 }, (_, i) => decision(`ad${i}`, `Decision ${i}`));
+  const u = U({ capability: capWith({ pd: pdWith({ decisions: many, constraints: [{ statement: "hard one", hard: true }] }) }) });
+  assert.ok(u.relied_upon.length <= 6, "surface stays compact regardless of history depth");
+});
+
+// ---- Frontier --------------------------------------------------------------
+
+test("SU frontier: a single load-bearing unknown is surfaced with consequence", () => {
+  const u = U({ pkg: pkgU({ findings: { unknowns: [{ id: "u_maturity", question: "q", blocking: false }] } }) });
+  assert.equal(u.frontier.length, 1);
+  assert.ok(u.frontier[0].why, "the frontier explains why it matters");
+});
+
+test("SU frontier: among many findings, only the consequential ones are selected", () => {
+  const u = U({ pkg: pkgU({ findings: {
+    unknowns: [{ id: "u_ki_ki1", question: "known-issue scope?", blocking: false }, { id: "u_maturity", question: "v2?", blocking: false }],
+    missing_information: [{ id: "m_arch", what: "no arch on disk", severity: "warn" }],
+  } }) });
+  // systemic warn + low-risk known-issue demoted; only the real question remains
+  assert.equal(u.frontier.length, 1);
+  assert.match(u.frontier[0].question, /extend|first version/i);
+});
+
+test("SU frontier: a well-supported case shows no invented frontier (stays compact)", () => {
+  const u = U({ pkg: pkgU({ verdict: readyV(1.0), findings: {} }) });
+  assert.deepEqual(u.frontier, []);
+});
+
+test("SU frontier: a contested/conflict claim surfaces for human judgment", () => {
+  const u = U({ pkg: pkgU({ findings: { conflicts: [{ id: "x1", detail: "intent overlaps rejected pattern rp1" }] } }) });
+  assert.ok(u.frontier.some((f) => /set aside|overlaps|human call/i.test(`${f.question} ${f.why}`)));
+});
+
+test("SU frontier: an accepted imperfection is carried, not raised as a blocker", () => {
+  const u = U({ capability: capWith({ known_issues: [{ id: "ki1", issue: "no audit trail", status: "open" }] }) });
+  assert.ok(u.carrying.some((k) => k.kind === "accepted_imperfection"));
+  assert.ok(!u.frontier.some((f) => /audit/i.test(f.question)), "accepted imperfection is not a frontier");
+});
+
+// ---- Provenance ------------------------------------------------------------
+
+test("SU provenance: operator vs settled vs advised are voiced differently", () => {
+  const u = U({ capability: capWith({ pd: pdWith({ decisions: [decision("a", "op", { provenance: "operator" }), decision("b", "seeded", { provenance: "seed" })] }) }) });
+  const voices = u.relied_upon.filter((r) => r.kind === "decision").map((r) => r.voice);
+  assert.ok(voices.includes("You decided"));
+  assert.ok(voices.includes("Settled"));
+});
+
+test("SU provenance: prior-mission evidence yields a continuation basis", () => {
+  const u = U({ missions: [missionOn("c", "waiting_for_operator", "p1"), missionOn("c", "ready", "cur")] });
+  assert.ok(u.basis, "basis present from real attempts");
+  assert.match(u.basis.continuation, /pick up|in progress|continue/i);
+});
+
+test("SU provenance: missing rationale is handled honestly (no fabricated why)", () => {
+  const u = U({ capability: capWith({ pd: pdWith({ decisions: [decision("a", "no-rationale decision")] }) }) });
+  const d = u.relied_upon.find((r) => r.kind === "decision");
+  assert.equal(d.why, null); // absent, not invented
+});
+
+// ---- Continuity ------------------------------------------------------------
+
+test("SU continuity: the surface is built from durable state, with no transcript input", () => {
+  // composeUnderstanding never receives messages — only durable mission/pd/pkg.
+  const u = U({ capability: capWith({ pd: pdWith({ decisions: [decision("a", "durable decision")] }) }) });
+  assert.ok(u.relied_upon.some((r) => r.text === "durable decision"));
+});
+
+test("SU continuity: survives regeneration — same durable inputs give the same surface", () => {
+  const cap = capWith({ pd: pdWith({ decisions: [decision("a", "d1")], constraints: [{ statement: "c1", hard: true }] }) });
+  const a = U({ capability: cap });
+  const b = U({ capability: cap });
+  assert.deepEqual(a, b); // pure projection, replayable across sessions/restarts
+});
+
+// ---- Composition (agreement with Phase 1) ----------------------------------
+
+test("SU composition: the visible frontier matches the Phase-1 counsel frontier (one source of truth)", () => {
+  const args = { mission: { mission_id: "cur", intent: "Communications V2" }, capability: capWith({ name: "Communications" }),
+    package: pkgU({ verdict: readyV(0.4), findings: { unknowns: [{ id: "u_maturity", question: "v2?", blocking: false }] } }), capabilityMissions: [], capName: "Communications" };
+  const counsel = composeCounsel(args);
+  const u = composeUnderstanding(args);
+  assert.equal(u.frontier.length, 1);
+  assert.equal(counsel.frontier.length, 1);
+  assert.equal(u.frontier[0].question, counsel.frontier[0].need); // identical claim, not two reconstructions
+});
+
+test("SU composition: Retention stays honestly underdefined", () => {
+  const V = { verdict: "Needs Product Decisions", why: "No decisions yet.", what_to_do: "Record the decisions that shape this.", reasons: [] };
+  const u = U({ capability: capWith({ name: "Retention", pd: pdWith({}) }), pkg: { readiness_verdict: V, gap_report: gapWith() } });
+  assert.equal(u.nothing_settled, true);
+  assert.equal(u.relied_upon.length, 0);
+  assert.ok(u.frontier.some((f) => f.blocks_execution)); // the missing decisions remain the open, blocking item
+});
+
+test("SU composition: Access & Roles shows history as one continuation, never a chronology dump", () => {
+  const ms = Array.from({ length: 9 }, (_, i) => missionOn("ar", i === 0 ? "completed" : i === 1 ? "waiting_for_operator" : "draft", i === 8 ? "cur" : `a${i}`));
+  const u = U({ capability: capWith({ name: "Access & Roles" }), missions: ms });
+  assert.ok(u.basis);
+  // continuation is a single sentence — not nine mission records
+  assert.equal((u.basis.continuation.match(/\./g) || []).length, 1);
+});
+
+test("SU composition: no internal taxonomy leaks into the surface text", () => {
+  const u = U({ capability: capWith({ name: "Communications" }), pkg: pkgU({ verdict: readyV(0.4), findings: { unknowns: [{ id: "u_maturity", question: "q", blocking: false }] }, suggested: [{ statement: "x" }] }) });
+  const strings = [u.intent, ...u.relied_upon.flatMap((r) => [r.text, r.why]), ...u.frontier.flatMap((f) => [f.question, f.why]), ...u.carrying.map((c) => c.text), u.basis?.continuation].filter(Boolean);
+  for (const s of strings) assert.doesNotMatch(s, TAXONOMY_LEAK, `taxonomy leaked in: ${s}`);
 });

@@ -531,4 +531,21 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .cvins{margin-bottom:14px;}
 .cvins p.cvgoal{margin:2px 0 0;font-size:13px;color:var(--ink);font-style:italic;line-height:1.5;}
 .dul.need{color:var(--review);}
+/* shared understanding — the reliance surface: calm, typed, subordinate */
+.su-item{margin:0 0 7px;}
+.su-line{display:flex;gap:7px;align-items:baseline;font-size:12.5px;color:var(--ink);line-height:1.5;}
+.su-tag{flex:none;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:5px;background:var(--bg-tint);color:var(--ink-3);white-space:nowrap;position:relative;top:-1px;}
+.su-tag.decided{background:var(--green-soft);color:var(--green-ink);}
+.su-tag.settled{background:var(--done-bg);color:var(--done);}
+.su-tag.must{background:var(--card-2);color:var(--ink-2);border:1px solid var(--line-strong);}
+.su-tag.approach{background:var(--card-2);color:var(--ink-3);}
+.su-tag.open{background:var(--terra-soft);color:var(--terra);}
+.su-tag.blocks{background:var(--blocked-bg);color:var(--blocked);}
+.su-tag.carry{background:var(--bg-tint);color:var(--ink-3);}
+.su-tag.advise{background:var(--card-2);color:var(--ink-3);border:1px dashed var(--line-strong);}
+.su-why{font-size:11px;color:var(--ink-3);line-height:1.45;margin:1px 0 0 2px;}
+.su-thin{font-size:11px;color:var(--ink-3);font-style:italic;margin-top:5px;}
+.su-basis{margin:2px 0 0;font-size:12px;color:var(--ink-2);line-height:1.5;}
+.su-aside{font-size:12px;color:var(--ink-4);line-height:1.5;margin:0 0 5px;text-decoration:line-through;text-decoration-color:var(--line-strong);}
+.su-aside .su-why{text-decoration:none;color:var(--ink-4);}
 @media(max-width:900px){.cvgrid{grid-template-columns:1fr;}}
