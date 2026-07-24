@@ -14,7 +14,7 @@ process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-test-"));
 const { validatePackage, createPackage, getPackage } = await import("../lib/vacilando/commands/mission-packages.mjs");
 const { retrieveCapability, getCapability, registerCapability, listCapabilities } = await import("../lib/vacilando/capability.mjs");
 const { getProductDefinitionForCapability, addAcceptedDecision, recordMissionInHistory, ensureSeeded: ensurePdSeeded } = await import("../lib/vacilando/product-definition.mjs");
-const { retrieveForCapability } = await import("../lib/vacilando/knowledge.mjs");
+const { retrieveForCapability, readSnapshot } = await import("../lib/vacilando/knowledge.mjs");
 const { createMission, getMission, recoverMissions, updateMission } = await import("../lib/vacilando/commands/missions.mjs");
 const { compile } = await import("../lib/vacilando/mission-compiler.mjs");
 const { checkStartPreconditions, serializePackagePrompt, parseOutcome } = await import("../lib/vacilando/mission-executor.mjs");
@@ -83,6 +83,22 @@ test("the registry supports N capabilities (register is idempotent)", () => {
   const all = listCapabilities();
   assert.ok(all.find((c) => c.capability_id === "cap_access_roles"), "seed present");
   assert.ok(all.find((c) => c.capability_id === r1.capability.capability_id), "registered capability present");
+});
+
+// --- Knowledge Snapshot v2: sectioned context, reproducible (step 3) ---
+
+test("the knowledge snapshot is sectioned context and reproducible", () => {
+  const cap = retrieveCapability("Access & Roles").capability;
+  const s1 = retrieveForCapability(cap);
+  assert.equal(s1.schema_version, "vacilando.knowledge-snapshot.v2");
+  assert.ok(s1.items.length >= 1, "referenced files preserved (back-compat items)");
+  assert.deepEqual(s1.sections.referenced_files, s1.items, "items == sections.referenced_files");
+  assert.ok(s1.sections.accepted_decisions.length >= 2, "decisions section populated from the product definition");
+  assert.ok(s1.sections.capability_data.goals.length >= 1, "capability_data carries product-definition goals");
+  assert.ok("mission_history" in s1.sections && "acceptance_history" in s1.sections, "history sections present");
+  // reproducible: same state → same snapshot_id (pure function of state)
+  const s2 = retrieveForCapability(cap);
+  assert.equal(s2.snapshot_id, s1.snapshot_id, "snapshot id is deterministic for unchanged state");
 });
 
 test("an incomplete package is BLOCKED and start is refused", () => {
