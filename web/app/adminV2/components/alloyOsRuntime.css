@@ -4619,39 +4619,28 @@ html[data-alloy-os-runtime-split="true"]
   align-items: start;
 }
 
-/* Cards read as soft SURFACES on the white canvas: a quiet hairline + soft shadow
- * (no hard outline) so the answers feel like one composed workspace. */
+/* Cards share the Universal Card shell on the Focus Panel canvas.
+ * No transparent borders and no inset Bend Pine rails (What's Next included). */
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-ucard {
-  border-color: transparent;
+  border: 1px solid var(--alloy-os-fp-card-border);
   border-radius: var(--alloy-os-fp-card-radius);
   background: var(--alloy-os-surface, #fff);
-  box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.05),
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 4px 12px -8px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--alloy-os-fp-card-shadow);
   transition: box-shadow var(--motion-micro) var(--motion-ease-move);
 }
-/* Keep the left accent rails legible even without the box border. */
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
   .alloy-os-ucard[data-card-role="critical"],
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
   .alloy-os-ucard[data-card-role="active-work"] {
-  box-shadow:
-    inset 2px 0 0 0 color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent),
-    0 0 0 1px rgba(15, 23, 42, 0.04),
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 4px 12px -8px rgba(15, 23, 42, 0.14);
+  border-left-color: var(--alloy-os-fp-card-border);
+  box-shadow: var(--alloy-os-fp-card-shadow);
 }
 
-/* When NOT in a depth layer, a gentle hover lift communicates the cards are live
- * surfaces of one canvas (suppressed entirely while a card is elevated). */
+/* When NOT in a depth layer, a gentle hover lift for cards with controls only. */
 .alloy-os-focus-panel-grid:not([data-fp-depth="active"]):not(.alloy-os-focus-panel-grid--work)
   .alloy-os-focus-panel-grid__cell:hover
-  .alloy-os-ucard {
-  box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.05),
-    0 2px 4px rgba(15, 23, 42, 0.05),
-    0 10px 22px -12px rgba(15, 23, 42, 0.22);
+  .alloy-os-ucard:has(button:not(:disabled)) {
+  box-shadow: var(--alloy-os-fp-card-shadow-hover);
 }
 @media (prefers-reduced-motion: reduce) {
   .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-ucard {

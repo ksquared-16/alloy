@@ -223,9 +223,12 @@ describe("Focus Panel header composition guards", () => {
         expect(css).toMatch(
             /\.alloy-os-ucard--tier-work,\s*\n\.alloy-os-ucard\[data-card-role="active-work"\]\s*\{\s*\n\s*border-left-width:\s*1px;/,
         );
-        // What's Next must not keep a Bend Pine summary accent rail.
+        // What's Next / work cards must not keep Bend Pine accent rails.
         expect(css).not.toMatch(
             /\.alloy-os-currentwork\[data-work-card-perspective="summary"\][\s\S]{0,120}border-left:\s*4px\s+solid\s+var\(--alloy-os-bend-pine/,
+        );
+        expect(css).not.toMatch(
+            /data-card-role="active-work"\][\s\S]{0,160}inset\s+2px\s+0\s+0\s+0\s+color-mix\(in\s+srgb,\s*var\(--alloy-os-bend-pine/,
         );
     });
 
