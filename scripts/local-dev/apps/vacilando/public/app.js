@@ -50,6 +50,8 @@ const MISSION_STATUS = {
 };
 const MISSION_LIVE = new Set(["starting", "running", "stopping"]);
 const READY_K = { ready: "ok", draft: "muted", blocked: "err", awaiting_operator: "auth", superseded: "muted" };
+// Director Review — six-state verdict badge colouring.
+const VERDICT_K = { "Ready": "ok", "Needs Decisions": "auth", "Needs Architecture": "auth", "Needs References": "warn", "Needs Acceptance": "warn", "Needs Review": "warn" };
 
 async function fetchMissions(slot) { try { const r = await fetch(`/api/missions?slot=${slot}`); state.missions[slot] = (await r.json()).missions || []; render(true); } catch { /* keep last */ } }
 // Loading is explicit: while a mission's detail is in flight we render a loading
@@ -77,7 +79,7 @@ async function compileMission(slot) {
   state.mission[data.mission.mission_id] = { mission: data.mission, package: data.package, outputs: [], acceptance: [] };
   state.missionIntent[slot] = "";
   await fetchMissions(slot);
-  toast("ok", "Package compiled", `${data.package.title} · ${data.package.readiness_status}`);
+  toast("ok", "Package prepared", `${data.package.title} · ${data.verdict?.verdict || data.package.readiness_status}`);
 }
 
 /**
@@ -713,6 +715,26 @@ function tabMission(sp) {
   const canAccept = m.status === "waiting_for_acceptance";
   const nOut = (d.outputs || []).length, nEv = (d.acceptance || []).length;
 
+  // Director Review — the operator reviews the prepared package + why it is (not) ready.
+  const V = pkg.readiness_verdict || null;
+  const vk = V ? (VERDICT_K[V.verdict] || "muted") : "muted";
+  const conf = pkg.gap_report ? `${Math.round((pkg.gap_report.confidence || 0) * 100)}%` : "—";
+  const diff = pkg.diff_from_previous;
+  const reviewPanel = V ? `<div class="sec">
+    <div class="m-head"><h5>Director Review</h5><span class="mbadge ${vk}">${esc(V.verdict)}</span></div>
+    ${V.verdict !== "Ready" && V.reasons?.length ? `<div class="m-blockers">${V.reasons.map((r) => "• " + esc(r)).join("<br>")}<br><span class="muted">Send back to: <b>${esc(V.send_back_to || "—")}</b></span></div>` : ""}
+    ${V.verdict === "Ready" ? `<div class="m-ok">Ready for the worker — the operator approves this package; it was not authored by hand.</div>` : ""}
+    <dl class="kv">
+      <dt>Confidence</dt><dd>${conf} <span class="muted">(gap coverage)</span></dd>
+      <dt>Questions</dt><dd>${(pkg.questions || []).map((q) => esc(q.question) + (q.blocking ? " <b>(blocking)</b>" : "")).join("<br>") || "—"}</dd>
+      <dt>Risks</dt><dd>${(pkg.risks || []).map((r) => esc(r.risk)).join("<br>") || "—"}</dd>
+      <dt>Advisory</dt><dd>${(V.advisory || []).slice(0, 6).map(esc).join("<br>") || "—"}</dd>
+      <dt>Suggested criteria</dt><dd>${(pkg.suggested_acceptance_criteria || []).length}</dd>
+      <dt>Version</dt><dd>v${pkg.version}${diff ? ` · Δ ${(diff.added || []).length} added, ${(diff.resolved || []).length} resolved${diff.verdict_change ? ` · ${esc(diff.verdict_change)}` : ""}` : ""}</dd>
+      <dt>Gap report</dt><dd class="mono">${esc(pkg.gap_report?.gap_report_id || "—")}</dd>
+    </dl>
+  </div>` : "";
+
   const pkgPanel = `<div class="sec">
     <div class="m-head"><h5>Mission Package</h5><span class="mbadge ${rk}">${pkg.readiness_status}</span></div>
     ${findings.length ? `<div class="m-blockers">${findings.map((f) => "⛔ " + esc(f.message)).join("<br>")}</div>` : ""}
@@ -759,7 +781,7 @@ function tabMission(sp) {
     </div>` : ""}
   </div>`;
 
-  return `<div class="mission">${compileBox}${pkgPanel}${statusPanel}</div>`;
+  return `<div class="mission">${compileBox}${reviewPanel}${pkgPanel}${statusPanel}</div>`;
 }
 
 // Read-only mission overlay (package review / outputs / evidence).

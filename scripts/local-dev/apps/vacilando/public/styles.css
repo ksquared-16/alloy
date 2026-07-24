@@ -398,6 +398,7 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .mbadge.auth{background:var(--review-bg);color:var(--review);}
 .mbadge.muted{background:var(--idle-bg);color:var(--idle);}
 .m-blockers{background:var(--blocked-bg);color:var(--blocked);border-radius:8px;padding:8px 11px;margin:8px 0;font-size:12px;line-height:1.6;}
+.m-ok{background:var(--ok-bg);color:var(--ok);border-radius:8px;padding:8px 11px;margin:8px 0;font-size:12px;line-height:1.6;}
 .m-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
 .m-list .chip{cursor:pointer;border:1px solid var(--line);}
 .m-list .chip.on{background:var(--terra);color:#fff;border-color:var(--terra);}
