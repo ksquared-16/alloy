@@ -43,6 +43,16 @@ export interface DraftFormSection {
     description?: string;
     /** Ordered ids into the flat `fields[]` (mirrors FormSchemaV1 section.field_ids). */
     field_ids: string[];
+    /**
+     * Operator-classified intent of this section (Phase 7 §3). Defaults to a recommendation from
+     * `recommendSectionDisposition`; the operator confirms/overrides before publish. Omitted === "fields".
+     */
+    disposition?: import("./sectionDisposition").SectionDisposition;
+    /**
+     * Preserved instructional / consent / signature prose that field-extraction alone would discard.
+     * Carried into the published form as a `text_block` so the document's meaning is never lost.
+     */
+    static_text?: string | null;
 }
 
 /** Debug visibility into what Alloy saw — so operators can understand zero-field results. */

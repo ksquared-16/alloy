@@ -17,7 +17,7 @@ Do not push/merge until explicitly instructed.
 | Slice | Status | Acceptance outcome (walkable) |
 |---|---|---|
 | 0 — Fidelity generation + native signing proof | **done** | Real PDF filled + signed + flattened, immutable artifact + audit, automated + artifact verification (6/6 tests) |
-| 1 — Source doc → reviewed published form (+OCR) | not started | Upload real PDF, correct ≥1 field, preserve a consent section, publish; repeat with a scanned PDF |
+| 1 — Source doc → reviewed published form (+OCR) | **backend done; UI+cert BLOCKED** | Upload real PDF, correct ≥1 field, preserve a consent section, publish; repeat with a scanned PDF |
 | 2 — Complete packet composition | not started | Compose + preview packet: form + handbook + upload + acknowledgement + signature, assigned across 2 guardians |
 | 3 — Participant launch + conversational completion | not started | Parent pastes info, confirms interpretation, uploads, resumes cross-session, reaches document review |
 | 4 — Generation + review + signing in journey | not started | Guardian reviews + signs a faithful completed doc; flattened PDF + evidence retrievable |
@@ -41,5 +41,13 @@ Do not push/merge until explicitly instructed.
 - **Deferred non-blockers:** pixel screenshot (browser pane blocked localhost/file:// this session — openable PDFs stand in); persistence of versions/audit to Documents + `form_submission_signatures` (Slice 4/7).
 - **Non-goals honored:** no production UI, no storage/DB wiring — engine + proof only.
 - **Commit:** _(below)_ · **Next:** Slice 1 (source document → reviewed, published form; + OCR path before final cert).
+
+### 2026-07-24 — Slice 1/2 (source doc → published form): backend increment DONE; UI + browser-cert BLOCKED
+- **Delivered (production, tested):** section **disposition** model + **static/consent/signature text preservation** through the draft→schema pipeline. `recommendSectionDisposition` classifies each section (fields / static_reference / acknowledgement / upload / signature / initials / generated) with rationale + confidence and preserves the prose field-extraction otherwise discards; `draftFormToFormSchemaV1` now emits the right FormSchemaV1 constructs per disposition (preserved `text_block` + `boolean`/`file_ref`/`signature` control), all validating against the live zod schema. This is the deterministic core the operator review UI will drive.
+- **Files:** `web/lib/pos/processingCase/formDraft/sectionDisposition.ts` (new); `web/lib/pos/processingCase/formDraft/types.ts` (+ `disposition`, `static_text` on section); `web/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1.ts` (disposition-aware). Test `web/tests/pos/sectionDisposition.test.ts`.
+- **Tests/evidence:** new suite green; existing draft/schema suites green (44/45 across the 6 draft tests). Every disposition-mapped schema passes `validateFormSchema`, incl. a mixed enrollment draft (fields + upload + acknowledgement + signature).
+- **Discovered pre-existing defect (NOT mine):** `deriveDocumentTitle` classification-label test fails on the reconciled staging base (`immunization_record` → "Child Medical Examination Report" vs expected "Immunization Record"); reproduces with my edits stashed. Unrelated to this slice; left untouched (scope discipline) — flagged for a separate fix.
+- **BLOCKER (gates full acceptance of this and every operator slice):** the slice's acceptance requires **browser certification of the authenticated operator authoring experience** (upload → correct → publish). The in-app browser pane refuses `localhost` "by policy" this whole session, and the operator form-studio needs an authenticated Supabase session the pane cannot hold (auth = Playwright/service-role magic-link; credentials must not be handled here). Remaining operator-visible work that depends on this: the section-disposition selector + pre-create field-type editing in `ProcessingQuestionReviewList`, confidence visualization, the OCR scanned-document path, and publish-in-browser. **Awaiting a certification-path decision** (options in the checkpoint reply).
+- **Commit:** _(below)_ · **Next:** unblock certification path, then finish the operator UI for this slice.
 
 <!-- Append one checkpoint per slice: outcome now walkable · files/changes · tests/evidence · defects found · deferred non-blockers · commit · next slice -->
