@@ -18,7 +18,7 @@ import { getProductDefinitionForCapability } from "./product-definition.mjs";
 import { readAcceptance } from "./acceptance.mjs";
 import { composeCounsel } from "./counsel.mjs";
 import { composeUnderstanding } from "./shared-understanding.mjs";
-import { composeOperations, stateKeyFor, STATES } from "./operations.mjs";
+import { composeOperations, stateKeyFor, STATES, conversationStage } from "./operations.mjs";
 
 const firstSentence = (s) => { const t = String(s || "").trim(); const i = t.search(/[.!?]/); return i > 0 ? t.slice(0, i) : t; };
 const time = (x) => (x ? new Date(x).getTime() : 0);
@@ -42,11 +42,16 @@ const STATE_ACTION = {
  * Part III). A blocking verdict (Needs Product Decisions) still shows its own
  * label so the send-back reads honestly.
  */
+const STAGE_INBOX = {
+  understanding: { label: "Understanding", tone: "run", action: "Answer" },
+  preparing: { label: "Ready to start", tone: "ok", action: "Review" },
+};
 export function conversationState(m, pkg) {
-  const V = pkg?.readiness_verdict || null;
-  // A prepared-but-not-ready package names its send-back verdict, not "Preparing".
-  if (!["completed", "closed", "failed", "interrupted"].includes(m.status) && V && V.verdict !== "Ready" && !["starting", "running", "stopping", "waiting_for_operator", "waiting_for_acceptance", "blocked"].includes(m.status)) {
-    return { label: V.verdict, tone: "attn", action: "Continue", key: "preparing" };
+  // Pre-start, the conversation is in a STAGE (Understanding until Director's
+  // questions are answered, then Preparing). The inbox names the stage honestly.
+  if (!["completed", "closed", "failed", "interrupted", "starting", "running", "stopping", "waiting_for_operator", "waiting_for_acceptance", "blocked"].includes(m.status)) {
+    const stage = conversationStage(m, pkg);
+    if (STAGE_INBOX[stage]) return { ...STAGE_INBOX[stage], key: stage === "understanding" ? "preparing" : "ready" };
   }
   const key = stateKeyFor(m, pkg);
   const st = STATES[key];

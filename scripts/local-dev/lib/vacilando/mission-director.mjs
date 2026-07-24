@@ -25,6 +25,7 @@ import { evaluateMission, readAcceptance } from "./acceptance.mjs";
 import { writeAuditEvent } from "./commands/audit.mjs";
 import { createRequest, updateRequest } from "./commands/director-requests.mjs";
 import { resolveSlotIdentity } from "./identity.mjs";
+import { understandingQuestions } from "./operations.mjs";
 
 /** Consequential mission actions require explicit confirmation, like every other. */
 const CONSEQUENTIAL = new Set(["start", "steer", "stop", "accept", "close"]);
@@ -127,7 +128,8 @@ export function recompileMission({ mission_id }) {
   const gapReport = analyzeGap({ intent, capability, snapshot });
   const { package: pkgRaw } = compile({ capability, snapshot, mission, gapReport, reviseOf: prevPkg.package_id });
 
-  const verdict = deriveVerdict(gapReport, pkgRaw);
+  // Questions the operator has already answered no longer hold the verdict off Ready.
+  const verdict = deriveVerdict(gapReport, pkgRaw, { answered: mission.answered_questions || [] });
   const prevVerdict = prevPkg.readiness_verdict?.verdict || "?";
   const diff = { ...(pkgRaw.diff_from_previous || {}), verdict_change: prevVerdict !== verdict.verdict ? `${prevVerdict} → ${verdict.verdict}` : null };
   const pkg = updatePackage(pkgRaw.package_id, { readiness_verdict: verdict, diff_from_previous: diff }) || pkgRaw;
@@ -167,6 +169,29 @@ export function reframeMission({ mission_id, direction }) {
   updateMission(mission_id, { intent });
   const out = recompileMission({ mission_id }); // recompiles from the new authoritative intent
   return out.ok ? { ...out, reframed: true } : out;
+}
+
+/**
+ * Answer Director's open questions in the Understanding stage. The operator simply
+ * replies — they do NOT rewrite the objective. The answer is recorded as a durable
+ * clarification (carried into the objective for the worker), the answered questions
+ * drop off, and the package recompiles. When no questions remain, understanding is
+ * sufficient and the conversation advances to Preparing.
+ */
+export function answerQuestions({ mission_id, answer }) {
+  const mission = getMission(mission_id);
+  if (!mission) return { ok: false, error: "unknown_mission" };
+  if (isLive(mission_id)) return { ok: false, error: "mid_turn" };
+  if (["completed", "closed"].includes(mission.status)) return { ok: false, error: "terminal" };
+  const text = String(answer || "").trim();
+  if (!text) return { ok: false, error: "empty_answer" };
+  const pkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
+  const open = understandingQuestions(mission, pkg).map((q) => q.id);
+  const clarifications = [...(mission.clarifications || []), { answer: text, question_ids: open, at: new Date().toISOString() }];
+  const answered = [...new Set([...(mission.answered_questions || []), ...open])];
+  updateMission(mission_id, { answered_questions: answered, clarifications });
+  const out = recompileMission({ mission_id }); // recompile carries the clarifications into the objective
+  return out.ok ? { ...out, answered: open.length } : out;
 }
 
 /** Turn an intent into a capability display name (strip leading verb + version). */

@@ -25,7 +25,7 @@ const { checkStartPreconditions, serializePackagePrompt, parseOutcome } = await 
 const { composeCounsel, selectFrontier, attemptCounsel, readinessCounsel, frontierPhrase } = await import("../lib/vacilando/counsel.mjs");
 const { assembleConversation } = await import("../lib/vacilando/conversation.mjs");
 const { composeUnderstanding } = await import("../lib/vacilando/shared-understanding.mjs");
-const { composeOperations, stateKeyFor, assembleReview, STATES } = await import("../lib/vacilando/operations.mjs");
+const { composeOperations, stateKeyFor, assembleReview, STATES, conversationStage, understandingQuestions } = await import("../lib/vacilando/operations.mjs");
 const { close: directorCloseFn } = await import("../lib/vacilando/mission-director.mjs");
 
 test("readiness is computed: a complete package is ready", () => {
@@ -918,4 +918,68 @@ test("intent authority: the operator's scope is the objective, not a side decisi
   // objective stayed authoritative. Here the intent IS the objective.
   const { pkg } = directedPkg();
   assert.ok(pkg.objective.includes("security model")); // the operator's substance is in the objective
+});
+
+// ============================================================================
+// Understanding stage — the operator sees only the stage they are in. Director's
+// open questions are shown (not buried under preparation); the operator answers;
+// preparation waits until understanding is sufficient.
+// ============================================================================
+
+const pkgQ = (o = {}) => ({
+  readiness_verdict: o.verdict || { verdict: "Needs Clarification", why: "open questions", what_to_do: "answer them" },
+  readiness_status: o.status || "awaiting_operator",
+  gap_report: { findings: { unknowns: o.unknowns || [{ id: "u1", question: "The intent's scope includes ki1?", blocking: false }], conflicts: o.conflicts || [{ id: "c1", detail: "Intent text overlaps rejected pattern rp1: Per-user direct grants" }] } },
+});
+
+test("understanding: Director's open questions are surfaced from gap conflicts + unknowns", () => {
+  const qs = understandingQuestions({}, pkgQ());
+  assert.equal(qs.length, 2);
+  const conflict = qs.find((q) => q.id === "c1");
+  assert.ok(conflict.blocks);                                   // a conflict is a blocking question
+  assert.match(conflict.question, /set aside|did you mean|exclud/i);
+  assert.ok(conflict.why && conflict.tests);                    // why it matters + what it tests
+  const unknown = qs.find((q) => q.id === "u1");
+  assert.equal(unknown.blocks, false);
+  assert.doesNotMatch(unknown.question, /the intent's/i);       // de-jargoned
+});
+
+test("understanding: answered questions drop off", () => {
+  assert.equal(understandingQuestions({ answered_questions: ["c1", "u1"] }, pkgQ()).length, 0);
+  assert.equal(understandingQuestions({ answered_questions: ["c1"] }, pkgQ()).length, 1);
+});
+
+test("stage: a mission with open questions is Understanding, not Preparing", () => {
+  assert.equal(conversationStage({ status: "draft" }, pkgQ()), "understanding");
+});
+
+test("stage: preparation waits until Ready with no open questions", () => {
+  const ready = { readiness_verdict: { verdict: "Ready" }, readiness_status: "ready", gap_report: { findings: {} } };
+  assert.equal(conversationStage({ status: "ready" }, ready), "preparing");
+  // Ready but still carrying a question → stay in Understanding
+  const readyWithQ = { ...ready, gap_report: { findings: { unknowns: [{ id: "u1", question: "confirm scope?", blocking: false }] } } };
+  assert.equal(conversationStage({ status: "ready" }, readyWithQ), "understanding");
+  assert.equal(conversationStage({ status: "ready", answered_questions: ["u1"] }, readyWithQ), "preparing"); // answered → prepares
+});
+
+test("stage: executing / reviewing / closed map to their stages", () => {
+  assert.equal(conversationStage({ status: "running" }, pkgQ()), "executing");
+  assert.equal(conversationStage({ status: "waiting_for_acceptance" }, {}), "reviewing");
+  assert.equal(conversationStage({ status: "completed" }, {}), "reviewing");
+  assert.equal(conversationStage({ status: "closed" }, {}), "closed");
+});
+
+test("stage: understanding offers 'answer'; start is withheld until preparing", () => {
+  const u = composeOperations({ mission: { mission_id: "m", status: "draft" }, package: pkgQ(), acceptance: [] });
+  assert.equal(u.stage, "understanding");
+  assert.ok(u.actions.includes("answer"));
+  assert.ok(!u.actions.includes("start"));              // cannot start while questions are open
+  assert.ok(u.questions.length >= 1);
+});
+
+test("understanding: answering clears the verdict's blocking findings → Ready", () => {
+  const gap = { findings: { conflicts: [{ id: "c1", detail: "overlaps rejected pattern rp1", feeds_verdict: "Needs Clarification" }] } };
+  const pkgReady = { readiness_status: "ready" };
+  assert.equal(deriveVerdict(gap, pkgReady).verdict, "Needs Clarification");            // conflict blocks
+  assert.equal(deriveVerdict(gap, pkgReady, { answered: ["c1"] }).verdict, "Ready");     // answered → cleared
 });

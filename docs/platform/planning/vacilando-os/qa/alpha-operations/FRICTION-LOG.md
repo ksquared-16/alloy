@@ -37,6 +37,15 @@ Recurrence is what turns a single observation into evidence — note when the sa
 
 ## Observations
 
+### [VALIDATED] Director enters Preparation before the Understanding conversation has completed
+- when: Access & Roles, immediately after describing the objective — Director replied it had questions, then the product showed the Preparation experience (package / gap-analysis / checklist / "set the objective").
+- what happened: Director *had* open questions (a gap conflict — the objective overlapped a rejected pattern — and an unknown about ki1 scope), but they were buried in the package's gap report. The operator saw preparation artifacts and had to **infer** what Director wanted; there was no way to see the questions, why they mattered, whether they blocked, or to simply reply.
+- escape required: none, but the operator could not tell what to do next — a violation of the emerging product law: *the operator should never have to infer what Director wants next.*
+- recurrence: first observed on real operation; reproducible on any objective that produces gap unknowns/conflicts.
+- hypothesis: the product had no operator-visible **stage**. `operations.state` computed "preparing" the moment a package existed, and the UI rendered preparation artifacts regardless of whether Director still had questions. The questions existed in durable state (`gap_report.findings`) but were never surfaced as a conversation.
+- **RESOLUTION (this sprint):** realized the Understanding stage. A derived `stage` (Understanding → Preparing → Executing → Reviewing) gates the experience; Director's open questions are projected from the gap findings + verdict (each with why-it-matters / blocks / what-it-tests) and shown in "The work" as a conversation; preparation artifacts and the fully-formed Shared Understanding are hidden until the questions are answered; the input becomes "Answer Director…"; an answer records a durable clarification (carried into the objective), clears the answered findings from the verdict, and advances to Preparing. Proven live: a fresh Access & Roles mission opens in Understanding with Director's question shown; answering advances to Preparing with the contract. This is the **first validated Operational Learning example** — an observed friction turned into a shipped product improvement.
+
+
 ### Starting a mission gives no way to capture what the work should specifically do
 - when: Access & Roles, starting a new mission (state: Ready to start)
 - what happened: The "What are we working on?" box accepts text, but the operator's words don't shape the compiled work — a rich intent ("Access & Roles V2 — add an audit trail and role templates, exclude per-user grants") produces the **identical** templated objective as just typing "Access & Roles". At a Ready mission the only actions are *Start this work* / *Ask Director to prepare again*; there is no field or reply box to add scope, decisions, or specifics before starting. Clicking a capability card also overwrites any fuller text the operator had typed.

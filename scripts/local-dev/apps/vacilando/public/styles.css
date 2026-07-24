@@ -578,6 +578,16 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .opphase{margin-left:8px;font-size:11px;color:var(--ink-3);font-style:italic;}
 .opsum{margin:8px 0 0;font-size:12.5px;color:var(--ink);line-height:1.5;}
 .opobjective{font-size:12.5px;color:var(--ink);line-height:1.5;white-space:pre-wrap;max-height:200px;overflow-y:auto;overflow-wrap:anywhere;}
+/* Understanding stage — Director's open questions, shown as a conversation */
+.uqlist{margin-top:10px;display:flex;flex-direction:column;gap:10px;}
+.uq{border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:8px;padding:9px 11px;background:var(--card-2);}
+.uq.blocks{border-left-color:var(--terra);}
+.uq-q{font-size:13px;color:var(--ink);line-height:1.5;font-weight:600;}
+.uq-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:5px;align-items:center;}
+.uq-badge{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:5px;background:var(--bg-tint);color:var(--ink-3);}
+.uq-badge.blocks{background:var(--terra-soft);color:var(--terra);}
+.uq-tests{font-size:11px;color:var(--ink-4);font-style:italic;}
+.uq-why{font-size:11.5px;color:var(--ink-3);line-height:1.45;margin-top:5px;}
 .opnote{margin-top:8px;font-size:11px;color:var(--ink-3);font-style:italic;}
 .opsec{margin-top:10px;}
 .opfile{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);padding:1px 0;}

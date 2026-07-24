@@ -114,11 +114,16 @@ export function compile({ capability, snapshot, mission, gapReport = null, revis
     { id: "AC4", type: "product-fidelity", statement: `The proposal respects the capability's rejected patterns (${(capability.rejected_patterns || []).map((r) => r.id).join(", ") || "none"}).`, evidence_required: ["rejected_patterns_not_reintroduced"] },
   ];
 
-  const objective = directed
+  // Operator clarifications (answers given in the Understanding stage) are carried
+  // into the objective so the worker executes with the operator's answers in hand.
+  const clarifications = (mission.clarifications || []).map((c) => c.answer).filter(Boolean);
+  const clarBlock = clarifications.length ? `\n\n[OPERATOR CLARIFICATIONS]\n${clarifications.map((a) => `- ${a}`).join("\n")}` : "";
+
+  const objective = (directed
     ? `${String(mission.intent).trim()}\n\n[EXECUTION NOTES] Write the outputs this objective requires to ${opPath}. Governance: do not push, merge, or promote; do not modify application source code unless the objective explicitly requires it.`
     : `Analyze the current ${capability.name} implementation${codePaths ? ` (${codePaths})` : ""} ` +
       `and produce the ${capability.name} V2 implementation proposal${roadmapStr ? ` covering the roadmap items [${roadmapStr}]` : ""}. ` +
-      `Write the proposal to ${outPath}. Do NOT modify any source code — this is a planning proposal only.`;
+      `Write the proposal to ${outPath}. Do NOT modify any source code — this is a planning proposal only.`) + clarBlock;
 
   const scope_included = directed ? [
     "Perform the work described in the objective, in full.",

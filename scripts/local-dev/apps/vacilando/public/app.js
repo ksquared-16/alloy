@@ -1232,9 +1232,12 @@ function conversationInbox() {
 // question never disappears behind a green verdict. Curated and load-bearing:
 // superseded claims live under "Set aside", never in the active surface.
 const CARRY_LABEL = { tradeoff: "Accepted tradeoff", accepted_imperfection: "Accepted gap", risk: "Risk" };
-function sharedUnderstanding(c) {
+function sharedUnderstanding(c, stage) {
   const u = c.understanding;
   if (!u) return `<div class="cvcol cvinsights"><div class="cvcol-h">Shared understanding</div><span class="muted">—</span></div>`;
+  // While Director is still Understanding, the surface must not look fully formed:
+  // show what is settled and what is open, but not carried/advised/set-aside yet.
+  const understanding = stage === "understanding";
   const tag = (t, cls) => `<span class="su-tag ${cls || ""}">${esc(t)}</span>`;
   const why = (w) => (w ? `<div class="su-why">${esc(w)}</div>` : "");
   const claim = (voiceTag, text, whyText) => `<div class="su-item"><div class="su-line">${voiceTag}<span>${esc(text)}</span></div>${why(whyText)}</div>`;
@@ -1247,15 +1250,16 @@ function sharedUnderstanding(c) {
 
   const frontier = u.frontier.length
     ? u.frontier.map((f) => claim(tag(f.blocks_execution ? "Needs a decision" : "Open", f.blocks_execution ? "blocks" : "open"), f.question, f.why)).join("")
-    : `<span class="muted">Nothing load-bearing is unresolved.</span>`;
+    : (understanding ? `<span class="muted">Director is still working out what's open.</span>` : `<span class="muted">Nothing load-bearing is unresolved.</span>`);
 
-  const carrying = u.carrying.length
+  // These sections are premature while still understanding — hidden until preparing.
+  const carrying = (!understanding && u.carrying.length)
     ? `<div class="cvins"><div class="dlabel">Knowingly carrying</div>${u.carrying.map((k) => claim(tag(CARRY_LABEL[k.kind] || "Carrying", "carry"), k.text, k.why)).join("")}</div>` : "";
-  const advises = u.advises
+  const advises = (!understanding && u.advises)
     ? `<div class="cvins"><div class="dlabel">Director advises</div>${claim(tag("Not yet decided", "advise"), u.advises.headline, null)}</div>` : "";
-  const basis = u.basis
+  const basis = (!understanding && u.basis)
     ? `<div class="cvins"><div class="dlabel">Continuing from</div><p class="su-basis">${esc(u.basis.continuation)}</p></div>` : "";
-  const aside = u.set_aside.length
+  const aside = (!understanding && u.set_aside.length)
     ? `<div class="cvins"><div class="dlabel">Set aside</div>${u.set_aside.map((s) => `<div class="su-aside"><span>${esc(s.text)}</span>${s.revisit_if ? `<div class="su-why">Revisit if ${esc(s.revisit_if)}</div>` : ""}</div>`).join("")}</div>` : "";
 
   return `<div class="cvcol cvinsights"><div class="cvcol-h">Shared understanding</div>
@@ -1324,6 +1328,13 @@ function opFooter(c, id) {
   const o = c.operations, m = c.mission, V = c.verdict;
   const acts = o?.actions || [];
   const k = o?.state?.key;
+  const stage = o?.stage;
+  // UNDERSTANDING: the operator simply answers Director's questions — they do not
+  // rewrite the objective. The answer continues the conversation.
+  if (stage === "understanding") {
+    return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director…" />
+      <button class="btn go sm" data-cvanswer="${id}">Answer</button></div>`;
+  }
   // Needs-operator during execution: the answer STEERS the running work.
   if (acts.includes("reply")) {
     return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director to continue this work…" />
@@ -1354,38 +1365,66 @@ function opFooter(c, id) {
   return btns.length ? `<div class="cvcompose ready">${btns.join("")}</div>` : "";
 }
 
+// Conversation STAGES — the operator sees only the stage they are in.
+const STAGE_LABEL = { understanding: "Understanding", preparing: "Preparing", executing: "Executing", reviewing: "Reviewing", closed: "Closed" };
+const STAGE_TONE = { understanding: "run", preparing: "ok", executing: "run", reviewing: "ok", closed: "muted" };
+
+// The Understanding stage: Director's open questions, shown — not buried under
+// preparation. Each question says why it matters, whether it blocks, and what it tests.
+function understandingPanel(c) {
+  const o = c.operations, qs = o.questions || [];
+  const items = qs.map((q) => `<div class="uq${q.blocks ? " blocks" : ""}">
+    <div class="uq-q">${esc(q.question)}</div>
+    <div class="uq-meta"><span class="uq-badge${q.blocks ? " blocks" : ""}">${q.blocks ? "needs an answer" : "worth confirming"}</span>${q.tests ? `<span class="uq-tests">tests ${esc(q.tests)}</span>` : ""}</div>
+    ${q.why ? `<div class="uq-why">${esc(q.why)}</div>` : ""}
+  </div>`).join("");
+  const n = qs.length;
+  return `<div class="opband run"><span class="opstate run">Understanding</span>
+    <p class="opsum">${n ? `Director is still understanding this work — it has ${n} ${n === 1 ? "question" : "questions"} before it prepares anything. Answer below and it will continue.` : "Director is still understanding this work."}</p>
+    <div class="uqlist">${items || `<span class="muted">Working it through…</span>`}</div></div>`;
+}
+
 function conversationWorkspace(id) {
   const c = state._convo?.[id];
   if (!c) { fetchConversation(id); return `<div class="dwrap"><button class="btn sm" data-dback>← Conversations</button><div class="m-loading"><span class="spin"></span> Opening the conversation…</div></div>`; }
   const m = c.mission, pkg = c.package, o = c.operations;
+  const stage = o?.stage || "preparing";
   const list = (arr, f) => (arr && arr.length ? `<ul class="dul">${arr.slice(0, 6).map((x) => `<li>${esc(f(x))}</li>`).join("")}</ul>` : `<span class="muted">—</span>`);
 
-  // LEFT — the conversation, as a dialogue, with the operational next-action footer.
+  // LEFT — the conversation, as a dialogue, with the stage-aware next-action footer.
   const bubbles = c.messages.map((msg) => `<div class="cvmsg ${msg.from}"><div class="cvbub">${esc(msg.text)}</div></div>`).join("");
   const left = `<div class="cvcol cvhistory"><div class="cvcol-h">Conversation</div><div class="cvthread">${bubbles}</div>${opFooter(c, id)}</div>`;
 
-  // CENTER — the operational band (state / progress / review) over the timeline.
-  const timeline = `<div class="dtl vert">${DIR_STAGES.map((s) => {
-    const st = dirStageState(s.key, m, pkg);
-    return `<div class="dtl-step ${st}"><span class="dtl-dot">${DIR_MARK[st]}</span><span class="dtl-lbl">${s.label}</span></div>`;
-  }).join('<span class="dtl-line"></span>')}</div>`;
-  const center = `<div class="cvcol cvprep"><div class="cvcol-h">The work</div>
-    ${opBand(c)}
-    ${timeline}
-    ${pkg ? `<div class="cvpkg"><div class="cvpkg-h"><b>What Director prepared</b> <span class="muted">v${pkg.version}${pkg.diff_from_previous?.verdict_change ? ` · ${esc(pkg.diff_from_previous.verdict_change)}` : ""}</span></div>
-      <div class="dcols">
-        <div><div class="dlabel">Deliverables</div>${list(pkg.expected_deliverables, (x) => x.description)}</div>
-        <div><div class="dlabel">How we'll know it's done</div>${list(pkg.acceptance_criteria, (x) => x.statement)}</div>
-      </div></div>` : `<div class="muted">Director is still pulling this together.</div>`}
-  </div>`;
+  // CENTER — gated by stage: while Director is still Understanding, it shows the
+  // OPEN QUESTIONS and nothing else; preparation artifacts appear only afterward.
+  let center;
+  if (stage === "understanding") {
+    center = `<div class="cvcol cvprep"><div class="cvcol-h">The work</div>${understandingPanel(c)}
+      <div class="opnote">Preparation — the objective, deliverables, and acceptance — appears once Director's questions are answered.</div></div>`;
+  } else {
+    const timeline = `<div class="dtl vert">${DIR_STAGES.map((s) => {
+      const st = dirStageState(s.key, m, pkg);
+      return `<div class="dtl-step ${st}"><span class="dtl-dot">${DIR_MARK[st]}</span><span class="dtl-lbl">${s.label}</span></div>`;
+    }).join('<span class="dtl-line"></span>')}</div>`;
+    center = `<div class="cvcol cvprep"><div class="cvcol-h">The work</div>
+      ${opBand(c)}
+      ${timeline}
+      ${pkg ? `<div class="cvpkg"><div class="cvpkg-h"><b>What Director prepared</b> <span class="muted">v${pkg.version}${pkg.diff_from_previous?.verdict_change ? ` · ${esc(pkg.diff_from_previous.verdict_change)}` : ""}</span></div>
+        <div class="dcols">
+          <div><div class="dlabel">Deliverables</div>${list(pkg.expected_deliverables, (x) => x.description)}</div>
+          <div><div class="dlabel">How we'll know it's done</div>${list(pkg.acceptance_criteria, (x) => x.statement)}</div>
+        </div></div>` : `<div class="muted">Director is still pulling this together.</div>`}
+    </div>`;
+  }
 
-  // RIGHT — Shared Understanding: the curated reliance surface.
-  const right = sharedUnderstanding(c);
+  // RIGHT — Shared Understanding, gated so it doesn't look fully-formed mid-understanding.
+  const right = sharedUnderstanding(c, stage);
 
+  const stageLabel = STAGE_LABEL[stage] || o?.state?.label || "";
   return `<div class="dwrap wide">
     <div class="dmhead"><button class="btn sm" data-dback>← Conversations</button>
-      <div class="dmtitle"><h2>${esc(c.title)}</h2><span class="dmintent">${esc(c.state.label)}</span></div>
-      ${o ? `<span class="mbadge ${o.state.tone} big">${esc(o.state.label)}</span>` : ""}</div>
+      <div class="dmtitle"><h2>${esc(c.title)}</h2><span class="dmintent">${esc(stageLabel)}</span></div>
+      ${o ? `<span class="mbadge ${STAGE_TONE[stage] || o.state.tone} big">${esc(stageLabel)}</span>` : ""}</div>
     <div class="cvgrid">${left}${center}${right}</div>
   </div>`;
 }
@@ -1436,6 +1475,17 @@ async function recompileDirector(id) {
 async function convMissionAct(action, id, okMsg) {
   await missionAct(action, id, {}, okMsg);
   await fetchConversations(); await fetchConversation(id);
+}
+// In the Understanding stage, the operator simply ANSWERS Director's questions.
+// The answer is recorded and the conversation continues — no objective rewriting.
+async function answerDirector(id) {
+  const el2 = document.getElementById("cv-reply");
+  const text = (el2?.value || "").trim();
+  if (!text) { toast("err", "Type your answer to Director"); return; }
+  const { data } = await api("/api/missions/answer", { mission_id: id, answer: text });
+  if (!data.ok) { toast("err", "Couldn't send that", data.detail || data.error); return; }
+  await fetchConversations(); await fetchConversation(id);
+  toast("ok", data.verdict?.verdict === "Ready" ? "Director has what it needs — preparing the work" : "Answer sent", "");
 }
 // Before start, the operator's words REDEFINE the mission — the direction becomes
 // the authoritative objective (recompiled), not a side decision.
@@ -1509,6 +1559,7 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-cvreply]"))) { replyToDirector(n.dataset.cvreply, n.dataset.cap); return; }
   if ((n = t("[data-cvsteer]"))) { steerWork(n.dataset.cvsteer); return; }
   if ((n = t("[data-cvreframe]"))) { reframeWork(n.dataset.cvreframe); return; }
+  if ((n = t("[data-cvanswer]"))) { answerDirector(n.dataset.cvanswer); return; }
   if ((n = t("[data-drecompile]"))) { recompileDirector(n.dataset.drecompile); return; }
   if ((n = t("[data-dstart]"))) { convMissionAct("start", n.dataset.dstart, "Starting the work"); return; }
   if ((n = t("[data-daccept]"))) { convMissionAct("accept", n.dataset.daccept, "Accepted"); return; }
