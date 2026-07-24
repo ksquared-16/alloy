@@ -1183,6 +1183,7 @@ function dirStageState(key, m, pkg) {
 const DIR_MARK = { done: "✓", current: "•", review: "!", blocked: "⛔", pending: "○" };
 
 async function fetchConversations() { try { const r = await fetch("/api/director/conversations"); state._convos = (await r.json()).conversations || []; render(true); } catch { /* keep last */ } }
+async function fetchCapabilities() { try { const r = await fetch("/api/capabilities"); state._caps = (await r.json()).capabilities || []; render(true); } catch { /* keep last */ } }
 async function fetchConversation(id) { try { const r = await fetch("/api/director/conversation?id=" + encodeURIComponent(id)); (state._convo = state._convo || {})[id] = (await r.json()).conversation; render(true); } catch { /* keep last */ } }
 
 function viewDirector() {
@@ -1195,12 +1196,18 @@ function viewDirector() {
 // The home is an inbox of ongoing CONVERSATIONS — not a grid of records.
 function conversationInbox() {
   const cs = state._convos || [];
+  if (!state._caps) fetchCapabilities();
+  const caps = state._caps || [];
   const intent = esc(state._dirIntent || "");
   const def = state._dirDefine;
   const rows = cs.length ? cs.map((c) => `<div class="cvrow" data-dmission="${c.conversation_id}">
       <div class="cvrow-m"><div class="cvrow-t">${esc(c.title)}</div><div class="cvrow-s trunc">${esc(c.intent)}</div></div>
       <div class="cvrow-r"><span class="cvstate ${c.state.tone}">${esc(c.state.label)}</span><span class="cvgo">${esc(c.state.action)} →</span></div>
-    </div>`).join("") : `<div class="rempty">No conversations yet — tell Director about a piece of work.</div>`;
+    </div>`).join("") : `<div class="rempty">Nothing in flight. Pick a capability to begin, or describe a new piece of work above.</div>`;
+  // Available capabilities — a click names the work in the box for the operator to
+  // start intentionally (Director never launches work on its own).
+  const capChips = caps.length ? `<div class="dsec-h">Capabilities you can work <span class="muted">· ${caps.length}</span></div>
+    <div class="capgrid">${caps.map((c) => { const d = c.description && !/^defined from/i.test(c.description) ? esc(String(c.description).replace(/\s+/g, " ").slice(0, 68)) : ""; return `<button class="capchip" data-dcap="${esc(c.name)}"><span class="capchip-n">${esc(c.name)}</span>${d ? `<span class="capchip-d">${d}</span>` : ""}</button>`; }).join("")}</div>` : "";
   return `<div class="dwrap">
     <div class="dhero">
       <h2>What are we working on?</h2>
@@ -1211,8 +1218,10 @@ function conversationInbox() {
         <button class="btn go sm" data-ddefine="${esc(def.intent)}">Start it anyway</button>
         <button class="btn sm" data-ddismiss>Dismiss</button></div>` : ""}
     </div>
+    ${cs.length ? "" : capChips}
     <div class="dsec-h">Conversations <span class="muted">· ${cs.length}</span></div>
     <div class="cvlist">${rows}</div>
+    ${cs.length ? capChips : ""}
   </div>`;
 }
 
@@ -1451,6 +1460,7 @@ function directorSendBack(id, verdict, cid) {
 document.addEventListener("click", (e) => {
   const t = (a) => e.target.closest(a);
   let n;
+  if ((n = t("[data-dcap]"))) { state._dirIntent = n.dataset.dcap; render(true); const box = document.getElementById("d-intent"); if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } return; }
   if ((n = t("[data-dprepare]"))) { prepareDirectorMission(); return; }
   if ((n = t("[data-ddefine]"))) { defineDirectorCapability(n.dataset.ddefine); return; }
   if ((n = t("[data-ddismiss]"))) { state._dirDefine = null; render(true); return; }

@@ -450,6 +450,12 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .ddefine{margin:14px auto 0;max-width:640px;background:var(--review-bg);color:var(--review);border-radius:10px;padding:10px 12px;font-size:13px;display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap;}
 .dsec-h{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-4);margin:22px 4px 10px;}
 .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+/* available capabilities — a click names the work; the operator starts it */
+.capgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
+.capchip{display:flex;flex-direction:column;gap:3px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 13px;cursor:pointer;transition:border-color .12s,box-shadow .12s;}
+.capchip:hover{border-color:var(--terra-line);box-shadow:var(--shadow);}
+.capchip-n{font-size:13.5px;font-weight:650;color:var(--ink);}
+.capchip-d{font-size:11px;color:var(--ink-3);line-height:1.4;}
 .dcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:border-color .12s,box-shadow .12s;}
 .dcard:hover{border-color:var(--terra);box-shadow:var(--shadow);}
 .dcard-t{font-weight:700;font-size:14px;color:var(--ink);margin-bottom:3px;}
