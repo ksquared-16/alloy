@@ -165,7 +165,12 @@ export function prefetchWorkUnitProvisioningFromHref(
     }
 }
 
-/** @internal test seam */
-export function clearProvisioningPrefetchForTests(): void {
+/** @internal test seam + publish-path bust so the next Work Unit entry cannot serve a stale answer. */
+export function clearProvisioningPrefetchCache(): void {
     cache.clear();
+}
+
+/** @deprecated Prefer {@link clearProvisioningPrefetchCache}. */
+export function clearProvisioningPrefetchForTests(): void {
+    clearProvisioningPrefetchCache();
 }

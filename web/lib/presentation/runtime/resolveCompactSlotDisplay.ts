@@ -91,9 +91,14 @@ export function resolveQueueRowFieldValueFromContext(
             return parts.join(" · ");
         }
         case "queue_row.next_best_action_label":
+        case "opportunity.next_step":
             return context.next_best_action?.label?.trim() ?? null;
         case "queue_row.group_count_label":
             return groupedCountLabel(context);
+        case "waitlist.positionLabel":
+            return context.waitlist_context?.position_label?.trim() || null;
+        case "waitlist.waitSince":
+            return context.waitlist_context?.wait_since?.trim() || null;
         default:
             return null;
     }

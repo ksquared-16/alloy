@@ -29,24 +29,12 @@
  *   groupCount → "queue_row.group_count_label"      (grouped-row count chip)
  *
  * ── Visibility rule ───────────────────────────────────────────────────────────────────
- * For each slot:
- *   - If a mapped field is PRESENT in config and NOT statically hidden → slot.visible=true,
- *     slot.label = field.label ?? null.
- *     `visibleWhen` here is ALWAYS record-conditional (exists/equals/not_equals/count_gt —
- *     see LAYOUT_CONDITION_TYPES); there is no static-true/false primitive. Per spec we
- *     treat record-conditional visibility as VISIBLE and let the row's own frozen context
- *     gate whether the slot has content. So a present field is visible.
- *   - If NO mapped field is present in config → FALLBACK to generic-context behavior:
- *     slot.visible=true, slot.label=null (absent config never HIDES a compact slot; it just
- *     does not override the generic anatomy).
- *   - When config is null (unpublished / fetch failed) → ALL slots visible, no label
- *     overrides — pure generic-context fallback.
- *
- * NOTE — no static-hide primitive today: `QueueRecordLayoutConfigV3` fields cannot express
- * "always hide" (only record-conditional `visibleWhen`). The `visible:false` state is
- * therefore never produced from a real published config today, but the type + the compact
- * row honor it so a future explicit-hide mapping needs no row change (and tests exercise it
- * directly). See `fallbackSlots` in the return for slots that fell back to generic context.
+ * When a published config is present:
+ *   - Mapped field(s) → slot.visible=true + fieldKeys (builder / SLOT vocabulary order).
+ *   - No mapped field → slot.visible=false (published config is authoritative — do NOT fall
+ *     back to hardcoded contact/work/children defaults that re-show removed fields).
+ * When config is null (unpublished / fetch failed) → ALL slots visible via generic-context
+ * fallback (`fallbackSlots` lists every slot).
  */
 
 import type {
@@ -111,13 +99,22 @@ export function isQueueRowPersonContactFieldKey(fieldKey: string): boolean {
     return (QUEUE_ROW_PERSON_CONTACT_FIELD_KEYS as readonly string[]).includes(fieldKey.trim());
 }
 
-/** Compact slot → published fieldKey(s), first present wins for legacy label metadata. */
+/** Compact slot → published fieldKey(s); builder canvas order wins when present. */
 const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
     subject: ["customer.display_name", "queue_row.subject_label"],
-    status: ["opportunity.status_label", "queue_row.stage_label"],
+    status: [
+        "opportunity.status_label",
+        "queue_row.stage_label",
+        "waitlist.positionLabel",
+        "waitlist.waitSince",
+    ],
     contact: [...QUEUE_ROW_PERSON_CONTACT_FIELD_KEYS],
     attention: ["opportunity.attention_reason"],
-    work: ["queue_row.work_summary", "queue_row.next_best_action_label"],
+    work: [
+        "queue_row.work_summary",
+        "queue_row.next_best_action_label",
+        "opportunity.next_step",
+    ],
     groupCount: [
         "queue_row.group_count_label",
         "child.name",
@@ -127,6 +124,7 @@ const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
         "children.summary",
         "inquiry_child.program",
         "inquiry_child.schedule_type",
+        "child.room",
     ],
 } as const;
 
@@ -370,13 +368,17 @@ function genericSlot(): CompactRowSlotConfig {
     return { visible: true, label: null };
 }
 
+/** Published config omitted this slot — hide it (do not reintroduce hardcoded defaults). */
+function hiddenSlot(): CompactRowSlotConfig {
+    return { visible: false, label: null };
+}
+
 /**
  * Map a published Queue Row surface config onto the compact row's fixed slots.
  *
  * Pure + unit-testable. Null config (unpublished / fetch failed) → all slots generic
- * (visible, no override). Present mapped field → visible + label override. Absent field →
- * generic fallback (recorded in `fallbackSlots`). See the file doc comment for the full
- * slot↔fieldKey mapping and visibility rule.
+ * (visible, no override). Present mapped field → visible + fieldKeys. Absent field on a
+ * published config → hidden (authoritative). See the file doc comment for the mapping.
  */
 export function mapQueueRowSurfaceToCompactConfig(
     config: QueueRecordLayoutConfigV3 | null,
@@ -419,13 +421,12 @@ export function mapQueueRowSurfaceToCompactConfig(
             .map((key) => byKey.get(key))
             .filter((f): f is QueueRecordFieldConfig => f != null);
         if (!mappedFields.length) {
-            // No published field for this slot → generic-context fallback (never a hide).
-            slots[slot] = genericSlot();
-            fallbackSlots.push(slot);
+            // Published config with no field for this slot → hide (never generic email/work fallback).
+            slots[slot] = hiddenSlot();
             continue;
         }
-        // SLOT_FIELD_KEYS order is authoritative — first present mapped key wins (label + fieldKeys).
-        slots[slot] = slotConfigFromPublishedFields(slot, [mappedFields[0]]);
+        // Preserve all mapped published fields in SLOT_FIELD_KEYS order (not first-key-only).
+        slots[slot] = slotConfigFromPublishedFields(slot, mappedFields);
     }
 
     return {

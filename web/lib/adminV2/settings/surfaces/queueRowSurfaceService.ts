@@ -49,10 +49,18 @@ export async function publishQueueRowSurfaceConfig(args: {
 }
 
 export const QUEUE_ROW_SURFACE_PUBLISHED_EVENT = "alloy:queue-row-surface-published";
+export const QUEUE_ROW_SURFACE_PUBLISHED_CHANNEL = "alloy-queue-row-surface";
 
 export function dispatchQueueRowSurfacePublished(surfaceId: string): void {
     if (typeof window === "undefined") return;
     window.dispatchEvent(
         new CustomEvent(QUEUE_ROW_SURFACE_PUBLISHED_EVENT, { detail: { surfaceId } }),
     );
+    try {
+        const channel = new BroadcastChannel(QUEUE_ROW_SURFACE_PUBLISHED_CHANNEL);
+        channel.postMessage({ type: "published", surfaceId });
+        channel.close();
+    } catch {
+        /* BroadcastChannel unavailable */
+    }
 }

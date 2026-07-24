@@ -269,8 +269,12 @@ operator queue rows render exclusively through `CondensedQueueRow` (`WU.QUEUE_RO
 - Published Surfaces fields map onto the fixed compact anatomy via `mapQueueRowSurfaceToCompactConfig` / `COMPACT_ROW_EFFECTIVE_FIELD_KEYS`.
 - Per-row variants resolve with `queueRowVariantMatchInputFromContext` (nested `QueueRowContext` stage/grain paths) — never flat keys that the frozen context does not expose.
 - Empty matched variant columns **inherit Default** columns (starter Enrollment variants must not blank the row).
+- **Published config is authoritative:** when a published layout is present, compact slots without mapped fields are **hidden** (`visible:false`). Hardcoded generic defaults (e.g. `contactLine()` re-showing email) apply only when config is null/unpublished.
+- Preview projection promotes `drawer_open.active_subject.stage_key` onto `stage_focus_key` so stage variants still match after heavy `active_subject` is dropped from the wire.
+- After publish, Work Unit applies a live `rowConfig` overlay (`usePublishedQueueRowSlotsOverlay`) and busts the provisioning prefetch cache so composition updates without a hard reload.
 - Family/case-grain child summaries use canonical keys `children`, `children.count`, `children.names`, and `children.summary` (batch-resolved from queue row context — not per-row fetches). Scalar Program aliases `inquiry_child.program_category` / `inquiry_child.program_category_id` canonicalize to `inquiry_child.program` for compact effectiveness.
 - Surfaces publish (`POST /api/admin/queue-row-layout/...`) rejects non-compact-effective field keys with an operator-safe message that names the **exact field label, field key, and variant**. Empty inherited variants do not produce false failures. Error copy must not blame a supported Children field while rejecting a different key.
+- The Surface Builder picker lists **only** compact-effective fields (unsupported keys are omitted, not grayed).
 - Older invalid published configs surface `data-queue-row-ineffective-fields` on `WU.QUEUE` rather than silently omitting with no diagnostic.
 - Family-grain rows render child summaries via `related_subjects_summary` / `children` collection projection — never by reinterpreting the row as child-grain.
 
