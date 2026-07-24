@@ -1,0 +1,98 @@
+#!/usr/bin/env node
+/**
+ * alloy-vacilando — Vacilando Runtime CLI.
+ *
+ * The runtime that powers the Command Center. It PROJECTS existing toolkit
+ * truth (alloy-ro + git + state files); it owns no parallel model and never
+ * mutates anything. Read-only in Phase 1.
+ *
+ * Usage:
+ *   alloy-vacilando snapshot [--json]   Compose + print the Command Center snapshot
+ *   alloy-vacilando sources             Show which authoritative sources resolved
+ *   alloy-vacilando serve [--port N]    Start the loopback control plane (default 3020)
+ *   alloy-vacilando help
+ */
+import { composeSnapshot } from "./lib/vacilando/compose.mjs";
+import { collectRaw } from "./lib/vacilando/sources.mjs";
+import { startVacilandoServer } from "./lib/vacilando-server.mjs";
+
+const args = process.argv.slice(2);
+const cmd = args[0] || "help";
+const has = (f) => args.includes(f);
+const opt = (f, d) => { const i = args.indexOf(f); return i > -1 ? args[i + 1] : d; };
+
+function humanSnapshot(s) {
+  const L = [];
+  const h = s.headline;
+  L.push(`\n  Vacilando Runtime — ${s.project.name}   (${s.generated_at})`);
+  L.push(`  ${"─".repeat(58)}`);
+  L.push(`  Sprints ${h.active_sprints} active · Workers ${h.workers_running.running}/${h.workers_running.total} · ` +
+    `Questions ${h.questions_pending} · Merge-ready ${h.prs_ready} · Staging ${h.staging_sync}`);
+  L.push("");
+  L.push("  SPRINTS");
+  for (const sp of s.sprints) {
+    const prog = sp.progress.value === null ? "  —" : `${String(sp.progress.value).padStart(3)}%`;
+    L.push(`    ${String(sp.slot).padStart(2)}  ${pad(sp.status, 9)} ${prog}  ${pad(sp.key, 34)} ` +
+      `${sp.provider}  git:${sp.git.state} ↑${sp.git.ahead}/↓${sp.git.behind}` + (sp.question_count ? `  ⚠ ${sp.question_count}q` : ""));
+  }
+  L.push("");
+  L.push("  WORKERS");
+  for (const w of s.workers) {
+    L.push(`    ${pad(w.id, 10)} ${pad(w.health, 10)} ${pad(w.role || "—", 26)} last:${w.last_commit?.short || "—"}`);
+  }
+  L.push("");
+  L.push(`  APPROVALS  questions:${s.approvals.counts.questions} reviews:${s.approvals.counts.reviews} ` +
+    `merges:${s.approvals.counts.merges} promotions:${s.approvals.counts.promotions}`);
+  if (s.approvals.questions.length) {
+    for (const q of s.approvals.questions.slice(0, 5)) L.push(`    ? [${q.initiative_key}] ${trunc(q.summary, 66)}`);
+  }
+  L.push("");
+  L.push("  ACTIVITY (projected from git + state)");
+  for (const a of s.activity.slice(0, 6)) L.push(`    ${pad(a.kind, 9)} ${a.actor || "—"}  ${trunc(a.summary, 60)}`);
+  L.push("");
+  L.push(`  GAPS (${s.gaps.length}) — surfaced, never invented`);
+  for (const g of s.gaps) L.push(`    · ${g.field}: ${g.reason}`);
+  L.push("");
+  return L.join("\n");
+}
+const pad = (s, n) => String(s ?? "").padEnd(n).slice(0, n);
+const trunc = (s, n) => (String(s || "").length > n ? String(s).slice(0, n - 1) + "…" : String(s || ""));
+
+async function main() {
+  if (cmd === "help" || cmd === "--help" || cmd === "-h") {
+    process.stdout.write(
+      "alloy-vacilando — Vacilando Runtime (read-only projection over the Alloy toolkit)\n\n" +
+      "  snapshot [--json]   Compose + print the Command Center snapshot\n" +
+      "  sources             Show which authoritative sources resolved\n" +
+      "  serve [--port N]    Start loopback control plane (default 3020)\n" +
+      "  help\n");
+    return;
+  }
+  if (cmd === "snapshot") {
+    const snap = await composeSnapshot();
+    process.stdout.write(has("--json") ? JSON.stringify(snap, null, 2) + "\n" : humanSnapshot(snap) + "\n");
+    return;
+  }
+  if (cmd === "sources") {
+    const raw = await collectRaw();
+    const report = {
+      worker_status: { ok: raw.slots.ok !== false, slots: (raw.slots.slots || []).length, error: raw.slots.error || null },
+      agent_status: { ok: raw.agents.ok !== false, agents: (raw.agents.agents || []).length, error: raw.agents.error || null },
+      dev_status: { ok: raw.servers.ok !== false, servers: (raw.servers.servers || []).length, error: raw.servers.error || null },
+      runtime_paths: { ok: Boolean(raw.paths.runtime_root), runtime_root: raw.paths.runtime_root || null },
+      root: { canonical: raw.root.canonical || raw.root.Canonical || null },
+    };
+    process.stdout.write(JSON.stringify(report, null, 2) + "\n");
+    return;
+  }
+  if (cmd === "serve") {
+    const port = Number(opt("--port", "3020"));
+    const { port: bound } = await startVacilandoServer(port);
+    process.stdout.write(`Vacilando Runtime → http://127.0.0.1:${bound}  (loopback only · read-only · Ctrl-C to stop)\n`);
+    return;
+  }
+  process.stderr.write(`unknown command: ${cmd}\n`);
+  process.exit(2);
+}
+
+main().catch((e) => { process.stderr.write(`error: ${e.stack || e}\n`); process.exit(1); });

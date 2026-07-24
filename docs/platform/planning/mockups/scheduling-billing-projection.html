@@ -1,0 +1,113 @@
+<title>Scheduling — billing projection</title>
+<style>
+  :root{
+    --pine:#00A283;--pine-hover:#009276;--forge:#273F52;--ink:#18273A;--slate:#4b5563;--muted:#59678b;
+    --stone:#F4F6F9;--gold:#DBC078;--gold-dark:#d0ad50;--ember:#BC4300;--blue:#00458C;--page:#EEF2F8;--border:#e5e9ef;
+    --font:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --mid-45:rgba(39,63,82,.45);--mid-40:rgba(39,63,82,.40);--mid-35:rgba(39,63,82,.35);--mid-25:rgba(39,63,82,.25);--mid-70:rgba(39,63,82,.70);
+    color-scheme:light;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--page);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.45}
+  .tab{font-variant-numeric:tabular-nums} h1,h2,h3{margin:0} button{font-family:inherit;cursor:pointer;border:none;background:none}
+  .frame{max-width:540px;margin:0 auto;padding:22px 18px 48px}
+  .switch{display:flex;gap:6px;margin-bottom:14px;justify-content:center;flex-wrap:wrap}
+  .sw{border:1px solid var(--mid-25);background:#fff;color:var(--slate);font-size:11.5px;font-weight:500;padding:6px 12px;border-radius:999px;transition:all .15s}
+  .sw:hover{border-color:var(--pine);color:var(--pine)} .sw[aria-selected="true"]{border-color:var(--pine);background:rgba(0,162,131,.08);color:var(--pine);font-weight:600}
+  .sw:focus-visible{outline:2px solid var(--pine);outline-offset:2px}
+  .fp{border-radius:14px;background:#fff;border:1px solid var(--mid-25);box-shadow:0 10px 34px rgba(39,63,82,.10);overflow:hidden}
+  .fp-top{height:6px;background:var(--blue)}
+  .fp-hd{display:flex;align-items:center;gap:10px;padding:11px 15px;border-bottom:1px solid var(--border)}
+  .fp-av{width:32px;height:32px;border-radius:999px;background:rgba(0,162,131,.10);color:var(--pine);display:grid;place-items:center;font-size:12px;font-weight:700}
+  .fp-nm{font-size:13.5px;font-weight:600;color:var(--forge)} .fp-sb{font-size:10.5px;color:var(--muted)}
+  .fp-mis{margin-left:auto;font-size:10px;color:var(--muted);background:var(--stone);border:1px solid var(--border);padding:3px 9px;border-radius:999px}
+  .fp-modes{display:flex;gap:4px;padding:7px 15px 0} .fpm{font-size:10.5px;font-weight:600;color:var(--mid-45);padding:4px 10px} .fpm.on{color:var(--pine);border-bottom:2px solid var(--pine)}
+  .fp-body{padding:11px;display:flex;flex-direction:column;gap:9px;background:var(--stone)}
+  .card{background:#fff;border:1px solid var(--border);border-left:3px solid var(--pine);border-radius:12px;overflow:hidden}
+  .s-hd{display:flex;align-items:center;gap:8px;padding:10px 14px 4px} .s-q{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--slate)} .plat{margin-left:auto;font-size:9px;font-weight:600;color:var(--pine)}
+  .s-room{padding:2px 14px 0;font-size:14px;font-weight:600;color:var(--forge)} .s-pat{padding:1px 14px 0;font-size:12.5px;color:var(--forge)} .s-eff{padding:2px 14px 6px;font-size:11.5px;color:var(--muted)}
+  .s-ft{padding:9px 14px 11px;display:flex;gap:8px} .bs{display:inline-flex;align-items:center;gap:6px;border-radius:7px;border:1px solid var(--mid-25);background:#fff;padding:6px 11px;font-size:11.5px;font-weight:500;color:var(--mid-70)}
+  /* billing projection block (from Billing, read-only) */
+  .bill{margin:0 14px 12px;border:1px solid rgba(208,173,80,.45);border-radius:11px;background:rgba(219,192,120,.07);overflow:hidden}
+  .bill-hd{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(208,173,80,.3)} .bill-q{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gold-dark)} .frm{margin-left:auto;font-size:9px;font-weight:600;color:var(--muted)}
+  .bill-b{padding:9px 12px}
+  .tui{display:flex;align-items:baseline;gap:8px} .tui .amt{font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--forge)} .tui .per{font-size:12px;color:var(--muted)} .tui .rname{margin-left:auto;font-size:11px;font-weight:600;color:var(--gold-dark);background:rgba(219,192,120,.18);border-radius:999px;padding:2px 8px}
+  .line{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--slate);padding:4px 0;border-top:1px solid rgba(208,173,80,.18)} .line .k{color:var(--muted)} .line .v{color:var(--forge);font-weight:500;margin-left:auto} .line.warn .v{color:var(--ember)}
+  .bill-ft{padding:7px 12px;border-top:1px solid rgba(208,173,80,.3);display:flex;align-items:center} .billlink{font-size:11px;font-weight:600;color:var(--blue)} .billnote{margin-left:auto;font-size:10px;color:var(--muted)}
+  .upcoming .bill{border-color:rgba(0,69,140,.3);background:rgba(0,69,140,.04)} .upcoming .bill-hd{border-color:rgba(0,69,140,.2)} .upcoming .bill-q{color:var(--blue)} .upcoming .tui .rname{color:var(--blue);background:rgba(0,69,140,.08)}
+  /* command surface */
+  .cmd{background:#fff;border:1px solid var(--mid-25);border-radius:12px;box-shadow:0 8px 26px rgba(39,63,82,.12);overflow:hidden}
+  .cmd-hd{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border)} .cmd-t{font-size:13px;font-weight:600;color:var(--forge)} .cmd-x{margin-left:auto;color:var(--mid-40)}
+  .cmd-step{padding:11px 14px;border-bottom:1px solid #f1f3f6} .cmd-l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid-40);margin-bottom:7px}
+  .days{display:flex;gap:6px} .day{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-size:11px;font-weight:600;color:var(--muted);background:var(--stone);border:1px solid var(--border)} .day.on{background:rgba(0,162,131,.10);color:var(--pine);border-color:rgba(0,162,131,.35)} .day.off{opacity:.55}
+  .hours{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--forge);font-weight:600} .roompill{font-size:11px;color:var(--slate);background:var(--stone);border:1px solid var(--border);border-radius:8px;padding:4px 9px}
+  .field{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--mid-25);border-radius:8px;padding:6px 10px;font-size:12.5px;color:var(--forge)} .field .fx{color:var(--mid-40);font-size:11px}
+  .cmd-ft{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--stone)} .cmd-note{font-size:10.5px;color:var(--muted)} .bp{display:inline-flex;align-items:center;gap:6px;border-radius:7px;background:var(--pine);padding:7px 13px;font-size:12px;font-weight:600;color:#fff;margin-left:auto}
+  /* change compare */
+  .cmp{display:grid;grid-template-columns:1fr 20px 1fr;gap:8px;align-items:stretch} .cc{border-radius:9px;padding:9px 10px;border:1px solid var(--border)} .cc.a{background:var(--stone)} .cc.b{background:rgba(0,69,140,.05);border-color:rgba(0,69,140,.28)} .ce{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid-40)} .cv{font-size:17px;font-weight:700;color:var(--forge);margin-top:2px} .cd{font-size:10.5px;color:var(--muted);margin-top:1px} .carr{display:grid;place-items:center;color:var(--muted)}
+  .screen{display:none}.screen.on{display:block} .lab{font-size:11px;color:var(--muted);text-align:center;margin-top:8px}
+</style>
+
+<div class="frame">
+  <div class="switch" role="tablist" aria-label="Screens">
+    <button class="sw" role="tab" aria-selected="true" data-s="create">Create · preview</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="card">Card · tuition</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="change">Change · before/after</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="temp">Temporary &amp; future</button>
+  </div>
+  <div id="stage"></div>
+</div>
+
+<script>
+(function(){
+  function panel(nm,sub,mis,body,cls){return '<div class="fp '+(cls||'')+'"><div class="fp-top"></div><div class="fp-hd"><div class="fp-av">ER</div><div><div class="fp-nm">'+nm+'</div><div class="fp-sb">'+sub+'</div></div><div class="fp-mis">'+mis+'</div></div><div class="fp-modes"><span class="fpm on">Work</span><span class="fpm">Activity</span></div><div class="fp-body">'+body+'</div></div>';}
+  function bill(cls,q,amt,per,rname,lines,link,note){
+    var l=lines.map(function(x){return '<div class="line '+(x[2]||'')+'"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>';}).join('');
+    return '<div class="bill"><div class="bill-hd"><span class="bill-q">'+q+'</span><span class="frm">from Billing</span></div><div class="bill-b"><div class="tui"><span class="amt tab">'+amt+'</span><span class="per">'+per+'</span>'+(rname?'<span class="rname">'+rname+'</span>':'')+'</div>'+l+'</div><div class="bill-ft"><span class="billlink">'+link+'</span><span class="billnote">'+note+'</span></div></div>';
+  }
+
+  var CREATE=panel('Ethan Rivera','Toddler · Maple Street','Create schedule',
+    '<div class="cmd"><div class="cmd-hd"><span class="cmd-t">Create schedule · Ethan</span><span class="cmd-x">✕</span></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Days &amp; hours</div><div class="days" style="margin-bottom:8px"><span class="day on">M</span><span class="day on">T</span><span class="day on">W</span><span class="day on">T</span><span class="day on">F</span><span class="day off">S</span><span class="day off">S</span></div><div class="hours">8:30 <span style="color:var(--mid-40)">–</span> 5:30 <span class="roompill">Room Sunshine</span></div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Effective from</div><span class="field">Jul 28<span class="fx">▾</span></span></div>'
+    +'<div class="cmd-step" style="padding-bottom:6px"><div class="cmd-l">Financial preview</div></div>'
+    +bill('','Projected recurring tuition','$980','/month','Toddler · Full Week',[['Discount','Sibling applied'],['Funding','State subsidy applies'],['Billing starts','Jul 28']],'View in Billing →','determined by Billing')
+    +'<div class="cmd-ft"><span class="cmd-note">You see the money before you commit.</span><button class="bp">Commit schedule</button></div></div>')
+    +'<div class="lab">During the create command, Scheduling requests a projection from Billing and shows it in the preview — rate, discount &amp; funding summary, and when billing starts. Scheduling computes none of it.</div>';
+
+  var CARD=panel('Ethan Rivera','Toddler · Maple Street','Review schedule',
+    '<div class="card"><div class="s-hd"><span class="s-q">Schedule</span><span class="plat">Scheduled</span></div>'
+    +'<div class="s-room">Sunshine · Toddler</div><div class="s-pat">Monday–Friday · 8:30–5:30</div><div class="s-eff">Starts Jul 28 · open-ended</div>'
+    +bill('','Recurring tuition · current','$980','/month','Toddler · Full Week',[['Discount','Sibling applied'],['Funding','Subsidy applies']],'View in Billing →','projection · not a bill')
+    +'<div class="s-ft"><button class="bs">Change schedule</button></div></div>')
+    +'<div class="lab">On the card: current recurring tuition, rate name, and discount/funding <b>summary</b> — with a link into Billing for detail. No invoices, balances or ledger here.</div>';
+
+  var CHANGE=panel('Ethan Rivera','Toddler · Maple Street','Change schedule',
+    '<div class="card" style="opacity:.5"><div class="s-hd"><span class="s-q">Schedule</span></div><div class="s-room">Sunshine · Mon–Fri</div></div>'
+    +'<div class="cmd"><div class="cmd-hd"><span class="cmd-t">Change schedule · Ethan</span><span class="cmd-x">✕</span></div>'
+    +'<div class="cmd-step"><div class="cmd-l">New pattern</div><div class="hours">Mon–Thu <span class="roompill">Sunshine</span> · drops Friday</div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Effective from</div><span class="field">Aug 4<span class="fx">▾</span></span></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Recurring tuition</div><div class="cmp"><div class="cc a"><div class="ce">Now</div><div class="cv tab">$980</div><div class="cd">/month · Full Week</div></div><div class="carr">→</div><div class="cc b"><div class="ce">From Aug 4</div><div class="cv tab">$800</div><div class="cd">/month · Part Week</div></div></div><div style="font-size:10.5px;color:var(--muted);margin-top:7px">Billing re-priced this schedule · sibling discount still applies · <span style="color:var(--blue);font-weight:600">View in Billing →</span></div></div>'
+    +'<div class="cmd-ft"><span class="cmd-note">Future invoices reflect the change from Aug 4. Billing owns the update.</span><button class="bp">Commit change</button></div></div>')
+    +'<div class="lab">The financial preview lives in the change command: before → after recurring tuition. Billing re-prices on the schedule change; Scheduling only shows the result.</div>';
+
+  var TEMP='<div class="upcoming">'+panel('Ethan Rivera','Toddler · Maple Street','Review schedule',
+    '<div class="card"><div class="s-hd"><span class="s-q">Schedule</span><span class="plat">Scheduled</span></div>'
+    +'<div class="s-room">Sunshine · Toddler</div><div class="s-pat">Monday–Friday</div><div class="s-eff">Starts Jul 28 · open-ended</div>'
+    +bill('','Recurring tuition · current','$980','/month','Full Week',[['Funding','Subsidy applies']],'View in Billing →','projection')
+    +'<div class="s-hd" style="padding-top:6px"><span class="s-q" style="color:var(--blue)">Upcoming · from Sep 2</span></div>'
+    +bill('','Recurring tuition · upcoming','$1,040','/month','Full Week',[['Reason','Fall rate · begins Sep 2']],'View in Billing →','begins Sep 2')
+    +'<div class="s-eff" style="padding-top:4px;color:var(--gold-dark)">Temporary: Rainbow on Thursdays · Jul 24 – Aug 15 · no tuition change</div>'
+    +'<div class="s-ft"><button class="bs">Change schedule</button></div></div>')
+    +'</div>'
+    +'<div class="lab">Financial projections follow effective dates: an <b>upcoming</b> rate from Sep 2, and a <b>temporary</b> Thursday move that doesn\'t change tuition. Every projection aligns with the schedule\'s dates.</div>';
+
+  var S={create:CREATE,card:CARD,change:CHANGE,temp:TEMP};
+  var stage=document.getElementById('stage');
+  document.querySelectorAll('.sw').forEach(function(b){b.addEventListener('click',function(){
+    document.querySelectorAll('.sw').forEach(function(x){x.setAttribute('aria-selected',x.dataset.s===b.dataset.s?'true':'false');});
+    stage.innerHTML=S[b.dataset.s];
+  });});
+  stage.innerHTML=S.create;
+})();
+</script>

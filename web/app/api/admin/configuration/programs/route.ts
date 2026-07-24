@@ -6,13 +6,22 @@ import { classifyConfigurationRuntimeIssue } from "@/lib/configPublication/runti
 import {
     assignProgramDistribution,
     createProgramDraft,
+    deleteProgram,
+    evaluateProgramDeleteEligibility,
     loadProgramPublicationSnapshot,
     previewProgramDistribution,
     publishProgramDraft,
+    removeProgramLocationAssociations,
+    restoreProgram,
+    retireProgram,
     retryProgramDistribution,
     updateProgramDraft,
     validateProgramDraft,
 } from "@/lib/programs/publication/programPublicationService";
+import {
+    commitMakeProgramAvailable,
+    previewMakeProgramAvailable,
+} from "@/lib/programs/commands/makeProgramAvailable";
 
 type ActionBody = {
     action?: string;
@@ -21,7 +30,19 @@ type ActionBody = {
     runId?: string;
     key?: string;
     label?: string;
+    description?: string | null;
     targetIds?: string[];
+    locationIds?: string[];
+    originatingLocationId?: string;
+    idempotencyKey?: string;
+    entryPoint?: "organization_program" | "location" | "unknown";
+    program?: {
+        kind?: "existing" | "new";
+        programId?: string;
+        publicationId?: string;
+        revisionId?: string;
+        input?: { key?: string; label?: string; description?: string | null };
+    };
     patch?: Record<string, unknown>;
 };
 
@@ -57,16 +78,47 @@ function targetIds(value: unknown): string[] {
     return value.map(String).map((id) => id.trim()).filter(Boolean);
 }
 
+function parseMakeAvailableProgram(body: ActionBody): {
+    kind: "existing";
+    programId: string;
+    publicationId?: string;
+    revisionId?: string;
+} | {
+    kind: "new";
+    input: { key: string; label: string; description?: string | null };
+} {
+    const nested = body.program;
+    if (nested?.kind === "new" || (!nested && body.key && body.label && !body.programId)) {
+        return {
+            kind: "new",
+            input: {
+                key: requiredString(nested?.input?.key ?? body.key, "Program key"),
+                label: requiredString(nested?.input?.label ?? body.label, "Program name"),
+                description: nested?.input?.description ?? body.description ?? null,
+            },
+        };
+    }
+    return {
+        kind: "existing",
+        programId: requiredString(nested?.programId ?? body.programId, "Program"),
+        publicationId: nested?.publicationId ?? body.publicationId,
+        revisionId: nested?.revisionId,
+    };
+}
+
 function operatorError(error: unknown): string {
     const message = error instanceof Error ? error.message : "The request could not be completed.";
     if (message.includes("duplicate key") || message.includes("programs_org_key_unique")) {
-        return "A Program with this key already exists.";
+        return "A Program with this name already exists. Choose a different name and try again.";
     }
     if (message.includes("program_draft_not_validated")) {
-        return "Validate this Program before publishing it.";
+        return "We could not save this Program. Review the highlighted fields and try again.";
     }
     if (message.includes("program_retired")) {
-        return "A retired Program cannot be published.";
+        return "Archived Programs cannot be used for new activity. Restore the Program first.";
+    }
+    if (/revision|publication|distribution|command|invariant/i.test(message)) {
+        return "We could not save this Program. Review the highlighted fields and try again.";
     }
     return message.replace(/^[A-Za-z ]+:\s*/, "");
 }
@@ -195,12 +247,99 @@ export async function POST(request: NextRequest) {
                 });
                 return NextResponse.json({ ok: true, result });
             }
+            case "preview_make_available": {
+                const preview = await previewMakeProgramAvailable(supabase, {
+                    orgId: context.orgId,
+                    actorUserId: context.userId,
+                    program: parseMakeAvailableProgram(body),
+                    locationIds: targetIds(body.locationIds ?? body.targetIds),
+                    originatingLocationId: body.originatingLocationId ?? null,
+                    idempotencyKey: requiredString(body.idempotencyKey, "Idempotency key"),
+                    allowedSiteLocationIds: context.allowedSiteLocationIds,
+                    entryPoint: body.entryPoint ?? "unknown",
+                });
+                return NextResponse.json({ ok: true, preview });
+            }
+            case "make_available": {
+                const result = await commitMakeProgramAvailable(supabase, {
+                    orgId: context.orgId,
+                    actorUserId: context.userId,
+                    program: parseMakeAvailableProgram(body),
+                    locationIds: targetIds(body.locationIds ?? body.targetIds),
+                    originatingLocationId: body.originatingLocationId ?? null,
+                    idempotencyKey: requiredString(body.idempotencyKey, "Idempotency key"),
+                    allowedSiteLocationIds: context.allowedSiteLocationIds,
+                    entryPoint: body.entryPoint ?? "unknown",
+                });
+                return NextResponse.json({ ok: true, result });
+            }
             case "retry": {
                 const result = await retryProgramDistribution({
                     supabase,
                     orgId: context.orgId,
                     actorUserId: context.userId,
                     runId: requiredString(body.runId, "Delivery run"),
+                    allowedSiteLocationIds: context.allowedSiteLocationIds,
+                });
+                return NextResponse.json({ ok: true, result });
+            }
+            case "retire":
+            case "archive": {
+                await retireProgram({
+                    supabase,
+                    orgId: context.orgId,
+                    actorUserId: context.userId,
+                    programId: requiredString(body.programId, "Program"),
+                });
+                return NextResponse.json({ ok: true });
+            }
+            case "restore": {
+                await restoreProgram({
+                    supabase,
+                    orgId: context.orgId,
+                    actorUserId: context.userId,
+                    programId: requiredString(body.programId, "Program"),
+                });
+                return NextResponse.json({ ok: true });
+            }
+            case "delete": {
+                const eligibility = await evaluateProgramDeleteEligibility({
+                    supabase,
+                    orgId: context.orgId,
+                    programId: requiredString(body.programId, "Program"),
+                });
+                if (!eligibility.allowed) {
+                    return NextResponse.json(
+                        {
+                            ok: false,
+                            blocked: true,
+                            reason: eligibility.reason,
+                            error: {
+                                code: "program_delete_blocked",
+                                title: "Program cannot be deleted",
+                                message:
+                                    eligibility.reason
+                                    ?? "This Program is already in use and its history must be preserved.",
+                                nextStep: "Archive it instead.",
+                            },
+                        },
+                        { status: 409 },
+                    );
+                }
+                await deleteProgram({
+                    supabase,
+                    orgId: context.orgId,
+                    actorUserId: context.userId,
+                    programId: requiredString(body.programId, "Program"),
+                });
+                return NextResponse.json({ ok: true });
+            }
+            case "remove_locations": {
+                const result = await removeProgramLocationAssociations({
+                    supabase,
+                    orgId: context.orgId,
+                    programId: requiredString(body.programId, "Program"),
+                    locationIds: targetIds(body.locationIds ?? body.targetIds),
                     allowedSiteLocationIds: context.allowedSiteLocationIds,
                 });
                 return NextResponse.json({ ok: true, result });

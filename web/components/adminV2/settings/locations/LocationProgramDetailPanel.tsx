@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import type { LocationProgramOperationalSummary } from "@/lib/locations/locationWorkspaceModel";
 import {
@@ -17,6 +17,8 @@ import {
     ConfigObjectHeader,
     type ConfigAttentionItem,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import { ConfigOwnershipSourceBadge } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigOwnershipSourceBadge";
+import { resolveProgramOfferingOwnership } from "@/lib/configRuntime/organizationLocationScope";
 
 function readMeta(metadata: LocationProgramCategoryRow["metadata"], key: string): string {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return "";
@@ -95,6 +97,9 @@ export default function LocationProgramDetailPanel({
             metadata?: Record<string, unknown>;
             local_description_override?: string | null;
             local_authorization_evidence?: string | null;
+            local_display_name?: string | null;
+            available_from?: string | null;
+            available_through?: string | null;
         },
     ) => Promise<void>;
     programs: LocationProgramCategoryRow[];
@@ -112,6 +117,9 @@ export default function LocationProgramDetailPanel({
     const [ageUnit, setAgeUnit] = useState("");
     const [defaultRoomTypes, setDefaultRoomTypes] = useState("");
     const [localDescription, setLocalDescription] = useState("");
+    const [localDisplayName, setLocalDisplayName] = useState("");
+    const [availableFrom, setAvailableFrom] = useState("");
+    const [availableThrough, setAvailableThrough] = useState("");
     const [localAuthorizationEvidence, setLocalAuthorizationEvidence] = useState("");
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -126,6 +134,9 @@ export default function LocationProgramDetailPanel({
         setAgeUnit(readMeta(program.metadata, "age_range_unit"));
         setDefaultRoomTypes(readMeta(program.metadata, "default_room_types"));
         setLocalDescription(program.local_description_override ?? "");
+        setLocalDisplayName(program.local_display_name ?? "");
+        setAvailableFrom(program.available_from ?? "");
+        setAvailableThrough(program.available_through ?? "");
         setLocalAuthorizationEvidence(program.local_authorization_evidence ?? "");
         setActive(program.is_active !== false);
         setError(null);
@@ -140,6 +151,15 @@ export default function LocationProgramDetailPanel({
             `Uses ${siteLabel || "location"} hours${scheduleSummary ? ` · ${scheduleSummary}` : ""}`
         :   "Location hours are not set up yet";
 
+    const ownershipSource = useMemo(
+        () =>
+            resolveProgramOfferingOwnership({
+                hasProgramRevision: Boolean(program?.program_revision_id),
+                hasLocalDescriptionOverride: Boolean(program?.local_description_override?.trim()),
+            }),
+        [program?.local_description_override, program?.program_revision_id],
+    );
+
     const beginEdit = () => setEditing(true);
     const cancelEdit = () => {
         if (!program) return;
@@ -149,10 +169,68 @@ export default function LocationProgramDetailPanel({
         setAgeUnit(readMeta(program.metadata, "age_range_unit"));
         setDefaultRoomTypes(readMeta(program.metadata, "default_room_types"));
         setLocalDescription(program.local_description_override ?? "");
+        setLocalDisplayName(program.local_display_name ?? "");
+        setAvailableFrom(program.available_from ?? "");
+        setAvailableThrough(program.available_through ?? "");
         setLocalAuthorizationEvidence(program.local_authorization_evidence ?? "");
         setActive(program.is_active !== false);
         setError(null);
         setEditing(false);
+    };
+
+    const saveLocationOnly = async () => {
+        if (!program) return;
+        setSaving(true);
+        setError(null);
+        try {
+            const base =
+                program.metadata != null && typeof program.metadata === "object" ?
+                    { ...(program.metadata as Record<string, unknown>) }
+                :   {};
+            const metadata: Record<string, unknown> = { ...base };
+            for (const [k, v] of [
+                ["age_range_from", ageFrom],
+                ["age_range_to", ageTo],
+                ["age_range_unit", ageUnit],
+                ["default_room_types", defaultRoomTypes],
+            ] as const) {
+                if (v.trim()) metadata[k] = v.trim();
+                else delete metadata[k];
+            }
+            await onSave(program.id, {
+                ...(program.program_revision_id ? {} : { label: label.trim() }),
+                is_active: active,
+                metadata,
+                local_display_name: localDisplayName.trim() || null,
+                available_from: availableFrom.trim() || null,
+                available_through: availableThrough.trim() || null,
+                ...(program.program_revision_id
+                    ? {
+                          local_description_override: localDescription.trim() || null,
+                          local_authorization_evidence: localAuthorizationEvidence.trim() || null,
+                      }
+                    : {}),
+            });
+            setEditing(false);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Save failed");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const restoreOrganizationDescription = async () => {
+        if (!program?.program_revision_id) return;
+        setSaving(true);
+        setError(null);
+        try {
+            await onSave(program.id, { local_description_override: null });
+            setLocalDescription("");
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Restore failed");
+        } finally {
+            setSaving(false);
+        }
     };
 
     const detail =
@@ -188,6 +266,7 @@ export default function LocationProgramDetailPanel({
                     facts={[
                         siteLabel ? `Offered at ${siteLabel}` : "",
                         program.program_revision_id ? "Identity from Organization" : "Legacy local Program",
+                        program.program_id ? "Organization Program identity retained" : "",
                     ].filter(Boolean)}
                     actions={
                         <ConfigurationSecondaryButton
@@ -200,11 +279,20 @@ export default function LocationProgramDetailPanel({
                     testId="locations-program-header"
                 />
 
+                <div className="flex flex-wrap gap-2" data-testid="locations-program-ownership">
+                    <ConfigOwnershipSourceBadge source={ownershipSource} locationLabel={siteLabel} />
+                </div>
+
+                <p className="text-xs text-alloy-midnight/55" data-testid="locations-program-location-only-note">
+                    This surface edits {siteLabel || "Location"} configuration only. Organization definition
+                    changes use Edit Organization definition on the summary view.
+                </p>
+
                 <div className="space-y-2.5" data-testid="locations-program-editor">
                     <ConfigEditorSection title="Identity" testId="locations-program-editor-identity">
                         <label className="block space-y-1">
                             <span className="config-typo-field-label">
-                                Name · {program.program_revision_id ? "Organization" : "Legacy local"}
+                                Name · {program.program_revision_id ? "Organization (locked here)" : "Legacy local"}
                             </span>
                             <input
                                 type="text"
@@ -218,9 +306,50 @@ export default function LocationProgramDetailPanel({
                         {program.program_revision_id ?
                             <p className="text-xs text-alloy-midnight/50">
                                 Program identity comes from the published Organization revision and cannot be changed
-                                here.
+                                here. Location-only is the only supported mutation scope on this surface.
                             </p>
                         :   null}
+                        {program.program_revision_id ?
+                            <label className="block space-y-1">
+                                <span className="config-typo-field-label">Name at this Location</span>
+                                <input
+                                    type="text"
+                                    value={localDisplayName}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setLocalDisplayName(e.target.value)}
+                                    className="config-runtime-input"
+                                    placeholder={program.label}
+                                    data-testid="locations-program-local-name"
+                                />
+                                <span className="text-[11px] text-alloy-midnight/45">
+                                    Leave blank to use “{program.label},” the Organization Program name.
+                                </span>
+                            </label>
+                        :   null}
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            <label className="block space-y-1">
+                                <span className="config-typo-field-label">Available from</span>
+                                <input
+                                    type="date"
+                                    value={availableFrom}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setAvailableFrom(e.target.value)}
+                                    className="config-runtime-input"
+                                    data-testid="locations-program-available-from"
+                                />
+                            </label>
+                            <label className="block space-y-1">
+                                <span className="config-typo-field-label">Available through</span>
+                                <input
+                                    type="date"
+                                    value={availableThrough}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setAvailableThrough(e.target.value)}
+                                    className="config-runtime-input"
+                                    data-testid="locations-program-available-through"
+                                />
+                            </label>
+                        </div>
                         <label className="flex items-center gap-2">
                             <input
                                 type="checkbox"
@@ -229,7 +358,7 @@ export default function LocationProgramDetailPanel({
                                 onChange={(e) => setActive(e.target.checked)}
                                 className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
                             />
-                            <span className="config-typo-sublabel">Active program</span>
+                            <span className="config-typo-sublabel">Active / offered at this Location</span>
                         </label>
                     </ConfigEditorSection>
 
@@ -247,11 +376,27 @@ export default function LocationProgramDetailPanel({
                                     onChange={(e) => setLocalDescription(e.target.value)}
                                     className="config-runtime-input min-h-20"
                                     placeholder="Uses the Organization description"
+                                    data-testid="locations-program-local-description"
                                 />
                             </label>
-                            <p className="text-xs text-alloy-midnight/45">
-                                Source: {localDescription.trim() ? "Location override" : "Organization"}
-                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <ConfigOwnershipSourceBadge
+                                    source={localDescription.trim() ? "location_override" : "inherited"}
+                                    locationLabel={siteLabel}
+                                    testId="locations-program-description-source"
+                                />
+                                {canMutate && localDescription.trim() ?
+                                    <button
+                                        type="button"
+                                        className="text-xs font-semibold text-alloy-bend-pine"
+                                        disabled={saving}
+                                        onClick={() => void restoreOrganizationDescription()}
+                                        data-testid="locations-program-restore-description"
+                                    >
+                                        Restore Organization default
+                                    </button>
+                                :   null}
+                            </div>
                         </ConfigEditorSection>
                     :   null}
 
@@ -276,7 +421,11 @@ export default function LocationProgramDetailPanel({
                         </dl>
                     </ConfigEditorSection>
 
-                    <ConfigEditorSection title="Age range" testId="locations-program-editor-age">
+                    <ConfigEditorSection
+                        title="Age range"
+                        description="Stored on this Location offering (metadata). Not an Organization draft field."
+                        testId="locations-program-editor-age"
+                    >
                         <div className="grid gap-2 sm:grid-cols-3">
                             <input
                                 type="text"
@@ -359,53 +508,11 @@ export default function LocationProgramDetailPanel({
                             <ConfigurationPrimaryButton
                                 disabled={saving}
                                 data-testid="locations-program-save"
-                                onClick={() => {
-                                    void (async () => {
-                                        setSaving(true);
-                                        setError(null);
-                                        try {
-                                            const base =
-                                                program.metadata != null && typeof program.metadata === "object" ?
-                                                    { ...(program.metadata as Record<string, unknown>) }
-                                                :   {};
-                                            const metadata: Record<string, unknown> = { ...base };
-                                            for (const [k, v] of [
-                                                ["age_range_from", ageFrom],
-                                                ["age_range_to", ageTo],
-                                                ["age_range_unit", ageUnit],
-                                                ["default_room_types", defaultRoomTypes],
-                                            ] as const) {
-                                                if (v.trim()) metadata[k] = v.trim();
-                                                else delete metadata[k];
-                                            }
-                                            await onSave(program.id, {
-                                                ...(program.program_revision_id ? {} : { label: label.trim() }),
-                                                is_active: active,
-                                                metadata,
-                                                ...(program.program_revision_id
-                                                    ? {
-                                                          local_description_override:
-                                                              localDescription.trim() || null,
-                                                          local_authorization_evidence:
-                                                              localAuthorizationEvidence.trim() || null,
-                                                      }
-                                                    : {}),
-                                            });
-                                            setEditing(false);
-                                        } catch (e) {
-                                            setError(e instanceof Error ? e.message : "Save failed");
-                                        } finally {
-                                            setSaving(false);
-                                        }
-                                    })();
-                                }}
+                                onClick={() => void saveLocationOnly()}
                             >
-                                {saving ? "Saving…" : "Save program"}
+                                {saving ? "Saving…" : "Save Location offering"}
                             </ConfigurationPrimaryButton>
-                            <ConfigurationSecondaryButton
-                                onClick={cancelEdit}
-                                disabled={saving}
-                            >
+                            <ConfigurationSecondaryButton onClick={cancelEdit} disabled={saving}>
                                 Cancel
                             </ConfigurationSecondaryButton>
                         </div>
@@ -420,6 +527,7 @@ export default function LocationProgramDetailPanel({
                     facts={[
                         siteLabel ? `Offered at ${siteLabel}` : "",
                         program.program_revision_id ? "Published by Organization" : "Legacy local Program",
+                        program.program_id ? "Organization Program identity" : "",
                     ].filter(Boolean)}
                     actions={
                         canMutate ?
@@ -427,12 +535,32 @@ export default function LocationProgramDetailPanel({
                                 onClick={beginEdit}
                                 data-testid={`locations-program-edit-${program.id}`}
                             >
-                                Edit program
+                                Edit {siteLabel || "Location"} configuration
                             </ConfigurationSecondaryButton>
                         :   null
                     }
                     testId="locations-program-header"
                 />
+
+                <div className="mb-2 flex flex-wrap gap-2">
+                    {canMutate && program.program_revision_id ?
+                        <ConfigurationSecondaryButton
+                            onClick={() => {
+                                const href = program.program_id
+                                    ? `/organization/programs?programId=${encodeURIComponent(program.program_id)}`
+                                    : "/organization/programs";
+                                window.location.assign(href);
+                            }}
+                            data-testid={`locations-program-edit-org-${program.id}`}
+                        >
+                            Edit Organization definition
+                        </ConfigurationSecondaryButton>
+                    :   null}
+                </div>
+
+                <div className="flex flex-wrap gap-2" data-testid="locations-program-summary-ownership">
+                    <ConfigOwnershipSourceBadge source={ownershipSource} locationLabel={siteLabel} />
+                </div>
 
                 <ConfigConsequenceLine testId="locations-program-consequence">
                     {(summary?.roomCount ?? 0) > 0 ?
@@ -453,17 +581,19 @@ export default function LocationProgramDetailPanel({
                         <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
                             <div>
                                 <dt className="text-alloy-midnight/45">Identity and requirements</dt>
-                                <dd className="font-medium text-alloy-midnight">Organization</dd>
+                                <dd className="font-medium text-alloy-midnight">Organization default</dd>
                             </div>
                             <div>
                                 <dt className="text-alloy-midnight/45">Description</dt>
                                 <dd className="font-medium text-alloy-midnight">
-                                    {program.local_description_override?.trim() ? "Location override" : "Organization"}
+                                    {program.local_description_override?.trim()
+                                        ? `Overridden by ${siteLabel || "Location"}`
+                                        : "Inherited from Organization"}
                                 </dd>
                             </div>
                             <div>
                                 <dt className="text-alloy-midnight/45">Offered here and authorization</dt>
-                                <dd className="font-medium text-alloy-midnight">Location</dd>
+                                <dd className="font-medium text-alloy-midnight">Location must supply</dd>
                             </div>
                             <div>
                                 <dt className="text-alloy-midnight/45">Resources, capacity, schedule</dt>
@@ -543,7 +673,7 @@ export default function LocationProgramDetailPanel({
     return (
         <ConfigChildObjectMasterDetail
             listTitle="Programs"
-            listSummary={`${programs.length} ${programs.length === 1 ? "program" : "programs"}`}
+            listSummary={`${programs.length} ${programs.length === 1 ? "program" : "programs"} · Organization associations`}
             testId="locations-programs"
             listActions={
                 canMutate && onAddProgram ?
@@ -552,7 +682,7 @@ export default function LocationProgramDetailPanel({
                         onClick={onAddProgram}
                         data-testid="locations-program-add"
                     >
-                        + Add program
+                        + Add Program
                     </ConfigurationPrimaryButton>
                 :   null
             }
@@ -561,12 +691,21 @@ export default function LocationProgramDetailPanel({
                     programs.map((entry) => {
                         const entrySummary = summaries.find((item) => item.id === entry.id);
                         const roomCount = entrySummary?.roomCount ?? 0;
+                        const source = resolveProgramOfferingOwnership({
+                            hasProgramRevision: Boolean(entry.program_revision_id),
+                            hasLocalDescriptionOverride: Boolean(entry.local_description_override?.trim()),
+                        });
+                        const sourceLabel =
+                            source === "location_override" ? "Overridden locally"
+                            : source === "inherited" ? "Inherited"
+                            : entry.program_revision_id ? "Assigned"
+                            : "Legacy local";
                         const subtitle =
-                            entry.is_active === false ? "Inactive"
-                            : roomCount === 0 ? "Active · no rooms"
+                            entry.is_active === false ? `Inactive · ${sourceLabel}`
+                            : roomCount === 0 ? `Active · no rooms · ${sourceLabel}`
                             : entrySummary?.configuredCapacity == null ?
-                                `Active · ${roomCount} ${roomCount === 1 ? "room" : "rooms"}`
-                            :   `Active · ${roomCount} ${roomCount === 1 ? "room" : "rooms"} · ${entrySummary.configuredCapacity} capacity`;
+                                `Active · ${roomCount} ${roomCount === 1 ? "room" : "rooms"} · ${sourceLabel}`
+                            :   `Active · ${roomCount} ${roomCount === 1 ? "room" : "rooms"} · ${entrySummary.configuredCapacity} capacity · ${sourceLabel}`;
                         return (
                             <ConfigurationQueueItem
                                 key={entry.id}
@@ -579,7 +718,7 @@ export default function LocationProgramDetailPanel({
                             />
                         );
                     })
-                :   <p className="config-typo-sublabel">No programs yet.</p>
+                :   <p className="config-typo-sublabel">No programs associated yet.</p>
             }
             detail={detail}
         />

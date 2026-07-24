@@ -59,7 +59,7 @@ ALLOY_WORKER_LIFECYCLE ALLOY_PROVIDER_SESSION_ID ALLOY_PAUSE_RECORDED_AT ALLOY_F
 # Canonical read-only inspection verb set — the ONE source the capability
 # manifest and the alloy-ro dispatcher are both validated against.
 # ===========================================================================
-ALLOY_RC_RO_VERBS="root runtime-paths worker-status agent-status dev-status agent-evidence capabilities runtime-list runtime-status runtime-capacity runtime-discover runtime-containers runtime-intent runtime-admission runtime-policy runtime-explain runtime-reservations runtime-executions runtime-actuation-capacity"
+ALLOY_RC_RO_VERBS="root runtime-paths worker-status agent-status dev-status agent-evidence worker-detail sprint-manifest initiatives initiative capabilities runtime-list runtime-status runtime-capacity runtime-discover runtime-containers runtime-intent runtime-admission runtime-policy runtime-explain runtime-reservations runtime-executions runtime-actuation-capacity"
 ALLOY_RC_CAPABILITY_KEYS="reads writes network process_control git_mutation deletion arbitrary_execution credential_access"
 
 # ===========================================================================

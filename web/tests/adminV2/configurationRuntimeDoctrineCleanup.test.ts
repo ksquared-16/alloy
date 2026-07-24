@@ -70,20 +70,24 @@ describe("Configuration Mode doctrine cleanup", () => {
         expect(detail).toContain("status-detail-open-processes");
     });
 
-    it("Statuses page has queue/workspace without cross-link banner", () => {
+    it("Statuses page redirects into the Data Model Statuses category", () => {
         const page = read("app/adminV2/settings/statuses/page.tsx");
-        expect(page).toContain("StatusesConfigurationPage");
+        expect(page).toContain("dataModelSectionHref");
+        expect(page).toContain('"statuses"');
         expect(page).not.toContain("LifecycleSettingsCrossLinkBanner");
+        expect(read("components/adminV2/settings/statuses/StatusesConfigurationPage.tsx")).toContain(
+            "ConfigurationShell",
+        );
     });
 
     it("hybrid settings surfaces use configuration shell instead of rollout placeholders", () => {
         const shell = read("components/adminV2/settings/configurationRuntime/SettingsConfigurationSurfaceShell.tsx");
         expect(shell).toContain("ConfigurationContext");
         expect(shell).toContain("ConfigurationShell");
-        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("FieldsConfigurationPage");
+        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("dataModelSectionHref");
         expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("UsersRolesConfigurationPage");
         expect(read("app/adminV2/settings/communications/page.tsx")).toContain("CommunicationsConfigurationPage");
-        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("EntitiesConfigurationPage");
+        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("dataModelSectionHref");
         expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
         for (const path of [
             "app/adminV2/settings/fields/page.tsx",

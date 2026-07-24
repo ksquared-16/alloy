@@ -1,7 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Inbox, ListChecks, BarChart3, Layers } from "lucide-react";
+// Forms lives inside the Digital Mailroom — no standalone Forms nav / /admin/forms (Mailroom doctrine).
+// Scheduling (CalendarRange) is a staging improvement kept during reconciliation.
+import { Inbox, ListChecks, BarChart3, Layers, CalendarRange } from "lucide-react";
 
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
@@ -18,6 +20,7 @@ import {
     dispatchAdminV2OpenTasksPanel,
     dispatchAdminV2OpenAnalyticsModal,
     dispatchAdminV2OpenProcessingModal,
+    dispatchAdminV2OpenSchedulingModal,
 } from "@/lib/adminV2/workspaceModalEvents";
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
@@ -225,6 +228,24 @@ export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) 
                 void warmProcessingQueueCache();
                 void warmProcessingFormsCache();
                 dispatchAdminV2OpenProcessingModal();
+            }}
+        />
+    );
+}
+/** Scheduling — rooms, ratios, and placements; opens as a workspace modal. */
+export function SidebarSchedulingNavItem({ collapsed }: { collapsed: boolean }) {
+    const activeModal = useActiveAdminV2WorkspaceModal();
+    return (
+        <SidebarModalNavButton
+            collapsed={collapsed}
+            title="Scheduling — rooms, ratios, and placements"
+            label="Scheduling"
+            icon={<CalendarRange size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+            badge={null}
+            active={activeModal === "scheduling"}
+            dataAttr="scheduling"
+            onClick={() => {
+                dispatchAdminV2OpenSchedulingModal();
             }}
         />
     );

@@ -148,7 +148,7 @@ export function ProgramOverviewSurface({
                         metrics={[
                             {
                                 key: "offerings",
-                                label: "Offerings",
+                                label: "Delivery Options",
                                 icon: "programs",
                                 tone: offerings.length > 0 && variants.length > 0 ? "ready" : "attention",
                                 value: String(offerings.length),
@@ -157,7 +157,7 @@ export function ProgramOverviewSurface({
                             },
                             {
                                 key: "pricing",
-                                label: "Pricing",
+                                label: "Tuition",
                                 icon: "pricing",
                                 tone: rates.length > 0 ? "ready" : "attention",
                                 value: String(rates.length),
@@ -166,21 +166,21 @@ export function ProgramOverviewSurface({
                             },
                             {
                                 key: "availability",
-                                label: "Availability",
+                                label: "Local offer",
                                 icon: "availability",
                                 tone: availability.length > 0 ? "ready" : "default",
                                 value: `${offeredLocations}/${snapshot.locations.length}`,
-                                hint: "Locations offering",
+                                hint: "Locations offering locally",
                                 onSelect: () => onOpenSection("availability"),
                             },
                             {
-                                key: "policies",
-                                label: "Policies",
-                                icon: "policies",
-                                tone: policies.length > 0 ? "ready" : "default",
-                                value: String(policies.length),
-                                hint: "Commercial-owned rules",
-                                onSelect: () => onOpenSection("policies"),
+                                key: "assignment",
+                                label: "Assigned",
+                                icon: "availability",
+                                tone: viewModel.runtime.assignment.assignedCount > 0 ? "ready" : "attention",
+                                value: String(viewModel.runtime.assignment.assignedCount),
+                                hint: viewModel.runtime.assignment.label,
+                                onSelect: () => onOpenSection("assignment"),
                             },
                         ]}
                     />

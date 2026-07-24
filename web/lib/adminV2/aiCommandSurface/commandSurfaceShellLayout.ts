@@ -81,13 +81,73 @@ export const CONFIGURATION_RAIL_STARTER_SUGGESTIONS: readonly CommandSurfaceRail
     },
 ];
 
+/** Programs page — no publication/draft language; grounded operator starters only. */
+export const PROGRAMS_RAIL_STARTER_SUGGESTIONS: readonly CommandSurfaceRailStarterSuggestion[] = [
+    {
+        title: "Summarize this Program",
+        description: "Explain the selected Program and where it is offered",
+        prompt: "Summarize this Program",
+        icon: "summarize",
+    },
+    {
+        title: "Which Locations offer this Program?",
+        description: "List active and scheduled Location availability",
+        prompt: "Which Locations offer this Program?",
+        icon: "missing",
+    },
+    {
+        title: "What changed recently?",
+        description: "Summarize recent Program updates operators can see",
+        prompt: "What changed recently on this Program?",
+        icon: "insight",
+    },
+];
+
+/** Locations page — operator-facing; no configuration-engine or unpublished language. */
+export const LOCATIONS_RAIL_STARTER_SUGGESTIONS: readonly CommandSurfaceRailStarterSuggestion[] = [
+    {
+        title: "Summarize this Location",
+        description: "Explain the selected Location and what it offers",
+        prompt: "Summarize this Location",
+        icon: "summarize",
+    },
+    {
+        title: "Which Programs are offered here?",
+        description: "List active and scheduled Programs at this Location",
+        prompt: "Which Programs are offered here?",
+        icon: "missing",
+    },
+    {
+        title: "Show upcoming availability changes",
+        description: "List Programs scheduled to begin or end at this Location",
+        prompt: "Show upcoming availability changes at this Location",
+        icon: "insight",
+    },
+];
+
 /** Context-aware first starter title (presentation only — prompts unchanged). */
 export function resolveCommandSurfaceRailStarterSuggestions(args: {
     hasWorkUnitScope: boolean;
     hasOpportunityContext: boolean;
     opportunitySingular: string;
     isConfigurationContext?: boolean;
+    pathname?: string | null;
 }): readonly CommandSurfaceRailStarterSuggestion[] {
+    const pathname = typeof args.pathname === "string" ? args.pathname : "";
+    if (
+        pathname === "/organization/programs"
+        || pathname.startsWith("/organization/programs?")
+        || pathname.startsWith("/organization/programs/")
+    ) {
+        return PROGRAMS_RAIL_STARTER_SUGGESTIONS;
+    }
+    if (
+        pathname === "/organization/locations"
+        || pathname.startsWith("/organization/locations?")
+        || pathname.startsWith("/organization/locations/")
+    ) {
+        return LOCATIONS_RAIL_STARTER_SUGGESTIONS;
+    }
     if (args.isConfigurationContext) return CONFIGURATION_RAIL_STARTER_SUGGESTIONS;
     const leadLabel =
         args.opportunitySingular === "Inquiry" || args.opportunitySingular === "Opportunity" ?

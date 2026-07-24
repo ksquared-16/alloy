@@ -42,11 +42,12 @@ describe("Configuration Runtime final ownership cleanup", () => {
         expect(sidebar).toContain("config-mode-nav-settings-home");
     });
 
-    it("Access page uses Platform Configuration shell with Users & Roles workspace", () => {
-        const access = read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx");
-        expect(access).toContain("SettingsConfigurationSurfaceShell");
-        expect(access).toContain('title="Users & Roles"');
-        expect(access).toContain("UsersRolesSettingsClient");
+    it("Access page uses Platform Configuration shell with the Access product workspace", () => {
+        const wrapper = read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx");
+        expect(wrapper).toContain("AccessWorkspaceSurface");
+        const surface = read("components/adminV2/settings/access/AccessWorkspaceSurface.tsx");
+        expect(surface).toContain("ConfigurationShell");
+        expect(surface).toContain('title="Access"');
     });
 
     it("login page has password visibility toggle", () => {

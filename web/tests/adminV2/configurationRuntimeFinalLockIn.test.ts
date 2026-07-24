@@ -63,10 +63,13 @@ describe("Configuration Runtime final lock-in", () => {
         );
     });
 
-    it("statuses page uses configuration queue/workspace surface", () => {
+    it("statuses page redirects into Data Model; StatusesConfigurationPage remains the embedded editor", () => {
         const page = read("app/adminV2/settings/statuses/page.tsx");
-        expect(page).toContain("statuses-config-surface");
-        expect(page).toContain("StatusesConfigurationPage");
+        expect(page).toContain("dataModelSectionHref");
+        expect(page).toContain('"statuses"');
+        expect(read("components/adminV2/settings/statuses/StatusesConfigurationPage.tsx")).toContain(
+            "ConfigurationQueue",
+        );
     });
 
     it("playwright final lock-in screenshot spec exists", () => {

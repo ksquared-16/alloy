@@ -15,11 +15,12 @@ describe("sidebar modal navigation", () => {
         expect(items).toContain("SidebarTasksNavItem");
         expect(items).toContain("SidebarInboxNavItem");
         expect(items).toContain("SidebarAnalyticsNavItem");
-        expect(items).toContain("SidebarFormsNavItem");
+        // Forms lives inside the Digital Mailroom — no standalone Forms sidebar item (Mailroom doctrine,
+        // enforced by digitalMailroomFormsConsolidation.test.ts).
+        expect(items).not.toContain("SidebarFormsNavItem");
         expect(items).not.toContain("SidebarNotificationsNavItem");
         expect(items).toContain("dispatchAdminV2OpenTasksPanel");
         expect(items).toContain("dispatchAdminV2OpenInboxModal");
-        expect(items).toContain("ADMIN_FORMS_HREF");
         expect(items).toContain("data-adminv2-operational-tasks-badge");
         expect(items).toContain("data-adminv2-inbox-unread-badge");
         expect(items).toContain("formatSidebarBadgeCount");
@@ -46,9 +47,9 @@ describe("sidebar modal navigation", () => {
         expect(read("lib/adminV2/adminV2NavConstants.ts")).toContain("ADMIN_V2_NOTIFICATIONS_HREF");
     });
 
-    it("sidebar lists Forms route destination", () => {
+    it("sidebar lists the Scheduling workspace modal", () => {
         const sidebar = read("app/adminV2/components/Sidebar.tsx");
-        expect(sidebar).toContain("SidebarFormsNavItem");
-        expect(read("app/adminV2/components/SidebarModalNavItems.tsx")).toContain('href={ADMIN_FORMS_HREF}');
+        expect(sidebar).toContain("SidebarSchedulingNavItem");
+        expect(read("app/adminV2/components/SidebarModalNavItems.tsx")).toContain("dispatchAdminV2OpenSchedulingModal");
     });
 });

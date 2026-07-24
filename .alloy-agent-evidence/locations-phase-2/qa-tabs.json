@@ -1,0 +1,46 @@
+{
+  "overview": {
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=overview",
+    "hasPctReady": false,
+    "hasClosures": false,
+    "hasStaffing": false,
+    "hasProgramsOffered": false,
+    "hasRooms": false,
+    "hasSchedule": false,
+    "hasScheduleType": true,
+    "overviewFacts": true
+  },
+  "programs": {
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=programs",
+    "hasPctReady": false,
+    "hasClosures": false,
+    "hasStaffing": false,
+    "hasProgramsOffered": true,
+    "hasRooms": false,
+    "hasSchedule": false,
+    "hasScheduleType": false,
+    "overviewFacts": false
+  },
+  "rooms": {
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=rooms",
+    "hasPctReady": false,
+    "hasClosures": false,
+    "hasStaffing": false,
+    "hasProgramsOffered": false,
+    "hasRooms": true,
+    "hasSchedule": false,
+    "hasScheduleType": false,
+    "overviewFacts": false
+  },
+  "schedule": {
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=schedule",
+    "hasPctReady": false,
+    "hasClosures": false,
+    "hasStaffing": false,
+    "hasProgramsOffered": false,
+    "hasRooms": false,
+    "hasSchedule": true,
+    "hasScheduleType": true,
+    "overviewFacts": false
+  }
+}

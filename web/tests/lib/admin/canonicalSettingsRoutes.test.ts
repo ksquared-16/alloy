@@ -14,9 +14,10 @@ describe("canonical settings routes — Configuration Runtime Phase 2A", () => {
         expect(CANONICAL_SETTINGS_BASE).toBe("/settings");
     });
 
-    it("builds product nav hrefs under /settings", () => {
-        expect(adminSettingsSubpathHref("processes")).toBe("/settings/processes");
-        expect(adminSettingsSubpathHref("business-processes")).toBe("/settings/business-processes");
+    it("builds product nav hrefs — completed domains under /organization, others under /settings", () => {
+        expect(adminSettingsSubpathHref("processes")).toBe("/organization/processes");
+        expect(adminSettingsSubpathHref("business-processes")).toBe("/organization/processes");
+        expect(adminSettingsSubpathHref("surfaces")).toBe("/organization/surfaces");
         expect(adminSettingsSubpathHref("layouts")).toBe("/settings/layouts");
         expect(adminSettingsSubpathHref("")).toBe("/organization");
         expect(adminSettingsSubpathHref("organization")).toBe("/organization");
@@ -31,7 +32,7 @@ describe("canonical settings routes — Configuration Runtime Phase 2A", () => {
         expect(normalizeToCanonicalAdminPath("/adminV2/settings/layouts")).toBe("/settings/layouts");
     });
 
-    it("configuration workspace domain links prefer /settings or Organization Programs", () => {
+    it("configuration workspace domain links prefer /settings or Organization product routes", () => {
         const hrefs = CONFIGURATION_WORKSPACE_DOMAINS.flatMap((d) => d.items.map((i) => i.href));
         expect(
             hrefs.every(
@@ -42,8 +43,9 @@ describe("canonical settings routes — Configuration Runtime Phase 2A", () => {
                     || h.startsWith("/admin/workflows"),
             ),
         ).toBe(true);
-        expect(hrefs).toContain("/settings/processes");
-        expect(hrefs).toContain("/settings/surfaces");
-        expect(hrefs).toContain("/organization/programs");
+        expect(hrefs).toContain("/organization/processes");
+        expect(hrefs).toContain("/organization/surfaces");
+        expect(hrefs).toContain("/organization/financials");
+        expect(hrefs).not.toContain("/organization/programs");
     });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BookOpen, Plus } from "lucide-react";
@@ -12,21 +12,23 @@ import {
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
-    ConfigAssignmentRuntime,
-    ConfigCollectionRail,
-    ConfigDetailRuntime,
     ConfigDistributionRuntime,
     ConfigHistoryTimeline,
-    ConfigObjectHeader,
     ConfigWorkspaceCard,
     type ConfigDetailTab,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import { ProgramLocationAvailabilityFlow } from "@/components/adminV2/settings/programs/ProgramLocationAvailabilityFlow";
+import {
+    ConfigurationObjectEditGate,
+    ConfigurationObjectWorkspace,
+} from "@/components/adminV2/settings/configurationRuntime/object";
 import {
     ConfigurationCommandRailActions,
     type ConfigurationRailAction,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationCommandRailActions";
+import { useConfigurationContinuityOptional } from "@/components/adminV2/settings/configurationRuntime/ConfigurationContinuityProvider";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { organizationProgramsHref } from "@/lib/admin/canonicalAdminRoutes";
-import type { ConfigurationTargetPreview } from "@/lib/configPublication/types";
 import type { ConfigurationDetailSection } from "@/lib/configPublication/runtimeModel";
 import {
     classifyConfigurationRuntimeIssue,
@@ -59,6 +61,40 @@ import {
     ProgramRelationshipsSection,
 } from "@/components/adminV2/settings/programs/ProgramDomainSections";
 import { ProgramOverviewSurface } from "@/components/adminV2/settings/programs/ProgramOverviewSurface";
+import ProgramsLanding from "@/components/adminV2/settings/programs/ProgramsLanding";
+import {
+    buildProgramsConfigurationObjectDescriptor,
+    PROGRAMS_WORKSPACE_SIBLING_CHAPTERS,
+} from "@/lib/configRuntime/configurationObject/programsAdoptionSeam";
+import type { ProgramsWorkspaceChapter } from "@/lib/commercial/commercialChapterRoutes";
+import { buildProgramsLandingViewModel } from "@/lib/programs/publication/programsLandingModel";
+import { visibleConfigurationObjectConcerns } from "@/lib/configRuntime/configurationObject/concernRegistry";
+import {
+    beginConfigurationObjectEdit,
+    cancelConfigurationObjectEdit,
+    completeConfigurationObjectSave,
+    configurationObjectEditBlocksNavigation,
+    createConfigurationObjectEditSession,
+    failConfigurationObjectSave,
+    markConfigurationObjectSaving,
+    patchConfigurationObjectDraft,
+} from "@/lib/configRuntime/configurationObject/editingLifecycle";
+import {
+    invalidateProgramsCollection,
+    loadProgramsCollection,
+    peekProgramsCollection,
+} from "@/lib/programs/programsCollectionCache";
+import {
+    resolveProgramsConcernState,
+    resolveProgramsSelection,
+} from "@/lib/programs/programsSelectionAdapter";
+import {
+    markConfigurationContinuity,
+} from "@/lib/configRuntime/configurationContinuity";
+import {
+    publishConfigurationInvalidation,
+    subscribeConfigurationInvalidation,
+} from "@/lib/configRuntime/configurationInvalidation";
 
 const ENDPOINT = "/api/admin/configuration/programs";
 
@@ -174,64 +210,217 @@ function programSectionForRuntime(section: ConfigurationDetailSection): ProgramC
 export default function ProgramsPublicationWorkspace(props: {
     initialProgramId?: string | null;
     initialSection?: ProgramConfigurationSection;
+    /** @deprecated Chapters redirect to Financials at the route layer — ignored. */
+    initialChapter?: ProgramsWorkspaceChapter | null;
+}) {
+    const { orgId: authOrgId } = useAdminAuth();
+    const continuity = useConfigurationContinuityOptional();
+    const orgId = continuity?.orgId || authOrgId || "";
+
+    return <ProgramsPublicationObjectWorkspace {...props} orgId={orgId} />;
+}
+
+function ProgramsPublicationObjectWorkspace(props: {
+    initialProgramId?: string | null;
+    initialSection?: ProgramConfigurationSection;
+    orgId: string;
 }) {
     const router = useRouter();
-    const [snapshot, setSnapshot] = useState<ProgramPublicationSnapshot | null>(null);
+    const continuity = useConfigurationContinuityOptional();
+    const orgId = props.orgId;
+    const retainedProgramId = continuity?.selection?.programId ?? null;
+    const retainedSection = continuity?.selection?.programSection ?? null;
+    const [snapshot, setSnapshot] = useState<ProgramPublicationSnapshot | null>(() =>
+        orgId ? (peekProgramsCollection(orgId) ?? null) : null,
+    );
     const [selectedProgramId, setSelectedProgramId] = useState<string | null>(
         props.initialProgramId?.trim() || null,
     );
     const [activeSection, setActiveSection] = useState<ProgramConfigurationSection>(
         props.initialSection ?? "overview",
     );
+    const [shouldSyncRoute, setShouldSyncRoute] = useState(false);
     const [form, setForm] = useState<DraftForm | null>(null);
-    const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
-    const [preview, setPreview] = useState<ConfigurationTargetPreview[] | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [editSession, setEditSession] = useState(() => createConfigurationObjectEditSession<DraftForm>());
+    const [loading, setLoading] = useState(!snapshot);
     const [working, setWorking] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loadIssue, setLoadIssue] = useState<ConfigurationRuntimeIssue | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [createName, setCreateName] = useState("");
     const [createKey, setCreateKey] = useState("");
+    const [landingSearch, setLandingSearch] = useState("");
+    const [showRetired, setShowRetired] = useState(false);
+    const skipHistorySyncRef = useRef(false);
+    const objectDescriptor = useMemo(() => buildProgramsConfigurationObjectDescriptor(), []);
 
-    const selectProgram = useCallback((programId: string | null) => {
-        setSelectedProgramId(programId);
-        setActiveSection("overview");
-    }, []);
+    const applySelection = useCallback(
+        (programs: ProgramCatalogItem[], routeProgramId: string | null | undefined) => {
+            const resolution = resolveProgramsSelection({
+                routeProgramId,
+                retainedProgramId,
+                validProgramIds: programs.map((program) => program.id),
+            });
+            setSelectedProgramId(resolution.objectId);
+            setShouldSyncRoute(resolution.shouldSyncRoute);
+            if (resolution.error) setError(resolution.error);
+            if (resolution.source === "retained" && resolution.objectId) {
+                const section = normalizeProgramConfigurationSection(retainedSection);
+                setActiveSection(section);
+            }
+            return resolution;
+        },
+        [retainedProgramId, retainedSection],
+    );
 
-    const reload = useCallback(async () => {
-        const response = await fetch(ENDPOINT, { credentials: "include" });
-        const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-        if (!response.ok) {
-            setLoadIssue(readConfigurationRuntimeIssue(payload.error, "Programs"));
-            setSnapshot(null);
-            setSelectedProgramId(null);
-            return;
-        }
-        const json = payload as ProgramPublicationSnapshot;
-        setLoadIssue(null);
-        setSnapshot(json);
-        setSelectedProgramId((current) => {
-            if (current && json.programs.some((program) => program.id === current)) return current;
-            const preferred = props.initialProgramId?.trim() || null;
-            if (preferred && json.programs.some((program) => program.id === preferred)) return preferred;
-            return json.programs[0]?.id ?? null;
-        });
-    }, [props.initialProgramId]);
+    const selectProgram = useCallback(
+        (programId: string | null, section: ProgramConfigurationSection = "overview") => {
+            if (configurationObjectEditBlocksNavigation(editSession)) {
+                const confirmed = window.confirm("Discard unsaved Program changes?");
+                if (!confirmed) return;
+                setEditSession(cancelConfigurationObjectEdit(editSession));
+            }
+            setSelectedProgramId(programId);
+            setActiveSection(section);
+            setShouldSyncRoute(false);
+            continuity?.rememberProgramSelection({
+                programId,
+                section: programId ? section : null,
+            });
+            // Explicit operator selection — push for Back/Forward across Programs.
+            router.push(organizationProgramsHref(programId, section), { scroll: false });
+        },
+        [continuity, editSession, router],
+    );
+
+    const navigateSection = useCallback(
+        (section: ProgramConfigurationSection) => {
+            if (
+                configurationObjectEditBlocksNavigation(editSession)
+                && activeSection === "definition"
+                && section !== "definition"
+            ) {
+                const confirmed = window.confirm("Discard unsaved Program changes?");
+                if (!confirmed) return;
+                setEditSession(cancelConfigurationObjectEdit(editSession));
+            }
+            setActiveSection(section);
+            setShouldSyncRoute(false);
+            if (selectedProgramId) {
+                continuity?.rememberProgramSelection({
+                    programId: selectedProgramId,
+                    section,
+                });
+                router.push(organizationProgramsHref(selectedProgramId, section), { scroll: false });
+            }
+        },
+        [activeSection, continuity, editSession, router, selectedProgramId],
+    );
+
+    const reload = useCallback(
+        async (opts?: { force?: boolean }) => {
+            if (!orgId) {
+                setLoading(false);
+                setLoadIssue(readConfigurationRuntimeIssue("Organization context is required.", "Programs"));
+                return;
+            }
+            const peeked = peekProgramsCollection(orgId);
+            if (peeked && !opts?.force) {
+                setSnapshot(peeked);
+                applySelection(peeked.programs, props.initialProgramId);
+                setLoading(false);
+            }
+            try {
+                const { snapshot: next, meta } = await loadProgramsCollection(orgId, {
+                    force: opts?.force === true,
+                });
+                setLoadIssue(null);
+                setSnapshot(next);
+                applySelection(next.programs, props.initialProgramId);
+                markConfigurationContinuity("reveal", {
+                    domain: "programs",
+                    cache_hit: meta.cacheHit,
+                    inflight_join: meta.inflightJoin,
+                    stale_reuse: meta.staleReuse,
+                });
+            } catch (nextError) {
+                const issue =
+                    nextError instanceof ConfigurationRuntimeIssueError
+                        ? nextError.issue
+                        : readConfigurationRuntimeIssue(nextError, "Programs");
+                setLoadIssue(issue);
+                setError(null);
+                if (!peeked) {
+                    setSnapshot(null);
+                    setSelectedProgramId(null);
+                }
+            } finally {
+                setLoading(false);
+            }
+        },
+        [applySelection, orgId, props.initialProgramId],
+    );
 
     useEffect(() => {
-        void reload()
-            .catch((nextError) => {
-                setLoadIssue(readConfigurationRuntimeIssue(nextError, "Programs"));
-                setSnapshot(null);
-            })
-            .finally(() => setLoading(false));
+        void reload();
     }, [reload]);
 
     useEffect(() => {
-        if (loading) return;
+        if (!orgId) return;
+        return subscribeConfigurationInvalidation((event) => {
+            if (event.scope !== "programs" && event.scope !== "all" && event.scope !== "locations") return;
+            invalidateProgramsCollection(orgId, event.reason, { publishBus: false });
+            void reload({ force: true });
+        });
+    }, [orgId, reload]);
+
+    // Retained Continuity restore → replace-sync URL (no history loop).
+    useEffect(() => {
+        if (!shouldSyncRoute || !selectedProgramId) return;
+        skipHistorySyncRef.current = true;
         router.replace(organizationProgramsHref(selectedProgramId, activeSection), { scroll: false });
-    }, [activeSection, loading, router, selectedProgramId]);
+        setShouldSyncRoute(false);
+    }, [activeSection, router, selectedProgramId, shouldSyncRoute]);
+
+    // Back/Forward + deep link: URL props win when Continuity restore is not projecting.
+    useEffect(() => {
+        if (loading || shouldSyncRoute) return;
+        if (skipHistorySyncRef.current) {
+            skipHistorySyncRef.current = false;
+            return;
+        }
+        const projected = resolveProgramsConcernState({
+            routeSection: props.initialSection,
+            localSection: activeSection,
+            routeProgramId: props.initialProgramId?.trim() || null,
+            localProgramId: selectedProgramId,
+        });
+        if (projected.objectChanged) {
+            const resolution = resolveProgramsSelection({
+                routeProgramId: props.initialProgramId,
+                retainedProgramId: null,
+                validProgramIds: snapshot?.programs.map((program) => program.id) ?? [],
+                allowRetainedRestore: false,
+            });
+            setSelectedProgramId(resolution.objectId);
+            if (resolution.error) setError(resolution.error);
+        }
+        if (projected.section !== activeSection || projected.objectChanged) {
+            setActiveSection(projected.section);
+        }
+        // Route props are authoritative; omit local section from deps to avoid loops.
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- Checkpoint D history projection
+    }, [loading, props.initialProgramId, props.initialSection, shouldSyncRoute, snapshot]);
+
+    useEffect(() => {
+        if (!configurationObjectEditBlocksNavigation(editSession)) return;
+        const onBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = "";
+        };
+        window.addEventListener("beforeunload", onBeforeUnload);
+        return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    }, [editSession]);
 
     const selectedProgram = useMemo(
         () => snapshot?.programs.find((program) => program.id === selectedProgramId) ?? null,
@@ -252,12 +441,15 @@ export default function ProgramsPublicationWorkspace(props: {
             })) ?? [],
         [snapshot],
     );
+    const landing = useMemo(
+        () => (snapshot ? buildProgramsLandingViewModel(snapshot) : null),
+        [snapshot],
+    );
     const canManage = snapshot?.capabilities.canManage ?? false;
 
     useEffect(() => {
         setForm(selectedProgram ? formFor(selectedProgram) : null);
-        setPreview(null);
-        setSelectedLocationIds([]);
+        setEditSession(createConfigurationObjectEditSession<DraftForm>());
     }, [selectedProgram]);
 
     const run = useCallback(
@@ -307,7 +499,7 @@ export default function ProgramsPublicationWorkspace(props: {
                 label: item.nextLabel,
                 reason: item.consequence,
                 group: "fix" as const,
-                onClick: () => setActiveSection(programSectionForRuntime(item.section)),
+                onClick: () => navigateSection(programSectionForRuntime(item.section)),
             }));
         if (canManage && viewModel.runtime.publication.canPublish) {
             actions.push({
@@ -315,7 +507,7 @@ export default function ProgramsPublicationWorkspace(props: {
                 label: "Publish working draft",
                 reason: `${viewModel.runtime.publication.activeRevisionLabel} remains active until publication.`,
                 group: "next",
-                onClick: () => setActiveSection("definition"),
+                onClick: () => navigateSection("definition"),
             });
         } else if (canManage && viewModel.runtime.publication.hasUnpublishedChanges) {
             actions.push({
@@ -323,7 +515,7 @@ export default function ProgramsPublicationWorkspace(props: {
                 label: "Review working draft",
                 reason: "Validate the draft before publishing.",
                 group: "next",
-                onClick: () => setActiveSection("definition"),
+                onClick: () => navigateSection("definition"),
             });
         }
         if (canManage) {
@@ -331,25 +523,240 @@ export default function ProgramsPublicationWorkspace(props: {
                 id: "edit-configuration-draft",
                 label: "Edit working draft",
                 group: "manage",
-                onClick: () => setActiveSection("definition"),
+                onClick: () => navigateSection("definition"),
             }, {
                 id: "manage-configuration-assignment",
-                label: "Manage assignments",
+                label: "Add to Locations",
                 group: "manage",
-                onClick: () => setActiveSection("assignment"),
+                onClick: () => navigateSection("assignment"),
             });
         }
         actions.push({
             id: "review-configuration-history",
             label: "Review history",
             group: "more",
-            onClick: () => setActiveSection("history"),
+            onClick: () => navigateSection("history"),
         });
         return actions;
-    }, [canManage, selectedProgram, viewModel]);
+    }, [canManage, navigateSection, selectedProgram, viewModel]);
 
     if (loading) {
-        return <p className="p-6 text-sm text-alloy-midnight/55">Loading Programs…</p>;
+        return (
+            <p className="p-6 text-sm text-alloy-midnight/55" data-testid="programs-loading">
+                Loading Programs…
+            </p>
+        );
+    }
+
+    const showLanding = !selectedProgramId;
+
+    if (showLanding) {
+        return (
+            <div
+                className="config-runtime-shell process-config-page min-h-0 flex-1"
+                data-testid="programs-publication-runtime"
+                data-programs-mode="landing"
+            >
+                <ConfigurationCommandRailActions
+                    actions={
+                        canManage ?
+                            [{
+                                id: "add-configuration-object",
+                                label: "Add Program",
+                                reason: "Create an Organization-owned working draft.",
+                                group: "manage",
+                                onClick: () => setCreateOpen(true),
+                            }]
+                        :   []
+                    }
+                    testIdPrefix="programs-rail"
+                />
+                <ConfigurationContext
+                    title="Programs"
+                    subtitle="Reusable Organization services published for Locations to offer."
+                    titleIcon={<BookOpen className="h-5 w-5" strokeWidth={2} />}
+                    testId="programs-configuration-context"
+                    actions={
+                        canManage ?
+                            <ConfigurationPrimaryButton
+                                className="xl:hidden"
+                                onClick={() => setCreateOpen(true)}
+                                data-testid="programs-mobile-add"
+                            >
+                                <Plus className="mr-1 h-3.5 w-3.5" aria-hidden />
+                                Add Program
+                            </ConfigurationPrimaryButton>
+                        :   undefined
+                    }
+                >
+                    <ul
+                        className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-alloy-stone/25 pt-2 text-[11px] text-alloy-midnight/52"
+                        aria-label="Programs posture"
+                        data-testid="programs-collection-posture"
+                    >
+                        <li>
+                            <Link href="/organization" className="font-medium hover:text-alloy-bend-pine">
+                                Organization
+                            </Link>
+                            <span className="mx-1.5 text-alloy-midnight/35" aria-hidden>
+                                ›
+                            </span>
+                            <span className="font-semibold text-alloy-midnight/70">Programs</span>
+                        </li>
+                        {landing ?
+                            <>
+                                <li>
+                                    <strong className="font-semibold text-alloy-midnight">
+                                        {landing.summary.activePrograms}
+                                    </strong>{" "}
+                                    Active
+                                </li>
+                                <li>
+                                    <strong className="font-semibold text-alloy-midnight">
+                                        {landing.summary.averageReadinessPercent}%
+                                    </strong>{" "}
+                                    Average readiness
+                                </li>
+                                <li>
+                                    <strong className="font-semibold text-alloy-midnight">
+                                        {landing.summary.attentionPrograms}
+                                    </strong>{" "}
+                                    Need attention
+                                </li>
+                            </>
+                        :   null}
+                    </ul>
+                    <div
+                        className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-alloy-midnight/40"
+                        data-testid="programs-sibling-chapters"
+                    >
+                        <span className="font-semibold uppercase tracking-[0.08em]">Related</span>
+                        {PROGRAMS_WORKSPACE_SIBLING_CHAPTERS.map((chapter) => (
+                            <Link
+                                key={chapter.id}
+                                href={chapter.href}
+                                className="hover:text-alloy-midnight/65 hover:underline"
+                                data-testid={`programs-sibling-${chapter.id}`}
+                            >
+                                {chapter.label}
+                            </Link>
+                        ))}
+                    </div>
+                </ConfigurationContext>
+
+                <ConfigurationShell testId="programs-configuration-shell">
+                    {loadIssue && !landing ?
+                        <div
+                            className="mx-auto max-w-xl rounded-xl border border-alloy-forge/10 bg-white px-5 py-6 shadow-[0_1px_2px_rgba(19,33,43,0.04)]"
+                            data-testid="programs-unavailable-state"
+                            data-issue-code={loadIssue.code}
+                        >
+                            <p className="text-base font-semibold text-alloy-midnight">{loadIssue.title}</p>
+                            <p className="mt-1.5 text-sm text-alloy-midnight/65">{loadIssue.message}</p>
+                            <p className="mt-1 text-xs text-alloy-midnight/50">{loadIssue.nextStep}</p>
+                            {loadIssue.reference ?
+                                <p className="mt-3 text-[11px] text-alloy-midnight/40">
+                                    Engineering reference · {loadIssue.reference}
+                                </p>
+                            :   null}
+                            <ConfigurationSecondaryButton
+                                className="mt-4"
+                                onClick={() => void reload({ force: true })}
+                                data-testid="programs-unavailable-retry"
+                            >
+                                Retry
+                            </ConfigurationSecondaryButton>
+                        </div>
+                    : landing ?
+                        <>
+                            {loadIssue ?
+                                <div
+                                    className="mb-3 rounded-lg border border-alloy-forge/15 bg-alloy-sand/40 px-3 py-2 text-sm text-alloy-midnight/75"
+                                    data-testid="programs-landing-soft-error"
+                                    data-issue-code={loadIssue.code}
+                                >
+                                    <p className="font-medium text-alloy-midnight">{loadIssue.title}</p>
+                                    <p className="mt-0.5 text-xs text-alloy-midnight/60">{loadIssue.message}</p>
+                                    <ConfigurationSecondaryButton
+                                        className="mt-2"
+                                        onClick={() => void reload({ force: true })}
+                                        data-testid="programs-landing-soft-error-retry"
+                                    >
+                                        Retry
+                                    </ConfigurationSecondaryButton>
+                                </div>
+                            :   null}
+                            <ProgramsLanding
+                                landing={landing}
+                                showRetired={showRetired}
+                                onShowRetiredChange={setShowRetired}
+                                search={landingSearch}
+                                onSearchChange={setLandingSearch}
+                                onOpenProgram={(programId, section) =>
+                                    selectProgram(programId, section ?? "overview")
+                                }
+                                onAddProgram={() => setCreateOpen(true)}
+                            />
+                        </>
+                    :   null}
+                </ConfigurationShell>
+
+                {createOpen ?
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-alloy-midnight/30 p-4">
+                        <div
+                            className="w-full max-w-md rounded-xl border border-alloy-stone/25 bg-white p-4 shadow-lg"
+                            data-testid="programs-create-dialog"
+                        >
+                            <p className="text-sm font-semibold text-alloy-midnight">Add Program</p>
+                            <label className="mt-3 block text-xs font-medium text-alloy-midnight/70">
+                                Name
+                                <input
+                                    className="mt-1 w-full rounded border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                    value={createName}
+                                    onChange={(event) => setCreateName(event.target.value)}
+                                    data-testid="programs-create-name"
+                                />
+                            </label>
+                            <label className="mt-3 block text-xs font-medium text-alloy-midnight/70">
+                                Key
+                                <input
+                                    className="mt-1 w-full rounded border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                    value={createKey}
+                                    onChange={(event) => setCreateKey(event.target.value)}
+                                    data-testid="programs-create-key"
+                                />
+                            </label>
+                            <div className="mt-4 flex justify-end gap-2">
+                                <ConfigurationSecondaryButton onClick={() => setCreateOpen(false)}>
+                                    Cancel
+                                </ConfigurationSecondaryButton>
+                                <ConfigurationPrimaryButton
+                                    disabled={!createName.trim() || !createKey.trim() || working === "create"}
+                                    onClick={() =>
+                                        void run("create", async () => {
+                                            const result = await postAction({
+                                                action: "create",
+                                                label: createName.trim(),
+                                                key: createKey.trim(),
+                                            });
+                                            const createdId =
+                                                typeof result.programId === "string" ? result.programId : null;
+                                            setCreateOpen(false);
+                                            setCreateName("");
+                                            setCreateKey("");
+                                            if (createdId) selectProgram(createdId, "overview");
+                                        })
+                                    }
+                                    data-testid="programs-create-submit"
+                                >
+                                    Create
+                                </ConfigurationPrimaryButton>
+                            </div>
+                        </div>
+                    </div>
+                :   null}
+            </div>
+        );
     }
 
     const activeRevision: ProgramRevision | null =
@@ -362,25 +769,26 @@ export default function ProgramsPublicationWorkspace(props: {
         activeRevision ?? selectedProgram?.draft ?? null;
     const tabs: ConfigDetailTab<ProgramConfigurationSection>[] =
         viewModel
-            ? [
-                  { key: "overview", label: "Overview" },
-                  { key: "offerings", label: "Offerings" },
-                  { key: "pricing", label: "Pricing" },
-                  { key: "availability", label: "Availability" },
-                  { key: "policies", label: "Policies" },
-                  { key: "relationships", label: "Relationships" },
-                  {
-                      key: "publication",
-                      label: "Publication",
-                      attentionCount: viewModel.runtime.attention.filter((item) => item.section === "distribution").length,
-                  },
-                  {
-                      key: "assignment",
-                      label: "Assignments",
-                      attentionCount: viewModel.runtime.attention.filter((item) => item.section === "assignment").length,
-                  },
-                  { key: "history", label: "History" },
-              ]
+            ? visibleConfigurationObjectConcerns(objectDescriptor.concerns)
+                  .filter((concern) => concern.key !== "definition")
+                  .map((concern) => {
+                      const key = concern.key as ProgramConfigurationSection;
+                      const attentionCount =
+                          key === "publication"
+                              ? viewModel.runtime.attention.filter((item) =>
+                                    item.section === "distribution" || item.section === "publication",
+                                ).length
+                          : key === "assignment"
+                            ? viewModel.runtime.attention.filter((item) => item.section === "assignment").length
+                          : key === "availability"
+                            ? viewModel.runtime.attention.filter((item) => item.section === "assignment").length
+                          : 0;
+                      return {
+                          key,
+                          label: concern.label,
+                          attentionCount: attentionCount > 0 ? attentionCount : undefined,
+                      };
+                  })
             : [];
     const revisionLabelByPublicationId = new Map(
         selectedProgram?.publications.map((publication) => [
@@ -396,8 +804,6 @@ export default function ProgramsPublicationWorkspace(props: {
             .filter((assignment) => assignment.revisionId === selectedProgram?.latestPublication?.revision.id)
             .map((assignment) => assignment.locationId) ?? [],
     );
-    const availableAssignmentLocations =
-        snapshot?.locations.filter((location) => !activeAssignmentLocationIds.has(location.id)) ?? [];
 
     return (
         <div
@@ -428,12 +834,38 @@ export default function ProgramsPublicationWorkspace(props: {
                         Organization
                     </Link>
                     <span aria-hidden>›</span>
+                    <Link
+                        href="/organization/programs-locations"
+                        className="font-medium hover:text-alloy-bend-pine"
+                        data-testid="programs-breadcrumb-programs-locations"
+                    >
+                        Programs & Locations
+                    </Link>
+                    <span aria-hidden>›</span>
                     <span className="font-semibold text-alloy-midnight/65">Programs</span>
                     {snapshot ?
                         <span className="ml-auto">
                             {snapshot.programs.length} Programs · {snapshot.programs.filter((program) => program.latestPublication).length} published
                         </span>
                     :   null}
+                </div>
+                <div
+                    className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-alloy-stone/15 pt-2"
+                    data-testid="programs-sibling-chapters"
+                >
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                        Workspace chapters
+                    </span>
+                    {PROGRAMS_WORKSPACE_SIBLING_CHAPTERS.map((chapter) => (
+                        <Link
+                            key={chapter.id}
+                            href={chapter.href}
+                            className="text-[11px] font-medium text-alloy-midnight/50 underline-offset-2 hover:text-alloy-bend-pine hover:underline"
+                            data-testid={`programs-sibling-${chapter.id}`}
+                        >
+                            {chapter.label}
+                        </Link>
+                    ))}
                 </div>
             </ConfigurationContext>
 
@@ -444,265 +876,393 @@ export default function ProgramsPublicationWorkspace(props: {
             :   null}
 
             <ConfigurationShell testId="programs-configuration-shell">
-                <div
-                    className={`grid items-start gap-4 pb-4 ${
-                        selectedProgram ? "xl:grid-cols-[20.5rem_minmax(0,1fr)]" : ""
-                    }`}
-                >
-                    <ConfigCollectionRail
-                        title="Programs"
-                        description="Reusable services the Organization can publish and make available to Locations."
-                        objectLabel="Program"
-                        items={collectionItems}
-                        selectedId={selectedProgramId}
-                        canAdd={canManage}
-                        onAdd={() => setCreateOpen(true)}
-                        onSelect={selectProgram}
-                        addLabel="Add Program"
-                        testId="programs-collection"
-                    />
-
-                    <main className="min-w-0" data-testid="programs-workspace">
-                        {!selectedProgram || !form || !snapshot || !viewModel || !visibleDefinition ?
-                            <ConfigurationEmptyState
-                                title={
-                                    loadIssue ? "Programs are not ready in this environment"
-                                    : canManage ? "Create your first Program"
-                                    : "No Programs have been created"
-                                }
-                                description="Programs are reusable service definitions owned by the Organization, such as Preschool, After-school care, or Summer camp."
-                                purpose="Define a service once, publish an immutable revision, then assign that revision to the Locations that may offer it. Each Location still owns its local availability, resources, evidence, and schedule."
-                                examples={["Preschool", "After-school care", "Summer camp"]}
-                                setupSteps={[
-                                    {
-                                        label: "Create a working draft",
-                                        description: "Describe the reusable service and its Organization-owned requirements.",
-                                    },
-                                    {
-                                        label: "Publish a revision",
-                                        description: "Make an immutable version available for Location assignment.",
-                                    },
-                                    {
-                                        label: "Assign to Locations",
-                                        description: "Choose which Locations may consume the published revision.",
-                                    },
-                                ]}
-                                issue={loadIssue}
-                                actions={
-                                    canManage && !loadIssue ?
-                                        <ConfigurationPrimaryButton onClick={() => setCreateOpen(true)}>
-                                            Add Program
-                                        </ConfigurationPrimaryButton>
-                                    :   undefined
-                                }
-                                testId="programs-empty-state"
-                            />
-                        :   <ConfigDetailRuntime
-                                header={
-                                    <ConfigObjectHeader
-                                        size="hero"
-                                        name={selectedProgram.draft.label}
-                                        status={{
-                                            label: selectedProgram.lifecycleStatus === "active" ? "Active" : "Retired",
-                                            tone: selectedProgram.lifecycleStatus === "active" ? "active" : "inactive",
-                                        }}
-                                        breadcrumb={
-                                            <nav
-                                                className="flex flex-wrap items-center gap-1.5 text-[11px] text-alloy-midnight/45"
-                                                aria-label="Program ownership"
-                                            >
-                                                <Link href="/organization" className="hover:text-alloy-bend-pine">
-                                                    Organization
-                                                </Link>
-                                                <span aria-hidden>›</span>
-                                                <span>Programs</span>
-                                                <span aria-hidden>›</span>
-                                                <span className="font-semibold text-alloy-midnight/65">
-                                                    {selectedProgram.draft.label}
-                                                </span>
-                                            </nav>
-                                        }
-                                        facts={[
-                                            `Key · ${selectedProgram.key}`,
-                                            selectedProgram.draft.category ?? "Category not set",
-                                            audienceLabel(selectedProgram.draft),
-                                        ]}
-                                        actions={
-                                            canManage && activeSection !== "definition" ?
-                                                <ConfigurationSecondaryButton
-                                                    onClick={() => setActiveSection("definition")}
-                                                    data-testid="program-edit-draft"
-                                                >
-                                                    Edit Program
-                                                </ConfigurationSecondaryButton>
-                                            :   undefined
-                                        }
-                                        testId="program-object-header"
-                                    />
-                                }
-                                tabs={tabs}
-                                activeSection={activeSection}
-                                onSectionChange={setActiveSection}
-                                testId="program-detail-runtime"
+                <ConfigurationObjectWorkspace
+                    collectionTitle="Programs"
+                    collectionDescription="Reusable services the Organization can publish and assign to Locations."
+                    objectLabel="Program"
+                    items={collectionItems}
+                    selectedId={selectedProgramId}
+                    canAdd={canManage}
+                    onAdd={() => setCreateOpen(true)}
+                    onSelect={(programId) => selectProgram(programId, "overview")}
+                    addLabel="Add Program"
+                    identity={
+                        selectedProgram
+                            ? {
+                                  domainId: "programs",
+                                  objectId: selectedProgram.id,
+                                  objectType: "Program",
+                                  displayName: selectedProgram.draft.label,
+                                  secondaryIdentity: selectedProgram.key,
+                                  lifecycleStatus:
+                                      selectedProgram.lifecycleStatus === "active" ? "active" : "retired",
+                                  ownershipScopeLabel: "Organization",
+                                  versionLabel:
+                                      viewModel?.runtime.publication.activeRevisionLabel ?? null,
+                              }
+                            : null
+                    }
+                    headerStatus={{
+                        label: selectedProgram?.lifecycleStatus === "active" ? "Active" : "Retired",
+                        tone: selectedProgram?.lifecycleStatus === "active" ? "active" : "inactive",
+                    }}
+                    headerBreadcrumb={
+                        selectedProgram ?
+                            <nav
+                                className="flex flex-wrap items-center gap-1.5 text-[11px] text-alloy-midnight/45"
+                                aria-label="Program ownership"
                             >
-                                {activeSection === "overview" ?
-                                    <ProgramOverviewSurface
-                                        program={selectedProgram}
-                                        snapshot={snapshot}
-                                        viewModel={viewModel}
-                                        onOpenSection={setActiveSection}
-                                    />
-                                : activeSection === "definition" ?
-                                    <div className="space-y-4 pb-2" data-testid="program-draft-runtime">
-                                        <ConfigWorkspaceCard
-                                            title="Active revision"
-                                            description="Immutable configuration currently available to assigned Locations."
-                                            compact
-                                            testId="program-active-revision"
-                                        >
-                                            {activeRevision ?
-                                                <ProgramDefinitionSummary
-                                                    definition={activeRevision}
-                                                    label={`Revision ${activeRevision.revisionNumber} · published ${new Date(activeRevision.publishedAt).toLocaleString()}`}
-                                                    testId="program-active-revision-definition"
-                                                />
-                                            :   <p className="py-4 text-sm text-alloy-midnight/50">
-                                                    Nothing has been published yet.
-                                                </p>
-                                            }
-                                        </ConfigWorkspaceCard>
+                                <button
+                                    type="button"
+                                    className="font-medium underline-offset-2 hover:text-alloy-midnight/70 hover:underline"
+                                    onClick={() => selectProgram(null)}
+                                    data-testid="programs-breadcrumb-collection"
+                                >
+                                    Programs
+                                </button>
+                                <span aria-hidden="true">›</span>
+                                <span className="font-semibold text-alloy-midnight/65">
+                                    {selectedProgram.draft.label}
+                                </span>
+                            </nav>
+                        :   undefined
+                    }
+                    headerFacts={
+                        selectedProgram
+                            ? [
+                                  `Key · ${selectedProgram.key}`,
+                                  selectedProgram.draft.category ?? "Category not set",
+                                  audienceLabel(selectedProgram.draft),
+                                  viewModel?.runtime.publication.activeRevisionLabel ?? "Not published",
+                              ]
+                            : undefined
+                    }
+                    headerActions={
+                        canManage && selectedProgram && activeSection !== "definition" ?
+                            <ConfigurationSecondaryButton
+                                onClick={() => navigateSection("definition")}
+                                data-testid="program-edit-draft"
+                            >
+                                Edit Program
+                            </ConfigurationSecondaryButton>
+                        :   undefined
+                    }
+                    concernTabs={tabs}
+                    activeConcern={activeSection === "definition" ? "overview" : activeSection}
+                    onConcernChange={(concern) =>
+                        navigateSection(normalizeProgramConfigurationSection(concern))
+                    }
+                    emptyDetail={
+                        <ConfigurationEmptyState
+                            title={
+                                loadIssue ? "Programs are not ready in this environment"
+                                : canManage ? "Select or create a Program"
+                                : "No Programs have been created"
+                            }
+                            description="Programs are reusable service definitions owned by the Organization, such as Preschool, After-school care, or Summer camp."
+                            purpose="Define a service once, publish an immutable revision, then assign that revision to Locations. Each Location still owns local availability, resources, evidence, and schedule."
+                            examples={["Preschool", "After-school care", "Summer camp"]}
+                            setupSteps={[
+                                {
+                                    label: "Create a working draft",
+                                    description: "Describe the reusable service and its Organization-owned requirements.",
+                                },
+                                {
+                                    label: "Publish a revision",
+                                    description: "Make an immutable version available for Location assignment.",
+                                },
+                                {
+                                    label: "Assign to Locations",
+                                    description: "Choose which Locations may consume the published revision.",
+                                },
+                            ]}
+                            issue={loadIssue}
+                            actions={
+                                canManage && !loadIssue ?
+                                    <ConfigurationPrimaryButton onClick={() => setCreateOpen(true)}>
+                                        Add Program
+                                    </ConfigurationPrimaryButton>
+                                :   undefined
+                            }
+                            testId="programs-empty-state"
+                        />
+                    }
+                    testId="programs-object-workspace"
+                >
+                    {!selectedProgram || !form || !snapshot || !viewModel || !visibleDefinition ?
+                        null
+                    : activeSection === "overview" || activeSection === "definition" ?
+                        <>
+                            {activeSection === "overview" ?
+                                <ProgramOverviewSurface
+                                    program={selectedProgram}
+                                    snapshot={snapshot}
+                                    viewModel={viewModel}
+                                    onOpenSection={navigateSection}
+                                />
+                            :   null}
+                            {activeSection === "definition" ?
+                                <div className="space-y-4 pb-2" data-testid="program-draft-runtime">
+                                    <ConfigWorkspaceCard
+                                        title="Active revision"
+                                        description="Immutable configuration currently available to assigned Locations."
+                                        compact
+                                        testId="program-active-revision"
+                                    >
+                                        {activeRevision ?
+                                            <ProgramDefinitionSummary
+                                                definition={activeRevision}
+                                                label={`Revision ${activeRevision.revisionNumber} · published ${new Date(activeRevision.publishedAt).toLocaleString()}`}
+                                                testId="program-active-revision-definition"
+                                            />
+                                        :   <p className="py-4 text-sm text-alloy-midnight/50">
+                                                Nothing has been published yet.
+                                            </p>
+                                        }
+                                    </ConfigWorkspaceCard>
 
-                                        <ConfigWorkspaceCard
-                                            title="Working draft"
-                                            description={
-                                                viewModel.runtime.publication.hasUnpublishedChanges
-                                                    ? "Changes remain private to Organization until published."
-                                                    : "This draft matches the active published revision."
-                                            }
-                                            compact
-                                            testId="program-working-draft"
-                                        >
-                                            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.04] px-3 py-2">
-                                                <div>
-                                                    <p className="text-xs font-semibold text-alloy-midnight">
-                                                        {viewModel.runtime.publication.draftLabel}
-                                                    </p>
-                                                    <p className="mt-0.5 text-[11px] text-alloy-midnight/45">
-                                                        {viewModel.runtime.publication.activeRevisionLabel} remains active.
-                                                    </p>
-                                                </div>
-                                                <span className="rounded-full border border-alloy-stone/25 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
-                                                    {selectedProgram.draft.status}
-                                                </span>
+                                    <ConfigWorkspaceCard
+                                        title="Working draft"
+                                        description={
+                                            viewModel.runtime.publication.hasUnpublishedChanges
+                                                ? "Changes remain private to Organization until published."
+                                                : "This draft matches the active published revision."
+                                        }
+                                        compact
+                                        testId="program-working-draft"
+                                    >
+                                        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.04] px-3 py-2">
+                                            <div>
+                                                <p className="text-xs font-semibold text-alloy-midnight">
+                                                    {viewModel.runtime.publication.draftLabel}
+                                                </p>
+                                                <p className="mt-0.5 text-[11px] text-alloy-midnight/45">
+                                                    {viewModel.runtime.publication.activeRevisionLabel} remains active.
+                                                </p>
                                             </div>
-                                            <div className="grid gap-3 sm:grid-cols-2">
-                                                <label>
-                                                    <span className="config-typo-field-label">Name · Organization locked</span>
-                                                    <input
-                                                        value={form.label}
-                                                        onChange={(event) => setForm({ ...form, label: event.target.value })}
-                                                        className="config-runtime-input mt-1"
-                                                        data-testid="program-draft-label"
-                                                        disabled={!canManage}
-                                                    />
-                                                </label>
-                                                <label>
-                                                    <span className="config-typo-field-label">Category · Organization locked</span>
-                                                    <input
-                                                        value={form.category}
-                                                        onChange={(event) => setForm({ ...form, category: event.target.value })}
-                                                        className="config-runtime-input mt-1"
-                                                        disabled={!canManage}
-                                                    />
-                                                </label>
-                                                <label className="sm:col-span-2">
-                                                    <span className="config-typo-field-label">Description · Location may override</span>
-                                                    <textarea
-                                                        value={form.description}
-                                                        onChange={(event) => setForm({ ...form, description: event.target.value })}
-                                                        className="config-runtime-input mt-1 min-h-20"
-                                                        disabled={!canManage}
-                                                    />
-                                                </label>
-                                                <label>
-                                                    <span className="config-typo-field-label">Minimum audience age</span>
-                                                    <input
-                                                        type="number"
-                                                        min={0}
-                                                        value={form.minimumAge}
-                                                        onChange={(event) => setForm({ ...form, minimumAge: event.target.value })}
-                                                        className="config-runtime-input mt-1"
-                                                        disabled={!canManage}
-                                                    />
-                                                </label>
-                                                <label>
-                                                    <span className="config-typo-field-label">Maximum audience age</span>
-                                                    <input
-                                                        type="number"
-                                                        min={0}
-                                                        value={form.maximumAge}
-                                                        onChange={(event) => setForm({ ...form, maximumAge: event.target.value })}
-                                                        className="config-runtime-input mt-1"
-                                                        disabled={!canManage}
-                                                    />
-                                                </label>
-                                                <label>
-                                                    <span className="config-typo-field-label">Required resource type</span>
-                                                    <input
-                                                        value={form.requiredResourceType}
-                                                        onChange={(event) => setForm({ ...form, requiredResourceType: event.target.value })}
-                                                        className="config-runtime-input mt-1"
-                                                        disabled={!canManage}
-                                                    />
-                                                </label>
-                                                <label>
-                                                    <span className="config-typo-field-label">Qualification requirements</span>
-                                                    <textarea
-                                                        value={form.qualificationRequirements}
-                                                        onChange={(event) => setForm({ ...form, qualificationRequirements: event.target.value })}
-                                                        placeholder="One requirement per line"
-                                                        className="config-runtime-input mt-1 min-h-20"
-                                                        disabled={!canManage}
-                                                    />
-                                                </label>
-                                            </div>
-                                            {selectedProgram.draft.validationErrors.length > 0 ?
-                                                <ul className="mt-3 list-disc pl-5 text-sm text-red-700">
-                                                    {selectedProgram.draft.validationErrors.map((item) => <li key={item}>{item}</li>)}
-                                                </ul>
-                                            :   null}
-                                            {canManage ?
-                                                <div className="mt-4 flex flex-wrap gap-2">
-                                                <ConfigurationPrimaryButton
-                                                    disabled={working != null}
-                                                    data-testid="program-save-draft"
-                                                    onClick={() =>
-                                                        void run("save", () =>
-                                                            postAction({
-                                                                action: "update_draft",
-                                                                programId: selectedProgram.id,
-                                                                patch: {
-                                                                    label: form.label,
-                                                                    description: form.description.trim() || null,
-                                                                    category: form.category.trim() || null,
-                                                                    required_resource_type: form.requiredResourceType.trim() || null,
-                                                                    audience: {
-                                                                        minimumAge: optionalNumber(form.minimumAge),
-                                                                        maximumAge: optionalNumber(form.maximumAge),
-                                                                    },
-                                                                    qualification_requirements: form.qualificationRequirements
-                                                                        .split("\n")
-                                                                        .map((value) => value.trim())
-                                                                        .filter(Boolean),
+                                            <span className="rounded-full border border-alloy-stone/25 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
+                                                {selectedProgram.draft.status}
+                                            </span>
+                                        </div>
+                                        <ConfigurationObjectEditGate
+                                            session={editSession}
+                                            testId="program-definition-edit-gate"
+                                            editLabel="Edit working draft"
+                                            onBeginEdit={() => {
+                                                if (!form) return;
+                                                setEditSession(beginConfigurationObjectEdit(editSession, form));
+                                            }}
+                                            onCancel={() => {
+                                                setForm(selectedProgram ? formFor(selectedProgram) : null);
+                                                setEditSession(cancelConfigurationObjectEdit(editSession));
+                                            }}
+                                            onSave={() => {
+                                                if (!form || !editSession.draft) return;
+                                                const draft = editSession.draft;
+                                                setEditSession(markConfigurationObjectSaving(editSession, true));
+                                                void run(
+                                                    "save",
+                                                    () =>
+                                                        postAction({
+                                                            action: "update_draft",
+                                                            programId: selectedProgram.id,
+                                                            patch: {
+                                                                label: draft.label,
+                                                                description: draft.description.trim() || null,
+                                                                category: draft.category.trim() || null,
+                                                                required_resource_type:
+                                                                    draft.requiredResourceType.trim() || null,
+                                                                audience: {
+                                                                    minimumAge: optionalNumber(draft.minimumAge),
+                                                                    maximumAge: optionalNumber(draft.maximumAge),
                                                                 },
-                                                            }),
-                                                        )
-                                                    }
-                                                >
-                                                    {working === "save" ? "Saving…" : "Save working draft"}
-                                                </ConfigurationPrimaryButton>
+                                                                qualification_requirements: draft.qualificationRequirements
+                                                                    .split("\n")
+                                                                    .map((value) => value.trim())
+                                                                    .filter(Boolean),
+                                                            },
+                                                        }),
+                                                    {
+                                                        afterSuccess: () => {
+                                                            setForm(draft);
+                                                            setEditSession(completeConfigurationObjectSave(editSession));
+                                                            if (orgId) {
+                                                                invalidateProgramsCollection(orgId, "program-draft-saved");
+                                                                publishConfigurationInvalidation(
+                                                                    "programs",
+                                                                    "program-draft-saved",
+                                                                );
+                                                            }
+                                                        },
+                                                    },
+                                                ).then(() => {
+                                                    /* run() clears working; salvage edit session on failure via error banner */
+                                                });
+                                            }}
+                                            readContent={
+                                                <ProgramDefinitionSummary
+                                                    definition={{
+                                                        ...selectedProgram.draft,
+                                                        label: form.label,
+                                                        description: form.description || null,
+                                                        category: form.category || null,
+                                                        requiredResourceType: form.requiredResourceType || null,
+                                                        audience: {
+                                                            minimumAge: optionalNumber(form.minimumAge),
+                                                            maximumAge: optionalNumber(form.maximumAge),
+                                                        },
+                                                        qualificationRequirements: form.qualificationRequirements
+                                                            .split("\n")
+                                                            .map((value) => value.trim())
+                                                            .filter(Boolean),
+                                                    }}
+                                                    label="Current working draft"
+                                                    testId="program-draft-read-summary"
+                                                />
+                                            }
+                                            editContent={
+                                                <div className="grid gap-3 sm:grid-cols-2">
+                                                    <label>
+                                                        <span className="config-typo-field-label">Name · Organization locked</span>
+                                                        <input
+                                                            value={editSession.draft?.label ?? form.label}
+                                                            onChange={(event) => {
+                                                                const next = {
+                                                                    ...(editSession.draft ?? form),
+                                                                    label: event.target.value,
+                                                                };
+                                                                setForm(next);
+                                                                setEditSession(patchConfigurationObjectDraft(editSession, next));
+                                                            }}
+                                                            className="config-runtime-input mt-1"
+                                                            data-testid="program-draft-label"
+                                                            disabled={!canManage}
+                                                        />
+                                                    </label>
+                                                    <label>
+                                                        <span className="config-typo-field-label">Category · Organization locked</span>
+                                                        <input
+                                                            value={editSession.draft?.category ?? form.category}
+                                                            onChange={(event) => {
+                                                                const next = {
+                                                                    ...(editSession.draft ?? form),
+                                                                    category: event.target.value,
+                                                                };
+                                                                setForm(next);
+                                                                setEditSession(patchConfigurationObjectDraft(editSession, next));
+                                                            }}
+                                                            className="config-runtime-input mt-1"
+                                                            disabled={!canManage}
+                                                        />
+                                                    </label>
+                                                    <label className="sm:col-span-2">
+                                                        <span className="config-typo-field-label">Description · Location may override</span>
+                                                        <textarea
+                                                            value={editSession.draft?.description ?? form.description}
+                                                            onChange={(event) => {
+                                                                const next = {
+                                                                    ...(editSession.draft ?? form),
+                                                                    description: event.target.value,
+                                                                };
+                                                                setForm(next);
+                                                                setEditSession(patchConfigurationObjectDraft(editSession, next));
+                                                            }}
+                                                            className="config-runtime-input mt-1 min-h-20"
+                                                            disabled={!canManage}
+                                                        />
+                                                    </label>
+                                                    <label>
+                                                        <span className="config-typo-field-label">Minimum audience age</span>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            value={editSession.draft?.minimumAge ?? form.minimumAge}
+                                                            onChange={(event) => {
+                                                                const next = {
+                                                                    ...(editSession.draft ?? form),
+                                                                    minimumAge: event.target.value,
+                                                                };
+                                                                setForm(next);
+                                                                setEditSession(patchConfigurationObjectDraft(editSession, next));
+                                                            }}
+                                                            className="config-runtime-input mt-1"
+                                                            disabled={!canManage}
+                                                        />
+                                                    </label>
+                                                    <label>
+                                                        <span className="config-typo-field-label">Maximum audience age</span>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            value={editSession.draft?.maximumAge ?? form.maximumAge}
+                                                            onChange={(event) => {
+                                                                const next = {
+                                                                    ...(editSession.draft ?? form),
+                                                                    maximumAge: event.target.value,
+                                                                };
+                                                                setForm(next);
+                                                                setEditSession(patchConfigurationObjectDraft(editSession, next));
+                                                            }}
+                                                            className="config-runtime-input mt-1"
+                                                            disabled={!canManage}
+                                                        />
+                                                    </label>
+                                                    <label>
+                                                        <span className="config-typo-field-label">Required resource type</span>
+                                                        <input
+                                                            value={
+                                                                editSession.draft?.requiredResourceType
+                                                                ?? form.requiredResourceType
+                                                            }
+                                                            onChange={(event) => {
+                                                                const next = {
+                                                                    ...(editSession.draft ?? form),
+                                                                    requiredResourceType: event.target.value,
+                                                                };
+                                                                setForm(next);
+                                                                setEditSession(patchConfigurationObjectDraft(editSession, next));
+                                                            }}
+                                                            className="config-runtime-input mt-1"
+                                                            disabled={!canManage}
+                                                        />
+                                                    </label>
+                                                    <label>
+                                                        <span className="config-typo-field-label">Qualification requirements</span>
+                                                        <textarea
+                                                            value={
+                                                                editSession.draft?.qualificationRequirements
+                                                                ?? form.qualificationRequirements
+                                                            }
+                                                            onChange={(event) => {
+                                                                const next = {
+                                                                    ...(editSession.draft ?? form),
+                                                                    qualificationRequirements: event.target.value,
+                                                                };
+                                                                setForm(next);
+                                                                setEditSession(patchConfigurationObjectDraft(editSession, next));
+                                                            }}
+                                                            placeholder="One requirement per line"
+                                                            className="config-runtime-input mt-1 min-h-20"
+                                                            disabled={!canManage}
+                                                        />
+                                                    </label>
+                                                </div>
+                                            }
+                                        />
+                                        {selectedProgram.draft.validationErrors.length > 0 ?
+                                            <ul className="mt-3 list-disc pl-5 text-sm text-red-700">
+                                                {selectedProgram.draft.validationErrors.map((item) => (
+                                                    <li key={item}>{item}</li>
+                                                ))}
+                                            </ul>
+                                        :   null}
+                                        {canManage ?
+                                            <div className="mt-4 flex flex-wrap gap-2">
                                                 <ConfigurationSecondaryButton
-                                                    disabled={working != null || !viewModel.runtime.publication.hasUnpublishedChanges}
+                                                    disabled={
+                                                        working != null
+                                                        || !viewModel.runtime.publication.hasUnpublishedChanges
+                                                    }
                                                     data-testid="program-validate-draft"
                                                     onClick={() =>
                                                         void run("validate", () =>
@@ -726,17 +1286,29 @@ export default function ProgramsPublicationWorkspace(props: {
                                                                     action: "publish",
                                                                     programId: selectedProgram.id,
                                                                 }),
-                                                            { afterSuccess: () => setActiveSection("overview") },
+                                                            {
+                                                                afterSuccess: () => {
+                                                                    if (orgId) {
+                                                                        invalidateProgramsCollection(
+                                                                            orgId,
+                                                                            "program-published",
+                                                                        );
+                                                                    }
+                                                                    navigateSection("overview");
+                                                                },
+                                                            },
                                                         )
                                                     }
                                                 >
                                                     {working === "publish" ? "Publishing…" : "Publish immutable revision"}
                                                 </ConfigurationSecondaryButton>
-                                                </div>
-                                            :   null}
-                                        </ConfigWorkspaceCard>
-                                    </div>
-                                : activeSection === "availability" ?
+                                            </div>
+                                        :   null}
+                                    </ConfigWorkspaceCard>
+                                </div>
+                            :   null}
+                        </>
+                    : activeSection === "availability" ?
                                     <ProgramAvailabilitySection program={selectedProgram} snapshot={snapshot} />
                                 : activeSection === "offerings" ?
                                     <ProgramOfferingsSection
@@ -768,7 +1340,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                     <div className="space-y-4" data-testid="program-publication-runtime">
                                         <ConfigWorkspaceCard
                                             title="Publication"
-                                            description="Validate a working draft, publish an immutable revision, and review delivery evidence."
+                                            description="Publication creates an immutable revision. It does not distribute to Locations."
                                         >
                                             <div className="grid gap-3 sm:grid-cols-3">
                                                 <div className="config-runtime-object-cell">
@@ -791,16 +1363,100 @@ export default function ProgramsPublicationWorkspace(props: {
                                                 </div>
                                             </div>
                                             <div className="mt-4 flex flex-wrap gap-2">
-                                                <ConfigurationSecondaryButton onClick={() => setActiveSection("definition")}>
+                                                <ConfigurationSecondaryButton onClick={() => navigateSection("definition")}>
                                                     Review working draft
+                                                </ConfigurationSecondaryButton>
+                                                <ConfigurationSecondaryButton onClick={() => navigateSection("assignment")}>
+                                                    Add to Locations
                                                 </ConfigurationSecondaryButton>
                                             </div>
                                         </ConfigWorkspaceCard>
+                                        {selectedProgram.revisions.length > 0 ?
+                                            <ConfigWorkspaceCard
+                                                title="Immutable revisions"
+                                                description="Published revisions are never overwritten."
+                                                compact
+                                            >
+                                                <ul className="divide-y divide-alloy-stone/20">
+                                                    {selectedProgram.revisions
+                                                        .slice()
+                                                        .sort((a, b) => b.revisionNumber - a.revisionNumber)
+                                                        .map((revision) => (
+                                                            <li
+                                                                key={revision.id}
+                                                                className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm"
+                                                            >
+                                                                <span className="font-semibold text-alloy-midnight">
+                                                                    Revision {revision.revisionNumber}
+                                                                </span>
+                                                                <span className="text-[11px] text-alloy-midnight/45">
+                                                                    {new Date(revision.publishedAt).toLocaleString()}
+                                                                </span>
+                                                            </li>
+                                                        ))}
+                                                </ul>
+                                            </ConfigWorkspaceCard>
+                                        :   null}
+                                    </div>
+                                : activeSection === "assignment" ?
+                                    <div className="space-y-4" data-testid="program-distribution-concern">
+                                        {selectedProgram && canManage ?
+                                            <ProgramLocationAvailabilityFlow
+                                                entry={{
+                                                    direction: "organization_program",
+                                                    programId: selectedProgram.id,
+                                                    programLabel:
+                                                        selectedProgram.draft?.label
+                                                        ?? selectedProgram.key,
+                                                    publicationReady: Boolean(selectedProgram.latestPublication),
+                                                    publicationId: selectedProgram.latestPublication?.id ?? null,
+                                                    lifecycleStatus: selectedProgram.lifecycleStatus,
+                                                    currentLocationCount: activeAssignmentLocationIds.size,
+                                                }}
+                                                locations={snapshot?.locations ?? []}
+                                                onCancel={() => navigateSection("overview")}
+                                                onDone={async () => {
+                                                    if (orgId) {
+                                                        invalidateProgramsCollection(orgId, "program-make-available");
+                                                        publishConfigurationInvalidation(
+                                                            "locations",
+                                                            "program-make-available",
+                                                        );
+                                                    }
+                                                    await reload({ force: true });
+                                                    navigateSection("assignment");
+                                                }}
+                                            />
+                                        : selectedProgram ?
+                                            <p className="text-sm text-alloy-midnight/55">
+                                                You can review Location availability. Managing availability requires Program configuration permission.
+                                            </p>
+                                        :   null}
+                                        {selectedProgram && canManage ?
+                                            <div className="rounded-lg border border-alloy-forge/10 bg-white px-3 py-3">
+                                                <p className="text-sm font-semibold text-alloy-midnight">
+                                                    Edit Organization definition
+                                                </p>
+                                                <p className="mt-1 text-[11px] text-alloy-midnight/55">
+                                                    Organization-owned fields are edited on the Program definition — not mixed with Location configuration.
+                                                </p>
+                                                <div className="mt-2">
+                                                    <ConfigurationSecondaryButton
+                                                        onClick={() => navigateSection("definition")}
+                                                        data-testid="programs-edit-organization-definition"
+                                                    >
+                                                        Edit Organization definition
+                                                    </ConfigurationSecondaryButton>
+                                                </div>
+                                            </div>
+                                        :   null}
                                         <ConfigDistributionRuntime
                                             runs={viewModel.runs}
                                             revisionLabelByPublicationId={revisionLabelByPublicationId}
                                             locationLabelById={locationLabelById}
-                                            retryingRunId={working?.startsWith("retry:") ? working.slice("retry:".length) : null}
+                                            retryingRunId={
+                                                working?.startsWith("retry:") ? working.slice("retry:".length) : null
+                                            }
                                             onRetry={
                                                 canManage ?
                                                     (runId) =>
@@ -812,115 +1468,6 @@ export default function ProgramsPublicationWorkspace(props: {
                                             testId="program-distribution-runtime"
                                         />
                                     </div>
-                                : activeSection === "assignment" ?
-                                    <ConfigAssignmentRuntime
-                                        posture={viewModel.runtime.assignment}
-                                        assignments={viewModel.assignments}
-                                        activeRevisionId={selectedProgram.latestPublication?.revision.id ?? null}
-                                        activeRevisionLabel={viewModel.runtime.publication.activeRevisionLabel}
-                                        testId="program-assignment-runtime"
-                                        workflow={
-                                            !canManage ? undefined
-                                            : !selectedProgram.latestPublication ?
-                                                <p className="py-4 text-sm text-alloy-midnight/50">
-                                                    Publish this Program before assigning it to Locations.
-                                                </p>
-                                            : availableAssignmentLocations.length === 0 ?
-                                                <p className="py-4 text-sm text-alloy-midnight/50">
-                                                    Every eligible Location is already consuming the active revision.
-                                                </p>
-                                            :   <>
-                                                    <div className="grid gap-2 sm:grid-cols-2">
-                                                        {availableAssignmentLocations.map((location) => (
-                                                            <label
-                                                                key={location.id}
-                                                                className="flex items-center gap-2 rounded-lg border border-alloy-stone/15 px-3 py-2 text-sm"
-                                                            >
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={selectedLocationIds.includes(location.id)}
-                                                                    onChange={(event) =>
-                                                                        setSelectedLocationIds((current) =>
-                                                                            event.target.checked
-                                                                                ? [...current, location.id]
-                                                                                : current.filter((id) => id !== location.id),
-                                                                        )
-                                                                    }
-                                                                />
-                                                                <span>{location.label}</span>
-                                                            </label>
-                                                        ))}
-                                                    </div>
-                                                    <div className="mt-3 flex flex-wrap gap-2">
-                                                        <ConfigurationSecondaryButton
-                                                            disabled={selectedLocationIds.length === 0 || working != null}
-                                                            data-testid="program-preview-delivery"
-                                                            onClick={() =>
-                                                                void run(
-                                                                    "preview",
-                                                                    async () => {
-                                                                        const result = await postAction({
-                                                                            action: "preview",
-                                                                            publicationId: selectedProgram.latestPublication!.id,
-                                                                            targetIds: selectedLocationIds,
-                                                                        });
-                                                                        setPreview((result.preview as ConfigurationTargetPreview[]) ?? []);
-                                                                    },
-                                                                    { reload: false },
-                                                                )
-                                                            }
-                                                        >
-                                                            {working === "preview" ? "Previewing…" : "Preview impact"}
-                                                        </ConfigurationSecondaryButton>
-                                                        <ConfigurationPrimaryButton
-                                                            disabled={!preview || preview.length === 0 || working != null}
-                                                            data-testid="program-assign-delivery"
-                                                            onClick={() =>
-                                                                void run(
-                                                                    "assign",
-                                                                    async () => {
-                                                                        await postAction({
-                                                                            action: "assign",
-                                                                            publicationId: selectedProgram.latestPublication!.id,
-                                                                            targetIds: selectedLocationIds,
-                                                                        });
-                                                                        setPreview(null);
-                                                                    },
-                                                                    { afterSuccess: () => setActiveSection("overview") },
-                                                                )
-                                                            }
-                                                        >
-                                                            {working === "assign" ? "Assigning…" : "Confirm assignment"}
-                                                        </ConfigurationPrimaryButton>
-                                                    </div>
-                                                    {preview ?
-                                                        <div className="mt-4 space-y-2" data-testid="program-delivery-preview">
-                                                            <p className="text-xs font-semibold text-alloy-midnight">
-                                                                Impact preview · {preview.length} Locations
-                                                            </p>
-                                                            {preview.map((target) => (
-                                                                <div
-                                                                    key={target.locationId}
-                                                                    className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.035] p-3"
-                                                                >
-                                                                    <div className="flex justify-between gap-2">
-                                                                        <strong className="text-sm text-alloy-midnight">{target.locationLabel}</strong>
-                                                                        <span className="text-xs text-alloy-midnight/45">
-                                                                            {target.currentRevisionId === target.nextRevisionId ? "Current" : "Update ready"}
-                                                                        </span>
-                                                                    </div>
-                                                                    <ul className="mt-2 space-y-1 text-xs text-alloy-midnight/60">
-                                                                        {target.impacts.map((impact) => (
-                                                                            <li key={`${impact.fieldKey}-${impact.kind}`}>{impact.message}</li>
-                                                                        ))}
-                                                                    </ul>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    :   null}
-                                                </>
-                                        }
-                                    />
                                 : activeSection === "history" ?
                                     <ConfigHistoryTimeline
                                         entries={viewModel.history}
@@ -937,12 +1484,8 @@ export default function ProgramsPublicationWorkspace(props: {
                                         }
                                         testId="program-history-runtime"
                                     />
-                                :   null
-                                }
-                            </ConfigDetailRuntime>
-                        }
-                    </main>
-                </div>
+                                :   null}
+                </ConfigurationObjectWorkspace>
             </ConfigurationShell>
 
             {createOpen && canManage ?
@@ -998,12 +1541,20 @@ export default function ProgramsPublicationWorkspace(props: {
                                                 label: createName,
                                                 key: createKey,
                                             });
-                                            setSelectedProgramId(String(result.programId ?? ""));
+                                            const newId = String(result.programId ?? "").trim();
                                             setCreateName("");
                                             setCreateKey("");
                                             setCreateOpen(false);
+                                            if (orgId) {
+                                                invalidateProgramsCollection(orgId, "program-created", {
+                                                    publishBus: true,
+                                                });
+                                            }
+                                            if (newId) {
+                                                selectProgram(newId, "definition");
+                                            }
                                         },
-                                        { afterSuccess: () => setActiveSection("definition") },
+                                        { reload: true },
                                     )
                                 }
                             >

@@ -1,0 +1,211 @@
+<title>Scheduling — child Focus Panel</title>
+<style>
+  :root{
+    --pine:#00A283;--pine-hover:#009276;--forge:#273F52;--ink:#18273A;--slate:#4b5563;--muted:#59678b;
+    --stone:#F4F6F9;--gold:#DBC078;--gold-dark:#d0ad50;--ember:#BC4300;--blue:#00458C;--page:#EEF2F8;--border:#e5e9ef;
+    --font:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --mid-90:rgba(39,63,82,.90);--mid-70:rgba(39,63,82,.70);--mid-45:rgba(39,63,82,.45);--mid-40:rgba(39,63,82,.40);--mid-35:rgba(39,63,82,.35);--mid-25:rgba(39,63,82,.25);
+    color-scheme:light;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--page);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.45}
+  .tab{font-variant-numeric:tabular-nums} h1,h2,h3,h4{margin:0} button{font-family:inherit;cursor:pointer;border:none;background:none}
+  .frame{max-width:960px;margin:0 auto;padding:22px 18px 48px}
+  .switch{display:flex;gap:6px;margin-bottom:14px;justify-content:center;flex-wrap:wrap}
+  .sw{border:1px solid var(--mid-25);background:#fff;color:var(--slate);font-size:11.5px;font-weight:500;padding:6px 12px;border-radius:999px;transition:all .15s}
+  .sw:hover{border-color:var(--pine);color:var(--pine)} .sw[aria-selected="true"]{border-color:var(--pine);background:rgba(0,162,131,.08);color:var(--pine);font-weight:600}
+  .sw:focus-visible{outline:2px solid var(--pine);outline-offset:2px}
+  /* focus panel surface */
+  .fp{border-radius:14px;background:#fff;border:1px solid var(--mid-25);box-shadow:0 12px 40px rgba(39,63,82,.10);overflow:hidden}
+  .fp-top{height:6px;background:var(--blue)}
+  .fp-hd{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)}
+  .fp-av{width:34px;height:34px;border-radius:999px;background:rgba(0,162,131,.10);color:var(--pine);display:grid;place-items:center;font-size:13px;font-weight:700}
+  .fp-nm{font-size:14px;font-weight:600;color:var(--forge)} .fp-sb{font-size:11px;color:var(--muted)}
+  .fp-mis{margin-left:auto;font-size:10.5px;color:var(--muted);background:var(--stone);border:1px solid var(--border);padding:3px 9px;border-radius:999px}
+  .fp-modes{display:flex;gap:4px;padding:8px 16px 0} .fpm{font-size:10.5px;font-weight:600;color:var(--mid-45);padding:4px 11px;border-radius:999px 999px 0 0} .fpm.on{color:var(--pine);border-bottom:2px solid var(--pine)}
+  .fp-body{padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--stone)}
+  /* card */
+  .card{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .card.sched{border-left:3px solid var(--pine)} .card.sched.warn{border-left-color:var(--ember)} .card.sched.prop{border-left-color:var(--gold-dark)}
+  .card-hd{display:flex;align-items:center;gap:8px;padding:10px 13px 4px} .card-q{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--slate)}
+  .chip{margin-left:auto;font-size:10px;font-weight:600;padding:2px 9px;border-radius:999px;border:1px solid var(--border)}
+  .chip.ok{border-color:rgba(0,162,131,.35);color:var(--pine);background:rgba(0,162,131,.06)} .chip.warn{border-color:rgba(188,67,0,.35);color:var(--ember);background:rgba(188,67,0,.06)} .chip.gold{border-color:rgba(208,173,80,.5);color:var(--gold-dark);background:rgba(219,192,120,.12)} .chip.slate{border-color:var(--border);color:var(--slate)}
+  .mean{padding:2px 13px 2px;font-size:14.5px;font-weight:600;color:var(--forge);line-height:1.3}
+  .sit{padding:2px 13px;font-size:12px;color:var(--slate)} .sit.rec{color:var(--muted)}
+  .next{padding:2px 13px;font-size:11.5px;color:var(--gold-dark);font-weight:500}
+  .sib-hint{padding:4px 13px 0;font-size:11px;color:var(--muted)}
+  .card-ft{display:flex;align-items:center;gap:8px;padding:10px 13px 11px}
+  .bp{display:inline-flex;align-items:center;gap:6px;border-radius:7px;background:var(--pine);padding:7px 13px;font-size:12px;font-weight:600;color:#fff} .bp:hover{background:var(--pine-hover)}
+  .bs{display:inline-flex;align-items:center;gap:6px;border-radius:7px;border:1px solid var(--mid-25);background:#fff;padding:7px 12px;font-size:12px;font-weight:500;color:var(--mid-70)}
+  .cmd-state{margin-left:auto;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em} .cmd-state.rec{color:var(--pine)} .cmd-state.block{color:var(--ember)}
+  /* detail groups (the label-value fix) */
+  .grp{padding:10px 13px;border-top:1px solid #f1f3f6} .grp:first-of-type{border-top:none}
+  .eyebrow{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mid-40);margin-bottom:4px}
+  .val{font-size:13.5px;font-weight:600;color:var(--forge);line-height:1.35} .sub{font-size:11.5px;color:var(--slate);margin-top:1px}
+  .stmt{font-size:12.5px;color:var(--forge);line-height:1.5} .stmt.mut{color:var(--slate)}
+  /* paired rows (tight, content-width) */
+  .paired{display:inline-grid;grid-template-columns:auto auto;column-gap:8px;row-gap:3px;font-size:12px;align-items:baseline}
+  .paired .pl{color:var(--muted)} .paired .pv{color:var(--forge);font-weight:500}
+  /* history */
+  .hist{display:flex;flex-direction:column;gap:0} .hrow{display:flex;gap:10px;align-items:baseline;padding:4px 0;border-bottom:1px solid #f4f6f9;font-size:11.5px} .hrow:last-child{border-bottom:none} .hd{color:var(--muted);flex:0 0 68px} .hv{color:var(--forge)}
+  /* siblings */
+  .sibs{display:flex;flex-direction:column} .sib{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f4f6f9;cursor:pointer} .sib:last-child{border-bottom:none} .sib:hover{background:rgba(0,162,131,.03);border-radius:6px}
+  .sav{width:24px;height:24px;border-radius:999px;background:var(--stone);color:var(--forge);display:grid;place-items:center;font-size:9.5px;font-weight:600}
+  .snm{font-size:12.5px;font-weight:500;color:var(--forge)} .ssb{font-size:11px;color:var(--muted)} .schev{margin-left:auto;color:var(--mid-25)} .sstat{margin-left:auto;font-size:10px;color:var(--gold-dark);font-weight:600}
+  /* compare */
+  .compare{display:grid;grid-template-columns:1fr 22px 1fr;gap:8px;align-items:stretch;padding:10px 13px}
+  .cs{border-radius:9px;padding:9px 10px;border:1px solid var(--border)} .cs.cur{background:var(--stone)} .cs.prop{background:rgba(219,192,120,.08);border-color:rgba(208,173,80,.4)}
+  .cse{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid-40)} .csv{font-size:13px;font-weight:600;color:var(--forge);margin-top:3px} .csd{font-size:11px;margin-top:2px} .cs.cur .csd{color:var(--ember)} .cs.prop .csd{color:var(--pine)}
+  .carrow{display:grid;place-items:center;color:var(--muted)}
+  /* related cards (composition) */
+  .minicard{background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 12px} .minicard.en{border-left:3px solid var(--blue)} .minicard.at{border-left:3px solid var(--slate)} .minicard.bl{border-left:3px solid var(--gold-dark)}
+  .mc-q{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mid-40)} .mc-v{font-size:12.5px;font-weight:600;color:var(--forge);margin-top:2px} .mc-s{font-size:11px;color:var(--slate);margin-top:1px}
+  /* command surface */
+  .cmd{background:#fff;border:1px solid var(--mid-25);border-radius:12px;box-shadow:0 8px 30px rgba(39,63,82,.12);overflow:hidden}
+  .cmd-hd{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--border)} .cmd-t{font-size:13px;font-weight:600;color:var(--forge)} .cmd-x{margin-left:auto;color:var(--mid-40);font-size:12px}
+  .cmd-step{padding:11px 14px;border-bottom:1px solid #f1f3f6} .cmd-step:last-of-type{border-bottom:none}
+  .cmd-l{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid-40);margin-bottom:6px}
+  .field{display:flex;align-items:center;gap:8px;border:1px solid var(--mid-25);border-radius:8px;padding:8px 11px;font-size:12.5px;color:var(--forge);background:#fff} .field .fv{font-weight:600} .field .fx{margin-left:auto;color:var(--mid-40);font-size:11px}
+  .radioline{display:flex;gap:8px;align-items:center;padding:6px 0;font-size:12.5px} .rr{width:14px;height:14px;border-radius:50%;border:2px solid var(--mid-25);position:relative} .radioline.on .rr{border-color:var(--pine)} .radioline.on .rr::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--pine)} .radioline .rl{font-weight:600;color:var(--forge)} .radioline .rs{color:var(--muted);font-size:11px}
+  .cmd-ft{display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--stone)} .cmd-note{font-size:10.5px;color:var(--muted)}
+  /* bad vs good */
+  .vs{display:grid;grid-template-columns:1fr 1fr;gap:14px} @media (max-width:640px){.vs{grid-template-columns:1fr}}
+  .vslab{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px} .vslab.bad{color:var(--ember)} .vslab.good{color:var(--pine)}
+  .demo{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 13px}
+  .badrow{display:flex;align-items:baseline;font-size:12.5px;padding:6px 0;color:var(--forge)} .badrow .bl{color:var(--muted)} .badrow .dots{flex:1;border-bottom:1px dotted var(--mid-25);margin:0 6px;transform:translateY(-3px)} .badrow .bv{font-weight:600}
+  .success{display:flex;flex-direction:column;align-items:center;gap:8px;padding:22px;text-align:center} .ck{width:42px;height:42px;border-radius:999px;background:rgba(0,162,131,.12);color:var(--pine);display:grid;place-items:center;font-size:20px} .success h3{font-size:14px;color:var(--forge)} .success p{font-size:11.5px;color:var(--muted)}
+  .screen{display:none}.screen.on{display:block}
+  .caption-lite{font-size:11px;color:var(--muted);text-align:center;margin-top:10px}
+</style>
+
+<div class="frame">
+  <div class="switch" role="tablist" aria-label="Cards">
+    <button class="sw" role="tab" aria-selected="true" data-s="summary">Summary states</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="detail">Detail card</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="siblings">Siblings</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="labels">Label &amp; value</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="compare">Proposed vs current</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="command">Change schedule</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="panel">Full panel</button>
+  </div>
+  <div id="stage"></div>
+</div>
+
+<script>
+(function(){
+  function panel(sub,mis,body){
+    return '<div class="fp"><div class="fp-top"></div>'
+      +'<div class="fp-hd"><div class="fp-av">ER</div><div><div class="fp-nm">Ethan Rivera</div><div class="fp-sb">'+sub+'</div></div><div class="fp-mis">'+mis+'</div></div>'
+      +'<div class="fp-modes"><span class="fpm on">Work</span><span class="fpm">Activity</span></div>'
+      +'<div class="fp-body">'+body+'</div></div>';
+  }
+  function sumcard(cls,chip,chipcls,mean,sit,sitcls,next,sibhint,prim,sec,primstate){
+    return '<div class="card sched '+cls+'">'
+      +'<div class="card-hd"><span class="card-q">Schedule</span><span class="chip '+chipcls+'">'+chip+'</span></div>'
+      +'<div class="mean">'+mean+'</div>'
+      +'<div class="sit '+(sitcls||'')+'">'+sit+'</div>'
+      +(next?'<div class="next">'+next+'</div>':'')
+      +(sibhint?'<div class="sib-hint">'+sibhint+'</div>':'')
+      +'<div class="card-ft"><button class="bp">'+prim+'</button>'+(sec?'<button class="bs">'+sec+'</button>':'')+(primstate?'<span class="cmd-state '+primstate[1]+'">'+primstate[0]+'</span>':'')+'</div>'
+      +'</div>';
+  }
+
+  var SUMMARY='<div style="display:flex;flex-direction:column;gap:10px;max-width:420px;margin:0 auto">'
+    +sumcard('','Healthy','ok','Sunshine · Mon–Fri · begins Jul 28','Healthy · In ratio · No additional staff','',null,null,'View schedule','Change schedule')
+    +sumcard('','Needs a room','gold','Needs a room · Mon–Fri · begins Jul 28','Two rooms fit. Sunshine preserves cohort continuity.','rec',null,null,'Place Ethan',null,['Recommended','rec'])
+    +sumcard('warn','Conflict','warn','Sunflower · Mon–Fri','Thursday will exceed ratio when Ava starts.','',null,null,'Fix Thursday',null)
+    +sumcard('prop','Proposed','gold','Proposed: Sunshine · Mon–Fri · begins Jul 28','9 of 11 · In ratio · No new staff','',null,null,'Review change','Discard')
+    +sumcard('','Change scheduled','slate','Sunshine · Mon–Fri','Committed.','',' Change scheduled for Aug 4 → Rainbow',null,'View schedule',null)
+    +sumcard('','Ended','slate','Ended Jun 30 · was Sunshine · Mon–Fri','No current schedule.','mut',null,null,'Create schedule',null)
+    +sumcard('','Staffing not connected','gold','Sunshine · Mon–Fri · begins Jul 28','In ratio · staffing not connected','mut',null,null,'View schedule',null)
+    +'</div><div class="caption-lite">Seven states · chip → meaning line → situation → next action. Scannable in five seconds; never a field grid.</div>';
+
+  var DETAIL_BODY=''
+    +'<div class="card sched">'
+    +'<div class="card-hd"><span class="card-q">Schedule</span><span class="chip ok">Healthy</span></div>'
+    +'<div class="grp"><div class="eyebrow">Placement</div><div class="val">Sunshine</div><div class="sub">Toddler · Maple Street</div></div>'
+    +'<div class="grp"><div class="eyebrow">Weekly schedule</div><div class="val">Monday–Friday</div><div class="sub">Effective Jul 28 · no end date</div></div>'
+    +'<div class="grp"><div class="eyebrow">Operational health</div><div class="stmt">In ratio · 9 of 11<br>No additional staff<br>Projected tuition $980 / month</div></div>'
+    +'<div class="grp"><div class="eyebrow">Expected attendance</div><div class="stmt mut">Mon · Tue · Wed · Thu · Fri — begins Jul 28</div></div>'
+    +'<div class="grp"><div class="eyebrow">Related children</div><div class="sibs">'
+    +'<div class="sib"><span class="sav">AV</span><div><div class="snm">Ava</div><div class="ssb">Rainbow · Tue/Thu · Maple St</div></div><span class="schev">›</span></div>'
+    +'<div class="sib"><span class="sav">NO</span><div><div class="snm">Noah</div><div class="ssb">Sunshine · Mon–Fri · Maple St</div></div><span class="schev">›</span></div>'
+    +'</div></div>'
+    +'<div class="grp"><div class="eyebrow">Schedule history</div><div class="hist">'
+    +'<div class="hrow"><span class="hd">Jul 28</span><span class="hv">Scheduled Mon–Fri · Sunshine (current)</span></div>'
+    +'<div class="hrow"><span class="hd">Jul 14</span><span class="hv">Placed · Sunshine</span></div>'
+    +'</div></div>'
+    +'<div class="card-ft"><button class="bp">Change schedule</button><button class="bs">Change placement</button><button class="bs">End schedule</button></div>'
+    +'</div>';
+  var DETAIL=panel('Toddler · Maple Street','Review schedule',DETAIL_BODY)
+    +'<div class="caption-lite">Compact grouped rows — label and value stay adjacent. Read-first; actions are configured commands.</div>';
+
+  var SIB_BODY=''
+    +'<div class="card sched"><div class="card-hd"><span class="card-q">Schedule</span><span class="chip ok">Healthy</span></div>'
+    +'<div class="mean">Sunshine · Mon–Fri · begins Jul 28</div><div class="sit">Healthy · In ratio · No additional staff</div>'
+    +'<div class="card-ft"><button class="bp">View schedule</button><button class="bs">Change schedule</button></div></div>'
+    +'<div class="card"><div class="card-hd"><span class="card-q">Related children · Rivera household</span></div>'
+    +'<div class="grp" style="border-top:none"><div class="sibs">'
+    +'<div class="sib"><span class="sav">AV</span><div><div class="snm">Ava</div><div class="ssb">Rainbow · Tue/Thu · Maple St</div></div><span class="schev">Open ›</span></div>'
+    +'<div class="sib"><span class="sav">NO</span><div><div class="snm">Noah</div><div class="ssb">Sunshine · Mon–Fri · Maple St</div></div><span class="schev">Open ›</span></div>'
+    +'<div class="sib"><span class="sav">MI</span><div><div class="snm">Mia</div><div class="ssb">Oak Ave</div></div><span class="sstat">Needs a room</span></div>'
+    +'</div></div></div>';
+  var SIBLINGS=panel('Toddler · Maple Street','Review schedule',SIB_BODY)
+    +'<div class="caption-lite">Active child stays primary. Siblings are quiet context; a row opens that child\'s card in the same panel and Back returns.</div>';
+
+  var LABELS='<div class="vs">'
+    +'<div><div class="vslab bad">Weak association</div><div class="demo">'
+    +'<div class="badrow"><span class="bl">Room</span><span class="dots"></span><span class="bv">Sunshine</span></div>'
+    +'<div class="badrow"><span class="bl">Program</span><span class="dots"></span><span class="bv">Toddler</span></div>'
+    +'<div class="badrow"><span class="bl">Schedule</span><span class="dots"></span><span class="bv">Mon–Fri</span></div>'
+    +'<div class="badrow"><span class="bl">Effective</span><span class="dots"></span><span class="bv">Jul 28</span></div>'
+    +'<div class="badrow"><span class="bl">Ratio</span><span class="dots"></span><span class="bv">9 of 11</span></div>'
+    +'</div></div>'
+    +'<div><div class="vslab good">Meaning-first &amp; grouped</div><div class="demo">'
+    +'<div class="grp" style="border-top:none;padding:6px 0"><div class="eyebrow">Placement</div><div class="val">Sunshine</div><div class="sub">Toddler · Maple Street</div></div>'
+    +'<div class="grp" style="padding:6px 0"><div class="eyebrow">Schedule</div><div class="val">Monday–Friday</div><div class="sub">Effective Jul 28</div></div>'
+    +'<div class="grp" style="padding:6px 0"><div class="eyebrow">Operational health</div><div class="stmt">In ratio · 9 of 11<br>No additional staff</div></div>'
+    +'</div></div>'
+    +'</div>'
+    +'<div class="caption-lite">Left: value drifts from its label across empty space (settings-form feel). Right: adjacent, meaning-first, grouped — the operator reads an object, not a row.</div>';
+
+  var COMPARE_BODY='<div class="card sched prop"><div class="card-hd"><span class="card-q">Schedule</span><span class="chip gold">Proposed</span></div>'
+    +'<div class="compare"><div class="cs cur"><div class="cse">Current · committed</div><div class="csv">Sunflower · Mon–Fri</div><div class="csd">12 of 11 · over ratio</div></div><div class="carrow">→</div><div class="cs prop"><div class="cse">Proposed</div><div class="csv">Sunshine · Mon–Fri</div><div class="csd">9 of 11 · in ratio</div></div></div>'
+    +'<div class="grp"><div class="stmt mut">No new staff · tuition unchanged · effective Jul 28 · not committed yet</div></div>'
+    +'<div class="card-ft"><button class="bp">Commit change</button><button class="bs">Discard</button></div></div>';
+  var COMPARE=panel('Toddler · Maple Street','Review proposed change',COMPARE_BODY)
+    +'<div class="caption-lite">The one place two columns are used: comparing current committed vs a proposed change. Proposed is badged and write-free until commit.</div>';
+
+  var COMMAND=panel('Toddler · Maple Street','Change schedule',
+    '<div class="card sched" style="opacity:.5"><div class="card-hd"><span class="card-q">Schedule</span><span class="chip ok">Healthy</span></div><div class="mean">Sunshine · Mon–Fri · begins Jul 28</div></div>'
+    +'<div class="cmd">'
+    +'<div class="cmd-hd"><span class="cmd-t">Change schedule · Ethan</span><span class="cmd-x">✕</span></div>'
+    +'<div class="cmd-step"><div class="cmd-l">New pattern</div>'
+    +'<div class="radioline on"><span class="rr"></span><span class="rl">Mon–Thu</span><span class="rs">drops Friday</span></div>'
+    +'<div class="radioline"><span class="rr"></span><span class="rl">Tue/Thu</span><span class="rs">two days</span></div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Effective from</div><div class="field"><span class="fv">Aug 4</span><span class="fx">change ▾</span></div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">What changes</div><div class="compare" style="padding:0"><div class="cs cur"><div class="cse">Now</div><div class="csv tab">9 of 11</div><div class="csd" style="color:var(--slate)">Fri included</div></div><div class="carrow">→</div><div class="cs prop"><div class="cse">From Aug 4</div><div class="csv tab">7 of 11</div><div class="csd">Fri freed</div></div></div><div class="stmt mut" style="margin-top:6px">In ratio all days · no new staff · tuition −$180/mo · affects Fridays from Aug 4</div></div>'
+    +'<div class="cmd-ft"><span class="cmd-note">Takes effect Aug 4. This week is unchanged; history is kept.</span><button class="bp" style="margin-left:auto">Commit change</button></div>'
+    +'</div>')
+    +'<div class="caption-lite">Editing runs in a focused command inside the same panel: choose the change → see the preview → commit. The card is read-first; changes are recorded and history is kept.</div>';
+
+  var PANEL_BODY=''
+    +'<div class="card sched warn"><div class="card-hd"><span class="card-q">Schedule</span><span class="chip warn">Conflict</span></div>'
+    +'<div class="mean">Sunflower · Mon–Fri</div><div class="sit">Thursday will exceed ratio when Ava starts.</div>'
+    +'<div class="card-ft"><button class="bp">Fix Thursday</button><button class="bs">View schedule</button><span class="cmd-state rec">Recommended</span></div></div>'
+    +'<div class="minicard en"><div class="mc-q">Enrollment</div><div class="mc-v">Agreement executed</div><div class="mc-s">Toddler · full week · from Jul 28</div></div>'
+    +'<div class="minicard at"><div class="mc-q">Attendance</div><div class="mc-v">Begins once scheduled</div><div class="mc-s">expected from the committed schedule</div></div>'
+    +'<div class="minicard bl"><div class="mc-q">Billing preview</div><div class="mc-v">$980 / month projected</div><div class="mc-s">from scheduled reality · no charge posted</div></div>';
+  var PANEL=panel('Toddler · Maple Street','Fix conflict',PANEL_BODY)
+    +'<div class="caption-lite">One subject — the child — in Work mode: the Scheduling card leads, with Enrollment, Attendance and Billing shown alongside for context.</div>';
+
+  var S={summary:SUMMARY,detail:DETAIL,siblings:SIBLINGS,labels:LABELS,compare:COMPARE,command:COMMAND,panel:PANEL};
+  var stage=document.getElementById('stage');
+  function show(k){stage.innerHTML=S[k];}
+  document.querySelectorAll('.sw').forEach(function(b){b.addEventListener('click',function(){
+    document.querySelectorAll('.sw').forEach(function(x){x.setAttribute('aria-selected',x.dataset.s===b.dataset.s?'true':'false');});
+    show(b.dataset.s);
+  });});
+  show('summary');
+})();
+</script>

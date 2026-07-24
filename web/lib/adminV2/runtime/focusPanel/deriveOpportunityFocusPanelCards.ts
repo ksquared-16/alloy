@@ -451,6 +451,55 @@ export function buildChildrenCardModel(record: Record<string, unknown>): FocusPa
     });
 }
 
+function schedulingCollectionItems(record: Record<string, unknown>): {
+    items: FocusPanelCollectionItem[];
+    overflowCount: number;
+} {
+    const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
+    const visible = rows.slice(0, 3).map((row) => {
+        const firstName = (row.display_name ?? "Child").split(/\s+/)[0] ?? "Child";
+        // Operational schedule assignments do not exist until enrollment/Registration;
+        // at the case-grain lead stage each child reads "Needs a room" (honest state,
+        // never a fabricated schedule). Room · pattern display arrives with the
+        // scheduling projection once the child is enrolled.
+        return { label: firstName, status: "Needs a room" };
+    });
+    return { items: visible, overflowCount: Math.max(0, rows.length - 3) };
+}
+
+/**
+ * Canonical Scheduling card model — case-grain, per the Children pattern. Shows the
+ * family's children and their scheduling state; the Create-schedule command
+ * (configured) is launched from the card action. Room · weekly pattern · dates are
+ * set at Registration once enrollment creates the operational agreement.
+ */
+export function buildSchedulingCardModel(record: Record<string, unknown>): FocusPanelCardModel {
+    const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
+    const count = rows.length;
+    const collection = schedulingCollectionItems(record);
+    const insight =
+        count === 0
+            ? "No children to schedule"
+            : count === 1
+              ? "1 child · schedule not set"
+              : `${count} children · schedule not set`;
+    void collection;
+    return card({
+        key: "scheduling",
+        title: "Scheduling",
+        insight,
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        statusChip: null,
+        statusTone: "neutral",
+        // The card component renders per-child status + opens the work surface on
+        // click; no card-level primary action or collection payload.
+        primaryAction: null,
+        secondaryInsight: count > 0 ? "Open a child to build their schedule" : null,
+    });
+}
+
 function buildCardModels(input: {
     displayVm: OpportunityDrawerViewModel;
     record: Record<string, unknown>;
@@ -575,6 +624,7 @@ function buildCardModels(input: {
 
     map.set("household", buildHouseholdCardModel(record, title));
     map.set("children", buildChildrenCardModel(record));
+    map.set("scheduling", buildSchedulingCardModel(record));
 
     map.set(
         "communications",

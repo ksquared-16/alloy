@@ -22,14 +22,14 @@ describe("Settings index IA — Configuration Runtime domains", () => {
 
     it("Processes tile lives under Operations with editable mode", () => {
         const operations = CONFIGURATION_WORKSPACE_DOMAINS.find((d) => d.id === "operations");
-        const processes = operations?.items.find((i) => i.href === "/settings/processes");
+        const processes = operations?.items.find((i) => i.href === "/organization/processes");
         expect(processes?.label).toBe("Processes");
         expect(processes?.emphasis).toBe(true);
     });
 
-    it("Surfaces tile lives under Experience as Layouts", () => {
+    it("Surfaces tile lives under Experience as Surfaces", () => {
         const experience = CONFIGURATION_WORKSPACE_DOMAINS.find((d) => d.id === "experience");
-        expect(experience?.items.some((i) => i.href === "/settings/surfaces" && i.label === "Surfaces")).toBe(true);
+        expect(experience?.items.some((i) => i.href === "/organization/surfaces" && i.label === "Surfaces")).toBe(true);
     });
 
     it("journey guide links to Processes not Business Processes", () => {

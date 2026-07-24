@@ -62,28 +62,38 @@ export async function PATCH(
     }
 
     if (body.attendance_type !== undefined) {
-        // Block attendance_type change if any variant has rates
         const supabase = createAdminClient();
-        const { count } = await supabase
-            .from("commercial_tuition_rates")
-            .select("id", { count: "exact", head: true })
-            .in(
-                "variant_id",
-                (
-                    await supabase
-                        .from("program_offering_variants")
-                        .select("id")
-                        .eq("offering_id", id)
-                        .eq("org_id", ctx.orgId)
-                ).data?.map((v: { id: string }) => v.id) ?? [],
-            );
-        if (count && count > 0) {
-            return NextResponse.json(
-                { error: "Cannot change attendance type — variants have rates. Remove rates first." },
-                { status: 409 },
-            );
+        const { data: current } = await supabase
+            .from("program_offerings")
+            .select("attendance_type")
+            .eq("id", id)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        const nextAttendance = String(body.attendance_type);
+        const currentAttendance = current ? String((current as { attendance_type?: string }).attendance_type ?? "") : "";
+        // Idempotent: same care format is not a change — do not block metadata/location saves.
+        if (currentAttendance !== nextAttendance) {
+            const { count } = await supabase
+                .from("commercial_tuition_rates")
+                .select("id", { count: "exact", head: true })
+                .in(
+                    "variant_id",
+                    (
+                        await supabase
+                            .from("program_offering_variants")
+                            .select("id")
+                            .eq("offering_id", id)
+                            .eq("org_id", ctx.orgId)
+                    ).data?.map((v: { id: string }) => v.id) ?? [],
+                );
+            if (count && count > 0) {
+                return NextResponse.json(
+                    { error: "Cannot change attendance type — variants have rates. Remove rates first." },
+                    { status: 409 },
+                );
+            }
+            patch.attendance_type = body.attendance_type;
         }
-        patch.attendance_type = body.attendance_type;
     }
 
     if (Object.keys(patch).length <= 1) {

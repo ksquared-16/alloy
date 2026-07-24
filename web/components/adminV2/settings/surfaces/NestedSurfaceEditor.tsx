@@ -14,6 +14,7 @@ import NestedSurfaceRuntimeCanvas from "@/components/adminV2/settings/surfaces/c
 import NestedSurfaceGroupInspector from "@/components/adminV2/settings/surfaces/composer/NestedSurfaceGroupInspector";
 import SurfaceFieldInspector from "@/components/adminV2/settings/surfaces/composer/SurfaceFieldInspector";
 import SurfaceItemLibraryPanel from "@/components/adminV2/settings/surfaces/composer/SurfaceItemLibraryPanel";
+import { SurfaceBuilderInspectorRail } from "@/components/adminV2/settings/surfaces/SurfaceBuilderInspectorRail";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 import {
     addFieldToNestedGroup,
@@ -384,8 +385,13 @@ export default function NestedSurfaceEditor({
                         />
                     </div>
 
+                    <SurfaceBuilderInspectorRail
+                        widthClassName="w-[360px]"
+                        testId="nested-surface-inspector-rail"
+                        aria-label="Nested Surface configuration"
+                    >
                     <div
-                        className="w-[360px] shrink-0 overflow-y-auto"
+                        className="h-full overflow-y-auto"
                         data-surface-inspector="true"
                         {...{ [SURFACE_COMPOSER_INSPECTOR_ATTR]: true }}
                     >
@@ -607,6 +613,7 @@ export default function NestedSurfaceEditor({
                             </div>
                         }
                     </div>
+                    </SurfaceBuilderInspectorRail>
                 </div>
             }
 

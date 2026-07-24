@@ -9,8 +9,10 @@
 import {
     adminSettingsSubpathHref,
     CANONICAL_ORGANIZATION_BASE,
+    CANONICAL_ORGANIZATION_DATA_MODEL_HREF,
     CANONICAL_SETTINGS_BASE,
 } from "@/lib/admin/canonicalAdminRoutes";
+import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
 
 const settings = adminSettingsSubpathHref;
 
@@ -73,7 +75,7 @@ export const CONFIGURATION_JOURNEY_STEPS = [
         step: 2,
         label: "Data Model",
         summary: "Fields and statuses define operator vocabulary.",
-        href: settings("fields"),
+        href: CANONICAL_ORGANIZATION_DATA_MODEL_HREF,
     },
     {
         step: 3,
@@ -96,9 +98,9 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
         description: "Who uses the system and where.",
         items: [
             {
-                href: settings("locations"),
-                label: "Locations",
-                description: "Sites, Programs offered, delivery resources, and local schedules.",
+                href: "/organization/programs-locations",
+                label: "Programs & Locations",
+                description: "Reusable services and the places that deliver them.",
             },
             {
                 href: settings("users-roles"),
@@ -124,28 +126,28 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
         description: "Entities, fields, relationships, and runtime signals.",
         items: [
             {
-                href: settings("fields"),
+                href: CANONICAL_ORGANIZATION_DATA_MODEL_HREF,
                 label: "Data Model",
                 description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.fieldsCanonical,
                 emphasis: true,
             },
             {
-                href: settings("statuses"),
+                href: dataModelSectionHref("statuses"),
                 label: "Statuses",
                 description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.statusesCanonical,
             },
             {
-                href: settings("option-sets"),
+                href: dataModelSectionHref("option-sets"),
                 label: "Option sets",
                 description: "Static and reference-backed dropdown vocabulary for fields.",
             },
             {
-                href: settings("relationships"),
+                href: dataModelSectionHref("relationships"),
                 label: "Relationships",
                 description: "Person and family relationship types.",
             },
             {
-                href: settings("entity-labels"),
+                href: dataModelSectionHref("entities"),
                 label: "Record labels",
                 description: "Singular names for record types.",
                 advanced: true,
@@ -213,13 +215,13 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
     },
     {
         id: "commercial",
-        label: "Programs",
-        description: "Reusable services and their organization defaults.",
+        label: "Business",
+        description: "Business configuration modules.",
         items: [
             {
-                href: "/organization/programs",
-                label: "Programs",
-                description: "Service catalog, categories, eligibility, requirements, and defaults.",
+                href: "/organization/financials",
+                label: "Financials",
+                description: "Tuition, fees, catalog, policies, accounting, and commercial simulation.",
             },
         ],
     },

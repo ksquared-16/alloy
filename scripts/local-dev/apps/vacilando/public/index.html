@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vacilando Runtime — Control Plane</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="g-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.2 5.2l1.7 1.7M17.1 17.1l1.7 1.7M18.8 5.2l-1.7 1.7M6.9 17.1l-1.7 1.7"/></symbol>
+  <symbol id="g-cactus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 21v-9M12 12V7a2.5 2.5 0 0 1 5 0v2M12 14V12a2.5 2.5 0 0 0-5 0v1M9 21h6"/></symbol>
+  <symbol id="g-mountain" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 19l6-11 4 7 2-3 6 7z"/></symbol>
+  <symbol id="g-wave" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M2 9c2.2 0 2.2 2.4 4.5 2.4S8.7 9 11 9s2.2 2.4 4.5 2.4S17.7 9 20 9M2 15c2.2 0 2.2 2.4 4.5 2.4S8.7 15 11 15s2.2 2.4 4.5 2.4S17.7 15 20 15"/></symbol>
+  <symbol id="g-leaf" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M5 19c9 1 14-4 14-13 0 0-11-2-13 5-.8 3 .7 5.6 3 6.5M5 19c1.8-4 4-6 7-7.5"/></symbol>
+  <symbol id="g-bus" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="11" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M3.5 11h17M9 5v6"/><circle cx="7.5" cy="18" r="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="16.5" cy="18" r="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="g-ruler" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M4 20L20 4M4 20h16V4"/><path stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M9 20v-3M14 20v-6M9 9h3M9 14h6"/></symbol>
+  <symbol id="g-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></symbol>
+  <symbol id="i-sprints" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 6h16M4 12h16M4 18h10"/></symbol>
+  <symbol id="i-workers" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M3.5 19c.6-3 3-4.5 5.5-4.5S13.9 16 14.5 19M16 6.2a3 3 0 0 1 0 5.6"/></symbol>
+  <symbol id="i-repo" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 3v13m0 5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 0v3a4 4 0 0 1-4 4H8"/></symbol>
+  <symbol id="i-approvals" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 12.5l5 5 11-11"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3 8 4-16 3 8h4"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
+</defs></svg>
+
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><div class="word">Vacilando<b>OS</b></div><div class="sub">Engineering Operating System</div></div>
+    <nav class="nav" id="nav">
+      <a data-route="director"><svg class="ico"><use href="#i-home"/></svg>Director</a>
+      <a data-route="command"><svg class="ico"><use href="#i-home"/></svg>Command Center<span class="badge" id="nb-needs">0</span></a>
+      <a data-route="history"><svg class="ico"><use href="#i-activity"/></svg>Work History</a>
+      <a data-route="policies"><svg class="ico"><use href="#i-approvals"/></svg>Policies</a>
+      <a data-route="trust"><svg class="ico"><use href="#i-approvals"/></svg>Runtime Trust</a>
+      <a data-route="settings"><svg class="ico"><use href="#i-repo"/></svg>Settings</a>
+    </nav>
+    <div class="railcap" id="railcap"></div>
+    <div class="nav-sep"></div>
+    <div class="desert">
+      <svg viewBox="0 0 212 104" width="100%" height="100%" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#173f2a"/><stop offset="1" stop-color="#c8794a"/></linearGradient>
+        <linearGradient id="d1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c06a3f"/><stop offset="1" stop-color="#a4512d"/></linearGradient></defs>
+        <rect width="212" height="104" fill="url(#sky)"/><circle cx="158" cy="46" r="20" fill="#f0b878" opacity=".92"/>
+        <path d="M0 74 Q54 52 108 68 T212 64 V104 H0 Z" fill="url(#d1)"/><path d="M0 90 Q64 72 128 86 T212 82 V104 H0 Z" fill="#8a4527"/>
+        <g fill="#14311f"><rect x="36" y="56" width="3.4" height="34" rx="2"/><path d="M37.7 58 q-14 -8 -23 -4 q11 -1 23 4 M37.7 58 q14 -8 23 -4 q-11 -1 -23 4 M37.7 57 q-7 -13 -18 -15 q9 5 18 15 M37.7 57 q7 -13 18 -15 q-9 5 -18 15"/></g>
+      </svg>
+    </div>
+    <div class="ruser"><div class="av">A</div><div><div class="nm">Admin</div><div class="rl">Vacilando</div></div></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="crumb" id="crumb">Command Center</div>
+      <div class="spacer"></div>
+      <div class="search">Search…</div>
+      <button class="refreshbtn" id="refresh-btn" title="Recompute the projection from authoritative sources">↻ Refresh</button>
+      <span class="livepill" id="livepill"><span class="d"></span><span id="live-label">…</span></span>
+      <span class="gen" id="gen"></span>
+    </div>
+    <div class="view" id="view"></div>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

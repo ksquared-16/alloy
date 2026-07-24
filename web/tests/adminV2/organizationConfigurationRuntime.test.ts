@@ -17,8 +17,14 @@ describe("Organization Configuration Runtime", () => {
         expect(organization?.items[0]?.label).toBe("Locations");
         expect(organization?.items.map((item) => item.label)).not.toContain("Organization settings");
         expect(CONFIGURATION_MODE_NAV_GROUPS.flatMap((group) => group.items).find(
+            (item) => item.href === "/organization/programs",
+        )).toBeUndefined();
+        expect(CONFIGURATION_MODE_NAV_GROUPS.flatMap((group) => group.items).find(
+            (item) => item.href === "/organization/financials",
+        )?.label).toBe("Financials");
+        expect(CONFIGURATION_MODE_NAV_GROUPS.flatMap((group) => group.items).find(
             (item) => item.href === "/settings/commercial",
-        )?.label).toBe("Programs");
+        )).toBeUndefined();
         expect(read("next.config.ts")).toContain('{ source: "/organization", destination: "/adminV2/settings/organization" }');
         const sidebar = read("app/adminV2/components/Sidebar.tsx");
         expect(sidebar).toContain('title="Organization"');

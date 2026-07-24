@@ -34,10 +34,22 @@ describe("Configuration Runtime operator issues", () => {
         expect(result.status).toBe(status);
     });
 
-    it("accepts an operator-safe issue returned by an API", () => {
-        const issue = classifyConfigurationRuntimeIssue(new Error("Forbidden"), {
+    it("does not treat an empty successful payload as not_initialized", () => {
+        const result = classifyConfigurationRuntimeIssue(new Error(""), {
             domainLabel: "Programs",
-        }).issue;
-        expect(readConfigurationRuntimeIssue(issue, "Programs")).toEqual(issue);
+        });
+        expect(result.issue.code).not.toBe("not_initialized");
+    });
+
+    it("keeps ordinary failures distinct from missing platform capability", () => {
+        const failed = classifyConfigurationRuntimeIssue(new Error("Load Programs: timeout"), {
+            domainLabel: "Programs",
+        });
+        expect(failed.issue.code).not.toBe("not_initialized");
+        const missing = classifyConfigurationRuntimeIssue(
+            new Error("Could not find the table 'public.programs' in the schema cache"),
+            { domainLabel: "Programs" },
+        );
+        expect(missing.issue.code).toBe("not_initialized");
     });
 });

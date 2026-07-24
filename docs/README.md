@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-13
+last_reviewed: 2026-07-24
 supersedes: []
 ---
 
@@ -40,6 +40,8 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 **Runtime Realization — the governing Runtime corpus (July 2026):** The Runtime's constitutional authority. **`platform/runtime/runtime-realization-architecture.md`** is the **Alloy Operating System Constitution** (canonical) — read it first. The **Kernel** (`platform/runtime/alloy-runtime-kernel.md`) defines the four runtime authorities **K1 Attention · K2 Provisioning · K3 Focus · K4 Instrumentation**; the **Engineering Specification** (`platform/runtime/runtime-realization-engineering-specification.md`) expresses K1–K4 as buildable structure; the **Implementation Authorization Package** (`platform/runtime/runtime-implementation-authorization.md`) carries the **ratified Work Unit contracts** — Operational (U-O1…U-O7), Preparation (U-P1…U-P7), Retention (U-R1…U-R8), Settlement (U-S1…U-S9) — the operator budgets, and the D1–D7 sequence. Provenance for the Constitution's ratification is **`platform/runtime/runtime-constitution-ratification-review.md`**. Product semantics are **not** owned here: the Runtime expresses **Record of Truth / Record of Attention / Context Frame** as defined in **`platform/operator/canonical-interaction-model.md`**.
 
 **Operational Expectations — two-ledger architecture (frozen, July 2026):** The platform's authored operational truth is **two ledgers** — **Operational Facts** (observed) and **Operational Expectations** (intended) — with everything else (Judgment, Gap, Projection, Scheduling, Forecasting, Billing) **derived**. Architecture is frozen; implementation is sequenced P0–P8. Frozen corpus: **`platform/core/operational-expectations-system-design.md`** (system design + §0.5 reconciliation), **`platform/milestones/operational-expectations-architecture-closeout.md`** (freeze), **`platform/milestones/operational-expectations-doctrine-convergence.md`** (terminology sweep), **`platform/milestones/operational-expectations-engineering-realization.md`** (the implementation contract), **`platform/milestones/operational-expectations-implementation-program.md`** (execution index), **`platform/milestones/operational-expectations-p0-substrate-reconciliation.md`** (P0 / G-Reconciliation certification), and **`platform/milestones/operational-expectations-p1-certification.md`** (P1 / M1 certification — the append-only ledger, the one authoring intake, Authority→Standing, revision/correction effectivity). **P0 and P1 are complete;** authoring is server-side and flag-gated `oe.ledger.author` **OFF** by default with no operator surface, and Judgment/Gap (P3) onward are not started — so the capability is **not yet operational** (that is M7).
+
+**Organization Configuration product realization (July 2026):** Programs, Locations, Financials, Access (UI), Business Processes, Surfaces, and Data Model share Collection → Selected → Focused workspace under `/organization/*`. Closeout: **`platform/milestones/organization-configuration-product-realization-closeout.md`**.
 
 ---
 
@@ -107,6 +109,10 @@ Then: **`platform/foundation/system-overview.md`**
 26a. `platform/operator/configuration-workspace-platform-doctrine.md` — **Configuration Workspace Platform Doctrine** (canonical owner of every configuration workspace: operators operate configuration objects; object model, workspace anatomy, two-status model, business-language & inheritance doctrine; **reference impl = Locations**; supersedes the `system/` configuration-workspace docs)
 26b. `platform/operator/configuration-workspace-visual-language.md` — **Configuration Workspace Visual Language** (why configuration feels calm/object-shaped/consequence-first; extends `alloy-visual-language.md`)
 26c. `platform/operator/configuration-workspace-component-library.md` — **Configuration Workspace Component Library** (platform primitives: Object Header, Operational Summary, Attention Panel, Setup Progress, Inline Property, Focused Editor, Consequence Sentence, Inherited Value, Configuration Dialog, …)
+26d. `platform/operator/access-product-ui.md` — **Access product UI** (Users / Roles / Access Scopes / Security; UI realized; runtime deferred)
+26e. `platform/operator/business-processes-product-ui.md` — **Business Processes product UI** (Collection → Selected Process → Focused workspace; UI realized)
+26f. `platform/operator/surfaces-product-ui.md` — **Surfaces product UI** (Edit-first; collapsible inspector; tab-row Save/Publish; publication in collection list — **realized** July 2026)
+26g. `platform/operator/data-model-product-ui.md` — **Data Model product UI** (Entity-centric IA; Definition/Usage/History for child objects; Operational Calculations deferred — **realized** July 2026)
 27. `platform/operator/queue-system.md`
 28. `platform/operator/drawer-system.md`
 29. `platform/operator/drawer-sunset-roadmap.md` — **Drawer Sunset & Focus Panel Convergence** (sunset status matrix, freeze rule, editing-gap blocker, Household-then-Children targets — convergence lock)

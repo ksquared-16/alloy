@@ -13,7 +13,7 @@ import {
 export const CONFIGURATION_SHELL_SECTION_QUEUE_WIDTH_PX = 260;
 export const CONFIGURATION_SHELL_OBJECT_QUEUE_WIDTH_PX = 320;
 
-/** Context bar — title, subtitle, and actions above the configuration shell. */
+/** Context bar — compact domain identity above the configuration shell. */
 export function ConfigurationContext({
     eyebrow,
     title,
@@ -33,8 +33,8 @@ export function ConfigurationContext({
     children?: ReactNode;
 }) {
     return (
-        <header className="process-config-context-bar space-y-2" data-testid={testId}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
+        <header className="process-config-context-bar" data-testid={testId}>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                 <div className="min-w-0">
                     {eyebrow ?
                         <p className="config-platform-hub-eyebrow" data-testid={`${testId}-eyebrow`}>
@@ -44,7 +44,7 @@ export function ConfigurationContext({
                     <div className="flex items-center gap-2">
                         {titleIcon ?
                             <span
-                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-alloy-bend-pine/[0.10] text-[#007d68]"
+                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-alloy-bend-pine/[0.10] text-[#007d68]"
                                 data-testid={`${testId}-title-icon`}
                                 aria-hidden
                             >
@@ -54,14 +54,16 @@ export function ConfigurationContext({
                         <h1 className="config-typo-page-title process-config-context-title">{title}</h1>
                     </div>
                     {subtitle ?
-                        <p className="config-typo-sublabel process-config-context-summary mt-1 max-w-3xl">{subtitle}</p>
+                        <p className="config-typo-sublabel process-config-context-summary mt-0.5 max-w-3xl">
+                            {subtitle}
+                        </p>
                     :   null}
                 </div>
                 {actions ?
                     <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
                 :   null}
             </div>
-            {children}
+            {children ? <div className="process-config-context-children mt-1.5">{children}</div> : null}
         </header>
     );
 }

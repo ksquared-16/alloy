@@ -165,9 +165,9 @@ describe("location workspace model", () => {
     });
 
     it("keeps selected location, tab, and nested item URL-addressable", () => {
-        expect(locationsLandingHref()).toBe("/settings/locations");
+        expect(locationsLandingHref()).toBe("/organization/locations");
         expect(locationWorkspaceHref("site-1", "rooms", "room-2")).toBe(
-            "/settings/locations?locationId=site-1&tab=rooms&itemId=room-2",
+            "/organization/locations?locationId=site-1&tab=rooms&itemId=room-2",
         );
         expect(parseLocationWorkspaceTab("communications")).toBe("overview");
         expect(parseLocationWorkspaceTab("unknown")).toBe("overview");

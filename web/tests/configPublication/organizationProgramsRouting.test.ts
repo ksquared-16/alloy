@@ -3,13 +3,22 @@ import {
     CANONICAL_ORGANIZATION_PROGRAMS_HREF,
     organizationProgramsHref,
 } from "@/lib/admin/canonicalAdminRoutes";
-import { organizationConfigurationDomains } from "@/lib/configRuntime/organizationRuntime";
+import {
+    organizationConfigurationDomain,
+    organizationConfigurationDomains,
+} from "@/lib/configRuntime/organizationRuntime";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 describe("Organization Programs canonical routing", () => {
-    it("exposes /organization/programs as the Programs domain href", () => {
-        const programs = organizationConfigurationDomains().find((domain) => domain.key === "programs");
+    it("keeps Programs off the Organization landing while preserving domain lookup + href", () => {
+        expect(organizationConfigurationDomains().some((domain) => domain.key === "programs")).toBe(
+            false,
+        );
+        expect(organizationConfigurationDomains().some((domain) => domain.key === "financials")).toBe(
+            true,
+        );
+        const programs = organizationConfigurationDomain("programs");
         expect(programs?.href).toBe(CANONICAL_ORGANIZATION_PROGRAMS_HREF);
         expect(organizationProgramsHref("program-1")).toBe(
             "/organization/programs?programId=program-1",
@@ -42,10 +51,10 @@ describe("Organization Programs canonical routing", () => {
             resolve(process.cwd(), "app/adminV2/commercial/programs/page.tsx"),
             "utf8",
         );
-        expect(canonical).toContain("ProgramsPublicationWorkspace");
+        expect(canonical).toContain("ProgramsConfigurationPage");
         expect(legacySettings).toContain("redirect(organizationProgramsHref())");
         expect(legacyCommercial).toContain("redirect(organizationProgramsHref())");
-        expect(legacySettings).not.toContain("<ProgramsPublicationWorkspace");
-        expect(legacyCommercial).not.toContain("<ProgramsPublicationWorkspace");
+        expect(legacySettings).not.toContain("<ProgramsConfigurationPage");
+        expect(legacyCommercial).not.toContain("<ProgramsConfigurationPage");
     });
 });

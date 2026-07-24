@@ -1,0 +1,34 @@
+{
+  "database_target": "ikaxilmwmrmbagoidedu",
+  "table_configuration_command_operations": "exists",
+  "operations_sample": [
+    {
+      "id": "fe88e786-0390-4c05-8eb0-9e8143c32f32",
+      "command_key": "programs.make_available.v1",
+      "idempotency_key_prefix": "make-available:recert3-w9k7sx",
+      "status": "committed",
+      "program_id": "c0358ff7-ce0c-4caa-969a-194159bf8dab",
+      "completed": true,
+      "secrets_included": false
+    }
+  ],
+  "program_c0358ff7": {
+    "lpc_association_count": 3,
+    "workflow_events": {
+      "configuration.program.published": 1,
+      "configuration.program.delivered": 3,
+      "configuration.program.make_available": 1
+    }
+  },
+  "idempotent_replay": {
+    "same_operation_id": "fe88e786-0390-4c05-8eb0-9e8143c32f32",
+    "lpc_count_unchanged": 3
+  },
+  "draft_blocked_after_fix": {
+    "operation_id": "911358c4-caad-40ab-bee1-64fa05b14679",
+    "status": "blocked",
+    "code": "publication_required",
+    "publication_id": null,
+    "revision_id": null
+  }
+}

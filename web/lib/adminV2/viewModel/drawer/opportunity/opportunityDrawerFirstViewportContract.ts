@@ -28,6 +28,7 @@ export const OPPORTUNITY_DRAWER_WORKFLOW_V1_FIRST_PAINT_DEPENDENCIES: readonly O
         "tasks_preview",
         "scheduled_sends",
         "inquiry_children",
+        "scheduling_projection",
     ];
 
 export type OpportunityFirstViewportPlan = {
@@ -78,8 +79,11 @@ export function buildOpportunityFirstViewportPlan(input: OpportunityFirstViewpor
     if (inquiryChildrenInFirstViewport(input.shell)) {
         viewport_slots.push("inquiry_children");
     } else {
-        const idx = dependencies.indexOf("inquiry_children");
-        if (idx >= 0) dependencies.splice(idx, 1);
+        // No children in view → drop both the children list and their scheduling projection.
+        for (const key of ["inquiry_children", "scheduling_projection"] as const) {
+            const idx = dependencies.indexOf(key);
+            if (idx >= 0) dependencies.splice(idx, 1);
+        }
     }
 
     return { viewport_slots, dependencies };

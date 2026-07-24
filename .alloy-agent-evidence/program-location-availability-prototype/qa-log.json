@@ -1,0 +1,50 @@
+[
+  {
+    "name": "01-location-selected.png",
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2"
+  },
+  {
+    "name": "02-location-programs-tab.png",
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=programs"
+  },
+  {
+    "name": "03-location-add-choose.png",
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=programs"
+  },
+  {
+    "name": "04-location-use-existing.png",
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=programs"
+  },
+  {
+    "name": "12-program-selected.png",
+    "url": "http://127.0.0.1:3014/organization/programs?programId=6d942681-3bf5-4e66-863e-242e87987f4b"
+  },
+  {
+    "name": "13-org-availability-flow.png",
+    "url": "http://127.0.0.1:3014/organization/programs?programId=6d942681-3bf5-4e66-863e-242e87987f4b&section=assignment"
+  },
+  {
+    "name": "17-org-ownership-prototype.png",
+    "url": "http://127.0.0.1:3014/organization/programs?programId=6d942681-3bf5-4e66-863e-242e87987f4b&section=assignment"
+  },
+  {
+    "name": "18-location-programs-deeplink.png",
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=programs"
+  },
+  {
+    "name": "19-location-create-new.png",
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=programs"
+  },
+  {
+    "name": "20-location-create-locations.png",
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=programs"
+  },
+  {
+    "name": "21-location-create-review.png",
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=programs"
+  },
+  {
+    "name": "22-location-create-success.png",
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=programs"
+  }
+]

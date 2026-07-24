@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import DataModelCategoriesTab from "@/components/admin/fields/DataModelCategoriesTab";
 import DataModelEntityHeader from "@/components/admin/fields/DataModelEntityHeader";
 import DataModelFieldsTab from "@/components/admin/fields/DataModelFieldsTab";
@@ -23,6 +23,7 @@ import {
     type SettingsHubEntityKey,
 } from "@/lib/fields/fieldCatalogForSettings";
 import { dataModelStatsForEntity } from "@/lib/fields/dataModelWorkspaceModel";
+import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
 
 export type FieldEntityKey = SettingsHubEntityKey;
@@ -60,8 +61,16 @@ function normalizeOwnershipFilter(raw: string | undefined): FieldOwnershipFilter
     return "all";
 }
 
-function settingsFieldsBasePath(_pathname: string): string {
-    return "/settings/fields";
+function fieldsWorkspaceHref(
+    nextEntity: FieldEntityKey,
+    nextTab: DataModelWorkspaceTab,
+    ownership?: FieldOwnershipFilter,
+): string {
+    const href = dataModelSectionHref("fields", { entity: nextEntity, tab: nextTab });
+    if (ownership && ownership !== "all" && nextTab === "fields") {
+        return `${href}&ownership=${encodeURIComponent(ownership)}`;
+    }
+    return href;
 }
 
 function toFieldDef(r: Record<string, unknown>): FieldDef {
@@ -102,7 +111,6 @@ export default function DataModelWorkspaceClient({
     initialTab?: string;
 }) {
     const router = useRouter();
-    const pathname = usePathname();
     const searchParams = useSearchParams();
     const { labels } = useEntityLabels();
     const entity = useMemo(
@@ -138,15 +146,9 @@ export default function DataModelWorkspaceClient({
 
     const replaceWorkspaceUrl = useCallback(
         (nextEntity: FieldEntityKey, nextTab: DataModelWorkspaceTab, ownership?: FieldOwnershipFilter) => {
-            const params = new URLSearchParams();
-            params.set("entity", nextEntity);
-            params.set("tab", nextTab);
-            if (ownership && ownership !== "all" && nextTab === "fields") {
-                params.set("ownership", ownership);
-            }
-            router.replace(`${settingsFieldsBasePath(pathname)}?${params.toString()}`);
+            router.replace(fieldsWorkspaceHref(nextEntity, nextTab, ownership));
         },
-        [router, pathname],
+        [router],
     );
 
     useEffect(() => {

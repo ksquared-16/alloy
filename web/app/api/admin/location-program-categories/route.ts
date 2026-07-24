@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import {
+    LOCATION_PROGRAM_CATEGORY_IDENTITY_SELECT_ATTEMPTS,
+    LOCATION_PROGRAM_CATEGORY_SELECT_ATTEMPTS,
+    isMissingColumnError,
+    resolveProgramRevisionIdFromRow,
+    stripUnavailableProgramCategoryPatchFields,
+} from "@/lib/locations/locationProgramCategorySelect";
 
 type CategoryRow = {
     id: string;
@@ -16,12 +23,14 @@ type CategoryRow = {
     configuration_consumption_id: string | null;
     local_description_override: string | null;
     local_authorization_evidence: string | null;
+    local_display_name: string | null;
+    available_from: string | null;
+    available_through: string | null;
     created_at: string;
     updated_at: string | null;
 };
 
-const CATEGORY_SELECT =
-    "id, org_id, location_id, key, label, sort_order, is_active, metadata, program_id, program_revision_id, configuration_consumption_id, local_description_override, local_authorization_evidence, created_at, updated_at";
+type AdminSupabase = ReturnType<typeof createAdminClient>;
 
 export function buildProgramCategoryPatch(
     raw: Record<string, unknown>,
@@ -65,10 +74,36 @@ export function buildProgramCategoryPatch(
                 ? raw.local_authorization_evidence.trim() || null
                 : null;
     }
+    if (raw.local_display_name !== undefined) {
+        if (raw.local_display_name !== null && typeof raw.local_display_name !== "string") {
+            return { ok: false, error: "Name at this Location must be text or empty." };
+        }
+        patch.local_display_name =
+            typeof raw.local_display_name === "string" ? raw.local_display_name.trim() || null : null;
+    }
+    if (raw.available_from !== undefined) {
+        if (raw.available_from !== null && typeof raw.available_from !== "string") {
+            return { ok: false, error: "Available from must be a date or empty." };
+        }
+        const value = typeof raw.available_from === "string" ? raw.available_from.trim() : "";
+        patch.available_from = value || null;
+    }
+    if (raw.available_through !== undefined) {
+        if (raw.available_through !== null && typeof raw.available_through !== "string") {
+            return { ok: false, error: "Available through must be a date or empty." };
+        }
+        const value = typeof raw.available_through === "string" ? raw.available_through.trim() : "";
+        patch.available_through = value || null;
+    }
+    const from = typeof patch.available_from === "string" ? patch.available_from : null;
+    const through = typeof patch.available_through === "string" ? patch.available_through : null;
+    if (from && through && through < from) {
+        return { ok: false, error: "Available through must be on or after Available from." };
+    }
     return { ok: true, patch };
 }
 
-function mapCategoryRow(r: Record<string, unknown>): CategoryRow {
+export function mapCategoryRow(r: Record<string, unknown>): CategoryRow {
     return {
         id: String(r.id ?? ""),
         org_id: String(r.org_id ?? ""),
@@ -82,16 +117,111 @@ function mapCategoryRow(r: Record<string, unknown>): CategoryRow {
                 ? (r.metadata as Record<string, unknown>)
                 : {},
         program_id: (r.program_id as string | null | undefined) ?? null,
-        program_revision_id: (r.program_revision_id as string | null | undefined) ?? null,
+        program_revision_id: resolveProgramRevisionIdFromRow(r),
         configuration_consumption_id:
             (r.configuration_consumption_id as string | null | undefined) ?? null,
         local_description_override:
             (r.local_description_override as string | null | undefined) ?? null,
         local_authorization_evidence:
             (r.local_authorization_evidence as string | null | undefined) ?? null,
+        local_display_name: (r.local_display_name as string | null | undefined) ?? null,
+        available_from: (r.available_from as string | null | undefined) ?? null,
+        available_through: (r.available_through as string | null | undefined) ?? null,
         created_at: String(r.created_at ?? ""),
         updated_at: (r.updated_at as string | null | undefined) ?? null,
     };
+}
+
+async function listProgramCategoryRows(
+    supabase: AdminSupabase,
+    orgId: string,
+    options: { locationId?: string; includeInactive?: boolean },
+): Promise<{ rows: CategoryRow[] } | { error: string }> {
+    let lastError: string | null = null;
+    for (const select of LOCATION_PROGRAM_CATEGORY_SELECT_ATTEMPTS) {
+        let q = supabase
+            .from("location_program_categories")
+            .select(select as string)
+            .eq("org_id", orgId)
+            .order("sort_order", { ascending: true })
+            .order("label", { ascending: true });
+        if (options.locationId) q = q.eq("location_id", options.locationId);
+        if (!options.includeInactive) q = q.eq("is_active", true);
+        const { data, error } = await q;
+        if (!error) {
+            return {
+                rows: (data ?? []).map((r) => mapCategoryRow(r as unknown as Record<string, unknown>)),
+            };
+        }
+        lastError = error.message;
+        if (!isMissingColumnError(error)) {
+            return { error: error.message };
+        }
+    }
+    return { error: lastError ?? "Failed to load location program categories" };
+}
+
+async function readProgramIdentityRevisionId(
+    supabase: AdminSupabase,
+    orgId: string,
+    categoryId: string,
+): Promise<{ revisionId: string | null } | { error: string }> {
+    let lastError: string | null = null;
+    for (const select of LOCATION_PROGRAM_CATEGORY_IDENTITY_SELECT_ATTEMPTS) {
+        const { data, error } = await supabase
+            .from("location_program_categories")
+            .select(select as string)
+            .eq("id", categoryId)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        if (!error) {
+            return { revisionId: resolveProgramRevisionIdFromRow((data as unknown as Record<string, unknown> | null) ?? null) };
+        }
+        lastError = error.message;
+        if (!isMissingColumnError(error)) {
+            return { error: error.message };
+        }
+    }
+    return { error: lastError ?? "Failed to load program category identity" };
+}
+
+async function updateProgramCategoryRow(
+    supabase: AdminSupabase,
+    orgId: string,
+    categoryId: string,
+    patch: Record<string, unknown>,
+): Promise<{ row: CategoryRow } | { error: string }> {
+    let workingPatch = { ...patch };
+    let lastError: string | null = null;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        for (const select of LOCATION_PROGRAM_CATEGORY_SELECT_ATTEMPTS) {
+            const { data, error } = await supabase
+                .from("location_program_categories")
+                .update(workingPatch)
+                .eq("id", categoryId)
+                .eq("org_id", orgId)
+                .select(select as string)
+                .maybeSingle();
+            if (!error) {
+                if (!data) return { error: "Program category was not found after save." };
+                return { row: mapCategoryRow(data as unknown as Record<string, unknown>) };
+            }
+            lastError = error.message;
+            if (isMissingColumnError(error)) {
+                const stripped = stripUnavailableProgramCategoryPatchFields(workingPatch, error);
+                if (stripped && Object.keys(stripped).length > 1) {
+                    workingPatch = stripped;
+                    break;
+                }
+                // Missing select columns only — try a narrower select with same patch.
+                continue;
+            }
+            return { error: error.message };
+        }
+    }
+
+    return { error: lastError ?? "Failed to update location program category" };
 }
 
 /** GET: list location program categories for current org. Optional ?location_id= filter. */
@@ -108,28 +238,16 @@ export async function GET(request: NextRequest) {
     const locationId = (searchParams.get("location_id") ?? "").trim();
     const includeInactive = searchParams.get("include_inactive") === "true";
 
-    const supabase = createAdminClient();
-    let q = supabase
-        .from("location_program_categories")
-        .select(CATEGORY_SELECT)
-        .eq("org_id", ctx.orgId)
-        .order("sort_order", { ascending: true })
-        .order("label", { ascending: true });
-
-    if (locationId) {
-        q = q.eq("location_id", locationId);
-    }
-    if (!includeInactive) {
-        q = q.eq("is_active", true);
-    }
-
-    const { data, error } = await q;
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    const listed = await listProgramCategoryRows(createAdminClient(), ctx.orgId, {
+        locationId: locationId || undefined,
+        includeInactive,
+    });
+    if ("error" in listed) {
+        return NextResponse.json({ error: listed.error }, { status: 500 });
     }
 
     return NextResponse.json({
-        categories: (data ?? []).map((r) => mapCategoryRow(r as Record<string, unknown>)),
+        categories: listed.rows,
     });
 }
 
@@ -168,39 +286,22 @@ export async function PATCH(request: NextRequest) {
 
         if (Object.keys(patch).length <= 1) continue;
 
-        const { data: current, error: currentError } = await supabase
-            .from("location_program_categories")
-            .select("program_revision_id")
-            .eq("id", id)
-            .eq("org_id", ctx.orgId)
-            .maybeSingle();
-        if (currentError) {
-            return NextResponse.json({ error: currentError.message }, { status: 400 });
+        const identity = await readProgramIdentityRevisionId(supabase, ctx.orgId, id);
+        if ("error" in identity) {
+            return NextResponse.json({ error: identity.error }, { status: 400 });
         }
-        if (
-            (current as { program_revision_id?: string | null } | null)?.program_revision_id
-            && Object.prototype.hasOwnProperty.call(patch, "label")
-        ) {
+        if (identity.revisionId && Object.prototype.hasOwnProperty.call(patch, "label")) {
             return NextResponse.json(
                 { error: "Published Program identity is managed by the Organization." },
                 { status: 409 },
             );
         }
 
-        const { data, error } = await supabase
-            .from("location_program_categories")
-            .update(patch)
-            .eq("id", id)
-            .eq("org_id", ctx.orgId)
-            .select(CATEGORY_SELECT)
-            .maybeSingle();
-
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 400 });
+        const updated = await updateProgramCategoryRow(supabase, ctx.orgId, id, patch);
+        if ("error" in updated) {
+            return NextResponse.json({ error: updated.error }, { status: 400 });
         }
-        if (data) {
-            results.push(mapCategoryRow(data as Record<string, unknown>));
-        }
+        results.push(updated.row);
     }
 
     return NextResponse.json({ categories: results, updated: results.length });

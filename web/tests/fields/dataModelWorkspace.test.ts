@@ -16,11 +16,11 @@ import { CONFIGURATION_WORKSPACE_DOMAINS } from "@/lib/adminV2/configurationWork
 const root = resolve(__dirname, "../..");
 
 describe("Data Model workspace", () => {
-    it("configuration nav exposes Data Model at /settings/fields", () => {
+    it("configuration nav exposes Data Model at /organization/data-model", () => {
         const dataModel = CONFIGURATION_WORKSPACE_DOMAINS.find((d) => d.id === "data_model");
         expect(dataModel?.items.some((i) => i.label === "Data Model")).toBe(true);
-        expect(dataModel?.items.some((i) => i.href.endsWith("/fields"))).toBe(true);
-        expect(dataModel?.items.some((i) => i.href.endsWith("/data-model"))).toBe(false);
+        expect(dataModel?.items.some((i) => i.href.includes("/organization/data-model"))).toBe(true);
+        expect(dataModel?.items.some((i) => i.href.endsWith("/fields"))).toBe(false);
     });
 
     it("Child hub entity includes gender in catalog entries", () => {

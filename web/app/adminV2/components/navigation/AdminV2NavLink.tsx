@@ -28,8 +28,9 @@ export type AdminV2NavLinkProps = {
 };
 
 /**
- * Shell navigation — soft orchestrated transition when `NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV=1`
- * and the target is an eligible workspace route; otherwise `adminV2CommitNavigation` (full document load).
+ * Shell navigation — soft orchestrated transition for eligible Workspace and Organization /
+ * Settings routes (Configuration Continuity Checkpoint A); otherwise `adminV2CommitNavigation`
+ * (full document load). Kill switch: `NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV=0`.
  */
 export function AdminV2NavLink({
     className,

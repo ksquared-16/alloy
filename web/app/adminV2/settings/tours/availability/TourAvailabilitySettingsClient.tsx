@@ -1,37 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
+import {
+    loadLocationTourRules,
+    peekLocationTourRules,
+    type LocationTourRulePreview,
+} from "@/lib/locations/locationConcernCache";
 
 type LocationOpt = { id: string; label: string | null };
 
-type RuleRow = {
-    id: string;
-    location_id: string | null;
-    user_id: string | null;
-    day_of_week: number;
-    start_time: string;
-    end_time: string;
-    timezone: string;
-    slot_duration_minutes: number;
-    buffer_minutes: number;
-    max_bookings_per_slot: number;
-    approval_required: boolean;
-    is_active: boolean;
-};
+type RuleRow = LocationTourRulePreview;
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function TourAvailabilitySettingsClient({
+    orgId = null,
     locationId = null,
     locationLabel = null,
     embedded = false,
     onMutationCommitted,
 }: {
+    orgId?: string | null;
     locationId?: string | null;
     locationLabel?: string | null;
     embedded?: boolean;
@@ -39,31 +33,77 @@ export default function TourAvailabilitySettingsClient({
 }) {
     const [locations, setLocations] = useState<LocationOpt[]>([]);
     const [locFilter, setLocFilter] = useState(locationId ?? "");
-    const [rules, setRules] = useState<RuleRow[]>([]);
-    const [loading, setLoading] = useState(true);
+    const peeked =
+        embedded && orgId && locationId ? peekLocationTourRules(orgId, locationId) : null;
+    const [rules, setRules] = useState<RuleRow[]>(() => peeked?.rules ?? []);
+    const [loading, setLoading] = useState(() => !(peeked != null));
+    const [refreshing, setRefreshing] = useState(false);
     const [err, setErr] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [adding, setAdding] = useState(false);
     const [editingRule, setEditingRule] = useState<RuleRow | null>(null);
+    const hasRulesRef = useRef((peeked?.rules.length ?? 0) > 0);
+    const requestSeqRef = useRef(0);
+
+    // Embedded Locations keepalive may remount via key, but also sync when locationId changes
+    // without remount — stale locFilter caused false empties after Location switches.
+    useEffect(() => {
+        const next = String(locationId ?? "").trim();
+        setLocFilter(next);
+        if (embedded && orgId && next) {
+            const warm = peekLocationTourRules(orgId, next);
+            if (warm) {
+                setRules(warm.rules.filter((rule) => rule.location_id === next));
+                hasRulesRef.current = warm.rules.length > 0;
+                setLoading(false);
+            }
+        }
+    }, [embedded, locationId, orgId]);
 
     const loadRules = useCallback(async () => {
-        setLoading(true);
+        const requestSeq = ++requestSeqRef.current;
+        const hadRules = hasRulesRef.current;
+        if (hadRules) setRefreshing(true);
+        else if (!(embedded && orgId && locationId && peekLocationTourRules(orgId, locationId))) {
+            setLoading(true);
+        }
         setErr(null);
         try {
-            const qs = locFilter.trim() ? `?location_id=${encodeURIComponent(locFilter.trim())}` : "";
-            const res = await fetch(`/api/admin/tours/availability-rules${qs}`, {
-                credentials: "include",
-            });
-            const j = (await res.json()) as { rules?: RuleRow[]; error?: string };
-            if (!res.ok) throw new Error(j.error ?? res.statusText);
-            const loadedRules = j.rules ?? [];
-            setRules(locationId ? loadedRules.filter((rule) => rule.location_id === locationId) : loadedRules);
+            if (embedded && orgId && locationId) {
+                const { snapshot } = await loadLocationTourRules(orgId, locationId, { force: hadRules });
+                if (requestSeq !== requestSeqRef.current) return;
+                const nextRules = snapshot.rules.filter((rule) => rule.location_id === locationId);
+                setRules(nextRules);
+                hasRulesRef.current = nextRules.length > 0;
+            } else {
+                const qs = locFilter.trim() ? `?location_id=${encodeURIComponent(locFilter.trim())}` : "";
+                const res = await fetch(`/api/admin/tours/availability-rules${qs}`, {
+                    credentials: "include",
+                });
+                const j = (await res.json()) as { rules?: RuleRow[]; error?: string };
+                if (!res.ok) throw new Error(j.error ?? res.statusText);
+                if (requestSeq !== requestSeqRef.current) return;
+                const loadedRules = j.rules ?? [];
+                const nextRules = locationId
+                    ? loadedRules.filter((rule) => rule.location_id === locationId)
+                    : loadedRules;
+                setRules(nextRules);
+                hasRulesRef.current = nextRules.length > 0;
+            }
         } catch (e) {
+            if (requestSeq !== requestSeqRef.current) return;
             setErr(e instanceof Error ? e.message : String(e));
+            if (!hadRules) {
+                setRules([]);
+                hasRulesRef.current = false;
+            }
         } finally {
-            setLoading(false);
+            if (requestSeq === requestSeqRef.current) {
+                setLoading(false);
+                setRefreshing(false);
+            }
         }
-    }, [locFilter, locationId]);
+    }, [embedded, locFilter, locationId, orgId]);
 
     useEffect(() => {
         if (embedded && locationId) return;
@@ -158,8 +198,20 @@ export default function TourAvailabilitySettingsClient({
                     </label>
                 </div>
             :   null}
-            {loading ?
-                <p className="text-sm text-alloy-midnight/55">Loading…</p>
+            {loading && !refreshing && rules.length === 0 ?
+                <div
+                    className="rounded-xl border border-dashed border-alloy-forge/15 p-4"
+                    data-testid="tours-availability-pending"
+                    aria-busy="true"
+                >
+                    <div className="h-3 w-40 animate-pulse rounded bg-alloy-midnight/[0.06]" />
+                    <div className="mt-3 h-3 w-64 animate-pulse rounded bg-alloy-midnight/[0.04]" />
+                </div>
+            :   null}
+            {refreshing ?
+                <p className="text-sm text-alloy-midnight/45" data-testid="tours-availability-refreshing">
+                    Updating tour windows…
+                </p>
             :   null}
             {!loading && rules.length === 0 ?
                 <div className="rounded-xl border border-dashed border-alloy-forge/15 p-4">

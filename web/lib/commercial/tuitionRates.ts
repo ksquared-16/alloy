@@ -27,6 +27,8 @@ export type TuitionRateRow = {
     effective_start: string | null;
     /** Optional: date after which this rate expires (ISO date string, YYYY-MM-DD). */
     effective_end: string | null;
+    /** Optional revenue category (Accounting) — plan GL may also live on offering metadata. */
+    revenue_category_id?: string | null;
     metadata: Record<string, unknown>;
     created_at: string;
     updated_at: string | null;
