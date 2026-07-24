@@ -190,7 +190,7 @@ document.addEventListener("input", (e) => {
 function parseRoute() { const p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean); return { name: p[0] || "command", sub: p[1], param: p[2] }; }
 function route() { return parseRoute().name; }
 function go(r) { location.hash = "#/" + r; }
-const CRUMBS = { command: "Command Center", history: "Work History", policies: "Policies", settings: "Settings", trust: "Runtime Trust" };
+const CRUMBS = { director: "Director", command: "Command Center", history: "Work History", policies: "Policies", settings: "Settings", trust: "Runtime Trust" };
 function setActiveNav(name) {
   document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === name));
   $("#crumb").textContent = CRUMBS[name] || "Command Center";
@@ -1141,6 +1141,11 @@ function toast(kind, title, msg) {
 // The operator thinks about MISSIONS, never about runtimes. One surface: tell
 // Director what you want → watch it prepare → review → approve → send.
 async function fetchAllMissions() { try { const r = await fetch("/api/missions"); state._allMissions = (await r.json()).missions || []; render(true); } catch { /* keep last */ } }
+const DIR_VERBS = /^\s*(build|extend|fix|refactor|redesign|design|improve|create|update|rebuild|revamp|enhance|add|replace|harden|make)\b/i;
+function dirCapName(intent) {
+  const n = String(intent || "").replace(DIR_VERBS, "").replace(/\bv\d+\b/i, "").replace(/\s+/g, " ").trim();
+  return n.split(" ").map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" ") || String(intent || "");
+}
 
 const DIR_STAGES = [
   { key: "intent", label: "Intent" }, { key: "capability", label: "Capability" },
@@ -1261,7 +1266,7 @@ async function prepareDirectorMission() {
   if (!intent) { toast("err", "Tell Director what you want to build"); return; }
   const { status, data } = await api("/api/missions/compile", { slot: DIRECTOR_SLOT, intent });
   if (!data.ok) {
-    if (data.reason === "no_capability") { state._dirDefine = { intent, name: null }; render(true); return; }
+    if (data.reason === "no_capability") { state._dirDefine = { intent, name: dirCapName(intent) }; render(true); return; }
     toast("err", "Couldn't prepare", data.error || status); return;
   }
   state._dirIntent = ""; state._dirDefine = null;
