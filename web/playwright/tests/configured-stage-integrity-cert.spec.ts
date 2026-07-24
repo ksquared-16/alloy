@@ -147,3 +147,34 @@ test("an invalid stage move on Wenc changes nothing (guard + rollback)", async (
     expect(after.opp_stage_key).toBe(before.opp_stage_key);
     expect(after.activity_count).toBe(before.activity_count);
 });
+
+test("Qualification never appears in Wenc's What's Next / focused surface", async ({ page }) => {
+    await page.goto("/adminV2/workspace", { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
+    const entry = await page.$('a[href*="/work-unit/"]');
+    if (entry) await entry.click({ timeout: 15_000 }).catch(() => {});
+    const card = page.locator('[data-work-card="true"]').first();
+    await card.waitFor({ state: "visible", timeout: 30_000 });
+    await page.waitForTimeout(3500);
+
+    // Summary card.
+    const summaryText = (await card.innerText().catch(() => "")) as string;
+    await page.screenshot({ path: path.join(OUT, "whats-next-summary.png") });
+
+    // Focused surface + any stage-transition / outcome controls.
+    await card.locator('[data-work-action="open-focused"]').first().click({ timeout: 15_000 }).catch(() => {});
+    await page.waitForTimeout(3000);
+    const focusedText = (await page.locator('[data-work-focused-surface="true"], [data-current-work-surface="true"]').first().innerText().catch(() => "")) as string;
+    // Also open the outcome picker (where a move-to-stage would surface a destination label).
+    await page.locator('[data-work-action="record-outcome"]').first().click({ timeout: 10_000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    const outcomeText = (await page.locator('[data-work-focused-surface="true"], [data-current-work-surface="true"]').first().innerText().catch(() => "")) as string;
+    await page.screenshot({ path: path.join(OUT, "whats-next-focused.png"), fullPage: true });
+
+    const combined = `${summaryText}\n${focusedText}\n${outcomeText}`;
+    fs.writeFileSync(path.join(OUT, "whats-next-text.json"), JSON.stringify({ summaryText, focusedText, outcomeText }, null, 2));
+
+    // The operator-facing surface must not show the word "Qualification" (case-insensitive),
+    // because it is not a stage in the configured process.
+    expect(/qualification/i.test(combined)).toBe(false);
+});
