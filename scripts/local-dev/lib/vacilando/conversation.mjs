@@ -16,6 +16,7 @@ import { getPackage, packageLineage, packageForMission } from "./commands/missio
 import { getCapability } from "./capability.mjs";
 import { getProductDefinitionForCapability } from "./product-definition.mjs";
 import { readAcceptance } from "./acceptance.mjs";
+import { composeCounsel } from "./counsel.mjs";
 
 const firstSentence = (s) => { const t = String(s || "").trim(); const i = t.search(/[.!?]/); return i > 0 ? t.slice(0, i) : t; };
 const time = (x) => (x ? new Date(x).getTime() : 0);
@@ -37,13 +38,18 @@ export function conversationState(m, V) {
   return { label: "Preparing…", tone: "muted", action: "Open" };
 }
 
-/** What Director says right now, given the verdict + lifecycle. */
-function directorSays(V, m, title) {
+/**
+ * What Director says right now. Lifecycle states (executing / done / waiting /
+ * failed) are unchanged. At REST — a prepared package awaiting the operator —
+ * Director speaks confidence-qualified counsel (readiness + attempt history +
+ * frontier), composed upstream, instead of a flat "Ready" badge.
+ */
+function directorSays(V, m, title, counsel) {
   if (m.status === "completed") return "This work is done and accepted.";
   if (["starting", "running", "stopping"].includes(m.status)) return "This is executing now — I'll let you know when it needs you.";
   if (m.status === "waiting_for_operator") return "I'm waiting on your input to continue.";
   if (m.status === "failed") return "The last run didn't finish cleanly — let's take another look before sending it again.";
-  if (V?.verdict === "Ready") return `Everything I need is in place. The package for ${title} is ready for your review.`;
+  if (counsel?.closing) return counsel.closing;
   if (V) return `${V.why || "I need a little more before this is ready."} ${V.what_to_do || ""}`.trim();
   return `Let me pull together what I know about ${title}.`;
 }
@@ -61,7 +67,17 @@ export function assembleConversation(mission_id) {
   const title = conversationTitle(m, cap);
   const intent = m.intent || m.objective || "";
   const lineage = pkg ? packageLineage(pkg.package_lineage_id || pkg.package_id) : [];
-  const pastMissions = (cap?.mission_history || []).length;
+
+  // The REAL attempt history for this capability — every mission on it, not the
+  // static seed count (which under-reported nine attempts as "1 past mission").
+  const capabilityMissions = m.capability_id
+    ? readMissions(null, 1000).filter((x) => x.capability_id === m.capability_id)
+    : [];
+  const pastMissions = Math.max(0, capabilityMissions.filter((x) => x.mission_id !== mission_id).length);
+
+  // Confidence-qualified counsel (readiness + attempt history + frontier),
+  // composed from signals already computed and frozen on the package.
+  const counsel = composeCounsel({ mission: m, capability: cap, package: pkg, capabilityMissions, capName: title });
 
   // ---- narrative transcript (a story, from real facts) ----
   const opening = [];
@@ -70,7 +86,7 @@ export function assembleConversation(mission_id) {
     const desc = cap.description && !/^defined from/i.test(cap.description) ? ` — ${firstSentence(cap.description).toLowerCase()}` : "";
     opening.push({ from: "director", kind: "found", text: `I found ${cap.name}${desc}.`, at: m.created_at });
   }
-  if (pastMissions) opening.push({ from: "director", kind: "reviewed", text: `I looked over previous work on this — ${pastMissions} past ${pastMissions === 1 ? "mission" : "missions"}.`, at: m.created_at });
+  if (counsel.reviewedLine) opening.push({ from: "director", kind: "reviewed", text: counsel.reviewedLine, at: m.created_at });
 
   // Time-ordered middle: package versions interleaved with the operator's decisions.
   const middle = [];
@@ -83,7 +99,7 @@ export function assembleConversation(mission_id) {
   }
   middle.sort((a, b) => time(a.at) - time(b.at));
 
-  const closing = [{ from: "director", kind: "state", text: directorSays(V, m, title), at: m.updated_at }];
+  const closing = [{ from: "director", kind: "state", text: directorSays(V, m, title, counsel), at: m.updated_at }];
   const messages = [...opening, ...middle, ...closing];
 
   // ---- insights: what we're doing / what Director knows / still needs ----
@@ -95,7 +111,10 @@ export function assembleConversation(mission_id) {
     refs ? `${refs} reference${refs === 1 ? "" : "s"}` : null,
     pkg ? `A prepared package (v${pkg.version})` : null,
   ].filter(Boolean);
-  const needs = V && V.verdict !== "Ready" ? [V.what_to_do, ...(V.reasons || [])].filter(Boolean) : [];
+  // What Director still needs: the send-back items when not ready, OR the
+  // load-bearing frontier when a "Ready" package still has an open question —
+  // so a computed unknown is never suppressed behind a green verdict.
+  const needs = counsel.needs;
 
   const st = conversationState(m, V);
   return {

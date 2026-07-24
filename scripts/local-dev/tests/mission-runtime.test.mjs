@@ -21,6 +21,8 @@ const { createMission, getMission, recoverMissions, updateMission } = await impo
 const { compile } = await import("../lib/vacilando/mission-compiler.mjs");
 const { analyzeGap } = await import("../lib/vacilando/gap-analysis.mjs");
 const { checkStartPreconditions, serializePackagePrompt, parseOutcome } = await import("../lib/vacilando/mission-executor.mjs");
+const { composeCounsel, selectFrontier, attemptCounsel, readinessCounsel, frontierPhrase } = await import("../lib/vacilando/counsel.mjs");
+const { assembleConversation } = await import("../lib/vacilando/conversation.mjs");
 
 test("readiness is computed: a complete package is ready", () => {
   const cap = retrieveCapability("Build Access & Roles V2");
@@ -301,4 +303,230 @@ test("worktree.delete is internal, typed-confirmed, and frees the slot atomicall
   // wrong (or an undefined) path. The guard is exercised live in cert; here we
   // assert the contract shape that makes it safe.
   assert.equal(typeof d.run, "function");
+});
+
+// ============================================================================
+// Director Counsel (Product Realization V1, Phase 1) — confidence-qualified
+// readiness, attempt-history counsel, frontier surfacing, composition.
+// Behavioural contracts over brittle full-string snapshots.
+// ============================================================================
+
+// Internal taxonomy that must NEVER reach operator-facing text.
+const TAXONOMY_LEAK = /\b(confidence[- ]qualified|attempt[- ]history|frontier|epistemic|leadership move|shared understanding|reliance surface|\bsignal\b|\btier\b)\b/i;
+const readyV = (confidence, extra = {}) => ({ verdict: "Ready", confidence, why: null, what_to_do: null, reasons: [], advisory: [], ...extra });
+const gapWith = (findings = {}) => ({ findings: { missing_information: [], conflicts: [], unknowns: [], ...findings }, confidence: 0.5 });
+const missionOn = (capId, status, id) => ({ mission_id: id, capability_id: capId, status });
+
+// ---- Confidence-qualified readiness ---------------------------------------
+
+test("readiness: high confidence + no open question → strongly supported, no invented caution", () => {
+  const r = readinessCounsel({ verdict: readyV(1.0), confidence: 1.0, hasFrontier: false });
+  assert.equal(r.tier, "strong");
+  assert.match(r.line, /line up well|go ahead/i);
+  assert.doesNotMatch(r.line, /thin|judgment call|resting on/i); // no manufactured caution (acceptance #7)
+});
+
+test("readiness: low confidence with a positive verdict is NOT clean readiness", () => {
+  const weak04 = readinessCounsel({ verdict: readyV(0.4), confidence: 0.4, hasFrontier: false });
+  const weak02 = readinessCounsel({ verdict: readyV(0.2), confidence: 0.2, hasFrontier: false });
+  assert.equal(weak04.tier, "weak");
+  assert.equal(weak02.tier, "weak");
+  // weak readiness must not borrow strong language
+  assert.doesNotMatch(weak04.line, /line up well|go ahead/i);
+  // 0.2 and 0.4 are materially DIFFERENT language, not one canned sentence
+  assert.notEqual(weak02.line, weak04.line);
+  assert.match(weak02.line, /very little|almost nothing|barely/i);
+});
+
+test("readiness: three confidence levels produce three different lines (no flat 'Ready')", () => {
+  const strong = readinessCounsel({ verdict: readyV(1.0), confidence: 1.0, hasFrontier: false }).line;
+  const thin = readinessCounsel({ verdict: readyV(0.4), confidence: 0.4, hasFrontier: false }).line;
+  const veryThin = readinessCounsel({ verdict: readyV(0.2), confidence: 0.2, hasFrontier: false }).line;
+  assert.equal(new Set([strong, thin, veryThin]).size, 3);
+});
+
+test("readiness: a load-bearing open question qualifies readiness regardless of a high score", () => {
+  const r = readinessCounsel({ verdict: readyV(1.0), confidence: 1.0, hasFrontier: true });
+  assert.equal(r.tier, "qualified");
+});
+
+test("readiness: not-Ready verdict → not honestly ready (honest send-back preserved)", () => {
+  const V = { verdict: "Needs Product Decisions", confidence: 0.2, why: "Director doesn't yet have the product decisions this work depends on.", what_to_do: "Record the decisions.", reasons: [] };
+  const r = readinessCounsel({ verdict: V, confidence: 0.2, hasFrontier: false });
+  assert.equal(r.tier, "not_ready");
+  assert.match(r.line, /product decisions/i);
+});
+
+test("readiness: money-touching capability gets a firmer thin note", () => {
+  const plain = composeCounsel({ mission: { mission_id: "m1" }, capability: { name: "Reporting", description: "reads only" }, package: { readiness_verdict: readyV(0.4), gap_report: gapWith() }, capabilityMissions: [] });
+  const money = composeCounsel({ mission: { mission_id: "m2" }, capability: { name: "Financials", description: "reconcile against the ledger" }, package: { readiness_verdict: readyV(0.4), gap_report: gapWith() }, capabilityMissions: [] });
+  assert.match(money.closing, /ledger|firmer/i);
+  assert.doesNotMatch(plain.closing, /ledger/i);
+});
+
+// ---- Attempt-history counsel ----------------------------------------------
+
+test("attempts: zero prior attempts → no counsel (genuinely new work)", () => {
+  assert.equal(attemptCounsel([missionOn("capX", "draft", "cur")], "cur", "X"), null);
+  assert.equal(attemptCounsel([], "cur", "X"), null);
+});
+
+test("attempts: one accepted prior → build-on, recount names the completed work", () => {
+  const a = attemptCounsel([missionOn("c", "completed", "p1"), missionOn("c", "draft", "cur")], "cur", "Onboarding");
+  assert.equal(a.position, "build_on");
+  assert.match(a.recount, /completed/i);
+  assert.match(a.rec, /continue|start fresh/i);
+});
+
+test("attempts: an in-flight prior wins → continue it rather than start over", () => {
+  const a = attemptCounsel([missionOn("c", "completed", "p1"), missionOn("c", "waiting_for_operator", "p2"), missionOn("c", "draft", "cur")], "cur", "Access & Roles");
+  assert.equal(a.position, "continue");
+  assert.match(a.rec, /still in progress|pick up/i);
+});
+
+test("attempts: only failed priors → resume with caution (learn before retrying)", () => {
+  const a = attemptCounsel([missionOn("c", "failed", "p1"), missionOn("c", "draft", "cur")], "cur", "X");
+  assert.equal(a.position, "resume_caution");
+});
+
+test("attempts: the real Access & Roles history is NOT reduced to 'one' — it is interpreted", () => {
+  // 9 missions on the capability incl current → 8 priors, mixed outcomes.
+  const ms = [
+    missionOn("ar", "completed", "a1"), missionOn("ar", "waiting_for_operator", "a2"),
+    missionOn("ar", "failed", "a3"), missionOn("ar", "draft", "a4"),
+    missionOn("ar", "ready", "a5"), missionOn("ar", "draft", "a6"),
+    missionOn("ar", "draft", "a7"), missionOn("ar", "ready", "a8"),
+    missionOn("ar", "ready", "cur"),
+  ];
+  const a = attemptCounsel(ms, "cur", "Access & Roles");
+  assert.equal(a.n, 8);
+  assert.match(a.recount, /eight earlier attempts/i);
+  assert.match(a.recount, /completed/i); // the accepted one is surfaced
+  assert.equal(a.position, "continue"); // the waiting attempt is the continuation point
+  // not a chronology dump: a single interpreted sentence
+  assert.equal((a.recount.match(/\./g) || []).length, 1);
+});
+
+// ---- Frontier surfacing ----------------------------------------------------
+
+test("frontier: no findings → nothing surfaced (silence over invention)", () => {
+  assert.deepEqual(selectFrontier(gapWith()), []);
+  assert.deepEqual(selectFrontier(null), []);
+});
+
+test("frontier: a load-bearing unknown is surfaced with why-it-matters", () => {
+  const g = gapWith({ unknowns: [{ id: "u_maturity", question: "Intent asks for v2 but maturity is new — is there a V1?", blocking: false, feeds_verdict: "Needs Clarification" }] });
+  const items = selectFrontier(g);
+  assert.equal(items.length, 1);
+  const p = frontierPhrase(items[0], { capName: "Communications" });
+  assert.match(p.need, /extend|first version/i);
+  assert.match(p.line, /earlier version|first real version/i);
+});
+
+test("frontier: systemic 'no architecture on disk' warn is NOT a frontier (every capability has it)", () => {
+  const g = gapWith({ missing_information: [{ id: "m_arch", what: "No architecture reference resolves on disk for this capability.", severity: "warn" }] });
+  assert.deepEqual(selectFrontier(g), []);
+});
+
+test("frontier: low-risk known-issue scope questions are accepted imperfections, not a frontier", () => {
+  const g = gapWith({ unknowns: [{ id: "u_ki_ki1", question: "Does the intent's scope include known issue ki1?", blocking: false, feeds_verdict: "Needs Review" }] });
+  assert.deepEqual(selectFrontier(g), []);
+});
+
+test("frontier: multiple findings are prioritised — a blocking item ranks above a non-blocking unknown", () => {
+  const g = gapWith({
+    unknowns: [
+      { id: "u_soft", question: "soft q", blocking: false },
+      { id: "u_hard", question: "hard q", blocking: true },
+    ],
+    missing_information: [{ id: "m_block", what: "a blocking gap", severity: "block" }],
+  });
+  const items = selectFrontier(g);
+  assert.equal(items[0].kind, "missing"); // blocking missing_information first
+  assert.ok(items.findIndex((i) => i.id === "u_hard") < items.findIndex((i) => i.id === "u_soft"));
+});
+
+// ---- Composition -----------------------------------------------------------
+
+test("composition: all three behaviours compose into one coherent line (attempt + qualified + frontier)", () => {
+  const c = composeCounsel({
+    mission: { mission_id: "cur" },
+    capability: { name: "Access & Roles" },
+    package: { readiness_verdict: readyV(0.9), gap_report: gapWith({ unknowns: [{ id: "u_maturity", question: "v2 but new?", blocking: false }] }) },
+    capabilityMissions: [missionOn("ar", "waiting_for_operator", "p1"), missionOn("ar", "ready", "cur")],
+  });
+  assert.equal(c.tier, "qualified");
+  assert.ok(c.reviewedLine); // attempt history present
+  assert.match(c.closing, /pick up|in progress/i); // continuation counsel
+  assert.match(c.closing, /settling first|earlier version/i); // frontier
+  assert.equal(c.frontier.length, 1);
+});
+
+test("composition: only one behaviour warranted → just that behaviour (no empty widgets)", () => {
+  const c = composeCounsel({
+    mission: { mission_id: "cur" },
+    capability: { name: "Reporting" },
+    package: { readiness_verdict: readyV(0.4), gap_report: gapWith() },
+    capabilityMissions: [],
+  });
+  assert.equal(c.reviewedLine, null); // no attempts
+  assert.deepEqual(c.frontier, []);    // no frontier
+  assert.match(c.closing, /thin basis|thorough/i); // just readiness
+});
+
+test("composition: no verdict yet → silence (closing null, Director still preparing)", () => {
+  const c = composeCounsel({ mission: { mission_id: "cur" }, capability: { name: "X" }, package: null, capabilityMissions: [] });
+  assert.equal(c.closing, null);
+});
+
+test("composition: internal taxonomy never leaks into operator-facing text", () => {
+  for (const conf of [0.2, 0.4, 1.0]) {
+    for (const findings of [{}, { unknowns: [{ id: "u_maturity", question: "q", blocking: false }] }]) {
+      const c = composeCounsel({
+        mission: { mission_id: "cur" }, capability: { name: "Communications" },
+        package: { readiness_verdict: readyV(conf), gap_report: gapWith(findings) },
+        capabilityMissions: [missionOn("c", "completed", "p1"), missionOn("c", "ready", "cur")],
+      });
+      for (const s of [c.closing, c.reviewedLine, ...(c.needs || [])].filter(Boolean)) {
+        assert.doesNotMatch(s, TAXONOMY_LEAK, `taxonomy leaked in: ${s}`);
+      }
+    }
+  }
+});
+
+test("composition: Retention control stays honest — send-back only, no trailing frontier clause", () => {
+  const V = { verdict: "Needs Product Decisions", confidence: 0.2, why: "Director doesn't yet have the product decisions this work depends on.", what_to_do: "Record the decisions, goals, or constraints that shape this capability.", reasons: ["This capability has no decisions, goals, or constraints recorded yet."] };
+  const c = composeCounsel({
+    mission: { mission_id: "cur" }, capability: { name: "Retention" },
+    package: { readiness_verdict: V, gap_report: gapWith({ missing_information: [{ id: "m_pd_empty", what: "no decisions yet", severity: "block" }] }) },
+    capabilityMissions: [],
+  });
+  assert.equal(c.tier, "not_ready");
+  assert.match(c.closing, /product decisions/i);
+  assert.doesNotMatch(c.closing, /before we lock|settling first/i); // send-back stands alone
+  assert.ok(c.needs.length >= 1); // still asks for what's missing
+});
+
+// ---- Wiring: the retrieval-layer fix, through assembleConversation ---------
+
+test("wiring: assembleConversation reads the real mission store, not the static seed count", () => {
+  const capId = "cap_wiring_ar";
+  const p1 = createMission({ slot: 6, provider: "claude", title: "Access & Roles V2", objective: "o", status: "completed" });
+  updateMission(p1.mission_id, { capability_id: capId });
+  const p2 = createMission({ slot: 6, provider: "claude", title: "Access & Roles V2", objective: "o", status: "waiting_for_operator" });
+  updateMission(p2.mission_id, { capability_id: capId });
+  const cur = createMission({ slot: 6, provider: "claude", title: "Access & Roles V2", objective: "o", status: "draft" });
+  const pkg = createPackage({
+    mission_id: cur.mission_id, capability_id: capId, title: "Access & Roles V2", objective: "o",
+    readiness_verdict: readyV(1.0),
+    gap_report: gapWith(),
+  });
+  updateMission(cur.mission_id, { capability_id: capId, package_id: pkg.package_id, intent: "Access & Roles V2" });
+
+  const convo = assembleConversation(cur.mission_id);
+  const reviewed = convo.messages.find((x) => x.kind === "reviewed");
+  assert.ok(reviewed, "attempt-history line is present");
+  assert.match(reviewed.text, /two earlier attempts/i); // real count (2 priors), not "1 past mission"
+  const closing = convo.messages.filter((x) => x.from === "director").slice(-1)[0].text;
+  assert.match(closing, /line up well|pick up|in progress/i); // strong readiness + continuation counsel
 });
