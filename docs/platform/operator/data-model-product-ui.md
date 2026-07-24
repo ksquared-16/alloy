@@ -1,13 +1,13 @@
 ---
 owner: operator
-status: active
+status: canonical
 last_reviewed: 2026-07-24
 supersedes: []
 ---
 
 # Data Model product UI
 
-UI-only product realization for **Data Model** (`/organization/data-model`).
+UI-only product realization for **Data Model** (`/organization/data-model`). **Product realization is complete** for this sprint — see [`../milestones/organization-configuration-product-realization-closeout.md`](../milestones/organization-configuration-product-realization-closeout.md). Operational Calculations remains deferred (compat pane only).
 
 Data Model is **Entity-centric**. The operator picks an Entity and everything about that
 Entity — vocabulary, fields, relationships, statuses, usage, history — resolves inside the
@@ -78,8 +78,10 @@ redirects, configuration mode nav, organization domain landing tiles) keep resol
 | `calculations` | Operational Calculations compat pane |
 
 An explicit `?tab=` always wins over `?section=`, so an Entity deep-link is never overridden by
-a stale category link. `?tab=usage` resolves to Overview, since usage now reads inside the object
-being configured rather than from a top-level Entity tab.
+a stale category link. `?tab=usage` resolves to Overview — there is **no top-level Entity Usage
+tab**. Usage for child objects (fields, option sets, statuses, relationships) lives on each
+object's **Definition · Usage · History** workspace; field and option-set Usage links into
+**Surfaces** (Focus Panels, Queue Rows) via `EntitySurfacesUsageCard`, not a detached category.
 
 ## Runtime composition
 
@@ -233,7 +235,8 @@ steered into it. Formula and registry semantics are unchanged.
 - `web/components/adminV2/settings/dataModel/entities/` — `EntitiesWorkspaceSurface`,
   `EntitiesCollectionRail`, `EntitySelectedWorkspace`, one component per tab
   (`Entity{Overview,Vocabulary,Fields,Relationships,Status,History}Tab`), plus `EntityFieldDetail`,
-  `EntityFieldCreatePanel`, `EntityFieldCategoriesPanel`, and `EntityOptionSetPanel`.
+  `EntityFieldCreatePanel`, `EntityFieldCategoriesPanel`, `EntityOptionSetPanel`, and
+  `EntitySurfacesUsageCard` (Usage → Surfaces: Focus Panels, Queue Rows).
 - `web/components/adminV2/configuration/ConfigurationAdvancedToggle.tsx` — the one disclosure that
   may reveal an internal reference or storage location.
 

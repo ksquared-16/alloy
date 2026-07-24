@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-24
 supersedes: []
 ---
 
@@ -133,6 +133,8 @@ Domains keep their authoritative tables, validation, mutation paths, and runtime
 **Apply is not inheritance.** Inherited values continue to resolve from their owner. Apply durably creates or updates Location-owned objects through a registered domain provider. The action remains hidden until that provider can return an audit id, the authoritative published revision, and a result for every selected Location.
 
 The frozen registry contains Locations, Programs, Access, Communications, Data Model, Business Processes, Surfaces, Automation, and Operational Intelligence. Automation and Operational Intelligence remain first-class because the ownership matrix already gives each a distinct owner.
+
+**Organization Configuration product realization (July 2026):** Programs, Locations, Financials, Access (UI), Business Processes, Surfaces, and Data Model now share the realized Collection → Selected → Focused workspace language under `/organization/*`. Milestone closeout: [`../milestones/organization-configuration-product-realization-closeout.md`](../milestones/organization-configuration-product-realization-closeout.md). Operational Calculations, Commands, and Access runtime remain deferred.
 
 **Programs** is operator language for the reusable service catalog. The
 canonical Programs route is `/organization/programs` (selection via
@@ -299,7 +301,12 @@ Canonical Organization hierarchy (product IA):
 | `/organization` | Canonical landing |
 | `/organization/locations` | Canonical Locations (Settings path remains compatible) |
 | `/organization/programs` | Canonical Programs (this sprint) |
-| `/organization/processes` | Planned convergence; today `/settings/processes` remains the Business Processes surface |
+| `/organization/programs-locations` | Canonical Programs & Locations grouped landing |
+| `/organization/financials` | Canonical Financials |
+| `/organization/access` | Canonical Access (UI realized) |
+| `/organization/processes` | Canonical Business Processes |
+| `/organization/surfaces` | Canonical Surfaces |
+| `/organization/data-model` | Canonical Data Model |
 
 Existing `/settings/*` URLs remain compatibility or domain routes until each domain
 is migrated beneath `/organization`. Compatibility redirects must not render a

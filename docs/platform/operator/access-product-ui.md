@@ -1,13 +1,13 @@
 ---
 owner: operator
-status: active
-last_reviewed: 2026-07-23
+status: canonical
+last_reviewed: 2026-07-24
 supersedes: []
 ---
 
 # Access product UI
 
-UI-only product realization for Organization **Access** (`/settings/users-roles`).
+UI-only product realization for Organization **Access** (`/organization/access`). **Access UI is realized** (Collection → Selected → Focused workspace); identity, authentication, sessions, MFA, and audit runtime remain deferred — see [`../milestones/organization-configuration-product-realization-closeout.md`](../milestones/organization-configuration-product-realization-closeout.md).
 
 This document freezes the operator experience so a later implementation sprint can bind identity,
 authentication, authorization, audit, session, and provider capabilities **without redesigning the UI**.

@@ -1,13 +1,13 @@
 ---
 owner: operator
-status: active
-last_reviewed: 2026-07-23
+status: canonical
+last_reviewed: 2026-07-24
 supersedes: []
 ---
 
 # Business Processes product UI
 
-UI-only product realization for **Business Processes** (`/settings/processes`).
+UI-only product realization for **Business Processes** (`/organization/processes`). **Business Processes UI is realized** (Collection → Selected Process → Focused workspace); Automation authoring and configuration-history runtime remain deferred — see [`../milestones/organization-configuration-product-realization-closeout.md`](../milestones/organization-configuration-product-realization-closeout.md).
 
 This document freezes the operator experience so `/settings/processes` matches the Collection →
 Selected object → Focused workspace pattern already shipped for Access and Tuition Plans, without

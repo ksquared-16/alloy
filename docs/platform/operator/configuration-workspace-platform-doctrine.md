@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-17
+last_reviewed: 2026-07-24
 supersedes: [docs/system/configuration-workspace-doctrine.md, docs/system/configuration-workspace-v1-doctrine.md]
 ---
 
@@ -425,6 +425,23 @@ Each brings its own objects (an Offering, a Template, a Process, a Role, a Surfa
 
 ---
 
+## Organization Configuration product realization (July 2026)
+
+The seven Organization domains below now share one **realized** interaction language — Collection → Selected object → Focused workspace, embedded editing, overview-before-edit (Surfaces excepted: Edit-first), and Configuration Runtime visual primitives. This sprint closes **product UI realization**, not runtime convergence or deferred backends.
+
+| Domain | Canonical route | Closeout posture |
+|--------|-----------------|------------------|
+| Programs & Locations | `/organization/programs-locations` | Publishable Programs + Locations reference workspace |
+| Financials | `/organization/financials` | Grouped landing; catalog/chapter collection workspaces |
+| Access | `/organization/access` | UI realized; identity/auth runtime deferred |
+| Business Processes | `/organization/processes` | Collection → Process workspace rehosted |
+| Surfaces | `/organization/surfaces` | Edit-first; collapsible inspector; tab-row Save/Publish |
+| Data Model | `/organization/data-model` | Entity-centric; OC deep-link only |
+
+Milestone record: [`../milestones/organization-configuration-product-realization-closeout.md`](../milestones/organization-configuration-product-realization-closeout.md). Per-domain product UI docs live under `docs/platform/operator/*-product-ui.md`.
+
+---
+
 ## Non-goals
 
 - This is **not** the control plane. What configuration is *allowed* to steer (the four-plane Fields/Grouping/Surfaces/Actions model) is `../modules/configuration-platform.md`. This doctrine owns the *experience*, not the capability.
@@ -467,6 +484,7 @@ Future engineers **must not** build:
 - `../foundation/platform-decisions.md` — the registered platform decision ("Configuration is object-centric") this doctrine realizes.
 - `alloy-visual-language.md`, `canonical-interaction-model.md`, `operational-surface-design-system.md` — the operator platform this doctrine specializes.
 - `../modules/configuration-platform.md`, `../../system/configuration-ownership-doctrine.md`, `../../system/configuration-mode-doctrine.md` — the control plane, ownership matrix, and shell this doctrine consumes.
+- `../milestones/organization-configuration-product-realization-closeout.md` — Organization Configuration product realization closeout (July 2026).
 
 ## When this doc must be updated
 

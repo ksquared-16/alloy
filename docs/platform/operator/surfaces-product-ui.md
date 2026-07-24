@@ -1,13 +1,13 @@
 ---
 owner: operator
-status: active
-last_reviewed: 2026-07-23
+status: canonical
+last_reviewed: 2026-07-24
 supersedes: []
 ---
 
 # Surfaces product UI
 
-UI-only product realization for **Surfaces** (`/organization/surfaces`).
+UI-only product realization for **Surfaces** (`/organization/surfaces`). **Product realization is complete** — see [`../milestones/organization-configuration-product-realization-closeout.md`](../milestones/organization-configuration-product-realization-closeout.md).
 
 This document freezes the operator experience so `/organization/surfaces` matches the compact
 Organization landing pattern already shipped for Financials and Programs & Locations:
@@ -46,10 +46,12 @@ separate back-compat redirect source outside this product path.
 
 - Category → Collection → Selected Surface workspace for `/settings/surfaces`
 - Surface collection rail (search) per category, replacing the prior tile-landing default
-- Selected Surface workspace with a 6-tab bar: **Overview · Edit · Assignments · Versions ·
-  Health · History**
+- Selected Surface workspace with a 5-tab bar: **Edit · Assignments · Versions · Health · History**
+  (Edit-first — no Overview tab)
 - Embedding every existing Surface editor **inline** inside the Edit tab (never full-bleed)
-- New Overview tab (presentation only, composed from data already loaded)
+- Collapsible builder inspector (`SurfaceBuilderInspectorRail`, default collapsed)
+- Save / Publish / Undo / Reset lifted onto the workspace tab row (`SurfaceEditTabActions`)
+- Publication posture on collection rows (`publicationBySurfaceId`)
 - Disabling full-bleed studio chrome for the Surfaces product path
 - Truthful runtime certification matrix for how published Surface config reaches operator runtime
 
@@ -72,8 +74,7 @@ Surfaces
   Category rail: Focus Panels · Queue Rows · Workspaces · Work Units · Operational Intelligence
   Collection rail (search, per category)
   Selected Surface
-    Overview
-    Edit          — embeds the existing editor inline
+    Edit          — default; embeds the existing editor inline
     Assignments
     Versions
     Health
@@ -101,35 +102,23 @@ Operational Intelligence — the existing `SURFACE_CONFIG_SECTIONS` from
 
 **Collection rail**: search box + the section's `listItems` (reused from
 `useSurfacesConfigurationSettings`, `useWorkspaceProcessCatalog`, `useQueueRowProcessCatalog`).
-Selecting a row always lands on **Overview**, never auto-Edit.
+Each row shows publication posture when known. Selecting a row lands on **Edit**
+(`SURFACE_WORKSPACE_DEFAULT_TAB`), never a read-only Overview.
 
 **No selection**: an intentional `ConfigurationEmptyState` — "Choose a Surface" / "Select a
 Surface to review its composition, assignments, versions, and health."
 
-**Selected Surface workspace**: title + subtitle, then the 6-tab bar
-(`SURFACE_WORKSPACE_TABS`). Deep link `?editor=1&layout=X` selects Surface `X` and opens the Edit
-tab without hiding the category/collection rails and without activating studio chrome.
+**Selected Surface workspace**: title + subtitle, then the 5-tab bar
+(`SURFACE_WORKSPACE_TABS`) with **Edit** first. When `tab=edit`, **Save / Publish / Undo / Reset**
+render on the tab row via `SurfaceEditTabActions` (registered by each editor through
+`SurfaceBuilderChromeProvider`). Deep link `?editor=1&layout=X` selects Surface `X` and opens Edit
+without hiding the category/collection rails and without activating studio chrome.
 
-## Overview
-
-Presentation only — reads `selectedObject` + the bound lifecycle catalog entry (when the Surface
-is process-scoped); makes no independent request.
-
-- **Surface Snapshot** — name, category label, humanized editor kind (`editorKindLabel()`)
-- **Composition Summary** — "Open Edit to compose this Surface" + which editor it uses; button
-  jumps to Edit
-- **Used By / Assignments** — bound business process name when known; calm Planned note otherwise;
-  button jumps to Assignments
-- **Publication** — calm note that publication state is managed inside Edit (each editor owns its
-  own draft/publish flow; no cross-editor publication state is fabricated)
-- **Health** — button jumps to Health
-
-No version numbers are fabricated anywhere in this tab.
-
-## Edit
+## Edit (default tab)
 
 When a Surface has a wired editor, the Edit tab renders it **inline** in the main workspace pane,
-with the category and collection rails still visible:
+with the category and collection rails still visible. Builder **inspectors** wrap in
+`SurfaceBuilderInspectorRail` (**default collapsed**); the row canvas is the primary editing surface.
 
 | Surface kind | Editor component |
 |---|---|
@@ -141,9 +130,9 @@ with the category and collection rails still visible:
 | Operational Intelligence | `OperationalIntelligenceSurfaceBuilder` |
 | Nested surface (drill-in) | `NestedSurfaceEditor` |
 
-Every editor's `onBack` now calls `setTab("overview")` — returns to Overview inside the same
-shell (button label: **← Overview**). `WorkspaceProcessesSurfaceEditor`'s `onSelectProcess` still
-calls `openSurface(id)` to move between processes while staying in Edit, preserving its existing
+Every editor's `onBack` calls `clearSelection` — returns to the collection without inner
+← Surfaces chrome. `WorkspaceProcessesSurfaceEditor`'s `onSelectProcess` still calls
+`openSurface(id)` to move between processes while staying in Edit, preserving its existing
 in-editor navigation behavior. Surfaces without a wired editor show either a live/preview link
 (when the catalog provides one) or a calm "Authoring for this surface is coming soon" note —
 never a blank page.
@@ -181,9 +170,9 @@ Business Processes pattern:
 
 | Area | Status |
 |---|---|
-| Category rail, collection rail (search), selected-Surface header, tab navigation | Wired (existing hooks/catalogs) |
-| Overview tab | Wired (presentation over existing selection state) |
-| Edit tab — all 6 editor kinds + nested surface | Wired (existing editors, unchanged, now embedded inline) |
+| Category rail, collection rail (search + publication posture), selected-Surface header, tab navigation | Wired (existing hooks/catalogs) |
+| Edit tab — all 6 editor kinds + nested surface | Wired (existing editors, embedded inline; inspector default collapsed) |
+| Save / Publish / Undo / Reset on tab row | Wired (`SurfaceEditTabActions` + `SurfaceBuilderChromeProvider`) |
 | Assignments tab — catalog-bound and org-singleton surfaces | Wired (truthful) |
 | Assignments tab — unresolved bindings | Planned |
 | Versions tab | Planned |
