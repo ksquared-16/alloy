@@ -91,7 +91,6 @@ export function assembleConversation(mission_id) {
   const capabilityMissions = m.capability_id
     ? readMissions(null, 1000).filter((x) => x.capability_id === m.capability_id)
     : [];
-  const pastMissions = Math.max(0, capabilityMissions.filter((x) => x.mission_id !== mission_id).length);
 
   // Confidence-qualified counsel (readiness + attempt history + frontier),
   // composed from signals already computed and frozen on the package.
@@ -128,26 +127,12 @@ export function assembleConversation(mission_id) {
   const closing = [{ from: "director", kind: "state", text: directorSays(V, m, title, counsel), at: m.updated_at }];
   const messages = [...opening, ...middle, ...closing];
 
-  // ---- insights: what we're doing / what Director knows / still needs ----
-  const refs = (pkg?.relevant_documents || []).length + (pkg?.approved_references || []).length;
-  const knows = [
-    cap ? `The capability: ${cap.name}` : null,
-    (cap?.accepted_decisions || []).length ? `${(cap.accepted_decisions || []).length} product decision${(cap.accepted_decisions || []).length === 1 ? "" : "s"}` : null,
-    pastMissions ? `${pastMissions} past mission${pastMissions === 1 ? "" : "s"}` : null,
-    refs ? `${refs} reference${refs === 1 ? "" : "s"}` : null,
-    pkg ? `A prepared package (v${pkg.version})` : null,
-  ].filter(Boolean);
-  // What Director still needs: the send-back items when not ready, OR the
-  // load-bearing frontier when a "Ready" package still has an open question —
-  // so a computed unknown is never suppressed behind a green verdict.
-  const needs = counsel.needs;
-
   const st = conversationState(m, pkg);
   return {
     schema_version: "vacilando.conversation.v1",
     conversation_id: mission_id, mission_id, title, intent,
     state: st, verdict: V, capability_id: m.capability_id || null,
-    messages, insights: { goal: intent, knows, needs },
+    messages,
     understanding, operations,
     package: pkg || null, mission: m,
     acceptance: readAcceptance(mission_id),

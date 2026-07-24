@@ -1464,7 +1464,6 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-daccept]"))) { convMissionAct("accept", n.dataset.daccept, "Accepted"); return; }
   if ((n = t("[data-dclose]"))) { convMissionAct("close", n.dataset.dclose, "Closed — capacity freed"); return; }
   if ((n = t("[data-dstop]"))) { convMissionAct("stop", n.dataset.dstop, "Stopped"); return; }
-  if ((n = t("[data-dapprove]"))) { missionAct("start", n.dataset.dapprove, {}, "Approved — sending to the worker"); return; }
   // Specific actions win over container selection: a worker-dock card is a
   // [data-sel] container that WRAPS its own action buttons, so [data-sel] must
   // be the LAST fallback — otherwise every button click just selects the card.
