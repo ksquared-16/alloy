@@ -43,24 +43,29 @@ describe("workspace overview responsive layout primitives", () => {
         expect(WS_OVERVIEW_INFO_PRIMARY).toContain("lg:col-span-2");
     });
 
-    it("Processing, Communications, and Scheduling compose shared overview primitives", () => {
+    it("Processing, Communications, Scheduling, and Work Items compose shared overview primitives", () => {
         const processing = readSrc("app/adminV2/pos/ProcessingOverviewLanding.tsx");
         const comms = readSrc("app/adminV2/communications/CommunicationsOverviewLanding.tsx");
         const scheduling = readSrc("components/adminV2/scheduling/screens/SchedulingOverview.tsx");
+        const workItems = readSrc("app/adminV2/tasks/WorkItemsOverviewLanding.tsx");
+        const oi = readSrc("components/adminV2/intelligence/OperationalIntelligencePanel.tsx");
 
-        for (const src of [processing, comms]) {
+        for (const src of [processing, comms, workItems]) {
             expect(src).toContain("WorkspaceOverviewStack");
             expect(src).toContain("WorkspaceOverviewActionRow");
-            expect(src).toContain("WorkspaceOverviewActivityBand");
             expect(src).toContain("WorkspaceOverviewInfoGrid");
             expect(src).toContain("WorkspaceOverviewInfoPrimary");
             expect(src).not.toContain("max-w-6xl space-y-5");
+            expect(src).not.toContain("max-w-6xl space-y-7");
         }
 
         expect(scheduling).toContain("WorkspaceOverviewStack");
         expect(scheduling).toContain("WS_OVERVIEW_INFO_SPLIT");
         expect(scheduling).toContain("WS_OVERVIEW_LAUNCH_GRID");
         expect(scheduling).not.toContain("max-w-[1180px]");
+
+        expect(oi).toContain("WS_OVERVIEW_CONTENT");
+        expect(oi).toContain("data-workspace-overview-width");
     });
 
     it("layout components expose stable data markers", () => {

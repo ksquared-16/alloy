@@ -452,7 +452,7 @@ Eyebrow labels stack **above** the metric row — never beside metrics in a hori
 
 **Overview sections:** compact **Today's activity** tiles via `SurfaceHeaderKpiCard` in `*OverviewLanding` — below action cards, non-interactive, same grid density as Communications (`grid-cols-2 lg:grid-cols-4`, `space-y-5` rhythm).
 
-**Overview content width (shared):** compose `WorkspaceOverviewStack` / `WS_OVERVIEW_*` tokens from `@/components/workspace/doctrine` — `max-w-6xl` through tablet, expanding to `xl:max-w-[80rem]` / `2xl:max-w-[90rem]` so large desktops use the expanded canvas intentionally. Information zones use `WorkspaceOverviewInfoGrid` (primary continue/recent panel first) or `WS_OVERVIEW_INFO_SPLIT` for two-zone overviews (Scheduling). Do **not** invent module-specific max-width shells.
+**Overview content width (shared):** compose `WorkspaceOverviewStack` / `WS_OVERVIEW_*` tokens from `@/components/workspace/doctrine` — `max-w-6xl` through tablet, expanding to `xl:max-w-[80rem]` / `2xl:max-w-[90rem]` so large desktops use the expanded canvas intentionally. Information zones use `WorkspaceOverviewInfoGrid` (primary continue/recent panel first) or `WS_OVERVIEW_INFO_SPLIT` for two-zone overviews (Scheduling). Live adopters: Processing, Communications, Scheduling, Work Items (no Overview metric tiles), and Operational Intelligence Overview (same `WS_OVERVIEW_CONTENT` width without inventing a second shell). Do **not** invent module-specific max-width shells.
 
 **Operational sections:** `WorkspaceOperationalHealth` in the nav control band. Module adapters (e.g. `ProcessingKpiStrip`, `CommunicationsWorkspaceKpiStrip`) supply **data and trend placeholders only**. Shell adapters omit `metricsColumn` when the active section is Overview.
 
