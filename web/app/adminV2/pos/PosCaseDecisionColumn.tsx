@@ -14,28 +14,36 @@ import ReviewDecideCard, { DECISION_TO_ACTION } from "@/app/adminV2/processing/R
 import { approveButtonLabel, resolveDecisionPresentation } from "@/lib/pos/decisionPresentation";
 import { buildMatchedRecords } from "@/lib/pos/matchedRecordsPresentation";
 import { buildCommitPlanLines } from "@/lib/pos/commitPlanSummary";
+import { buildApprovalResultView, type ApprovalResultLine } from "@/lib/pos/approvalResultPresentation";
 import WorkspaceActionBar from "@/components/workspace/WorkspaceActionBar";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import PosPanel from "./PosPanel";
 import { POS_STATUS_LABELS } from "./posSections";
 import type { PosCaseState } from "./usePosCase";
 
-const RECORD_TYPE_LABELS: Record<string, string> = {
-    person: "Person",
-    customer: "Customer",
-    opportunity: "Opportunity",
-    customer_member: "Member",
-};
-
 function statusLabel(s: string): string {
     return POS_STATUS_LABELS[s] ?? s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
-function outputLine(approveResult: PosCaseState["approveResult"]): string {
-    if (approveResult?.recordId) {
-        return `${approveResult.created ? "Created" : "Linked"} ${RECORD_TYPE_LABELS[approveResult.recordType ?? ""] ?? approveResult.recordType} ${approveResult.recordId}`;
-    }
-    return "Completed.";
+/** One "Linked / Created / Updated" group — rendered only when it has lines. */
+function ResultGroup({ title, lines }: { title: string; lines: ApprovalResultLine[] }) {
+    if (lines.length === 0) return null;
+    return (
+        <div>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">{title}</div>
+            <ul className="space-y-1">
+                {lines.map((l, i) => (
+                    <li key={i} className="flex items-baseline gap-1.5 text-[12.5px] text-alloy-midnight">
+                        <span aria-hidden className="text-alloy-bend-pine">•</span>
+                        <span>
+                            {l.primary}
+                            {l.secondary ? <span className="text-alloy-midnight/50"> — {l.secondary}</span> : null}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
 }
 
 export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }) {
@@ -53,10 +61,29 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
     // Concise "Approval will:" plan for the rail — derived from the same honest matched-record
     // cards the middle column shows, so the rail never promises a plan the records don't support.
     const submitted = evidence.flatMap((e) => e.proposedValues).map((v) => ({ label: v.label, value: v.value ?? null }));
-    const planLines =
+    const matchedCards =
         rec?.supported && rec.recommendation
-            ? buildCommitPlanLines(buildMatchedRecords({ recommendation: rec.recommendation, intent: rec.intent ?? null, submitted }))
+            ? buildMatchedRecords({ recommendation: rec.recommendation, intent: rec.intent ?? null, submitted })
             : [];
+    const planLines = matchedCards.length ? buildCommitPlanLines(matchedCards) : [];
+
+    // §5 — after approval, the honest "Linked / Created / Updated" result: created lines gated on
+    // the real committed record ids the server returned, linked lines on the link decision.
+    const recommendedCandidate =
+        rec?.recommendation?.recommendedCandidateId
+            ? (rec.candidateDetails ?? []).find((d) => d.id === rec.recommendation!.recommendedCandidateId) ?? null
+            : null;
+    const submittedZip = submitted.find((v) => /\b(zip|postal)\b/i.test(v.label))?.value ?? null;
+    const leadRecords = approveResult && "records" in approveResult ? approveResult.records ?? null : null;
+    const resultView = isClosed
+        ? buildApprovalResultView({
+              cards: matchedCards,
+              records: leadRecords,
+              linkedParentName: recommendedCandidate?.fullName ?? null,
+              linkedHouseholdName: recommendedCandidate?.householdName ?? null,
+              submittedZip,
+          })
+        : null;
 
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -67,15 +94,26 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
                 ) : (
                     <div className="rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.07] p-3 text-[12.5px] text-alloy-midnight">
                         <div className="font-semibold">{statusLabel(detail.status)}</div>
-                        <p className="mt-0.5 text-[11.5px] text-alloy-bend-pine/80">{outputLine(approveResult)}</p>
+                        <p className="mt-0.5 text-[11.5px] text-alloy-bend-pine/80">
+                            {resultView && !resultView.isEmpty ? "The records below were saved." : "This case is complete."}
+                        </p>
                     </div>
                 )}
 
                 {/* Result — a full panel only once there IS a result; a quiet one-liner before that,
-                    so an empty Result box never dominates the narrow decision rail (§8). */}
+                    so an empty Result box never dominates the narrow decision rail (§8). After approval,
+                    the concrete records grouped as Linked / Created / Updated, human language only (§5). */}
                 {isClosed ? (
                     <PosPanel eyebrow="Result" accent={false}>
-                        <div className="text-[12.5px] text-alloy-midnight">{outputLine(approveResult)}</div>
+                        {resultView && !resultView.isEmpty ? (
+                            <div className="space-y-2.5">
+                                <ResultGroup title="Linked" lines={resultView.linked} />
+                                <ResultGroup title="Created" lines={resultView.created} />
+                                <ResultGroup title="Updated" lines={resultView.updated} />
+                            </div>
+                        ) : (
+                            <div className="text-[12.5px] text-alloy-midnight">This case is complete.</div>
+                        )}
                     </PosPanel>
                 ) : (
                     <p className="px-1 text-[11px] leading-snug text-alloy-midnight/40">

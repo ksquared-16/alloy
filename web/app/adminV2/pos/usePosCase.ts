@@ -21,7 +21,24 @@ import {
 import type { ProcessingCaseDetail } from "@/lib/pos/processingCase/readModel/types";
 import type { SourceEvidence } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
 import type { HandoffResult } from "@/lib/pos/processingCase/approveHandoff";
+import type { CommittedRecordIds } from "@/lib/pos/approvalResultPresentation";
 import type { RecommendationView } from "@/app/adminV2/processing/ReviewDecideCard";
+
+/**
+ * The full lead-commit result the approve route returns for a form_submission case — the
+ * committed records (household / child / person / lead / participation) plus the top-level lead.
+ * The minimal non-lead handoff returns a plain HandoffResult, so approveResult is their union.
+ */
+export interface LeadCommitResult {
+    kind: "lead";
+    recordType?: string;
+    recordId?: string | null;
+    created?: boolean;
+    records?: CommittedRecordIds;
+    attemptId?: string;
+}
+
+export type OperationalCommitResult = HandoffResult | LeadCommitResult;
 
 interface DetailResponse {
     data: { detail: ProcessingCaseDetail; evidence: SourceEvidence[]; affectedRecordTypes: string[] };
@@ -39,7 +56,7 @@ export interface PosCaseState {
     approve: () => Promise<void>;
     approving: boolean;
     approveErr: string | null;
-    approveResult: HandoffResult | null;
+    approveResult: OperationalCommitResult | null;
     isClosed: boolean;
 }
 
@@ -49,7 +66,7 @@ export function usePosCase(caseId: string | null): PosCaseState {
     const [error, setError] = useState<string | null>(null);
     const [approving, setApproving] = useState(false);
     const [approveErr, setApproveErr] = useState<string | null>(null);
-    const [approveResult, setApproveResult] = useState<HandoffResult | null>(null);
+    const [approveResult, setApproveResult] = useState<OperationalCommitResult | null>(null);
     const [rec, setRec] = useState<RecommendationView | null>(null);
     const [recLoading, setRecLoading] = useState(false);
 
@@ -128,7 +145,7 @@ export function usePosCase(caseId: string | null): PosCaseState {
                 credentials: "same-origin",
             });
             if (!res.ok) throw new Error(`Request failed (${res.status})`);
-            const body = (await res.json()) as { data?: { operationalResult?: HandoffResult | null } };
+            const body = (await res.json()) as { data?: { operationalResult?: OperationalCommitResult | null } };
             setApproveResult(body.data?.operationalResult ?? null);
             dispatchOperationalWorkRefresh({
                 processing_case_id: caseId,

@@ -82,11 +82,27 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                 // Phase 1 — populate the committed Person's canonical address (incl. ZIP) through the
                 // canonical field system. ZIP is identity, not intake: this reuses the same writer as the
                 // manual Create-Lead path. Never blocks the commit.
-                if (personId) {
+                //
+                // The address goes onto the person the lead actually belongs to — the newly created
+                // person, or (on a LINK decision, where there is no create_person op) the existing
+                // person the lead was linked to, read back from the committed opportunity's
+                // primary_person_id. Without this fallback, linking an existing parent silently dropped
+                // the submitted ZIP.
+                let addressPersonId: string | null = personId;
+                if (!addressPersonId && leadId) {
+                    const { data: leadRow } = await supabase
+                        .from("opportunities")
+                        .select("primary_person_id")
+                        .eq("org_id", ctx.orgId)
+                        .eq("id", leadId)
+                        .maybeSingle();
+                    addressPersonId = (leadRow as { primary_person_id?: string | null } | null)?.primary_person_id ?? null;
+                }
+                if (addressPersonId) {
                     try {
                         await persistIntakePersonAddressFieldValues(supabase, {
                             orgId: ctx.orgId,
-                            personId,
+                            personId: addressPersonId,
                             caseMetadata: row.metadata ?? null,
                         });
                     } catch {
