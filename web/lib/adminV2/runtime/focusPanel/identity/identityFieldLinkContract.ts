@@ -71,7 +71,22 @@ export const IDENTITY_LINK_CARD_OPTIONS: ReadonlyArray<{ value: FocusPanelCardKe
     { value: "children", label: "Children" },
     { value: "household", label: "Household" },
     { value: "current_work", label: "What's Next" },
+    { value: "communications", label: "Contacts" },
+    { value: "tour_summary", label: "Tour" },
+    { value: "milestones", label: "Milestones" },
+    { value: "billing_preview", label: "Billing Preview" },
 ];
+
+/** Builder destination picker — Visible + Linked only (never Hidden). */
+export function identityLinkDestinationOptions(
+    visibilityByCardKey?: ReadonlyMap<FocusPanelCardKey, import("@/lib/adminV2/runtime/focusPanel/focusPanelCardVisibility").FocusPanelCardVisibility>,
+): ReadonlyArray<{ value: FocusPanelCardKey; label: string }> {
+    if (!visibilityByCardKey) return IDENTITY_LINK_CARD_OPTIONS;
+    return IDENTITY_LINK_CARD_OPTIONS.filter((opt) => {
+        const visibility = visibilityByCardKey.get(opt.value) ?? "visible";
+        return visibility === "visible" || visibility === "linked";
+    });
+}
 
 export const IDENTITY_LINK_OPEN_OPTIONS: ReadonlyArray<{ value: IdentityLinkDestinationOpen; label: string }> = [
     { value: "detail", label: "Detail" },
@@ -124,11 +139,19 @@ export function resolveIdentityFieldLinkContract(fieldRef: string): IdentityFiel
             defaultTarget: null,
         };
     }
+    const dest = defaultTarget.toCard;
+    const linkLabel =
+        dest === "scheduling" ? "Schedule"
+        : dest === "household" ? "Household"
+        : dest === "children" ? "Children"
+        : dest === "communications" ? "Contacts"
+        : dest === "current_work" ? "What's Next"
+        : "Open";
     return {
         fieldRef: normalized,
         canOfferLinked: true,
-        destinationCard: defaultTarget.toCard,
-        linkLabel: "Open",
+        destinationCard: dest,
+        linkLabel,
         defaultTarget,
     };
 }

@@ -36,6 +36,10 @@ import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focus
 import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { resolveIdentityPlacementLabelMode } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import {
+    isCompactTitleRedundantIdentityField,
+    resolveCompactIdentitySummaryLabelMode,
+} from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
 import { composeContextCollectionRows } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import {
     enabledEvidenceSections,
@@ -139,6 +143,24 @@ function buildRecordRows(args: {
             tier: args.purpose,
         });
         if (!fieldShouldRender(policy)) continue;
+        const authoredLabelModeEarly =
+            placement.labelMode === "hidden"
+            || placement.labelMode === "eyebrow"
+            || placement.labelMode === "visible"
+                ? placement.labelMode
+                : group.fieldModes?.[placement.fieldRef]?.showLabel === false
+                  ? ("hidden" as const)
+                  : group.fieldModes?.[placement.fieldRef]?.showLabel === true
+                    ? ("visible" as const)
+                    : null;
+        // Compact summary: omit title-redundant name parts entirely (runtime projection only).
+        if (
+            args.purpose === "summary"
+            && authoredLabelModeEarly == null
+            && isCompactTitleRedundantIdentityField(placement.fieldRef)
+        ) {
+            continue;
+        }
         const isMaskedChannel =
             args.maskedChannels
             && args.subject.kind === "person"
@@ -170,9 +192,17 @@ function buildRecordRows(args: {
             ? normalizeIdentityFieldLinkTarget(placement.linkTarget, placement.fieldRef)
                 ?? linkContract.defaultTarget
             : null;
+        const authoredLabelMode = authoredLabelModeEarly;
         const placementForRuntime = {
             ...placement,
-            labelMode: resolveIdentityPlacementLabelMode(placement, group.fieldModes, placement.fieldRef),
+            labelMode: resolveCompactIdentitySummaryLabelMode({
+                fieldRef: placement.fieldRef,
+                authoredLabelMode:
+                    authoredLabelMode
+                    ?? resolveIdentityPlacementLabelMode(placement, group.fieldModes, placement.fieldRef),
+                purpose: args.purpose,
+                treatResolvedVisibleAsUnauthored: authoredLabelMode == null,
+            }),
         };
         inputs.push({
             placement: placementForRuntime,

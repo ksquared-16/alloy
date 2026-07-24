@@ -28,8 +28,8 @@ function UnsupportedPanelBody({ action, surface }: { action: CurrentWorkActionVM
     const reason =
         action.disabledReason
         ?? (surface === "unsupported"
-            ? "This action is not available inline from Current Work yet."
-            : "This action cannot be run from Current Work.");
+            ? "This action is not available inline from What's Next yet."
+            : "This action cannot be run from What's Next.");
 
     return (
         <div className="alloy-os-currentwork__action-panel-body" data-work-action-panel-state="unsupported">
@@ -81,6 +81,8 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
         // Focus Panel Activity uses (`.alloy-os-activity-cockpit__comms` → `.alloy-os-activity-
         // workspace__embed` → activity_embed variant). The composer fills the host height with an
         // internal-scroll thread and its Send / Send later / BOS Assist footer stays visible.
+        // Close lives on the What's Next card header (capability-active) so the compose body
+        // gets full vertical room — no Communication chip / Message sub-header here.
         return (
             <div
                 className="alloy-os-currentwork__composer-host"
@@ -89,21 +91,6 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
                 data-work-action-surface="communications_composer"
                 aria-label={`${action.label} composer`}
             >
-                <div className="alloy-os-currentwork__action-panel-header alloy-os-currentwork__composer-header">
-                    <div>
-                        <p className="alloy-os-currentwork__action-panel-eyebrow">Communication</p>
-                        <h3 className="alloy-os-currentwork__action-panel-title">{action.label}</h3>
-                    </div>
-                    <button
-                        type="button"
-                        className="alloy-os-currentwork__action-panel-close"
-                        onClick={onClose}
-                        aria-label="Close composer"
-                        data-work-action-panel-close="true"
-                    >
-                        Close
-                    </button>
-                </div>
                 <div className="alloy-os-activity-cockpit__comms">
                     <div className="alloy-os-activity-workspace__embed" data-activity-cockpit-embed="true">
                         <CommunicationsDrawerSection

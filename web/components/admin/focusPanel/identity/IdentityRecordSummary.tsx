@@ -219,17 +219,6 @@ export default function IdentityRecordSummary({
                             defaultOpen
                         />
                     ) : null}
-                    {onActivate && !batchEditing ? (
-                        <button
-                            type="button"
-                            className="identity-record-summary__open-details"
-                            data-identity-open-details={record.id}
-                            onClick={() => onActivate(record.id)}
-                            aria-label={`Open details for ${record.title}`}
-                        >
-                            Details →
-                        </button>
-                    ) : null}
                 </div>
                 {showPersonLevelEdit ? (
                     <button

@@ -293,7 +293,7 @@ export default function CurrentWorkCard({
                 invokeHeaderDelegate(plan.action);
                 return;
             default:
-                setHandoffNotice("This action is not available from Current Work.");
+                setHandoffNotice("This action is not available from What's Next.");
         }
     };
 
@@ -464,13 +464,13 @@ export default function CurrentWorkCard({
     const body =
         stageWorkPending ? (
             <div className="alloy-os-household__summary" data-work-pending="true" aria-busy="true">
-                <p className="alloy-os-household__row-detail alloy-os-currentwork__pending" aria-label="Loading current work">
-                    Loading current work…
+                <p className="alloy-os-household__row-detail alloy-os-currentwork__pending" aria-label="Loading What's Next">
+                    Loading What&apos;s Next…
                 </p>
             </div>
         ) : evidence.isEmpty ? (
             <div className="alloy-os-household__summary" data-work-empty="true">
-                <p className="alloy-os-household__row-detail">No current work configured</p>
+                <p className="alloy-os-household__row-detail">No What&apos;s Next configured</p>
             </div>
         ) : completionPhase === "complete" && completionSummary ?
             <OutcomeCompleteBody
@@ -507,6 +507,17 @@ export default function CurrentWorkCard({
             data-capability-active={capabilityActive ? "true" : undefined}
             data-current-work-surface="true"
         >
+            {capabilityActive ?
+                <button
+                    type="button"
+                    className="alloy-os-currentwork__capability-close"
+                    onClick={closeActionPanel}
+                    aria-label="Close composer"
+                    data-work-action-panel-close="true"
+                >
+                    Close
+                </button>
+            :   null}
             <UniversalCard
                 title={vm.microLabel}
                 insight={surface.title}

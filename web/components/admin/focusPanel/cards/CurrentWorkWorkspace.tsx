@@ -98,7 +98,7 @@ export default function CurrentWorkWorkspace({
                 className="alloy-os-currentwork-workspace"
                 data-current-work-workspace="true"
                 data-work-completion="complete"
-                aria-label="Current Work workspace"
+                aria-label="What's Next workspace"
             >
                 <WorkspaceChrome onBack={onBack} title={surface.title} statusLabel="Completed" />
                 <div className="alloy-os-currentwork__complete" data-work-completion="complete">
@@ -141,7 +141,7 @@ export default function CurrentWorkWorkspace({
                 className="alloy-os-currentwork-workspace"
                 data-current-work-workspace="true"
                 data-work-completion="select"
-                aria-label="Current Work workspace"
+                aria-label="What's Next workspace"
             >
                 <WorkspaceChrome
                     onBack={onBack}
@@ -169,7 +169,7 @@ export default function CurrentWorkWorkspace({
                 className="alloy-os-currentwork-workspace"
                 data-current-work-workspace="true"
                 data-work-completion="confirm"
-                aria-label="Current Work workspace"
+                aria-label="What's Next workspace"
             >
                 <WorkspaceChrome
                     onBack={onBack}
@@ -195,7 +195,7 @@ export default function CurrentWorkWorkspace({
                 className="alloy-os-currentwork-workspace"
                 data-current-work-workspace="true"
                 data-work-completion="processing"
-                aria-label="Current Work workspace"
+                aria-label="What's Next workspace"
             >
                 <WorkspaceChrome onBack={onBack} title={surface.title} statusLabel={surface.statusLabel} />
                 <p className="alloy-os-household__row-detail">Applying outcome…</p>
@@ -232,7 +232,7 @@ export default function CurrentWorkWorkspace({
             className="alloy-os-currentwork-workspace"
             data-current-work-workspace="true"
             data-work-completion="working"
-            aria-label="Current Work workspace"
+            aria-label="What's Next workspace"
         >
             <header className="alloy-os-currentwork-workspace__header">
                 <button
