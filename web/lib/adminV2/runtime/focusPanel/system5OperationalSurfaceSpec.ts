@@ -64,8 +64,8 @@ export function footprintToGridSpan(footprint: FocusPanelCardFootprint): FocusPa
     }
 }
 
-/** Lucide icon names — resolved in UniversalCardIcon. */
-export const SYSTEM5_CARD_ICON: Partial<Record<FocusPanelCardKey, string>> = {
+/** Lucide icon names — resolved in UniversalCardIcon (every key must resolve). */
+export const SYSTEM5_CARD_ICON: Record<FocusPanelCardKey, string> = {
     attention: "AlertCircle",
     current_mission: "Target",
     current_work: "Briefcase",
@@ -75,6 +75,7 @@ export const SYSTEM5_CARD_ICON: Partial<Record<FocusPanelCardKey, string>> = {
     tour_summary: "Calendar",
     household: "Home",
     children: "Baby",
+    milestones: "Flag",
     scheduling: "CalendarDays",
     communications: "MessageSquare",
     documents: "FileText",
@@ -116,8 +117,8 @@ export const SYSTEM5_DEFAULT_CARD_ACTIONS: Partial<
     documents: { label: "View documents →", variant: "secondary" },
 };
 
-export function system5IconForCard(key: FocusPanelCardKey): string | null {
-    return SYSTEM5_CARD_ICON[key] ?? null;
+export function system5IconForCard(key: FocusPanelCardKey): string {
+    return SYSTEM5_CARD_ICON[key] ?? "LayoutGrid";
 }
 
 export function system5DefaultActionForCard(

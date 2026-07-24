@@ -1676,14 +1676,7 @@ html[data-alloy-os-runtime="on"]
   border-left-color: var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
-.alloy-os-ucard--tier-attention .alloy-os-ucard__title,
-.alloy-os-ucard--tier-work .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="attention"] .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="current_mission"] .alloy-os-ucard__title {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--alloy-os-midnight, #273f52);
-}
+/* Title chrome unified below (.alloy-os-ucard__title) — no tier-specific title overrides. */
 
 .alloy-os-ucard--tier-attention .alloy-os-ucard__insight,
 .alloy-os-ucard--tier-work .alloy-os-ucard__insight,
@@ -1746,22 +1739,6 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard[data-universal-card-key="readiness_kpi"],
 .alloy-os-ucard[data-universal-card-key="tour"] {
   border-left: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
-}
-
-.alloy-os-ucard--tier-metric .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="health"] .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="readiness_kpi"] .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="tour"] .alloy-os-ucard__title {
-  font-weight: 800;
-  color: var(--alloy-os-midnight, #273f52);
-}
-
-.alloy-os-ucard--compact .alloy-os-ucard__title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--alloy-os-text-secondary, #4b5563);
 }
 
 .alloy-os-ucard__insight {
@@ -2283,18 +2260,30 @@ html[data-alloy-os-runtime="on"]
   padding: 8px 12px 4px;
 }
 
+/* Shared header icon chrome — same quiet gray as the category title. */
 .alloy-os-ucard__icon {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
   margin-top: 1px;
-  color: var(--alloy-os-text-secondary, #4b5563);
+  color: var(--alloy-os-text-tertiary, #9ca3af);
 }
-.alloy-os-ucard--tier-attention .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
-.alloy-os-ucard--tier-work .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
-.alloy-os-ucard--tier-metric .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
-/* Uniform Bend Pine section icons across all neutral tiers (one cohesive language, no gray/pine mix) */
-.alloy-os-ucard--tier-context .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
-.alloy-os-ucard--tier-historical .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
+.alloy-os-ucard__icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
+.alloy-os-ucard--tier-attention .alloy-os-ucard__icon,
+.alloy-os-ucard--tier-work .alloy-os-ucard__icon,
+.alloy-os-ucard--tier-metric .alloy-os-ucard__icon,
+.alloy-os-ucard--tier-context .alloy-os-ucard__icon,
+.alloy-os-ucard--tier-reference .alloy-os-ucard__icon,
+.alloy-os-ucard--tier-historical .alloy-os-ucard__icon {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
 
 .alloy-os-ucard--micro .alloy-os-ucard__header {
   padding: 8px 10px;
@@ -4581,26 +4570,14 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-ucard__footer {
   padding: 0 13px 11px;
 }
-/* Title: quiet category label; the insight is the loud line. */
+/* Title: quiet category label for EVERY card; the insight is the loud line. */
 .alloy-os-ucard__title {
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--alloy-os-text-tertiary, #9ca3af);
-}
-.alloy-os-ucard--tier-reference .alloy-os-ucard__title,
-.alloy-os-ucard[data-card-role="reference"] .alloy-os-ucard__title,
-.alloy-os-ucard--tier-attention .alloy-os-ucard__title,
-.alloy-os-ucard--tier-work .alloy-os-ucard__title,
-.alloy-os-ucard--tier-metric .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="readiness_kpi"] .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="current_work"] .alloy-os-ucard__title {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--alloy-os-text-tertiary, #9ca3af);
-  font-weight: 700;
+  line-height: 1.2;
 }
 /* Answer line owns the visual weight. */
 .alloy-os-ucard__insight {
