@@ -41,6 +41,13 @@ export type WorkspaceHeaderBuilderProps = {
 
 export type SurfaceHeaderVariant = "workspace" | "work-unit";
 
+/**
+ * Work Unit page-header density. Orthogonal to ambient `metricDensity` (width):
+ * - `browse` — full identity + KPI strip (no record of attention)
+ * - `focus` — compact operational context bar when a record is selected / Focus Panel open
+ */
+export type WorkUnitHeaderDensity = "browse" | "focus";
+
 const VARIANT_META: Record<
     SurfaceHeaderVariant,
     {
@@ -234,18 +241,27 @@ export function WorkspaceHeader({
     builder,
     variant = "workspace",
     actionsSlot = null,
+    workUnitDensity = "browse",
 }: {
     model: WorkspaceHeaderPresentationModel;
     builder?: WorkspaceHeaderBuilderProps;
     variant?: SurfaceHeaderVariant;
     /** Operational Actions chrome — workspace / Work Unit control band (not BOS). */
     actionsSlot?: ReactNode;
+    /**
+     * Work Unit only: browse (full identity/KPI) vs focus (compact context bar when a record
+     * is selected). Ignored for workspace variant. Orthogonal to ambient metric density.
+     */
+    workUnitDensity?: WorkUnitHeaderDensity;
 }) {
     const meta = VARIANT_META[variant];
     const titleAttr = variant === "work-unit" ? "data-work-unit-header-title" : "data-workspace-header-title";
     const subtitleAttr = variant === "work-unit" ? "data-work-unit-header-subtitle" : "data-workspace-header-subtitle";
     const kpisAttr = variant === "work-unit" ? "data-work-unit-header-kpis" : "data-workspace-header-kpis";
-    const metricDensity = useAdaptiveMetricDensity();
+    const ambientMetricDensity = useAdaptiveMetricDensity();
+    const focusMode = variant === "work-unit" && workUnitDensity === "focus";
+    // Focus state forces compact KPI tiles so the Focus Panel rises; ambient still applies in browse.
+    const metricDensity = focusMode ? "compact" : ambientMetricDensity;
     const kpiRowClass =
         metricDensity === "compact"
             ? "flex flex-nowrap items-stretch justify-start gap-2 overflow-x-auto"
@@ -257,31 +273,47 @@ export function WorkspaceHeader({
             data-alloy-section={meta.section}
             {...{ [meta.dataAttr]: true }}
             data-adaptive-metric-density={metricDensity}
+            {...(variant === "work-unit"
+                ? { "data-work-unit-header-mode": workUnitDensity }
+                : {})}
             className={
                 variant === "work-unit"
-                    ? "flex flex-wrap items-start justify-between gap-x-6 gap-y-2"
+                    ? focusMode
+                        ? "flex flex-wrap items-center justify-between gap-x-4 gap-y-1"
+                        : "flex flex-wrap items-start justify-between gap-x-6 gap-y-2"
                     : // Workspace: title owns the left half; the KPI region anchors at the ~50%
                       // center point and flows RIGHT (left-aligned from that anchor, never stretched).
                       "flex flex-col gap-y-5 lg:grid lg:grid-cols-2 lg:items-center lg:gap-x-8"
             }
         >
-            <div className={`min-w-0 max-w-xl ${variant === "work-unit" ? "flex items-start gap-3" : ""}`}>
+            <div
+                className={`min-w-0 ${focusMode ? "max-w-2xl" : "max-w-xl"} ${
+                    variant === "work-unit" ? `flex ${focusMode ? "items-center gap-2" : "items-start gap-3"}` : ""
+                }`}
+            >
                 {variant === "work-unit" && model.identityIcon ? (
                     <span
                         aria-hidden
                         data-work-unit-header-identity-chip
-                        className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${processTileIdentityWellClass(model.identityAccent)} ${model.identityAccent ? workspaceHeaderKpiIconClass({ accent: model.identityAccent, status: "unknown" }) : "text-alloy-midnight/50"}`}
+                        className={`inline-flex shrink-0 items-center justify-center rounded-xl ${
+                            focusMode ? "h-8 w-8 rounded-lg" : "h-11 w-11"
+                        } ${processTileIdentityWellClass(model.identityAccent)} ${model.identityAccent ? workspaceHeaderKpiIconClass({ accent: model.identityAccent, status: "unknown" }) : "text-alloy-midnight/50"}`}
                     >
-                        <ProcessCardGlyph icon={model.identityIcon} className="h-5 w-5" />
+                        <ProcessCardGlyph
+                            icon={model.identityIcon}
+                            className={focusMode ? "h-3.5 w-3.5" : "h-5 w-5"}
+                        />
                     </span>
                 ) : null}
-                <div className="min-w-0 flex-1">
-                <BuilderHit field="title" builder={builder} className="block w-full">
+                <div className={`min-w-0 flex-1 ${focusMode ? "flex flex-wrap items-baseline gap-x-2 gap-y-0" : ""}`}>
+                <BuilderHit field="title" builder={builder} className="block w-full min-w-0">
                     <h1
                         {...{ [titleAttr]: true }}
                         className={`leading-tight tracking-[-0.02em] text-alloy-midnight ${
                             variant === "work-unit"
-                                ? "text-[28px] font-semibold"
+                                ? focusMode
+                                    ? "text-[18px] font-semibold"
+                                    : "text-[28px] font-semibold"
                                 : "text-[26px] font-semibold"
                         }`}
                     >
@@ -289,12 +321,18 @@ export function WorkspaceHeader({
                     </h1>
                 </BuilderHit>
                 {model.subtitle ? (
-                    <BuilderHit field="subtitle" builder={builder} className="mt-0.5 block w-full">
+                    <BuilderHit
+                        field="subtitle"
+                        builder={builder}
+                        className={`block min-w-0 ${focusMode ? "mt-0" : "mt-0.5 w-full"}`}
+                    >
                         <p
                             {...{ [subtitleAttr]: true }}
                             className={`leading-snug text-alloy-bend-pine ${
                                 variant === "work-unit"
-                                    ? "text-[14px] font-medium"
+                                    ? focusMode
+                                        ? "truncate text-[12px] font-medium text-alloy-midnight/55"
+                                        : "text-[14px] font-medium"
                                     : "text-[15px] font-semibold"
                             }`}
                         >
@@ -312,12 +350,12 @@ export function WorkspaceHeader({
             <div
                 className={
                     variant === "work-unit"
-                        ? "flex min-w-0 flex-wrap items-start justify-end gap-3"
+                        ? `flex min-w-0 flex-wrap items-center justify-end ${focusMode ? "gap-2" : "gap-3"}`
                         : "flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-end"
                 }
                 data-workspace-header-control-band="true"
             >
-                {model.kpis.length > 0 ? (
+                {model.kpis.length > 0 && !focusMode ? (
                     <div
                         {...runtimeLabelProps(meta.calculationsLabel)}
                         data-alloy-section={meta.calculationsSection}
@@ -338,6 +376,32 @@ export function WorkspaceHeader({
                                     <HeaderKpiCard kpi={kpi} variant={variant} density={metricDensity} />
                                 </div>
                             </BuilderHit>
+                        ))}
+                    </div>
+                ) : null}
+                {model.kpis.length > 0 && focusMode ? (
+                    <div
+                        {...runtimeLabelProps(meta.calculationsLabel)}
+                        data-alloy-section={meta.calculationsSection}
+                        {...{ [kpisAttr]: true }}
+                        data-work-unit-header-kpi-inline="true"
+                        className="flex max-w-xl flex-nowrap items-center gap-x-3 overflow-x-auto text-[11px] text-alloy-midnight/55"
+                        role="list"
+                        aria-label={meta.kpiAria}
+                    >
+                        {model.kpis.map((kpi) => (
+                            <span
+                                key={kpi.slot}
+                                role="listitem"
+                                data-work-unit-header-kpi={kpi.slot}
+                                className="inline-flex shrink-0 items-baseline gap-1 whitespace-nowrap"
+                                title={kpi.label}
+                            >
+                                <span className="font-semibold tabular-nums text-alloy-midnight/80">
+                                    {kpi.pending ? "…" : kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE}
+                                </span>
+                                <span className="truncate font-medium text-alloy-midnight/40">{kpi.label}</span>
+                            </span>
                         ))}
                     </div>
                 ) : null}

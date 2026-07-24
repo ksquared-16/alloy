@@ -83,6 +83,7 @@ Work-view pills render **below** the header — never above or competing with KP
 | **Persistence** | `entity_layouts`, `surface="workspace"`, `layoutKey="work_unit_header"`, config in `doc.metadata.workUnitHeaderSurface` |
 | **KPI source** | Operational Calculations — `useOperationalAnswers` scoped with `workUnitId`. Same metric-card grammar as Workspace Header. |
 | **Presentation** | Shared `WorkspaceHeader` presenter with `variant="work-unit"` — builder preview and runtime match (icon/accent, no-data `—`) |
+| **Focus density** | When `model.selectedRecordId` is set, the page shell passes `density="focus"` into `WorkUnitHeader` / `WorkspaceHeader` (`data-work-unit-header-mode="focus"`). Browse mode keeps the full identity + KPI cards; focus mode collapses to a compact operational context bar (smaller title/chip, inline KPI strip) so the Focus Panel is the primary body. Orthogonal to ambient width-based `metricDensity`. Does **not** alter Focus Panel payload, reveal, or VM authority. Closing the Focus Panel restores browse density without remounting the page. Work View pills stay fully visible in both modes. |
 | **Identity fallback** | Unset title/subtitle fall back to configured process label and active work-view label at runtime |
 | **Reveal** | `useWorkUnitSurfaceRuntime` gates `model.ready` on header config + metric settle — no default-template flash; holds last complete header during refresh |
 | **API** | `GET/PUT /api/admin/surfaces/work-unit-header` |
@@ -262,6 +263,15 @@ is classified as Configuration Runtime, NOT Presentation Runtime legacy.** It is
 the `/settings` Queue Row layout editor + preview (`QueueRecordLayoutPreview`,
 `compositionFieldAdapter`). It is deliberately **retained**. The operator product does not use it —
 operator queue rows render exclusively through `CondensedQueueRow` (`WU.QUEUE_ROW`).
+
+### Queue Row compact field contract
+
+- Published Surfaces fields map onto the fixed compact anatomy via `mapQueueRowSurfaceToCompactConfig` / `COMPACT_ROW_EFFECTIVE_FIELD_KEYS`.
+- Per-row variants resolve with `queueRowVariantMatchInputFromContext` (nested `QueueRowContext` stage/grain paths) — never flat keys that the frozen context does not expose.
+- Empty matched variant columns **inherit Default** columns (starter Enrollment variants must not blank the row).
+- Surfaces publish (`POST /api/admin/queue-row-layout/...`) rejects non-compact-effective field keys with an operator-safe message.
+- Older invalid published configs surface `data-queue-row-ineffective-fields` on `WU.QUEUE` rather than silently omitting with no diagnostic.
+- Family-grain rows render child summaries via `related_subjects_summary` / `children` collection projection — never by reinterpreting the row as child-grain.
 
 Migrating the Configuration Runtime preview/editor onto the shared `CondensedQueueRow` presenter is
 **out of scope for Presentation Runtime V2** — it belongs to the Runtime Adoption / SurfaceRenderer

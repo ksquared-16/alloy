@@ -10,6 +10,7 @@
 import type { ReactNode } from "react";
 import {
     WorkspaceHeader,
+    type WorkUnitHeaderDensity,
     type WorkspaceHeaderBuilderProps,
 } from "@/components/presentation/workspace/WorkspaceHeader";
 import type { WorkUnitHeaderPresentationModel } from "@/lib/presentation/runtime/workUnitHeaderSurfaceConfig";
@@ -19,17 +20,27 @@ export type WorkUnitHeaderBuilderField = WorkspaceHeaderBuilderProps["activeFiel
     : never;
 
 export type WorkUnitHeaderBuilderProps = WorkspaceHeaderBuilderProps;
+export type { WorkUnitHeaderDensity };
 
 export function WorkUnitHeader({
     model,
     builder,
     actionsSlot = null,
+    density = "browse",
 }: {
     model: WorkUnitHeaderPresentationModel;
     builder?: WorkUnitHeaderBuilderProps;
     actionsSlot?: ReactNode;
+    /** Browse = full identity/KPI; focus = compact context bar when a record is selected. */
+    density?: WorkUnitHeaderDensity;
 }) {
     return (
-        <WorkspaceHeader model={model} builder={builder} variant="work-unit" actionsSlot={actionsSlot} />
+        <WorkspaceHeader
+            model={model}
+            builder={builder}
+            variant="work-unit"
+            actionsSlot={actionsSlot}
+            workUnitDensity={density}
+        />
     );
 }
