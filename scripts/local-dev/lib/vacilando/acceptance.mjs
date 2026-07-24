@@ -23,7 +23,9 @@ const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(os.homedir()
 const DIR = join(RUNTIME_ROOT, "vacilando", "acceptance");
 const LEDGER = join(DIR, "ledger.jsonl");
 
-const ALLOWED_CHANGE_PREFIX = "docs/platform/planning/vacilando-os/qa/vertical-slice-v1/";
+// Mission outputs (proposals and operator-directed deliverables) both live under
+// the vacilando-os QA docs tree; changes there are allowed, application source is not.
+const ALLOWED_CHANGE_PREFIX = "docs/platform/planning/vacilando-os/qa/";
 
 function ensureDir() { if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true }); }
 function dirtyPaths(cwd) {
@@ -59,6 +61,13 @@ function checkEvidence(kind, { pkg, mission, cwd }) {
     const offending = attributable.filter((p) => !p.startsWith(ALLOWED_CHANGE_PREFIX));
     if (offending.length) return { status: "unmet", detail: `mission changed files outside the allowed docs path: ${offending.slice(0, 8).join(", ")}` };
     return { status: "met", detail: attributable.length ? `only allowed docs changed (${attributable.length})` : "no new changes attributable to the mission" };
+  }
+  if (kind === "intent_fidelity") {
+    // Load-bearing integrity: whether the deliverables satisfy the APPROVED
+    // objective (not a generic substitute) is a semantic judgment only the
+    // operator can make. It is never auto-met, so a mission can never pass by
+    // producing an unrelated artifact — the operator must consciously confirm.
+    return { status: "operator_review", detail: "Requires the operator to confirm the outputs satisfy the objective they approved." };
   }
   if (kind === "rejected_patterns_not_reintroduced") {
     // Product-fidelity: not reliably machine-verifiable → honest operator review,

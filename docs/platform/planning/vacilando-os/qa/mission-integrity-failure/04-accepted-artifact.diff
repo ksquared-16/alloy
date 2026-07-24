@@ -1,0 +1,52 @@
+diff --git a/docs/platform/planning/vacilando-os/qa/vertical-slice-v1/cap_access_roles-v2-proposal.md b/docs/platform/planning/vacilando-os/qa/vertical-slice-v1/cap_access_roles-v2-proposal.md
+index cbbe75c12..defd5c816 100644
+--- a/docs/platform/planning/vacilando-os/qa/vertical-slice-v1/cap_access_roles-v2-proposal.md
++++ b/docs/platform/planning/vacilando-os/qa/vertical-slice-v1/cap_access_roles-v2-proposal.md
+@@ -1,9 +1,9 @@
+ # Access & Roles V2 — Implementation Proposal
+ 
+ - **Capability:** `cap_access_roles`
+-- **Mission:** `msn_a47b9aded72c70955f` · **Package:** `pkg_92244e354b6d2d7020` (v1)
++- **Mission:** `msn_d32a9c061f9615d429` · **Package:** `pkg_8fe98b86cfd3c21a6b` (v2)
+ - **Status:** Planning proposal only — **no source code changes.** V2 is not implemented by this mission.
+-- **Current implementation under analysis:** `web/app/adminV2/settings/users-roles/UsersRolesSettingsClient.tsx`
++- **Current implementation under analysis:** `web/components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx` (thin entrypoint) → `web/components/adminV2/settings/access/AccessWorkspaceSurface.tsx` (the live product surface).
+ 
+ ## Governing constraints (inherited — do not violate)
+ 
+@@ -22,7 +22,23 @@ Both roadmap-critical V2 features below (granular permissions, templates+inherit
+ 
+ ### 1.1 What exists today
+ 
+-The Access & Roles surface is a single client component (`UsersRolesSettingsClient.tsx`) with two tabs — **Users** and **Roles** — gated on `canManageUsersRoles` (org admin, or the `settings.users_roles` permission). It composes four data domains served by REST routes under `web/app/api/admin/`:
++The route entrypoint (`UsersRolesConfigurationPage.tsx`) is now a **thin wrapper** — it renders `AccessWorkspaceSurface`, a four-chapter Access product workspace (Collection → Selected → Focused Workspace shell) gated on `canManage` (org admin, or the `settings.users_roles` permission). The retired two-tab `UsersRolesSettingsClient` is gone. The four chapters are:
++
++| Chapter | Component | State |
++|---|---|---|
++| **Users** | `AccessUsersConfigurationPage` | Live — user list, person link, primary-role assignment, access scope (dept/site). |
++| **Roles** | `AccessRolesConfigurationPage` | Live — role catalog rail + per-role workspace (tabs: Overview / Permissions / Users / **Experience Access** / **History**). |
++| **Access Scopes** | `AccessScopesPage` | Live — data-visibility scope (department/site), orthogonal to capability grants. |
++| **Security** | `AccessSecurityPage` | Live — authentication / security surface. |
++
++Two of the per-role tabs are **inert, honestly-labelled placeholders for V2 work** — not gaps to discover, but seams the current UI already reserves:
++
++- **Experience Access** — renders `"Derived from permission grants. Planned projection."` (`data-capability="planned"`). This is the surface-visibility layer, computed-from-grants, not yet built.
++- **History** — renders `"A verified change history for this role is planned. No events are fabricated for display."` (`data-capability="planned"`). This is the audit-trail read surface; it deliberately shows nothing rather than fabricate events, because there is no audit store behind it yet.
++
++V2 does not need to invent placements for the audit trail or the surface-access view — the workspace already reserves them. This lowers the UI risk of the two biggest V2 items to "fill an existing, already-designed tab."
++
++The workspace composes four data domains served by REST routes under `web/app/api/admin/`:
+ 
+ | Concern | Storage | Route | Notes |
+ |---|---|---|---|
+@@ -202,8 +218,8 @@ Phased, additive, reversible. Each phase is independently shippable and behind a
+ - **Phase 0 — Migrations (no behavior change).** Add `access_audit_log`, `role_templates`, `role_template_grants`, and the `role_definitions` columns. All nullable/additive; existing code untouched.
+ - **Phase 1 — Audit the existing write path.** Convert `PUT /grants` to diff-and-log (§3.3) and add user→role assignment logging. No UI change yet — this is pure risk reduction and can ship first. Gains **AC-V2-6/7** immediately for today's coarse grants.
+ - **Phase 2 — Effective-permission resolver + inheritance.** Land `resolveEffectiveGrants`, `parent_role_key` editing, cycle/depth guards. Enforcement reads from the resolver. Feature-flag the inheritance editor UI.
+-- **Phase 3 — Granular editor + presets.** Extend the grid to render the full capability taxonomy with presets layered on top; ship the "Custom" state. Flagged rollout, then default-on.
+-- **Phase 4 — Templates + Change-history UI.** Template picker on role create; per-role and org-wide history view.
++- **Phase 3 — Granular editor + presets.** Extend the grid in the role workspace's existing **Permissions** tab to render the full capability taxonomy with presets layered on top; ship the "Custom" state. Flagged rollout, then default-on. (The **Experience Access** placeholder tab is where the computed surface-visibility projection lands once grants are granular enough to derive it.)
++- **Phase 4 — Templates + Change-history UI.** Template picker on role create; fill the already-reserved per-role **History** tab (and an org-wide history view) — replacing today's honest "planned" placeholder with real, non-fabricated audit rows.
+ - **Rollback:** each phase is flag-gated; migrations are additive so a code rollback leaves the schema harmless. The `GET/PUT /grants` contract is preserved throughout, so an old client and a new server (or vice versa) interoperate during deploys.
+ 
+ **Sequencing rationale:** audit first (highest risk, lowest surface), then the resolver (foundation for both granularity and inheritance), then the operator-facing granular/template UX. Granular permissions never ship *before* templates+inheritance are available to manage them at scale — that ordering is what keeps `rp2` from creeping back in as per-role toggle fatigue.

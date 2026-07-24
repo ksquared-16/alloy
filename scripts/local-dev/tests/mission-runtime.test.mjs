@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import { join } from "node:path";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 
 process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-test-"));
 
@@ -18,7 +18,8 @@ const { getProductDefinitionForCapability, addAcceptedDecision, recordMissionInH
 const { capabilityNameFromIntent } = await import("../lib/vacilando/mission-director.mjs");
 const { retrieveForCapability, readSnapshot } = await import("../lib/vacilando/knowledge.mjs");
 const { createMission, getMission, recoverMissions, updateMission } = await import("../lib/vacilando/commands/missions.mjs");
-const { compile } = await import("../lib/vacilando/mission-compiler.mjs");
+const { compile, isOperatorDirected } = await import("../lib/vacilando/mission-compiler.mjs");
+const { evaluateMission: evalMission } = await import("../lib/vacilando/acceptance.mjs");
 const { analyzeGap } = await import("../lib/vacilando/gap-analysis.mjs");
 const { checkStartPreconditions, serializePackagePrompt, parseOutcome } = await import("../lib/vacilando/mission-executor.mjs");
 const { composeCounsel, selectFrontier, attemptCounsel, readinessCounsel, frontierPhrase } = await import("../lib/vacilando/counsel.mjs");
@@ -838,4 +839,83 @@ test("ops closure: accepted work closes, freeing capacity and preserving artifac
   assert.equal(r.ok, true);
   assert.equal(r.status, "closed");
   assert.equal(getMission(m.mission_id).status, "closed");
+});
+
+// ============================================================================
+// Mission-Intent Integrity — the operator's approved intent is authoritative
+// through compilation and verification. Encodes the failed Access & Roles run:
+// a substantial discovery scope must NOT execute the seeded "refresh V2 proposal"
+// objective, and must not pass acceptance on a generic proposal artifact.
+// ============================================================================
+
+const DISCOVERY = "Discover and specify Access & Roles V2: inventory the real authority paths and gaps, define the canonical security model, produce implementation-ready specifications, and sequence a safe delivery plan. Do not build V2 immediately; do not modify application source.";
+function directedPkg(intent = DISCOVERY) {
+  const cap = retrieveCapability("Build Access & Roles V2").capability;
+  const snap = retrieveForCapability(cap);
+  const m = createMission({ slot: 6, provider: "claude", title: "t", objective: "o", status: "draft" });
+  const { package: pkg } = compile({ capability: cap, snapshot: snap, mission: { ...m, intent } });
+  return { cap, snap, m, pkg };
+}
+
+test("intent authority: a substantial operator direction is detected as operator-directed", () => {
+  const cap = retrieveCapability("Build Access & Roles V2").capability;
+  assert.equal(isOperatorDirected({ intent: DISCOVERY }, cap), true);
+  assert.equal(isOperatorDirected({ intent: "Access & Roles" }, cap), false);
+  assert.equal(isOperatorDirected({ intent: "Access & Roles V2" }, cap), false);
+  assert.equal(isOperatorDirected({ intent: "" }, cap), false);
+});
+
+test("intent authority: the objective derives from the operator's intent, NOT the generic template", () => {
+  const { pkg } = directedPkg();
+  assert.equal(pkg.operator_directed, true);
+  assert.match(pkg.objective, /inventory the real authority paths/i);          // the operator's words
+  assert.doesNotMatch(pkg.objective, /produce the Access & Roles V2 implementation proposal/i); // NOT the template
+});
+
+test("intent authority: thin capability-name intent falls back to the template (Phase 1–3 preserved)", () => {
+  const { pkg } = directedPkg("Access & Roles");
+  assert.equal(pkg.operator_directed, false);
+  assert.match(pkg.objective, /produce the Access & Roles V2 implementation proposal/i);
+});
+
+test("intent authority: deliverables, exclusions, and acceptance all derive from the approved intent", () => {
+  const { pkg } = directedPkg();
+  // deliverable is mission-scoped, not the generic proposal path
+  assert.match(pkg.expected_deliverables[0].path, /\/qa\/missions\//);
+  assert.doesNotMatch(pkg.expected_deliverables[0].path, /v2-proposal\.md$/);
+  // the operator's explicit "do not" became out-of-scope
+  assert.ok(pkg.scope_excluded.some((s) => /do not build v2/i.test(s)));
+  assert.ok(pkg.scope_excluded.some((s) => /do not modify application source/i.test(s)));
+  // acceptance is intent-bound; there is NO generic "V2 proposal exists" criterion
+  assert.ok(pkg.acceptance_criteria.some((c) => c.type === "intent-fidelity"));
+  assert.ok(!pkg.acceptance_criteria.some((c) => /V2 proposal exists/i.test(c.statement)));
+});
+
+test("verification integrity: an intent-fidelity criterion is never auto-met (operator must confirm)", () => {
+  const { m, pkg } = directedPkg();
+  const tmp = mkdtempSync(join(os.tmpdir(), "vac-cwd-"));
+  const result = evalMission({ ...m, intent: DISCOVERY, git_baseline: [] }, pkg, { worktreePath: tmp });
+  const acf = result.criteria.find((c) => c.criterion_id === "ACF");
+  assert.equal(acf.status, "operator_review"); // semantic fidelity is the operator's judgment, never auto-passed
+});
+
+test("REGRESSION (failed A&R run): refreshing the generic V2 proposal cannot pass a discovery mission", () => {
+  const { m, pkg } = directedPkg();
+  const tmp = mkdtempSync(join(os.tmpdir(), "vac-cwd-"));
+  // Simulate the failure: the generic proposal file exists, but the mission's own
+  // output does not. Acceptance must NOT pass.
+  const proposalDir = join(tmp, "docs/platform/planning/vacilando-os/qa/vertical-slice-v1");
+  mkdirSync(proposalDir, { recursive: true });
+  writeFileSync(join(proposalDir, "access-roles-v2-proposal.md"), "# refreshed generic proposal\n", "utf8");
+  const result = evalMission({ ...m, intent: DISCOVERY, git_baseline: [] }, pkg, { worktreePath: tmp });
+  assert.notEqual(result.gate, "pass");                       // cannot pass on the wrong artifact
+  const ac1 = result.criteria.find((c) => c.criterion_id === "AC1");
+  assert.equal(ac1.status, "unmet");                          // the mission's own output is absent
+});
+
+test("intent authority: the operator's scope is the objective, not a side decision", () => {
+  // The failure was that the scope became an accepted_decision while a generic
+  // objective stayed authoritative. Here the intent IS the objective.
+  const { pkg } = directedPkg();
+  assert.ok(pkg.objective.includes("security model")); // the operator's substance is in the objective
 });

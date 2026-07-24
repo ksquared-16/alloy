@@ -49,7 +49,7 @@ import { readMissions, getMission, recoverMissions } from "./vacilando/commands/
 import { getPackage } from "./vacilando/commands/mission-packages.mjs";
 import { readMissionOutputs, readTurnOutput, liveMissionIds } from "./vacilando/mission-executor.mjs";
 import { providerResumable } from "./vacilando/provider-runtime.mjs";
-import { compileMissionForIntent, recompileMission, defineCapability, addProductDecision, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, close as directorClose, previewAction, readAcceptance } from "./vacilando/mission-director.mjs";
+import { compileMissionForIntent, recompileMission, reframeMission, defineCapability, addProductDecision, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, close as directorClose, previewAction, readAcceptance } from "./vacilando/mission-director.mjs";
 import { listCapabilities, getCapability, registerCapability } from "./vacilando/capability.mjs";
 import { assembleConversation, listConversations } from "./vacilando/conversation.mjs";
 import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
@@ -566,6 +566,11 @@ export function createVacilandoServer() {
       }
       if (path === "/api/missions/recompile") {
         const out = recompileMission({ mission_id: mid });
+        return sendJson(res, out.ok ? 200 : 409, out);
+      }
+      if (path === "/api/missions/reframe") {
+        if (typeof v.direction !== "string" || !v.direction.trim()) return sendJson(res, 400, { ok: false, error: "empty_direction" });
+        const out = reframeMission({ mission_id: mid, direction: v.direction });
         return sendJson(res, out.ok ? 200 : 409, out);
       }
       if (path === "/api/missions/evaluate") return sendJson(res, 200, directorEvaluate({ mission_id: mid }));

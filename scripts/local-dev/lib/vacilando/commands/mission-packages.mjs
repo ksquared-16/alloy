@@ -86,6 +86,7 @@ export function createPackage(input, { origin = "compiled", nowMs } = {}) {
     mission_id: input.mission_id || null, project_id: input.project_id || "alloy",
     capability_id: input.capability_id || null, worker_slot: input.worker_slot ?? null,
     title: input.title || "(untitled)", objective: input.objective || "",
+    operator_directed: input.operator_directed || false,
     scope_included: arr(input.scope_included), scope_excluded: arr(input.scope_excluded),
     relevant_documents: arr(input.relevant_documents), approved_references: arr(input.approved_references),
     inherited_product_rules: arr(input.inherited_product_rules),

@@ -1303,12 +1303,18 @@ function opBand(c) {
   if (k === "blocked" || k === "at_risk") return `<div class="opband attn">${pill}<p class="opsum">${esc(c.mission?.error_message || c.mission?.pending_question || "This needs a look before it can go on.")}</p></div>`;
   if (k === "closed") return `<div class="opband done">${pill}<p class="muted">Wound down — capacity freed, artifacts preserved.</p></div>`;
   if (k === "ready") {
-    const crit = (c.package?.acceptance_criteria || []).slice(0, 4).map((x) => `<li>${esc(x.statement)}</li>`).join("");
-    const outcome = (c.package?.expected_deliverables || []).map((d) => `<div>${esc(d.description)}</div>`).join("") || "—";
-    return `<div class="opband ok">${pill}
+    const p = c.package || {};
+    // The execution contract the operator approves — what will actually run.
+    const objective = String(p.objective || "").replace(/\n*\[EXECUTION NOTES\][\s\S]*$/i, "").trim();
+    const crit = (p.acceptance_criteria || []).map((x) => `<li>${esc(x.statement)}</li>`).join("");
+    const outcome = (p.expected_deliverables || []).map((d) => `<div>${esc(d.description)}${d.path ? ` <span class="muted">→ ${esc(d.path)}</span>` : ""}</div>`).join("") || "—";
+    const outScope = (p.scope_excluded || []).slice(0, 6).map((s) => `<li>${esc(s)}</li>`).join("");
+    return `<div class="opband ok">${pill}${p.operator_directed ? `<span class="opphase">operator-directed</span>` : ""}
+      <div class="opsec"><div class="dlabel">Objective — what will run</div><div class="opobjective">${esc(objective) || "—"}</div></div>
       <div class="opsec"><div class="dlabel">Expected outcome</div>${outcome}</div>
+      ${outScope ? `<div class="opsec"><div class="dlabel">Out of scope</div><ul class="dul">${outScope}</ul></div>` : ""}
       <div class="opsec"><div class="dlabel">How we'll know it's done</div><ul class="dul">${crit || "<li>—</li>"}</ul></div>
-      <div class="opnote">Starting runs the work on an engine in an isolated workspace — you don't manage the provider, branch, or server.</div></div>`;
+      <div class="opnote">Starting runs exactly this on an engine in an isolated workspace — you don't manage the provider, branch, or server. Change it above before starting.</div></div>`;
   }
   return `<div class="opband">${pill}</div>`;
 }
@@ -1323,13 +1329,17 @@ function opFooter(c, id) {
     return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director to continue this work…" />
       <button class="btn go sm" data-cvsteer="${id}">Send</button>${acts.includes("stop") ? `<button class="btn warn sm" data-dstop="${id}">Stop</button>` : ""}</div>`;
   }
-  // BEFORE it starts (preparing OR ready): always let the operator SHAPE the work —
-  // a detail/decision is recorded and the package recompiles. This is how you say
-  // what this mission should specifically do; it is available even at Ready, not
-  // only when Director sends the work back.
+  // A "Needs Product Decisions" send-back needs a capability-level DECISION.
+  if (k === "preparing" && V?.verdict === "Needs Product Decisions") {
+    return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Record a decision that shapes this capability…" />
+      <button class="btn go sm" data-cvreply="${id}" data-cap="${esc(c.capability_id || "")}">Record decision</button></div>`;
+  }
+  // BEFORE it starts (preparing OR ready): the operator's words REDEFINE the mission
+  // — the direction becomes the authoritative objective (recompiled), never a side
+  // note while a generic objective stays in charge. Available at Ready too.
   if (k === "preparing" || k === "ready") {
-    const shape = `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Shape this work — add a detail or decision, e.g. “must cover the audit trail; exclude per-user grants”…" />
-      <button class="btn go sm" data-cvreply="${id}" data-cap="${esc(c.capability_id || "")}">Add to the work</button></div>`;
+    const shape = `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Describe what this mission should do — this becomes the objective, e.g. “inventory the real authority paths, define the security model; do not build V2”…" />
+      <button class="btn go sm" data-cvreframe="${id}">Set the objective</button></div>`;
     const btns = [];
     if (acts.includes("start")) btns.push(`<button class="btn go" data-dstart="${id}">Start this work</button>`);
     if (k === "ready") btns.push(`<button class="btn sm" data-drecompile="${id}">Ask Director to prepare again</button>`);
@@ -1427,6 +1437,17 @@ async function convMissionAct(action, id, okMsg) {
   await missionAct(action, id, {}, okMsg);
   await fetchConversations(); await fetchConversation(id);
 }
+// Before start, the operator's words REDEFINE the mission — the direction becomes
+// the authoritative objective (recompiled), not a side decision.
+async function reframeWork(id) {
+  const el2 = document.getElementById("cv-reply");
+  const text = (el2?.value || "").trim();
+  if (!text) { toast("err", "Describe what this mission should do"); return; }
+  const { data } = await api("/api/missions/reframe", { mission_id: id, direction: text });
+  if (!data.ok) { toast("err", "Couldn't set the objective", data.detail || data.error); return; }
+  await fetchConversations(); await fetchConversation(id);
+  toast("ok", "Objective updated", data.diff?.verdict_change || (data.package ? "v" + data.package.version : ""));
+}
 // Answer during execution STEERS the running work (resumes its engine), rather
 // than recording a product decision.
 async function steerWork(id) {
@@ -1487,6 +1508,7 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-dsendback]"))) { directorSendBack(n.dataset.dsendback, n.dataset.verdict, n.dataset.cap); return; }
   if ((n = t("[data-cvreply]"))) { replyToDirector(n.dataset.cvreply, n.dataset.cap); return; }
   if ((n = t("[data-cvsteer]"))) { steerWork(n.dataset.cvsteer); return; }
+  if ((n = t("[data-cvreframe]"))) { reframeWork(n.dataset.cvreframe); return; }
   if ((n = t("[data-drecompile]"))) { recompileDirector(n.dataset.drecompile); return; }
   if ((n = t("[data-dstart]"))) { convMissionAct("start", n.dataset.dstart, "Starting the work"); return; }
   if ((n = t("[data-daccept]"))) { convMissionAct("accept", n.dataset.daccept, "Accepted"); return; }

@@ -577,6 +577,7 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .opstate.muted{background:var(--bg-tint);color:var(--ink-3);}
 .opphase{margin-left:8px;font-size:11px;color:var(--ink-3);font-style:italic;}
 .opsum{margin:8px 0 0;font-size:12.5px;color:var(--ink);line-height:1.5;}
+.opobjective{font-size:12.5px;color:var(--ink);line-height:1.5;white-space:pre-wrap;max-height:200px;overflow-y:auto;overflow-wrap:anywhere;}
 .opnote{margin-top:8px;font-size:11px;color:var(--ink-3);font-style:italic;}
 .opsec{margin-top:10px;}
 .opfile{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);padding:1px 0;}
