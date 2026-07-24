@@ -33,9 +33,9 @@ describe("FormLifecycleUsagePanel", () => {
         );
 
         expect(html).toContain('data-testid="form-lifecycle-usage-panel"');
-        expect(html).toContain("Lifecycle usage");
+        expect(html).toContain("Business Process");
         expect(html).toContain('data-testid="lifecycle-usage-selectors"');
-        expect(html).toContain("Lifecycle coverage checks whether this form captures");
+        expect(html).toContain("Checks whether this form captures");
         expect(html).not.toContain("effectiveFieldRulesForStage");
         expect(html).not.toContain("crm_mapping_key");
         expect(html).not.toContain("person:first_name");

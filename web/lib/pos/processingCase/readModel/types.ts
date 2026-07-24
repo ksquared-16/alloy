@@ -49,6 +49,12 @@ export interface ProcessingCaseQueueRow {
     primarySource: SourceRef | null;
     relatedSourceCount: number;
     sourceDisplay: SourceDisplayDescriptor | null;
+    /**
+     * Queue folder configured on the source form (`metadata.admin_category`), copied onto the case
+     * at intake. Display/routing only — the folder rail matches on this before falling back to
+     * keyword matching. Null when the form declares no folder.
+     */
+    adminCategory?: string | null;
     /** Display-only document→form state for queue rows. Derived from metadata, never authoritative. */
     formDraftSummary?: {
         detectionMode: DetectionModeKind | "unknown";

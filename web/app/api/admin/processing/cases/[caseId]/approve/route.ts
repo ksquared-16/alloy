@@ -8,6 +8,7 @@ import {
     operatorErrorResponse,
     resolveOperatorRoute,
 } from "@/lib/pos/processingIdentity/operator";
+import { persistIntakePersonAddressFieldValues } from "@/lib/pos/processingIdentity/operator/persistIntakePersonAddress";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 
 export const dynamic = "force-dynamic";
@@ -76,6 +77,22 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                     attempt.operations.find((o) => o.commandKey === commandKey && o.status === "committed")?.recordId ??
                     null;
                 const leadId = committedRecord("create_lead");
+                const personId = committedRecord("create_person");
+
+                // Phase 1 — populate the committed Person's canonical address (incl. ZIP) through the
+                // canonical field system. ZIP is identity, not intake: this reuses the same writer as the
+                // manual Create-Lead path. Never blocks the commit.
+                if (personId) {
+                    try {
+                        await persistIntakePersonAddressFieldValues(supabase, {
+                            orgId: ctx.orgId,
+                            personId,
+                            caseMetadata: row.metadata ?? null,
+                        });
+                    } catch {
+                        /* canonical-field population is best-effort — the lead is already committed */
+                    }
+                }
                 const operationalResult = {
                     kind: "lead",
                     recordType: "opportunity",

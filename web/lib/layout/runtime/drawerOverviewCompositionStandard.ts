@@ -81,8 +81,12 @@ export const DRAWER_OVERVIEW_PANEL_SURFACE =
 export const DRAWER_OVERVIEW_PANEL_CENTERPIECE_SURFACE =
     "overflow-hidden rounded-xl border border-alloy-stone/38 border-b-[2px] border-b-alloy-stone/55 border-l-[3px] border-l-alloy-juniper/80 bg-white shadow-[0_3px_10px_rgba(24,39,58,0.09)] ring-1 ring-alloy-stone/12";
 
+// Clean header: white surface + Alloy-green eyebrow + hairline divider. The old pale wash band
+// (emerald-50 gradient) read as a washed-out mint stripe; re-tinting it pine kept the same washed
+// FORMAT, so the band is removed entirely and the green now lives in the eyebrow type — matching
+// the Review & Decide treatment.
 export const DRAWER_OVERVIEW_PANEL_HEADER =
-    "border-b border-alloy-stone/16 bg-gradient-to-r from-emerald-50/70 via-emerald-50/35 to-white px-3.5 py-2.5";
+    "border-b border-alloy-stone/16 bg-white px-3.5 py-2.5";
 
 export const DRAWER_OVERVIEW_PANEL_ICON_BADGE =
     "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-alloy-stone/10 bg-alloy-juniper/[0.08] text-alloy-juniper/80";

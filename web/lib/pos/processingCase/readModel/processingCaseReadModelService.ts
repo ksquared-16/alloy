@@ -83,6 +83,10 @@ export async function listProcessingCaseQueue(
             primarySource: primary,
             relatedSourceCount: g?.relatedCount ?? 0,
             sourceDisplay,
+            adminCategory: (() => {
+                const raw = (c.metadata as Record<string, unknown> | null)?.admin_category;
+                return typeof raw === "string" && raw.trim() ? raw.trim().toLowerCase() : null;
+            })(),
             formDraftSummary: (() => {
                 const draft = parseStoredFormDraftPreview(c.metadata);
                 const created = parseFormDraftCreated(c.metadata);

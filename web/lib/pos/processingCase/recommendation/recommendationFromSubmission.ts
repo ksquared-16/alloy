@@ -20,11 +20,14 @@ import {
     listPersonIdsByEmail,
     listPersonIdsByPhone,
 } from "@/lib/forms/intake/intakeIdentityLookups";
+import { readStoredOperationalIntent, type OperationalIntentKey } from "@/lib/forms/operationalIntentTemplates";
 
 export type FormSubmissionRecommendation =
     | {
           supported: true;
           recommendation: IntakeRecommendation;
+          /** Configured operational intent of the source form — drives operator-facing decision language. */
+          intent: OperationalIntentKey | null;
           source: { kind: "form_submission"; hasEmailBinding: boolean; mappedPersonValues: number };
       }
     | { supported: false; reason: string };
@@ -51,15 +54,31 @@ export async function recommendationFromFormSubmission(
             : {};
 
     let schemaJson: unknown = null;
+    let formDefinitionId: string | null = null;
     if (subRow.form_definition_version_id) {
         const { data: ver, error: verErr } = await supabase
             .from("form_definition_versions")
-            .select("schema_json")
+            .select("schema_json, form_definition_id")
             .eq("org_id", orgId)
             .eq("id", subRow.form_definition_version_id)
             .maybeSingle();
         if (verErr) throw new Error(verErr.message);
-        schemaJson = (ver as { schema_json?: unknown } | null)?.schema_json ?? null;
+        const verRow = ver as { schema_json?: unknown; form_definition_id?: string | null } | null;
+        schemaJson = verRow?.schema_json ?? null;
+        formDefinitionId = verRow?.form_definition_id ?? null;
+    }
+
+    // The form's configured operational intent (Purpose / Business Process) — decides the business
+    // noun + action the operator sees ("enrollment lead" vs "waitlist opportunity" …).
+    let intent: OperationalIntentKey | null = null;
+    if (formDefinitionId) {
+        const { data: form } = await supabase
+            .from("form_definitions")
+            .select("metadata")
+            .eq("org_id", orgId)
+            .eq("id", formDefinitionId)
+            .maybeSingle();
+        intent = readStoredOperationalIntent((form as { metadata?: Record<string, unknown> } | null)?.metadata);
     }
 
     const bound = extractBoundPerson(schemaJson, values);
@@ -79,6 +98,7 @@ export async function recommendationFromFormSubmission(
     return {
         supported: true,
         recommendation,
+        intent,
         source: { kind: "form_submission", hasEmailBinding: bound.hasEmailBinding, mappedPersonValues },
     };
 }

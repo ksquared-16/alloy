@@ -57,6 +57,20 @@ export async function ingestPublicFormThroughProcessing(
             return { ok: false, error: "form_submission processing source row missing" };
         }
 
+        // Queue folder routing: the source form's configured folder (metadata.admin_category)
+        // travels onto the case so the Work rail can route it deterministically. Keyword matching
+        // stays the fallback for forms that declare no folder.
+        let adminCategory: string | null = null;
+        {
+            const { data: formRow } = await supabase
+                .from("form_definitions")
+                .select("metadata")
+                .eq("id", input.formDefinitionId)
+                .maybeSingle();
+            const raw = (formRow as { metadata?: Record<string, unknown> | null } | null)?.metadata?.admin_category;
+            if (typeof raw === "string" && raw.trim()) adminCategory = raw.trim().toLowerCase();
+        }
+
         await supabase
             .from("processing_cases")
             .update({
@@ -68,6 +82,7 @@ export async function ingestPublicFormThroughProcessing(
                     link_metadata: input.linkMetadata ?? {},
                     source_adapter: "public_form_v1",
                     intake_authority: "processing",
+                    ...(adminCategory ? { admin_category: adminCategory } : {}),
                 },
                 status: "needs_resolution",
                 status_changed_at: new Date().toISOString(),
