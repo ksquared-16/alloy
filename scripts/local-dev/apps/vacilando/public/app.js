@@ -50,8 +50,10 @@ const MISSION_STATUS = {
 };
 const MISSION_LIVE = new Set(["starting", "running", "stopping"]);
 const READY_K = { ready: "ok", draft: "muted", blocked: "err", awaiting_operator: "auth", superseded: "muted" };
-// Director Review — six-state verdict badge colouring.
-const VERDICT_K = { "Ready": "ok", "Needs Decisions": "auth", "Needs Architecture": "auth", "Needs References": "warn", "Needs Acceptance": "warn", "Needs Review": "warn" };
+// Director Review — six-state verdict badge colouring (operator language).
+const VERDICT_K = { "Ready": "ok", "Needs Product Decisions": "auth", "Needs Clarification": "auth", "Needs References": "warn", "Needs Acceptance Criteria": "warn", "Needs Review": "warn" };
+const verdictBadgeClass = (v) => VERDICT_K[v] || "muted";
+const DIRECTOR_SLOT = 6; // where a prepared mission will run (a detail, not the operator's concern)
 
 async function fetchMissions(slot) { try { const r = await fetch(`/api/missions?slot=${slot}`); state.missions[slot] = (await r.json()).missions || []; render(true); } catch { /* keep last */ } }
 // Loading is explicit: while a mission's detail is in flight we render a loading
@@ -225,7 +227,7 @@ function render(force) {
   const ae = document.activeElement;
   const savedFocus = ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT") && ae.id
     ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd, top: ae.scrollTop } : null;
-  V.innerHTML = ({ command: viewCommand, history: viewHistory, policies: viewPolicies, settings: viewSettings, trust: viewTrust }[r.name] || viewCommand)();
+  V.innerHTML = ({ director: viewDirector, command: viewCommand, history: viewHistory, policies: viewPolicies, settings: viewSettings, trust: viewTrust }[r.name] || viewCommand)();
   if (savedFocus) {
     const n = document.getElementById(savedFocus.id);
     if (n) { try { n.focus({ preventScroll: true }); if (savedFocus.s != null) n.setSelectionRange(savedFocus.s, savedFocus.e); n.scrollTop = savedFocus.top; } catch { /* field gone */ } }
@@ -1135,9 +1137,190 @@ function toast(kind, title, msg) {
 }
 
 // -------- delegation --------
+// ================= Director workspace (mission-first experience) =================
+// The operator thinks about MISSIONS, never about runtimes. One surface: tell
+// Director what you want → watch it prepare → review → approve → send.
+async function fetchAllMissions() { try { const r = await fetch("/api/missions"); state._allMissions = (await r.json()).missions || []; render(true); } catch { /* keep last */ } }
+
+const DIR_STAGES = [
+  { key: "intent", label: "Intent" }, { key: "capability", label: "Capability" },
+  { key: "knowledge", label: "Knowledge" }, { key: "gap", label: "Gap Analysis" },
+  { key: "package", label: "Package" }, { key: "approved", label: "Approved" },
+  { key: "executing", label: "Executing" }, { key: "accepted", label: "Accepted" },
+];
+function dirStageState(key, m, pkg) {
+  const compiled = !!pkg, ready = (pkg?.readiness_verdict?.verdict === "Ready");
+  const live = ["starting", "running", "stopping"].includes(m.status), done = m.status === "completed";
+  switch (key) {
+    case "intent": return "done";
+    case "capability": return pkg?.capability_id ? "done" : "pending";
+    case "knowledge": return pkg?.knowledge_snapshot ? "done" : "pending";
+    case "gap": return pkg?.gap_report ? "done" : "pending";
+    case "package": return !compiled ? "pending" : (ready ? "done" : "review");
+    case "approved": return (done || live) ? "done" : (ready ? "current" : "pending");
+    case "executing": return done ? "done" : (live ? "current" : "pending");
+    case "accepted": return done ? "done" : "pending";
+    default: return "pending";
+  }
+}
+const DIR_MARK = { done: "✓", current: "•", review: "!", blocked: "⛔", pending: "○" };
+
+function viewDirector() {
+  const r = parseRoute();
+  if (!state._allMissions) { fetchAllMissions(); return `<div class="empty"><div class="big"><span class="spin"></span> Opening Director…</div></div>`; }
+  if (r.sub === "mission" && r.param) return directorMission(r.param);
+  return directorHome();
+}
+
+function directorHome() {
+  const missions = (state._allMissions || []).filter((m) => m.capability_id);
+  const intent = esc(state._dirIntent || "");
+  const def = state._dirDefine;
+  const cards = missions.length ? missions.map((m) => {
+    const v = m.readiness_verdict || "—";
+    return `<div class="dcard" data-dmission="${m.mission_id}">
+      <div class="dcard-t">${esc(m.title || "(mission)")}</div>
+      <div class="dcard-s trunc">${esc(m.intent || m.objective || "")}</div>
+      <div class="dcard-f"><span class="mbadge ${verdictBadgeClass(v)}">${esc(v)}</span><span class="muted">${m.status === "completed" ? "accepted" : esc(m.status)}</span></div>
+    </div>`;
+  }).join("") : `<div class="rempty">No missions yet — tell Director what you want to build.</div>`;
+  return `<div class="dwrap">
+    <div class="dhero">
+      <h2>What should we build?</h2>
+      <p class="dsub">Tell Director in a sentence. It prepares the work — you review and approve.</p>
+      <div class="dintent"><input id="d-intent" class="d-intent" placeholder="e.g. Build Access &amp; Roles V2   ·   Improve Scheduling   ·   Communications V2" value="${intent}" />
+        <button class="btn go" data-dprepare>Prepare</button></div>
+      ${def ? `<div class="ddefine"><span>Director doesn't know <b>${esc(def.name || def.intent)}</b> yet.</span>
+        <button class="btn go sm" data-ddefine="${esc(def.intent)}">Define &amp; prepare</button>
+        <button class="btn sm" data-ddismiss>Dismiss</button></div>` : ""}
+    </div>
+    <div class="dsec-h">Missions <span class="muted">· ${missions.length}</span></div>
+    <div class="dgrid">${cards}</div>
+  </div>`;
+}
+
+function directorMission(id) {
+  const d = state.mission[id];
+  if (!d) { fetchMissionDetail(id); return `<div class="dwrap"><button class="btn sm" data-dback>← Missions</button><div class="m-loading"><span class="spin"></span> Opening mission…</div></div>`; }
+  const m = d.mission, pkg = d.package;
+  if (!m) return `<div class="dwrap"><button class="btn sm" data-dback>← Missions</button><div class="empty">Mission not found.</div></div>`;
+  const V = pkg?.readiness_verdict || null;
+  const vk = V ? verdictBadgeClass(V.verdict) : "muted";
+  const gr = pkg?.gap_report || null;
+  const conf = gr ? `${Math.round((gr.confidence || 0) * 100)}%` : "—";
+  const diff = pkg?.diff_from_previous;
+
+  // Preparation timeline.
+  const timeline = `<div class="dtl">${DIR_STAGES.map((s) => {
+    const st = dirStageState(s.key, m, pkg);
+    return `<div class="dtl-step ${st}"><span class="dtl-dot">${DIR_MARK[st]}</span><span class="dtl-lbl">${s.label}</span></div>`;
+  }).join('<span class="dtl-line"></span>')}</div>`;
+
+  // Readiness card — operator language, one-click send-back.
+  const readiness = V ? `<div class="dpanel ${V.verdict === "Ready" ? "ok" : "attn"}">
+    <div class="dpanel-h"><h4>Readiness</h4><span class="mbadge ${vk} big">${esc(V.verdict)}</span></div>
+    ${V.why ? `<p class="dwhy">${esc(V.why)}</p>` : ""}
+    ${V.verdict !== "Ready" ? `<div class="dwhat"><b>What to do:</b> ${esc(V.what_to_do || "")}</div>
+      ${V.reasons?.length ? `<ul class="dreasons">${V.reasons.slice(0, 5).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      <div class="dactions"><button class="btn go" data-dsendback="${m.mission_id}" data-verdict="${esc(V.verdict)}" data-cap="${esc(pkg.capability_id || "")}">${esc(V.where_label || "Resolve")}</button></div>`
+    : `<div class="dactions"><button class="btn go big" data-dapprove="${m.mission_id}">Approve &amp; Send to Worker</button>
+        <button class="btn" data-drecompile="${m.mission_id}">Prepare again</button></div>`}
+  </div>` : "";
+
+  // Package review — understand the mission in under two minutes.
+  const list = (arr, f) => (arr && arr.length ? `<ul class="dul">${arr.slice(0, 8).map((x) => `<li>${esc(f(x))}</li>`).join("")}</ul>` : `<span class="muted">—</span>`);
+  const review = pkg ? `<div class="dpanel">
+    <div class="dpanel-h"><h4>Mission package</h4><span class="muted">v${pkg.version}${diff && diff.verdict_change ? ` · ${esc(diff.verdict_change)}` : ""}</span></div>
+    <div class="dkv"><span>Summary</span><div>${esc(pkg.objective || "")}</div></div>
+    <div class="dkv"><span>Capability</span><div>${esc(m.title?.replace(/ V2.*$/, "") || pkg.capability_id)} <span class="muted">— Director matched your intent to this capability.</span></div></div>
+    <div class="dcols">
+      <div><div class="dlabel">Deliverables</div>${list(pkg.expected_deliverables, (x) => x.description)}</div>
+      <div><div class="dlabel">Acceptance</div>${list(pkg.acceptance_criteria, (x) => x.statement)}</div>
+      <div><div class="dlabel">Product decisions</div>${list(pkg.accepted_decisions, (x) => x.statement)}</div>
+      <div><div class="dlabel">References</div>${list(pkg.relevant_documents?.concat(pkg.approved_references || []), (x) => x.uri || x.title)}</div>
+      <div><div class="dlabel">Risks</div>${list(pkg.risks, (x) => x.risk)}</div>
+      <div><div class="dlabel">Questions</div>${list(pkg.questions, (x) => x.question)}</div>
+    </div>
+    <div class="dkv"><span>Gap analysis</span><div>Confidence ${conf} · ${(pkg.suggested_acceptance_criteria || []).length} suggested criteria · ${(gr?.findings?.unknowns || []).length} open questions</div></div>
+    ${diff ? `<div class="dkv"><span>Changed</span><div>${(diff.added || []).length} added · ${(diff.resolved || []).length} resolved${diff.verdict_change ? ` · ${esc(diff.verdict_change)}` : ""}</div></div>` : ""}
+  </div>` : "";
+
+  return `<div class="dwrap">
+    <div class="dmhead"><button class="btn sm" data-dback>← Missions</button>
+      <div class="dmtitle"><h2>${esc(m.title || "(mission)")}</h2><span class="dmintent">“${esc(m.intent || m.objective || "")}”</span></div>
+      ${V ? `<span class="mbadge ${vk} big">${esc(V.verdict)}</span>` : ""}</div>
+    <div class="dsec-h">Preparation</div>
+    ${timeline}
+    ${readiness}
+    ${review}
+  </div>`;
+}
+
+async function prepareDirectorMission() {
+  const intent = (state._dirIntent || document.getElementById("d-intent")?.value || "").trim();
+  if (!intent) { toast("err", "Tell Director what you want to build"); return; }
+  const { status, data } = await api("/api/missions/compile", { slot: DIRECTOR_SLOT, intent });
+  if (!data.ok) {
+    if (data.reason === "no_capability") { state._dirDefine = { intent, name: null }; render(true); return; }
+    toast("err", "Couldn't prepare", data.error || status); return;
+  }
+  state._dirIntent = ""; state._dirDefine = null;
+  await fetchAllMissions();
+  go("director/mission/" + data.mission.mission_id);
+  toast("ok", "Mission prepared", data.verdict?.verdict || "");
+}
+async function defineDirectorCapability(intent) {
+  const { data } = await api("/api/director/define-capability", { intent });
+  if (!data.ok) { toast("err", "Couldn't define capability", data.error); return; }
+  toast("ok", "Capability defined", data.capability.name);
+  state._dirIntent = intent; state._dirDefine = null;
+  return prepareDirectorMission();
+}
+async function recompileDirector(id) {
+  const { data } = await api("/api/missions/recompile", { mission_id: id });
+  if (!data.ok) { toast("err", "Couldn't prepare again", data.error); return; }
+  await fetchAllMissions(); await fetchMissionDetail(id);
+  toast("ok", "Prepared again", data.diff?.verdict_change || ("v" + data.package.version + " · " + data.verdict.verdict));
+}
+function showDecisionDialog(cid, id) {
+  const ov = el("div", "ov");
+  ov.innerHTML = `<div class="dlg"><h3>Record a product decision</h3>
+    <div class="b"><p class="muted">Director needs a decision that shapes this capability. Record it and Director will prepare again.</p>
+      <textarea id="d-dec" placeholder="e.g. Roles are the unit of permission grant; users never receive access directly."></textarea></div>
+    <div class="foot"><button class="btn cancel">Cancel</button><button class="btn go ok">Record &amp; prepare again</button></div></div>`;
+  const close = () => { ov.remove(); render(true); };
+  ov.querySelector(".cancel").onclick = close;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  ov.querySelector(".ok").onclick = async () => {
+    const statement = ov.querySelector("#d-dec").value.trim();
+    if (!statement) { toast("err", "Enter a decision"); return; }
+    ov.remove();
+    const { data } = await api("/api/director/product-decision", { capability_id: cid, statement });
+    if (!data.ok) { toast("err", "Couldn't record decision", data.error); return; }
+    await recompileDirector(id);
+  };
+  document.body.appendChild(ov);
+  setTimeout(() => ov.querySelector("#d-dec")?.focus(), 30);
+}
+function directorSendBack(id, verdict, cid) {
+  if (verdict === "Needs Product Decisions") return showDecisionDialog(cid, id);
+  // Other blockers: editing Knowledge/Acceptance isn't a workspace surface yet —
+  // open the mission's package review and offer to prepare again (honest V1).
+  toast("info", "Resolve upstream, then prepare again", verdict);
+  return recompileDirector(id);
+}
+
 document.addEventListener("click", (e) => {
   const t = (a) => e.target.closest(a);
   let n;
+  if ((n = t("[data-dprepare]"))) { prepareDirectorMission(); return; }
+  if ((n = t("[data-ddefine]"))) { defineDirectorCapability(n.dataset.ddefine); return; }
+  if ((n = t("[data-ddismiss]"))) { state._dirDefine = null; render(true); return; }
+  if ((n = t("[data-dmission]"))) { go("director/mission/" + n.dataset.dmission); return; }
+  if ((n = t("[data-dback]"))) { go("director"); return; }
+  if ((n = t("[data-dsendback]"))) { directorSendBack(n.dataset.dsendback, n.dataset.verdict, n.dataset.cap); return; }
+  if ((n = t("[data-drecompile]"))) { recompileDirector(n.dataset.drecompile); return; }
+  if ((n = t("[data-dapprove]"))) { missionAct("start", n.dataset.dapprove, {}, "Approved — sending to worker"); return; }
   // Specific actions win over container selection: a worker-dock card is a
   // [data-sel] container that WRAPS its own action buttons, so [data-sel] must
   // be the LAST fallback — otherwise every button click just selects the card.
