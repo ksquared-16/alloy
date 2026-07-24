@@ -1,0 +1,8 @@
+{
+  "correlation_id": "cert-tour-1784860917926",
+  "http_status": 400,
+  "response_body": "{\"error\":\"tour_bookings: an active non-terminal booking already exists for this opportunity\"}",
+  "bookings_before": 1,
+  "bookings_after": 1,
+  "existing_booking_id": "651d3035-64ed-4a3b-8d90-1cd3b72e6fa8"
+}
