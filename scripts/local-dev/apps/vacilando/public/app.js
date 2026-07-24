@@ -1317,23 +1317,30 @@ function opBand(c) {
 function opFooter(c, id) {
   const o = c.operations, m = c.mission, V = c.verdict;
   const acts = o?.actions || [];
-  // A prep-time send-back (Needs Product Decisions) records a decision + recompiles.
-  if (o?.state?.key === "preparing" && V?.verdict && V.verdict !== "Ready") {
-    return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Reply to Director — a decision that shapes this work…" />
-      <button class="btn go sm" data-cvreply="${id}" data-cap="${esc(c.capability_id || "")}">Send</button></div>`;
-  }
+  const k = o?.state?.key;
   // Needs-operator during execution: the answer STEERS the running work.
   if (acts.includes("reply")) {
     return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director to continue this work…" />
       <button class="btn go sm" data-cvsteer="${id}">Send</button>${acts.includes("stop") ? `<button class="btn warn sm" data-dstop="${id}">Stop</button>` : ""}</div>`;
   }
+  // BEFORE it starts (preparing OR ready): always let the operator SHAPE the work —
+  // a detail/decision is recorded and the package recompiles. This is how you say
+  // what this mission should specifically do; it is available even at Ready, not
+  // only when Director sends the work back.
+  if (k === "preparing" || k === "ready") {
+    const shape = `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Shape this work — add a detail or decision, e.g. “must cover the audit trail; exclude per-user grants”…" />
+      <button class="btn go sm" data-cvreply="${id}" data-cap="${esc(c.capability_id || "")}">Add to the work</button></div>`;
+    const btns = [];
+    if (acts.includes("start")) btns.push(`<button class="btn go" data-dstart="${id}">Start this work</button>`);
+    if (k === "ready") btns.push(`<button class="btn sm" data-drecompile="${id}">Ask Director to prepare again</button>`);
+    return `${shape}${btns.length ? `<div class="cvcompose ready">${btns.join("")}</div>` : ""}`;
+  }
+  // Execution / review / accepted states: the action buttons.
   const btns = [];
-  if (acts.includes("start")) btns.push(`<button class="btn go" data-dstart="${id}">Start this work</button>`);
   if (acts.includes("accept")) btns.push(`<button class="btn go" data-daccept="${id}">Accept</button>`);
   if (acts.includes("close")) btns.push(`<button class="btn" data-dclose="${id}">Close</button>`);
   if (acts.includes("restart")) btns.push(`<button class="btn" data-dstart="${id}">Try again</button>`);
   if (acts.includes("stop")) btns.push(`<button class="btn warn" data-dstop="${id}">Stop</button>`);
-  if (o?.state?.key === "ready") btns.push(`<button class="btn sm" data-drecompile="${id}">Ask Director to prepare again</button>`);
   return btns.length ? `<div class="cvcompose ready">${btns.join("")}</div>` : "";
 }
 
@@ -1460,7 +1467,18 @@ function directorSendBack(id, verdict, cid) {
 document.addEventListener("click", (e) => {
   const t = (a) => e.target.closest(a);
   let n;
-  if ((n = t("[data-dcap]"))) { state._dirIntent = n.dataset.dcap; render(true); const box = document.getElementById("d-intent"); if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } return; }
+  if ((n = t("[data-dcap]"))) {
+    // Name the capability without discarding detail the operator already typed:
+    // keep their text as a suffix so "add an audit trail" becomes "Access & Roles — add an audit trail".
+    const cap = n.dataset.dcap;
+    const box0 = document.getElementById("d-intent");
+    const cur = (state._dirIntent || box0?.value || "").trim();
+    const detail = cur && !new RegExp(cap.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(cur) ? cur : "";
+    state._dirIntent = detail ? `${cap} — ${detail}` : cap;
+    render(true);
+    const box = document.getElementById("d-intent"); if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+    return;
+  }
   if ((n = t("[data-dprepare]"))) { prepareDirectorMission(); return; }
   if ((n = t("[data-ddefine]"))) { defineDirectorCapability(n.dataset.ddefine); return; }
   if ((n = t("[data-ddismiss]"))) { state._dirDefine = null; render(true); return; }
