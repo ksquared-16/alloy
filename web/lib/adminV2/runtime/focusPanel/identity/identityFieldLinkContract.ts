@@ -70,7 +70,7 @@ export const IDENTITY_LINK_CARD_OPTIONS: ReadonlyArray<{ value: FocusPanelCardKe
     { value: "scheduling", label: "Scheduling" },
     { value: "children", label: "Children" },
     { value: "household", label: "Household" },
-    { value: "current_work", label: "Current Work" },
+    { value: "current_work", label: "What's Next" },
 ];
 
 export const IDENTITY_LINK_OPEN_OPTIONS: ReadonlyArray<{ value: IdentityLinkDestinationOpen; label: string }> = [

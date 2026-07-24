@@ -105,7 +105,7 @@ export function buildCurrentWorkCardModel(input: {
     const primaryOpen = input.stageWorkRuntime?.primary?.state === "open";
     return card({
         key: "current_work",
-        title: "Current Work",
+        title: "What's Next",
         insight: stageWorkInsight(input.stageWorkRuntime),
         secondaryInsight: primaryOpen
             ? "Due today · continue stage steps"

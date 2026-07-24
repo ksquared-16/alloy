@@ -20,11 +20,11 @@ import type {
     FocusPanelCardSpan,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import {
-    FOCUS_PANEL_CARD_KEYS,
     FOCUS_PANEL_CARD_TIERS,
     type FocusPanelCardKey,
     type FocusPanelCardTier,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import { focusPanelCardCatalogLabel, normalizeFocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
 import type { FocusPanelCardConfig } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { isFocusPanelCardConfigEmpty } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import type { LayoutSection } from "@/lib/layout/layoutV2";
@@ -65,10 +65,6 @@ const FOCUS_PANEL_CARD_DENSITIES: readonly FocusPanelCardDensity[] = [
     "expanded",
 ];
 
-function isFocusPanelCardKey(v: unknown): v is FocusPanelCardKey {
-    return typeof v === "string" && (FOCUS_PANEL_CARD_KEYS as readonly string[]).includes(v);
-}
-
 function isFocusPanelCardSpan(v: unknown): v is FocusPanelCardSpan {
     return v === 1 || v === 2 || v === "row";
 }
@@ -93,13 +89,13 @@ export function readFocusPanelCardSectionMeta(
     if (!raw || typeof raw !== "object") return null;
     const meta = raw as Record<string, unknown>;
 
-    const key = meta.key;
+    const key = normalizeFocusPanelCardKey(meta.key);
     const span = meta.span;
     const density = meta.density;
     const tier = meta.tier;
     const gridRow = meta.gridRow;
 
-    if (!isFocusPanelCardKey(key)) return null;
+    if (!key) return null;
     if (!isFocusPanelCardSpan(span)) return null;
     if (!isFocusPanelCardDensity(density)) return null;
     if (!isFocusPanelCardTier(tier)) return null;
@@ -130,13 +126,6 @@ export function readFocusPanelCardConfig(section: LayoutSection): FocusPanelCard
     return raw as FocusPanelCardConfig;
 }
 
-function humanizeCardKey(key: FocusPanelCardKey): string {
-    return key
-        .split("_")
-        .map((part) => (part.length ? part[0]!.toUpperCase() + part.slice(1) : part))
-        .join(" ");
-}
-
 /**
  * Build a `LayoutSection` for one Focus Panel card. `rows` is empty in Phase 1
  * (read path); slot items are added in the configure phase. `title` is cosmetic
@@ -148,7 +137,7 @@ export function buildFocusPanelCardSection(meta: FocusPanelCardSectionMeta): Lay
     return {
         id: `fp-card-${instanceId}`,
         key: meta.key,
-        title: humanizeCardKey(meta.key),
+        title: focusPanelCardCatalogLabel(meta.key),
         rows: [],
         metadata: {
             [FOCUS_PANEL_CARD_METADATA_KEY]: {
