@@ -3,8 +3,12 @@
  *
  * D1 freezes rowSlots into the provisioning snapshot at commit. Focus never un-commits.
  * When the operator publishes a Queue Row surface in the same browser session, this hook
- * re-fetches the published layout and maps it onto the compact anatomy so CondensedQueueRow
- * reflects the new config without a full Work Unit remount / hard reload.
+ * re-fetches the published layout and rematches Default + variants onto each row so
+ * CondensedQueueRow reflects the new config without a full Work Unit remount / hard reload.
+ *
+ * Critical: replacing only Default slots and merging into STALE per-row variant configs
+ * leaves old contact email (and other variant-owned fieldKeys) in place after Default edits.
+ * Rematch from the full published layout document.
  */
 
 "use client";
@@ -16,28 +20,46 @@ import {
     QUEUE_ROW_SURFACE_PUBLISHED_CHANNEL,
 } from "@/lib/adminV2/settings/surfaces/queueRowSurfaceService";
 import { loadQueueRowSurfaceConfig } from "@/lib/adminV2/settings/surfaces/queueRowSurfaceService";
+import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
 import {
     mapQueueRowSurfaceToCompactConfig,
     type CompactRowSlots,
 } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import { clearProvisioningPrefetchCache } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
 
+export type PublishedQueueRowLayoutOverlay = {
+    layout: QueueRecordLayoutConfigV3;
+    defaultSlots: CompactRowSlots;
+    source: string;
+    surfaceId: string;
+    processKey: string | null;
+    fetchedAt: string;
+};
+
 export function usePublishedQueueRowSlotsOverlay(args: {
     surfaceId: string | null | undefined;
     processKey?: string | null;
     enabled?: boolean;
-}): CompactRowSlots | null {
+}): PublishedQueueRowLayoutOverlay | null {
     const surfaceId = args.surfaceId?.trim() || null;
     const processKey = args.processKey ?? null;
     const enabled = args.enabled !== false;
-    const [override, setOverride] = useState<CompactRowSlots | null>(null);
+    const [override, setOverride] = useState<PublishedQueueRowLayoutOverlay | null>(null);
 
     const refresh = useCallback(async () => {
         if (!surfaceId || !enabled) return;
         clearProvisioningPrefetchCache();
         try {
             const loaded = await loadQueueRowSurfaceConfig(surfaceId, processKey);
-            setOverride(mapQueueRowSurfaceToCompactConfig(loaded.envelope.layout).slots);
+            const defaultSlots = mapQueueRowSurfaceToCompactConfig(loaded.envelope.layout).slots;
+            setOverride({
+                layout: loaded.envelope.layout,
+                defaultSlots,
+                source: loaded.source,
+                surfaceId,
+                processKey,
+                fetchedAt: new Date().toISOString(),
+            });
         } catch {
             /* keep prior override / committed snapshot slots */
         }

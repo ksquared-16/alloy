@@ -11,16 +11,25 @@
  * already operational. `WorkUnitSurfaceBody` is the SAME canonical presentation tree the old runtime
  * used — the difference is where its model comes from, not what renders it.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { WorkUnitSurfaceBodyFromModel } from "@/components/presentation/workUnit/WorkUnitSurface";
 import { useCommittedWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime";
 import { usePublishedQueueRowSlotsOverlay } from "@/lib/presentation/runtime/usePublishedQueueRowSlotsOverlay";
-import { mergeCompactSlotsInheritDefault } from "@/lib/presentation/runtime/mergeCompactSlotsInheritDefault";
+import {
+    queueRowVariantMatchInputFromContext,
+    resolveQueueRowCompactSlots,
+} from "@/lib/presentation/runtime/queueRowVariantResolve";
 import { runtimeLabelProps, PRESENTATION_RUNTIME_LABELS } from "@/components/presentation/runtimeLabels";
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import { useCommittedFocus } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { OperationalSubjectProvider } from "@/components/presentation/workUnit/OperationalSubjectContext";
 import { focusPanelSeedForSubject } from "@/lib/presentation/runtime/focusPanelSeedFromQueueRow";
+
+declare global {
+    interface Window {
+        __ALLOY_QUEUE_ROW_SURFACE_DIAG__?: Record<string, unknown>;
+    }
+}
 
 export function ProvisionedWorkUnitSurface() {
     const { model, intents } = useCommittedWorkUnitSurfaceRuntime();
@@ -30,33 +39,110 @@ export function ProvisionedWorkUnitSurface() {
     const committedOp =
         committed?.snapshot.terminal === "operational" ? committed.snapshot : null;
 
-    const publishedSlots = usePublishedQueueRowSlotsOverlay({
+    const processKey =
+        committed && committed.snapshot.terminal !== "error"
+            ? committed.snapshot.businessProcess.key
+            : null;
+    const workViewId =
+        committed && committed.snapshot.terminal !== "error"
+            ? committed.snapshot.activeWorkView.id
+            : null;
+
+    const publishedOverlay = usePublishedQueueRowSlotsOverlay({
         surfaceId: model?.queue.provenance?.surfaceId ?? null,
-        processKey: null,
+        processKey,
     });
 
     const effectiveModel = useMemo(() => {
         if (!model) return null;
-        if (!publishedSlots) return model;
+        if (!publishedOverlay) return model;
+
+        const layout = publishedOverlay.layout;
+        const defaultSlots = publishedOverlay.defaultSlots;
+
         return {
             ...model,
             queue: {
                 ...model.queue,
-                rowConfig: publishedSlots,
-                // Per-row variant overrides must inherit freshly published Default slots
-                // (children.names/count, contact, work) — otherwise a stale matched variant
-                // keeps wiping Default after Surface Builder publish.
-                rows: model.queue.rows.map((row) =>
-                    row.rowConfig
-                        ? {
-                              ...row,
-                              rowConfig: mergeCompactSlotsInheritDefault(row.rowConfig, publishedSlots),
-                          }
-                        : row,
-                ),
+                rowConfig: defaultSlots,
+                // Rematch every row against the freshly published layout (Default + variants).
+                // Do not merge into stale D1 variant slots — those freeze pre-publish fieldKeys
+                // (e.g. contact email) and ignore Default edits (children.names).
+                rows: model.queue.rows.map((row) => {
+                    const input = queueRowVariantMatchInputFromContext(row.context, {
+                        workViewId,
+                        workViewKey: null,
+                    });
+                    if (!input.processKey && processKey) {
+                        input.processKey = processKey;
+                    }
+                    return {
+                        ...row,
+                        rowConfig: resolveQueueRowCompactSlots(layout, input),
+                    };
+                }),
             },
         };
-    }, [model, publishedSlots]);
+    }, [model, publishedOverlay, processKey, workViewId]);
+
+    useEffect(() => {
+        if (typeof window === "undefined" || !effectiveModel) return;
+        const first = effectiveModel.queue.rows[0];
+        const diag = {
+            editedOrResolvedSurfaceId: effectiveModel.queue.provenance?.surfaceId ?? null,
+            committedResolvedSource: effectiveModel.queue.provenance?.resolvedSource ?? null,
+            committedSource: effectiveModel.queue.provenance?.source ?? null,
+            overlay: publishedOverlay
+                ? {
+                      surfaceId: publishedOverlay.surfaceId,
+                      processKey: publishedOverlay.processKey,
+                      source: publishedOverlay.source,
+                      fetchedAt: publishedOverlay.fetchedAt,
+                      defaultFieldKeys: {
+                          subject: publishedOverlay.defaultSlots.subject.fieldKeys ?? [],
+                          status: publishedOverlay.defaultSlots.status.fieldKeys ?? [],
+                          contact: publishedOverlay.defaultSlots.contact.fieldKeys ?? [],
+                          attention: publishedOverlay.defaultSlots.attention.fieldKeys ?? [],
+                          work: publishedOverlay.defaultSlots.work.fieldKeys ?? [],
+                          groupCount: publishedOverlay.defaultSlots.groupCount.fieldKeys ?? [],
+                      },
+                  }
+                : null,
+            activeWorkViewId: workViewId,
+            processKey,
+            slotsSource: publishedOverlay ? "published_overlay_rematch" : "committed_snapshot",
+            queueDefaultFieldKeys: {
+                subject: effectiveModel.queue.rowConfig?.subject.fieldKeys ?? [],
+                status: effectiveModel.queue.rowConfig?.status.fieldKeys ?? [],
+                contact: effectiveModel.queue.rowConfig?.contact.fieldKeys ?? [],
+                attention: effectiveModel.queue.rowConfig?.attention.fieldKeys ?? [],
+                work: effectiveModel.queue.rowConfig?.work.fieldKeys ?? [],
+                groupCount: effectiveModel.queue.rowConfig?.groupCount.fieldKeys ?? [],
+            },
+            firstRow: first
+                ? {
+                      id: first.id,
+                      rowConfigFieldKeys: {
+                          subject: first.rowConfig?.subject.fieldKeys ?? [],
+                          status: first.rowConfig?.status.fieldKeys ?? [],
+                          contact: first.rowConfig?.contact.fieldKeys ?? [],
+                          attention: first.rowConfig?.attention.fieldKeys ?? [],
+                          work: first.rowConfig?.work.fieldKeys ?? [],
+                          groupCount: first.rowConfig?.groupCount.fieldKeys ?? [],
+                      },
+                      hasChildrenNames: Boolean(
+                          first.rowConfig?.groupCount.fieldKeys?.includes("children.names"),
+                      ),
+                      hasContactEmail: Boolean(
+                          first.rowConfig?.contact.fieldKeys?.some((k) =>
+                              k === "person.email" || k === "person.primary_email" || k.includes("email"),
+                          ),
+                      ),
+                  }
+                : null,
+        };
+        window.__ALLOY_QUEUE_ROW_SURFACE_DIAG__ = diag;
+    }, [effectiveModel, publishedOverlay, processKey, workViewId]);
 
     const identitySeed = useMemo(
         () =>
@@ -72,6 +158,7 @@ export function ProvisionedWorkUnitSurface() {
 
     const snapshot = committed.snapshot;
     const op = snapshot.terminal === "operational" ? snapshot : null;
+    const firstRowKeys = effectiveModel.queue.rows[0]?.rowConfig;
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workUnitSurface)}
@@ -90,7 +177,17 @@ export function ProvisionedWorkUnitSurface() {
                 snapshot.terminal === "operational" ? snapshot.recordOfAttention.id : undefined
             }
             data-context-frame={snapshot.terminal !== "error" ? snapshot.contextFrame.workViewId : undefined}
-            data-queue-row-slots-source={publishedSlots ? "published_overlay" : "committed_snapshot"}
+            data-queue-row-slots-source={publishedOverlay ? "published_overlay_rematch" : "committed_snapshot"}
+            data-queue-row-surface-id={effectiveModel.queue.provenance?.surfaceId ?? undefined}
+            data-queue-row-resolved-source={
+                publishedOverlay?.source ?? effectiveModel.queue.provenance?.resolvedSource ?? undefined
+            }
+            data-queue-row-has-children-names={
+                firstRowKeys?.groupCount.fieldKeys?.includes("children.names") ? "true" : "false"
+            }
+            data-queue-row-has-contact-email={
+                firstRowKeys?.contact.fieldKeys?.some((k) => k.includes("email")) ? "true" : "false"
+            }
             data-focus-panel-scope={
                 snapshot.terminal !== "error" ? snapshot.focusPanelScopeState : undefined
             }

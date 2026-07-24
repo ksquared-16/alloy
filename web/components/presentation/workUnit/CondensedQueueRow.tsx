@@ -198,6 +198,11 @@ export function CondensedQueueRow({
             data-queue-row-first={isFirst ? "true" : undefined}
             data-queue-row-active={isSelected ? "true" : undefined}
             data-needs-attention={needsAttention ? "true" : undefined}
+            data-queue-row-vm-contact={rowConfig?.contact.fieldKeys?.join("|") || undefined}
+            data-queue-row-vm-group={rowConfig?.groupCount.fieldKeys?.join("|") || undefined}
+            data-queue-row-vm-work={rowConfig?.work.fieldKeys?.join("|") || undefined}
+            data-queue-row-rendered-contact={line2 ?? undefined}
+            data-queue-row-rendered-group={countChip ?? undefined}
             onPointerDown={warm}
             onPointerEnter={warm}
             onFocus={warm}

@@ -35,6 +35,7 @@ const CANONICAL_REF_ALIASES: Record<string, string> = {
     "person.dob": "person.date_of_birth",
     "contact.date_of_birth": "person.date_of_birth",
     "contact.dob": "person.date_of_birth",
+    "child.dob": "child.date_of_birth",
 };
 
 export type IdentityPickerFieldOption = AvailableField & {
