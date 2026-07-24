@@ -307,10 +307,15 @@ export async function executeAdminAction(
         } catch (e) {
             // executeCreateLeadAction throws (rather than returning EntryLifecycleActionError) when a
             // downstream native insert fails — e.g. ensureCustomerForPersonNative on a stale/diverged
-            // schema. Translate to operator-safe copy and a highly searchable server log instead of an
-            // unhandled 500. Searchable on: action_key=create_lead + correlation_id.
+            // schema (missing column), or a CHECK-constraint rejecting a value the application path
+            // considers canonical (e.g. chk_pcs_source_kind vs the deployed source_kind vocabulary).
+            // Both are record-model-out-of-sync failures, NOT bad operator input: the operator never
+            // types a source_kind or a column name. Translate to operator-safe copy that does not blame
+            // the entered information and does not leak DB/constraint details, plus a highly searchable
+            // server log. Searchable on: action_key=create_lead + correlation_id.
             const technical = e instanceof Error ? e.message : String(e);
-            const schemaOutOfSync = /PGRST204|schema cache|Could not find the .* column/i.test(technical);
+            const schemaOutOfSync =
+                /PGRST204|schema cache|Could not find the .* column|violates check constraint/i.test(technical);
             console.error("[executeAdminAction] create_lead execution threw", {
                 action_key: actionKey,
                 correlation_id: correlationId,
@@ -322,7 +327,7 @@ export async function executeAdminAction(
                 ok: false,
                 correlation_id: correlationId,
                 error: schemaOutOfSync
-                    ? "I couldn't create the lead because the record model is out of sync. This needs an admin fix."
+                    ? "I couldn't create the lead because the record model is out of sync — this is a system issue, not the information you entered. Your draft is saved; an administrator needs to apply a fix before you retry."
                     : "I couldn't create the lead. Review the information and try again.",
                 status: schemaOutOfSync ? 500 : 400,
             };
