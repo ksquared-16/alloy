@@ -47,7 +47,7 @@ function ResultGroup({ title, lines }: { title: string; lines: ApprovalResultLin
 }
 
 export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }) {
-    const { detail, evidence, rec, recLoading, approve, approving, approveErr, approveResult, isClosed } = state;
+    const { detail, evidence, rec, recLoading, approve, approving, approveErr, approveResult, needsIdentityReview, isClosed } = state;
     if (!detail) return null;
 
     const recommendedActionKey = rec?.supported && rec.recommendation ? DECISION_TO_ACTION[rec.recommendation.decision].key : null;
@@ -75,15 +75,22 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
             : null;
     const submittedZip = submitted.find((v) => /\b(zip|postal)\b/i.test(v.label))?.value ?? null;
     const leadRecords = approveResult && "records" in approveResult ? approveResult.records ?? null : null;
-    const resultView = isClosed
-        ? buildApprovalResultView({
-              cards: matchedCards,
-              records: leadRecords,
-              linkedParentName: recommendedCandidate?.fullName ?? null,
-              linkedHouseholdName: recommendedCandidate?.householdName ?? null,
-              submittedZip,
-          })
-        : null;
+    // Only render the rich Linked/Created/Updated result when we hold the ACTUAL committed records
+    // from this approval (immediately after approving). On a re-opened completed case we no longer
+    // have them, and the live recommendation would re-resolve to "link" (the records now exist) —
+    // deriving a result from that would falsely read "Linked" for records we in fact created. In
+    // that case we fall back to a neutral completion note rather than show a misleading result.
+    // (Persisting a human result summary server-side for re-open is a tracked follow-up.)
+    const resultView =
+        isClosed && leadRecords
+            ? buildApprovalResultView({
+                  cards: matchedCards,
+                  records: leadRecords,
+                  linkedParentName: recommendedCandidate?.fullName ?? null,
+                  linkedHouseholdName: recommendedCandidate?.householdName ?? null,
+                  submittedZip,
+              })
+            : null;
 
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -125,6 +132,15 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
             {/* Approve bar */}
             {!isClosed ? (
                 <WorkspaceActionBar eyebrow="Decide">
+                    {needsIdentityReview ? (
+                        <div className="mb-2 rounded-md border border-alloy-gold/40 bg-alloy-gold/[0.12] px-2.5 py-1.5 text-[11px] text-alloy-gold-dark">
+                            <div className="font-semibold">Some matches need your review</div>
+                            <p className="mt-0.5 leading-snug">
+                                A record couldn’t be settled automatically. Review the matches to accept a record, choose another,
+                                create new, or mark it unresolved before approving. Nothing has been saved.
+                            </p>
+                        </div>
+                    ) : null}
                     {approveResult?.kind === "needs_mapping" ? (
                         <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
                             Can’t save yet — {approveResult.note}

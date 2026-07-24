@@ -57,6 +57,13 @@ export interface PosCaseState {
     approving: boolean;
     approveErr: string | null;
     approveResult: OperationalCommitResult | null;
+    /**
+     * The commit was refused because identity subjects still need an operator decision
+     * (the server's fail-closed `identity_review_required` guard — nothing was mutated).
+     * This is a normal review state, not an error: the rail explains it and points to the
+     * identity review, rather than showing a raw "Request failed (400)".
+     */
+    needsIdentityReview: boolean;
     isClosed: boolean;
 }
 
@@ -66,6 +73,7 @@ export function usePosCase(caseId: string | null): PosCaseState {
     const [error, setError] = useState<string | null>(null);
     const [approving, setApproving] = useState(false);
     const [approveErr, setApproveErr] = useState<string | null>(null);
+    const [needsIdentityReview, setNeedsIdentityReview] = useState(false);
     const [approveResult, setApproveResult] = useState<OperationalCommitResult | null>(null);
     const [rec, setRec] = useState<RecommendationView | null>(null);
     const [recLoading, setRecLoading] = useState(false);
@@ -100,6 +108,7 @@ export function usePosCase(caseId: string | null): PosCaseState {
     useEffect(() => {
         setApproveResult(null);
         setApproveErr(null);
+        setNeedsIdentityReview(false);
         // Paint immediately from the prefetch cache when the row was warmed, then revalidate.
         const cached = readCachedProcessingCase(caseId);
         setData(cached?.data ?? null);
@@ -139,12 +148,22 @@ export function usePosCase(caseId: string | null): PosCaseState {
         if (!caseId) return;
         setApproving(true);
         setApproveErr(null);
+        setNeedsIdentityReview(false);
         try {
             const res = await fetch(`/api/admin/processing/cases/${caseId}/approve`, {
                 method: "POST",
                 credentials: "same-origin",
             });
-            if (!res.ok) throw new Error(`Request failed (${res.status})`);
+            if (!res.ok) {
+                // The fail-closed identity guard refuses the commit (no mutation) when subjects
+                // still need an operator decision. Surface it as a review state, not a raw error.
+                const errBody = (await res.json().catch(() => null)) as { code?: string; error?: string } | null;
+                if (errBody?.code === "identity_review_required") {
+                    setNeedsIdentityReview(true);
+                    return;
+                }
+                throw new Error(errBody?.error || `Request failed (${res.status})`);
+            }
             const body = (await res.json()) as { data?: { operationalResult?: OperationalCommitResult | null } };
             setApproveResult(body.data?.operationalResult ?? null);
             dispatchOperationalWorkRefresh({
@@ -175,6 +194,7 @@ export function usePosCase(caseId: string | null): PosCaseState {
         approving,
         approveErr,
         approveResult,
+        needsIdentityReview,
         isClosed: detail ? detail.status === "completed" || detail.status === "archived" : false,
     };
 }
