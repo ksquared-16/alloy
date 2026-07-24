@@ -1,9 +1,9 @@
 {
   "quick_message": {
     "mounted": true,
-    "open_ms": 72,
+    "open_ms": 86,
     "visible_text_head": "WHAT'S NEXT\nBlocked\n\nContact Family\n\nCOMMUNICATION\n\nMessage\nClose\nNew Message\nNew\nEmail\nSMS\nTO\nTaryn Wenc\nAdd\nAdd another email\nCC/BCC\nSend\nSend later\nBOS Assist",
-    "api_calls_on_open": 3,
+    "api_calls_on_open": 4,
     "duplicate_requests": [],
     "hard_navigations": 0,
     "mutation_requests": [],
@@ -13,7 +13,7 @@
   },
   "schedule_tour": {
     "mounted": true,
-    "open_ms": 77,
+    "open_ms": 70,
     "visible_text_head": "WHAT'S NEXT\nBlocked\n\nContact Family\n\nHELPFUL ACTION\n\nSchedule tour\nClose\nSchedule tour\n\nAn active tour booking already exists for this opportunity. Pick a new time with Reschedule, or use Cancel under Tour date in the inquiry summary before scheduling again.\n\nConfirmed\nJul 27, 2026, 9:00 AM\nAmerica/",
     "api_calls_on_open": 3,
     "duplicate_requests": [],
@@ -23,8 +23,8 @@
   },
   "send_form": {
     "mounted": true,
-    "open_ms": 63,
-    "visible_text_head": "WHAT'S NEXT\nBlocked\n\nContact Family\n\nSEND FORM\n\nDeliver a form\nClose\n\nNo active forms are configured for this organization.",
+    "open_ms": 136,
+    "visible_text_head": "WHAT'S NEXT\nBlocked\n\nContact Family\n\nSEND FORM\n\nDeliver a form\nClose\n\nForm\n\nSelect a form…\nFirefly New Lead Inquiry (polish walk)\nMissouri State Medical Form\nLead Enrollment Inquiry (realization walk)\nLead Form\nNew Lead Gen\n\nSend to\n\nTaryn Wenc\ntarynw@hotmail.com\nDan Wenc\nno email\n\nDelivery\n\nEmail\nS",
     "api_calls_on_open": 4,
     "duplicate_requests": [],
     "hard_navigations": 0,

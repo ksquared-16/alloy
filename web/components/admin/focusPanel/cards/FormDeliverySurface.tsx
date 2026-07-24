@@ -62,11 +62,22 @@ export default function FormDeliverySurface({ opportunityId, onClose, onComplete
                     fetch(`/api/admin/communications/drawer-recipients?entity_type=opportunities&entity_id=${encodeURIComponent(opportunityId)}`, { credentials: "include" }),
                     fetch(`/api/admin/opportunities/${encodeURIComponent(opportunityId)}/delivery-subjects`, { credentials: "include" }),
                 ]);
-                const formsJ = (await formsRes.json().catch(() => ({}))) as { forms?: Array<{ id: string; name: string; is_active?: boolean }>; data?: { forms?: Array<{ id: string; name: string; is_active?: boolean }> } };
+                // /api/admin/forms answers { data: FormRow[] } (an array directly under `data`).
+                // Reading `forms` / `data.forms` here always missed, so a tenant with published
+                // forms saw "No active forms are configured" — the runtime hid valid config.
+                type FormRow = { id: string; name: string; is_active?: boolean };
+                const formsJ = (await formsRes.json().catch(() => ({}))) as {
+                    forms?: FormRow[];
+                    data?: FormRow[] | { forms?: FormRow[] };
+                };
                 const recJ = (await recRes.json().catch(() => ({}))) as { recipients?: RecipientOption[] };
                 const subjJ = (await subjRes.json().catch(() => ({}))) as { subjects?: SubjectOption[]; data?: { subjects?: SubjectOption[] } };
                 if (!live) return;
-                const formList = (formsJ.forms ?? formsJ.data?.forms ?? []).filter((f) => f.is_active !== false).map((f) => ({ id: f.id, name: f.name }));
+                const rawForms: FormRow[] =
+                    formsJ.forms
+                    ?? (Array.isArray(formsJ.data) ? formsJ.data : formsJ.data?.forms)
+                    ?? [];
+                const formList = rawForms.filter((f) => f.is_active !== false).map((f) => ({ id: f.id, name: f.name }));
                 setForms(formList);
                 setRecipients(recJ.recipients ?? []);
                 setSubjects(subjJ.subjects ?? subjJ.data?.subjects ?? []);

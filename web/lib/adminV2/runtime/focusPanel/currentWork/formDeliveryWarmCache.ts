@@ -36,13 +36,15 @@ function isFresh(entry: Entry, now: number): boolean {
 async function fetchForms(): Promise<FormDeliveryFormOption[]> {
     const res = await fetch("/api/admin/forms", { credentials: "include" });
     if (!res.ok) return [];
+    // /api/admin/forms answers { data: FormRow[] } — an array directly under `data`. The old
+    // `data.forms` read never matched, so the warm cache pre-seeded an empty form list.
+    type FormRow = { id: string; name: string; is_active?: boolean };
     const j = (await res.json().catch(() => ({}))) as {
-        forms?: Array<{ id: string; name: string; is_active?: boolean }>;
-        data?: { forms?: Array<{ id: string; name: string; is_active?: boolean }> };
+        forms?: FormRow[];
+        data?: FormRow[] | { forms?: FormRow[] };
     };
-    return (j.forms ?? j.data?.forms ?? [])
-        .filter((f) => f.is_active !== false)
-        .map((f) => ({ id: f.id, name: f.name }));
+    const rawForms: FormRow[] = j.forms ?? (Array.isArray(j.data) ? j.data : j.data?.forms) ?? [];
+    return rawForms.filter((f) => f.is_active !== false).map((f) => ({ id: f.id, name: f.name }));
 }
 
 async function fetchRecipients(opportunityId: string): Promise<FormDeliveryRecipientOption[]> {
