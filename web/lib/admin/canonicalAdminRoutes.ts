@@ -57,6 +57,9 @@ export const CANONICAL_ORGANIZATION_ACCESS_HREF = `${CANONICAL_ORGANIZATION_BASE
 /** Canonical Organization Business Processes. */
 export const CANONICAL_ORGANIZATION_PROCESSES_HREF = `${CANONICAL_ORGANIZATION_BASE}/processes` as const;
 
+/** Canonical Organization Data Model (Entities, Fields, Statuses, Option Sets, Relationships, Calculations). */
+export const CANONICAL_ORGANIZATION_DATA_MODEL_HREF = `${CANONICAL_ORGANIZATION_BASE}/data-model` as const;
+
 /**
  * Settings subpaths that have been productized under `/organization/{slug}`.
  * `adminSettingsSubpathHref` emits the organization URL for these so call sites
@@ -73,6 +76,9 @@ const ORGANIZATION_CONFIG_SUBPATH_ALIASES: Record<string, string> = {
     "users-roles": "access",
     processes: "processes",
     "business-processes": "processes",
+    "data-model": "data-model",
+    /** Legacy Data Model landing slug → `/organization/data-model` (default Entities). */
+    entities: "data-model",
 };
 
 /** Legacy admin implementation base (financials, old list pages, unmigrated system). */

@@ -14,9 +14,9 @@ import {
     resolveConfigurationEntitySingularLabel,
     type ConfigurationHubEntityDefinition,
 } from "@/lib/adminV2/configuration/configurationEntityCatalog";
-import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
 import { DATA_MODEL_ICON_STROKE } from "@/lib/fields/dataModelWorkspaceIcons";
 import { ExternalLink } from "lucide-react";
 
@@ -90,7 +90,7 @@ function EntityWorkspaceRow({
                     <span className="mt-0.5 block truncate text-[10px] text-alloy-midnight/45">{entity.description}</span>
                 </button>
                 <a
-                    href={`${adminSettingsSubpathHref("fields")}?entity=${encodeURIComponent(entity.hubKey)}`}
+                    href={`${dataModelSectionHref("fields", { entity: entity.hubKey })}`}
                     className="hidden shrink-0 text-[10px] font-medium text-alloy-bend-pine hover:underline sm:inline"
                     data-testid={`entities-open-data-model-${entity.hubKey}`}
                 >
@@ -388,8 +388,8 @@ export default function EntitiesWorkspaceClient() {
             <p className="flex items-center gap-1.5 text-[11px] text-alloy-midnight/45">
                 <ExternalLink size={12} strokeWidth={DATA_MODEL_ICON_STROKE} aria-hidden />
                 Field and category configuration lives in{" "}
-                <a href={adminSettingsSubpathHref("fields")} className="font-medium text-alloy-bend-pine hover:underline">
-                    Data Model
+                <a href={dataModelSectionHref("fields")} className="font-medium text-alloy-bend-pine hover:underline">
+                    Fields
                 </a>
                 .
             </p>

@@ -58,7 +58,7 @@ export const BUSINESS_PROCESS_HEADER_TABS: readonly {
     { key: "history", label: BUSINESS_PROCESS_NAV_HISTORY },
 ];
 
-/** Deep-link section values `/settings/processes?section=` accepts — legacy names included. */
+/** Deep-link section values `/settings/processes?section=` accepts — prior names included. */
 const BUSINESS_PROCESS_DEEP_LINK_SECTIONS: readonly BusinessProcessWorkspaceSection[] = [
     "overview",
     "stages",

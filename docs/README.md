@@ -110,6 +110,7 @@ Then: **`platform/foundation/system-overview.md`**
 26d. `platform/operator/access-product-ui.md` — **Access product UI** (Users / Roles / Access Scopes / Security; UI-only IA and Planned vs wired capability)
 26e. `platform/operator/business-processes-product-ui.md` — **Business Processes product UI** (Collection → Selected Process → Focused workspace; Stages / Work Views / Actions / Health)
 26f. `platform/operator/surfaces-product-ui.md` — **Surfaces product UI** (Category → Collection → Selected Surface workspace; embedded Edit for every Surface editor, never a detached full-bleed builder; truthful runtime certification matrix + known gaps)
+26g. `platform/operator/data-model-product-ui.md` — **Data Model product UI** (Category rail → Collection → Selected object; Entities / Fields / Statuses / Option Sets / Relationships / Operational Calculations shell; embedded editors; Calculations deep product deferred)
 27. `platform/operator/queue-system.md`
 28. `platform/operator/drawer-system.md`
 29. `platform/operator/drawer-sunset-roadmap.md` — **Drawer Sunset & Focus Panel Convergence** (sunset status matrix, freeze rule, editing-gap blocker, Household-then-Children targets — convergence lock)

@@ -122,32 +122,39 @@ const nextConfig: NextConfig = {
       { source: "/settings/locations", destination: "/organization/locations", permanent: false },
       { source: "/settings/locations/:path*", destination: "/organization/locations", permanent: false },
       /**
-       * Operational Calculations rename — the canonical route is `/settings/calculations`.
-       * `/settings/analytics` aliases to it for compatibility. (`analytics` remains the
-       * storage/route folder; the visible product path is calculations.)
+       * Data Model productization — canonical `/organization/data-model?section=…`.
+       * List pages redirect into the shell; option-set detail `[setKey]` stays until embedded.
        */
-      { source: "/settings/analytics", destination: "/settings/calculations", permanent: false },
-      { source: "/settings/analytics/:path*", destination: "/settings/calculations/:path*", permanent: false },
-      /** Data Model workspace — canonical route is `/settings/fields`. */
-      { source: "/settings/data-model", destination: "/settings/fields", permanent: false },
-      { source: "/settings/data-model/:path*", destination: "/settings/fields/:path*", permanent: false },
+      { source: "/settings/entities", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/settings/fields", destination: "/organization/data-model?section=fields", permanent: false },
+      { source: "/settings/statuses", destination: "/organization/data-model?section=statuses", permanent: false },
+      { source: "/settings/option-sets", destination: "/organization/data-model?section=option-sets", permanent: false },
+      { source: "/settings/relationships", destination: "/organization/data-model?section=relationships", permanent: false },
+      { source: "/settings/calculations", destination: "/organization/data-model?section=calculations", permanent: false },
+      { source: "/settings/data-model", destination: "/organization/data-model", permanent: false },
+      { source: "/settings/data-model/:path*", destination: "/organization/data-model", permanent: false },
+      /**
+       * Operational Calculations rename — analytics aliases into Data Model Calculations.
+       */
+      { source: "/settings/analytics", destination: "/organization/data-model?section=calculations", permanent: false },
+      { source: "/settings/analytics/:path*", destination: "/organization/data-model?section=calculations", permanent: false },
       /** Legacy Settings aliases → canonical Platform Configuration routes. */
-      { source: "/settings/entity-labels", destination: "/settings/entities", permanent: false },
-      { source: "/settings/entity-labels/:path*", destination: "/settings/entities", permanent: false },
-      { source: "/settings/label-entities", destination: "/settings/entities", permanent: false },
-      { source: "/settings/label-entities/:path*", destination: "/settings/entities", permanent: false },
-      { source: "/settings/kpis", destination: "/settings/calculations?tab=visibility", permanent: false },
-      { source: "/settings/kpis/:path*", destination: "/settings/calculations?tab=visibility", permanent: false },
+      { source: "/settings/entity-labels", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/settings/entity-labels/:path*", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/settings/label-entities", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/settings/label-entities/:path*", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/settings/kpis", destination: "/organization/data-model?section=calculations", permanent: false },
+      { source: "/settings/kpis/:path*", destination: "/organization/data-model?section=calculations", permanent: false },
       /** Legacy admin system hub → Platform Configuration equivalents. */
-      { source: "/legacy-admin/system/person-fields", destination: "/settings/fields?entity=person", permanent: false },
-      { source: "/legacy-admin/system/location-fields", destination: "/settings/fields?entity=location", permanent: false },
-      { source: "/legacy-admin/system/customer-fields", destination: "/settings/fields?entity=customer", permanent: false },
-      { source: "/legacy-admin/system/job-fields", destination: "/settings/fields?entity=opportunity", permanent: false },
-      { source: "/legacy-admin/system/opportunity-fields", destination: "/settings/fields?entity=opportunity", permanent: false },
-      { source: "/legacy-admin/system/vendor-fields", destination: "/settings/fields", permanent: false },
-      { source: "/legacy-admin/system/schedule-fields", destination: "/settings/fields", permanent: false },
+      { source: "/legacy-admin/system/person-fields", destination: "/organization/data-model?section=fields&entity=person", permanent: false },
+      { source: "/legacy-admin/system/location-fields", destination: "/organization/data-model?section=fields&entity=location", permanent: false },
+      { source: "/legacy-admin/system/customer-fields", destination: "/organization/data-model?section=fields&entity=customer", permanent: false },
+      { source: "/legacy-admin/system/job-fields", destination: "/organization/data-model?section=fields&entity=opportunity", permanent: false },
+      { source: "/legacy-admin/system/opportunity-fields", destination: "/organization/data-model?section=fields&entity=opportunity", permanent: false },
+      { source: "/legacy-admin/system/vendor-fields", destination: "/organization/data-model?section=fields", permanent: false },
+      { source: "/legacy-admin/system/schedule-fields", destination: "/organization/data-model?section=fields", permanent: false },
       { source: "/legacy-admin/system/document-fields", destination: "/settings/documents/document-fields", permanent: false },
-      { source: "/legacy-admin/system/entity-labels", destination: "/settings/entities", permanent: false },
+      { source: "/legacy-admin/system/entity-labels", destination: "/organization/data-model?section=entities", permanent: false },
       { source: "/legacy-admin/system/statuses", destination: "/settings/statuses", permanent: false },
       { source: "/legacy-admin/system/option-sets", destination: "/settings/option-sets", permanent: false },
       { source: "/legacy-admin/system/option-sets/:setKey", destination: "/settings/option-sets/:setKey", permanent: false },
@@ -172,7 +179,7 @@ const nextConfig: NextConfig = {
       { source: "/admin/system/vendor-fields", destination: "/settings/fields", permanent: false },
       { source: "/admin/system/schedule-fields", destination: "/settings/fields", permanent: false },
       { source: "/admin/system/document-fields", destination: "/settings/documents/document-fields", permanent: false },
-      { source: "/admin/system/entity-labels", destination: "/settings/entities", permanent: false },
+      { source: "/admin/system/entity-labels", destination: "/organization/data-model?section=entities", permanent: false },
       { source: "/admin/system/statuses", destination: "/settings/statuses", permanent: false },
       { source: "/admin/system/option-sets", destination: "/settings/option-sets", permanent: false },
       { source: "/admin/system/option-sets/:setKey", destination: "/settings/option-sets/:setKey", permanent: false },
@@ -204,6 +211,8 @@ const nextConfig: NextConfig = {
       { source: "/organization/access/:path*", destination: "/adminV2/settings/organization/access/:path*" },
       { source: "/organization/processes", destination: "/adminV2/settings/organization/processes" },
       { source: "/organization/processes/:path*", destination: "/adminV2/settings/organization/processes/:path*" },
+      { source: "/organization/data-model", destination: "/adminV2/settings/organization/data-model" },
+      { source: "/organization/data-model/:path*", destination: "/adminV2/settings/organization/data-model/:path*" },
       /**
        * Organization Programs & Locations — relationship landing.
        * Must precede exact `/organization` rewrite. Collections remain at

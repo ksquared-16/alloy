@@ -1,11 +1,9 @@
-import { Suspense } from "react";
-import AnalyticsSettingsClient from "@/app/adminV2/settings/analytics/AnalyticsSettingsClient";
+import { redirect } from "next/navigation";
+import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
 
-/** Operational Calculations — the canonical route (formerly /settings/analytics). */
+export const dynamic = "force-dynamic";
+
+/** Compatibility: `/settings/calculations` → Data Model Operational Calculations category. */
 export default function AdminV2SettingsCalculationsPage() {
-    return (
-        <Suspense fallback={<p className="text-sm text-alloy-midnight/55">Loading Operational Calculations…</p>}>
-            <AnalyticsSettingsClient />
-        </Suspense>
-    );
+    redirect(dataModelSectionHref("calculations"));
 }

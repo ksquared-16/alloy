@@ -34,9 +34,10 @@ describe("Configuration Runtime settings pattern rollout", () => {
         expect(bpShell).not.toContain("process-config-setup-workspace");
     });
 
-    it("Statuses page uses queue/workspace configuration page, not legacy accordion client", () => {
+    it("Statuses page redirects into Data Model; StatusesConfigurationPage remains the queue/workspace editor", () => {
         const page = read("app/adminV2/settings/statuses/page.tsx");
-        expect(page).toContain("StatusesConfigurationPage");
+        expect(page).toContain("dataModelSectionHref");
+        expect(page).toContain('"statuses"');
         expect(page).not.toContain("StatusesClient");
 
         const statusesPage = read("components/adminV2/settings/statuses/StatusesConfigurationPage.tsx");
@@ -66,11 +67,14 @@ describe("Configuration Runtime settings pattern rollout", () => {
         expect(hook).not.toContain("opportunity_customer_members");
     });
 
-    it("Fields uses Platform Configuration shell", () => {
-        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("FieldsConfigurationPage");
+    it("Fields redirects into the Data Model shell; FieldsConfigurationPage remains available", () => {
+        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("dataModelSectionHref");
         const fieldsPage = read("components/adminV2/settings/fields/FieldsConfigurationPage.tsx");
         expect(fieldsPage).toContain("ConfigurationContext");
         expect(fieldsPage).toContain("ConfigurationShell");
+        expect(read("components/adminV2/settings/dataModel/DataModelWorkspaceSurface.tsx")).toContain(
+            "DataModelWorkspaceClient",
+        );
     });
 
     it("configuration CSS avoids blue/slate accordion styling for statuses surface", () => {

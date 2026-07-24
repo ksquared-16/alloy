@@ -25,11 +25,14 @@ describe("Configuration Runtime settings rollout", () => {
             const src = read(page);
             expect(src).not.toContain("ConfigurationPatternPlaceholder");
         }
-        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("FieldsConfigurationPage");
+        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("dataModelSectionHref");
         expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
         expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("UsersRolesConfigurationPage");
         expect(read("app/adminV2/settings/communications/page.tsx")).toContain("CommunicationsConfigurationPage");
-        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("EntitiesConfigurationPage");
+        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("dataModelSectionHref");
+        expect(read("components/adminV2/settings/dataModel/DataModelWorkspaceSurface.tsx")).toContain(
+            "DataModelWorkspaceClient",
+        );
     });
 
     it("priority rollout surfaces use Platform Configuration shell primitives", () => {

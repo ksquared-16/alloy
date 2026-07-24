@@ -254,7 +254,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         key: "data-model",
         label: "Data Model",
         description: "Organization vocabulary shared by records, processes, and configured surfaces.",
-        href: "/settings/entities",
+        href: "/organization/data-model",
         icon: "data-model",
         publisherLabel: "Organization",
         configurationOwner: "Data Model",

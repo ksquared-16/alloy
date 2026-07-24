@@ -13,18 +13,23 @@ function read(rel: string): string {
 }
 
 describe("organization domain landings", () => {
-    it("builds Data Model tiles to existing settings routes", () => {
+    it("builds Data Model tiles into the organization shell without ceremony cards", () => {
         const model = buildDataModelLandingModel();
         expect(model.tiles.map((t) => t.id)).toEqual([
             "entities",
             "fields",
             "statuses",
-            "calculations",
             "option-sets",
             "relationships",
+            "calculations",
         ]);
-        expect(model.tiles.find((t) => t.id === "entities")?.href).toContain("/settings/entities?section=entities");
-        expect(model.tiles.find((t) => t.id === "fields")?.href).toContain("/settings/fields");
+        expect(model.summaryCards).toEqual([]);
+        expect(model.tiles.find((t) => t.id === "entities")?.href).toContain(
+            "/organization/data-model?section=entities",
+        );
+        expect(model.tiles.find((t) => t.id === "fields")?.href).toContain(
+            "/organization/data-model?section=fields",
+        );
         expect(model.ownershipNote.toLowerCase()).toContain("organization");
     });
 
@@ -52,8 +57,11 @@ describe("organization domain landings", () => {
         );
     });
 
-    it("wires page entrypoints to landing when section is absent", () => {
-        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("OrganizationDomainLanding");
+    it("wires Data Model to the organization workspace and Access landing when section is absent", () => {
+        expect(read("app/adminV2/settings/organization/data-model/page.tsx")).toContain(
+            "DataModelWorkspaceSurface",
+        );
+        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("dataModelSectionHref");
         expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("buildAccessLandingModel");
     });
 
