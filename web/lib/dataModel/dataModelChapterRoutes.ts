@@ -1,9 +1,12 @@
 /**
- * Data Model workspace categories — Category → Collection → Selected → Focused workspace.
+ * Data Model routes.
  *
- * Canonical owner: `/organization/data-model?section=…`
- * Legacy `/settings/entities|fields|statuses|option-sets|relationships|calculations`
- * redirect into this shell.
+ * Canonical owner: `/organization/data-model?entity=<hubKey>&tab=<tabKey>` — the
+ * operator picks an Entity and stays inside it. The legacy `?section=…`
+ * vocabulary is retained only as an inbound compatibility surface: existing links
+ * (settings redirects, configuration nav, domain landing tiles) keep resolving,
+ * and `resolveDataModelEntityRoute` maps them onto the Entity workspace instead
+ * of a category page.
  */
 
 import { CANONICAL_ORGANIZATION_DATA_MODEL_HREF } from "@/lib/admin/canonicalAdminRoutes";
@@ -94,3 +97,69 @@ export function dataModelSectionHref(
         ? `${CANONICAL_ORGANIZATION_DATA_MODEL_HREF}?${query}`
         : CANONICAL_ORGANIZATION_DATA_MODEL_HREF;
 }
+
+/** Hub entity selected when an inbound link names no entity. */
+export const DATA_MODEL_DEFAULT_ENTITY_HUB_KEY = "person";
+
+/**
+ * Legacy category → Entity workspace tab. Fields, Statuses, Option Sets, and
+ * Relationships are no longer destinations of their own: they resolve inside the
+ * selected Entity. Option Sets land on Fields because an option set is reached
+ * through the option-backed field that consumes it.
+ */
+export const DATA_MODEL_SECTION_ENTITY_TAB: Readonly<
+    Record<Exclude<DataModelWorkspaceSection, "calculations">, string>
+> = {
+    entities: "overview",
+    fields: "fields",
+    statuses: "status",
+    "option-sets": "fields",
+    relationships: "relationships",
+};
+
+export type DataModelEntityRoute =
+    | { mode: "entity"; entity: string | undefined; tab: string | undefined; field: string | undefined }
+    | { mode: "calculations" };
+
+/**
+ * Resolve inbound route params onto the Entity-centric workspace.
+ *
+ * `?tab=` always wins when present, so an Entity deep-link is never overridden by
+ * a stale `?section=`. Operational Calculations stays a separate deferred pane.
+ */
+export function resolveDataModelEntityRoute(params: {
+    section?: string | null;
+    entity?: string | null;
+    tab?: string | null;
+    field?: string | null;
+}): DataModelEntityRoute {
+    const section = normalizeDataModelWorkspaceSection(params.section);
+    if (section === "calculations") return { mode: "calculations" };
+
+    const explicitTab = params.tab?.trim() || undefined;
+    const mappedTab = section ? DATA_MODEL_SECTION_ENTITY_TAB[section] : undefined;
+    return {
+        mode: "entity",
+        entity: params.entity?.trim() || undefined,
+        tab: explicitTab ?? mappedTab,
+        field: params.field?.trim() || undefined,
+    };
+}
+
+/** Canonical Entity-centric deep-link — no `section` param. */
+export function dataModelEntityHref(
+    hubKey: string,
+    options?: { tab?: string | null; field?: string | null },
+): string {
+    const params = new URLSearchParams();
+    if (hubKey.trim()) params.set("entity", hubKey.trim());
+    if (options?.tab?.trim()) params.set("tab", options.tab.trim());
+    if (options?.field?.trim()) params.set("field", options.field.trim());
+    const query = params.toString();
+    return query
+        ? `${CANONICAL_ORGANIZATION_DATA_MODEL_HREF}?${query}`
+        : CANONICAL_ORGANIZATION_DATA_MODEL_HREF;
+}
+
+/** Quiet secondary entry for the deferred Operational Calculations experience. */
+export const DATA_MODEL_CALCULATIONS_HREF = dataModelSectionHref("calculations");

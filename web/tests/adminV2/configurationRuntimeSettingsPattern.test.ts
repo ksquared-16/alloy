@@ -72,8 +72,10 @@ describe("Configuration Runtime settings pattern rollout", () => {
         const fieldsPage = read("components/adminV2/settings/fields/FieldsConfigurationPage.tsx");
         expect(fieldsPage).toContain("ConfigurationContext");
         expect(fieldsPage).toContain("ConfigurationShell");
+        // Data Model is Entity-centric: `?section=fields` lands on the selected Entity's
+        // Fields tab, not a legacy DataModelWorkspaceClient category pane.
         expect(read("components/adminV2/settings/dataModel/DataModelWorkspaceSurface.tsx")).toContain(
-            "DataModelWorkspaceClient",
+            "EntitiesWorkspaceSurface",
         );
     });
 

@@ -1,8 +1,6 @@
 import DataModelWorkspaceSurface from "@/components/adminV2/settings/dataModel/DataModelWorkspaceSurface";
-import {
-    DATA_MODEL_DEFAULT_SECTION,
-    normalizeDataModelWorkspaceSection,
-} from "@/lib/dataModel/dataModelChapterRoutes";
+import { resolveDataModelEntityRoute } from "@/lib/dataModel/dataModelChapterRoutes";
+import { loadDataModelEntitiesWorkspaceVm } from "@/lib/dataModel/loadDataModelEntitiesWorkspaceVm";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +9,7 @@ type PageProps = {
         section?: string | string[];
         entity?: string | string[];
         tab?: string | string[];
+        field?: string | string[];
     }>;
 };
 
@@ -22,21 +21,32 @@ function firstOf(value: string | string[] | undefined): string | undefined {
 /**
  * Canonical Organization Data Model — `/organization/data-model`.
  *
- * Immediate Category → Collection → Selected workspace (no conceptual landing cards).
- * Default category is Entities.
+ * Entity-centric: pick an Entity, then work inside it. Legacy `?section=` links
+ * (fields, statuses, option-sets, relationships) map onto the matching Entity tab
+ * rather than a separate category page.
  */
 export default async function OrganizationDataModelPage({ searchParams }: PageProps) {
     const resolved = searchParams ? await searchParams : {};
-    const section =
-        normalizeDataModelWorkspaceSection(firstOf(resolved.section)) ?? DATA_MODEL_DEFAULT_SECTION;
-    const entity = firstOf(resolved.entity);
-    const tab = firstOf(resolved.tab);
+    const route = resolveDataModelEntityRoute({
+        section: firstOf(resolved.section),
+        entity: firstOf(resolved.entity),
+        tab: firstOf(resolved.tab),
+        field: firstOf(resolved.field),
+    });
+
+    // The Entity workspace is the primary experience, so its VM composes on every
+    // request — collection, selected identity, fields, statuses, and option sets
+    // all arrive with the initial payload. Operational Calculations is the one
+    // deferred compat pane and does not need it.
+    const entitiesLoad = route.mode === "entity" ? await loadDataModelEntitiesWorkspaceVm() : undefined;
 
     return (
         <DataModelWorkspaceSurface
-            section={section}
-            initialEntity={entity}
-            initialTab={tab}
+            mode={route.mode}
+            initialEntity={route.mode === "entity" ? route.entity : undefined}
+            initialTab={route.mode === "entity" ? route.tab : undefined}
+            initialField={route.mode === "entity" ? route.field : undefined}
+            entitiesLoad={entitiesLoad}
         />
     );
 }

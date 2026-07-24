@@ -30,8 +30,9 @@ describe("Configuration Runtime settings rollout", () => {
         expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("UsersRolesConfigurationPage");
         expect(read("app/adminV2/settings/communications/page.tsx")).toContain("CommunicationsConfigurationPage");
         expect(read("app/adminV2/settings/entities/page.tsx")).toContain("dataModelSectionHref");
+        // Data Model's primary experience is the Entity workspace, not a legacy category embed.
         expect(read("components/adminV2/settings/dataModel/DataModelWorkspaceSurface.tsx")).toContain(
-            "DataModelWorkspaceClient",
+            "EntitiesWorkspaceSurface",
         );
     });
 
