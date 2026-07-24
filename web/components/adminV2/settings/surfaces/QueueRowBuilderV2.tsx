@@ -65,7 +65,7 @@ import { isQueueRowNameFieldKey } from "@/lib/presentation/formatQueueRowNameDis
 import {
     CHILDREN_COLLECTION_GENDER_UNAVAILABLE_REASON,
     COLLECTION_ITEM_FIELD_CATALOG,
-    DEFAULT_CHILDREN_COLLECTION_PRESENTATION,
+    collectionPresentationForFieldKey,
     isCollectionFieldKey,
     normalizeCollectionFieldPresentation,
     selectableChildrenCollectionItemFieldKeys,
@@ -1064,7 +1064,10 @@ function FieldInspector({
     const supportsNameDisplay = field.kind === "field" && isQueueRowNameFieldKey(field.fieldKey);
     const isCollectionField = field.kind === "field" && isCollectionFieldKey(field.fieldKey);
     const collectionPresentation =
-        field.collectionPresentation ?? DEFAULT_CHILDREN_COLLECTION_PRESENTATION;
+        collectionPresentationForFieldKey(field.fieldKey, {
+            collectionPresentation: field.collectionPresentation,
+            nameDisplay: field.nameDisplay,
+        }) ?? normalizeCollectionFieldPresentation(undefined);
     return (
         <div className="rounded-xl border border-alloy-stone/14 bg-white shadow-sm" data-field-inspector={field.id}>
             <div className="flex items-center justify-between border-b border-alloy-stone/10 px-4 py-2.5">
@@ -1307,6 +1310,10 @@ export default function QueueRowBuilderV2({
             const stackLine = ctx?.stackLine ?? 0;
             const inlineWithPrevious = ctx?.inlineWithPrevious ?? false;
             const fieldKey = item.kind === "field" ? item.fieldKey : `widget:${item.widgetKey}`;
+            const collectionPresentation =
+                item.kind === "field"
+                    ? collectionPresentationForFieldKey(fieldKey) ?? undefined
+                    : undefined;
 
             mark((prev) =>
                 prev.map((z) => {
@@ -1322,9 +1329,7 @@ export default function QueueRowBuilderV2({
                                 builderSlot: slot,
                                 stackLine,
                                 inlineWithPrevious,
-                                ...(fieldKey === "children"
-                                    ? { collectionPresentation: DEFAULT_CHILDREN_COLLECTION_PRESENTATION }
-                                    : {}),
+                                ...(collectionPresentation ? { collectionPresentation } : {}),
                             },
                         },
                     };

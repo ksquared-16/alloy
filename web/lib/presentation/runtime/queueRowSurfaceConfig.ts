@@ -44,6 +44,7 @@ import type {
 } from "@/lib/layout/queueRecordLayoutV3";
 import { compactSlotForCanvasRegion, type CanvasAnatomyRegion } from "@/lib/adminV2/settings/surfaces/queueRowCanvasRegions";
 import type { CollectionFieldPresentationConfig } from "@/lib/presentation/collectionFieldPresentation";
+import { collectionPresentationForFieldKey } from "@/lib/presentation/collectionFieldPresentation";
 
 /** One compact-anatomy slot's resolved config: whether to render it + configured field keys. */
 export type CompactRowSlotConfig = {
@@ -232,7 +233,15 @@ function slotsFromBuilderAssignment(
                     nameDisplayBySlot.set(compactSlot, nameDisplay);
                 }
 
-                if (field.collectionPresentation) {
+                const derivedPresentation = collectionPresentationForFieldKey(fieldKey, {
+                    collectionPresentation: field.collectionPresentation,
+                    nameDisplay: field.nameDisplay,
+                });
+                if (derivedPresentation) {
+                    const collectionPresentation = collectionPresentationBySlot.get(compactSlot) ?? {};
+                    collectionPresentation[fieldKey] = derivedPresentation;
+                    collectionPresentationBySlot.set(compactSlot, collectionPresentation);
+                } else if (field.collectionPresentation) {
                     const collectionPresentation = collectionPresentationBySlot.get(compactSlot) ?? {};
                     collectionPresentation[fieldKey] = field.collectionPresentation;
                     collectionPresentationBySlot.set(compactSlot, collectionPresentation);
@@ -352,7 +361,11 @@ function slotConfigFromPublishedFields(
     for (const field of fields) {
         const key = field.fieldKey.trim();
         if (field.nameDisplay) nameDisplayByFieldKey[key] = field.nameDisplay;
-        if (field.collectionPresentation) collectionPresentationByFieldKey[key] = field.collectionPresentation;
+        const derived = collectionPresentationForFieldKey(key, {
+            collectionPresentation: field.collectionPresentation,
+            nameDisplay: field.nameDisplay,
+        });
+        if (derived) collectionPresentationByFieldKey[key] = derived;
     }
     return {
         visible: true,

@@ -396,7 +396,7 @@ describe("resolveCompactSlotDisplay", () => {
             { visible: true, label: null, fieldKeys: ["children.summary"] },
             null,
         );
-        expect(summary).toBe("2 children: Avery Lee, Rowan Lee");
+        expect(summary).toBe("2 children · Avery Lee, Rowan Lee");
     });
 
     it("renders child.name as first name when nameDisplay is first_name", () => {

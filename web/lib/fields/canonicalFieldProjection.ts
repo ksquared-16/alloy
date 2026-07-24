@@ -8,7 +8,9 @@
 import type { CanonicalDataProvider } from "@/lib/fields/canonicalDataProviderModel";
 
 export type CanonicalFieldProjectionKind =
+    | "inquiry_participation"
     | "current_enrollment"
+    | "committed_placement"
     | "relationship"
     | "calculated"
     | "runtime"
@@ -38,8 +40,8 @@ export const CHILD_ENROLLMENT_PROJECTIONS: readonly CanonicalFieldProjection[] =
         ownerEntity: "inquiry_child",
         projectionSubject: "child",
         providerRef: "inquiry_child.location_id",
-        projectionKind: "current_enrollment",
-        displayLabelOverride: "Current Location",
+        projectionKind: "inquiry_participation",
+        displayLabelOverride: "Location",
         optionSourceEntity: "location",
         writableViaOwner: true,
     },
@@ -48,8 +50,8 @@ export const CHILD_ENROLLMENT_PROJECTIONS: readonly CanonicalFieldProjection[] =
         ownerEntity: "inquiry_child",
         projectionSubject: "child",
         providerRef: "inquiry_child.program",
-        projectionKind: "current_enrollment",
-        displayLabelOverride: "Current Program",
+        projectionKind: "inquiry_participation",
+        displayLabelOverride: "Program",
         optionSourceEntity: "location_program_category",
         writableViaOwner: true,
     },
@@ -58,8 +60,8 @@ export const CHILD_ENROLLMENT_PROJECTIONS: readonly CanonicalFieldProjection[] =
         ownerEntity: "inquiry_child",
         projectionSubject: "child",
         providerRef: "inquiry_child.program_room_cohort_key",
-        projectionKind: "current_enrollment",
-        displayLabelOverride: "Current Room",
+        projectionKind: "inquiry_participation",
+        displayLabelOverride: "Room",
         optionSourceEntity: "location_unit",
         writableViaOwner: true,
     },
@@ -68,8 +70,8 @@ export const CHILD_ENROLLMENT_PROJECTIONS: readonly CanonicalFieldProjection[] =
         ownerEntity: "inquiry_child",
         projectionSubject: "child",
         providerRef: "inquiry_child.schedule_type",
-        projectionKind: "current_enrollment",
-        displayLabelOverride: "Current Schedule",
+        projectionKind: "inquiry_participation",
+        displayLabelOverride: "Schedule",
         optionSourceEntity: "option_set",
         writableViaOwner: true,
     },
@@ -78,8 +80,8 @@ export const CHILD_ENROLLMENT_PROJECTIONS: readonly CanonicalFieldProjection[] =
         ownerEntity: "inquiry_child",
         projectionSubject: "child",
         providerRef: "inquiry_child.start_date",
-        projectionKind: "current_enrollment",
-        displayLabelOverride: "Enrollment Start Date",
+        projectionKind: "inquiry_participation",
+        displayLabelOverride: "Start date",
         writableViaOwner: true,
     },
     {
@@ -87,8 +89,8 @@ export const CHILD_ENROLLMENT_PROJECTIONS: readonly CanonicalFieldProjection[] =
         ownerEntity: "inquiry_child",
         projectionSubject: "child",
         providerRef: "inquiry_child.outcome_status_key",
-        projectionKind: "current_enrollment",
-        displayLabelOverride: "Enrollment Status",
+        projectionKind: "inquiry_participation",
+        displayLabelOverride: "Enrollment status",
         writableViaOwner: true,
     },
 ] as const;
@@ -109,7 +111,8 @@ export const LEGACY_CHILD_ENROLLMENT_ALIAS_TO_PROVIDER: Readonly<Record<string, 
  * Focus Panel Children evidence rows are already bound to one
  * `opportunity_customer_members` / `_inquiry_children` participation. Projected
  * values resolve from that bound row — never an arbitrary "first enrollment"
- * across opportunities.
+ * across opportunities. These are inquiry participation fields (requested /
+ * in-process), not committed operational placement.
  *
  * Out of band for this subject grain: multi-opportunity historical/future
  * placements — selected by Work Views / process instance context, not by the

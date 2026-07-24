@@ -200,16 +200,39 @@ export function groupDefsFor(surfaceId: string): NestedSurfaceGroupDef[] {
     const groups: NestedSurfaceGroupDef[] = [];
     for (const component of surfaceComponents(surface)) {
         for (const group of component.evidenceGroups) {
+            const fromItems = namespacesForEvidenceGroup(group.items);
             groups.push({
                 key: group.key,
                 label: group.label,
                 purpose: group.purpose,
-                acceptedNamespaces: namespacesForEvidenceGroup(group.items),
+                // Seed items alone must not define the picker catalog. Children identity
+                // cards may project child profile + inquiry participation + calculated
+                // fields; namespaces come from surface grain policy + seed items.
+                acceptedNamespaces: acceptedNamespacesForNestedGroup(surfaceId, group.key, fromItems),
                 defaultFieldKeys: group.items.filter((item) => item.kind === "field").map((item) => item.key),
             });
         }
     }
     return groups;
+}
+
+/**
+ * Applicable entity namespaces for a nested surface group picker.
+ * Broader than seed items so /fields inquiry participation (and related) remain selectable
+ * on Children identity cards without duplicating field definitions.
+ */
+export function acceptedNamespacesForNestedGroup(
+    surfaceId: string,
+    groupKey: string,
+    fromItems: readonly AvailableFieldEntityNamespace[],
+): AvailableFieldEntityNamespace[] {
+    const base = new Set<AvailableFieldEntityNamespace>(fromItems);
+    if (surfaceId === CHILDREN_SURFACE_ID || surfaceId === "child_surface") {
+        base.add("child");
+        base.add("inquiry_child");
+        if (groupKey === "readiness") base.add("opportunity");
+    }
+    return [...base];
 }
 
 export function nestedSurfaceLabel(surfaceId: string): string {

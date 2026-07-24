@@ -137,6 +137,28 @@ export function normalizeCollectionFieldPresentation(
     };
 }
 
+/**
+ * Presentation config for a children collection field key.
+ * Legacy keys (`children.names|count|summary`) keep distinct modes — never collapse to one default.
+ */
+export function collectionPresentationForFieldKey(
+    fieldKey: string,
+    options?: {
+        collectionPresentation?: CollectionFieldPresentationConfig | null;
+        nameDisplay?: QueueRecordNameDisplay;
+    },
+): CollectionFieldPresentationConfig | null {
+    const collectionKey = normalizeCollectionFieldKey(fieldKey);
+    if (!collectionKey) return null;
+    if (options?.collectionPresentation) {
+        return normalizeCollectionFieldPresentation(options.collectionPresentation);
+    }
+    return (
+        legacyCollectionPresentationFromFieldKey(fieldKey, options?.nameDisplay)
+        ?? normalizeCollectionFieldPresentation(undefined)
+    );
+}
+
 /** Map legacy children.* primitive keys to equivalent collection configs. */
 export function legacyCollectionPresentationFromFieldKey(
     fieldKey: string,
@@ -509,7 +531,7 @@ export function renderCollectionFieldPresentation(
     if (config.displayMode === "summary") {
         const listBody = applyOverflow(lines, count, config);
         if (!listBody) return countLabel(count);
-        return `${countLabel(count)}: ${listBody}`;
+        return `${countLabel(count)} · ${listBody}`;
     }
 
     return applyOverflow(lines, count, config);
@@ -527,10 +549,11 @@ export function renderCollectionFieldFromContext(
     const collectionKey = normalizeCollectionFieldKey(fieldKey);
     if (!collectionKey) return null;
 
-    const config =
-        options?.collectionPresentation
-        ?? legacyCollectionPresentationFromFieldKey(fieldKey, options?.nameDisplay)
-        ?? normalizeCollectionFieldPresentation(undefined);
+    const config = collectionPresentationForFieldKey(fieldKey, {
+        collectionPresentation: options?.collectionPresentation,
+        nameDisplay: options?.nameDisplay,
+    });
+    if (!config) return null;
 
     return renderCollectionFieldPresentation(collectionKey, context, config, options?.record);
 }
