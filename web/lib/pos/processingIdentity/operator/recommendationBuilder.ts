@@ -70,6 +70,55 @@ function refFor(sub: ResolvedSubject): string {
     return sub.ref;
 }
 
+/** Decisions that result in a committed record the child/lead can be enrolled against. */
+const COMMITTABLE_DECISIONS: readonly SubjectDecision[] = ["create", "link", "update", "no_op"];
+
+/**
+ * Enrollment participation is a committed consequence of creating a lead with children —
+ * not an identity the operator resolves. For each committable child, ensure a participation
+ * subject (child → lead) exists so the frozen `create_process_participation` command fires at
+ * commit, giving a public-form / Create-Lead intake case the same enrollment process_instance
+ * that manual Create Lead already produces. Idempotent: skipped when a participation subject
+ * for that child is already present, and the downstream process_instance upsert is natural-keyed
+ * (org_id, process_key, subject_id, context_id), so re-committing never duplicates.
+ */
+function ensureParticipationSubjects(subjects: ResolvedSubject[]): ResolvedSubject[] {
+    const lead = subjects.find((s) => s.role === "lead");
+    if (!lead || !COMMITTABLE_DECISIONS.includes(lead.decision)) return subjects;
+    const alreadyEnrolled = new Set(
+        subjects.filter((s) => s.role === "participation" && s.childRef).map((s) => s.childRef as string),
+    );
+    const synthesized: ResolvedSubject[] = [];
+    for (const child of subjects) {
+        if (child.role !== "child") continue;
+        if (!COMMITTABLE_DECISIONS.includes(child.decision)) continue;
+        if (alreadyEnrolled.has(child.ref)) continue;
+        synthesized.push({
+            ref: `${child.ref}:participation`,
+            role: "participation",
+            decision: "create",
+            childRef: child.ref,
+            leadRef: lead.ref,
+            values: {},
+            resolutionRef: child.resolutionRef,
+        });
+    }
+    return synthesized.length ? [...subjects, ...synthesized] : subjects;
+}
+
+/**
+ * Resolve a child/lead subject ref to the value a workflow op should reference: a `@ref`
+ * placeholder when that subject is being created in this same plan, or the literal existing
+ * record id when it is linked/updated/unchanged (mirrors the guardian-link resolution below,
+ * so returning families whose child is linked to an existing record still enroll correctly).
+ */
+function resolveEntityRef(subjects: ResolvedSubject[], ref: string | undefined): string {
+    if (!ref) return "";
+    const sub = subjects.find((s) => s.ref === ref);
+    if (sub && sub.decision !== "create" && sub.selectedRecordId) return sub.selectedRecordId;
+    return `@${ref}`;
+}
+
 /** Build the deterministic recommendation set from operator resolution decisions. */
 export function buildRecommendations(set: IdentityResolutionSet): RecommendationResult {
     const operations: PlanOperationInput[] = [];
@@ -86,7 +135,7 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
         lead: 3,
         participation: 4,
     };
-    const subjects = [...set.subjects].sort(
+    const subjects = ensureParticipationSubjects([...set.subjects]).sort(
         (a, b) => roleOrder[a.role] - roleOrder[b.role] || a.ref.localeCompare(b.ref),
     );
 
@@ -194,7 +243,7 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
                 }
                 break;
             case "participation":
-                operations.push({ ...common, opKind: "workflow", commandKey: IDENTITY_COMMAND_KEYS.createProcessParticipation, payload: { child_id: `@${sub.childRef}`, lead_id: `@${sub.leadRef}`, participation: sub.values ?? {} }, dependsOnRefs: dedupeRefs([sub.childRef, sub.leadRef]), reason: "enrollment participation" });
+                operations.push({ ...common, opKind: "workflow", commandKey: IDENTITY_COMMAND_KEYS.createProcessParticipation, payload: { child_id: resolveEntityRef(subjects, sub.childRef), lead_id: resolveEntityRef(subjects, sub.leadRef), participation: sub.values ?? {} }, dependsOnRefs: dedupeRefs([sub.childRef, sub.leadRef]), reason: "enrollment participation" });
                 break;
         }
     }

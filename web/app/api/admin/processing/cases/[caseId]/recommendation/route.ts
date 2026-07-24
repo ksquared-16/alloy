@@ -55,8 +55,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             });
         }
 
-        // Shared FP8a computation (same logic the queue enrichment uses).
-        const result = await recommendationFromFormSubmission(supabase, ctx.orgId, source.source_id);
+        // Shared FP8a computation (same logic the queue enrichment uses) — the per-case view also
+        // enriches match candidates with identifying detail for the expand-in-place card (§3).
+        const result = await recommendationFromFormSubmission(supabase, ctx.orgId, source.source_id, {
+            enrichCandidates: true,
+        });
         return jsonData(result);
     } catch (e) {
         return NextResponse.json(

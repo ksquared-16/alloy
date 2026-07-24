@@ -17,6 +17,8 @@ export type LifecycleSetupStep = {
     title: string;
     summary: string;
     manageHref?: string;
+    /** Modal-open action (e.g. Digital Mailroom Studio); takes precedence over `manageHref`. */
+    manageOnClick?: () => void;
     manageLabel?: string;
     content: ReactNode;
 };
@@ -83,7 +85,17 @@ export default function LifecycleStageSetupWizard({
                                     className="max-h-[320px] overflow-y-auto border-t border-alloy-forge/10 px-4 py-3 text-sm"
                                     data-testid={`lifecycle-setup-step-body-${step.id}`}
                                 >
-                                    {step.manageHref ? (
+                                    {step.manageOnClick ? (
+                                        <div className="mb-2 flex justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={step.manageOnClick}
+                                                className="text-[11px] font-medium text-alloy-pine hover:underline"
+                                            >
+                                                {step.manageLabel ?? "Advanced"}
+                                            </button>
+                                        </div>
+                                    ) : step.manageHref ? (
                                         <div className="mb-2 flex justify-end">
                                             <Link
                                                 href={step.manageHref}

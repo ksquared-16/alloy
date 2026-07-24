@@ -53,16 +53,15 @@ import {
     summarizeGenerateIncludedFields,
 } from "@/lib/pos/processingCase/formDraft/generateStepPresentation";
 import { detectionModeLabel } from "@/lib/pos/processingCase/formDraft/detectionModeLabel";
+import { formatDisplayDateTime } from "@/lib/presentation/presentationDateFormat";
 import { proposeGeneratedFormName } from "@/lib/pos/documentInstanceNaming";
 import ProcessingNativeFormCreatingState from "./ProcessingNativeFormCreatingState";
 import ProcessingConfirmDialog from "./ProcessingConfirmDialog";
 import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/processingSourceCapabilities";
 
 function formatWhen(iso: string | null | undefined): string {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    // Canonical presentation datetime (doctrine: typography-and-presentation-doctrine.md).
+    return (iso && formatDisplayDateTime(iso)) || "—";
 }
 
 /** Build the editable reviewed question list from the stored draft, preserving provenance. */

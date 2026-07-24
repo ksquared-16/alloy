@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { formAuthoringWorkspacePath } from "@/lib/admin/forms/formAuthoringWorkspacePath";
 import { detectionModeHelper, detectionModeLabel, resolveDetectionMode } from "@/lib/pos/processingCase/formDraft/detectionModeLabel";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 
@@ -25,10 +24,6 @@ function draft(partial: Partial<StoredFormDraftPreview>): StoredFormDraftPreview
 }
 
 describe("Form Composer V1 helpers", () => {
-    it("routes generated forms to the rich adminV2 authoring workspace", () => {
-        expect(formAuthoringWorkspacePath("abc-123")).toBe("/adminV2/forms/abc-123");
-    });
-
     it("labels acroform detection distinctly from text-assisted detection", () => {
         const acro = draft({ generator_version: "fp11-acroform-v2", fields: [{ id: "f1", label: "Name", type: "text" }] as StoredFormDraftPreview["fields"] });
         expect(resolveDetectionMode(acro)).toBe("acroform");

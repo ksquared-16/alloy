@@ -1,12 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { usePathname } from "next/navigation";
-import { ClipboardList, Inbox, ListChecks, BarChart3, Layers, CalendarRange } from "lucide-react";
+// Forms lives inside the Digital Mailroom — no standalone Forms nav / /admin/forms (Mailroom doctrine).
+// Scheduling (CalendarRange) is a staging improvement kept during reconciliation.
+import { Inbox, ListChecks, BarChart3, Layers, CalendarRange } from "lucide-react";
 
-import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
-import { ADMIN_FORMS_HREF, isCanonicalFormsPath, normalizeToCanonicalAdminPath } from "@/lib/admin/canonicalAdminRoutes";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
 import { useInboxUnreadNavCount } from "@/lib/adminV2/useInboxUnreadNavCount";
 import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
@@ -177,46 +176,6 @@ export function SidebarInboxNavItem({ collapsed }: { collapsed: boolean }) {
     );
 }
 
-function SidebarRouteNavItem({
-    collapsed,
-    href,
-    title,
-    label,
-    active,
-    icon,
-    badge,
-}: {
-    collapsed: boolean;
-    href: string;
-    title: string;
-    label: string;
-    active?: boolean;
-    icon: ReactNode;
-    badge?: ReactNode;
-}) {
-    return (
-        <AdminV2NavLink
-            href={href}
-            title={title}
-            aria-label={title}
-            active={active}
-            className={collapsed ? "adminv2-sidebar-rail-link relative" : `${EXPANDED_PRIMARY_LINK} relative`}
-        >
-            {collapsed ?
-                <>
-                    <span className={badge ? "adminv2-sidebar-rail-icon-with-badge" : undefined}>{icon}</span>
-                    {badge ? <span className="adminv2-sidebar-nav-badge-anchor">{badge}</span> : null}
-                </>
-            :   <span className="inline-flex w-full items-center gap-2">
-                    {icon}
-                    <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-                    {badge}
-                </span>
-            }
-        </AdminV2NavLink>
-    );
-}
-
 export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();
     return (
@@ -273,23 +232,6 @@ export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) 
         />
     );
 }
-
-export function SidebarFormsNavItem({ collapsed }: { collapsed: boolean }) {
-    const pathname = usePathname();
-    const active = isCanonicalFormsPath(normalizeToCanonicalAdminPath(pathname));
-
-    return (
-        <SidebarRouteNavItem
-            collapsed={collapsed}
-            href={ADMIN_FORMS_HREF}
-            title="Forms — definitions, submissions, and packets"
-            label="Forms"
-            active={active}
-            icon={<ClipboardList size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
-        />
-    );
-}
-
 /** Scheduling — rooms, ratios, and placements; opens as a workspace modal. */
 export function SidebarSchedulingNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();

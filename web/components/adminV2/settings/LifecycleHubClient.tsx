@@ -15,6 +15,7 @@ import LifecycleStageLayoutAssignmentsCard from "@/components/adminV2/settings/l
 import LifecycleStageSetupWizard, {
     type LifecycleSetupStep,
 } from "@/components/adminV2/settings/lifecycle/LifecycleStageSetupWizard";
+import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
 import type { EnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import {
     asOperatorStageKey,
@@ -292,7 +293,8 @@ export default function LifecycleHubClient() {
                 id: "forms",
                 title: "Forms",
                 summary: "Forms and packets for this stage",
-                manageHref: "/admin/forms",
+                manageOnClick: () =>
+                    dispatchAdminV2OpenProcessingModal({ mode: "studio", studioTab: "forms" }),
                 manageLabel: "Forms",
                 content:
                     departmentId && operatorStage ? (

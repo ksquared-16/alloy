@@ -10,6 +10,7 @@ import { deleteFormDefinitionForAdmin } from "@/lib/admin/forms/deleteFormDefini
 import { allocateUniqueKey, slugKeyFromDisplayName } from "@/lib/forms/adminGeneratedKeys";
 import { createBlankSchema } from "@/lib/forms/formBuilderSchema";
 import { brandingMetadataPatch } from "@/lib/forms/processingFormBranding";
+import { applyDefaultLeadCaptureFormMetadata } from "@/lib/forms/intake/defaultLeadCaptureFormMetadata";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 
 /**
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Key allocation failed" }, { status: 500 });
     }
 
-    const metadata = {
+    let metadata: Record<string, unknown> = {
         ...metadataBase,
         source: "processing",
         origin,
@@ -67,6 +68,14 @@ export async function POST(request: NextRequest) {
         field_count: 0,
         section_count: 1,
     };
+
+    // A blank form is the lead-capture creation path: default it to the enrollment_lead
+    // operational intent (+ Business Process context) so a minted public link auto-resolves
+    // org intake routing instead of silently dead-ending. Document/packet origins keep their
+    // own intent; an explicit intake_intent in the request metadata always wins.
+    if (origin === "blank") {
+        metadata = await applyDefaultLeadCaptureFormMetadata(supabase, ctx.orgId, metadata);
+    }
 
     const { data: formRow, error: formErr } = await dbInsertFormDefinition(supabase, {
         org_id: ctx.orgId,

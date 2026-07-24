@@ -10,13 +10,14 @@
  * intentional empty / loading / error states. Read-only; selection is controlled.
  */
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
 import type { ProcessingCaseQueueRow, ProcessingCaseStatus } from "@/lib/pos/processingCase/readModel/types";
 import RecommendationBadge from "@/app/adminV2/pos/RecommendationBadge";
 import ProcessingConfirmDialog from "@/app/adminV2/pos/ProcessingConfirmDialog";
 import ProcessingRenameDocumentDialog from "@/app/adminV2/pos/ProcessingRenameDocumentDialog";
 import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
+import { prefetchProcessingCase, prefetchProcessingCases } from "@/lib/pos/processingCasePrefetch";
 import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
 import { ProcessingFolderIcon } from "@/lib/pos/processingFolderIcons";
@@ -154,14 +155,22 @@ export default function ProcessingQueueList({
 }) {
     const { data, loading, error, refresh } = useProcessingQueueWarm();
     const rows = data?.rows ?? [];
+    // Warm the leading rows as soon as the queue paints, so opening the top item is instant even
+    // without a hover (keyboard, deep link, or a straight click off the list).
+    const warmRowIds = rows.slice(0, 6).map((r) => r.id).join(",");
+    useEffect(() => {
+        if (warmRowIds) prefetchProcessingCases(warmRowIds.split(","));
+    }, [warmRowIds]);
     const counts = data?.counts ?? {};
     const recommendations = data?.recommendations ?? {};
     const { workFolders } = useProcessingFolders();
     const categoryFolders = workFolders.filter((f) => f.id !== "incoming" && f.id !== "completed");
+    // Every folder starts collapsed — the operator chooses which section to open, so the rail
+    // reads as a compact index rather than a pre-expanded wall of rows.
     const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => {
         const initial: Record<string, boolean> = {};
         for (const folder of workFolders) {
-            initial[folder.id] = folder.id === "incoming" || folder.id === "completed";
+            initial[folder.id] = false;
         }
         return initial;
     });
@@ -243,7 +252,10 @@ export default function ProcessingQueueList({
 
     const renderRow = (row: QueueDisplayRow) => {
         const selected = selectedCaseId === row.id;
-        const title = row.sourceDisplay?.label ?? row.primarySource?.kind ?? "Untitled source";
+        // Configurable title (person — purpose) instead of the repeated form name; the form name
+        // stays visible below as source context.
+        const title = row.caseTitle ?? row.sourceDisplay?.label ?? row.primarySource?.kind ?? "Untitled source";
+        const sourceContext = row.caseTitle ? row.sourceDisplay?.label ?? null : null;
         const rec = recommendations[row.id] ?? null;
         const lane = deriveWorkLane(row);
         const laneLabel =
@@ -270,6 +282,9 @@ export default function ProcessingQueueList({
                     type="button"
                     data-processing-case-id={row.id}
                     onClick={() => onSelectCase(row.id)}
+                    // Warm detail + recommendation on intent, so the click paints from cache.
+                    onMouseEnter={() => void prefetchProcessingCase(row.id)}
+                    onFocus={() => void prefetchProcessingCase(row.id)}
                     aria-current={selected}
                     className={`${QUEUE_ROW_CLASS} ${selected ? QUEUE_ROW_SELECTED_CLASS : ""}`}
                 >
@@ -287,6 +302,11 @@ export default function ProcessingQueueList({
                                 </>
                             ) : null}
                         </span>
+                        {sourceContext ? (
+                            <span className={`mt-0.5 block truncate ${PROCESSING_QUEUE_METADATA} text-alloy-midnight/40`}>
+                                Submitted through {sourceContext}
+                            </span>
+                        ) : null}
                     </span>
                 </button>
                 {canDelete || canArchive || canRename ? (
@@ -391,7 +411,7 @@ export default function ProcessingQueueList({
         >
             <span className="flex min-w-0 items-center gap-2">
                 <ProcessingFolderIcon folderId={key} className={`h-3 w-3 shrink-0 ${iconClass}`} />
-                <span className={`truncate text-[11px] font-semibold ${WS_TEXT_PRIMARY}`}>{label}</span>
+                <span className={`truncate text-[12.5px] font-semibold ${WS_TEXT_PRIMARY}`}>{label}</span>
             </span>
             <span className={`ml-2 shrink-0 px-1.5 text-[9px] font-semibold tabular-nums ${WS_TEXT_SECONDARY}`}>
                 {count}

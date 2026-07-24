@@ -70,11 +70,17 @@ export function formMatchesStudioFolder(
 }
 
 export function caseMatchesCategoryFolder(
-    row: { sourceDisplay?: { label: string } | null; caseType?: string | null },
+    row: { sourceDisplay?: { label: string } | null; caseType?: string | null; adminCategory?: string | null },
     folderId: string
 ): boolean {
     const def = folderDef(folderId);
     if (!def) return false;
+    // An explicit category (configured on the source form) is authoritative — keywords are only
+    // the fallback "when metadata.admin_category is unset", per the folder model. Without this a
+    // form whose name happens not to contain the folder keyword (e.g. "Firefly Lead Capture" vs
+    // "enrollment") silently falls back to Incoming no matter how it is configured.
+    const explicit = typeof row.adminCategory === "string" ? row.adminCategory.trim().toLowerCase() : "";
+    if (explicit) return explicit === folderId;
     const stack = `${row.sourceDisplay?.label ?? ""} ${row.caseType ?? ""}`.toLowerCase();
     return def.keywords?.some((kw) => stack.includes(kw)) ?? stack.includes(folderId);
 }

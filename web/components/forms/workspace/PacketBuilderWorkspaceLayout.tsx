@@ -81,6 +81,12 @@ type Props = {
     onRemoveStep: (index: number) => void;
     onMintLink: () => void;
     onToggleLink: (link: PacketPublicLinkRow, nextActive: boolean) => void;
+    /**
+     * When provided (Digital Mailroom context), packet sessions live in the Mailroom Work queue,
+     * so the "Session inbox" / "Intake workspace" controls open Work instead of navigating to the
+     * retired standalone Forms surface.
+     */
+    onOpenWorkQueue?: () => void;
 };
 
 /** Packet builder orchestration layout (OW-4). */
@@ -112,6 +118,7 @@ export function PacketBuilderWorkspaceLayout({
     onRemoveStep,
     onMintLink,
     onToggleLink,
+    onOpenWorkQueue,
 }: Props) {
     const statusRow = {
         is_active: defActive,
@@ -137,9 +144,15 @@ export function PacketBuilderWorkspaceLayout({
                     <p className={clsx("mt-2", opMetadata)}>{defDesc}</p>
                 :   null}
                 <div className="mt-3 flex flex-wrap gap-2">
-                    <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions} className={intakeWorkspaceBtnPrimary}>
-                        Session inbox
-                    </FormsOperationalLink>
+                    {onOpenWorkQueue ? (
+                        <button type="button" onClick={onOpenWorkQueue} className={intakeWorkspaceBtnPrimary}>
+                            Session inbox
+                        </button>
+                    ) : (
+                        <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions} className={intakeWorkspaceBtnPrimary}>
+                            Session inbox
+                        </FormsOperationalLink>
+                    )}
                     <a href="#packet-distribution" className={intakeWorkspaceBtnSecondary}>
                         Launch packet
                     </a>
@@ -253,8 +266,20 @@ export function PacketBuilderWorkspaceLayout({
                             :   "No sessions yet. Launch a packet link — completed runs will show in the session inbox."}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-3">
-                            <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions}>Open session inbox</FormsOperationalLink>
-                            <FormsOperationalLink href={FORMS_MODULE_ROUTES.workspace}>Intake workspace</FormsOperationalLink>
+                            {onOpenWorkQueue ? (
+                                <button
+                                    type="button"
+                                    onClick={onOpenWorkQueue}
+                                    className="text-sm font-semibold text-alloy-pine hover:underline"
+                                >
+                                    Open session inbox
+                                </button>
+                            ) : (
+                                <>
+                                    <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions}>Open session inbox</FormsOperationalLink>
+                                    <FormsOperationalLink href={FORMS_MODULE_ROUTES.workspace}>Intake workspace</FormsOperationalLink>
+                                </>
+                            )}
                         </div>
                     </IntakeWorkspaceRegion>
                 </section>

@@ -49,6 +49,18 @@ export interface ProcessingCaseQueueRow {
     primarySource: SourceRef | null;
     relatedSourceCount: number;
     sourceDisplay: SourceDisplayDescriptor | null;
+    /**
+     * Configurable case title (`metadata.case_title`) resolved at intake from the form's title
+     * template — person + purpose, e.g. "Nadia Northfield — New enrollment lead". The form name
+     * stays available via sourceDisplay as source context. Null for cases without a computed title.
+     */
+    caseTitle?: string | null;
+    /**
+     * Queue folder configured on the source form (`metadata.admin_category`), copied onto the case
+     * at intake. Display/routing only — the folder rail matches on this before falling back to
+     * keyword matching. Null when the form declares no folder.
+     */
+    adminCategory?: string | null;
     /** Display-only document→form state for queue rows. Derived from metadata, never authoritative. */
     formDraftSummary?: {
         detectionMode: DetectionModeKind | "unknown";
@@ -67,6 +79,8 @@ export interface ProcessingCaseDetail {
     updatedAt: string | null;
     archivedAt: string | null;
     sources: Array<SourceRef & { display: SourceDisplayDescriptor }>;
+    /** Configurable case title (`metadata.case_title`): person + purpose. Null when not computed. */
+    caseTitle: string | null;
     /** POS-FP9 read-only classification (from `metadata.classification`); null until classified. */
     classification: StoredProcessingClassification | null;
     /** POS-FP10 read-only intake extraction (from `metadata.extraction`): source/facts/candidates; null until extracted. Proposed values only — never committed. */

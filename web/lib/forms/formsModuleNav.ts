@@ -1,11 +1,16 @@
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 
-/** Forms module primary navigation (OW-1). */
+/**
+ * Forms module nav targets. The standalone Forms module was retired; forms work now lives in the
+ * Digital Mailroom (Studio for authoring, Work for submissions/packet-sessions). These all resolve
+ * to the Mailroom Work queue (`ADMIN_FORMS_UI_BASE` → `/admin/processing`) so preserved shared
+ * components (packet builder, distribution panel) never link an operator back to `/admin/forms`.
+ */
 export const FORMS_MODULE_ROUTES = {
     workspace: ADMIN_FORMS_UI_BASE,
-    packetDefinitions: `${ADMIN_FORMS_UI_BASE}/packet-definitions`,
-    packetSessions: `${ADMIN_FORMS_UI_BASE}/packets`,
-    submissionsHub: `${ADMIN_FORMS_UI_BASE}/submissions`,
+    packetDefinitions: ADMIN_FORMS_UI_BASE,
+    packetSessions: ADMIN_FORMS_UI_BASE,
+    submissionsHub: ADMIN_FORMS_UI_BASE,
 } as const;
 
 export type FormsModuleNavKey = "workspace" | "packets" | "sessions" | "submissions";

@@ -49,11 +49,11 @@ export type FormLifecycleRecordCreationGateInput = {
 };
 
 const SHARE_BLOCK_COPY =
-    "This form cannot create a Lead yet because it does not capture all required information for the selected lifecycle stage.";
+    "This form cannot create a Lead yet because it does not capture all required information for the selected business process stage.";
 
 function missingRequiredBlockMessage(recordLabel: string): string {
     if (recordLabel === "Lead") return SHARE_BLOCK_COPY;
-    return `This form cannot create a ${recordLabel} yet because it does not capture all required information for the selected lifecycle stage.`;
+    return `This form cannot create a ${recordLabel} yet because it does not capture all required information for the selected business process stage.`;
 }
 
 export function buildFormLifecycleRecordCreationGate(
@@ -83,9 +83,9 @@ export function buildFormLifecycleRecordCreationGate(
             applies: true,
             readiness: "not_configured",
             blocksRecordCreatingShare: false,
-            setupHeadline: "Lifecycle coverage not configured",
+            setupHeadline: "Business process not configured",
             setupMessage:
-                "Lifecycle coverage not configured. Select a lifecycle stage above to verify required fields before sharing record-creating links.",
+                "Business process not configured. Select a business process and stage above to verify required fields before sharing record-creating links.",
             shareBlockMessage: null,
             shareBlockButtonLabel: null,
             recordLabel,
@@ -100,7 +100,7 @@ export function buildFormLifecycleRecordCreationGate(
             blocksRecordCreatingShare: true,
             setupHeadline: "Coverage unavailable",
             setupMessage:
-                "Coverage unavailable. Review lifecycle field requirements before creating record-creating share links.",
+                "Coverage unavailable. Review business process field requirements before creating record-creating share links.",
             shareBlockMessage:
                 "Coverage unavailable. Add required fields and refresh coverage before creating share links that create records.",
             shareBlockButtonLabel: "Add required fields first",
@@ -154,7 +154,7 @@ export function buildFormLifecycleRecordCreationGate(
         setupHeadline: readyHeadline,
         setupMessage:
             presentation.status_message ||
-            `This form captures the required information to create a ${recordLabel} for the selected lifecycle stage.`,
+            `This form captures the required information to create a ${recordLabel} for the selected business process stage.`,
         shareBlockMessage: null,
         shareBlockButtonLabel: null,
         recordLabel,

@@ -427,6 +427,42 @@ export async function executeApprovedPlanForCase(
     return attempt;
 }
 
+// ---------------------------------------------------------------------------
+// Compose the full lead commit: build → approve → execute in one operator action
+// ---------------------------------------------------------------------------
+/**
+ * Runs the complete identity commit for a case that is ready for it: builds the
+ * commit plan from durable resolutions, approves it, and executes it — producing
+ * the full record set (household + child + person + link + lead +
+ * create_process_participation), not just a person.
+ *
+ * This is the composition behind the Decision Conversation "Approve" for a
+ * form_submission lead case: rather than the minimal person-only handoff, one
+ * operator approval commits the whole lead → enrollment participation.
+ *
+ * All three underlying service calls independently enforce the review gates, so
+ * this composition inherits them for free — in particular {@link requirePlanEligibility}
+ * throws `identity_review_required` when a subject has a plausible existing match
+ * that the operator has not explicitly resolved. That means an existing-household
+ * submission does NOT auto-commit here; it surfaces for review (the operator uses
+ * the identity review panel to accept/choose/override), preserving duplicate
+ * prevention. The deterministic `exec:${planId}:${contentHash}` idempotency key
+ * makes a retried approval a safe replay rather than a double commit.
+ */
+export async function commitApprovedLeadForCase(
+    deps: OperatorReviewDeps,
+    input: { caseId: string },
+): Promise<{ plan: CommitPlan; approval: PlanApproval; attempt: CommitAttempt }> {
+    const { plan } = await buildPlan(deps, { caseId: input.caseId });
+    const approval = await approvePlan(deps, { caseId: input.caseId, planId: plan.planId });
+    const attempt = await executeApprovedPlanForCase(deps, {
+        caseId: input.caseId,
+        planId: plan.planId,
+        executionIdempotencyKey: `exec:${plan.planId}:${plan.contentHash}`,
+    });
+    return { plan, approval, attempt };
+}
+
 export async function readAttempts(
     deps: OperatorReviewDeps,
     input: { planId: string },

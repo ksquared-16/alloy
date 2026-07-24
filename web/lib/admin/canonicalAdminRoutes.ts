@@ -108,7 +108,6 @@ export const CANONICAL_ADMIN_PATH_PREFIXES = [
     `${CANONICAL_ADMIN_BASE}/settings`,
     CANONICAL_ORGANIZATION_BASE,
     `${CANONICAL_SETTINGS_BASE}`,
-    `${CANONICAL_ADMIN_BASE}/forms`,
     `${CANONICAL_ADMIN_BASE}/workflows`,
     `${CANONICAL_ADMIN_BASE}/messages`,
     `${CANONICAL_ADMIN_BASE}/ai-activity`,
@@ -334,10 +333,6 @@ export function isCanonicalWorkflowsPath(pathname: string): boolean {
     return matchesCanonicalPrefix(pathname, `${CANONICAL_ADMIN_BASE}/workflows`);
 }
 
-export function isCanonicalFormsPath(pathname: string): boolean {
-    return matchesCanonicalPrefix(pathname, `${CANONICAL_ADMIN_BASE}/forms`);
-}
-
 export function isCanonicalAiActivityPath(pathname: string): boolean {
     return matchesCanonicalPrefix(pathname, `${CANONICAL_ADMIN_BASE}/ai-activity`);
 }
@@ -352,7 +347,6 @@ export function isCanonicalDrawerHostPath(pathname: string | null | undefined): 
     if (p === CANONICAL_OPERATOR_BASE || p.startsWith(`${CANONICAL_OPERATOR_BASE}/`)) return true;
     if (isCanonicalWorkspacePath(p)) return true;
     if (isCanonicalSettingsPath(p)) return true;
-    if (isCanonicalFormsPath(p)) return true;
     // POS-FP4: Processing Workspace hosts the read-only Processing Case detail drawer.
     if (p === `${CANONICAL_ADMIN_BASE}/processing` || p.startsWith(`${CANONICAL_ADMIN_BASE}/processing/`)) return true;
     if (p.startsWith(`${LEGACY_ADMIN_BASE}/workspace`)) return true;
@@ -376,9 +370,6 @@ export function isPublicMarketingChromeSuppressedPath(pathname: string | null | 
     }
     return isCanonicalWorkspacePath(p) || isCanonicalSettingsPath(p);
 }
-
-/** Product nav — forms module base. */
-export const ADMIN_FORMS_HREF = `${CANONICAL_ADMIN_BASE}/forms` as const;
 
 /** Product nav — workflows module base. */
 export const ADMIN_WORKFLOWS_HREF = `${CANONICAL_ADMIN_BASE}/workflows` as const;

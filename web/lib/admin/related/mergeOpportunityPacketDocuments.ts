@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { dbListSubmissionLinkedDocumentsForSubmissionIds } from "@/lib/admin/forms/formsAdminDb";
+import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { normalizeDocumentRows, type NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { buildPacketReviewRollupV1 } from "@/lib/forms/packets/buildPacketReviewRollupV1";
 import {
@@ -104,7 +105,7 @@ export async function loadPacketSubmissionDocumentRowsForOpportunity(
         if (r.id && r.form_definition_id) {
             pathBySubmission.set(
                 r.id,
-                `/admin/forms/${encodeURIComponent(r.form_definition_id)}/submissions/${encodeURIComponent(r.id)}`
+                `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(r.form_definition_id)}/submissions/${encodeURIComponent(r.id)}`
             );
         }
     }
@@ -123,7 +124,7 @@ export async function loadPacketSubmissionDocumentRowsForOpportunity(
         const packetSessionId = sid ? submissionToPacketSession.get(sid) ?? null : null;
         const packetPath =
             packetSessionId != null && String(packetSessionId).length > 0
-                ? `/adminV2/forms/packets/${encodeURIComponent(String(packetSessionId))}`
+                ? `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(String(packetSessionId))}`
                 : null;
         return {
             ...(doc as Record<string, unknown>),

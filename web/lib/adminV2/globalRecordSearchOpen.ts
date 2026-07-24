@@ -4,7 +4,6 @@ import type { GlobalRecordSearchHit } from "@/lib/admin/globalSearch/globalRecor
 import type { GlobalRecordSearchCluster } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
 import type { PersonDrawerOpenSeed } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import {
-    ADMIN_FORMS_HREF,
     ADMIN_SETTINGS_SUBPATH_PREFIX,
     CANONICAL_ADMIN_WORKSPACE,
     CANONICAL_OPERATOR_BASE,
@@ -36,13 +35,10 @@ const DRAWER_HOST_PREFIXES = [
     CANONICAL_OPERATOR_BASE,
     CANONICAL_ADMIN_WORKSPACE,
     ADMIN_SETTINGS_SUBPATH_PREFIX,
-    ADMIN_FORMS_HREF,
     "/adminV2/workspace",
     "/admin/v2/workspace",
     "/adminV2/settings",
     "/admin/v2/settings",
-    "/adminV2/forms",
-    "/admin/v2/forms",
 ] as const;
 
 export function adminV2PathHasDrawerHost(pathname: string): boolean {

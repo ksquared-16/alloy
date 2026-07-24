@@ -1,4 +1,5 @@
 import type { FormSubmissionLinkedDocument } from "@/lib/admin/forms/formsAdminDb";
+import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { buildFormPdfIdempotencyKey, parseFormPdfMappingJson } from "@/lib/forms/pdf/pdfMappingContract";
 import type { DocumentProvenanceV1, PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
 
@@ -45,11 +46,11 @@ export function hasUsablePdfMapping(pdfMappingJson: unknown): boolean {
 }
 
 export function adminSubmissionPath(formDefinitionId: string, submissionId: string): string {
-    return `/admin/forms/${encodeURIComponent(formDefinitionId)}/submissions/${encodeURIComponent(submissionId)}`;
+    return `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formDefinitionId)}/submissions/${encodeURIComponent(submissionId)}`;
 }
 
 export function adminPacketSessionPath(packetSessionId: string): string {
-    return `/adminV2/forms/packets/${encodeURIComponent(packetSessionId)}`;
+    return `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(packetSessionId)}`;
 }
 
 export function normalizeOperatorReviewWarnings(raw: unknown): { kind: string; message: string; field_key?: string }[] {

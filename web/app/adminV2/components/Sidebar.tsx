@@ -18,7 +18,6 @@ import {
     CANONICAL_OPERATOR_BASE,
     CANONICAL_ORGANIZATION_BASE,
     CANONICAL_SETTINGS_BASE,
-    isCanonicalFormsPath,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
 import { parseOperatorWorkUnitPath } from "@/lib/admin/canonicalOperatorRoutes";
@@ -74,7 +73,6 @@ function isAdminConfigPath(path: string): boolean {
         return false;
     }
     if (path.startsWith("/admin/tasks") || path.startsWith("/admin/messages")) return false;
-    if (isCanonicalFormsPath(path)) return false;
     if (path.startsWith(`${CANONICAL_ADMIN_BASE}/workspace`)) return false;
     return (
         path === CANONICAL_SETTINGS_BASE

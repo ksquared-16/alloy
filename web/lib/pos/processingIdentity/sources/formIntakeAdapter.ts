@@ -16,6 +16,9 @@ import {
     extractFactsFromFormIntakeMeta,
     formIntakeLocationId,
 } from "../formIntakeShadowHelpers";
+import { readStoredOperationalIntent } from "@/lib/forms/operationalIntentTemplates";
+import { resolveCaseTitle } from "@/lib/pos/caseTitlePresentation";
+import { intentPurposeLabel } from "@/lib/pos/decisionPresentation";
 
 export type IngestPublicFormInput = {
     orgId: string;
@@ -57,6 +60,39 @@ export async function ingestPublicFormThroughProcessing(
             return { ok: false, error: "form_submission processing source row missing" };
         }
 
+        // Load the source form once for the routing/naming metadata that rides onto the case:
+        //   • admin_category → queue folder routing (keyword match is the fallback)
+        //   • case title (name + purpose) from the form's configured title template + intent
+        let adminCategory: string | null = null;
+        let caseTitle: string | null = null;
+        {
+            const { data: formRow } = await supabase
+                .from("form_definitions")
+                .select("name, metadata")
+                .eq("id", input.formDefinitionId)
+                .maybeSingle();
+            const form = formRow as { name?: string | null; metadata?: Record<string, unknown> | null } | null;
+            const meta = form?.metadata ?? {};
+            const rawCat = meta.admin_category;
+            if (typeof rawCat === "string" && rawCat.trim()) adminCategory = rawCat.trim().toLowerCase();
+
+            const intent = readStoredOperationalIntent(meta);
+            const g = input.intakeMeta.guardian ?? null;
+            const child0 = input.intakeMeta.children?.[0] ?? null;
+            const personName = [g?.first_name, g?.last_name].filter(Boolean).join(" ").trim() || null;
+            const childName = [child0?.first_name, child0?.last_name].filter(Boolean).join(" ").trim() || null;
+            const template = typeof meta.case_title_template === "string" ? meta.case_title_template : null;
+            caseTitle = resolveCaseTitle({
+                template,
+                tokens: {
+                    person_name: personName,
+                    child_name: childName,
+                    form_name: form?.name ?? null,
+                    purpose: intentPurposeLabel(intent),
+                },
+            });
+        }
+
         await supabase
             .from("processing_cases")
             .update({
@@ -68,6 +104,8 @@ export async function ingestPublicFormThroughProcessing(
                     link_metadata: input.linkMetadata ?? {},
                     source_adapter: "public_form_v1",
                     intake_authority: "processing",
+                    ...(adminCategory ? { admin_category: adminCategory } : {}),
+                    ...(caseTitle ? { case_title: caseTitle } : {}),
                 },
                 status: "needs_resolution",
                 status_changed_at: new Date().toISOString(),
