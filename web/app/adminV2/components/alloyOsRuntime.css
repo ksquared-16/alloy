@@ -1599,16 +1599,36 @@ html[data-alloy-os-runtime="on"]
   width: 100%;
 }
 
-/* Universal Card — tier hierarchy + density (white-on-white, quiet borders) */
+/* Universal Card — shared shell (white surface, soft stone perimeter, layered elevation).
+ * No decorative left rails / domain tints — Bend Pine stays on actions/selected/status only. */
 .alloy-os-ucard {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  /* Card border prominence — matches the Activity cockpit cards for one cohesive definition */
-  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 20%, var(--alloy-os-border, #e5e9ef));
-  border-radius: 10px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
+  border-radius: var(--alloy-os-fp-card-radius, 14px);
   background: var(--alloy-os-surface, #fff);
+  box-shadow: var(--alloy-os-fp-card-shadow, var(--alloy-os-elevation-1, 0 1px 2px rgba(20, 25, 34, 0.06)));
   overflow: hidden;
+  transition: box-shadow var(--alloy-os-motion-hover, 80ms) ease, border-color var(--alloy-os-motion-hover, 80ms) ease;
+}
+
+/* Tiny hover lift only for cards that expose operator controls (clickable / expandable). */
+.alloy-os-ucard:has(button:not(:disabled)):hover {
+  box-shadow: var(--alloy-os-fp-card-shadow-hover, var(--alloy-os-elevation-2, 0 4px 12px rgba(20, 25, 34, 0.08)));
+}
+
+/* Elevated Focus Card owns its own depth shadow — do not compete with base hover. */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard:hover {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.7) inset,
+    0 2px 8px -3px rgba(15, 23, 42, 0.16),
+    0 24px 44px -22px rgba(15, 23, 42, 0.34),
+    0 56px 110px -44px rgba(15, 23, 42, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 24%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, transparent);
 }
 
 .alloy-os-ucard--tier-attention,
@@ -1616,14 +1636,15 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard[data-universal-card-key="attention"],
 .alloy-os-ucard[data-universal-card-key="current_mission"],
 .alloy-os-ucard[data-universal-card-key="primary_next_action"] {
-  border-left-width: 3px;
-  border-left-color: #d97706;
+  /* Uniform perimeter — no decorative accent rail */
+  border-left-width: 1px;
+  border-left-color: var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
 .alloy-os-ucard--tier-work,
 .alloy-os-ucard[data-card-role="active-work"] {
-  border-left-width: 3px;
-  border-left-color: var(--alloy-os-bend-pine, #00a283);
+  border-left-width: 1px;
+  border-left-color: var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
 .alloy-os-ucard--tier-attention .alloy-os-ucard__title,
@@ -1653,7 +1674,7 @@ html[data-alloy-os-runtime="on"]
 
 .alloy-os-ucard--tier-context,
 .alloy-os-ucard[data-card-role="context"] {
-  border-left: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 90%, transparent);
+  border-left: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
 .alloy-os-ucard--tier-context .alloy-os-ucard__insight,
@@ -1667,11 +1688,11 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard--tier-historical,
 .alloy-os-ucard[data-card-role="reference"],
 .alloy-os-ucard[data-card-role="history"] {
-  border-left: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 85%, transparent);
+  border-left: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 .alloy-os-ucard--tier-reference,
 .alloy-os-ucard[data-card-role="reference"] {
-  border-left-color: color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 85%, transparent);
+  border-left-color: var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
 .alloy-os-ucard__supporting {
@@ -1695,7 +1716,7 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard[data-universal-card-key="health"],
 .alloy-os-ucard[data-universal-card-key="readiness_kpi"],
 .alloy-os-ucard[data-universal-card-key="tour"] {
-  border-left: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, var(--alloy-os-border, #e5e9ef));
+  border-left: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
 .alloy-os-ucard--tier-metric .alloy-os-ucard__title,
@@ -2380,11 +2401,11 @@ html[data-alloy-os-runtime="on"]
 
 /* System 5A — Universal Card Archetypes */
 .alloy-os-ucard--archetype-action-emphasis {
-  border-left-width: 3px;
+  border-left-width: 1px;
 }
 
 .alloy-os-ucard--archetype-action-emphasis.alloy-os-ucard--tier-attention {
-  border-left-color: #d97706;
+  border-left-color: var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
 .alloy-os-ucard--archetype-metric .alloy-os-ucard__insight--metric {
@@ -3176,6 +3197,15 @@ html[data-alloy-os-runtime-split="true"]
   --alloy-os-fp-gap-y: 10px;        /* card gap — vertical (matches Activity cockpit) */
   --alloy-os-fp-card-radius: 14px;  /* card + overlay corner radius */
   --alloy-os-fp-overlay-offset: 6px;/* gap between a card and its inline overlay */
+  /* Shared Focus Panel card chrome — soft stone perimeter + restrained layered elevation.
+   * All Universal Cards share this shell; prominence is content-only (no unique chrome). */
+  --alloy-os-fp-card-border: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #dde3eb));
+  --alloy-os-fp-card-shadow:
+    var(--alloy-os-elevation-1, 0 1px 2px rgba(20, 25, 34, 0.06)),
+    0 6px 18px -10px rgba(20, 25, 34, 0.12);
+  --alloy-os-fp-card-shadow-hover:
+    var(--alloy-os-elevation-1, 0 1px 2px rgba(20, 25, 34, 0.06)),
+    0 8px 22px -8px rgba(20, 25, 34, 0.16);
   --alloy-os-fp-overlay-shadow:
     0 1px 0 0 rgba(255, 255, 255, 0.8) inset,
     0 2px 6px -2px rgba(15, 23, 42, 0.12),
@@ -6233,6 +6263,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   flex: 1 1 0;
   min-width: 0;
   align-self: stretch;
@@ -6240,6 +6271,18 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   white-space: nowrap;
   padding-left: 10px;
   padding-right: 10px;
+}
+
+.alloy-os-currentwork__action-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.alloy-os-currentwork__action-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .alloy-os-currentwork__open-work {

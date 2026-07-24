@@ -45,7 +45,7 @@ A **Universal Card** is a reusable **business primitive** — not a field contai
 
 Header (icon, title, status chip, primary insight, overflow) · Body (secondary details, widgets) · Footer (primary action, related actions, metadata). States: empty, loading (coordinated reveal — no section skeletons), error, expand/collapse.
 
-Sizing tokens: header 36–56px by density; padding 16×12px; title 14/600; body 13/400; icon 16–20px; radius 10px; flat elevation (Attention tier may lift one level).
+Sizing tokens: header 36–56px by density; padding 16×12px; title 14/600; body 13/400; icon 16–20px; radius from Focus Panel card radius token; soft layered elevation (near + ambient) on all cards; optional tiny hover lift for clickable/expandable cards only.
 
 ---
 

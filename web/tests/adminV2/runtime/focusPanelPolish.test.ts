@@ -214,6 +214,17 @@ describe("Focus Panel header composition guards", () => {
         expect(css).toMatch(/alloy-os-focus-panel-mode-switch__tab--active[\s\S]*font-weight: 600/);
     });
 
+    it("UniversalCard shared shell uses soft perimeter + layered elevation tokens (no decorative left rails)", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toContain("--alloy-os-fp-card-border");
+        expect(css).toContain("--alloy-os-fp-card-shadow");
+        expect(css).toContain("--alloy-os-fp-card-shadow-hover");
+        expect(css).toMatch(/\.alloy-os-ucard\s*\{[^}]*box-shadow:\s*var\(--alloy-os-fp-card-shadow/);
+        expect(css).toMatch(
+            /\.alloy-os-ucard--tier-work,\s*\n\.alloy-os-ucard\[data-card-role="active-work"\]\s*\{\s*\n\s*border-left-width:\s*1px;/,
+        );
+    });
+
     it("header identity uses System 5 chip language", () => {
         const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
         expect(css).toContain("alloy-os-fp-header-compact__subject-tile");
