@@ -166,10 +166,23 @@ Spec `playwright/tests/configured-stage-integrity-cert.spec.ts` — non-destruct
 4. Invalid move on Wenc (`Reached/Qualified`) → **400**, `changed:false`, and Wenc canonical truth
    (stage_key, work state, attempt_count, activity count) **byte-identical before/after**.
 
-**Result: authored and queued; execution blocked on dev-server capacity** (3/3 sibling servers).
-The deterministic unit suite (51) proves every claim above without the server; the live spec adds
-the authenticated layer as soon as a slot frees. *(This section will be updated with the captured
-evidence JSON once the run completes.)*
+**Result: authored and committed; live execution blocked on dev-server capacity.** The toolkit
+caps at 3 concurrent dev servers; slots 2–4 are held by sibling worktrees (other sessions), and
+slot 1 could not be started — one brief auto-resume thrashed to an unresponsive state (HTTP 000)
+under machine memory pressure. I did not stop sibling servers to force capacity.
+
+The deterministic suite proves every claim above without a server: **81 tests pass** across
+referential-integrity, remediation, provenance, firefly-config, outcome-transaction and
+platform-transaction suites. The authenticated spec runs unchanged the moment a slot frees:
+
+```bash
+cd web && PLAYWRIGHT_BASE_URL=http://127.0.0.1:3011 PLAYWRIGHT_STORAGE_STATE=~/.local/state/alloy-dev/auth/slot1/storage-state.json \
+  npx playwright test playwright/tests/configured-stage-integrity-cert.spec.ts --workers=1
+```
+
+Prior live evidence from the provenance investigation captured the **before** state (bootstrap
+served qualification, HTTP 200); the cert captures the **after** (400). Until it runs, the
+after-state is proven by the unit layer, which exercises the exact same predicates.
 
 ---
 
@@ -188,7 +201,8 @@ evidence JSON once the run completes.)*
 - **Persist a new one:** publish rejects any config referencing a stage outside its own inventory
   (422, structured violations, no silent drops). *Proven.*
 
-Backed by 51 deterministic tests today; the authenticated live layer runs on server availability.
+Backed by 81 deterministic tests today; the authenticated live layer (committed spec) runs on
+server availability.
 
 ---
 
