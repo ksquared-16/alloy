@@ -64,6 +64,10 @@ export interface PosCaseState {
      * identity review, rather than showing a raw "Request failed (400)".
      */
     needsIdentityReview: boolean;
+    /** Commit eligibility per the identity guard: true = ready, false = subjects need review, null = unknown. */
+    reviewEligible: boolean | null;
+    /** Re-pull case + recommendation + eligibility after the operator resolves subjects in review. */
+    refreshAfterReview: () => Promise<void>;
     isClosed: boolean;
 }
 
@@ -77,6 +81,12 @@ export function usePosCase(caseId: string | null): PosCaseState {
     const [approveResult, setApproveResult] = useState<OperationalCommitResult | null>(null);
     const [rec, setRec] = useState<RecommendationView | null>(null);
     const [recLoading, setRecLoading] = useState(false);
+    // Bumping this re-runs the recommendation + identity-eligibility fetches — used after the
+    // operator resolves subjects in the embedded identity review, so the rail reflects the change.
+    const [refreshTick, setRefreshTick] = useState(0);
+    // Whether the commit is eligible per the fail-closed identity guard. null = unknown / not a
+    // form-intake case (don't gate). false = subjects still need an operator decision.
+    const [reviewEligible, setReviewEligible] = useState<boolean | null>(null);
 
     /**
      * `silent` revalidates without flipping `loading` — used when a prefetched case already
@@ -142,7 +152,43 @@ export function usePosCase(caseId: string | null): PosCaseState {
         return () => {
             cancelled = true;
         };
-    }, [caseId]);
+    }, [caseId, refreshTick]);
+
+    // Identity-review eligibility — drives whether Approve is offered or the operator is asked to
+    // "Review matches" first. Best-effort: on any error (non-form case, endpoint unavailable) we
+    // leave it unknown (null) and don't gate.
+    useEffect(() => {
+        if (!caseId) {
+            setReviewEligible(null);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`/api/admin/processing/cases/${caseId}/identity/review`, { credentials: "same-origin" });
+                if (!res.ok) throw new Error(`Request failed (${res.status})`);
+                const body = (await res.json()) as {
+                    data?: { planEligible?: boolean; identityBlockers?: string[] };
+                };
+                if (!cancelled) {
+                    const d = body.data;
+                    setReviewEligible(d ? d.planEligible !== false && (d.identityBlockers?.length ?? 0) === 0 : null);
+                }
+            } catch {
+                if (!cancelled) setReviewEligible(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [caseId, refreshTick]);
+
+    // Re-pull recommendation + eligibility + case detail after a resolution/correction is saved.
+    const refreshAfterReview = useCallback(async () => {
+        setRefreshTick((t) => t + 1);
+        setNeedsIdentityReview(false);
+        await reload();
+    }, [reload]);
 
     const approve = useCallback(async () => {
         if (!caseId) return;
@@ -195,6 +241,8 @@ export function usePosCase(caseId: string | null): PosCaseState {
         approveErr,
         approveResult,
         needsIdentityReview,
+        reviewEligible,
+        refreshAfterReview,
         isClosed: detail ? detail.status === "completed" || detail.status === "archived" : false,
     };
 }

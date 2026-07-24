@@ -411,7 +411,7 @@ export default function ProcessingQueueList({
         >
             <span className="flex min-w-0 items-center gap-2">
                 <ProcessingFolderIcon folderId={key} className={`h-3 w-3 shrink-0 ${iconClass}`} />
-                <span className={`truncate text-[11px] font-semibold ${WS_TEXT_PRIMARY}`}>{label}</span>
+                <span className={`truncate text-[12.5px] font-semibold ${WS_TEXT_PRIMARY}`}>{label}</span>
             </span>
             <span className={`ml-2 shrink-0 px-1.5 text-[9px] font-semibold tabular-nums ${WS_TEXT_SECONDARY}`}>
                 {count}
