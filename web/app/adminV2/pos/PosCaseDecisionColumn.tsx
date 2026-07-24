@@ -10,40 +10,49 @@
  * alternative decisions are not shown (no near-available placeholders).
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ReviewDecideCard, { DECISION_TO_ACTION } from "@/app/adminV2/processing/ReviewDecideCard";
 import { approveButtonLabel, resolveDecisionPresentation } from "@/lib/pos/decisionPresentation";
 import { buildMatchedRecords } from "@/lib/pos/matchedRecordsPresentation";
 import { buildCommitPlanLines } from "@/lib/pos/commitPlanSummary";
-import { buildApprovalResultView, type ApprovalResultLine } from "@/lib/pos/approvalResultPresentation";
+import { buildApprovalResultView } from "@/lib/pos/approvalResultPresentation";
 import WorkspaceActionBar from "@/components/workspace/WorkspaceActionBar";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
-import PosPanel from "./PosPanel";
 import PosIdentityReviewOverlay from "./PosIdentityReviewOverlay";
-import { POS_STATUS_LABELS } from "./posSections";
 import type { PosCaseState } from "./usePosCase";
 
-function statusLabel(s: string): string {
-    return POS_STATUS_LABELS[s] ?? s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
-}
-
-/** One "Linked / Created / Updated" group — rendered only when it has lines. */
-function ResultGroup({ title, lines }: { title: string; lines: ApprovalResultLine[] }) {
-    if (lines.length === 0) return null;
+/**
+ * The completed conclusion of the conversation (§ completed-state). One calm card — a title, the
+ * concrete ✓ outcomes, and "Complete." — so the operator never wonders what happened. Fades in on
+ * mount rather than snapping. No duplicated success screens; this IS the final Result.
+ */
+function ConclusionCard({ title, lines }: { title: string; lines: string[] }) {
+    const [shown, setShown] = useState(false);
+    useEffect(() => {
+        const id = requestAnimationFrame(() => setShown(true));
+        return () => cancelAnimationFrame(id);
+    }, []);
     return (
-        <div>
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">{title}</div>
-            <ul className="space-y-1">
-                {lines.map((l, i) => (
-                    <li key={i} className="flex items-baseline gap-1.5 text-[12.5px] text-alloy-midnight">
-                        <span aria-hidden className="text-alloy-bend-pine">•</span>
-                        <span>
-                            {l.primary}
-                            {l.secondary ? <span className="text-alloy-midnight/50"> — {l.secondary}</span> : null}
-                        </span>
-                    </li>
-                ))}
-            </ul>
+        <div
+            className={`rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.06] p-3.5 transition-all duration-500 ${
+                shown ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+            }`}
+        >
+            <div className="flex items-center gap-2">
+                <span aria-hidden className="text-[15px] text-alloy-bend-pine">✓</span>
+                <span className="text-[14px] font-semibold text-alloy-midnight">{title}</span>
+            </div>
+            {lines.length > 0 ? (
+                <ul className="mt-2 space-y-1">
+                    {lines.map((l, i) => (
+                        <li key={i} className="flex items-baseline gap-1.5 text-[12.5px] text-alloy-midnight">
+                            <span aria-hidden className="text-alloy-bend-pine">✓</span>
+                            <span>{l}</span>
+                        </li>
+                    ))}
+                </ul>
+            ) : null}
+            <div className="mt-2.5 text-[11.5px] font-medium text-alloy-bend-pine/70">Complete.</div>
         </div>
     );
 }
@@ -98,40 +107,30 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
               })
             : null;
 
+    // The completed conclusion: a human title + concrete ✓ outcomes (Linked / Created / Updated).
+    const conclusionTitle = leadRecords ? "Family confirmed" : "Completed";
+    const conclusionLines = resultView
+        ? [
+              ...resultView.linked.map((l) => `Linked ${l.primary}`),
+              ...resultView.created.map((l) => `Created ${l.primary}`),
+              ...resultView.updated.map((l) => `Updated ${l.primary}`),
+          ]
+        : [];
+
     return (
         <div className="flex h-full min-h-0 flex-col">
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-                {/* Decision */}
+                {/* Before approval: the recommendation + concise plan. After: one calm conclusion
+                    (title + ✓ outcomes + "Complete."), the natural end of the conversation (§5 + completed). */}
                 {!isClosed ? (
-                    <ReviewDecideCard view={rec} loading={recLoading} compact planLines={planLines} />
-                ) : (
-                    <div className="rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.07] p-3 text-[12.5px] text-alloy-midnight">
-                        <div className="font-semibold">{statusLabel(detail.status)}</div>
-                        <p className="mt-0.5 text-[11.5px] text-alloy-bend-pine/80">
-                            {resultView && !resultView.isEmpty ? "The records below were saved." : "This case is complete."}
+                    <>
+                        <ReviewDecideCard view={rec} loading={recLoading} compact planLines={planLines} />
+                        <p className="px-1 text-[11px] leading-snug text-alloy-midnight/40">
+                            Saved or linked records appear here after you approve.
                         </p>
-                    </div>
-                )}
-
-                {/* Result — a full panel only once there IS a result; a quiet one-liner before that,
-                    so an empty Result box never dominates the narrow decision rail (§8). After approval,
-                    the concrete records grouped as Linked / Created / Updated, human language only (§5). */}
-                {isClosed ? (
-                    <PosPanel eyebrow="Result" accent={false}>
-                        {resultView && !resultView.isEmpty ? (
-                            <div className="space-y-2.5">
-                                <ResultGroup title="Linked" lines={resultView.linked} />
-                                <ResultGroup title="Created" lines={resultView.created} />
-                                <ResultGroup title="Updated" lines={resultView.updated} />
-                            </div>
-                        ) : (
-                            <div className="text-[12.5px] text-alloy-midnight">This case is complete.</div>
-                        )}
-                    </PosPanel>
+                    </>
                 ) : (
-                    <p className="px-1 text-[11px] leading-snug text-alloy-midnight/40">
-                        Saved or linked records appear here after you approve.
-                    </p>
+                    <ConclusionCard key={detail.id} title={conclusionTitle} lines={conclusionLines} />
                 )}
             </div>
 

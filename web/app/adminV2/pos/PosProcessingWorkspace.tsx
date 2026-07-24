@@ -5,7 +5,7 @@
  * Folder rail + queue lanes + source-document-first review.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import { WS_ACTION_SECONDARY, WS_CANVAS, WS_INSPECTOR, WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
@@ -18,7 +18,7 @@ import PosTemplateSetupColumn from "./PosTemplateSetupColumn";
 import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/processingSourceCapabilities";
 import { uploadProcessingDocument } from "@/lib/pos/processingDocumentUpload";
 import ProcessingImportIntentModal from "./ProcessingImportIntentModal";
-import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
+import { getProcessingQueueWarmSnapshot, warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 
 export default function PosProcessingWorkspace({
     selectedCaseId,
@@ -30,7 +30,28 @@ export default function PosProcessingWorkspace({
     onOpenForm?: (formId: string, formName?: string) => void;
 }) {
     const state = usePosCase(selectedCaseId);
+    const advancedForRef = useRef<string | null>(null);
     const [dropActive, setDropActive] = useState(false);
+
+    // Auto-advance (§ completed-state): once a case reaches its completed conclusion, let the operator
+    // read the outcome, then return to the queue and select the next available case — preserving flow
+    // without an extra click. Only fires once per completed case; cancels if they navigate away first.
+    useEffect(() => {
+        if (!selectedCaseId || !state.isClosed) {
+            advancedForRef.current = null;
+            return;
+        }
+        if (advancedForRef.current === selectedCaseId) return;
+        advancedForRef.current = selectedCaseId;
+        const timer = setTimeout(() => {
+            const rows = getProcessingQueueWarmSnapshot().data?.rows ?? [];
+            const next = rows.find(
+                (r) => r.id !== selectedCaseId && r.status !== "completed" && r.status !== "archived",
+            );
+            onSelectCase(next?.id ?? null);
+        }, 3200);
+        return () => clearTimeout(timer);
+    }, [state.isClosed, selectedCaseId, onSelectCase]);
     const [uploading, setUploading] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
