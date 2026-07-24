@@ -158,14 +158,22 @@ describe("businessProcessRuntimeGoldenPath", () => {
         const tourPlan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
 
         // S4: move_to_stage now persists stage_key via supabase.update — provide a chainable stub.
-        const chainableUpdate = () => {
+        // Targets read their prior value first so the transaction has an inverse; answer it.
+        // The canonical stage-move guard reads department metadata to verify the target stage is
+        // configured, so `departments` must return the process that contains decision_pending.
+        const chainableUpdate = (table: string) => {
             const chain: Record<string, unknown> = {};
             chain.update = () => chain;
+            chain.select = () => chain;
             chain.eq = () => chain;
+            chain.maybeSingle = async () =>
+                table === "departments"
+                    ? { data: { metadata: enrollmentDepartmentMetadata() }, error: null }
+                    : { data: { status_key: "tour_completed", close_reason_key: null, stage_key: "tour_completed" }, error: null };
             return chain;
         };
         const outcomeResult = await executeStageOperatingOutcome({
-            supabase: { from: vi.fn(() => chainableUpdate()) } as never,
+            supabase: { from: vi.fn((table: string) => chainableUpdate(table)) } as never,
             orgId,
             userId,
             departmentId,

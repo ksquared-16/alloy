@@ -157,7 +157,7 @@ function factorLead(status: ReadinessFactor["status"]): string {
 const OWNER_LABEL: Record<string, string> = {
     household: "Household",
     children: "Children",
-    current_work: "Current Work",
+    current_work: "What's Next",
 };
 
 function FactorRow({ factor, onFocus }: { factor: ReadinessFactor; onFocus?: () => void }) {

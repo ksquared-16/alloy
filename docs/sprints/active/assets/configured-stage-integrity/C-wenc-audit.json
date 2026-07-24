@@ -1,0 +1,14 @@
+{
+  "opp_stage_key": null,
+  "opp_status_key": null,
+  "work_state": "open",
+  "attempt_count": 3,
+  "last_outcome": {
+    "outcome_key": "left_message",
+    "label": "Left Message",
+    "at": "2026-07-24T02:33:52.134Z"
+  },
+  "due_at": "2026-07-26T02:33:53.167+00:00",
+  "activity_count": 12,
+  "bookings_count": 1
+}

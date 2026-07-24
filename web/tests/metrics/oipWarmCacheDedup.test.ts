@@ -23,6 +23,14 @@ vi.mock("@/lib/workspace/adminV2DeferBackgroundWork", () => ({ runWhenAdminV2Pri
 
 import { prefetchOipMetricsWarm, buildOipWarmScopeKey } from "@/lib/metrics/oipWorkspaceWarmCache";
 
+// Real configured metric keys — the dedup/scope-key behaviour under test is key-set agnostic,
+// so any three distinct valid OipMetricKeys exercise it.
+const K1: OipMetricKey = "enrollment.lead_count";
+const K2: OipMetricKey = "enrollment.active_leads";
+const K3: OipMetricKey = "enrollment.new_leads";
+const KX: OipMetricKey = "comms.reply_rate";
+const KY: OipMetricKey = "comms.delivery_rate";
+
 let uniq = 0;
 const scope = (keys: OipMetricKey[]) => ({ siteId: `site-${++uniq}`, workUnitId: "wu-1", keys });
 
@@ -33,13 +41,13 @@ beforeEach(() => {
 
 describe("OIP warm cache — deterministic metrics batching (P1-C)", () => {
     it("scope key is order-independent (key SET is canonical)", () => {
-        const a = buildOipWarmScopeKey({ siteId: "s", workUnitId: "w", keys: ["a", "b", "c"] as OipMetricKey[] });
-        const b = buildOipWarmScopeKey({ siteId: "s", workUnitId: "w", keys: ["c", "a", "b"] as OipMetricKey[] });
+        const a = buildOipWarmScopeKey({ siteId: "s", workUnitId: "w", keys: [K1, K2, K3] });
+        const b = buildOipWarmScopeKey({ siteId: "s", workUnitId: "w", keys: [K3, K1, K2] });
         expect(a).toBe(b);
     });
 
     it("N concurrent calls for the same scope → exactly ONE request (in-flight dedup)", async () => {
-        const s = scope(["a", "b", "c"] as OipMetricKey[]);
+        const s = scope([K1, K2, K3]);
         const p1 = prefetchOipMetricsWarm(s);
         const p2 = prefetchOipMetricsWarm(s);
         const p3 = prefetchOipMetricsWarm(s);
@@ -51,7 +59,7 @@ describe("OIP warm cache — deterministic metrics batching (P1-C)", () => {
     });
 
     it("after the cache is fresh, repeated calls do not fan out background refreshes", async () => {
-        const s = scope(["x", "y"] as OipMetricKey[]);
+        const s = scope([KX, KY]);
         const p = prefetchOipMetricsWarm(s);
         deferred!.resolve({ x: {}, y: {} });
         await p;
@@ -65,20 +73,20 @@ describe("OIP warm cache — deterministic metrics batching (P1-C)", () => {
     });
 
     it("different key sets are distinct scopes → separate requests", () => {
-        prefetchOipMetricsWarm(scope(["a"] as OipMetricKey[]));
-        prefetchOipMetricsWarm(scope(["b"] as OipMetricKey[]));
+        prefetchOipMetricsWarm(scope([K1]));
+        prefetchOipMetricsWarm(scope([K2]));
         expect(calls.length).toBe(2);
     });
 
     it("failure isolation: a rejected fetch resolves to prior/empty and never throws", async () => {
-        const s = scope(["a", "b"] as OipMetricKey[]);
+        const s = scope([K1, K2]);
         const p = prefetchOipMetricsWarm(s);
         deferred!.reject(new Error("boom"));
         await expect(p).resolves.toEqual({}); // no throw; empty map (no prior cache)
     });
 
     it("stable mapping: the resolved map returned is the resolver's map verbatim", async () => {
-        const s = scope(["a", "b", "c"] as OipMetricKey[]);
+        const s = scope([K1, K2, K3]);
         const p = prefetchOipMetricsWarm(s);
         const map = { a: { metric_key: "a" }, b: { metric_key: "b" }, c: { metric_key: "c" } };
         deferred!.resolve(map);

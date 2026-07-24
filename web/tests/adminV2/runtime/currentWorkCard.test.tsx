@@ -8,7 +8,8 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
+import CurrentWorkCard, { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWorkCard";
+import type { CurrentWorkSurfaceVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import { buildStageWorkOutcomeAutomationPreview } from "@/lib/lifecycle/buildStageWorkOutcomeAutomationPreview";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
@@ -150,8 +151,9 @@ describe("CurrentWorkCard", () => {
         expect(html).not.toContain("Review Lead");
         expect(html).toContain('data-current-work-surface="true"');
         expect(html).toContain('data-work-card-perspective="summary"');
-        expect(html).toContain('data-work-action="open-work"');
-        expect(html).toContain("Open work");
+        // Obligation-first: no "Open workspace" competing, no progress meter (both removed in M1).
+        expect(html).not.toContain("Open workspace");
+        expect(html).not.toContain("data-work-progress");
     });
 
     it("routes Contact Family through resolveWorkItemHandoff — not dead panel copy", () => {
@@ -242,5 +244,62 @@ describe("CurrentWorkCard", () => {
                 />,
             ),
         ).not.toThrow();
+    });
+
+    it("M1 — summary omits the progress meter, keeps the obligation + primary CTA + reachability", () => {
+        const html = renderToStaticMarkup(
+            <CurrentWorkCard
+                model={{
+                    key: "current_work",
+                    title: "What's Next",
+                    insight: "Contact Family",
+                    tier: "work",
+                    span: "row",
+                    density: "compact",
+                    visible: true,
+                    archetype: "status",
+                }}
+                context={context()}
+            />,
+        );
+        // Obligation preserved; no "Open workspace" competing (removed in M1).
+        expect(html).toContain("Contact Family");
+        expect(html).toContain('data-work-summary="true"');
+        expect(html).not.toContain("Open workspace");
+        // No progress meter / percentage / "N of M complete" framing.
+        expect(html).not.toContain("data-work-progress");
+        expect(html).not.toContain("__progress-bar");
+        expect(html).not.toContain("requirements complete");
+    });
+
+    it("M1 — ReadinessSummary shows a concise Still needed summary, not the satisfied field checklist", () => {
+        const surface = {
+            readiness: {
+                state: "in_progress",
+                reasonCodes: [],
+                reasonLabel: null,
+                requirements: {
+                    complete: 1,
+                    total: 2,
+                    remaining: 1,
+                    items: [
+                        { key: "contacted", label: "Family contacted", status: "complete" },
+                        { key: "classroom", label: "Classroom", status: "missing", targetLabel: "Required information" },
+                    ],
+                },
+            },
+        } as unknown as CurrentWorkSurfaceVM;
+        const html = renderToStaticMarkup(<ReadinessSummary surface={surface} onNavigate={() => {}} />);
+        // Only the OUTSTANDING requirement is summarized; the satisfied field is NOT reproduced
+        // (Required Information owns detailed completeness).
+        expect(html).toContain("Still needed");
+        expect(html).toContain("Classroom");
+        expect(html).not.toContain("Ready to continue");
+        expect(html).not.toContain("Family contacted");
+        expect(html).toContain('data-work-readiness-group="still-needed"');
+        expect(html).not.toContain('data-work-readiness-group="ready"');
+        // A state, not a score — no percentage or progress meter.
+        expect(html).not.toContain("%");
+        expect(html).not.toContain("Progress");
     });
 });

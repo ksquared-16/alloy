@@ -6,6 +6,12 @@ import type {
 } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { CurrentWorkExecutionVM } from "./buildCurrentWorkExecutionVM";
+import type { CurrentWorkActionExecution } from "./executeCurrentWorkAction";
+import type { CurrentWorkResolutionVM } from "./buildCurrentWorkResolutions";
+import type { CurrentWorkRequirementOwner } from "./resolveCurrentWorkRequirementOwner";
+
+export type { CurrentWorkRequirementOwner } from "./resolveCurrentWorkRequirementOwner";
+export type { CurrentWorkResolutionVM, CurrentWorkResolutionKind } from "./buildCurrentWorkResolutions";
 
 /** Operator-facing status for Current Work summary chip. */
 export type CurrentWorkSurfaceStatus = "not_started" | "in_progress" | "blocked" | "completed";
@@ -39,7 +45,11 @@ export type CurrentWorkActionVM = {
     disabledReason?: string | null;
     /** Resolved registry action for client invoke — when available. */
     resolved?: ResolvedActionForClient | null;
+    /** Resolved execution state (Slice F) — every visible enabled action is provably executable. */
+    execution?: CurrentWorkActionExecution | null;
 };
+
+export type { CurrentWorkActionExecution, CurrentWorkActionExecutionStatus } from "./executeCurrentWorkAction";
 
 export type CurrentWorkChecklistStatus = "complete" | "missing" | "blocked";
 
@@ -52,6 +62,8 @@ export type CurrentWorkChecklistItemVM = {
     kind?: CurrentWorkChecklistItemKind;
     scope?: "record" | "child" | "person";
     targetLabel?: string | null;
+    /** Owning capability resolved from runtime metadata (not the label) — drives grouping + handoff. */
+    owner?: CurrentWorkRequirementOwner | null;
     actionRef?: string | null;
     description?: string | null;
     /** When navigable via Focus handoff (legacy stage-work rows). */
@@ -70,6 +82,8 @@ export type CurrentWorkReadinessItemVM = {
     status: CurrentWorkChecklistStatus;
     scope?: "record" | "child" | "person";
     targetLabel?: string | null;
+    /** Owning capability resolved from runtime metadata — drives owner grouping + handoff. */
+    owner?: CurrentWorkRequirementOwner | null;
 };
 
 export type CurrentWorkReadinessVM = {
@@ -140,6 +154,8 @@ export type CurrentWorkSurfaceVM = {
     showOutcomeCompletion: boolean;
     outcomeCompletionBlockReason: string | null;
     completionOutcomes: StageCompletionOutcomeV1[];
+    /** Unified generic contract for resolving work — configured outcomes + BP transitions (Slice D). */
+    resolutions: CurrentWorkResolutionVM[];
     primaryWorkItem: StageWorkItemProjection | null;
     primaryProjection: WorkIntentRuntimeProjection | null;
     runtime: StageWorkRuntimeProjection | null;

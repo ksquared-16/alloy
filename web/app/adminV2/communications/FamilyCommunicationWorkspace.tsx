@@ -56,6 +56,7 @@ export default function FamilyCommunicationWorkspace(props: {
         >
             <FamilyCommunicationWorkspaceView
                 surfaceVariant={props.surfaceVariant}
+                anchorOpportunityId={props.entity?.entityType === "opportunities" ? props.entity.entityId : null}
                 threads={runtime.vm.threads}
                 onNewMessage={runtime.startNewMessage}
                 selected={runtime.selected!}

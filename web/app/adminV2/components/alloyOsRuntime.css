@@ -2132,9 +2132,14 @@ html[data-alloy-os-runtime="on"]
   min-height: 0;
   overflow: auto;
 }
+/* #5 — responsive embedded-composer contract: the composer column is a BOUNDED region that
+   scrolls its own body when the host is height-constrained, so its footer (Send later · BOS
+   Assist · Send) is never clipped. Scoped to the shared cockpit wrapper → every host (What's
+   Next capability host, Activity cockpit, focused panel) inherits the pinned footer. */
 .alloy-os-activity-cockpit__comms [data-cc-ws-column="composer"] {
   flex: 0 0 auto;
-  overflow: visible;
+  min-height: 0;
+  overflow-y: auto;
 }
 .alloy-os-activity-cockpit__comms [data-cc-surface-variant="activity_embed"] textarea[aria-label="Message body"] {
   min-height: 88px;
@@ -2176,9 +2181,16 @@ html[data-alloy-os-runtime="on"]
   padding-right: 9px !important;
   font-size: 12px !important;
 }
-/* footer actions aligned right; drop the "Review-first manual send only" note */
+/* footer actions aligned right; drop the "Review-first manual send only" note. The footer STAYS
+   pinned to the bottom of the composer region (#5) even while the composer body scrolls. */
 .alloy-os-activity-cockpit__comms [data-cc-ws-column="composer"] > div:last-child {
+  position: sticky;
+  bottom: 0;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  background: var(--alloy-os-surface, #fff);
+  padding-top: 6px;
+  margin-top: 2px;
 }
 .alloy-os-activity-cockpit__comms [data-cc-ws-column="composer"] > div:last-child > span {
   display: none;
@@ -5596,6 +5608,14 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   letter-spacing: 0.01em;
 }
 
+/* #6 — the status chip reads as a compact contextual row WITH the What's Next eyebrow
+   ("What's Next   Blocked" over the obligation), not a chip floated to the far card edge by the
+   default space-between header row. Uses the shared UniversalCard status-chip system for tone. */
+.alloy-os-ucard[data-universal-card-key="current_work"] .alloy-os-ucard__header-row {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
 .alloy-os-currentwork__header-percent {
   font-size: 0.72rem;
   font-weight: 500;
@@ -5634,17 +5654,408 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
 }
 
+/* #2 — "Still needed" is a real subsection with clear hierarchy: a quiet uppercase heading, a
+   distinct owner label, a clean vertical requirement scan, and a subordinate-but-discoverable
+   owner handoff. ONE generic requirement-group presentation for every owner. No counts,
+   percentages, progress bars, warning banners, or excess color — and never the Required
+   Information card's field inventory. */
 .alloy-os-currentwork__readiness-block {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
 }
 
 .alloy-os-currentwork__readiness-reason,
 .alloy-os-currentwork__readiness-count {
   margin: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+
+/* Ownership grouping (Slice E) — requirements gather under the capability that owns them. */
+.alloy-os-currentwork__readiness-owner-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alloy-os-currentwork__readiness-owner {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+/* The owner heading itself is the navigation to its card (no separate "Open X →" affordance). */
+.alloy-os-currentwork__readiness-owner--link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+  transition: color 120ms ease;
+}
+.alloy-os-currentwork__readiness-owner--link:hover {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-currentwork__readiness-owner-arrow {
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 72%, var(--alloy-os-midnight, #273f52));
+  transition: color 120ms ease, transform 120ms ease;
+}
+.alloy-os-currentwork__readiness-owner--link:hover .alloy-os-currentwork__readiness-owner-arrow {
+  color: var(--alloy-os-bend-pine, #00a283);
+  transform: translateX(2px);
+}
+
+/* #1 — communication host: reuse the Activity embed contract so the composer fills the centered
+ * host with an internal-scroll thread + a visible Send/Send later/BOS Assist footer. */
+.alloy-os-currentwork__composer-host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  gap: 8px;
+}
+.alloy-os-currentwork__composer-header {
+  flex: 0 0 auto;
+}
+.alloy-os-currentwork__composer-host > .alloy-os-activity-cockpit__comms {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Generic form-delivery surface (send-form capability). */
+.alloy-os-formdelivery {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.alloy-os-formdelivery__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.alloy-os-formdelivery__select {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 16%, transparent);
+  background: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-formdelivery__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.alloy-os-formdelivery__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-formdelivery__option[data-disabled="true"] {
+  opacity: 0.5;
+}
+.alloy-os-formdelivery__hint {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 50%, #64748b);
+}
+.alloy-os-formdelivery__channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Slice A (#7) — the summary card links into the centered drill-in ("view more"). */
+.alloy-os-currentwork__summary-open {
+  align-self: flex-start;
+  margin-top: 2px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 0;
+  font: inherit;
   font-size: 0.78rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 70%, var(--alloy-os-midnight, #273f52));
+}
+.alloy-os-currentwork__summary-open:hover {
+  text-decoration: underline;
+}
+
+/* Slice A — centered configured-work focused surface. Single column; the centered card frame
+ * + elevation come from the elevated `.alloy-os-ucard` treatment, so this only owns internal
+ * layout. No progress meter, no two-column workspace grid. */
+.alloy-os-currentwork__focused {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px;
+  max-height: min(68vh, calc(100dvh - 120px));
+  overflow-y: auto;
+}
+/* Shared hosted-capability mode (#1, generic): when ANY capability is active the whole card is a
+ * fill/scroll host — the capability body scrolls internally, its footer stays pinned/visible, and
+ * NO nested full-surface scrollbar appears. Driven by data-capability-active, not by action name. */
+/* The card CONTENT-SIZES to the capability (capped) — short capabilities (forms/outcomes/tour
+ * loading) stay compact with no blank reserved region; tall ones (composer) cap and scroll inside
+ * their own region, never a nested full-surface scrollbar. */
+.alloy-os-currentwork[data-capability-active="true"] .alloy-os-ucard__body {
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 12px 10px;
+  display: flex;
+  flex-direction: column;
+}
+/* Compact context header: obligation + status only (the explanatory sentence is dropped in JS). */
+.alloy-os-currentwork[data-capability-active="true"] .alloy-os-ucard__header {
+  flex: 0 0 auto;
+  padding-bottom: 6px;
+}
+/* Cap the centered card to the viewport; height follows content (max-content on the base rule). */
+.alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-currentwork[data-capability-active="true"]
+  .alloy-os-ucard {
+  max-height: min(86vh, calc(100dvh - 40px));
+}
+.alloy-os-currentwork__focused[data-has-panel="true"] {
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  gap: 8px;
+}
+.alloy-os-currentwork__focused-panel-host {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.alloy-os-currentwork__focused-panel-host > * {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+.alloy-os-currentwork__focused-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.alloy-os-currentwork__focused-close {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 6px;
+  border-radius: 8px;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, #64748b);
+}
+.alloy-os-currentwork__focused-close:hover {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+}
+.alloy-os-currentwork__focused-reason {
+  margin: 0;
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 66%, #64748b);
+}
+/* The outcome-section header is a toggle button styled as a plain section label. */
+.alloy-os-currentwork__focused-outcomes-toggle {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+/* When the outcome section is engaged, commands stay available but recede to secondary. */
+.alloy-os-currentwork__focused[data-emphasize-outcome="true"] .alloy-os-currentwork__focused-actions {
+  opacity: 0.5;
+  transition: opacity 160ms ease;
+}
+.alloy-os-currentwork__focused[data-emphasize-outcome="true"] .alloy-os-currentwork__focused-outcome-pill {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
+}
+.alloy-os-currentwork__focused-section-title {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, #64748b);
+}
+.alloy-os-currentwork__focused-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.alloy-os-currentwork__focused-outcome-pills,
+.alloy-os-currentwork__focused-transition-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.alloy-os-currentwork__focused-outcome-pill,
+.alloy-os-currentwork__focused-transition {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 16%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 3%, #fff);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-currentwork__focused-outcome-pill:hover,
+.alloy-os-currentwork__focused-transition:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
+}
+.alloy-os-currentwork__focused-effect {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 66%, #64748b);
+}
+.alloy-os-currentwork__focused-confirm-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.alloy-os-currentwork__focused-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.alloy-os-currentwork__focused-activity-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 66%, #64748b);
+}
+.alloy-os-currentwork__focused-activity-when {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 48%, #64748b);
+}
+
+/* #2 — Record outcome is a subordinate affordance in the default work mode. */
+.alloy-os-currentwork__record-outcome-affordance {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
+}
+.alloy-os-currentwork__record-outcome-affordance:hover {
+  text-decoration: underline;
+}
+
+/* #4 — dedicated outcome-declaration mode: COMPACT selectable rows (control · label · concise
+   configured effect), assessed and selected without scrolling oversized tiles. The label carries
+   the weight; the effect line stays a single quiet subordinate line. */
+.alloy-os-currentwork__focused-outcome-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alloy-os-currentwork__focused-back {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 70%, var(--alloy-os-midnight, #273f52));
+}
+.alloy-os-currentwork__outcome-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.alloy-os-currentwork__outcome-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 2%, #fff);
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.alloy-os-currentwork__outcome-row:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 30%, transparent);
+}
+.alloy-os-currentwork__outcome-row--selected {
+  border-color: var(--alloy-os-bend-pine, #00a283);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+}
+.alloy-os-currentwork__outcome-radio {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, transparent);
+}
+.alloy-os-currentwork__outcome-row--selected .alloy-os-currentwork__outcome-radio {
+  border-color: var(--alloy-os-bend-pine, #00a283);
+  background:
+    radial-gradient(circle at center, var(--alloy-os-bend-pine, #00a283) 0 4px, transparent 5px);
+}
+.alloy-os-currentwork__outcome-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.alloy-os-currentwork__outcome-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-currentwork__outcome-effect {
+  font-size: 0.74rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 56%, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.alloy-os-currentwork__outcome-confirm {
+  align-self: flex-start;
+  margin-top: 2px;
 }
 
 .alloy-os-currentwork__guidance {
@@ -5710,9 +6121,25 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .alloy-os-currentwork__primary-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-wrap: nowrap;
+  align-items: stretch;
   gap: 8px;
+}
+/* All action buttons in the row share ONE equal width (flex:1 with a 0 basis), centered labels on a
+   single line, same height. Primary vs secondary differ only in fill, never in dimensions. The row
+   stays on one line (nowrap) with min-width:0 so buttons shrink equally instead of a 3+1 wrap. */
+.alloy-os-currentwork__primary-row > button,
+.alloy-os-currentwork__focused-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-width: 0;
+  align-self: stretch;
+  text-align: center;
+  white-space: nowrap;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .alloy-os-currentwork__open-work {
@@ -5918,11 +6345,15 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   overflow-y: auto;
 }
 
+/* #2 — requirements scan as a clean vertical list under the owner (not a horizontal stepper line
+   that blends into the card). The between-step connector is a horizontal-flow artifact and is
+   hidden here. */
 .alloy-os-currentwork__stepper {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 0;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 1px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -5937,13 +6368,13 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__stepper-static {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   border: 0;
   background: transparent;
-  padding: 2px 4px;
+  padding: 1px 0;
   font: inherit;
-  font-size: 0.74rem;
-  color: var(--alloy-os-midnight, #273f52);
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 80%, #64748b);
 }
 
 .alloy-os-currentwork__stepper-button {
@@ -5971,10 +6402,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 .alloy-os-currentwork__stepper-connector {
-  width: 12px;
-  height: 1px;
-  margin: 0 4px;
-  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
+  display: none;
 }
 
 .alloy-os-currentwork__work-primary {

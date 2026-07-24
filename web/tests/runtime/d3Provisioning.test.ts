@@ -208,7 +208,7 @@ describe("D3 — K2 Provisioning Runtime", () => {
         // queue committed while the Focus Panel never left the entry record. See provisioning.ts key.)
         const seen: (string | undefined)[] = [];
         const entry = vi.fn<EntryResource>((ref) => {
-            seen.push(ref.subject);
+            seen.push(ref.subject ?? undefined);
             const a = answer("operational") as unknown as Record<string, unknown>;
             // Echo the requested subject into Record of Attention, exactly as D1 composes it.
             a.recordOfAttention = { id: ref.subject ?? "opp-1", strategy: "requested", strategySource: "attention" };

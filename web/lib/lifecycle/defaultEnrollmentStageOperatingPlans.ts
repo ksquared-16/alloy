@@ -56,6 +56,18 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 owner_strategy: "record_owner",
                 work_definition_key: "contact_family",
                 execution_mode: "direct_action",
+                // Command-result sufficiency (R2): an objective integrated send is
+                // "contact attempted" (left_message, stays in stage) — configuration,
+                // not code, decides this. The operator is never asked to re-declare it.
+                completion_policy: {
+                    sufficient_command_results: [
+                        {
+                            capability: "communications_send",
+                            result: "sent",
+                            satisfies_outcome_key: "left_message",
+                        },
+                    ],
+                },
                 primary_action: { action_ref: "quick_message", override_label: "Contact Family" },
                 helpful_actions: [
                     { action_ref: "schedule_tour" },
@@ -592,11 +604,14 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
         ],
         outcome_rules: [
             {
-                rule_key: "reached_to_qualification",
+                // `qualification` was removed from the enrollment template (Part 9). The stale
+                // move_to_stage target is removed here so this default path no longer references a
+                // stage absent from the current template. Reaching the family marks the contact
+                // work complete; stage advancement is a configured transition, not a code default.
+                rule_key: "reached_family_qualified",
                 when_outcome_key: "reached_family",
                 targets: [
                     { kind: "update_family_case_status", status_key: "open" },
-                    { kind: "move_to_stage", stage_key: "qualification" },
                     { kind: "mark_stage_work_complete" },
                 ],
             },

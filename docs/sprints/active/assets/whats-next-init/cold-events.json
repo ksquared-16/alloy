@@ -1,0 +1,229 @@
+[
+  {
+    "seq": 0,
+    "t": 0,
+    "at": 1784755361694,
+    "phase": "provisioning.client.warm-miss",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer",
+    "cache": "miss",
+    "note": "no intent-warmed answer — cold entry"
+  },
+  {
+    "seq": 1,
+    "t": 0,
+    "at": 1784755361694,
+    "phase": "provisioning.cold.fetch",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer",
+    "cache": "miss",
+    "preloadSource": "live",
+    "note": "cold entry network fetch"
+  },
+  {
+    "seq": 2,
+    "t": 2,
+    "at": 1784755361696,
+    "phase": "surfaceHost.render",
+    "subjectId": null,
+    "note": "boot-loader",
+    "cache": "miss"
+  },
+  {
+    "seq": 3,
+    "t": 4,
+    "at": 1784755361698,
+    "phase": "surfaceHost.render",
+    "subjectId": null,
+    "note": "boot-loader",
+    "cache": "miss"
+  },
+  {
+    "seq": 4,
+    "t": 4392,
+    "at": 1784755366086,
+    "phase": "currentWorkCard.compose",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "note": "content"
+  },
+  {
+    "seq": 5,
+    "t": 4396,
+    "at": 1784755366090,
+    "phase": "recordRuntime.fetch.start",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "runtimeId": "recordRuntime-2",
+    "reqGen": 1,
+    "cacheKey": "opportunity:b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "preloadSource": "live",
+    "cache": "miss",
+    "note": "cold"
+  },
+  {
+    "seq": 6,
+    "t": 4403,
+    "at": 1784755366097,
+    "phase": "focusPanel.mount",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1"
+  },
+  {
+    "seq": 7,
+    "t": 4404,
+    "at": 1784755366098,
+    "phase": "focusPanel.body",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1",
+    "note": "commit-critical-seed",
+    "cache": "seed"
+  },
+  {
+    "seq": 8,
+    "t": 4409,
+    "at": 1784755366103,
+    "phase": "surfaceHost.render",
+    "subjectId": "new-leads",
+    "note": "provisioned"
+  },
+  {
+    "seq": 9,
+    "t": 4410,
+    "at": 1784755366104,
+    "phase": "focusPanel.unmount",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1"
+  },
+  {
+    "seq": 10,
+    "t": 4411,
+    "at": 1784755366105,
+    "phase": "currentWorkCard.compose",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "note": "content"
+  },
+  {
+    "seq": 11,
+    "t": 4411,
+    "at": 1784755366105,
+    "phase": "recordRuntime.fetch.start",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "runtimeId": "recordRuntime-2",
+    "reqGen": 2,
+    "cacheKey": "opportunity:b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "preloadSource": "live",
+    "cache": "miss",
+    "note": "cold"
+  },
+  {
+    "seq": 12,
+    "t": 4412,
+    "at": 1784755366106,
+    "phase": "focusPanel.mount",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1"
+  },
+  {
+    "seq": 13,
+    "t": 4412,
+    "at": 1784755366106,
+    "phase": "focusPanel.body",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1",
+    "note": "commit-critical-seed",
+    "cache": "seed"
+  },
+  {
+    "seq": 14,
+    "t": 4463,
+    "at": 1784755366157,
+    "phase": "provisioning.client.warm-miss",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_2",
+    "cache": "miss",
+    "note": "no intent-warmed answer — cold entry"
+  },
+  {
+    "seq": 15,
+    "t": 4463,
+    "at": 1784755366157,
+    "phase": "provisioning.cold.fetch",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_2",
+    "cache": "miss",
+    "preloadSource": "live",
+    "note": "cold entry network fetch"
+  },
+  {
+    "seq": 16,
+    "t": 4463,
+    "at": 1784755366157,
+    "phase": "provisioning.client.warm-miss",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_3",
+    "cache": "miss",
+    "note": "no intent-warmed answer — cold entry"
+  },
+  {
+    "seq": 17,
+    "t": 4463,
+    "at": 1784755366157,
+    "phase": "provisioning.cold.fetch",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_3",
+    "cache": "miss",
+    "preloadSource": "live",
+    "note": "cold entry network fetch"
+  },
+  {
+    "seq": 18,
+    "t": 4463,
+    "at": 1784755366157,
+    "phase": "provisioning.client.warm-miss",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_4",
+    "cache": "miss",
+    "note": "no intent-warmed answer — cold entry"
+  },
+  {
+    "seq": 19,
+    "t": 4463,
+    "at": 1784755366157,
+    "phase": "provisioning.cold.fetch",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_4",
+    "cache": "miss",
+    "preloadSource": "live",
+    "note": "cold entry network fetch"
+  },
+  {
+    "seq": 20,
+    "t": 4464,
+    "at": 1784755366158,
+    "phase": "provisioning.client.warm-miss",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_5",
+    "cache": "miss",
+    "note": "no intent-warmed answer — cold entry"
+  },
+  {
+    "seq": 21,
+    "t": 4464,
+    "at": 1784755366158,
+    "phase": "provisioning.cold.fetch",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_5",
+    "cache": "miss",
+    "preloadSource": "live",
+    "note": "cold entry network fetch"
+  },
+  {
+    "seq": 22,
+    "t": 4464,
+    "at": 1784755366158,
+    "phase": "provisioning.prefetch.fetch",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?subject_id=df771481-841f-4329-b7bb-c0a03d9fb621",
+    "cache": "miss",
+    "preloadSource": "prefetch",
+    "note": "intent-warm network fetch"
+  },
+  {
+    "seq": 23,
+    "t": 4464,
+    "at": 1784755366158,
+    "phase": "provisioning.prefetch.fetch",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?subject_id=c78a8e14-4e4f-4a17-acd4-0ad3245cc81a",
+    "cache": "miss",
+    "preloadSource": "prefetch",
+    "note": "intent-warm network fetch"
+  }
+]
