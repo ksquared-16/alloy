@@ -5,6 +5,7 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { completeStageWorkWithOutcome } from "@/lib/lifecycle/completeStageWorkWithOutcome";
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
+import { CORRELATION_ID_HEADER, resolveCorrelationId } from "@/lib/api/correlationId";
 
 /** POST — complete stage work and execute configured outcome rules. */
 export async function POST(request: NextRequest) {
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    const correlationId = resolveCorrelationId(request);
     const result = await completeStageWorkWithOutcome({
         supabase,
         orgId: ctx.orgId,
@@ -51,15 +53,38 @@ export async function POST(request: NextRequest) {
         workId,
         outcomeKey,
         subject,
+        correlationId,
+        // A double-submitted outcome joins the running transaction instead of executing twice.
+        idempotencyKey: `${ctx.orgId}:${workId}:${outcomeKey}`,
     });
+
+    const headers = { [CORRELATION_ID_HEADER]: result.correlation_id ?? correlationId };
 
     if (!result.ok) {
-        return NextResponse.json({ error: result.error ?? "Failed", outcome_execution: result.outcome_execution }, { status: 400 });
+        return NextResponse.json(
+            {
+                error: result.error ?? "Failed",
+                outcome_execution: result.outcome_execution,
+                // The operator's question is "did anything change?" — answer it explicitly.
+                changed: result.changed ?? false,
+                integrity_breach: result.integrity_breach,
+                transaction: result.transaction,
+                correlation_id: result.correlation_id ?? correlationId,
+            },
+            // A failed rollback is not a client error: durable state is uncertain and the
+            // operator must be told to verify rather than simply retry.
+            { status: result.integrity_breach ? 500 : 400, headers },
+        );
     }
 
-    return NextResponse.json({
-        ok: true,
-        outcome_execution: result.outcome_execution,
-        queue_refresh_opportunity_id: result.outcome_execution?.queue_refresh_opportunity_id,
-    });
+    return NextResponse.json(
+        {
+            ok: true,
+            outcome_execution: result.outcome_execution,
+            queue_refresh_opportunity_id: result.outcome_execution?.queue_refresh_opportunity_id,
+            transaction: result.transaction,
+            correlation_id: result.correlation_id ?? correlationId,
+        },
+        { headers },
+    );
 }

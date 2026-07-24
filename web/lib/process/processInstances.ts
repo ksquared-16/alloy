@@ -204,6 +204,25 @@ export async function readEnrollmentInstanceState(
     return (data as { state?: string | null } | null)?.state ?? null;
 }
 
+/**
+ * Read a child's current enrollment instance stage by scope. Captured before a stage move so
+ * the Platform Transaction Contract has an inverse to compensate with.
+ */
+export async function readEnrollmentInstanceStageKey(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityId: string; customerMemberId: string },
+): Promise<string | null> {
+    const { data } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("stage_key")
+        .eq("org_id", args.orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("context_id", args.opportunityId)
+        .eq("subject_id", args.customerMemberId)
+        .maybeSingle();
+    return (data as { stage_key?: string | null } | null)?.stage_key ?? null;
+}
+
 /** Read enrollment process instances for a lead (Work View / drawer child list). */
 export async function listEnrollmentInstancesForLead(
     supabase: SupabaseClient,

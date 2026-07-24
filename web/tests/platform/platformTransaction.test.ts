@@ -316,7 +316,7 @@ describe("platform transaction contract — no false 'applied'", () => {
 describe("platform transaction contract — duplicate execution", () => {
     it("joins an in-flight identical transaction instead of executing twice", async () => {
         let executions = 0;
-        let release: (() => void) | null = null;
+        let release: () => void = () => {};
         const gate = new Promise<void>((resolve) => {
             release = resolve;
         });
@@ -340,7 +340,7 @@ describe("platform transaction contract — duplicate execution", () => {
 
         const first = run();
         const second = run();
-        release?.();
+        release();
         const [a, b] = await Promise.all([first, second]);
 
         expect(executions).toBe(1);

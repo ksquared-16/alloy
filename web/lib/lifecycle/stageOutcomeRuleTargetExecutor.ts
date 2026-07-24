@@ -16,6 +16,7 @@ import {
     moveEnrollmentInstanceStageByScope,
     setEnrollmentInstanceStateByScope,
     readEnrollmentInstanceState,
+    readEnrollmentInstanceStageKey,
     type EnrollmentProcessState,
 } from "@/lib/process/processInstances";
 import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
@@ -66,6 +67,23 @@ async function resolveChildSubjectId(
     return typeof id === "string" && id.trim() ? id.trim() : null;
 }
 
+export type ApplyStageOutcomeRuleTargetResult = {
+    error?: string;
+    needs_attention?: boolean;
+    status_updated?: boolean;
+    /**
+     * Inverse of this target's durable write, for the Platform Transaction Contract's
+     * compensation pass. Present only when the write SUCCEEDED and can be undone; a target
+     * that writes nothing durable returns none.
+     */
+    undo?: () => Promise<void>;
+    /**
+     * A declared out-of-boundary effect that did not run. Reported so the operator learns
+     * about it — the alternative (an empty catch) is what made results untrustworthy.
+     */
+    degraded?: string;
+};
+
 export async function applyStageOutcomeRuleTarget(
     supabase: SupabaseClient,
     params: {
@@ -77,7 +95,7 @@ export async function applyStageOutcomeRuleTarget(
         subject: StageOutcomeExecutionSubject;
         target: StageOutcomeRuleTargetV1;
     },
-): Promise<{ error?: string; needs_attention?: boolean; status_updated?: boolean }> {
+): Promise<ApplyStageOutcomeRuleTargetResult> {
     const { orgId, userId, subject, target, plan, stageKey, departmentId } = params;
 
     switch (target.kind) {
@@ -89,6 +107,13 @@ export async function applyStageOutcomeRuleTarget(
             const statusKey = target.status_key?.trim();
             if (!statusKey) return { error: "Missing family case status key" };
             const closeReasonKey = target.close_reason_key?.trim();
+            // Read the prior value BEFORE the write so the transaction has an inverse.
+            const { data: priorStatus } = await supabase
+                .from("opportunities")
+                .select("status_key, close_reason_key")
+                .eq("id", subject.opportunity_id)
+                .eq("org_id", orgId)
+                .maybeSingle();
             const res = await updateOpportunityStatusWithEvent({
                 supabase,
                 orgId,
@@ -101,7 +126,27 @@ export async function applyStageOutcomeRuleTarget(
                 eventMetadata: { source: "stage_operating_plan_v1", stage_key: stageKey },
             });
             if (res.error) return { error: res.error.message };
-            return { status_updated: true };
+            return {
+                status_updated: true,
+                undo:
+                    priorStatus ?
+                        async () => {
+                            // Direct restore, not a second status EVENT: the transaction is being
+                            // unwound, so the forward transition never truthfully happened.
+                            const { error } = await supabase
+                                .from("opportunities")
+                                .update({
+                                    status_key: (priorStatus as { status_key?: string | null }).status_key ?? null,
+                                    close_reason_key:
+                                        (priorStatus as { close_reason_key?: string | null }).close_reason_key ?? null,
+                                    updated_at: new Date().toISOString(),
+                                })
+                                .eq("id", subject.opportunity_id)
+                                .eq("org_id", orgId);
+                            if (error) throw new Error(`restore family case status: ${error.message}`);
+                        }
+                    :   undefined,
+            };
         }
 
         case "update_child_enrollment_status": {
@@ -129,6 +174,17 @@ export async function applyStageOutcomeRuleTarget(
             });
             if (pi.error) return { error: pi.error };
 
+            const degradedEffects: string[] = [];
+            const undoChildState = async () => {
+                const restored = await setEnrollmentInstanceStateByScope(supabase, {
+                    orgId,
+                    opportunityId: subject.opportunity_id,
+                    customerMemberId: childId,
+                    state: (prevState ?? null) as EnrollmentProcessState,
+                });
+                if (restored.error) throw new Error(`restore child enrollment state: ${restored.error}`);
+            };
+
             const ocmBridgeId = subject.opportunity_customer_member_id?.trim() ?? null;
             // Child lifecycle event emitted from the process-instance transition (restored). While the
             // OCM bridge exists the event stays keyed on the OCM id so existing workflow subscriptions
@@ -148,7 +204,12 @@ export async function applyStageOutcomeRuleTarget(
                         rowGrain: "child",
                     });
                 } catch (e) {
+                    // Declared downstream effect: the state transition stands, but the operator
+                    // is told the event did not fire rather than it being logged and forgotten.
                     console.error("[stageOutcomeRuleTargetExecutor] child lifecycle event", e);
+                    degradedEffects.push(
+                        `child lifecycle event not emitted: ${e instanceof Error ? e.message : String(e)}`,
+                    );
                 }
             }
             // Waitlist placement candidate — sourced from the child's process instance (no OCM required).
@@ -172,9 +233,16 @@ export async function applyStageOutcomeRuleTarget(
                     });
                 } catch (e) {
                     console.error("[stageOutcomeRuleTargetExecutor] enrollment materialization", e);
+                    degradedEffects.push(
+                        `enrollment materialization did not run: ${e instanceof Error ? e.message : String(e)}`,
+                    );
                 }
             }
-            return { status_updated: true };
+            return {
+                status_updated: true,
+                undo: undoChildState,
+                degraded: degradedEffects.length ? degradedEffects.join("; ") : undefined,
+            };
         }
 
         case "update_candidate_status": {
@@ -183,13 +251,35 @@ export async function applyStageOutcomeRuleTarget(
             if (!candidateId || !candidateStatus) {
                 return { error: "Waitlist candidate required for candidate status update" };
             }
+            const { data: priorCandidate } = await supabase
+                .from("placement_candidates")
+                .select("status")
+                .eq("id", candidateId)
+                .eq("org_id", orgId)
+                .maybeSingle();
             const { error } = await supabase
                 .from("placement_candidates")
                 .update({ status: candidateStatus, updated_at: new Date().toISOString() })
                 .eq("id", candidateId)
                 .eq("org_id", orgId);
             if (error) return { error: error.message };
-            return { status_updated: true };
+            return {
+                status_updated: true,
+                undo:
+                    priorCandidate ?
+                        async () => {
+                            const { error: undoErr } = await supabase
+                                .from("placement_candidates")
+                                .update({
+                                    status: (priorCandidate as { status?: string | null }).status ?? null,
+                                    updated_at: new Date().toISOString(),
+                                })
+                                .eq("id", candidateId)
+                                .eq("org_id", orgId);
+                            if (undoErr) throw new Error(`restore candidate status: ${undoErr.message}`);
+                        }
+                    :   undefined,
+            };
         }
 
         case "create_needs_attention": {
@@ -218,7 +308,18 @@ export async function applyStageOutcomeRuleTarget(
                 .eq("id", subject.opportunity_id)
                 .eq("org_id", orgId);
             if (upErr) return { error: upErr.message };
-            return { needs_attention: true };
+            return {
+                needs_attention: true,
+                undo: async () => {
+                    // Restore the metadata document captured before the merge.
+                    const { error: undoErr } = await supabase
+                        .from("opportunities")
+                        .update({ metadata, updated_at: new Date().toISOString() })
+                        .eq("id", subject.opportunity_id)
+                        .eq("org_id", orgId);
+                    if (undoErr) throw new Error(`restore needs-attention metadata: ${undoErr.message}`);
+                },
+            };
         }
 
         case "create_next_work": {
@@ -240,12 +341,32 @@ export async function applyStageOutcomeRuleTarget(
             if (result.status === "rejected") {
                 return { error: result.error };
             }
-            return {};
+            return {
+                // Only a freshly CREATED work item is ours to remove; a deduped result matched
+                // work that already existed and must survive the rollback.
+                undo:
+                    result.status === "created" ?
+                        async () => {
+                            const { error: undoErr } = await supabase
+                                .from("operational_tasks")
+                                .delete()
+                                .eq("id", result.work_id)
+                                .eq("org_id", orgId);
+                            if (undoErr) throw new Error(`remove spawned work ${result.work_id}: ${undoErr.message}`);
+                        }
+                    :   undefined,
+            };
         }
 
         case "reopen_work": {
             const workId = subject.work_id?.trim();
             if (!workId) return { error: "Open work required to repeat work item" };
+            const { data: priorWork } = await supabase
+                .from("operational_tasks")
+                .select("status, due_at")
+                .eq("id", workId)
+                .eq("org_id", orgId)
+                .maybeSingle();
             const dueDays =
                 typeof target.due_days === "number" && Number.isFinite(target.due_days) ?
                     Math.max(0, Math.floor(target.due_days))
@@ -257,7 +378,24 @@ export async function applyStageOutcomeRuleTarget(
                 dueDays,
             });
             if (!reopened.ok) return { error: reopened.error };
-            return {};
+            return {
+                undo:
+                    priorWork ?
+                        async () => {
+                            const prior = priorWork as { status?: string | null; due_at?: string | null };
+                            const { error: undoErr } = await supabase
+                                .from("operational_tasks")
+                                .update({
+                                    status: prior.status ?? null,
+                                    due_at: prior.due_at ?? null,
+                                    updated_at: new Date().toISOString(),
+                                })
+                                .eq("id", workId)
+                                .eq("org_id", orgId);
+                            if (undoErr) throw new Error(`restore work ${workId}: ${undoErr.message}`);
+                        }
+                    :   undefined,
+            };
         }
 
         case "move_to_stage": {
@@ -268,12 +406,18 @@ export async function applyStageOutcomeRuleTarget(
                     : null);
             if (!targetStageKey) return { error: "Missing target stage key" };
             const nowIso = new Date().toISOString();
+            let undoStageMove: (() => Promise<void>) | undefined;
             if (subject.journey_segment === "child") {
                 // Authoritative + only writer: the child's process instance owns stage_key.
                 // (The OCM stage_key mirror write was removed — OCM is no longer a runtime dependency
                 // for child movement.)
                 const childId = await resolveChildSubjectId(supabase, orgId, subject);
                 if (!childId) return { error: "Child enrollment track required for move_to_stage" };
+                const priorStage = await readEnrollmentInstanceStageKey(supabase, {
+                    orgId,
+                    opportunityId: subject.opportunity_id,
+                    customerMemberId: childId,
+                });
                 const pi = await moveEnrollmentInstanceStageByScope(supabase, {
                     orgId,
                     opportunityId: subject.opportunity_id,
@@ -281,17 +425,50 @@ export async function applyStageOutcomeRuleTarget(
                     stageKey: targetStageKey,
                 });
                 if (pi.error) return { error: pi.error };
+                if (priorStage != null) {
+                    undoStageMove = async () => {
+                        const restored = await moveEnrollmentInstanceStageByScope(supabase, {
+                            orgId,
+                            opportunityId: subject.opportunity_id,
+                            customerMemberId: childId,
+                            stageKey: priorStage,
+                        });
+                        if (restored.error) throw new Error(`restore child stage: ${restored.error}`);
+                    };
+                }
             } else {
+                const { data: priorOpp } = await supabase
+                    .from("opportunities")
+                    .select("stage_key")
+                    .eq("id", subject.opportunity_id)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 const { error } = await supabase
                     .from("opportunities")
                     .update({ stage_key: targetStageKey, updated_at: nowIso })
                     .eq("id", subject.opportunity_id)
                     .eq("org_id", orgId);
                 if (error) return { error: error.message };
+                if (priorOpp) {
+                    undoStageMove = async () => {
+                        const { error: undoErr } = await supabase
+                            .from("opportunities")
+                            .update({
+                                stage_key: (priorOpp as { stage_key?: string | null }).stage_key ?? null,
+                                updated_at: new Date().toISOString(),
+                            })
+                            .eq("id", subject.opportunity_id)
+                            .eq("org_id", orgId);
+                        if (undoErr) throw new Error(`restore family stage: ${undoErr.message}`);
+                    };
+                }
             }
 
             // Stage membership changes first; then create destination stage-entry work.
-            // Soft-fail: transition already applied. Deduped/skipped entry spawn must not roll back stage membership.
+            // Declared OUTSIDE the boundary: a failed entry spawn must not roll back a stage
+            // move the operator completed — but it is REPORTED, never swallowed. An empty catch
+            // here is exactly how a stage could move with no destination work and nobody knew.
+            let spawnDegraded: string | undefined;
             try {
                 const { data: deptRow } = await supabase
                     .from("departments")
@@ -314,10 +491,13 @@ export async function applyStageOutcomeRuleTarget(
                     destinationStageKey: targetStageKey,
                     departmentMetadata,
                 });
-            } catch {
+            } catch (e) {
                 // Test doubles or transient reads must not undo a successful stage move.
+                spawnDegraded = `destination stage-entry work not created for "${targetStageKey}": ${
+                    e instanceof Error ? e.message : String(e)
+                }`;
             }
-            return {};
+            return { undo: undoStageMove, degraded: spawnDegraded };
         }
 
         default:

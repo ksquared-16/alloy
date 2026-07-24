@@ -25,6 +25,17 @@ vi.mock("@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus", ()
     })),
 }));
 
+/**
+ * Targets read their prior value before writing so the transaction has an inverse to
+ * compensate with; the doubles below must answer that read.
+ */
+function priorValueRead(row: Record<string, unknown>) {
+    const chain: Record<string, unknown> = {};
+    chain.eq = () => chain;
+    chain.maybeSingle = async () => ({ data: row, error: null });
+    return () => chain;
+}
+
 describe("executeStageOperatingOutcome", () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -169,6 +180,7 @@ describe("executeStageOperatingOutcome", () => {
         const eqSpy = vi.fn().mockReturnThis();
         const supabase = {
             from: vi.fn(() => ({
+                select: priorValueRead({ status_key: "open", close_reason_key: null, stage_key: "lead" }),
                 update: (...args: unknown[]) => {
                     updateSpy(...args);
                     return { eq: (...a: unknown[]) => { eqSpy(...a); return { eq: eqSpy }; } };
@@ -223,6 +235,7 @@ describe("executeStageOperatingOutcome", () => {
         const eqSpy = vi.fn().mockReturnThis();
         const supabase = {
             from: vi.fn(() => ({
+                select: priorValueRead({ status_key: "open", close_reason_key: null, stage_key: "tour" }),
                 update: (...args: unknown[]) => {
                     updateSpy(...args);
                     return { eq: (...args: unknown[]) => { eqSpy(...args); return { eq: eqSpy }; } };

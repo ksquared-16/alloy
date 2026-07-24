@@ -67,10 +67,17 @@ function granularTourDepartmentMetadata(): Record<string, unknown> {
 }
 
 // S4: move_to_stage now persists stage_key via supabase.update — chainable no-op stub.
+// Targets also READ their prior value before writing, so the transaction has an inverse to
+// compensate with; the stub answers that read with a plausible pre-move row.
 function makeChainableUpdateSupabase() {
     const chain: Record<string, unknown> = {};
     chain.update = () => chain;
+    chain.select = () => chain;
     chain.eq = () => chain;
+    chain.maybeSingle = async () => ({
+        data: { status_key: "tour_completed", close_reason_key: null, stage_key: "tour_completed" },
+        error: null,
+    });
     return { from: vi.fn(() => chain) };
 }
 

@@ -158,10 +158,16 @@ describe("businessProcessRuntimeGoldenPath", () => {
         const tourPlan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
 
         // S4: move_to_stage now persists stage_key via supabase.update — provide a chainable stub.
+        // Targets read their prior value first so the transaction has an inverse; answer it.
         const chainableUpdate = () => {
             const chain: Record<string, unknown> = {};
             chain.update = () => chain;
+            chain.select = () => chain;
             chain.eq = () => chain;
+            chain.maybeSingle = async () => ({
+                data: { status_key: "tour_completed", close_reason_key: null, stage_key: "tour_completed" },
+                error: null,
+            });
             return chain;
         };
         const outcomeResult = await executeStageOperatingOutcome({
