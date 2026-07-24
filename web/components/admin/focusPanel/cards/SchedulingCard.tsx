@@ -7,7 +7,10 @@ import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import {
+    focusPanelCardBackLabel,
+    type FocusPanelCoordination,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
     useDismissSignal,
     useReportPerspective,
@@ -291,7 +294,12 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                         projection={projById[activeChild.id] ?? null}
                         config={schedConfig}
                         reloadChild={() => reloadChild(activeChild.id, activeChild.name)}
+                        coordination={coordination}
                         onClose={() => setActiveChildId(null)}
+                        onBack={() => {
+                            setActiveChildId(null);
+                            coordination?.back?.();
+                        }}
                     />
                 ) : children.length === 0 ? (
                     <p style={{ fontSize: 12.5, color: T.muted }}>Link children to schedule them.</p>
@@ -343,14 +351,18 @@ function ScheduleWorkSurface({
     projection,
     config,
     reloadChild,
+    coordination,
     onClose,
+    onBack,
 }: {
     child: SchedChild;
     opportunityId: string | null;
     projection: ChildProj | null;
     config: SchedConfig;
     reloadChild: () => Promise<ChildProj | null>;
+    coordination?: FocusPanelCoordination;
     onClose: () => void;
+    onBack: () => void;
 }) {
     const [proj, setProj] = useState<ChildProj | null>(projection);
     const existing = existingView(proj);
@@ -376,9 +388,50 @@ function ScheduleWorkSurface({
         };
     }, [mode, existing?.scheduleType, existing?.effectiveFrom, proj?.child.siteId, child.id]);
 
+    const previousFocus = coordination?.previousFocus ?? null;
+    const backLabel = previousFocus
+        ? `← Back to ${focusPanelCardBackLabel(previousFocus.card)}`
+        : null;
+
     const header = (
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 2 }}>
-            <button type="button" onClick={onClose} aria-label="Close" data-schedule-close="true" style={{ all: "unset", marginLeft: "auto", cursor: "pointer", color: T.mid40, fontSize: 15, lineHeight: 1, padding: 2 }}>
+        <div
+            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}
+            data-schedule-nav="true"
+        >
+            {backLabel ? (
+                <button
+                    type="button"
+                    onClick={onBack}
+                    aria-label={backLabel}
+                    data-schedule-back="true"
+                    style={{
+                        all: "unset",
+                        cursor: "pointer",
+                        color: T.slate,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        lineHeight: 1.2,
+                        padding: "2px 0",
+                    }}
+                >
+                    {backLabel}
+                </button>
+            ) : null}
+            <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                data-schedule-close="true"
+                style={{
+                    all: "unset",
+                    marginLeft: "auto",
+                    cursor: "pointer",
+                    color: T.mid40,
+                    fontSize: 15,
+                    lineHeight: 1,
+                    padding: 2,
+                }}
+            >
                 ✕
             </button>
         </div>

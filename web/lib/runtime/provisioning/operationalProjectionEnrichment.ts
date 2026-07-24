@@ -21,6 +21,7 @@
  * So this module is composition, not extraction:
  *     Operational Projection rows
  *       → enrichOpportunityRowsWithCrmProjection   (shared owner, one batched query set)
+ *       → enrichOpportunityRowsWithChildrenForCompactQueue (Secondary / related subjects)
  *       → attachPartialQueueRowContextToRows       (shared owner, pure)
  *       → QueueRowContext
  * No QueueService import. No lane predicate. No membership re-evaluation — membership is already
@@ -33,6 +34,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { enrichOpportunityRowsWithCrmProjection } from "@/lib/workspace/enrichOpportunityQueueProjection";
+import { enrichOpportunityRowsWithChildrenForCompactQueue } from "@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQueue";
 import {
     attachPartialQueueRowContextToRows,
     type PartialQueueRowContextQueueMeta,
@@ -45,6 +47,7 @@ export type EnrichableProjectionRow = Record<string, unknown> & {
     id: string;
     primary_person_id?: string | null;
     location_id?: string | null;
+    customer_id?: string | null;
     metadata?: unknown;
 };
 
@@ -64,8 +67,8 @@ export async function enrichOperationalProjectionRows(args: {
     const rows = args.rows as unknown as Record<string, unknown>[];
     if (!rows.length) return [];
 
-    // ONE batched enrichment pass for the whole page (person + location reads are batched by id
-    // inside the shared owner — not a per-row query).
+    // ONE batched enrichment pass for the whole page (person + location + children reads are
+    // batched by id inside the shared owners — not a per-row query).
     let projectionById = new Map<string, Record<string, unknown>>();
     try {
         const crm = await enrichOpportunityRowsWithCrmProjection(
@@ -85,6 +88,28 @@ export async function enrichOperationalProjectionRows(args: {
         // through the shared status-label pipeline. The operator gets a real row, not a placeholder,
         // and recognition never depends on a best-effort read succeeding.
         projectionById = new Map();
+    }
+
+    // Secondary band (`children.names` / `children.count`) needs related_subjects_summary, which
+    // is built from `_crm_compact_children` / `_household_children` / `_inquiry_children`. CRM
+    // contact enrichment alone does not attach those — without this pass Secondary stays empty
+    // live while Builder preview (seeded) looks correct.
+    try {
+        const children = await enrichOpportunityRowsWithChildrenForCompactQueue(
+            args.supabase,
+            args.orgId,
+            args.rows.map((r) => ({
+                id: r.id,
+                customer_id: (r.customer_id as string | null) ?? null,
+                metadata: r.metadata,
+            })),
+        );
+        for (const [id, projection] of children) {
+            const prior = projectionById.get(id) ?? {};
+            projectionById.set(id, { ...prior, ...projection });
+        }
+    } catch {
+        // Same honest degrade: Secondary absent is preferable to failing the page.
     }
 
     const merged = rows.map((r) => {

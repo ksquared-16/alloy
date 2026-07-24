@@ -7,8 +7,13 @@ import {
     navigateIdentityFieldLink,
     resolveIdentityLinkDestinationFocus,
     defaultIdentityFieldLinkTarget,
+    isIdentityFieldLinkTargetComplete,
+    summarizeIdentityFieldLinkTarget,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
-import { createEmptyFocusPanelCardLinkNavState } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLinkNavigation";
+import {
+    createEmptyFocusPanelCardLinkNavState,
+    goBackCardLink,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLinkNavigation";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 
 describe("identity Linked destination / subject resolution", () => {
@@ -105,5 +110,51 @@ describe("identity Linked destination / subject resolution", () => {
         });
         expect(result.ok).toBe(false);
         expect(result.reason).toBe("destination_unavailable");
+    });
+
+    it("summarizes a complete Linked target for collapsed config chrome", () => {
+        const target = {
+            toCard: "scheduling" as const,
+            open: "detail" as const,
+            subject: "current_schedule" as const,
+        };
+        expect(isIdentityFieldLinkTargetComplete(target)).toBe(true);
+        expect(summarizeIdentityFieldLinkTarget(target)).toBe(
+            "Linked → Scheduling · Detail · Current schedule",
+        );
+    });
+
+    it("Back restores Children focus recorded for Lennon Schedule link-out", () => {
+        const requestFocus = vi.fn();
+        const coordination = {
+            focusTargets: new Set(["children", "scheduling"]),
+            requestFocus,
+            request: null,
+        } as unknown as FocusPanelCoordination;
+
+        const outbound = navigateIdentityFieldLink({
+            coordination,
+            fromCard: "children",
+            fieldRef: "child.schedule",
+            sourceItemId: "cm-lennon",
+            sourceFocus: "child-lennon",
+            authoredTarget: {
+                toCard: "scheduling",
+                open: "detail",
+                subject: "current_schedule",
+            },
+            nav: createEmptyFocusPanelCardLinkNavState(),
+        });
+        expect(outbound.ok).toBe(true);
+
+        requestFocus.mockClear();
+        const back = goBackCardLink({ coordination, nav: outbound.nav });
+        expect(back.ok).toBe(true);
+        expect(requestFocus).toHaveBeenCalledWith(
+            "children",
+            "child-lennon",
+            expect.objectContaining({ card: "scheduling" }),
+        );
+        expect(back.nav.activeCard).toBe("children");
     });
 });

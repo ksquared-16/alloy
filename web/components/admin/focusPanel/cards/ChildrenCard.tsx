@@ -199,32 +199,6 @@ export default function ChildrenCard({
         createEmptyFocusPanelCardLinkNavState(),
     );
 
-    const linkChildIdentityField = (fieldRef: string, childId: string) => {
-        const child =
-            evidence.children.find((row) => row.id === childId)
-            ?? evidence.children.find((row) => row.customerMemberId === childId)
-            ?? null;
-        const scheduleSubjectId = child?.customerMemberId?.trim() || child?.id || childId;
-        const sourceFocus = child?.id ?? childId;
-        const authoredTarget =
-            childrenSurfaceConfig
-                ? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "identity", fieldRef)
-                    ?? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "placement", fieldRef)
-                    ?? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "roster", fieldRef)
-                : null;
-        const result = navigateIdentityFieldLink({
-            coordination,
-            fromCard: "children",
-            fieldRef,
-            sourceItemId: scheduleSubjectId,
-            personId: child?.personId ?? null,
-            sourceFocus,
-            authoredTarget,
-            nav: cardLinkNav,
-        });
-        setCardLinkNav(result.nav);
-    };
-
     const saveChildIdentityField =
         canMutateIdentity && mutation
             ? async (args: IdentityFieldSaveArgs) => {
@@ -287,6 +261,49 @@ export default function ChildrenCard({
         back: backDisclosure,
         reset: resetDisclosure,
     } = useIdentityDisclosureState();
+
+    /**
+     * Linked navigate-away: history keeps exact prior Detail for Back; card default
+     * returns to Summary so a later reopen is not stuck on the prior child.
+     */
+    const linkChildIdentityField = (fieldRef: string, childId: string) => {
+        const child =
+            evidence.children.find((row) => row.id === childId)
+            ?? evidence.children.find((row) => row.customerMemberId === childId)
+            ?? null;
+        const scheduleSubjectId = child?.customerMemberId?.trim() || child?.id || childId;
+        const sourceFocus = child?.id ?? childId;
+        const authoredTarget =
+            childrenSurfaceConfig
+                ? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "identity", fieldRef)
+                    ?? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "placement", fieldRef)
+                    ?? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "roster", fieldRef)
+                : null;
+        const result = navigateIdentityFieldLink({
+            coordination,
+            fromCard: "children",
+            fieldRef,
+            sourceItemId: scheduleSubjectId,
+            personId: child?.personId ?? null,
+            sourceFocus,
+            authoredTarget,
+            nav: cardLinkNav,
+        });
+        setCardLinkNav(result.nav);
+        if (result.ok) {
+            setEditing(false);
+            setRelatedViewId(null);
+            resetDisclosure();
+        }
+    };
+
+    // Fresh queue subject → Summary default (no stale Lennon after Wrigley select).
+    useEffect(() => {
+        setEditing(false);
+        setRelatedViewId(null);
+        resetDisclosure();
+        setCardLinkNav(createEmptyFocusPanelCardLinkNavState());
+    }, [context.subject.id, resetDisclosure]);
 
     const request = coordination?.request;
     const requestNonce = request?.card === "children" ? request.nonce : null;

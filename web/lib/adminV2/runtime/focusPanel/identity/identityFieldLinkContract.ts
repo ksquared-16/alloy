@@ -133,6 +133,30 @@ export function resolveIdentityFieldLinkContract(fieldRef: string): IdentityFiel
     };
 }
 
+/** True when Link to card / Open / Subject are all set to known options. */
+export function isIdentityFieldLinkTargetComplete(
+    target: IdentityFieldLinkTarget | null | undefined,
+): boolean {
+    if (!target?.toCard) return false;
+    if (target.open !== "base" && target.open !== "detail") return false;
+    return IDENTITY_LINK_SUBJECT_OPTIONS.some((opt) => opt.value === target.subject);
+}
+
+/** Compact operator summary after Linked is configured (collapsed authoring chrome). */
+export function summarizeIdentityFieldLinkTarget(
+    target: IdentityFieldLinkTarget | null | undefined,
+): string | null {
+    if (!isIdentityFieldLinkTargetComplete(target) || !target) return null;
+    const card =
+        IDENTITY_LINK_CARD_OPTIONS.find((opt) => opt.value === target.toCard)?.label ?? target.toCard;
+    const open =
+        IDENTITY_LINK_OPEN_OPTIONS.find((opt) => opt.value === target.open)?.label ?? target.open;
+    const subject =
+        IDENTITY_LINK_SUBJECT_OPTIONS.find((opt) => opt.value === target.subject)?.label
+        ?? target.subject;
+    return `Linked → ${card} · ${open} · ${subject}`;
+}
+
 export function normalizeIdentityFieldLinkTarget(
     value: Partial<IdentityFieldLinkTarget> | null | undefined,
     fieldRef: string,

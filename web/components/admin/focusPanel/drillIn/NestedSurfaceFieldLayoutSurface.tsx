@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import clsx from "clsx";
 import { GripVertical, X, type LucideIcon } from "lucide-react";
 
@@ -35,6 +35,8 @@ import {
     IDENTITY_LINK_CARD_OPTIONS,
     IDENTITY_LINK_OPEN_OPTIONS,
     IDENTITY_LINK_SUBJECT_OPTIONS,
+    isIdentityFieldLinkTargetComplete,
+    summarizeIdentityFieldLinkTarget,
     type IdentityFieldLinkTarget,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
@@ -442,6 +444,8 @@ function FieldInstance({
     const showIcon = showIconProp ?? fieldShowIconForNestedGroup(config, groupKey, fieldKey);
     const editingLabel = editingLabelKey === fieldKey;
     const hasCustomLabel = label.trim() !== catalogLabel.trim();
+    /** Expand Linked authoring when the operator just chose Linked (not on load of a valid setup). */
+    const [linkConfigPreferExpanded, setLinkConfigPreferExpanded] = useState(false);
 
     const onDragOver = (e: DragEvent, zone: NestedSurfaceFieldDropZone) => {
         if (!composing) return;
@@ -570,17 +574,20 @@ function FieldInstance({
                                         : "read-only"
                                 }
                                 aria-label={`Display policy for ${catalogLabel}`}
-                                onChange={(e) =>
+                                onChange={(e) => {
+                                    const next = e.target.value as SurfaceFieldVisibility;
+                                    if (next === "linked") setLinkConfigPreferExpanded(true);
+                                    else setLinkConfigPreferExpanded(false);
                                     onMutate(
                                         setFieldVisibilityInNestedGroup(
                                             config,
                                             groupKey,
                                             fieldKey,
-                                            e.target.value as SurfaceFieldVisibility,
+                                            next,
                                             tier ? { tier } : undefined,
                                         ),
-                                    )
-                                }
+                                    );
+                                }}
                             >
                                 {identityFieldVisibilityOptionsForBuilder(fieldKey).map((mode) => (
                                     <option key={mode} value={mode}>
@@ -595,6 +602,8 @@ function FieldInstance({
                                     linkTarget={
                                         fieldLinkTargetForNestedGroup(config, groupKey, fieldKey, tier ? { tier } : undefined)
                                     }
+                                    preferExpanded={linkConfigPreferExpanded}
+                                    onPreferExpandedChange={setLinkConfigPreferExpanded}
                                     onChange={(nextTarget) =>
                                         onMutate(
                                             setFieldLinkTargetInNestedGroup(
@@ -661,20 +670,70 @@ function LinkedTargetControls({
     fieldKey,
     catalogLabel,
     linkTarget,
+    preferExpanded,
+    onPreferExpandedChange,
     onChange,
 }: {
     fieldKey: string;
     catalogLabel: string;
     linkTarget: IdentityFieldLinkTarget | null;
+    preferExpanded: boolean;
+    onPreferExpandedChange: (next: boolean) => void;
     onChange: (next: IdentityFieldLinkTarget) => void;
 }) {
+    const complete = isIdentityFieldLinkTargetComplete(linkTarget);
+    const summary = summarizeIdentityFieldLinkTarget(linkTarget);
+    const [expanded, setExpanded] = useState(() => !complete || preferExpanded);
+
+    useEffect(() => {
+        if (!complete || preferExpanded) setExpanded(true);
+    }, [complete, preferExpanded, linkTarget?.toCard, linkTarget?.open, linkTarget?.subject]);
+
     if (!linkTarget) return null;
+
+    const collapse = () => {
+        setExpanded(false);
+        onPreferExpandedChange(false);
+    };
+
+    if (!expanded && complete && summary) {
+        return (
+            <div
+                className="fp-linked-target-controls fp-linked-target-controls--collapsed"
+                data-linked-target-controls={fieldKey}
+                data-linked-target-collapsed="true"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <span className="fp-linked-target-controls__summary" title={summary}>
+                    {catalogLabel} · {summary}
+                </span>
+                <button
+                    type="button"
+                    className="fp-linked-target-controls__edit"
+                    data-linked-target-edit={fieldKey}
+                    onClick={() => {
+                        setExpanded(true);
+                        onPreferExpandedChange(true);
+                    }}
+                >
+                    Edit
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div
             className="fp-linked-target-controls"
             data-linked-target-controls={fieldKey}
+            data-linked-target-collapsed="false"
             onClick={(e) => e.stopPropagation()}
         >
+            {!complete ? (
+                <p className="fp-linked-target-controls__warn" data-linked-target-incomplete="true">
+                    Finish Link to card, Open, and Subject.
+                </p>
+            ) : null}
             <label className="fp-linked-target-controls__row">
                 <span>Link to card</span>
                 <select
@@ -732,6 +791,18 @@ function LinkedTargetControls({
                     ))}
                 </select>
             </label>
+            {complete ? (
+                <div className="fp-linked-target-controls__done-row">
+                    <button
+                        type="button"
+                        className="fp-linked-target-controls__edit"
+                        data-linked-target-done={fieldKey}
+                        onClick={collapse}
+                    >
+                        Done
+                    </button>
+                </div>
+            ) : null}
         </div>
     );
 }
