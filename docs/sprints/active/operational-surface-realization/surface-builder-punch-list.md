@@ -1,7 +1,7 @@
 # Surface Builder completion punch list
 
 **Sprint:** operational-surface-realization · Surfaces / Queue Runtime follow-up  
-**Status after this slice:** Queue publish→runtime ownership fixed for CondensedQueueRow; picker capability-aligned; partial provider restore; Card Links foundation landed. **HOLD** pending authenticated browser QA.
+**Status after Phases 8–13 slice:** Identity layout/edit/milestones/card-link foundations landed. **HOLD** pending authenticated browser QA.
 
 ## Done in this follow-up
 - Published config authoritative: unmapped compact slots **hide** (no hardcoded contact email fallback)
@@ -9,7 +9,11 @@
 - Publish refresh: BroadcastChannel + local event + prefetch bust + live `rowConfig` overlay
 - Picker: only compact-effective fields (no gray “Not in row” / unavailable siblings)
 - Restored compact providers: `waitlist.positionLabel`, `waitlist.waitSince`, `opportunity.next_step`, `child.room`, Children count/names/summary
-- Card Links: pure helpers on existing `FocusPanelCoordination.requestFocus` (+ history helpers)
+- Card Links: pure helpers + back/forward navigation runtime
+- Identity Collection archetype + Gender/Age Band row packing parity (Summary/Context)
+- Edit capability contract + publish validation for unsupported Editable
+- Milestones platform blueprint + Enrollment reference composition
+- Deterministic card grid-flow planner
 
 ## Remaining (post-sprint)
 
@@ -28,16 +32,24 @@
 ### Focus Panel Card Links
 - [ ] Surface Builder UI to author `FocusPanelCardLink[]` on Focus Panel composition
 - [ ] Persist links on published Focus Panel layout metadata
-- [ ] Wire field click → `navigateFocusPanelCardLink` in card renderers
+- [ ] Wire field / milestone / CTA click → `navigateCardLinkWithHistory` in card renderers
 - [ ] Deep-link URL/`?fp_card=` hydration (optional)
+
+### Identity / Milestones
+- [ ] Milestones evidence adapters (tour/forms/placements/…) wired to Operational Context
+- [ ] Milestones Focus Panel card renderer shell
+- [ ] Demote remaining Children compose-path `CHILDREN_FIELD_TRUTH_META` forks where still dual
+- [ ] Wire FocusPanelCardGrid to `planFocusPanelCardGridFlow` for Work mode (optional migrate from lanes)
 
 ### Surface Builder completeness
 - [ ] Header surfaces publish→runtime parity audit (same overlay pattern?)
 - [ ] Composite field authoring UX for Children summary formatting
 - [ ] Builder preview uses identical CondensedQueueRow + projected context (eliminate sample-context drift)
 - [ ] Variant editor warning when stage match keys may not be on live wire
+- [ ] Builder snap targets + keyboard move for card grid-flow authoring
 
 ### Certification still owed
-- [ ] Re-auth slot4 and run browser: remove field / add Children / publish / verify without reload
+- [ ] Re-auth slot4 and run browser: Gender+Age Band row / swap / Program above; 1- and 4-child
+- [ ] Editable contract + publish rejection for age_band Editable
+- [ ] Children → Scheduling → Back → Children (Placement when linked)
 - [ ] Waitlist + Tour + Program/Schedule live checks
-- [ ] Card-to-card navigation once UI wired

@@ -47,6 +47,7 @@ const FOCUS_PANEL_CARD_TITLES: Partial<Record<FocusPanelCardKey, string>> = {
     current_work: "What's Next",
     household: "Household",
     children: "Children",
+    milestones: "Milestones",
     readiness_kpi: "Readiness",
     health: "Enrollment Health",
     tour_summary: "Tour",

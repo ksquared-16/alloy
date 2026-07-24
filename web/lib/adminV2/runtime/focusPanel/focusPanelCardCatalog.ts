@@ -27,6 +27,7 @@ export const FOCUS_PANEL_CARD_CATALOG: readonly FocusPanelCardCatalogEntry[] = [
     { label: "Tour", cardKey: "tour_summary" },
     { label: "Household", cardKey: "household" },
     { label: "Children", cardKey: "children" },
+    { label: "Milestones", cardKey: "milestones" },
     { label: "Scheduling", cardKey: "scheduling" },
     { label: "Communications", cardKey: "communications" },
     { label: "Documents", cardKey: "documents" },

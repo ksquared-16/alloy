@@ -34,17 +34,21 @@ export type FocusPanelCardLinkHistoryEntry = {
 /**
  * Navigate to a Focus Panel card through the shared coordination owner.
  * Returns false when coordination is unavailable or the target card is not in layout.
+ *
+ * `destinationFocus` targets the destination card; `sourceFocus` is what Back restores
+ * on the source card (defaults to null = expand source card only).
  */
 export function navigateFocusPanelCardLink(
     coordination: FocusPanelCoordination | undefined,
     link: Pick<FocusPanelCardLink, "toCard" | "fromCard">,
-    focus: string | null = null,
+    destinationFocus: string | null = null,
+    sourceFocus: string | null = null,
 ): boolean {
     if (!coordination) return false;
     if (coordination.focusTargets && !coordination.focusTargets.has(link.toCard)) return false;
-    coordination.requestFocus(link.toCard, focus, {
+    coordination.requestFocus(link.toCard, destinationFocus, {
         card: link.fromCard,
-        focus,
+        focus: sourceFocus,
     });
     return true;
 }
