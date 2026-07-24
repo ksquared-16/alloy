@@ -96,6 +96,34 @@ describe("executeAdminAction create_lead — operator-safe failure copy", () => 
         }
     });
 
+    it("treats a chk_pcs_source_kind CHECK violation as a system failure, not operator input", async () => {
+        // Mirrors the exact staging failure when the deployed source_kind vocabulary
+        // predates create_lead: the operator's information is fine — the schema is stale.
+        vi.mocked(ingestCreateLeadThroughProcessing).mockRejectedValueOnce(
+            new Error(
+                'new row for relation "processing_case_sources" violates check constraint "chk_pcs_source_kind"',
+            ),
+        );
+        const sb = supabaseForCreateLead();
+
+        const res = await executeAdminAction(sb as never, ctx as never, createLeadInput());
+
+        expect(res.ok).toBe(false);
+        if (!res.ok) {
+            expect(res.status).toBe(500);
+            // Non-blaming: must NOT tell the operator to review their information.
+            expect(res.error).not.toMatch(/review the information/i);
+            expect(res.error).toMatch(/system issue, not the information you entered/i);
+            // Must not leak DB/constraint details.
+            expect(res.error).not.toMatch(/chk_pcs_source_kind|processing_case_sources|constraint/i);
+        }
+        // Classified as schema-out-of-sync in the searchable server log.
+        const logged = errorSpy.mock.calls.find(
+            (c: unknown[]) => typeof c[0] === "string" && c[0].includes("create_lead execution threw"),
+        );
+        expect(logged?.[1]).toEqual(expect.objectContaining({ schema_out_of_sync: true }));
+    });
+
     it("logs a searchable server-side line (action_key=create_lead + correlation_id) on failure", async () => {
         vi.mocked(ingestCreateLeadThroughProcessing).mockRejectedValueOnce(new Error("boom PGRST204"));
         const sb = supabaseForCreateLead();
