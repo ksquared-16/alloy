@@ -50,6 +50,8 @@ import { getPackage } from "./vacilando/commands/mission-packages.mjs";
 import { readMissionOutputs, readTurnOutput, liveMissionIds } from "./vacilando/mission-executor.mjs";
 import { providerResumable } from "./vacilando/provider-runtime.mjs";
 import { compileMissionForIntent, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, previewAction, readAcceptance } from "./vacilando/mission-director.mjs";
+import { listCapabilities, getCapability, registerCapability } from "./vacilando/capability.mjs";
+import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
 import { resolveSlotIdentity, runtimeHost, hostRegistration, listSlotIdentities, hostIdentity } from "./vacilando/identity.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -492,6 +494,14 @@ export function createVacilandoServer() {
       return sendJson(res, 202, { ok: true, request_id: rec.request_id, status: "queued", created_at: rec.created_at, request_type: rec.request_type });
     }
 
+    // Capability registration (additive; idempotent by capability_id).
+    if (req.method === "POST" && path === "/api/capabilities") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      const out = registerCapability(body.value || {});
+      return sendJson(res, out.ok ? (out.created ? 201 : 200) : 400, out);
+    }
+
     // ---- Mission pipeline (Director orchestration over the runtimes) ----
     if (req.method === "POST" && path.startsWith("/api/missions")) {
       const body = await readJsonBody(req);
@@ -731,6 +741,22 @@ export function createVacilandoServer() {
       const slot = url.searchParams.get("slot") != null ? Number(url.searchParams.get("slot")) : null;
       if (slot != null && (!Number.isInteger(slot) || slot < 1 || slot > 6)) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, missions: readMissions(slot) });
+    }
+    // Capability Runtime (registry). Read-only projections; enriched at read time.
+    if (path === "/api/capabilities") {
+      return sendJson(res, 200, { capabilities: listCapabilities() });
+    }
+    if (path === "/api/capability") {
+      const id = url.searchParams.get("id") || "";
+      const cap = getCapability(id);
+      if (!cap) return sendJson(res, 404, { error: "unknown_capability" });
+      return sendJson(res, 200, { capability: cap });
+    }
+    if (path === "/api/capability/product-definition") {
+      const id = url.searchParams.get("id") || "";
+      const pd = getProductDefinitionForCapability(id);
+      if (!pd) return sendJson(res, 404, { error: "no_product_definition" });
+      return sendJson(res, 200, { product_definition: pd });
     }
     if (path === "/api/mission") {
       const id = url.searchParams.get("id") || "";

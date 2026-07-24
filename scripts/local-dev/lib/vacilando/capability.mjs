@@ -14,9 +14,12 @@
  * restart, and the seed is idempotent (written once, retrieved forever after).
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import { join } from "node:path";
 import { getProductDefinitionForCapability } from "./product-definition.mjs";
+import { readMissions } from "./commands/missions.mjs";
+import { readAcceptanceForCapability } from "./acceptance.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(os.homedir(), ".local", "state", "alloy-dev");
 const DIR = join(RUNTIME_ROOT, "vacilando", "capabilities");
@@ -30,9 +33,11 @@ const iso = (ms) => new Date(ms).toISOString();
 function seedAccessRoles(nowMs) {
   const now = nowMs ?? Date.now();
   return {
-    schema_version: "vacilando.capability.v1",
-    capability_id: "cap_access_roles", project_id: "alloy",
+    schema_version: "vacilando.capability.v2",
+    capability_id: "cap_access_roles", project_id: "alloy", slug: "access-roles",
     name: "Access & Roles", description: "User access control, roles, and permission assignment for the Alloy operator platform.",
+    owner: { operator: "kelly", provider_default: "claude" },
+    dependencies: [{ capability_id: "cap_locations", kind: "soft" }],
     // ---- owned directly (capability-level truth) ----
     status: "active", maturity: "mature",
     graduation_status: { level: "mature", criteria_met: ["v1_shipped", "acceptance_gates_passing", "permission_taxonomy_stable"], criteria_pending: [], graduated_at: "2026-06-01T00:00:00.000Z" },
@@ -130,6 +135,84 @@ export function hydrateFromProductDefinition(capability) {
   };
 }
 
+/** Metrics PROJECTED from the durable mission + acceptance logs (never hand-set). */
+export function projectCapabilityMetrics(capability_id, cap) {
+  const missions = readMissions(null, 1000).filter((m) => m.capability_id === capability_id);
+  const completed = missions.filter((m) => m.status === "completed");
+  const accepts = readAcceptanceForCapability(capability_id).filter((a) => a.gate === "pass" || a.gate === "needs_operator");
+  return {
+    missions_total: missions.length,
+    missions_completed: completed.length,
+    missions_active: missions.filter((m) => !["completed", "failed", "stopped"].includes(m.status)).length,
+    last_accepted_at: accepts[0]?.at || null,
+    open_issues: (cap?.known_issues || []).filter((k) => k.status === "open").length,
+  };
+}
+
+/** Readiness PROJECTED honestly: a capability with a Product Definition and no open
+ *  blocking issue is prep-ready; otherwise it names what it needs. */
+export function projectReadiness(cap) {
+  const reasons = [];
+  if (!cap?.product_definition) reasons.push("no product definition");
+  if (!(cap?.documentation_index || []).length && !(cap?.knowledge_references || []).length) reasons.push("no knowledge references");
+  const level = reasons.length ? "needs_prep" : "ready";
+  return { level, reasons, computed_at: iso(Date.now()) };
+}
+
+/** Full read-time enrichment: PD hydration + projected metrics/acceptance/readiness. */
+function enrichCapability(cap) {
+  if (!cap) return cap;
+  const h = hydrateFromProductDefinition(cap);
+  return {
+    ...h,
+    owner: h.owner || { operator: "kelly", provider_default: "claude" },
+    dependencies: h.dependencies || (h.relationships || []).filter((r) => r.kind === "depends_on").map((r) => ({ capability_id: r.to, kind: "hard" })),
+    related_capabilities: h.related_capabilities || (h.relationships || []).map((r) => r.to),
+    acceptance_history: readAcceptanceForCapability(cap.capability_id),
+    metrics: projectCapabilityMetrics(cap.capability_id, h),
+    readiness: projectReadiness(h),
+  };
+}
+
+/**
+ * Register a NEW capability (the registry replaces the single-seed model). The
+ * store now holds N capabilities; registration is idempotent by capability_id.
+ * Returns { ok, capability } enriched, or an existing one unchanged.
+ */
+export function registerCapability(input, { nowMs } = {}) {
+  ensureSeeded();
+  const name = String(input?.name || "").trim();
+  if (!name) return { ok: false, error: "name_required" };
+  const slug = String(input?.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
+  const id = input?.capability_id || ("cap_" + createHash("sha256").update(slug).digest("hex").slice(0, 12));
+  const existing = readCapabilities().find((c) => c.capability_id === id);
+  if (existing) return { ok: true, created: false, capability: enrichCapability(existing) };
+  const now = nowMs ?? Date.now();
+  const rec = {
+    schema_version: "vacilando.capability.v2",
+    capability_id: id, project_id: input.project_id || "alloy", slug,
+    name, description: input.description || "",
+    owner: input.owner || { operator: "kelly", provider_default: "claude" },
+    status: input.status || "active", maturity: input.maturity || "new",
+    roadmap: input.roadmap || [], known_issues: input.known_issues || [],
+    relationships: input.relationships || [], dependencies: input.dependencies || [],
+    operator_notes: input.operator_notes || [], active_missions: [], mission_history: [],
+    current_implementation: input.current_implementation || { code_paths: [], entry_points: [] },
+    product_definition_ref: input.product_definition_ref || null,
+    architecture_ref: input.architecture_ref || null,
+    documentation_index: input.documentation_index || [],
+    updated_at: iso(now), updated_by: input.updated_by || "operator",
+  };
+  append({ event: "created", ...rec });
+  return { ok: true, created: true, capability: enrichCapability(rec) };
+}
+
+/** List every registered capability, enriched. */
+export function listCapabilities() {
+  ensureSeeded();
+  return readCapabilities().map(enrichCapability);
+}
+
 /**
  * Retrieve ONE capability object. Director calls this to RESOLVE an intent to a
  * capability — deterministic id or fuzzy name match. Returns { ok, capability }
@@ -150,11 +233,11 @@ export function retrieveCapability(query) {
     hit = caps.find((c) => c.name.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2).every((w) => q.includes(w)));
   }
   if (!hit) return { ok: false, reason: "no_capability", query, known: caps.map((c) => ({ id: c.capability_id, name: c.name })) };
-  return { ok: true, capability: hydrateFromProductDefinition(hit) };
+  return { ok: true, capability: enrichCapability(hit) };
 }
 
 export function getCapability(capability_id) {
   ensureSeeded();
   const hit = readCapabilities().find((c) => c.capability_id === capability_id) || null;
-  return hit ? hydrateFromProductDefinition(hit) : null;
+  return hit ? enrichCapability(hit) : null;
 }

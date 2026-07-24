@@ -114,3 +114,14 @@ export function readAcceptance(mission_id) {
   try { return readFileSync(LEDGER, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.mission_id === mission_id).reverse(); }
   catch { return []; }
 }
+
+/** Acceptance history for a capability (one entry per mission, newest first). */
+export function readAcceptanceForCapability(capability_id) {
+  let rows = [];
+  try { rows = readFileSync(LEDGER, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; }
+  const latestByMission = new Map();
+  for (const r of rows) if (r.capability_id === capability_id && r.mission_id) latestByMission.set(r.mission_id, r);
+  return [...latestByMission.values()]
+    .map((r) => ({ mission_id: r.mission_id, gate: r.gate, at: r.evaluated_at }))
+    .sort((a, b) => (a.at < b.at ? 1 : -1));
+}

@@ -12,7 +12,7 @@ import { mkdtempSync } from "node:fs";
 process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-test-"));
 
 const { validatePackage, createPackage, getPackage } = await import("../lib/vacilando/commands/mission-packages.mjs");
-const { retrieveCapability, getCapability } = await import("../lib/vacilando/capability.mjs");
+const { retrieveCapability, getCapability, registerCapability, listCapabilities } = await import("../lib/vacilando/capability.mjs");
 const { getProductDefinitionForCapability, addAcceptedDecision, recordMissionInHistory, ensureSeeded: ensurePdSeeded } = await import("../lib/vacilando/product-definition.mjs");
 const { retrieveForCapability } = await import("../lib/vacilando/knowledge.mjs");
 const { createMission, getMission, recoverMissions, updateMission } = await import("../lib/vacilando/commands/missions.mjs");
@@ -58,6 +58,31 @@ test("the learning loop accretes decisions + mission history (idempotent)", () =
   const h = recordMissionInHistory("pd_access_roles", { mission_id: "msn_test", title: "t", outcome: "completed", decisions_added: ["ad_learned"] });
   assert.equal(h.added, true);
   assert.equal(recordMissionInHistory("pd_access_roles", { mission_id: "msn_test" }).added, false, "mission history is idempotent");
+});
+
+// --- Capability model v2 + registry (Director Intelligence, step 2) ---
+
+test("the capability is enriched with projected metrics, readiness, and owner", () => {
+  const cap = getCapability("cap_access_roles");
+  assert.ok(cap.metrics, "metrics are projected");
+  assert.equal(typeof cap.metrics.missions_total, "number");
+  assert.equal(cap.metrics.open_issues, 1, "open_issues projected from known_issues");
+  assert.equal(cap.readiness.level, "ready", "a capability with a product definition + refs is prep-ready");
+  assert.ok(Array.isArray(cap.acceptance_history), "acceptance history projected");
+  assert.equal(cap.owner.provider_default, "claude");
+  assert.ok(cap.dependencies.length >= 1, "dependencies present");
+});
+
+test("the registry supports N capabilities (register is idempotent)", () => {
+  const r1 = registerCapability({ name: "Programs", description: "Program config." });
+  assert.equal(r1.ok, true); assert.equal(r1.created, true);
+  assert.equal(r1.capability.capability_id.startsWith("cap_"), true);
+  assert.equal(r1.capability.readiness.level, "needs_prep", "a bare capability names what it still needs");
+  const r2 = registerCapability({ capability_id: r1.capability.capability_id, name: "Programs" });
+  assert.equal(r2.created, false, "same id is not re-created");
+  const all = listCapabilities();
+  assert.ok(all.find((c) => c.capability_id === "cap_access_roles"), "seed present");
+  assert.ok(all.find((c) => c.capability_id === r1.capability.capability_id), "registered capability present");
 });
 
 test("an incomplete package is BLOCKED and start is refused", () => {
