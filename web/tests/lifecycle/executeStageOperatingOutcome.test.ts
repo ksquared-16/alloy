@@ -1,6 +1,70 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { executeStageOperatingOutcome, STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS } from "@/lib/lifecycle/executeStageOperatingOutcome";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
+import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
+
+/**
+ * The canonical stage-move guard reads the department's configured stage inventory before any
+ * move. These executor tests exercise moves to enrollment stages, so the department double must
+ * configure a process that CONTAINS those stages — otherwise the move is (correctly) blocked.
+ */
+const MOVE_TARGET_STAGES = [
+    "lead",
+    "qualification",
+    "tour",
+    "decision",
+    "waitlist",
+    "enrollment",
+    "enrolling",
+    "enrolled",
+    "closed",
+    "closed_lost",
+    "closed_withdrawn",
+];
+
+function configuredDeptMetadata(stageKeys: string[] = MOVE_TARGET_STAGES): Record<string, unknown> {
+    return {
+        [LIFECYCLE_BUILDER_METADATA_KEY]: {
+            version: 1,
+            active_process_id: "proc-enrollment",
+            processes: [
+                {
+                    id: "proc-enrollment",
+                    key: "enrollment",
+                    name: "Enrollment",
+                    primary_entity: "opportunity",
+                    sort_order: 0,
+                    is_active: true,
+                    stages: stageKeys.map((key, index) => ({
+                        id: `stage-${key}`,
+                        key,
+                        label: key,
+                        sort_order: index,
+                        is_active: true,
+                    })),
+                },
+            ],
+        },
+    };
+}
+
+/** A `from(table)` double that answers the guard's department-metadata read, delegating the
+ *  rest to the caller's original chain factory. */
+function withConfiguredDept(
+    originalFrom: (table: string) => unknown,
+    metadata: Record<string, unknown> = configuredDeptMetadata(),
+) {
+    return (table: string) => {
+        if (table === "departments") {
+            const chain: Record<string, unknown> = {};
+            chain.select = () => chain;
+            chain.eq = () => chain;
+            chain.maybeSingle = async () => ({ data: { metadata }, error: null });
+            return chain;
+        }
+        return originalFrom(table);
+    };
+}
 
 const mockInstantiate = vi.fn();
 
@@ -43,14 +107,15 @@ describe("executeStageOperatingOutcome", () => {
 
     it("updates child enrollment disposition for child journey stage", async () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("waitlist")!;
+        const genericChain = () => ({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn(async () => ({ data: null, error: null })),
+            update: vi.fn().mockReturnThis(),
+            single: vi.fn(async () => ({ data: {}, error: null })),
+        });
         const supabase = {
-            from: vi.fn(() => ({
-                select: vi.fn().mockReturnThis(),
-                eq: vi.fn().mockReturnThis(),
-                maybeSingle: vi.fn(async () => ({ data: null, error: null })),
-                update: vi.fn().mockReturnThis(),
-                single: vi.fn(async () => ({ data: {}, error: null })),
-            })),
+            from: vi.fn(withConfiguredDept(() => genericChain())),
         };
 
         const result = await executeStageOperatingOutcome({
@@ -179,13 +244,13 @@ describe("executeStageOperatingOutcome", () => {
         const updateSpy = vi.fn().mockReturnThis();
         const eqSpy = vi.fn().mockReturnThis();
         const supabase = {
-            from: vi.fn(() => ({
+            from: vi.fn(withConfiguredDept(() => ({
                 select: priorValueRead({ status_key: "open", close_reason_key: null, stage_key: "lead" }),
                 update: (...args: unknown[]) => {
                     updateSpy(...args);
                     return { eq: (...a: unknown[]) => { eqSpy(...a); return { eq: eqSpy }; } };
                 },
-            })),
+            }))),
         };
         const plan = {
             version: 1 as const,
@@ -234,13 +299,13 @@ describe("executeStageOperatingOutcome", () => {
         const updateSpy = vi.fn().mockReturnThis();
         const eqSpy = vi.fn().mockReturnThis();
         const supabase = {
-            from: vi.fn(() => ({
+            from: vi.fn(withConfiguredDept(() => ({
                 select: priorValueRead({ status_key: "open", close_reason_key: null, stage_key: "tour" }),
                 update: (...args: unknown[]) => {
                     updateSpy(...args);
                     return { eq: (...args: unknown[]) => { eqSpy(...args); return { eq: eqSpy }; } };
                 },
-            })),
+            }))),
         };
         const plan = {
             version: 1 as const,

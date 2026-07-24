@@ -7,6 +7,10 @@ import {
     buildLifecycleStageBootstrap,
     isValidBootstrapBuilderStage,
 } from "@/lib/lifecycle/buildLifecycleStageBootstrap";
+import {
+    configuredStageInventoryFromMetadata,
+    stageConfigurationError,
+} from "@/lib/lifecycle/configuredStageInventory";
 
 /** GET — single payload for lifecycle builder stage configuration (prefetch). */
 export async function GET(request: NextRequest) {
@@ -48,7 +52,15 @@ export async function GET(request: NextRequest) {
             : {};
 
     if (!isValidBootstrapBuilderStage(metadata, stageKey)) {
-        return NextResponse.json({ error: "Invalid stage_key for department" }, { status: 400 });
+        const inventory = configuredStageInventoryFromMetadata(metadata);
+        return NextResponse.json(
+            {
+                error: stageConfigurationError(inventory, stageKey).message,
+                code: "stage_not_configured",
+                configured_stages: inventory.stageKeys,
+            },
+            { status: 400 },
+        );
     }
 
     try {

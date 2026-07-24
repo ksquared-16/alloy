@@ -604,11 +604,14 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
         ],
         outcome_rules: [
             {
-                rule_key: "reached_to_qualification",
+                // `qualification` was removed from the enrollment template (Part 9). The stale
+                // move_to_stage target is removed here so this default path no longer references a
+                // stage absent from the current template. Reaching the family marks the contact
+                // work complete; stage advancement is a configured transition, not a code default.
+                rule_key: "reached_family_qualified",
                 when_outcome_key: "reached_family",
                 targets: [
                     { kind: "update_family_case_status", status_key: "open" },
-                    { kind: "move_to_stage", stage_key: "qualification" },
                     { kind: "mark_stage_work_complete" },
                 ],
             },

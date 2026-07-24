@@ -42,6 +42,16 @@ export const ENROLLMENT_STAGE_SPECS = [
     ...ENROLLMENT_CHILD_STAGE_SPECS,
 ] as const;
 
+/**
+ * The CURRENT enrollment template stage keys — the only stages a fresh tenant receives, and the
+ * only sanctioned built-in stage vocabulary for pre-configuration bootstrap. Deliberately does
+ * NOT contain `qualification` (removed in Part 9). Do not confuse with the broad legacy
+ * ENROLLMENT_TEMPLATE_STAGE_KEYS set, which retains historical keys for migration support only.
+ */
+export const CURRENT_ENROLLMENT_TEMPLATE_STAGE_KEYS: ReadonlySet<string> = new Set(
+    ENROLLMENT_STAGE_SPECS.map((s) => s.key),
+);
+
 export const ENROLLMENT_STATUS_ROLLUP_HINTS: Record<
     string,
     { family_status_examples?: string[]; enrollment_status_examples?: string[] }

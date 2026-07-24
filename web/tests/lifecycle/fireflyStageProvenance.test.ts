@@ -54,25 +54,28 @@ describe("Firefly published Business Process — the ground truth", () => {
     });
 });
 
-describe("PLATFORM DEFECT — the runtime accepts a stage that is not in the configured process", () => {
-    it("isValidBootstrapBuilderStage returns TRUE for qualification despite it not being configured", () => {
-        // This is the bug. The stage-bootstrap route gates on this predicate; a 200 for
-        // qualification (observed live) flows directly from here.
+describe("FIXED — the runtime now rejects a stage that is not in the configured process", () => {
+    it("isValidBootstrapBuilderStage returns FALSE for qualification (was TRUE — the defect)", () => {
+        // Historical defect: this returned true via the built-in LIFECYCLE_STAGE_ORDER, so
+        // stage-bootstrap served qualification (live HTTP 200). Fixed: configured membership only.
         expect(isConfiguredStageKey(tenantMetadata(), "qualification")).toBe(false);
-        expect(isValidBootstrapBuilderStage(tenantMetadata(), "qualification")).toBe(true);
+        expect(isValidBootstrapBuilderStage(tenantMetadata(), "qualification")).toBe(false);
     });
 
-    it("...because a hardcoded built-in list short-circuits the configured-stage check", () => {
-        // isValidBootstrapBuilderStage returns true when LIFECYCLE_STAGE_ORDER includes the key,
-        // BEFORE consulting the configured process. qualification is still in that built-in list.
+    it("the built-in operator-stage list is now presentation-only and grants NO validity", () => {
+        // LIFECYCLE_STAGE_ORDER may still list qualification for display bucketing, but it no
+        // longer short-circuits validity — the two are decoupled.
         expect((LIFECYCLE_STAGE_ORDER as readonly string[]).includes("qualification")).toBe(true);
+        expect(isValidBootstrapBuilderStage(tenantMetadata(), "qualification")).toBe(false);
     });
 
-    it("the same residue exists in the template stage-key set", () => {
+    it("the legacy template-key set retains qualification for migration support only", () => {
+        // Kept as documented legacy/migration support; no longer a runtime-validity source.
         expect(ENROLLMENT_TEMPLATE_STAGE_KEYS.has("qualification")).toBe(true);
+        expect(isValidBootstrapBuilderStage(tenantMetadata(), "qualification")).toBe(false);
     });
 
-    it("CONTROL: a truly unknown stage IS rejected — so the gate is not simply wide open", () => {
+    it("CONTROL: a truly unknown stage is rejected too", () => {
         expect(isValidBootstrapBuilderStage(tenantMetadata(), "zzz_not_a_stage")).toBe(false);
     });
 
@@ -92,36 +95,26 @@ describe("How qualification reaches a record — the lead plan's dangling move t
         expect(configuredStageKeysForMetadata(tenantMetadata())).not.toContain(moveTarget?.stage_key);
     });
 
-    it("resolving that move reveals what the operator actually experiences on Reached/Qualified", () => {
+    it("transition RESOLUTION still names qualification — the guard lives at the WRITER, not here", () => {
+        // resolveStageTransitionExecutionTargets is shape resolution only; it does not know the
+        // configured inventory. It still produces move_to_stage: qualification. The membership
+        // guard is downstream in applyStageOutcomeRuleTarget (proven in
+        // configuredStageReferentialIntegrity.test.ts), where the write is now blocked.
         const plan = leadPlan();
         const rules = outcomeRulesForKey(plan, "reached_qualified", { attemptCount: null });
-        const outcomes: Array<{ target: string; error?: string; movesTo?: string }> = [];
-        for (const rule of rules) {
-            for (const target of rule.targets) {
-                const resolved = resolveStageTransitionExecutionTargets(plan, target);
-                if (resolved.error) {
-                    outcomes.push({ target: target.kind, error: resolved.error });
-                } else {
-                    for (const t of resolved.targets) {
-                        outcomes.push({ target: t.kind, movesTo: t.stage_key });
-                    }
-                }
-            }
-        }
-        // Record the observed resolution as evidence (asserted below by shape).
-        fs.writeFileSync(
-            path.join(__dirname, "../../../docs/sprints/active/assets/firefly-config/reached-qualified-resolution.json"),
-            JSON.stringify({ outcomes }, null, 2),
-        );
-        // Either the move executes to a non-configured stage, or it errors — both are defects.
-        const move = outcomes.find((o) => o.target === "move_to_stage");
-        const errored = outcomes.find((o) => o.error);
-        expect(Boolean(move?.movesTo === "qualification") || Boolean(errored)).toBe(true);
+        const move = rules
+            .flatMap((r) => r.targets)
+            .map((t) => resolveStageTransitionExecutionTargets(plan, t))
+            .flatMap((r) => (r.error ? [] : r.targets))
+            .find((t) => t.kind === "move_to_stage");
+        expect(move?.stage_key).toBe("qualification");
+        // And the writer-level guard would reject exactly this target.
+        expect(configuredStageKeysForMetadata(tenantMetadata())).not.toContain("qualification");
     });
 });
 
 describe("The same defect class — every move target vs the configured process", () => {
-    it("three tenant move targets name stages absent from the configured process; the runtime accepts all", () => {
+    it("three tenant move targets name stages absent from the configured process; ALL now rejected", () => {
         const configured = configuredStageKeysForMetadata(tenantMetadata());
         const process = activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(tenantMetadata()));
         const nonConfiguredTargets: Array<{ from: string; to: string }> = [];
@@ -148,13 +141,10 @@ describe("The same defect class — every move target vs the configured process"
                 { from: "enrolling", to: "closed_withdrawn" },
             ]),
         );
-        // Two acceptance paths, both defective:
-        //  - qualification + enrollment are in the built-in LIFECYCLE_STAGE_ORDER, so the
-        //    stage-validity gate ACCEPTS them despite not being configured.
-        //  - closed_withdrawn is NOT in the built-in list, so the gate would reject it — yet the
-        //    move-writer has no membership guard, so an outcome rule executes the move anyway.
-        expect(isValidBootstrapBuilderStage(tenantMetadata(), "qualification")).toBe(true);
-        expect(isValidBootstrapBuilderStage(tenantMetadata(), "enrollment")).toBe(true);
+        // After the fix, NONE of the three non-configured targets pass validity — the built-in
+        // short-circuit is gone, so configured membership is the only authority.
+        expect(isValidBootstrapBuilderStage(tenantMetadata(), "qualification")).toBe(false);
+        expect(isValidBootstrapBuilderStage(tenantMetadata(), "enrollment")).toBe(false);
         expect(isValidBootstrapBuilderStage(tenantMetadata(), "closed_withdrawn")).toBe(false);
     });
 

@@ -19,6 +19,7 @@ import {
     readEnrollmentInstanceStageKey,
     type EnrollmentProcessState,
 } from "@/lib/process/processInstances";
+import { assertStageConfigured, loadConfiguredStageInventory } from "@/lib/lifecycle/configuredStageInventory";
 import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
 // BOUNDARY (platform↔childcare): the generic outcome runtime touches the childcare domain only here,
@@ -405,6 +406,19 @@ export async function applyStageOutcomeRuleTarget(
                     ? target.transition_ref.slice("move_to_stage:".length).trim()
                     : null);
             if (!targetStageKey) return { error: "Missing target stage key" };
+
+            // CANONICAL STAGE-MOVE GUARD (Configured Stage Referential Integrity).
+            // The destination must exist in the subject's current configured Business Process.
+            // This is the single chokepoint every stage-move caller inherits — outcome rules,
+            // status-entry automation, domain-signal automation and transition execution all
+            // resolve to this target executor. A non-configured target is a configuration error:
+            // no write happens, so the surrounding transaction aborts with nothing to compensate.
+            const inventory = await loadConfiguredStageInventory(supabase, orgId, departmentId);
+            const membership = assertStageConfigured(inventory, targetStageKey);
+            if (!membership.ok) {
+                return { error: membership.error.message };
+            }
+
             const nowIso = new Date().toISOString();
             let undoStageMove: (() => Promise<void>) | undefined;
             if (subject.journey_segment === "child") {
