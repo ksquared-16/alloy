@@ -18,6 +18,10 @@ import {
 } from "@/lib/lifecycle/configuredStageInventory";
 import { validateConfiguredStageReferences } from "@/lib/lifecycle/validateConfiguredStageReferences";
 import { applyStageOutcomeRuleTarget } from "@/lib/lifecycle/stageOutcomeRuleTargetExecutor";
+import {
+    CURRENT_ENROLLMENT_TEMPLATE_STAGE_KEYS,
+    ENROLLMENT_STAGE_SPECS,
+} from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 /** Build department metadata whose active process has exactly the given stages + key. */
@@ -130,6 +134,60 @@ describe("move_to_stage cannot write a non-configured stage", () => {
         const result = await applyStageOutcomeRuleTarget(supabase as never, move("decision"));
         expect(result.error).toBeUndefined();
         expect(writes).toContain("opportunities");
+    });
+});
+
+describe("a rejected move creates no activity and no next work", () => {
+    it("the guard returns before any write — no status update, no undo (nothing to compensate)", async () => {
+        // The guard short-circuits move_to_stage before the opportunities/process_instances write
+        // and before any activity/next-work step downstream. Proven at the writer: error + no undo.
+        const configuredMeta = processMetadata("enrollment", ["lead", "tour"]);
+        const writes: string[] = [];
+        const supabase = {
+            from: (table: string) => {
+                const chain: Record<string, unknown> = {};
+                chain.select = () => chain;
+                chain.eq = () => chain;
+                chain.maybeSingle = async () =>
+                    table === "departments" ? { data: { metadata: configuredMeta }, error: null } : { data: { stage_key: "lead" }, error: null };
+                chain.update = () => {
+                    writes.push(table);
+                    return { eq: () => ({ eq: async () => ({ error: null }) }) };
+                };
+                return chain;
+            },
+        };
+        const result = await applyStageOutcomeRuleTarget(supabase as never, {
+            orgId: "org-1",
+            userId: "user-1",
+            departmentId: "dept-1",
+            stageKey: "lead",
+            plan: { stage_key: "lead", journey_segment: "family", work_templates: [], outcomes: [], outcome_rules: [], attention_rules: [] } as unknown as StageOperatingPlanV1,
+            subject: { journey_segment: "family", opportunity_id: "opp-1" },
+            target: { kind: "move_to_stage", stage_key: "qualification" },
+        });
+        expect(result.error).toContain("not part of the configured Business Process");
+        expect(result.undo).toBeUndefined();
+        expect(result.status_updated).toBeUndefined();
+        expect(writes).toEqual([]); // no opportunities/process_instances write; nothing downstream
+    });
+});
+
+describe("fresh tenants contain no hidden qualification stage", () => {
+    it("the current enrollment template stage set excludes qualification", () => {
+        expect(CURRENT_ENROLLMENT_TEMPLATE_STAGE_KEYS.has("qualification")).toBe(false);
+        expect(ENROLLMENT_STAGE_SPECS.map((s) => s.key)).not.toContain("qualification");
+        // decision IS a fresh-template stage.
+        expect(ENROLLMENT_STAGE_SPECS.map((s) => s.key)).toContain("decision");
+    });
+
+    it("a freshly-configured tenant (template stages only) rejects a qualification bootstrap", () => {
+        const meta = processMetadata(
+            "enrollment",
+            ENROLLMENT_STAGE_SPECS.map((s) => s.key),
+        );
+        expect(isValidBootstrapBuilderStage(meta, "qualification")).toBe(false);
+        expect(isValidBootstrapBuilderStage(meta, "decision")).toBe(true);
     });
 });
 

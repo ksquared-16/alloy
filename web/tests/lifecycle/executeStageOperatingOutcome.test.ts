@@ -105,6 +105,41 @@ describe("executeStageOperatingOutcome", () => {
         vi.clearAllMocks();
     });
 
+    it("REJECTS an outcome that moves to a non-configured stage — failed target, no applied target", async () => {
+        const plan = {
+            stage_key: "lead",
+            journey_segment: "family",
+            work_templates: [],
+            outcomes: [{ outcome_key: "reached", label: "Reached" }],
+            outcome_rules: [
+                { rule_key: "reached_move", when_outcome_key: "reached", targets: [{ kind: "move_to_stage", stage_key: "qualification" }] },
+            ],
+            attention_rules: [],
+        } as unknown as Parameters<typeof executeStageOperatingOutcome>[0]["plan"];
+        // Department configures lead + tour only — qualification is NOT a stage.
+        const supabase = {
+            from: withConfiguredDept(() => ({
+                select: vi.fn().mockReturnThis(),
+                eq: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn(async () => ({ data: { stage_key: "lead" }, error: null })),
+                update: vi.fn().mockReturnThis(),
+            }), configuredDeptMetadata(["lead", "tour"])),
+        };
+        const result = await executeStageOperatingOutcome({
+            supabase: supabase as never,
+            orgId: "org-1",
+            userId: "user-1",
+            departmentId: "dept-1",
+            plan,
+            outcomeKey: "reached",
+            subject: { journey_segment: "family", opportunity_id: "opp-1" },
+        });
+        expect(result.errors.some((e) => e.includes("not part of the configured Business Process"))).toBe(true);
+        expect(result.applied_targets).toEqual([]); // the move never applied
+        expect(result.undo).toEqual([]); // nothing written → nothing to compensate
+        expect(result.status_updated).toBe(false);
+    });
+
     it("updates child enrollment disposition for child journey stage", async () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("waitlist")!;
         const genericChain = () => ({
