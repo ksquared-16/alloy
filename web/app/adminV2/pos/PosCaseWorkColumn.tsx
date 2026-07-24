@@ -16,6 +16,7 @@ import type { PosCaseState } from "./usePosCase";
 import { POS_SOURCE_KIND_LABELS } from "./posSections";
 import PosPanel from "./PosPanel";
 import ClassificationPanel from "./ClassificationPanel";
+import WhatAlloyFound from "./WhatAlloyFound";
 import { ProcessingCollectionEvidencePanel } from "@/components/pos/ProcessingCollectionEvidencePanel";
 import { buildMatchedRecords } from "@/lib/pos/matchedRecordsPresentation";
 
@@ -31,7 +32,7 @@ function formatWhen(iso: string | null): string {
 }
 
 export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
-    const { detail, evidence, rec, loading, error, reload } = state;
+    const { detail, evidence, rec, recLoading, loading, error, reload } = state;
 
     if (loading && !detail) {
         return (
@@ -138,6 +139,13 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                 </div>
             </PosPanel>
 
+            {/* 1b — What Alloy found: the existing records it matched, next to "What came in" so the
+                operator can compare the two before deciding (§1). This is the primary place for
+                match discovery — the right rail carries only the concise decision. */}
+            <PosPanel eyebrow="What Alloy found" accent={false} className="!h-auto">
+                <WhatAlloyFound rec={rec} recLoading={recLoading} />
+            </PosPanel>
+
             {collectionGroups.length > 0 || collectionDiagnostics.length > 0 ? (
                 <PosPanel eyebrow="Related records proposed" className="!h-auto">
                     <ProcessingCollectionEvidencePanel groups={collectionGroups} diagnostics={collectionDiagnostics} caseId={detail.id} onCommitted={reload} />
@@ -181,13 +189,6 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                 ) : (
                     <div className="text-[12.5px] text-stone-400">No records to show yet — resolved at commit.</div>
                 )}
-            </PosPanel>
-
-            {/* 4 — What Alloy found (honest pending until extraction/matching exist) */}
-            <PosPanel eyebrow="What Alloy found" accent={false}>
-                <div className="text-[12.5px] text-stone-400">
-                    Alloy is still reading this. Suggested record changes will appear here once it finishes.
-                </div>
             </PosPanel>
         </div>
     );

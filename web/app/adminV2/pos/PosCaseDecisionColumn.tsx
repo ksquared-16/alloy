@@ -12,6 +12,8 @@
 
 import ReviewDecideCard, { DECISION_TO_ACTION } from "@/app/adminV2/processing/ReviewDecideCard";
 import { approveButtonLabel, resolveDecisionPresentation } from "@/lib/pos/decisionPresentation";
+import { buildMatchedRecords } from "@/lib/pos/matchedRecordsPresentation";
+import { buildCommitPlanLines } from "@/lib/pos/commitPlanSummary";
 import WorkspaceActionBar from "@/components/workspace/WorkspaceActionBar";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import PosPanel from "./PosPanel";
@@ -37,7 +39,7 @@ function outputLine(approveResult: PosCaseState["approveResult"]): string {
 }
 
 export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }) {
-    const { detail, rec, recLoading, approve, approving, approveErr, approveResult, isClosed } = state;
+    const { detail, evidence, rec, recLoading, approve, approving, approveErr, approveResult, isClosed } = state;
     if (!detail) return null;
 
     const recommendedActionKey = rec?.supported && rec.recommendation ? DECISION_TO_ACTION[rec.recommendation.decision].key : null;
@@ -48,12 +50,20 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
             : null;
     const commitAvailable = !!recommendedActionKey;
 
+    // Concise "Approval will:" plan for the rail — derived from the same honest matched-record
+    // cards the middle column shows, so the rail never promises a plan the records don't support.
+    const submitted = evidence.flatMap((e) => e.proposedValues).map((v) => ({ label: v.label, value: v.value ?? null }));
+    const planLines =
+        rec?.supported && rec.recommendation
+            ? buildCommitPlanLines(buildMatchedRecords({ recommendation: rec.recommendation, intent: rec.intent ?? null, submitted }))
+            : [];
+
     return (
         <div className="flex h-full min-h-0 flex-col">
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
                 {/* Decision */}
                 {!isClosed ? (
-                    <ReviewDecideCard view={rec} loading={recLoading} />
+                    <ReviewDecideCard view={rec} loading={recLoading} compact planLines={planLines} />
                 ) : (
                     <div className="rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.07] p-3 text-[12.5px] text-alloy-midnight">
                         <div className="font-semibold">{statusLabel(detail.status)}</div>

@@ -17,6 +17,7 @@ import { useState } from "react";
 import type { IntakeRecommendation, IntakeDecision } from "@/lib/forms/intake/resolveIntakeIdentity";
 import type { OperationalIntentKey } from "@/lib/forms/operationalIntentTemplates";
 import type { CandidateDetail } from "@/lib/pos/processingCase/recommendation/candidateDetail";
+import type { CommitPlanLine } from "@/lib/pos/commitPlanSummary";
 import {
     resolveDecisionPresentation,
     type DecisionReadinessTone,
@@ -59,12 +60,19 @@ function proposedIdentityLine(rec: IntakeRecommendation): string {
 export default function ReviewDecideCard({
     view,
     loading,
+    compact = false,
+    planLines,
 }: {
     view: RecommendationView | null;
     loading: boolean;
+    /** Rail mode: show only the decision essentials (recommendation + readiness + the plan);
+     *  match discovery lives in "What Alloy found" (the middle column), never duplicated here (§2). */
+    compact?: boolean;
+    /** Concise "Approval will:" lines — only rendered in compact mode. */
+    planLines?: CommitPlanLine[];
 }) {
     return (
-        <section className="mb-5 rounded-lg border border-alloy-bend-pine/25 bg-white p-3.5 shadow-sm">
+        <section className={`rounded-lg border border-alloy-bend-pine/25 bg-white p-3.5 shadow-sm ${compact ? "" : "mb-5"}`}>
             <div className="mb-2 flex items-center justify-between">
                 <span className="text-[10.5px] font-semibold uppercase tracking-wide text-alloy-bend-pine">Review &amp; decide</span>
                 {loading ? <span className="text-[10.5px] text-stone-400">Analyzing…</span> : null}
@@ -85,7 +93,13 @@ export default function ReviewDecideCard({
                     </p>
                 </div>
             ) : view.recommendation ? (
-                <ReviewBody rec={view.recommendation} intent={view.intent ?? null} candidateDetails={view.candidateDetails ?? []} />
+                <ReviewBody
+                    rec={view.recommendation}
+                    intent={view.intent ?? null}
+                    candidateDetails={view.candidateDetails ?? []}
+                    compact={compact}
+                    planLines={planLines}
+                />
             ) : (
                 <div className="text-[12.5px] text-stone-500">No recommendation was produced.</div>
             )}
@@ -134,7 +148,19 @@ function CandidateCard({ candidate, detail, recommended }: { candidate: IntakeRe
     );
 }
 
-function ReviewBody({ rec, intent, candidateDetails }: { rec: IntakeRecommendation; intent: OperationalIntentKey | null; candidateDetails: CandidateDetail[] }) {
+function ReviewBody({
+    rec,
+    intent,
+    candidateDetails,
+    compact,
+    planLines,
+}: {
+    rec: IntakeRecommendation;
+    intent: OperationalIntentKey | null;
+    candidateDetails: CandidateDetail[];
+    compact: boolean;
+    planLines?: CommitPlanLine[];
+}) {
     const detailById = new Map(candidateDetails.map((d) => [d.id, d]));
     const p = resolveDecisionPresentation({ recommendation: rec, intent });
     const readinessCls = READINESS_STYLE[p.readiness.tone];
@@ -152,36 +178,56 @@ function ReviewBody({ rec, intent, candidateDetails }: { rec: IntakeRecommendati
             <div className="mt-1.5 text-[13px] font-medium text-alloy-midnight">{p.headline}</div>
             <p className="mt-0.5 text-[12px] text-stone-500">{p.readiness.detail}</p>
 
-            {/* Extracted identity */}
-            <div className="mt-3">
-                <div className="mb-1 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">From this submission</div>
-                <div className="rounded-md border border-stone-200 bg-stone-50/60 px-2.5 py-1.5 text-[12.5px] text-stone-700">
-                    {proposedIdentityLine(rec)}
-                </div>
-            </div>
-
-            {/* Existing match candidates */}
-            <div className="mt-3">
-                <div className="mb-1 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">
-                    Existing match candidates {rec.candidates.length > 0 ? `(${rec.candidates.length})` : ""}
-                </div>
-                {rec.candidates.length === 0 ? (
-                    <div className="text-[12.5px] text-stone-400">
-                        {rec.decision === "create" ? "None — this looks new." : "None found."}
+            {compact ? (
+                /* Rail: the concise expected result — "Approval will:" — no candidate discovery
+                   (that lives in "What Alloy found"). */
+                planLines && planLines.length > 0 ? (
+                    <div className="mt-3">
+                        <div className="mb-1 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">Approval will</div>
+                        <ul className="space-y-1">
+                            {planLines.map((l, i) => (
+                                <li key={i} className="flex gap-1.5 text-[12px] text-alloy-midnight/85">
+                                    <span aria-hidden className={l.tone === "review" ? "text-alloy-gold-dark" : "text-alloy-bend-pine"}>•</span>
+                                    <span>{l.text}</span>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
-                ) : (
-                    <ul className="space-y-1.5">
-                        {rec.candidates.map((c) => (
-                            <CandidateCard
-                                key={c.id}
-                                candidate={c}
-                                detail={detailById.get(c.id)}
-                                recommended={c.id === rec.recommendedCandidateId}
-                            />
-                        ))}
-                    </ul>
-                )}
-            </div>
+                ) : null
+            ) : (
+                <>
+                    {/* Extracted identity */}
+                    <div className="mt-3">
+                        <div className="mb-1 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">From this submission</div>
+                        <div className="rounded-md border border-stone-200 bg-stone-50/60 px-2.5 py-1.5 text-[12.5px] text-stone-700">
+                            {proposedIdentityLine(rec)}
+                        </div>
+                    </div>
+
+                    {/* Existing match candidates */}
+                    <div className="mt-3">
+                        <div className="mb-1 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">
+                            Existing match candidates {rec.candidates.length > 0 ? `(${rec.candidates.length})` : ""}
+                        </div>
+                        {rec.candidates.length === 0 ? (
+                            <div className="text-[12.5px] text-stone-400">
+                                {rec.decision === "create" ? "None — this looks new." : "None found."}
+                            </div>
+                        ) : (
+                            <ul className="space-y-1.5">
+                                {rec.candidates.map((c) => (
+                                    <CandidateCard
+                                        key={c.id}
+                                        candidate={c}
+                                        detail={detailById.get(c.id)}
+                                        recommended={c.id === rec.recommendedCandidateId}
+                                    />
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                </>
+            )}
         </div>
     );
 }
