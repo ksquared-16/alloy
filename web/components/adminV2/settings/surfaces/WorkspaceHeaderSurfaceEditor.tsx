@@ -190,7 +190,7 @@ export default function WorkspaceHeaderSurfaceEditor({
                     data-testid="workspace-header-back"
                     className="mb-2 text-[11px] font-medium text-alloy-midnight/50 transition-colors hover:text-alloy-bend-pine"
                 >
-                    ← Surfaces
+                    ← Overview
                 </button>
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>

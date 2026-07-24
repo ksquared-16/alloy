@@ -5,6 +5,19 @@ Workspace, replacing the technical-tab `UsersRolesSettingsClient`. No schema cha
 auth semantics, no new mutation paths — every write reuses an existing API with its existing
 guard (`requireUsersRolesManageAuth`, org `admin` check on password reset).
 
+Product owner doc: `docs/platform/operator/access-product-ui.md`
+
+## Landing simplification (Phase 2)
+
+Grouped configuration landings (Financials, Programs & Locations, Access, and other
+`OrganizationDomainLanding` domains) no longer render conceptual summary-card rows or
+Organization/Location ownership framing bars. Shared primitives:
+
+- `CompactGroupedLandingShell` — breadcrumb + compact title
+- `CompactConfigurationLauncher` — optional helper + launch grid
+
+Access tiles: Users · Roles · Access Scopes · Security (`summaryCards: []`).
+
 ## Files touched
 
 | File | Change |
@@ -68,3 +81,10 @@ guard (`requireUsersRolesManageAuth`, org `admin` check on password reset).
 1. No API to deactivate a user without removing them — "Active" badge cannot yet represent a false state. If a real deactivation flag ships, `UserAccessWorkspaceVm.isActive` should be wired to it and the badge should stop being unconditional.
 2. `send-password-reset` requires org `admin` (stricter than `canManageUsersAndRoles`); a `settings.users_roles`-only grantee will see a real 403 surfaced as an error banner. Not weakened here — flagged for product decision only.
 3. Multi-role-per-user is not supported by `PATCH .../role` (replaces all roles with one). The Roles-tab copy states this explicitly instead of implying multi-select.
+4. Some department rows still surface as **Enrollment (legacy)** in QA org data — compatibility label from existing department catalog, not invented here. Do not silently normalize; later cleanup should map or retire the legacy key with an explicit operator label.
+
+## Browser QA
+
+Authenticated evidence (slot 2, `http://127.0.0.1:3012`):
+
+`.alloy-agent-evidence/access-ui-discovery/qa/` — 19 screenshots + `qa-report.json` (landings, Users/Roles workspaces, invite, scopes, security, narrow).

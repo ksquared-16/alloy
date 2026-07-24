@@ -1,13 +1,18 @@
 "use client";
 
 import type { ReactNode } from "react";
-import BusinessProcessConfigurationNav from "@/components/adminV2/settings/businessProcess/BusinessProcessConfigurationNav";
 import { ConfigurationShell } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import type { BusinessProcessWorkspaceSection } from "@/lib/lifecycle/businessProcessUiLabels";
 
+/**
+ * Selected-Process workspace shell.
+ * Section switching is owned by the Selected Process header tabs — this shell no longer
+ * renders a duplicate Configure/Process/Health section queue on the left.
+ * `listColumn` remains for nested collections (Stages / Work Views / Actions / Health).
+ */
 export default function BusinessProcessConfigurationShell({
-    activeSection,
-    onSelectSection,
+    activeSection: _activeSection,
+    onSelectSection: _onSelectSection,
     listColumn,
     children,
 }: {
@@ -21,9 +26,6 @@ export default function BusinessProcessConfigurationShell({
             testId="business-process-configuration-shell"
             listColumnTestId="business-process-list-column"
             workspaceTestId="business-process-setup-workspace"
-            navColumn={
-                <BusinessProcessConfigurationNav activeSection={activeSection} onSelect={onSelectSection} />
-            }
             listColumn={listColumn}
         >
             {children}

@@ -4,7 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { TuitionRateRow } from "@/lib/commercial/tuitionRates";
 
 const SELECT_COLS =
-    "id, org_id, location_id, variant_id, cadence_key, payer_type, rate_cents, is_active, not_offered, effective_start, effective_end, metadata, created_at, updated_at";
+    "id, org_id, location_id, variant_id, cadence_key, payer_type, rate_cents, is_active, not_offered, effective_start, effective_end, revenue_category_id, metadata, created_at, updated_at";
 
 function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
     return {
@@ -19,6 +19,7 @@ function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
         not_offered: r.not_offered === true,
         effective_start: (r.effective_start as string | null | undefined) ?? null,
         effective_end: (r.effective_end as string | null | undefined) ?? null,
+        revenue_category_id: (r.revenue_category_id as string | null | undefined) ?? null,
         metadata:
             r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
                 ? (r.metadata as Record<string, unknown>)
@@ -66,6 +67,14 @@ export async function PATCH(
     if (typeof body.not_offered === "boolean") patch.not_offered = body.not_offered;
     if ("effective_start" in body) patch.effective_start = body.effective_start != null ? String(body.effective_start).trim() || null : null;
     if ("effective_end" in body) patch.effective_end = body.effective_end != null ? String(body.effective_end).trim() || null : null;
+    if (body.metadata != null && typeof body.metadata === "object" && !Array.isArray(body.metadata)) {
+        // Compatibility: Tuition product stores prior price periods in metadata.priceHistory.
+        patch.metadata = body.metadata;
+    }
+    if ("revenue_category_id" in body) {
+        patch.revenue_category_id =
+            body.revenue_category_id != null ? String(body.revenue_category_id).trim() || null : null;
+    }
 
     if (Object.keys(patch).length <= 1) {
         return NextResponse.json({ error: "No fields to update" }, { status: 400 });

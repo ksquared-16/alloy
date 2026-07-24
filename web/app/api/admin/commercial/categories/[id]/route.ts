@@ -37,6 +37,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     if (body.sort_order !== undefined) patch.sort_order = Math.round(Number(body.sort_order));
     if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
+    if (body.metadata !== undefined && typeof body.metadata === "object" && !Array.isArray(body.metadata)) {
+        patch.metadata = body.metadata;
+    }
 
     if (Object.keys(patch).length <= 1) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
 

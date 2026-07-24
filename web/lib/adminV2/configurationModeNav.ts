@@ -195,8 +195,30 @@ export function configurationModeNavItemActive(href: string, path: string): bool
     if (h === "/organization/financials") {
         return p === h || p.startsWith(`${h}/`);
     }
-    if (h === settings("processes")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/business-processes");
-    if (h === settings("surfaces")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/layouts");
+    if (h === "/organization/access" || h === settings("users-roles") || h === settings("access")) {
+        return (
+            p === "/organization/access"
+            || p.startsWith("/organization/access/")
+            || p === "/settings/users-roles"
+            || p.startsWith("/settings/users-roles/")
+        );
+    }
+    if (h === settings("processes")) {
+        return (
+            p === h
+            || p.startsWith(`${h}/`)
+            || p.startsWith("/settings/processes")
+            || p.startsWith("/settings/business-processes")
+        );
+    }
+    if (h === settings("surfaces")) {
+        return (
+            p === h
+            || p.startsWith(`${h}/`)
+            || p.startsWith("/settings/surfaces")
+            || p.startsWith("/settings/layouts")
+        );
+    }
     if (h === settings("entities")) {
         return (
             p === h

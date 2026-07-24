@@ -235,7 +235,7 @@ export default function QueueRowSurfaceEditor({
                     className="text-sm font-medium text-alloy-pine hover:underline"
                     data-testid="queue-row-surface-back"
                 >
-                    ← Surfaces
+                    ← Overview
                 </button>
                 <div className="min-w-0 flex-1">
                     <input

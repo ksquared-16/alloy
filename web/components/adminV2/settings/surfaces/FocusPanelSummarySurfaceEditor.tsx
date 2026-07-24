@@ -416,7 +416,7 @@ export default function FocusPanelSummarySurfaceEditor({ onBack, onOpenNestedSur
                             className="text-sm font-medium text-alloy-pine hover:underline"
                             data-testid="focus-panel-surface-back"
                         >
-                            ← Surfaces
+                            ← Overview
                         </button>
                     :   null}
                     <span className="config-typo-workspace-title">Enrollment Focus Panel</span>

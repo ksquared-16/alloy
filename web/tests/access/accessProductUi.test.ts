@@ -26,10 +26,10 @@ describe("Access landing model", () => {
         expect(model.summaryCards).toEqual([]);
     });
 
-    it("routes every tile at /settings/users-roles with the matching ?section=", () => {
+    it("routes every tile at /organization/access with the matching ?section=", () => {
         const model = buildAccessLandingModel();
         for (const tile of model.tiles) {
-            expect(tile.href).toContain("/settings/users-roles?section=");
+            expect(tile.href).toContain("/organization/access?section=");
             expect(tile.href).toContain(`section=${tile.id}`);
         }
     });
@@ -47,14 +47,14 @@ describe("Access chapter routing", () => {
     });
 
     it("builds deep links carrying optional userId / roleKey", () => {
-        expect(accessWorkspaceChapterHref("users")).toBe("/settings/users-roles?section=users");
+        expect(accessWorkspaceChapterHref("users")).toBe("/organization/access?section=users");
         expect(accessWorkspaceChapterHref("users", { userId: "abc-123" })).toBe(
-            "/settings/users-roles?section=users&userId=abc-123",
+            "/organization/access?section=users&userId=abc-123",
         );
         expect(accessWorkspaceChapterHref("roles", { roleKey: "ops" })).toBe(
-            "/settings/users-roles?section=roles&roleKey=ops",
+            "/organization/access?section=roles&roleKey=ops",
         );
-        expect(accessWorkspaceChapterHref(null)).toBe("/settings/users-roles");
+        expect(accessWorkspaceChapterHref(null)).toBe("/organization/access");
     });
 });
 
@@ -70,7 +70,7 @@ describe("Permission grid operator labels", () => {
 });
 
 describe("Access product UI wiring", () => {
-    it("routes /settings/users-roles to the landing when no section is set, and to the workspace otherwise", () => {
+    it("routes /organization/access (users-roles page) to the landing when no section is set, and to the workspace otherwise", () => {
         const page = read("app/adminV2/settings/users-roles/page.tsx");
         expect(page).toContain("OrganizationDomainLanding");
         expect(page).toContain("buildAccessLandingModel");
@@ -94,6 +94,8 @@ describe("Access product UI wiring", () => {
         expect(src).toContain("inviteOpen");
         expect(src).toContain('role="dialog"');
         expect(src).toContain('data-testid="access-user-role-select"');
+        expect(src).toContain('data-testid="access-invite-steps"');
+        expect(src).toContain('data-testid="access-invite-access-planned"');
         expect(src).not.toContain("Restricted</span>");
     });
 

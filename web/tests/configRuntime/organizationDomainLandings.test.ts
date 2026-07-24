@@ -38,21 +38,39 @@ describe("organization domain landings", () => {
         expect(model.tiles.find((t) => t.id === "security")?.href).toContain("section=security");
     });
 
-    it("builds Business Processes and Surfaces section deep-links", () => {
+    it("builds a collection-first Business Processes model and Surfaces section deep-links", () => {
         const processes = buildBusinessProcessesLandingModel();
-        expect(processes.tiles.some((t) => t.href.includes("section=stages"))).toBe(true);
-        expect(processes.tiles.some((t) => t.href.includes("section=automation"))).toBe(true);
+        expect(processes.summaryCards).toEqual([]);
+        expect(processes.purpose).toBe("Create and manage how operational work moves through Alloy.");
 
         const surfaces = buildSurfacesLandingModel();
+        expect(surfaces.summaryCards).toEqual([]);
+        expect(surfaces.purpose).toBe("Configure the presentation operators use across Alloy.");
         expect(surfaces.tiles.map((t) => t.id)).toContain("focus-panels");
-        expect(surfaces.tiles.find((t) => t.id === "queue-rows")?.href).toContain("section=queue-rows");
+        expect(surfaces.tiles.find((t) => t.id === "queue-rows")?.href).toContain(
+            "/organization/surfaces?section=queue-rows",
+        );
     });
 
     it("wires page entrypoints to landing when section is absent", () => {
         expect(read("app/adminV2/settings/entities/page.tsx")).toContain("OrganizationDomainLanding");
         expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("buildAccessLandingModel");
-        expect(read("app/adminV2/settings/processes/page.tsx")).toContain("buildBusinessProcessesLandingModel");
-        expect(read("app/adminV2/settings/surfaces/page.tsx")).toContain("buildSurfacesLandingModel");
+    });
+
+    it("always mounts the Business Processes collection workspace (no landing-tile default)", () => {
+        const page = read("app/adminV2/settings/processes/page.tsx");
+        expect(page).toContain("ProcessesConfigurationPage");
+        expect(page).not.toContain("OrganizationDomainLanding");
+        expect(page).toContain("normalizeBusinessProcessSection");
+    });
+
+    it("mounts SurfacesPublicationWorkspace — tile landing when bare, category workspace when ?section=", () => {
+        const page = read("app/adminV2/settings/surfaces/page.tsx");
+        expect(page).toContain("SurfacesPublicationWorkspace");
+        expect(page).not.toContain("OrganizationDomainLanding");
+        const workspace = read("components/adminV2/settings/surfaces/SurfacesPublicationWorkspace.tsx");
+        expect(workspace).toContain("SurfacesLanding");
+        expect(workspace).toContain("hideCategoryRail");
     });
 
     it("keeps Location Add Program in-context (no Programs peer redirect)", () => {

@@ -1,11 +1,11 @@
 /**
  * Access workspace sections — Users, Roles, Access Scopes, Security.
  *
- * Canonical owner: `/settings/users-roles?section=…`
+ * Canonical owner: `/organization/access?section=…`
  * Mirrors the Financials chapter-route pattern (`commercialChapterRoutes.ts`).
  */
 
-import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
+import { CANONICAL_ORGANIZATION_ACCESS_HREF } from "@/lib/admin/canonicalAdminRoutes";
 
 export const ACCESS_WORKSPACE_CHAPTERS = ["users", "roles", "scopes", "security"] as const;
 
@@ -30,8 +30,8 @@ export const ACCESS_WORKSPACE_CHAPTER_META: Record<AccessWorkspaceChapter, { lab
     },
 };
 
-/** Canonical base for the Access workspace (Settings → Users & Roles route). */
-export const ACCESS_WORKSPACE_BASE_HREF = adminSettingsSubpathHref("users-roles");
+/** Canonical base for the Access workspace. */
+export const ACCESS_WORKSPACE_BASE_HREF = CANONICAL_ORGANIZATION_ACCESS_HREF;
 
 export function normalizeAccessWorkspaceChapter(value: string | null | undefined): AccessWorkspaceChapter | null {
     const raw = value?.trim().toLowerCase() ?? "";

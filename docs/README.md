@@ -107,6 +107,9 @@ Then: **`platform/foundation/system-overview.md`**
 26a. `platform/operator/configuration-workspace-platform-doctrine.md` — **Configuration Workspace Platform Doctrine** (canonical owner of every configuration workspace: operators operate configuration objects; object model, workspace anatomy, two-status model, business-language & inheritance doctrine; **reference impl = Locations**; supersedes the `system/` configuration-workspace docs)
 26b. `platform/operator/configuration-workspace-visual-language.md` — **Configuration Workspace Visual Language** (why configuration feels calm/object-shaped/consequence-first; extends `alloy-visual-language.md`)
 26c. `platform/operator/configuration-workspace-component-library.md` — **Configuration Workspace Component Library** (platform primitives: Object Header, Operational Summary, Attention Panel, Setup Progress, Inline Property, Focused Editor, Consequence Sentence, Inherited Value, Configuration Dialog, …)
+26d. `platform/operator/access-product-ui.md` — **Access product UI** (Users / Roles / Access Scopes / Security; UI-only IA and Planned vs wired capability)
+26e. `platform/operator/business-processes-product-ui.md` — **Business Processes product UI** (Collection → Selected Process → Focused workspace; Stages / Work Views / Actions / Health)
+26f. `platform/operator/surfaces-product-ui.md` — **Surfaces product UI** (Category → Collection → Selected Surface workspace; embedded Edit for every Surface editor, never a detached full-bleed builder; truthful runtime certification matrix + known gaps)
 27. `platform/operator/queue-system.md`
 28. `platform/operator/drawer-system.md`
 29. `platform/operator/drawer-sunset-roadmap.md` — **Drawer Sunset & Focus Panel Convergence** (sunset status matrix, freeze rule, editing-gap blocker, Household-then-Children targets — convergence lock)

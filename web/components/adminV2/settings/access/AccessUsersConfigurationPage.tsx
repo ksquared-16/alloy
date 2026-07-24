@@ -674,12 +674,43 @@ export default function AccessUsersConfigurationPage() {
                     aria-modal="true"
                     aria-label="Invite user"
                 >
-                    <div className="w-full max-w-md rounded-xl border border-alloy-stone/25 bg-white p-5">
+                    <div className="w-full max-w-lg rounded-xl border border-alloy-stone/25 bg-white p-5">
                         <div className="flex items-center gap-2">
                             <UserRound className="h-4 w-4 text-alloy-bend-pine" aria-hidden />
                             <h2 className="text-lg font-semibold text-alloy-midnight">Invite User</h2>
                         </div>
+                        <ol
+                            className="mt-3 flex flex-wrap gap-1.5 text-[10px] font-semibold uppercase tracking-wide"
+                            data-testid="access-invite-steps"
+                            aria-label="Invite sequence"
+                        >
+                            {[
+                                { id: "person", label: "Person", state: "available" as const },
+                                { id: "role", label: "Role", state: "available" as const },
+                                { id: "access", label: "Access", state: "planned" as const },
+                                { id: "sign-in", label: "Sign-in", state: "available" as const },
+                                { id: "review", label: "Review", state: "available" as const },
+                            ].map((step) => (
+                                <li
+                                    key={step.id}
+                                    className={`rounded-full border px-2 py-0.5 ${
+                                        step.state === "planned"
+                                            ? "border-alloy-stone/30 bg-alloy-stone/15 text-alloy-midnight/45"
+                                            : "border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.06] text-alloy-bend-pine"
+                                    }`}
+                                    data-capability={step.state === "planned" ? "planned" : "available"}
+                                    data-testid={`access-invite-step-${step.id}`}
+                                >
+                                    {step.label}
+                                    {step.state === "planned" ? " · Planned" : ""}
+                                </li>
+                            ))}
+                        </ol>
                         <div className="mt-4 space-y-3">
+                            <p className="text-xs text-alloy-midnight/50" data-capability="planned">
+                                Linking an existing Person record is planned. Today, invite by email creates sign-in
+                                access for that address.
+                            </p>
                             <label className="block">
                                 <span className="config-typo-field-label">Email *</span>
                                 <input
@@ -707,9 +738,16 @@ export default function AccessUsersConfigurationPage() {
                                     ))}
                                 </select>
                             </label>
-                            <p className="text-xs text-alloy-midnight/45" data-capability="planned">
-                                Location and department access can be set after the invitation is accepted, from the
-                                Access tab. Custom onboarding steps are planned.
+                            <div
+                                className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.04] px-3 py-2 text-xs text-alloy-midnight/55"
+                                data-capability="planned"
+                                data-testid="access-invite-access-planned"
+                            >
+                                Location and department access are set after invitation from the Access tab. Access
+                                during invite is Planned.
+                            </div>
+                            <p className="text-xs text-alloy-midnight/55">
+                                Sign-in method: <span className="font-medium text-alloy-midnight/75">Email invitation</span>
                             </p>
                         </div>
                         <div className="mt-5 flex justify-end gap-2">

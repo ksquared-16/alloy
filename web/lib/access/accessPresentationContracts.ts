@@ -1,15 +1,37 @@
 /**
- * Access presentation contracts — type stubs for view models the Access product UI is designed
- * against but that have **no backing API yet**. These are documentation-as-types: they let the
- * UI reference a named shape (and render an honest "Planned" state) instead of inventing ad hoc
- * fields or fabricating data.
+ * Access presentation contracts — view-model shapes the Access product UI is designed
+ * against. Some compose existing APIs today; others document Planned surfaces that must
+ * not invent fetchers until a real backend exists.
  *
- * Do NOT implement fetchers against these types until a real API exists. Planned surfaces must
- * render static/deterministic copy, not a request that 404s.
+ * These are presentation contracts only — not sources of truth and not new domain tables.
  *
- * UI-only artifact — no schema, no runtime behavior. See:
- * `.alloy-agent-evidence/access-ui-discovery/ACCESS-UI-DISCOVERY.md`
+ * See: `docs/platform/operator/access-product-ui.md`
+ * See: `.alloy-agent-evidence/access-ui-discovery/ACCESS-UI-DISCOVERY.md`
  */
+
+/** Landing tiles for Access (Users / Roles / Access Scopes / Security). */
+export type AccessLandingVm = {
+    tiles: {
+        id: "users" | "roles" | "scopes" | "security";
+        label: string;
+        summary: string;
+        href: string;
+    }[];
+};
+
+/** Users collection rail row. */
+export type UsersCollectionVm = {
+    users: {
+        userId: string;
+        displayName: string;
+        email: string | null;
+        roleLabel: string;
+        locationSummary: string;
+        departmentSummary: string;
+        authenticationMethod: "password";
+        accountState: "active";
+    }[];
+};
 
 /** Aggregate workspace view for one user: identity + role + scope + planned projections. */
 export type UserAccessWorkspaceVm = {
@@ -26,6 +48,74 @@ export type UserAccessWorkspaceVm = {
     authenticationMethod: "password";
 };
 
+export type UserOverviewVm = {
+    userId: string;
+    accountSnapshot: {
+        accountState: string;
+        invitationState: string | null;
+        authenticationMethod: string;
+        lastSignIn: string | null;
+        linkedPersonLabel: string | null;
+    };
+    /** Planned until a resolver exists. */
+    effectiveAccess: EffectiveAccessVm | null;
+    securitySummary: {
+        authenticationMethod: string;
+        mfaStatus: "unsupported" | "planned";
+        sessionState: "unsupported" | "planned";
+    };
+};
+
+export type UserRolesVm = {
+    userId: string;
+    assignments: {
+        roleKey: string;
+        roleLabel: string;
+        description: string | null;
+        status: "active" | "inactive";
+    }[];
+    /** Existing API replaces with a single role. */
+    multiRoleSupported: false;
+};
+
+export type UserScopeVm = {
+    userId: string;
+    locationScope: "all" | "selected";
+    locationLabels: string[];
+    departmentScope: "all" | "selected";
+    departmentLabels: string[];
+};
+
+export type UserSecurityVm = {
+    userId: string;
+    accountState: "active";
+    authenticationMethods: AuthenticationMethodsVm;
+    passwordResetAvailable: true;
+    mfa: "planned";
+    sessions: "planned";
+};
+
+/** Roles collection rail. */
+export type RolesCollectionVm = {
+    roles: {
+        roleKey: string;
+        roleLabel: string;
+        description: string | null;
+        userCount: number;
+        isSystem: boolean;
+        isActive: boolean;
+    }[];
+};
+
+export type RoleAccessWorkspaceVm = {
+    roleKey: string;
+    roleLabel: string;
+    description: string | null;
+    isSystem: boolean;
+    isActive: boolean;
+    userCount: number;
+};
+
 /** Permission catalog shaped for operator-facing display (grid rows, not raw permission_keys). */
 export type PermissionCatalogVm = {
     groupKey: string;
@@ -34,6 +124,25 @@ export type PermissionCatalogVm = {
         id: string;
         label: string;
         level: "none" | "read" | "write";
+    }[];
+};
+
+export type RoleUsersVm = {
+    roleKey: string;
+    users: {
+        userId: string;
+        displayName: string;
+        email: string | null;
+        locationSummary: string;
+        departmentSummary: string;
+    }[];
+};
+
+export type AuthenticationMethodsVm = {
+    methods: {
+        id: string;
+        label: string;
+        status: "available" | "planned" | "unavailable";
     }[];
 };
 
@@ -47,7 +156,7 @@ export type ExperienceAccessVm = {
     surfaces: {
         surfaceKey: string;
         surfaceLabel: string;
-        accessLevel: "none" | "read" | "write";
+        accessLevel: "none" | "view" | "operate" | "configure" | "full";
     }[];
 };
 
@@ -62,6 +171,9 @@ export type UserHistoryVm = {
         occurredAt: string;
         title: string;
         detail: string;
+        actorLabel: string | null;
+        source: string | null;
+        result: "success" | "failure" | null;
     }[];
 };
 
@@ -76,6 +188,8 @@ export type RoleHistoryVm = {
         occurredAt: string;
         title: string;
         detail: string;
+        actorLabel: string | null;
+        source: string | null;
     }[];
 };
 
@@ -90,6 +204,8 @@ export type AccessAuditLogVm = {
         actorLabel: string;
         action: string;
         targetLabel: string;
+        category: string;
+        result: "success" | "failure" | "blocked" | null;
     }[];
 };
 
@@ -101,5 +217,9 @@ export type AccessAuditLogVm = {
  */
 export type EffectiveAccessVm = {
     userId: string;
-    statements: string[];
+    statements: {
+        capabilityLabel: string;
+        accessLabel: string;
+        locationSummary: string;
+    }[];
 };

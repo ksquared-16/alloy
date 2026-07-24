@@ -32,7 +32,7 @@ describe("Surfaces page — Configuration Runtime shell + naming", () => {
     const page = readSrc("components/adminV2/settings/surfaces/SurfacesConfigurationPage.tsx");
     const nav = readSrc("components/adminV2/settings/surfaces/useSurfacesConfigurationSettings.ts");
 
-    it("preserves the Configuration shell for the Surfaces list (Context → Section → Workspace)", () => {
+    it("preserves the Configuration shell for the Surfaces list (Context → Category → Collection → Workspace)", () => {
         expect(page).toContain("ConfigurationShell");
         expect(page).toContain('testId="surfaces-configuration-context"');
         expect(page).toContain('testId="surfaces-configuration-shell"');
@@ -45,15 +45,19 @@ describe("Surfaces page — Configuration Runtime shell + naming", () => {
         expect(nav).not.toContain("Opportunity · Summary");
     });
 
-    it("opens Focus Panel as a full-bleed wide builder (studio shell, not Surfaces IA column)", () => {
+    it("embeds Focus Panel inside the Selected Surface Edit tab — never a detached full-bleed studio route", () => {
         expect(page).toContain("FocusPanelSummarySurfaceEditor");
-        expect(page).toContain('data-focus-panel-builder-wide="true"');
-        expect(page).toContain("enterFocusPanelStudio");
-        expect(page).toContain("isFocusPanelEditor");
-        // Full-bleed early return — not trapped in ConfigurationShell queue columns.
-        expect(page).toContain("exitStudio");
-        expect(page).toContain('params.set("editor", "1")');
-        expect(page).toContain('params.set("layout", surfaceId)');
+        // The full-bleed studio-navigation path is gone: no router.replace(...) into
+        // `?editor=1&layout=` as the normal Edit journey, and no early return that replaces the
+        // whole page with only the editor.
+        expect(page).not.toContain("enterFocusPanelStudio");
+        expect(page).not.toContain("exitStudio");
+        expect(page).not.toContain("isFullBleedWorkspaceEditor");
+        expect(page).not.toContain("data-focus-panel-builder-wide");
+        expect(page).not.toContain('router.replace(`/settings/surfaces?${params.toString()}`)');
+        // Edit renders inline in the main workspace pane, `onBack` returns to Overview (same shell).
+        expect(page).toContain('selectedObject.editor === "focus-panel-summary"');
+        expect(page).toContain('<FocusPanelSummarySurfaceEditor onBack={() => setTab("overview")} />');
     });
 });
 

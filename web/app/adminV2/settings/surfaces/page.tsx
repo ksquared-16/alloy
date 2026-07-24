@@ -1,7 +1,6 @@
-import SurfacesConfigurationPage from "@/components/adminV2/settings/surfaces/SurfacesConfigurationPage";
-import OrganizationDomainLanding from "@/components/adminV2/settings/organization/OrganizationDomainLanding";
-import { buildSurfacesLandingModel } from "@/lib/configRuntime/surfacesLandingModel";
+import SurfacesPublicationWorkspace from "@/components/adminV2/settings/surfaces/SurfacesPublicationWorkspace";
 import type { SurfaceConfigSectionKey } from "@/components/adminV2/settings/surfaces/useSurfacesConfigurationSettings";
+import type { SurfaceWorkspaceTab } from "@/lib/adminV2/settings/surfaces/surfacesNavigationModel";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +9,7 @@ type PageProps = {
         section?: string | string[];
         editor?: string | string[];
         layout?: string | string[];
+        tab?: string | string[];
     }>;
 };
 
@@ -21,28 +21,58 @@ const SURFACE_SECTIONS = new Set<string>([
     "operational-intelligence",
 ]);
 
+const SURFACE_WORKSPACE_TABS = new Set<string>([
+    "overview",
+    "edit",
+    "assignments",
+    "versions",
+    "health",
+    "history",
+]);
+
+function firstOf(value: string | string[] | undefined): string | undefined {
+    const raw = Array.isArray(value) ? value[0] : value;
+    return typeof raw === "string" ? raw.trim() : undefined;
+}
+
 function asSurfaceSection(value: string): SurfaceConfigSectionKey | null {
     return SURFACE_SECTIONS.has(value) ? (value as SurfaceConfigSectionKey) : null;
 }
 
+function asSurfaceWorkspaceTab(value: string): SurfaceWorkspaceTab | null {
+    return SURFACE_WORKSPACE_TABS.has(value) ? (value as SurfaceWorkspaceTab) : null;
+}
+
+/**
+ * Organization Surfaces entry — `/organization/surfaces`.
+ *
+ * Bare path: Financials-style category tile landing.
+ * `?section=` : Collection → Selected Surface workspace (category rail omitted —
+ * categories live on the landing). `?editor=1&layout=` still resolves into embedded Edit.
+ */
 export default async function AdminV2SettingsSurfacesPage({ searchParams }: PageProps) {
     const resolved = searchParams ? await searchParams : {};
-    const rawSection = Array.isArray(resolved.section) ? resolved.section[0] : resolved.section;
-    const sectionRaw = typeof rawSection === "string" ? rawSection.trim().toLowerCase() : "";
+    const sectionRaw = firstOf(resolved.section)?.toLowerCase() ?? "";
     const section = asSurfaceSection(sectionRaw);
-    const hasEditor =
-        Boolean(Array.isArray(resolved.editor) ? resolved.editor[0] : resolved.editor)
-        || Boolean(Array.isArray(resolved.layout) ? resolved.layout[0] : resolved.layout);
 
-    if (section || hasEditor) {
-        return <SurfacesConfigurationPage initialSection={section ?? undefined} />;
-    }
+    const layoutId = firstOf(resolved.layout);
+    const hasEditorParam = Boolean(firstOf(resolved.editor));
+    const tabRaw = firstOf(resolved.tab)?.toLowerCase() ?? "";
+    const requestedTab = asSurfaceWorkspaceTab(tabRaw);
+    const initialTab: SurfaceWorkspaceTab | undefined = hasEditorParam ? "edit" : requestedTab ?? undefined;
+
+    // Deep-link with layout but no section — infer Focus Panels when the id matches,
+    // otherwise still open the workspace via SurfacesConfigurationPage once section is known.
+    // SurfacesPublicationWorkspace requires a section for drill-in; if only layout is present,
+    // treat as focus-panels (Enrollment Focus Panel deep links) so Edit still embeds.
+    const effectiveSection =
+        section ?? (layoutId || hasEditorParam ? ("focus-panels" as const) : null);
 
     return (
-        <OrganizationDomainLanding
-            model={buildSurfacesLandingModel()}
-            icon="layout-template"
-            testIdPrefix="surfaces"
+        <SurfacesPublicationWorkspace
+            initialSection={effectiveSection}
+            initialSurfaceId={layoutId}
+            initialTab={initialTab}
         />
     );
 }

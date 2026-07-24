@@ -1,8 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+/**
+ * Business Processes primary UX — Collection → Selected Process → Focused Workspace, same
+ * family as Access Users and Tuition Plans. Reuses the existing lifecycle catalog + builder
+ * APIs only; no new process/stage runtime and no parallel builder.
+ */
+
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import LifecycleActivationBoard from "@/components/adminV2/settings/lifecycle/LifecycleActivationBoard";
-import BusinessProcessProcessSelectorStrip from "@/components/adminV2/settings/businessProcess/BusinessProcessProcessSelectorStrip";
+import BusinessProcessCollectionRail, {
+    businessProcessHealthHint,
+    businessProcessStageSummary,
+} from "@/components/adminV2/settings/businessProcess/BusinessProcessCollectionRail";
+import {
+    ConfigurationEmptyState,
+    ConfigurationSecondaryButton,
+} from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import { ConfigWorkspaceTabBar } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
 import { lifecycleCatalogId } from "@/lib/lifecycle/lifecycleCatalog";
 import {
@@ -21,15 +35,26 @@ import LifecycleActivationDeleteModal from "@/components/adminV2/settings/lifecy
 import LifecycleDevCreateVerifyButton from "@/components/adminV2/settings/lifecycle/LifecycleDevCreateVerifyButton";
 import LifecycleTestCleanupButton from "@/components/adminV2/settings/lifecycle/LifecycleTestCleanupButton";
 import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
+import {
+    BUSINESS_PROCESS_EDIT_ACTION,
+    BUSINESS_PROCESS_HEADER_TABS,
+    BUSINESS_PROCESS_MORE_ACTION,
+    BUSINESS_PROCESS_NO_SELECTION_DESCRIPTION,
+    BUSINESS_PROCESS_NO_SELECTION_TITLE,
+    normalizeBusinessProcessSection,
+    type BusinessProcessWorkspaceSection,
+} from "@/lib/lifecycle/businessProcessUiLabels";
 
 export default function LifecycleBuilderPrimary({
     contextActions = null,
     onContextActionsChange,
     initialSection,
+    initialProcessId,
 }: {
     contextActions?: ReactNode;
     onContextActionsChange?: (actions: ReactNode) => void;
     initialSection?: string;
+    initialProcessId?: string;
 } = {}) {
     const { orgId, userId } = useAdminAuth();
     const [catalog, setCatalog] = useState<LifecycleCatalogEntry[]>([]);
@@ -40,6 +65,12 @@ export default function LifecycleBuilderPrimary({
     const [error, setError] = useState<string | null>(null);
     const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<LifecycleCatalogEntry | null>(null);
     const [deleting, setDeleting] = useState(false);
+    const [activeSection, setActiveSection] = useState<BusinessProcessWorkspaceSection>(
+        normalizeBusinessProcessSection(initialSection),
+    );
+    const [moreOpen, setMoreOpen] = useState(false);
+    const [renameTrigger, setRenameTrigger] = useState<(() => void) | null>(null);
+    const [didApplyInitialProcessId, setDidApplyInitialProcessId] = useState(false);
 
     const selectedCatalogEntry = identity ? findCatalogEntryForIdentity(catalog, identity) : null;
     const selectedCatalogId = selectedCatalogEntry?.id ?? (creatingNew ? "__new__" : null);
@@ -81,12 +112,23 @@ export default function LifecycleBuilderPrimary({
     const selectCatalogEntry = useCallback((entry: LifecycleCatalogEntry) => {
         setIdentity(buildIdentityFromCatalogEntry(entry));
         setCreatingNew(false);
+        setMoreOpen(false);
     }, []);
 
+    // Auto-select on catalog load: prefer an explicit `?processId=` deep link, otherwise the
+    // first catalog entry (operator convenience — avoids empty-state friction on first load).
     useEffect(() => {
         if (catalogLoading || creatingNew || identity || !catalog.length) return;
+        if (!didApplyInitialProcessId && initialProcessId) {
+            setDidApplyInitialProcessId(true);
+            const match = catalog.find((entry) => entry.id === initialProcessId);
+            if (match) {
+                selectCatalogEntry(match);
+                return;
+            }
+        }
         selectCatalogEntry(catalog[0]!);
-    }, [catalog, catalogLoading, creatingNew, identity, selectCatalogEntry]);
+    }, [catalog, catalogLoading, creatingNew, identity, initialProcessId, didApplyInitialProcessId, selectCatalogEntry]);
 
     const useRuntimeDepartment = useCallback(() => {
         if (!identity) return;
@@ -197,10 +239,14 @@ export default function LifecycleBuilderPrimary({
         setDeleteConfirmTarget(entry);
     }, []);
 
-    const showBoard = creatingNew || selectedCatalogEntry;
+    const headerMeta = useMemo(() => {
+        if (!selectedCatalogEntry) return null;
+        return `${businessProcessStageSummary(selectedCatalogEntry)} · ${businessProcessHealthHint(selectedCatalogEntry)}`;
+    }, [selectedCatalogEntry]);
 
     return (
         <div className="flex min-h-0 flex-1 flex-col gap-2" data-testid="lifecycle-builder-primary">
+            <h1 className="sr-only">Business Processes</h1>
             {isLifecycleDebugUiEnabled() ?
                 <>
                     <AdminAccessScopeDebugPanel surface="lifecycle" />
@@ -221,8 +267,11 @@ export default function LifecycleBuilderPrimary({
                 </p>
             :   null}
 
-            <div className="process-config-context-bar shrink-0" data-testid="process-config-context">
-                <BusinessProcessProcessSelectorStrip
+            <div
+                className="grid min-h-0 flex-1 items-start gap-4 xl:grid-cols-[22rem_minmax(0,1fr)]"
+                data-testid="business-process-collection-shell"
+            >
+                <BusinessProcessCollectionRail
                     items={catalog}
                     selectedId={selectedCatalogId}
                     loading={catalogLoading}
@@ -230,88 +279,166 @@ export default function LifecycleBuilderPrimary({
                     onCreateNew={() => {
                         setCreatingNew(true);
                         setIdentity(null);
+                        setMoreOpen(false);
                     }}
-                    trailingActions={contextActions}
                 />
-            </div>
 
-            {showBoard ?
-                <div className="flex min-h-0 flex-1 flex-col">
-                    <LifecycleActivationBoard
-                        key={creatingNew ? "new" : selectedCatalogEntry!.id}
-                        initialSection={
-                            initialSection === "stages"
-                            || initialSection === "work-views"
-                            || initialSection === "actions"
-                            || initialSection === "automation"
-                            || initialSection === "health"
-                                ? initialSection
-                                : "stages"
-                        }
-                        identity={
-                            creatingNew ?
-                                identity
-                            :   selectedCatalogEntry ?
-                                buildIdentityFromCatalogEntry(selectedCatalogEntry)
-                            :   null
-                        }
-                        catalog={catalog}
-                        creatingNew={creatingNew}
-                        onIdentityChange={setIdentity}
-                        onCatalogRefresh={() => void loadCatalog()}
-                        onWorkspaceBust={bumpWorkspace}
-                        onUseRuntimeDepartment={useRuntimeDepartment}
-                        onLifecycleCreated={async (deptId, procId, name) => {
-                            const interim = buildIdentityForNewLifecycle(deptId, procId, name);
-                            setIdentity(interim);
-                            bumpWorkspace();
-                            const items = await loadCatalog();
-                            const id = lifecycleCatalogId(deptId, procId);
-                            const row = items.find((c) => c.id === id);
-                            setIdentity(row ? buildIdentityFromCatalogEntry(row) : interim);
-                            setCreatingNew(false);
-                        }}
-                        onDeleted={() => {
-                            setIdentity(null);
-                            setCreatingNew(false);
-                            void loadCatalog();
-                        }}
-                        onRequestDelete={() => {
-                            const entry =
-                                selectedCatalogEntry ??
-                                (identity && catalog.length ?
-                                    findCatalogEntryForIdentity(catalog, identity)
-                                :   null);
-                            if (entry?.can_delete) onDeleteClick(entry);
-                        }}
-                        canDeleteLifecycle={selectedCatalogEntry?.can_delete ?? false}
-                        onRepairVisibility={
-                            selectedCatalogEntry?.can_repair ?
-                                () => void repairEntry(selectedCatalogEntry)
-                            :   undefined
-                        }
-                        repairingVisibility={repairingId === selectedCatalogEntry?.id}
-                        catalogSummary={
-                            selectedCatalogEntry ?
-                                {
-                                    trackCount: selectedCatalogEntry.track_count,
-                                    stageCount: selectedCatalogEntry.stage_count,
-                                    queueCount: selectedCatalogEntry.work_unit_count,
-                                }
-                            :   null
-                        }
-                        onBackToCatalog={() => {
-                            setCreatingNew(false);
-                            setIdentity(null);
-                        }}
-                        onContextActionsChange={onContextActionsChange}
-                    />
-                </div>
-            :   !catalogLoading && catalog.length ?
-                <p className="rounded-xl border border-dashed border-alloy-forge/20 bg-white px-4 py-6 text-center text-sm text-alloy-midnight/55">
-                    Select a process to configure stages, Work Views, and actions.
-                </p>
-            :   null}
+                <main className="min-w-0" data-testid="business-process-selected-main">
+                    {creatingNew || selectedCatalogEntry ? (
+                        creatingNew ? (
+                            <div className="flex min-h-0 flex-1 flex-col">
+                                <LifecycleActivationBoard
+                                    key="new"
+                                    initialSection={activeSection}
+                                    identity={identity}
+                                    catalog={catalog}
+                                    creatingNew
+                                    onIdentityChange={setIdentity}
+                                    onCatalogRefresh={() => void loadCatalog()}
+                                    onWorkspaceBust={bumpWorkspace}
+                                    onUseRuntimeDepartment={useRuntimeDepartment}
+                                    onLifecycleCreated={async (deptId, procId, name) => {
+                                        const interim = buildIdentityForNewLifecycle(deptId, procId, name);
+                                        setIdentity(interim);
+                                        bumpWorkspace();
+                                        const items = await loadCatalog();
+                                        const id = lifecycleCatalogId(deptId, procId);
+                                        const row = items.find((c) => c.id === id);
+                                        setIdentity(row ? buildIdentityFromCatalogEntry(row) : interim);
+                                        setCreatingNew(false);
+                                    }}
+                                    onDeleted={() => {
+                                        setIdentity(null);
+                                        setCreatingNew(false);
+                                        void loadCatalog();
+                                    }}
+                                    canDeleteLifecycle={false}
+                                    onBackToCatalog={() => {
+                                        setCreatingNew(false);
+                                        setIdentity(null);
+                                    }}
+                                    onContextActionsChange={onContextActionsChange}
+                                />
+                            </div>
+                        ) : selectedCatalogEntry ? (
+                            <div className="flex min-h-0 flex-1 flex-col gap-3">
+                                <section
+                                    className="process-config-setup-card p-5 shrink-0"
+                                    data-testid="business-process-selected-header"
+                                >
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <h2 className="config-typo-workspace-title text-xl text-alloy-midnight">
+                                                    {selectedCatalogEntry.lifecycle_name}
+                                                </h2>
+                                                <span
+                                                    className={`locations-collection-row__status ${
+                                                        selectedCatalogEntry.workspace.department_is_active
+                                                            ? "locations-collection-row__status--active"
+                                                            : ""
+                                                    }`}
+                                                    data-testid="business-process-selected-status"
+                                                >
+                                                    {selectedCatalogEntry.workspace.department_is_active
+                                                        ? "Active"
+                                                        : "Inactive"}
+                                                </span>
+                                            </div>
+                                            {headerMeta ?
+                                                <p
+                                                    className="mt-1 text-sm text-alloy-midnight/55"
+                                                    data-testid="business-process-selected-meta"
+                                                >
+                                                    {headerMeta}
+                                                </p>
+                                            :   null}
+                                        </div>
+                                        <div className="relative flex flex-wrap gap-2">
+                                            <ConfigurationSecondaryButton
+                                                onClick={() => renameTrigger?.()}
+                                                disabled={!renameTrigger}
+                                                data-testid="business-process-edit"
+                                            >
+                                                {BUSINESS_PROCESS_EDIT_ACTION}
+                                            </ConfigurationSecondaryButton>
+                                            <ConfigurationSecondaryButton
+                                                onClick={() => setMoreOpen((open) => !open)}
+                                                data-testid="business-process-more"
+                                            >
+                                                {BUSINESS_PROCESS_MORE_ACTION}
+                                            </ConfigurationSecondaryButton>
+                                            {moreOpen && contextActions ?
+                                                <div
+                                                    className="absolute right-0 top-full z-10 mt-1"
+                                                    data-testid="business-process-more-menu"
+                                                >
+                                                    {contextActions}
+                                                </div>
+                                            :   null}
+                                        </div>
+                                    </div>
+                                    <ConfigWorkspaceTabBar
+                                        tabs={BUSINESS_PROCESS_HEADER_TABS}
+                                        activeSection={activeSection}
+                                        onSectionChange={setActiveSection}
+                                        ariaLabel="Business process sections"
+                                        testIdPrefix="business-process-tab"
+                                    />
+                                </section>
+
+                                <div className="flex min-h-0 flex-1 flex-col">
+                                    <LifecycleActivationBoard
+                                        key={selectedCatalogEntry.id}
+                                        initialSection={activeSection}
+                                        activeProcessSection={activeSection}
+                                        onProcessSectionChange={setActiveSection}
+                                        onRenameTriggerReady={(trigger) => setRenameTrigger(() => trigger)}
+                                        identity={buildIdentityFromCatalogEntry(selectedCatalogEntry)}
+                                        catalog={catalog}
+                                        creatingNew={false}
+                                        onIdentityChange={setIdentity}
+                                        onCatalogRefresh={() => void loadCatalog()}
+                                        onWorkspaceBust={bumpWorkspace}
+                                        onUseRuntimeDepartment={useRuntimeDepartment}
+                                        onDeleted={() => {
+                                            setIdentity(null);
+                                            setCreatingNew(false);
+                                            void loadCatalog();
+                                        }}
+                                        onRequestDelete={() => {
+                                            if (selectedCatalogEntry.can_delete) onDeleteClick(selectedCatalogEntry);
+                                        }}
+                                        canDeleteLifecycle={selectedCatalogEntry.can_delete}
+                                        onRepairVisibility={
+                                            selectedCatalogEntry.can_repair
+                                                ? () => void repairEntry(selectedCatalogEntry)
+                                                : undefined
+                                        }
+                                        repairingVisibility={repairingId === selectedCatalogEntry.id}
+                                        catalogSummary={{
+                                            trackCount: selectedCatalogEntry.track_count,
+                                            stageCount: selectedCatalogEntry.stage_count,
+                                            queueCount: selectedCatalogEntry.work_unit_count,
+                                        }}
+                                        onBackToCatalog={() => {
+                                            setCreatingNew(false);
+                                            setIdentity(null);
+                                        }}
+                                        onContextActionsChange={onContextActionsChange}
+                                    />
+                                </div>
+                            </div>
+                        ) : null
+                    ) : (
+                        <ConfigurationEmptyState
+                            testId="business-process-no-selection"
+                            title={BUSINESS_PROCESS_NO_SELECTION_TITLE}
+                            description={BUSINESS_PROCESS_NO_SELECTION_DESCRIPTION}
+                        />
+                    )}
+                </main>
+            </div>
 
             <LifecycleActivationDeleteModal
                 open={deleteConfirmTarget != null}

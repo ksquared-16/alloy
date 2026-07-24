@@ -90,7 +90,7 @@ function AdminV2SettingsClientProvidersInner({
                         </div>
                         <div className="flex min-h-0 flex-1 overflow-hidden">
                             <div
-                                className={`min-h-0 min-w-0 flex-1 ${isProcessesSurface ? "flex flex-col overflow-hidden px-4 pb-4 pt-3 sm:px-5" : "overflow-y-auto px-4 pb-8 pt-3 sm:px-5"}`}
+                                className={`min-h-0 min-w-0 flex-1 ${isProcessesSurface ? "flex flex-col overflow-hidden px-4 pb-4 pt-2 sm:px-5" : "overflow-y-auto px-4 pb-6 pt-2 sm:px-5"}`}
                             >
                                 {children}
                             </div>

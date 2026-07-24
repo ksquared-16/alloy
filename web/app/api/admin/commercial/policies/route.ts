@@ -16,7 +16,7 @@ import {
  */
 
 export const SELECT_COLS =
-    "id, org_id, scope_type, location_id, program_key, offering_id, variant_id, policy_type, label, description, value, effective_start, effective_end, is_active, created_at, updated_at";
+    "id, org_id, scope_type, location_id, program_key, offering_id, variant_id, policy_type, label, description, value, effective_start, effective_end, is_active, metadata, created_at, updated_at";
 
 export type CommercialPolicyApiRow = {
     id: string;
@@ -33,6 +33,7 @@ export type CommercialPolicyApiRow = {
     effective_start: string | null;
     effective_end: string | null;
     is_active: boolean;
+    metadata: Record<string, unknown>;
     created_at: string;
     updated_at: string | null;
 };
@@ -55,6 +56,10 @@ export function mapPolicyRow(r: Record<string, unknown>): CommercialPolicyApiRow
         effective_start: (r.effective_start as string | null | undefined) ?? null,
         effective_end: (r.effective_end as string | null | undefined) ?? null,
         is_active: r.is_active !== false,
+        metadata:
+            r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
+                ? (r.metadata as Record<string, unknown>)
+                : {},
         created_at: String(r.created_at ?? ""),
         updated_at: (r.updated_at as string | null | undefined) ?? null,
     };
@@ -133,6 +138,10 @@ export async function POST(request: NextRequest) {
             effective_start: effStart ?? "2000-01-01",
             effective_end: effEnd,
             is_active: body.is_active !== false,
+            metadata:
+                body.metadata != null && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+                    ? (body.metadata as Record<string, unknown>)
+                    : {},
         })
         .select(SELECT_COLS)
         .single();

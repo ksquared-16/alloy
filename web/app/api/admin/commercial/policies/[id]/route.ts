@@ -38,6 +38,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if ("effective_start" in body) patch.effective_start = String(body.effective_start ?? "").trim() || "2000-01-01";
     if ("effective_end" in body) patch.effective_end = String(body.effective_end ?? "").trim() || null;
+    if (body.metadata !== undefined && typeof body.metadata === "object" && !Array.isArray(body.metadata)) {
+        patch.metadata = body.metadata;
+    }
     if (patch.effective_start && patch.effective_end && String(patch.effective_end) < String(patch.effective_start)) {
         return NextResponse.json({ error: "end date must be on or after the start date" }, { status: 400 });
     }
