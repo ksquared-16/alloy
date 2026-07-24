@@ -146,12 +146,25 @@ describe("tour lifecycle — a failed transition leaves the booking untouched", 
     });
 });
 
+// Await a call expected to reject with a TourBookingTransactionError and return it, narrowed via a
+// real instanceof guard — so the assertions read the transaction-error contract, not the
+// success-row (`TourBookingRow`) side of the union.
+async function captureTourFailure(p: Promise<unknown>): Promise<TourBookingTransactionError> {
+    try {
+        await p;
+    } catch (e) {
+        if (e instanceof TourBookingTransactionError) return e;
+        throw e;
+    }
+    throw new Error("expected markTourBookingCompleted to reject with a TourBookingTransactionError");
+}
+
 describe("tour lifecycle — the operator is told whether anything changed", () => {
     it("a clean rollback reports changed=false", async () => {
         mockIntegration.mockRejectedValue(new Error("mirror failed"));
 
-        const error = await markTourBookingCompleted(makeSupabase() as never, orgId, bookingId).catch(
-            (e: unknown) => e as TourBookingTransactionError,
+        const error = await captureTourFailure(
+            markTourBookingCompleted(makeSupabase() as never, orgId, bookingId),
         );
 
         expect(error).toBeInstanceOf(TourBookingTransactionError);
@@ -167,8 +180,8 @@ describe("tour lifecycle — the operator is told whether anything changed", () 
             throw new Error("mirror failed");
         });
 
-        const error = await markTourBookingCompleted(makeSupabase() as never, orgId, bookingId).catch(
-            (e: unknown) => e as TourBookingTransactionError,
+        const error = await captureTourFailure(
+            markTourBookingCompleted(makeSupabase() as never, orgId, bookingId),
         );
 
         expect(error.changed).toBe(true);

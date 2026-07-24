@@ -27,8 +27,10 @@ const views: HeaderPlacementView[] = [
 describe("Header placement ⇄ SurfaceDoc mapping", () => {
     it("writes each header to the zone the runtime reads", () => {
         expect(HEADER_ZONE_BY_SURFACE.workspace_header).toBe("primary_metrics");
-        expect(HEADER_ZONE_BY_SURFACE.work_unit_header).toBe("header_metrics");
         expect(isHeaderSurface("workspace_header")).toBe(true);
+        // The header vocabulary has collapsed to the single workspace_header surface — the legacy
+        // work_unit_header surface is no longer part of the contract.
+        expect(isHeaderSurface("work_unit_header")).toBe(false);
         expect(isHeaderSurface("operational_intelligence")).toBe(false);
     });
 

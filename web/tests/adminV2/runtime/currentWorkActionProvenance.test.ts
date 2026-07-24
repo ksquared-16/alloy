@@ -69,13 +69,17 @@ describe("What's Next action provenance — host resolves from capability metada
 });
 
 describe("What's Next action provenance — rendering follows configured PLACEMENT", () => {
-    function surfaceWith(over: Partial<CurrentWorkSurfaceVM>): CurrentWorkSurfaceVM {
+    type ActionPlacementSurface = Pick<
+        CurrentWorkSurfaceVM,
+        "primaryAction" | "recordOutcomeAction" | "supportingActions"
+    >;
+    function surfaceWith(over: Partial<ActionPlacementSurface>): ActionPlacementSurface {
         return {
             primaryAction: null,
             recordOutcomeAction: null,
             supportingActions: [],
-            ...(over as object),
-        } as CurrentWorkSurfaceVM;
+            ...over,
+        };
     }
 
     it("proof 2: an action present in a configured placement renders; removing the placement removes it", () => {

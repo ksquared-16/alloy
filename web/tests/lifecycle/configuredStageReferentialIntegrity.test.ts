@@ -301,7 +301,7 @@ describe("publish rejects dangling references", () => {
                             key: "tour",
                             is_active: true,
                             stage_operating_plan_v1: planWith({
-                                outgoing_transitions: [{ transition_ref: "t1", source_stage_key: "tour", target_stage_key: "decision", available: true }],
+                                outgoing_transitions: [{ transition_ref: "t1", label: "Tour → Decision", source_stage_key: "tour", target_stage_key: "decision", available: true }],
                                 outcome_rules: [
                                     { rule_key: "r", when_outcome_key: "o", targets: [{ kind: "move_to_stage", transition_ref: "t1" }] },
                                 ] as never,
