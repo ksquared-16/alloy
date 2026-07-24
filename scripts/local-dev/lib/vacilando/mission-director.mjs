@@ -12,10 +12,10 @@
  *   - DURABLE: a mission turn is a first-class Director request (active_request_id),
  *     so it appears in the same request timeline as every other worker instruction.
  */
-import { retrieveCapability, getCapability, updateCapability } from "./capability.mjs";
-import { getProductDefinitionForCapability, recordMissionInHistory } from "./product-definition.mjs";
+import { retrieveCapability, getCapability, updateCapability, registerCapability } from "./capability.mjs";
+import { getProductDefinitionForCapability, recordMissionInHistory, ensureProductDefinitionForCapability, addDecisionForCapability } from "./product-definition.mjs";
 import { retrieveForCapability } from "./knowledge.mjs";
-import { analyzeGap } from "./gap-analysis.mjs";
+import { analyzeGap, parseIntent } from "./gap-analysis.mjs";
 import { deriveVerdict } from "./director-review.mjs";
 import { compile } from "./mission-compiler.mjs";
 import { createMission, getMission, updateMission } from "./commands/missions.mjs";
@@ -93,6 +93,7 @@ export function compileMissionForIntent({ slot, intent }) {
 
   updateMission(mission.mission_id, {
     title: pkg.title, objective: pkg.objective, capability_id: capability.capability_id,
+    intent, // the operator's own words — recompilation reuses them
     package_id: pkg.package_id, package_version: pkg.version,
     gap_report_id: gapReport.gap_report_id, readiness_verdict: verdict.verdict,
     status: verdict.verdict === "Ready" && pkg.readiness_status === "ready" ? "ready" : "draft",
@@ -101,6 +102,77 @@ export function compileMissionForIntent({ slot, intent }) {
   const m = getMission(mission.mission_id);
   audit("compile", targetOf(m, identity), "succeeded", { summary: `compiled ${pkg.package_id} → ${verdict.verdict}`, input: { intent } });
   return { ok: true, mission: m, package: pkg, capability, snapshot, gap_report: gapReport, verdict, identity };
+}
+
+/**
+ * Recompile an existing mission after the operator resolved a blocker (e.g. added
+ * a product decision). Re-runs Knowledge → Gap Analysis → Compiler, revising the
+ * prior package into a NEW version with a diff, and re-deriving the verdict. This
+ * is what makes a send-back loop close: resolve upstream → recompile → watch
+ * readiness climb.
+ */
+export function recompileMission({ mission_id }) {
+  const mission = getMission(mission_id);
+  if (!mission) return { ok: false, error: "unknown_mission" };
+  if (isLive(mission_id)) return { ok: false, error: "mid_turn" };
+  const capability = mission.capability_id ? getCapability(mission.capability_id) : null;
+  if (!capability) return { ok: false, error: "no_capability" };
+  const intent = mission.intent || mission.title || capability.name;
+  const prevPkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
+  if (!prevPkg) return { ok: false, error: "no_package" };
+
+  const snapshot = retrieveForCapability(capability);
+  const gapReport = analyzeGap({ intent, capability, snapshot });
+  const { package: pkgRaw } = compile({ capability, snapshot, mission, gapReport, reviseOf: prevPkg.package_id });
+
+  const verdict = deriveVerdict(gapReport, pkgRaw);
+  const prevVerdict = prevPkg.readiness_verdict?.verdict || "?";
+  const diff = { ...(pkgRaw.diff_from_previous || {}), verdict_change: prevVerdict !== verdict.verdict ? `${prevVerdict} → ${verdict.verdict}` : null };
+  const pkg = updatePackage(pkgRaw.package_id, { readiness_verdict: verdict, diff_from_previous: diff }) || pkgRaw;
+
+  updateMission(mission_id, {
+    package_id: pkg.package_id, package_version: pkg.version, gap_report_id: gapReport.gap_report_id,
+    readiness_verdict: verdict.verdict,
+    status: verdict.verdict === "Ready" && pkg.readiness_status === "ready" ? "ready" : "draft",
+  });
+  const identity = resolveSlotIdentity(mission.worker_slot);
+  const m = getMission(mission_id);
+  audit("recompile", targetOf(m, identity), "succeeded", { summary: `recompiled → v${pkg.version} (${verdict.verdict})` });
+  return { ok: true, mission: m, package: pkg, capability, snapshot, gap_report: gapReport, verdict, diff };
+}
+
+/** Turn an intent into a capability display name (strip leading verb + version). */
+export function capabilityNameFromIntent(intent) {
+  const p = parseIntent(intent);
+  let name = p.raw.replace(new RegExp(`^\\s*${p.verb}\\b`, "i"), "");
+  if (p.version_hint) name = name.replace(new RegExp(`\\b${p.version_hint}\\b`, "i"), "");
+  name = name.replace(/\s+/g, " ").trim();
+  return name.split(" ").map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" ") || p.raw;
+}
+
+/**
+ * Director doesn't know this capability yet — define it. Registers a real
+ * capability from the operator's intent and gives it an (empty) Product
+ * Definition so it can immediately be prepared. The operator then adds decisions
+ * via send-back. No silent discovery — the operator explicitly defines it.
+ */
+export function defineCapability({ intent, name }) {
+  const capName = (name && name.trim()) || capabilityNameFromIntent(intent);
+  const reg = registerCapability({ name: capName, description: `Defined from operator intent: "${intent}".`, maturity: "new" });
+  if (!reg.ok) return { ok: false, error: reg.error };
+  ensureProductDefinitionForCapability(reg.capability.capability_id, { name: capName });
+  audit("define-capability", { kind: "capability", id: reg.capability.capability_id, label: capName }, "succeeded", { summary: `defined "${capName}"`, input: { intent } });
+  return { ok: true, capability: getCapability(reg.capability.capability_id), created: reg.created };
+}
+
+/** Add a product decision (the "Needs Product Decisions" send-back resolution). */
+export function addProductDecision({ capability_id, statement, rationale, actor = "operator" }) {
+  const cap = getCapability(capability_id);
+  if (!cap) return { ok: false, error: "unknown_capability" };
+  if (!statement || !String(statement).trim()) return { ok: false, error: "empty_statement" };
+  const r = addDecisionForCapability(capability_id, { statement, rationale, decided_by: actor, provenance: "operator" }, { name: cap.name });
+  audit("product-decision", { kind: "capability", id: capability_id, label: cap.name }, "succeeded", { summary: statement.slice(0, 60), confirmed: true });
+  return { ok: true, product_definition_id: r.product_definition_id, decision: r.decision, added: r.added };
 }
 
 /** Build a preview for a consequential mission action (pure; never executes). */

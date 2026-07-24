@@ -49,7 +49,7 @@ import { readMissions, getMission, recoverMissions } from "./vacilando/commands/
 import { getPackage } from "./vacilando/commands/mission-packages.mjs";
 import { readMissionOutputs, readTurnOutput, liveMissionIds } from "./vacilando/mission-executor.mjs";
 import { providerResumable } from "./vacilando/provider-runtime.mjs";
-import { compileMissionForIntent, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, previewAction, readAcceptance } from "./vacilando/mission-director.mjs";
+import { compileMissionForIntent, recompileMission, defineCapability, addProductDecision, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, previewAction, readAcceptance } from "./vacilando/mission-director.mjs";
 import { listCapabilities, getCapability, registerCapability } from "./vacilando/capability.mjs";
 import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
 import { resolveSlotIdentity, runtimeHost, hostRegistration, listSlotIdentities, hostIdentity } from "./vacilando/identity.mjs";
@@ -494,6 +494,24 @@ export function createVacilandoServer() {
       return sendJson(res, 202, { ok: true, request_id: rec.request_id, status: "queued", created_at: rec.created_at, request_type: rec.request_type });
     }
 
+    // Director: define a capability from an intent (no more no_capability dead-end).
+    if (req.method === "POST" && path === "/api/director/define-capability") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      const { intent, name } = body.value || {};
+      if ((!intent || !String(intent).trim()) && (!name || !String(name).trim())) return sendJson(res, 400, { ok: false, error: "empty_intent" });
+      const out = defineCapability({ intent: intent || name, name });
+      return sendJson(res, out.ok ? 201 : 400, out);
+    }
+    // Director: add a product decision (resolves a "Needs Product Decisions" blocker).
+    if (req.method === "POST" && path === "/api/director/product-decision") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      const { capability_id, statement, rationale } = body.value || {};
+      const out = addProductDecision({ capability_id, statement, rationale });
+      return sendJson(res, out.ok ? 200 : 400, out);
+    }
+
     // Capability registration (additive; idempotent by capability_id).
     if (req.method === "POST" && path === "/api/capabilities") {
       const body = await readJsonBody(req);
@@ -544,6 +562,10 @@ export function createVacilandoServer() {
       if (path === "/api/missions/stop") {
         const out = directorStop({ mission_id: mid, confirm: v.confirm === true });
         return sendJson(res, out.ok ? 200 : (out.error === "confirmation_required" ? 428 : 409), out);
+      }
+      if (path === "/api/missions/recompile") {
+        const out = recompileMission({ mission_id: mid });
+        return sendJson(res, out.ok ? 200 : 409, out);
       }
       if (path === "/api/missions/evaluate") return sendJson(res, 200, directorEvaluate({ mission_id: mid }));
       if (path === "/api/missions/accept") {

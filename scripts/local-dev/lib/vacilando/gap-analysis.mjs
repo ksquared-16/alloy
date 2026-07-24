@@ -31,7 +31,7 @@ function ensureDir() { if (!existsSync(GAP_DIR)) mkdirSync(GAP_DIR, { recursive:
 function parseIntent(intent) {
   const raw = String(intent || "").trim();
   const versionHint = (raw.match(/\bv(\d+)\b/i) || [])[1] || null;
-  const verb = (raw.match(/^\s*(build|extend|fix|refactor|design|add|replace|harden)\b/i) || [])[1]?.toLowerCase() || "build";
+  const verb = (raw.match(/^\s*(build|extend|fix|refactor|redesign|design|improve|create|update|rebuild|revamp|enhance|add|replace|harden|make)\b/i) || [])[1]?.toLowerCase() || "build";
   return { raw, verb, version_hint: versionHint ? `v${versionHint}` : null };
 }
 
@@ -53,16 +53,19 @@ export const DeterministicReasoner = {
     const pd = capability.product_definition || null;
     const sec = snapshot?.sections || {};
 
-    // R1 — no product definition → cannot prepare product truth. (Needs Decisions)
+    // R1 — no product definition, or an EMPTY one → nothing has been decided yet.
+    const decided = (pd?.accepted_decisions || []).length + (pd?.goals || []).length + (pd?.constraints || []).length;
     if (!pd) {
-      missing_information.push({ id: "m_pd", what: "The capability has no Product Definition — decisions/constraints are unknown.", severity: "block", feeds_verdict: "Needs Decisions" });
+      missing_information.push({ id: "m_pd", what: "Director has no product definition for this capability yet — nothing has been decided.", severity: "block", feeds_verdict: "Needs Product Decisions" });
+    } else if (decided === 0) {
+      missing_information.push({ id: "m_pd_empty", what: "This capability has no decisions, goals, or constraints recorded yet.", severity: "block", feeds_verdict: "Needs Product Decisions" });
     } else {
-      // R2 — an active goal not reflected in the roadmap → how will it be delivered? (Needs Decisions)
+      // R2 — an active goal not reflected in the roadmap → how will it be delivered?
       const roadmapText = (capability.roadmap || []).map((r) => String(r.item || "").toLowerCase()).join(" | ");
       for (const g of (pd.goals || []).filter((x) => x.status === "active")) {
         const words = String(g.statement || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3);
         const reflected = words.length && words.some((w) => roadmapText.includes(w));
-        if (!reflected) unknowns.push({ id: `u_goal_${g.id}`, question: `How does "${capability.name}" deliver goal ${g.id}: ${g.statement}?`, blocking: false, feeds_verdict: "Needs Review" });
+        if (!reflected) unknowns.push({ id: `u_goal_${g.id}`, question: `How does "${capability.name}" deliver goal ${g.id}: ${g.statement}?`, blocking: false, feeds_verdict: "Needs Clarification" });
       }
     }
 
@@ -77,16 +80,16 @@ export const DeterministicReasoner = {
     // R4 — no resolvable architecture reference → architecture is undefined. (Needs Architecture)
     const arch = (sec.architecture || []).filter((a) => a.exists !== false);
     if (arch.length === 0) {
-      missing_information.push({ id: "m_arch", what: "No architecture reference resolves on disk for this capability.", severity: "warn", feeds_verdict: "Needs Architecture" });
+      missing_information.push({ id: "m_arch", what: "No architecture reference resolves on disk for this capability.", severity: "warn", feeds_verdict: "Needs Product Decisions" });
     }
 
     // R5 — each planned roadmap item needs a covering acceptance criterion. (Needs Acceptance)
     for (const r of (capability.roadmap || []).filter((x) => x.status === "planned" || /v2/i.test(x.item))) {
-      suggested_acceptance_criteria.push({ statement: `The V2 proposal covers roadmap item: ${r.item}.`, from: `roadmap:${r.id}`, feeds_verdict: "Needs Acceptance" });
+      suggested_acceptance_criteria.push({ statement: `The V2 proposal covers roadmap item: ${r.item}.`, from: `roadmap:${r.id}`, feeds_verdict: "Needs Acceptance Criteria" });
     }
     // R6 — each OPEN known issue should be acknowledged by the mission. (Needs Acceptance)
     for (const k of (capability.known_issues || []).filter((x) => x.status === "open")) {
-      suggested_acceptance_criteria.push({ statement: `The proposal addresses known issue ${k.id}: ${k.issue}`, from: `known_issue:${k.id}`, feeds_verdict: "Needs Acceptance" });
+      suggested_acceptance_criteria.push({ statement: `The proposal addresses known issue ${k.id}: ${k.issue}`, from: `known_issue:${k.id}`, feeds_verdict: "Needs Acceptance Criteria" });
       unknowns.push({ id: `u_ki_${k.id}`, question: `Does the intent's scope include known issue ${k.id}?`, blocking: false, feeds_verdict: "Needs Review" });
     }
 
@@ -95,13 +98,13 @@ export const DeterministicReasoner = {
     for (const rp of (capability.rejected_patterns || [])) {
       const probe = String(rp.statement || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 4).slice(0, 3);
       if (probe.length >= 2 && probe.every((w) => intentText.includes(w))) {
-        conflicts.push({ id: `x_${rp.id}`, between: ["intent", rp.id], detail: `Intent text overlaps rejected pattern ${rp.id}: ${rp.statement}`, severity: "warn", feeds_verdict: "Needs Review" });
+        conflicts.push({ id: `x_${rp.id}`, between: ["intent", rp.id], detail: `Intent text overlaps rejected pattern ${rp.id}: ${rp.statement}`, severity: "warn", feeds_verdict: "Needs Clarification" });
       }
     }
 
     // R8 — version delta on a "new" capability is a mismatch worth surfacing. (Needs Review)
     if (parsed.version_hint && capability.maturity === "new") {
-      unknowns.push({ id: "u_maturity", question: `Intent asks for ${parsed.version_hint} but the capability maturity is "new" — is there a V1 to extend?`, blocking: false, feeds_verdict: "Needs Review" });
+      unknowns.push({ id: "u_maturity", question: `Intent asks for ${parsed.version_hint} but the capability maturity is "new" — is there a V1 to extend?`, blocking: false, feeds_verdict: "Needs Clarification" });
     }
 
     return { missing_information, conflicts, unknowns, recommended_references, suggested_acceptance_criteria, missing_files };

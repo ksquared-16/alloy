@@ -129,6 +129,34 @@ export function getProductDefinitionForCapability(capability_id) {
 }
 
 /**
+ * Ensure a capability has a Product Definition, creating an EMPTY one if it has
+ * none (so a newly-defined capability can immediately receive its first decision).
+ * Returns the product definition.
+ */
+export function ensureProductDefinitionForCapability(capability_id, { name, nowMs } = {}) {
+  const existing = getProductDefinitionForCapability(capability_id);
+  if (existing) return existing;
+  const now = nowMs ?? Date.now();
+  const pd_id = "pd_" + String(capability_id).replace(/^cap_/, "");
+  const rec = {
+    schema_version: "vacilando.product-definition.v1",
+    product_definition_id: pd_id, capability_id, name: name || capability_id,
+    accepted_decisions: [], rejected_patterns: [], constraints: [], patterns: [], goals: [],
+    architecture_references: [], known_tradeoffs: [], relationships: [], referenced_documents: [],
+    operator_notes: [], mission_history: [],
+    updated_at: iso(now), updated_by: "operator",
+  };
+  append({ event: "created", ...rec });
+  return rec;
+}
+
+/** Add a decision to a capability's Product Definition, creating the PD if needed. */
+export function addDecisionForCapability(capability_id, decision, { name, nowMs } = {}) {
+  const pd = ensureProductDefinitionForCapability(capability_id, { name, nowMs });
+  return addAcceptedDecision(pd.product_definition_id, decision, { nowMs });
+}
+
+/**
  * Append an accepted decision (learning loop). Idempotent by decision id — a
  * decision already present is not duplicated. Provenance is required so every
  * decision traces to the mission (or operator) that settled it.

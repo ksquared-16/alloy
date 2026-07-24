@@ -18,21 +18,31 @@
  * they inform the operator without falsely blocking a ready package.
  */
 
-const PRECEDENCE = ["Needs Decisions", "Needs Architecture", "Needs References", "Needs Acceptance", "Needs Review"];
+const PRECEDENCE = ["Needs Product Decisions", "Needs References", "Needs Acceptance Criteria", "Needs Clarification", "Needs Review"];
 
 // Which runtime the operator should feed to resolve each verdict.
 const SEND_BACK = {
-  "Needs Decisions": "product-definition",
-  "Needs Architecture": "product-definition",
+  "Needs Product Decisions": "product-definition",
   "Needs References": "knowledge",
-  "Needs Acceptance": "acceptance",
+  "Needs Acceptance Criteria": "acceptance",
+  "Needs Clarification": "operator",
   "Needs Review": "operator",
   Ready: null,
 };
 
+// Operator language — every blocker answers Why? / What should I do? / Where do I go?
+const GUIDANCE = {
+  "Needs Product Decisions": { why: "Director doesn't yet have the product decisions this mission depends on.", what: "Record the decisions, goals, or constraints that shape this capability.", where_label: "Open Product Definition" },
+  "Needs References": { why: "A document or file this mission points at can't be found.", what: "Repoint or remove the missing references.", where_label: "Open Knowledge" },
+  "Needs Acceptance Criteria": { why: "Some of the work isn't yet covered by a way to check it's done.", what: "Adopt or adjust the suggested acceptance criteria.", where_label: "Open Acceptance" },
+  "Needs Clarification": { why: "Director found open questions it can't answer on its own.", what: "Answer the open questions so Director can finish preparing.", where_label: "Answer Questions" },
+  "Needs Review": { why: "Something needs your judgment before this is ready.", what: "Review the flagged items and confirm.", where_label: "Review" },
+  Ready: { why: "Everything Director needs is in place.", what: "Approve the package and send it to the worker.", where_label: null },
+};
+
 /** Map a package-validation block finding to a verdict bucket. */
 function verdictForValidationCode(code) {
-  if (code === "acceptance_criteria_missing" || code === "qa_plan_missing") return "Needs Acceptance";
+  if (code === "acceptance_criteria_missing" || code === "qa_plan_missing") return "Needs Acceptance Criteria";
   if (code === "governance_missing") return "Needs Review";
   return "Needs Review"; // objective/scope/deliverable gaps → human review
 }
@@ -76,11 +86,15 @@ export function deriveVerdict(gapReport, pkg) {
   let verdict = "Ready";
   for (const v of PRECEDENCE) if (blocking.has(v)) { verdict = v; break; }
   const reasons = verdict === "Ready" ? [] : blocking.get(verdict) || [];
+  const g = GUIDANCE[verdict] || {};
 
   return {
     verdict,
     status: verdict === "Ready" ? "ready" : "awaiting_operator",
     send_back_to: SEND_BACK[verdict] ?? null,
+    why: g.why || null,
+    what_to_do: g.what || null,
+    where_label: g.where_label || null,
     reasons,
     advisory,
     confidence: gapReport?.confidence ?? null,
@@ -88,4 +102,4 @@ export function deriveVerdict(gapReport, pkg) {
   };
 }
 
-export { PRECEDENCE, SEND_BACK };
+export { PRECEDENCE, SEND_BACK, GUIDANCE };

@@ -14,7 +14,8 @@ process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-test-"));
 const { validatePackage, createPackage, getPackage, revisePackage, computeDiff, packageLineage } = await import("../lib/vacilando/commands/mission-packages.mjs");
 const { deriveVerdict } = await import("../lib/vacilando/director-review.mjs");
 const { retrieveCapability, getCapability, registerCapability, listCapabilities } = await import("../lib/vacilando/capability.mjs");
-const { getProductDefinitionForCapability, addAcceptedDecision, recordMissionInHistory, ensureSeeded: ensurePdSeeded } = await import("../lib/vacilando/product-definition.mjs");
+const { getProductDefinitionForCapability, addAcceptedDecision, recordMissionInHistory, ensureProductDefinitionForCapability, addDecisionForCapability } = await import("../lib/vacilando/product-definition.mjs");
+const { capabilityNameFromIntent } = await import("../lib/vacilando/mission-director.mjs");
 const { retrieveForCapability, readSnapshot } = await import("../lib/vacilando/knowledge.mjs");
 const { createMission, getMission, recoverMissions, updateMission } = await import("../lib/vacilando/commands/missions.mjs");
 const { compile } = await import("../lib/vacilando/mission-compiler.mjs");
@@ -114,7 +115,7 @@ test("gap analysis suggests criteria from roadmap + known issues, and is reprodu
   // one suggested criterion per planned roadmap item (rm1..rm3) + the open known issue
   const froms = r1.findings.suggested_acceptance_criteria.map((c) => c.from);
   assert.ok(froms.includes("roadmap:rm1") && froms.includes("known_issue:ki1"), "criteria suggested from roadmap + issues");
-  assert.ok(r1.findings.suggested_acceptance_criteria.every((c) => c.feeds_verdict === "Needs Acceptance"));
+  assert.ok(r1.findings.suggested_acceptance_criteria.every((c) => c.feeds_verdict === "Needs Acceptance Criteria"));
   assert.ok(r1.confidence > 0 && r1.confidence <= 1, "confidence is a real coverage ratio");
   // reproducible: same intent + snapshot + reasoner → same report id
   const r2 = analyzeGap({ intent: "Build Access & Roles V2", capability: cap, snapshot: snap });
@@ -129,7 +130,7 @@ test("a capability with no product definition yields a blocking Needs Decisions 
   const block = report.findings.missing_information.find((m) => m.id === "m_pd");
   assert.ok(block, "missing product definition is surfaced");
   assert.equal(block.severity, "block");
-  assert.equal(block.feeds_verdict, "Needs Decisions");
+  assert.equal(block.feeds_verdict, "Needs Product Decisions");
 });
 
 // --- Mission Package v2 + Director Review verdict (steps 5–6) ---
@@ -160,9 +161,9 @@ test("readiness verdict: mature capability → Ready; missing product definition
   assert.equal(ready.send_back_to, null);
   assert.ok(ready.advisory.length >= 1, "non-blocking gaps surface as advisory, not blockers");
   // Needs Decisions: a bare capability with a blocking missing-PD gap.
-  const bareGap = { findings: { missing_information: [{ id: "m_pd", what: "no PD", severity: "block", feeds_verdict: "Needs Decisions" }] }, confidence: 0.2 };
+  const bareGap = { findings: { missing_information: [{ id: "m_pd", what: "no PD", severity: "block", feeds_verdict: "Needs Product Decisions" }] }, confidence: 0.2 };
   const v = deriveVerdict(bareGap, pkg);
-  assert.equal(v.verdict, "Needs Decisions");
+  assert.equal(v.verdict, "Needs Product Decisions");
   assert.equal(v.send_back_to, "product-definition");
   assert.ok(v.reasons.length >= 1);
 });
@@ -178,6 +179,40 @@ test("package versioning: revise creates v2 with a diff and supersedes v1", () =
   assert.equal(v2.diff_from_previous.verdict_change, "Needs Acceptance → Ready");
   assert.equal(getPackage(v1.package_id).readiness_status, "superseded", "v1 superseded");
   assert.equal(packageLineage(v1.package_lineage_id).length, 2, "lineage has both versions");
+});
+
+// --- Director Experience V1: define-capability + send-back loop + recompile ---
+
+test("an intent becomes a clean capability name", () => {
+  assert.equal(capabilityNameFromIntent("Improve Scheduling"), "Scheduling");
+  assert.equal(capabilityNameFromIntent("Communications V2"), "Communications");
+  assert.equal(capabilityNameFromIntent("Fix runtime responsiveness"), "Runtime Responsiveness");
+  assert.equal(capabilityNameFromIntent("Redesign Financials"), "Financials");
+});
+
+test("a newly-defined capability can receive its first decision (send-back resolution)", () => {
+  const reg = registerCapability({ name: "Scheduling Exp Test", maturity: "new" });
+  const cid = reg.capability.capability_id;
+  assert.equal(getProductDefinitionForCapability(cid), null, "no product definition yet");
+  const pd = ensureProductDefinitionForCapability(cid, { name: "Scheduling Exp Test" });
+  assert.ok(pd.product_definition_id.startsWith("pd_"));
+  const add = addDecisionForCapability(cid, { statement: "Scheduling honors operating-day pills.", provenance: "operator" });
+  assert.equal(add.ok, true); assert.equal(add.added, true);
+  const cap = getCapability(cid);
+  assert.ok(cap.accepted_decisions.some((d) => /operating-day/.test(d.statement)), "decision hydrates onto the capability");
+});
+
+test("recompile revises the package into a new version with a diff", () => {
+  const cap = retrieveCapability("Build Access & Roles V2").capability;
+  const snap = retrieveForCapability(cap);
+  const gap = analyzeGap({ intent: "Build Access & Roles V2", capability: cap, snapshot: snap });
+  const m = createMission({ slot: 6, provider: "claude", title: "t", objective: "o", status: "draft" });
+  const { package: v1 } = compile({ capability: cap, snapshot: snap, mission: m, gapReport: gap });
+  const { package: v2 } = compile({ capability: cap, snapshot: snap, mission: m, gapReport: gap, reviseOf: v1.package_id });
+  assert.equal(v2.version, 2, "recompile produces v2");
+  assert.equal(v2.supersedes_package_id, v1.package_id);
+  assert.ok(v2.diff_from_previous, "a diff is attached");
+  assert.equal(getPackage(v1.package_id).readiness_status, "superseded");
 });
 
 test("an incomplete package is BLOCKED and start is refused", () => {

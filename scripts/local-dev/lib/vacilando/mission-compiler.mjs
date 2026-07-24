@@ -14,7 +14,7 @@
  * the whole slice (Capability → Knowledge → Compile → Execute → Acceptance)
  * with an objectively-checkable, source-safe deliverable.
  */
-import { createPackage } from "./commands/mission-packages.mjs";
+import { createPackage, revisePackage } from "./commands/mission-packages.mjs";
 
 const COMPILER_VERSION = "vacilando.compiler.v1";
 
@@ -34,7 +34,7 @@ export function proposalPath(capability_id) {
  * Returns { package, trace }. The package is persisted (durable) and its
  * readiness is computed on write.
  */
-export function compile({ capability, snapshot, mission, gapReport = null }) {
+export function compile({ capability, snapshot, mission, gapReport = null, reviseOf = null }) {
   const cid = capability.capability_id;
   const outPath = proposalPath(cid);
   const roadmapV2 = (capability.roadmap || []).filter((r) => /v2/i.test(r.item) || r.status === "planned");
@@ -118,7 +118,9 @@ export function compile({ capability, snapshot, mission, gapReport = null }) {
     knowledge_snapshot: snapshot || null,
   };
 
-  const pkg = createPackage(input, { origin: "compiled" });
+  // Recompilation revises the prior package into a new version (with a diff);
+  // a first compile creates v1.
+  const pkg = reviseOf ? revisePackage(reviseOf, input) : createPackage(input, { origin: "compiled" });
   return { package: pkg, trace };
 }
 
