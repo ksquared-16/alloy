@@ -169,10 +169,10 @@ function QuestionBlock({
             ) : null}
             <p className="text-[11px] font-semibold text-alloy-midnight">
                 {field.label}
-                {field.required ? <span className="text-amber-600"> *</span> : null}
+                {field.required ? <span className="text-alloy-ember"> *</span> : null}
                 {field.description === PROCESSING_NEEDS_DESTINATION_DESCRIPTION ? (
                     <span
-                        className="ml-1.5 rounded-full border border-amber-300/70 bg-amber-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-800"
+                        className="ml-1.5 rounded-full border border-alloy-ember/25 bg-alloy-ember/[0.06] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-alloy-ember"
                         data-testid={`form-canvas-needs-destination-${field.id}`}
                     >
                         Needs destination

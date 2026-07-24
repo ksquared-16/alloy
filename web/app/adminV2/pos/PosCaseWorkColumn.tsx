@@ -74,12 +74,12 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
     return (
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
             {/* Source summary header */}
-            <div className="rounded-lg border border-l-2 border-alloy-juniper border-alloy-stone/15 bg-emerald-50/50 px-3 py-2.5">
+            <div className="rounded-lg border border-l-2 border-alloy-juniper border-alloy-stone/15 bg-alloy-bend-pine/[0.06] px-3 py-2.5">
                 <div className="flex items-center gap-2">
                     <span className="truncate text-[14px] font-semibold text-alloy-midnight">
                         {primary?.display.label ?? "Processing case"}
                     </span>
-                    <span className="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-[10.5px] font-medium text-emerald-800">
+                    <span className="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-[10.5px] font-medium text-alloy-bend-pine">
                         {statusLabel(detail.status)}
                     </span>
                 </div>
@@ -90,8 +90,11 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                 </div>
             </div>
 
-            {/* 1 — What came in: submitted content + where it came from (the raw source) */}
-            <PosPanel eyebrow="What came in">
+            {/* 1 — What came in: submitted content + where it came from (the raw source).
+                `!h-auto` overrides the accent surface's `h-full`: these panels are STACKED in a
+                scrolling column, not filling a flex slot, so h-full stretched this panel down the
+                entire column and left a large dead gap under "Where it came from". */}
+            <PosPanel eyebrow="What came in" className="!h-auto">
                 {submitted.length > 0 ? (
                     <>
                         <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-stone-400">Submitted values</div>
@@ -135,7 +138,7 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
             </PosPanel>
 
             {collectionGroups.length > 0 || collectionDiagnostics.length > 0 ? (
-                <PosPanel eyebrow="Related records proposed">
+                <PosPanel eyebrow="Related records proposed" className="!h-auto">
                     <ProcessingCollectionEvidencePanel groups={collectionGroups} diagnostics={collectionDiagnostics} caseId={detail.id} onCommitted={reload} />
                     <p className="mt-2 text-[11px] text-stone-500">Existing Child updates can be approved field-by-field. New children and Parents/Guardians remain read-only.</p>
                 </PosPanel>

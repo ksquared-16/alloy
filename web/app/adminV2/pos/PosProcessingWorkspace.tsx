@@ -164,7 +164,10 @@ export default function PosProcessingWorkspace({
                     </div>
                 ) : (
                     <>
-                        <div className={`flex min-w-[20rem] flex-1 flex-col overflow-hidden ${WS_CANVAS}`}>
+                        {/* Case detail sits on a soft canvas, not a full-height white card: the panels
+                            inside are already white surfaces, so a white column made a short case read
+                            as one card stretched down the page with dead white space beneath it. */}
+                        <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden bg-alloy-midnight/[0.045]">
                             <PosCaseWorkColumn state={state} />
                         </div>
                         <div className={`flex w-[19rem] shrink-0 flex-col overflow-hidden ${WS_INSPECTOR}`}>

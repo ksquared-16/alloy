@@ -10,13 +10,14 @@
  * intentional empty / loading / error states. Read-only; selection is controlled.
  */
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
 import type { ProcessingCaseQueueRow, ProcessingCaseStatus } from "@/lib/pos/processingCase/readModel/types";
 import RecommendationBadge from "@/app/adminV2/pos/RecommendationBadge";
 import ProcessingConfirmDialog from "@/app/adminV2/pos/ProcessingConfirmDialog";
 import ProcessingRenameDocumentDialog from "@/app/adminV2/pos/ProcessingRenameDocumentDialog";
 import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
+import { prefetchProcessingCase, prefetchProcessingCases } from "@/lib/pos/processingCasePrefetch";
 import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
 import { ProcessingFolderIcon } from "@/lib/pos/processingFolderIcons";
@@ -154,14 +155,22 @@ export default function ProcessingQueueList({
 }) {
     const { data, loading, error, refresh } = useProcessingQueueWarm();
     const rows = data?.rows ?? [];
+    // Warm the leading rows as soon as the queue paints, so opening the top item is instant even
+    // without a hover (keyboard, deep link, or a straight click off the list).
+    const warmRowIds = rows.slice(0, 6).map((r) => r.id).join(",");
+    useEffect(() => {
+        if (warmRowIds) prefetchProcessingCases(warmRowIds.split(","));
+    }, [warmRowIds]);
     const counts = data?.counts ?? {};
     const recommendations = data?.recommendations ?? {};
     const { workFolders } = useProcessingFolders();
     const categoryFolders = workFolders.filter((f) => f.id !== "incoming" && f.id !== "completed");
+    // Every folder starts collapsed — the operator chooses which section to open, so the rail
+    // reads as a compact index rather than a pre-expanded wall of rows.
     const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => {
         const initial: Record<string, boolean> = {};
         for (const folder of workFolders) {
-            initial[folder.id] = folder.id === "incoming" || folder.id === "completed";
+            initial[folder.id] = false;
         }
         return initial;
     });
@@ -270,6 +279,9 @@ export default function ProcessingQueueList({
                     type="button"
                     data-processing-case-id={row.id}
                     onClick={() => onSelectCase(row.id)}
+                    // Warm detail + recommendation on intent, so the click paints from cache.
+                    onMouseEnter={() => void prefetchProcessingCase(row.id)}
+                    onFocus={() => void prefetchProcessingCase(row.id)}
                     aria-current={selected}
                     className={`${QUEUE_ROW_CLASS} ${selected ? QUEUE_ROW_SELECTED_CLASS : ""}`}
                 >

@@ -148,9 +148,9 @@ export default function RecordLaunchPicker({
 
             {value ? (
                 <div className="mt-1 flex items-center gap-2">
-                    <span className="inline-flex min-w-0 items-center gap-1.5 rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-800">
+                    <span className="inline-flex min-w-0 items-center gap-1.5 rounded border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.08] px-2 py-0.5 text-[11px] text-alloy-bend-pine">
                         <span className="truncate font-medium">{value.label}</span>
-                        <span className="shrink-0 text-emerald-600">· {value.sublabel ?? value.entity_type}</span>
+                        <span className="shrink-0 text-alloy-bend-pine">· {value.sublabel ?? value.entity_type}</span>
                     </span>
                     <button type="button" onClick={clear} className="text-[10.5px] font-medium text-stone-500 hover:text-stone-700">
                         Change
@@ -213,7 +213,7 @@ export default function RecordLaunchPicker({
                                                   setQuery("");
                                                   setResults(null);
                                               }}
-                                              className="flex w-full flex-col items-start border-b border-stone-100 px-3 py-1.5 text-left last:border-b-0 hover:bg-emerald-50/60"
+                                              className="flex w-full flex-col items-start border-b border-stone-100 px-3 py-1.5 text-left last:border-b-0 hover:bg-alloy-bend-pine/[0.07]"
                                           >
                                               <span className="truncate text-[12px] font-medium text-alloy-midnight">{opt.label}</span>
                                               {opt.sublabel ? <span className="truncate text-[10px] text-stone-400">{opt.sublabel}</span> : null}

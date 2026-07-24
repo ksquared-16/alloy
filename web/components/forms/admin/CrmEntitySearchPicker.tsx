@@ -126,7 +126,7 @@ export default function CrmEntitySearchPicker({
                 />
             </label>
             {busy ? <p className="mt-1 text-xs text-[#59678b]">Searching…</p> : null}
-            {err ? <p className="mt-1 text-xs text-red-700">{err}</p> : null}
+            {err ? <p className="mt-1 text-xs text-alloy-ember">{err}</p> : null}
             {open && hits.length > 0 ?
                 <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-[#cfd6e6] bg-white py-1 shadow-lg">
                     {hits.map((h) => (

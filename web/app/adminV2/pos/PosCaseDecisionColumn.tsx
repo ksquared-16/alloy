@@ -11,6 +11,7 @@
  */
 
 import ReviewDecideCard, { DECISION_TO_ACTION } from "@/app/adminV2/processing/ReviewDecideCard";
+import { approveButtonLabel, resolveDecisionPresentation } from "@/lib/pos/decisionPresentation";
 import WorkspaceActionBar from "@/components/workspace/WorkspaceActionBar";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import PosPanel from "./PosPanel";
@@ -40,8 +41,11 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
     if (!detail) return null;
 
     const recommendedActionKey = rec?.supported && rec.recommendation ? DECISION_TO_ACTION[rec.recommendation.decision].key : null;
-    const recommendedActionLabel =
-        rec?.supported && rec.recommendation ? DECISION_TO_ACTION[rec.recommendation.decision].label : null;
+    // Approve label in business language: "Approve — Create enrollment lead" / "Approve — Link existing".
+    const approveLabel =
+        rec?.supported && rec.recommendation
+            ? approveButtonLabel(resolveDecisionPresentation({ recommendation: rec.recommendation, intent: rec.intent ?? null }))
+            : null;
     const commitAvailable = !!recommendedActionKey;
 
     return (
@@ -51,9 +55,9 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
                 {!isClosed ? (
                     <ReviewDecideCard view={rec} loading={recLoading} />
                 ) : (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-[12.5px] text-emerald-900">
+                    <div className="rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.07] p-3 text-[12.5px] text-alloy-midnight">
                         <div className="font-semibold">{statusLabel(detail.status)}</div>
-                        <p className="mt-0.5 text-[11.5px] text-emerald-800/80">{outputLine(approveResult)}</p>
+                        <p className="mt-0.5 text-[11.5px] text-alloy-bend-pine/80">{outputLine(approveResult)}</p>
                     </div>
                 )}
 
@@ -83,7 +87,7 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
                             onClick={() => void approve()}
                             className={`${WS_ACTION_PRIMARY} w-full`}
                         >
-                            {approving ? "Saving…" : `Approve — ${recommendedActionLabel}`}
+                            {approving ? "Saving…" : approveLabel}
                         </button>
                     ) : (
                         <div className="rounded-md border border-alloy-stone/20 bg-alloy-stone/40 px-3 py-2 text-center text-[11.5px] text-alloy-midnight/45">

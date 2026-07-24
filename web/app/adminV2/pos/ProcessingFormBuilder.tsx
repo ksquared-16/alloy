@@ -39,6 +39,7 @@ import { DEFAULT_FORM_ACCENT, parseFormBranding, type ProcessingFormBranding } f
 import { FormOperationalIntentPicker } from "@/components/forms/admin/FormOperationalIntentPicker";
 import { FormOutcomeConfigPanel } from "@/components/forms/admin/FormOutcomeConfigPanel";
 import { FormLifecycleUsagePanel } from "@/components/forms/admin/FormLifecycleUsagePanel";
+import { FormQueueFolderPanel } from "@/components/forms/admin/FormQueueFolderPanel";
 import { FormLocationShareLinksPanel } from "@/components/forms/admin/FormLocationShareLinksPanel";
 import { FormExistingRecordSendPanel } from "@/components/forms/admin/FormExistingRecordSendPanel";
 import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
@@ -369,6 +370,11 @@ export default function ProcessingFormBuilder({
     const distributionSummary = hasPublishedVersion
         ? `Published · ${links.length} link${links.length === 1 ? "" : "s"}`
         : "Draft — not published";
+    const queueFolderRaw = (formMetaSnapshot as Record<string, unknown> | null | undefined)?.admin_category;
+    const queueFolderSummary =
+        typeof queueFolderRaw === "string" && queueFolderRaw.trim()
+            ? queueFolderRaw.trim().replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())
+            : "Match by keyword";
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-alloy-stone" data-testid="processing-form-builder">
@@ -461,7 +467,7 @@ export default function ProcessingFormBuilder({
                     {mode === "preview" || mode === "runtime" ? (
                         <FormPreview schema={schema} branding={branding} runtime={mode === "runtime"} />
                     ) : (
-                        <div className="mx-auto max-w-[780px] rounded-2xl bg-white px-8 py-8 shadow-[0_8px_40px_rgba(24,39,58,0.08)]">
+                        <div className="mx-auto max-w-[960px] rounded-2xl bg-white px-8 py-8 shadow-[0_8px_40px_rgba(24,39,58,0.08)]">
                             <ProcessingFormCanvas
                                 schema={schema}
                                 selectedFieldId={selectedFieldId}
@@ -501,7 +507,7 @@ export default function ProcessingFormBuilder({
 
                 {mode === "edit" ? (
                     <aside
-                        className="flex min-w-[280px] max-w-[320px] flex-[2] shrink-0 flex-col overflow-y-auto border-l border-alloy-midnight/[0.06] bg-white px-4 py-2"
+                        className="flex min-w-[340px] max-w-[380px] flex-[2] shrink-0 flex-col overflow-y-auto border-l border-alloy-midnight/[0.06] bg-white px-4 py-2"
                         data-surface-inspector="true"
                     >
                         <div>
@@ -589,7 +595,7 @@ export default function ProcessingFormBuilder({
                                     summary={schema.title || "Untitled form"}
                                     accent
                                     open={inspectorSection === "form"}
-                                    onOpenChange={(open) => open && setInspectorSection("form")}
+                                    onOpenChange={(open) => setInspectorSection(open ? "form" : "")}
                                     testId="form-builder-form-section"
                                 >
                                     {editable ? (
@@ -632,7 +638,7 @@ export default function ProcessingFormBuilder({
                                     subtitle="What this form is used for"
                                     summary={purposeSummary}
                                     open={inspectorSection === "purpose"}
-                                    onOpenChange={(open) => open && setInspectorSection("purpose")}
+                                    onOpenChange={(open) => setInspectorSection(open ? "purpose" : "")}
                                 >
                                     <FormOperationalIntentPicker
                                         formId={formId}
@@ -653,13 +659,30 @@ export default function ProcessingFormBuilder({
                                     subtitle="Which process and stage this form serves"
                                     summary={processSummary}
                                     open={inspectorSection === "process"}
-                                    onOpenChange={(open) => open && setInspectorSection("process")}
+                                    onOpenChange={(open) => setInspectorSection(open ? "process" : "")}
                                 >
                                     <FormLifecycleUsagePanel
                                         formId={formId}
                                         formMetadata={formMetaSnapshot}
                                         canMutate={editable || hasPublishedVersion}
                                         hasSchema={Boolean(schema && schema.fields.length > 0)}
+                                        onFormMetadataUpdated={onFormMetadataUpdated}
+                                    />
+                                </ProcessingCollapsibleInspectorSection>
+
+                                {/* 3b — Queue folder: where submissions land in Work */}
+                                <ProcessingCollapsibleInspectorSection
+                                    title="Queue folder"
+                                    subtitle="Where submissions land in the Work queue"
+                                    summary={queueFolderSummary}
+                                    open={inspectorSection === "queue_folder"}
+                                    onOpenChange={(open) => setInspectorSection(open ? "queue_folder" : "")}
+                                    testId="form-builder-queue-folder-section"
+                                >
+                                    <FormQueueFolderPanel
+                                        formId={formId}
+                                        formMetadata={formMetaSnapshot}
+                                        canMutate={editable || hasPublishedVersion}
                                         onFormMetadataUpdated={onFormMetadataUpdated}
                                     />
                                 </ProcessingCollapsibleInspectorSection>
@@ -671,7 +694,7 @@ export default function ProcessingFormBuilder({
                                     summary={distributionSummary}
                                     accent
                                     open={inspectorSection === "distribution"}
-                                    onOpenChange={(open) => open && setInspectorSection("distribution")}
+                                    onOpenChange={(open) => setInspectorSection(open ? "distribution" : "")}
                                     testId="form-builder-distribution-section"
                                 >
                                     <div className="space-y-4">
@@ -725,7 +748,7 @@ export default function ProcessingFormBuilder({
                                     subtitle="Logo, colors, parent-facing identity"
                                     summary={branding.brand_name || "Default"}
                                     open={inspectorSection === "branding"}
-                                    onOpenChange={(open) => open && setInspectorSection("branding")}
+                                    onOpenChange={(open) => setInspectorSection(open ? "branding" : "")}
                                     testId="form-builder-branding-card"
                                 >
                                     <BrandingInspectorFields
@@ -744,7 +767,7 @@ export default function ProcessingFormBuilder({
                                     subtitle="Intake behavior and routing details"
                                     summary="Intake behavior, routing"
                                     open={inspectorSection === "advanced"}
-                                    onOpenChange={(open) => open && setInspectorSection("advanced")}
+                                    onOpenChange={(open) => setInspectorSection(open ? "advanced" : "")}
                                 >
                                     <FormOutcomeConfigPanel
                                         formId={formId}

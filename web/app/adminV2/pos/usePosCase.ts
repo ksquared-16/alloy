@@ -13,6 +13,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { dispatchOperationalWorkRefresh } from "@/lib/workItems/operationalWorkRefresh";
+import {
+    invalidateProcessingCase,
+    readCachedProcessingCase,
+    writeCachedProcessingCase,
+} from "@/lib/pos/processingCasePrefetch";
 import type { ProcessingCaseDetail } from "@/lib/pos/processingCase/readModel/types";
 import type { SourceEvidence } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
 import type { HandoffResult } from "@/lib/pos/processingCase/approveHandoff";
@@ -48,28 +53,40 @@ export function usePosCase(caseId: string | null): PosCaseState {
     const [rec, setRec] = useState<RecommendationView | null>(null);
     const [recLoading, setRecLoading] = useState(false);
 
-    const reload = useCallback(async () => {
-        if (!caseId) return;
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await fetch(`/api/admin/processing/cases/${caseId}`, { credentials: "same-origin" });
-            if (!res.ok) throw new Error(res.status === 404 ? "Processing case not found" : `Request failed (${res.status})`);
-            const body = (await res.json()) as DetailResponse;
-            setData(body.data);
-        } catch (e) {
-            setError(e instanceof Error ? e.message : "Failed to load");
-            setData(null);
-        } finally {
-            setLoading(false);
-        }
-    }, [caseId]);
+    /**
+     * `silent` revalidates without flipping `loading` — used when a prefetched case already
+     * painted, so opening a warm case never flashes a skeleton.
+     */
+    const reload = useCallback(
+        async (opts?: { silent?: boolean }) => {
+            if (!caseId) return;
+            if (!opts?.silent) setLoading(true);
+            setError(null);
+            try {
+                const res = await fetch(`/api/admin/processing/cases/${caseId}`, { credentials: "same-origin" });
+                if (!res.ok) throw new Error(res.status === 404 ? "Processing case not found" : `Request failed (${res.status})`);
+                const body = (await res.json()) as DetailResponse;
+                setData(body.data);
+                writeCachedProcessingCase(caseId, { data: body.data });
+            } catch (e) {
+                if (!opts?.silent) {
+                    setError(e instanceof Error ? e.message : "Failed to load");
+                    setData(null);
+                }
+            } finally {
+                if (!opts?.silent) setLoading(false);
+            }
+        },
+        [caseId]
+    );
 
     useEffect(() => {
-        setData(null);
         setApproveResult(null);
         setApproveErr(null);
-        if (caseId) void reload();
+        // Paint immediately from the prefetch cache when the row was warmed, then revalidate.
+        const cached = readCachedProcessingCase(caseId);
+        setData(cached?.data ?? null);
+        if (caseId) void reload({ silent: Boolean(cached?.data) });
     }, [caseId, reload]);
 
     useEffect(() => {
@@ -78,16 +95,20 @@ export function usePosCase(caseId: string | null): PosCaseState {
             return;
         }
         let cancelled = false;
-        setRecLoading(true);
-        setRec(null);
+        const cached = readCachedProcessingCase(caseId);
+        setRec(cached?.rec ?? null);
+        setRecLoading(!cached?.rec);
         (async () => {
             try {
                 const res = await fetch(`/api/admin/processing/cases/${caseId}/recommendation`, { credentials: "same-origin" });
                 if (!res.ok) throw new Error(`Request failed (${res.status})`);
                 const body = (await res.json()) as { data?: RecommendationView };
-                if (!cancelled) setRec(body.data ?? null);
+                if (!cancelled) {
+                    setRec(body.data ?? null);
+                    writeCachedProcessingCase(caseId, { rec: body.data ?? null });
+                }
             } catch {
-                if (!cancelled) setRec(null);
+                if (!cancelled && !cached?.rec) setRec(null);
             } finally {
                 if (!cancelled) setRecLoading(false);
             }
@@ -113,6 +134,8 @@ export function usePosCase(caseId: string | null): PosCaseState {
                 processing_case_id: caseId,
                 kind: "complete",
             });
+            // The case just changed state — drop the warm copy so nothing repaints pre-commit data.
+            invalidateProcessingCase(caseId);
             await reload();
         } catch (e) {
             setApproveErr(e instanceof Error ? e.message : "Approve failed");

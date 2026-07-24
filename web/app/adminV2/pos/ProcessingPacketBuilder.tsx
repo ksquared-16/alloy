@@ -290,13 +290,13 @@ export default function ProcessingPacketBuilder({
                         {err ? <p className="text-sm text-alloy-ember">{err}</p> : null}
                         {okBanner ? (
                             <div
-                                className="mb-4 rounded-lg bg-emerald-50/80 px-4 py-3 text-sm text-emerald-950 ring-1 ring-emerald-200/60"
+                                className="mb-4 rounded-lg bg-alloy-bend-pine/[0.08] px-4 py-3 text-sm text-alloy-midnight ring-1 ring-alloy-bend-pine/20"
                                 role="status"
                             >
                                 {okBanner}
                                 <button
                                     type="button"
-                                    className="ml-3 text-xs font-semibold text-emerald-800 underline"
+                                    className="ml-3 text-xs font-semibold text-alloy-bend-pine underline"
                                     onClick={() => setOkBanner(null)}
                                 >
                                     Dismiss

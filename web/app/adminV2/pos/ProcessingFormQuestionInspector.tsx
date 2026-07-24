@@ -218,7 +218,7 @@ export default function ProcessingFormQuestionInspector({
                         </div>
                         {needsDestination ? (
                             <p
-                                className="rounded-lg border border-amber-200/70 bg-amber-50/80 px-2.5 py-2 text-[11px] text-amber-900"
+                                className="rounded-lg border border-alloy-ember/25 bg-alloy-ember/[0.06] px-2.5 py-2 text-[11px] text-alloy-ember"
                                 data-testid="form-builder-needs-destination"
                             >
                                 Needs destination — answers will not write to business records until you choose where to

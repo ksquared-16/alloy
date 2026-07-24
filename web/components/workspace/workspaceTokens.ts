@@ -83,7 +83,12 @@ export const WS_PROCESS_TILE_CHROME =
 export const WS_PROCESS_TILE_CHROME_HOVER =
     "transition-shadow hover:shadow-[0_4px_16px_rgba(24,39,58,0.11)] hover:ring-alloy-stone/10";
 
-export const WS_EYEBROW = PRESENTATION_SECTION_EYEBROW;
+/**
+ * Workspace panel eyebrow — Alloy green type on a clean white header (the Review & Decide
+ * treatment). Keeps the shared Tier-2 eyebrow token untouched for non-workspace surfaces; the
+ * green lives in the type rather than a washed tint band behind it.
+ */
+export const WS_EYEBROW = "text-[11px] font-semibold uppercase tracking-[0.07em] text-alloy-bend-pine";
 export const WS_SECTION_HEADER = PRESENTATION_SECTION_HEADER;
 
 /** Left-nav item states (white sidebar, pine active). */

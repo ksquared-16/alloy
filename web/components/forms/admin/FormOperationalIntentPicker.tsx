@@ -154,7 +154,7 @@ export function FormOperationalIntentPicker({
                 </div>
                 {effectiveIntent ?
                     <span
-                        className="rounded-full bg-alloy-blue/10 px-2.5 py-0.5 text-xs font-semibold text-alloy-midnight"
+                        className="rounded-full bg-alloy-bend-pine/[0.10] px-2.5 py-0.5 text-xs font-semibold text-alloy-bend-pine"
                         data-testid="form-operational-intent-active-label"
                     >
                         {OPERATIONAL_INTENT_CATALOG.find((t) => t.key === effectiveIntent)?.label ??
@@ -186,7 +186,7 @@ export function FormOperationalIntentPicker({
                             className={clsx(
                                 "rounded-lg px-3 py-2.5 text-left ring-1 transition",
                                 selected ?
-                                    "bg-alloy-blue/10 ring-alloy-blue/30"
+                                    "bg-alloy-bend-pine/[0.10] ring-alloy-bend-pine/30"
                                 :   "bg-white ring-alloy-midnight/[0.08] hover:bg-alloy-stone/10",
                                 (!canMutate || busy) && "opacity-60"
                             )}

@@ -130,7 +130,7 @@ export function FormLocationShareLinksPanel({
         <div data-testid="form-location-share-links">
             <p className={opMutedMeta}>{SHARE_BY_LOCATION_COPY.helper}</p>
             {shareCreationBlocked && shareBlockMessage ?
-                <p className="mt-2 text-sm text-amber-900" data-testid="location-share-links-blocked">
+                <p className="mt-2 text-sm text-alloy-ember" data-testid="location-share-links-blocked">
                     {shareBlockMessage}
                 </p>
             :   null}
@@ -142,7 +142,7 @@ export function FormLocationShareLinksPanel({
                     {loadErr}
                 </p>
             : siteOptions.length === 0 ?
-                <p className="mt-3 text-sm text-amber-900" data-testid="location-link-empty-state">
+                <p className="mt-3 text-sm text-alloy-ember" data-testid="location-link-empty-state">
                     {SHARE_BY_LOCATION_COPY.emptyLocations}
                 </p>
             :   <ul className="mt-3 space-y-2" data-testid="location-share-link-rows">

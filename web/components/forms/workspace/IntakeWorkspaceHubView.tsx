@@ -51,7 +51,7 @@ export type IntakeWorkspacePacketRow = {
 export type IntakeWorkspaceSubmissionRow = SubmissionInboxRow;
 
 export const intakeWorkspaceBtnPrimary =
-    "rounded-lg border border-alloy-blue/20 bg-alloy-blue px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-40";
+    "rounded-lg border border-alloy-bend-pine/20 bg-alloy-bend-pine px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-40";
 export const intakeWorkspaceBtnSecondary =
     "rounded-lg border border-alloy-midnight/10 bg-white px-3.5 py-2 text-xs font-medium text-alloy-midnight/85 shadow-sm hover:bg-alloy-stone/20 hover:text-alloy-midnight disabled:opacity-40";
 

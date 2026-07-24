@@ -14,44 +14,36 @@
  */
 
 import type { IntakeRecommendation, IntakeDecision } from "@/lib/forms/intake/resolveIntakeIdentity";
+import type { OperationalIntentKey } from "@/lib/forms/operationalIntentTemplates";
+import {
+    resolveDecisionPresentation,
+    type DecisionReadinessTone,
+} from "@/lib/pos/decisionPresentation";
 
 export interface RecommendationView {
     supported: boolean;
     reason?: string;
     sourceKind?: string;
     recommendation?: IntakeRecommendation;
+    /** Configured operational intent of the source form — drives business decision language. */
+    intent?: OperationalIntentKey | null;
     source?: { kind: string; hasEmailBinding: boolean; mappedPersonValues: number };
 }
 
-/** Map the read-model decision to the operator's action vocabulary. */
+/** Map the read-model decision to a stable action key (engine vocabulary, not shown to the operator). */
 export const DECISION_TO_ACTION: Record<IntakeDecision, { key: string; label: string }> = {
     link: { key: "link_existing", label: "Link existing" },
     create: { key: "create_new", label: "Create new" },
     route: { key: "route_for_review", label: "Route for review" },
 };
 
-const CONFIDENCE_STYLE: Record<string, string> = {
-    high: "bg-emerald-50 text-emerald-800",
-    medium: "bg-amber-50 text-amber-800",
-    low: "bg-amber-50 text-amber-800",
-    none: "bg-stone-100 text-stone-600",
+/** Readiness label styling — semantic tone, never raw scores. */
+const READINESS_STYLE: Record<DecisionReadinessTone, string> = {
+    ready: "bg-alloy-bend-pine/[0.10] text-alloy-bend-pine",
+    match: "bg-alloy-bend-pine/[0.10] text-alloy-bend-pine",
+    review: "bg-alloy-gold/[0.18] text-alloy-gold-dark",
+    neutral: "bg-alloy-stone/50 text-alloy-midnight/60",
 };
-
-function decisionHeadline(decision: IntakeDecision): string {
-    if (decision === "link") return "Link to an existing record";
-    if (decision === "create") return "Create a new record";
-    return "Route for human review";
-}
-
-function rationale(rec: IntakeRecommendation): string {
-    if (rec.blockers.includes("missing_identifiers")) return "No email or phone was captured to match on.";
-    if (rec.blockers.includes("ambiguous_email")) return "Several people share this email — confirm which record is right.";
-    if (rec.blockers.includes("ambiguous_phone")) return "Several people share this phone — confirm which record is right.";
-    if (rec.decision === "link" && rec.matchedOn.includes("email")) return "Matched an existing person by parent email.";
-    if (rec.decision === "link" && rec.matchedOn.includes("phone")) return "Matched an existing person by phone.";
-    if (rec.decision === "create") return "No existing person matches — Alloy would create a new record.";
-    return "Alloy could not settle this automatically.";
-}
 
 function proposedIdentityLine(rec: IntakeRecommendation): string {
     const p = rec.proposed.person;
@@ -68,9 +60,9 @@ export default function ReviewDecideCard({
     loading: boolean;
 }) {
     return (
-        <section className="mb-5 rounded-lg border border-emerald-200 bg-white p-3.5 shadow-sm">
+        <section className="mb-5 rounded-lg border border-alloy-bend-pine/25 bg-white p-3.5 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">Review &amp; decide</span>
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-alloy-bend-pine">Review &amp; decide</span>
                 {loading ? <span className="text-[10.5px] text-stone-400">Analyzing…</span> : null}
             </div>
 
@@ -89,7 +81,7 @@ export default function ReviewDecideCard({
                     </p>
                 </div>
             ) : view.recommendation ? (
-                <ReviewBody rec={view.recommendation} />
+                <ReviewBody rec={view.recommendation} intent={view.intent ?? null} />
             ) : (
                 <div className="text-[12.5px] text-stone-500">No recommendation was produced.</div>
             )}
@@ -97,22 +89,22 @@ export default function ReviewDecideCard({
     );
 }
 
-function ReviewBody({ rec }: { rec: IntakeRecommendation }) {
-    const action = DECISION_TO_ACTION[rec.decision];
-    const confCls = CONFIDENCE_STYLE[rec.confidence] ?? CONFIDENCE_STYLE.none;
+function ReviewBody({ rec, intent }: { rec: IntakeRecommendation; intent: OperationalIntentKey | null }) {
+    const p = resolveDecisionPresentation({ recommendation: rec, intent });
+    const readinessCls = READINESS_STYLE[p.readiness.tone];
     return (
         <div>
-            {/* Recommendation headline + confidence */}
+            {/* Recommendation headline + readiness (business language) */}
             <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-md bg-[#00A283] px-2 py-0.5 text-[11px] font-semibold text-white">
-                    Alloy recommends: {action.label}
+                <span className="rounded-md bg-alloy-bend-pine px-2 py-0.5 text-[11px] font-semibold text-white">
+                    Alloy recommends: {p.recommendsLabel}
                 </span>
-                <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium ${confCls}`}>
-                    {rec.confidence === "none" ? "No confidence" : `${rec.confidence} confidence`}
+                <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium ${readinessCls}`}>
+                    {p.readiness.label}
                 </span>
             </div>
-            <div className="mt-1.5 text-[13px] font-medium text-stone-900">{decisionHeadline(rec.decision)}</div>
-            <p className="mt-0.5 text-[12px] text-stone-500">{rationale(rec)}</p>
+            <div className="mt-1.5 text-[13px] font-medium text-alloy-midnight">{p.headline}</div>
+            <p className="mt-0.5 text-[12px] text-stone-500">{p.readiness.detail}</p>
 
             {/* Extracted identity */}
             <div className="mt-3">
@@ -139,7 +131,7 @@ function ReviewBody({ rec }: { rec: IntakeRecommendation }) {
                                 <li
                                     key={c.id}
                                     className={`flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 ${
-                                        recommended ? "border-emerald-300 bg-emerald-50/60" : "border-stone-200 bg-white"
+                                        recommended ? "border-alloy-bend-pine/40 bg-alloy-bend-pine/[0.07]" : "border-stone-200 bg-white"
                                     }`}
                                 >
                                     <span className="min-w-0">
@@ -147,7 +139,7 @@ function ReviewBody({ rec }: { rec: IntakeRecommendation }) {
                                         <span className="block truncate text-[11px] text-stone-500">Matched on {c.matchReason}</span>
                                     </span>
                                     {recommended ? (
-                                        <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                        <span className="shrink-0 rounded bg-alloy-bend-pine/[0.14] px-1.5 py-0.5 text-[10px] font-semibold text-alloy-bend-pine">
                                             Recommended
                                         </span>
                                     ) : null}

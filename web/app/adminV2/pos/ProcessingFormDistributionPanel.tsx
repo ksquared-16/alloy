@@ -270,7 +270,7 @@ export default function ProcessingFormDistributionPanel({
 
                 {loading ? <BosExecutionLoader variant="inline" title="Loading links" /> : null}
                 {err ? <p className="text-[11px] text-rose-700">{err}</p> : null}
-                {copyWarn ? <p className="text-[11px] text-amber-800">{copyWarn}</p> : null}
+                {copyWarn ? <p className="text-[11px] text-alloy-ember">{copyWarn}</p> : null}
 
                 {!hasPublishedVersion ? (
                     <p className="text-[11px] text-alloy-midnight/45">
@@ -408,7 +408,7 @@ export default function ProcessingFormDistributionPanel({
 
                 {minted && mintedShareUrl ? (
                     <div
-                        className="rounded-lg bg-amber-50/80 px-3 py-2 ring-1 ring-amber-200/60"
+                        className="rounded-lg bg-alloy-ember/[0.06] px-3 py-2 ring-1 ring-alloy-ember/20"
                         data-testid="processing-form-one-time-link"
                     >
                         <p className="text-[11px] font-semibold text-alloy-midnight">Copy this link now</p>
@@ -419,7 +419,7 @@ export default function ProcessingFormDistributionPanel({
                             <code className="break-all rounded bg-white px-2 py-1 font-mono text-[10px]">{mintedShareUrl}</code>
                             <button
                                 type="button"
-                                className="text-[10px] font-semibold text-alloy-blue hover:underline"
+                                className="text-[10px] font-semibold text-alloy-bend-pine hover:underline"
                                 onClick={() => void copyText("url", mintedShareUrl)}
                                 data-testid="processing-form-copy-url"
                             >
@@ -429,7 +429,7 @@ export default function ProcessingFormDistributionPanel({
                                 href={mintedShareUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[10px] font-semibold text-alloy-blue hover:underline"
+                                className="text-[10px] font-semibold text-alloy-bend-pine hover:underline"
                                 data-testid="processing-form-open-minted"
                             >
                                 Open

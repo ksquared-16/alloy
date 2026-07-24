@@ -63,8 +63,8 @@ function StoryBulletRow({ bullet }: { bullet: OutcomeStoryBullet }) {
         : bullet.tone === "attention" ? "!"
         : "·";
     const toneClass =
-        bullet.tone === "positive" ? "text-emerald-700"
-        : bullet.tone === "attention" ? "text-amber-800"
+        bullet.tone === "positive" ? "text-alloy-bend-pine"
+        : bullet.tone === "attention" ? "text-alloy-ember"
         : "text-alloy-midnight/70";
 
     return (
@@ -86,7 +86,7 @@ function OutcomeItemRow({ label, value, status }: { label: string; value: string
             <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                 <span className="text-xs font-semibold text-alloy-midnight/80">{label}</span>
                 {status === "varies" ?
-                    <span className={clsx("text-[10px] font-semibold uppercase tracking-wide", "text-amber-700")}>
+                    <span className={clsx("text-[10px] font-semibold uppercase tracking-wide", "text-alloy-ember")}>
                         Varies
                     </span>
                 :   null}
@@ -432,10 +432,10 @@ export function FormOutcomeConfigPanel({
 
             {selectedLinkModel?.varianceCallout ?
                 <div
-                    className="mt-3 rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2"
+                    className="mt-3 rounded-lg border border-alloy-ember/25 bg-alloy-ember/[0.06] px-3 py-2"
                     data-testid="form-outcome-variance-callout"
                 >
-                    <p className="text-xs font-semibold text-amber-900">{selectedLinkModel.varianceCallout.title}</p>
+                    <p className="text-xs font-semibold text-alloy-ember">{selectedLinkModel.varianceCallout.title}</p>
                     <p className={clsx("mt-0.5 text-xs leading-snug", opMetadata)}>{selectedLinkModel.varianceCallout.body}</p>
                 </div>
             :   null}
@@ -645,7 +645,7 @@ export function FormOutcomeConfigPanel({
                     {validation.warnings.length > 0 ?
                         <ul className={clsx("space-y-1", opMetadata)} data-testid="form-outcome-validation-warnings">
                             {validation.warnings.map((w) => (
-                                <li key={w} className="text-amber-800">
+                                <li key={w} className="text-alloy-ember">
                                     {w}
                                 </li>
                             ))}
