@@ -39,6 +39,12 @@ export type TourBookingOpportunityIntegrationKind =
 
 const TOUR_BOOKING_DOMAIN = "tour_booking" as const;
 
+/**
+ * Result of the integration. `undo` is the inverse of the durable write, for the Platform
+ * Transaction Contract's compensation pass; absent when nothing durable was written.
+ */
+export type TourBookingOpportunityIntegrationResult = { undo?: () => Promise<void> };
+
 function resolveTourIntegrationActorUserId(
     booking: Pick<TourBookingRow, "requested_by_user_id">,
     actorUserId?: string | null,
@@ -132,12 +138,14 @@ async function mirrorTourMetadataAndSignal(input: {
     recordCompletedDate?: boolean;
     actorUserId?: string | null;
     correlationId?: string | null;
-}): Promise<void> {
+}): Promise<TourBookingOpportunityIntegrationResult> {
     const { supabase, orgId, opportunityId, booking, signal, recordCompletedDate, actorUserId, correlationId } = input;
 
     const opp = await loadOpportunityForTourSync(supabase, orgId, opportunityId);
     if (!opp) throw new Error("tour_booking: opportunity not found for integration");
 
+    // Captured before the write so the surrounding transaction has an exact inverse.
+    const priorMetadata = opp.metadata;
     const md = asMetadataRecord(opp.metadata);
     // Scheduling signals mirror the wall date/time; completion records the completed date.
     if (signal === TOUR_BOOKING_SIGNAL.scheduled) {
@@ -157,6 +165,15 @@ async function mirrorTourMetadataAndSignal(input: {
         .eq("org_id", orgId);
     if (updErr) throw new Error(`tour_booking: opportunity metadata mirror failed — ${updErr.message}`);
 
+    const undo = async () => {
+        const { error } = await supabase
+            .from("opportunities")
+            .update({ metadata: priorMetadata })
+            .eq("id", opportunityId)
+            .eq("org_id", orgId);
+        if (error) throw new Error(`tour_booking: restore opportunity mirror failed — ${error.message}`);
+    };
+
     // How the opportunity advances for this tour event is CONFIGURED (generic domain-signal → stage
     // automation), never a hardcoded status/stage target — the same seam the "canceled" signal uses.
     const { error: sigErr } = await emitDomainLifecycleSignalEvent({
@@ -168,7 +185,14 @@ async function mirrorTourMetadataAndSignal(input: {
         actorUserId: resolveTourIntegrationActorUserId(booking, actorUserId),
         metadata: tourBookingEventMetadata(booking, opportunityId, correlationId),
     });
-    if (sigErr) throw new Error(`tour_booking: ${signal} signal failed — ${sigErr.message}`);
+    if (sigErr) {
+        // The mirror is already written; undo it before reporting, so the caller never sees a
+        // failure sitting next to a half-applied integration.
+        await undo();
+        throw new Error(`tour_booking: ${signal} signal failed — ${sigErr.message}`);
+    }
+
+    return { undo };
 }
 
 /**
@@ -183,11 +207,11 @@ export async function applyTourBookingOpportunityIntegration(
         actorUserId?: string | null;
         correlationId?: string | null;
     }
-): Promise<void> {
+): Promise<TourBookingOpportunityIntegrationResult> {
     const { booking, kind, actorUserId, correlationId } = args;
     const orgId = String(booking.org_id).trim();
     const opportunityId = String(booking.opportunity_id).trim();
-    if (!orgId || !opportunityId) return;
+    if (!orgId || !opportunityId) return {};
 
     if (kind === "canceled") {
         const { error } = await emitDomainLifecycleSignalEvent({
@@ -202,14 +226,14 @@ export async function applyTourBookingOpportunityIntegration(
         if (error) {
             throw new Error(`tour_booking: cancel signal failed — ${error.message}`);
         }
-        return;
+        return {};
     }
 
     if (kind === "confirmed_mirror" || kind === "reschedule_mirror") {
         if (booking.status_key !== "confirmed" && booking.status_key !== "rescheduled") {
-            return;
+            return {};
         }
-        await mirrorTourMetadataAndSignal({
+        return mirrorTourMetadataAndSignal({
             supabase,
             orgId,
             opportunityId,
@@ -218,11 +242,10 @@ export async function applyTourBookingOpportunityIntegration(
             actorUserId,
             correlationId,
         });
-        return;
     }
 
     if (kind === "completed") {
-        await mirrorTourMetadataAndSignal({
+        return mirrorTourMetadataAndSignal({
             supabase,
             orgId,
             opportunityId,
@@ -232,11 +255,10 @@ export async function applyTourBookingOpportunityIntegration(
             actorUserId,
             correlationId,
         });
-        return;
     }
 
     if (kind === "no_show") {
-        await mirrorTourMetadataAndSignal({
+        return mirrorTourMetadataAndSignal({
             supabase,
             orgId,
             opportunityId,
@@ -246,4 +268,6 @@ export async function applyTourBookingOpportunityIntegration(
             correlationId,
         });
     }
+
+    return {};
 }

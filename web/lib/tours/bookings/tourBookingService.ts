@@ -7,7 +7,7 @@ import type {
     RescheduleTourBookingInput,
     TourBookingRow,
 } from "@/lib/tours/bookings/types";
-import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
+import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS, type TourLifecycleEventType } from "@/lib/tours/constants";
 import { emitTourBookingLifecycleEvent } from "@/lib/tours/events/tourLifecycleEvents";
 import { applyTourBookingOpportunityIntegration } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
 import {
@@ -19,6 +19,10 @@ import {
     runTourCommsOrchestratorBestEffort,
     type TourCommsOrchestrationResult,
 } from "@/lib/tours/comms/tourCommsOrchestrator";
+import {
+    runPlatformTransaction,
+    type PlatformTransactionStep,
+} from "@/lib/platform/transaction/platformTransaction";
 
 const ACTIVE = [...TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS];
 
@@ -101,109 +105,341 @@ async function afterTourBookingComms(
     await runTourCommsOrchestratorBestEffort(label, fn);
 }
 
+function errorText(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Thrown when a tour lifecycle transaction did not commit. Carries the transaction envelope so
+ * a caller can tell the operator the one thing they actually need to know: whether anything
+ * changed. `changed === false` means the rollback is proven; `true` with `integrityBreach` set
+ * means it is not, and "just try again" is the wrong advice.
+ */
+export class TourBookingTransactionError extends Error {
+    readonly changed: boolean;
+    readonly correlationId: string;
+    readonly integrityBreach?: { step: string; error: string; detail: string };
+
+    constructor(params: {
+        message: string;
+        changed: boolean;
+        correlationId: string;
+        integrityBreach?: { step: string; error: string; detail: string };
+    }) {
+        super(params.message);
+        this.name = "TourBookingTransactionError";
+        this.changed = params.changed;
+        this.correlationId = params.correlationId;
+        this.integrityBreach = params.integrityBreach;
+    }
+}
+
+/**
+ * Every tour lifecycle change runs through the Platform Transaction Contract, so none of them
+ * re-implement abort/compensation. Preconditions live in `validate` (nothing has been written
+ * when they fail); the booking write, the opportunity integration and the lifecycle event are
+ * INSIDE the boundary; comms are declared OUTSIDE it and degrade rather than roll back.
+ */
+async function commitTourBookingTransaction(params: {
+    capability: string;
+    correlationId?: string | null;
+    actorUserId?: string | null;
+    subject: Record<string, string | null | undefined>;
+    idempotencyKey?: string | null;
+    validate: () => Promise<{ ok: true } | { ok: false; message: string }>;
+    steps: () => PlatformTransactionStep[];
+    value: () => TourBookingRow;
+}): Promise<TourBookingRow> {
+    const tx = await runPlatformTransaction<TourBookingRow>({
+        capability: params.capability,
+        correlationId: params.correlationId ?? null,
+        actorUserId: params.actorUserId ?? null,
+        subject: params.subject,
+        idempotencyKey: params.idempotencyKey ?? null,
+        validate: params.validate,
+        steps: params.steps,
+        value: params.value,
+    });
+
+    if (!tx.ok) {
+        throw new TourBookingTransactionError({
+            message: tx.message ?? "tour_bookings: transaction failed",
+            changed: tx.changed,
+            correlationId: tx.correlation_id,
+            integrityBreach: tx.integrity_breach,
+        });
+    }
+    return tx.value as TourBookingRow;
+}
+
+/** Mutable booking fields captured before a lifecycle write, so it has an exact inverse. */
+type BookingSnapshot = Partial<TourBookingRow>;
+
+function snapshotBooking(row: TourBookingRow, fields: Array<keyof TourBookingRow>): BookingSnapshot {
+    const snapshot: BookingSnapshot = {};
+    for (const field of fields) {
+        (snapshot as Record<string, unknown>)[field as string] = row[field];
+    }
+    return snapshot;
+}
+
+async function restoreBooking(
+    supabase: SupabaseClient,
+    orgId: string,
+    bookingId: string,
+    snapshot: BookingSnapshot
+): Promise<void> {
+    const { error } = await supabase.from("tour_bookings").update(snapshot).eq("org_id", orgId).eq("id", bookingId);
+    if (error) throw new Error(`tour_bookings restore: ${error.message}`);
+}
+
 export async function createTourBooking(supabase: SupabaseClient, input: CreateTourBookingInput): Promise<TourBookingRow> {
     const orgId = String(input.orgId).trim();
     const opportunityId = String(input.opportunityId).trim();
     const locationId = String(input.locationId).trim();
     const tz = String(input.timezone).trim();
-    if (!tz) throw new Error("tour_bookings: timezone required");
-    if (!(input.endAt > input.startAt)) throw new Error("tour_bookings: end_at must be after start_at");
-
-    await assertNoOtherActiveBooking(supabase, orgId, opportunityId, null);
-
     const status = resolveInitialStatus(input);
-    if (status !== "requested") {
-        await assertSlotAvailableForWrite(supabase, {
-            orgId,
-            locationId,
-            userId: input.requestedByUserId ?? null,
-            startAt: input.startAt,
-            endAt: input.endAt,
-            excludeBookingId: null,
-        });
-    }
-
-    const insertRow = {
-        org_id: orgId,
-        opportunity_id: opportunityId,
-        location_id: locationId,
-        primary_person_id: input.primaryPersonId ?? null,
-        primary_contact_id: input.primaryContactId ?? null,
-        requested_by_user_id: input.requestedByUserId ?? null,
-        start_at: input.startAt.toISOString(),
-        end_at: input.endAt.toISOString(),
-        timezone: tz,
-        status_key: status,
-        source: input.source,
-        form_submission_id: input.formSubmissionId ?? null,
-        form_public_link_id: input.formPublicLinkId ?? null,
-        metadata: input.metadata ?? {},
-    };
-
-    const { data, error } = await supabase.from("tour_bookings").insert(insertRow).select("*").single();
-    if (error) throw new Error(`tour_bookings insert: ${error.message}`);
-    const row = toRow(data);
-
-    // ATOMICITY (operator trust): everything below is part of the SAME transaction the operator
-    // initiated. Previously a failure here (e.g. the opportunity mirror) left the tour_bookings row
-    // COMMITTED while the route returned an error — the operator saw a failure next to a booking that
-    // actually existed ("ghost booking"). Any failure now COMPENSATES by removing the booking, so the
-    // transaction is all-or-nothing: it either completed, or nothing changed.
     const ctx = { correlation_id: input.correlationId ?? null, actor_user_id: input.requestedByUserId ?? null };
-    try {
-        if (row.status_key === "confirmed") {
-            await applyTourBookingOpportunityIntegration(supabase, {
-                booking: row,
-                kind: "confirmed_mirror",
-                actorUserId: input.requestedByUserId ?? null,
-                correlationId: input.correlationId ?? null,
-            });
-        }
 
-        if (status === "requested") {
-            await emitTourBookingLifecycleEvent(supabase, "tour_requested", row, { previous_status_key: null }, ctx);
-        } else if (status === "pending_approval") {
-            await emitTourBookingLifecycleEvent(supabase, "tour_booking_pending", row, { previous_status_key: null }, ctx);
-        } else {
-            await emitTourBookingLifecycleEvent(supabase, "tour_confirmed", row, { previous_status_key: null }, ctx);
-        }
-    } catch (e) {
-        await compensateFailedTourBookingInsert(supabase, orgId, row.id);
-        throw e;
-    }
+    let row: TourBookingRow | null = null;
+    let mirrorUndo: (() => Promise<void>) | undefined;
 
-    // Downstream + explicitly best-effort: a comms/notification failure must NEVER roll back a booking
-    // the operator already completed (it is not part of the booking transaction).
-    if (status !== "requested" && status !== "pending_approval") {
-        await afterTourBookingComms("create_confirmed", () =>
-            orchestrateTourBookingConfirmed(supabase, {
-                orgId,
-                booking: row,
-                actorUserId: input.requestedByUserId ?? null,
-            })
-        );
-    }
-
-    return row;
+    return commitTourBookingTransaction({
+        capability: "schedule_tour",
+        correlationId: input.correlationId ?? null,
+        actorUserId: input.requestedByUserId ?? null,
+        subject: { org_id: orgId, opportunity_id: opportunityId },
+        // A double-submitted booking for the same slot joins the running transaction.
+        idempotencyKey: `${orgId}:${opportunityId}:${input.startAt.toISOString()}`,
+        validate: async () => {
+            if (!tz) return { ok: false, message: "tour_bookings: timezone required" };
+            if (!(input.endAt > input.startAt)) {
+                return { ok: false, message: "tour_bookings: end_at must be after start_at" };
+            }
+            try {
+                await assertNoOtherActiveBooking(supabase, orgId, opportunityId, null);
+                if (status !== "requested") {
+                    await assertSlotAvailableForWrite(supabase, {
+                        orgId,
+                        locationId,
+                        userId: input.requestedByUserId ?? null,
+                        startAt: input.startAt,
+                        endAt: input.endAt,
+                        excludeBookingId: null,
+                    });
+                }
+            } catch (e) {
+                return { ok: false, message: errorText(e) };
+            }
+            return { ok: true };
+        },
+        steps: () => [
+            {
+                name: "insert_booking",
+                stage: "persist",
+                run: async () => {
+                    const insertRow = {
+                        org_id: orgId,
+                        opportunity_id: opportunityId,
+                        location_id: locationId,
+                        primary_person_id: input.primaryPersonId ?? null,
+                        primary_contact_id: input.primaryContactId ?? null,
+                        requested_by_user_id: input.requestedByUserId ?? null,
+                        start_at: input.startAt.toISOString(),
+                        end_at: input.endAt.toISOString(),
+                        timezone: tz,
+                        status_key: status,
+                        source: input.source,
+                        form_submission_id: input.formSubmissionId ?? null,
+                        form_public_link_id: input.formPublicLinkId ?? null,
+                        metadata: input.metadata ?? {},
+                    };
+                    const { data, error } = await supabase.from("tour_bookings").insert(insertRow).select("*").single();
+                    if (error) throw new Error(`tour_bookings insert: ${error.message}`);
+                    row = toRow(data);
+                    return row;
+                },
+                compensate: async () => {
+                    if (!row) return;
+                    const { error } = await supabase
+                        .from("tour_bookings")
+                        .delete()
+                        .eq("id", row.id)
+                        .eq("org_id", orgId);
+                    if (error) throw new Error(`tour_bookings compensating delete: ${error.message}`);
+                },
+            },
+            {
+                name: "opportunity_integration",
+                stage: "business_process",
+                run: async () => {
+                    if (!row || row.status_key !== "confirmed") return null;
+                    const applied = await applyTourBookingOpportunityIntegration(supabase, {
+                        booking: row,
+                        kind: "confirmed_mirror",
+                        actorUserId: input.requestedByUserId ?? null,
+                        correlationId: input.correlationId ?? null,
+                    });
+                    mirrorUndo = applied?.undo;
+                    return applied;
+                },
+                compensate: async () => {
+                    await mirrorUndo?.();
+                },
+            },
+            {
+                name: "lifecycle_event",
+                stage: "activity",
+                run: async () => {
+                    if (!row) return null;
+                    const eventKey =
+                        status === "requested" ? "tour_requested"
+                        : status === "pending_approval" ? "tour_booking_pending"
+                        : "tour_confirmed";
+                    await emitTourBookingLifecycleEvent(supabase, eventKey, row, { previous_status_key: null }, ctx);
+                    return eventKey;
+                },
+            },
+            {
+                name: "confirmation_comms",
+                stage: "relationships",
+                // Declared downstream: a notification failure must NEVER revoke a booking the
+                // operator completed. It degrades the result instead of rolling it back.
+                boundary: "outside",
+                run: async () => {
+                    if (!row || status === "requested" || status === "pending_approval") return null;
+                    const booking = row;
+                    await afterTourBookingComms("create_confirmed", () =>
+                        orchestrateTourBookingConfirmed(supabase, {
+                            orgId,
+                            booking,
+                            actorUserId: input.requestedByUserId ?? null,
+                        })
+                    );
+                    return true;
+                },
+            },
+        ],
+        value: () => row as TourBookingRow,
+    });
 }
 
 /**
- * Compensating delete for a booking whose in-transaction follow-up failed. Best-effort: if the
- * compensation itself fails we surface that alongside the original error rather than silently
- * leaving a ghost booking.
+ * Shared shape for the lifecycle transitions (confirm / reschedule / cancel / complete /
+ * no_show). Each one used to COMMIT the booking update and then run the opportunity
+ * integration and the lifecycle event unguarded — exactly the ghost shape that was fixed for
+ * `create` and left in place here: a mirror failure returned an error to the operator next to
+ * a booking whose status had already changed.
  */
-async function compensateFailedTourBookingInsert(
-    supabase: SupabaseClient,
-    orgId: string,
-    bookingId: string
-): Promise<void> {
-    const { error } = await supabase.from("tour_bookings").delete().eq("id", bookingId).eq("org_id", orgId);
-    if (error) {
-        // eslint-disable-next-line no-console -- integrity breach must be observable, never silent
-        console.error(
-            `tour_bookings: COMPENSATION FAILED for booking ${bookingId} (org ${orgId}) — a ghost booking may exist: ${error.message}`
-        );
-    }
+async function runTourBookingLifecycleTransition(params: {
+    supabase: SupabaseClient;
+    capability: string;
+    orgId: string;
+    bookingId: string;
+    correlationId?: string | null;
+    actorUserId?: string | null;
+    /** Preconditions + the row they were checked against. Runs before anything is written. */
+    prepare: () => Promise<
+        | { ok: false; message: string }
+        | {
+              ok: true;
+              existing: TourBookingRow;
+              patch: Partial<TourBookingRow>;
+              /** Fields to snapshot for the inverse. */
+              restoreFields: Array<keyof TourBookingRow>;
+          }
+    >;
+    integration?: (row: TourBookingRow) => Parameters<typeof applyTourBookingOpportunityIntegration>[1] | null;
+    lifecycleEvent: (
+        row: TourBookingRow,
+        existing: TourBookingRow
+    ) => { key: TourLifecycleEventType; previous: Record<string, unknown> };
+    comms?: (row: TourBookingRow) => { label: string; run: () => Promise<TourCommsOrchestrationResult> } | null;
+}): Promise<TourBookingRow> {
+    const { supabase, orgId, bookingId } = params;
+    let prepared: { existing: TourBookingRow; patch: Partial<TourBookingRow>; restoreFields: Array<keyof TourBookingRow> } | null =
+        null;
+    let snapshot: BookingSnapshot = {};
+    let row: TourBookingRow | null = null;
+    let mirrorUndo: (() => Promise<void>) | undefined;
+
+    return commitTourBookingTransaction({
+        capability: params.capability,
+        correlationId: params.correlationId ?? null,
+        actorUserId: params.actorUserId ?? null,
+        subject: { org_id: orgId, booking_id: bookingId },
+        idempotencyKey: `${orgId}:${bookingId}:${params.capability}`,
+        validate: async () => {
+            try {
+                const result = await params.prepare();
+                if (!result.ok) return { ok: false, message: result.message };
+                prepared = result;
+                snapshot = snapshotBooking(result.existing, result.restoreFields);
+                return { ok: true };
+            } catch (e) {
+                return { ok: false, message: errorText(e) };
+            }
+        },
+        steps: () => [
+            {
+                name: "booking_status",
+                stage: "persist",
+                run: async () => {
+                    const { data, error } = await supabase
+                        .from("tour_bookings")
+                        .update(prepared!.patch)
+                        .eq("org_id", orgId)
+                        .eq("id", bookingId)
+                        .select("*")
+                        .single();
+                    if (error) throw new Error(`tour_bookings ${params.capability}: ${error.message}`);
+                    row = toRow(data);
+                    return row;
+                },
+                compensate: async () => {
+                    await restoreBooking(supabase, orgId, bookingId, snapshot);
+                },
+            },
+            {
+                name: "opportunity_integration",
+                stage: "business_process",
+                run: async () => {
+                    const args = params.integration?.(row!);
+                    if (!args) return null;
+                    const applied = await applyTourBookingOpportunityIntegration(supabase, args);
+                    mirrorUndo = applied?.undo;
+                    return applied;
+                },
+                compensate: async () => {
+                    await mirrorUndo?.();
+                },
+            },
+            {
+                name: "lifecycle_event",
+                stage: "activity",
+                run: async () => {
+                    const event = params.lifecycleEvent(row!, prepared!.existing);
+                    await emitTourBookingLifecycleEvent(supabase, event.key, row!, event.previous, {
+                        correlation_id: params.correlationId ?? null,
+                        actor_user_id: params.actorUserId ?? null,
+                    });
+                    return event.key;
+                },
+            },
+            {
+                name: "notification_comms",
+                stage: "relationships",
+                boundary: "outside",
+                run: async () => {
+                    const comms = params.comms?.(row!);
+                    if (!comms) return null;
+                    await afterTourBookingComms(comms.label, comms.run);
+                    return true;
+                },
+            },
+        ],
+        value: () => row as TourBookingRow,
+    });
 }
 
 export async function confirmTourBooking(
@@ -212,52 +448,53 @@ export async function confirmTourBooking(
     bookingId: string,
     opts?: { correlationId?: string | null; actorUserId?: string | null }
 ): Promise<TourBookingRow> {
-    const existing = await fetchBooking(supabase, orgId, bookingId);
-    if (!existing) throw new Error("tour_bookings: not found");
-    if (existing.status_key !== "pending_approval") {
-        throw new Error("tour_bookings: confirm only allowed from pending_approval");
-    }
-
-    await assertSlotAvailableForWrite(supabase, {
-        orgId,
-        locationId: existing.location_id,
-        userId: existing.requested_by_user_id,
-        startAt: new Date(existing.start_at),
-        endAt: new Date(existing.end_at),
-        excludeBookingId: existing.id,
-    });
-
-    const prev = existing.status_key;
-    const { data, error } = await supabase
-        .from("tour_bookings")
-        .update({ status_key: "confirmed" })
-        .eq("org_id", orgId)
-        .eq("id", bookingId)
-        .select("*")
-        .single();
-    if (error) throw new Error(`tour_bookings confirm: ${error.message}`);
-    const row = toRow(data);
-    await applyTourBookingOpportunityIntegration(supabase, {
-        booking: row,
-        kind: "confirmed_mirror",
-        actorUserId: opts?.actorUserId ?? null,
-        correlationId: opts?.correlationId ?? null,
-    });
-    await emitTourBookingLifecycleEvent(
+    return runTourBookingLifecycleTransition({
         supabase,
-        "tour_confirmed",
-        row,
-        { previous_status_key: prev, previous_start_at: existing.start_at, previous_end_at: existing.end_at },
-        { correlation_id: opts?.correlationId ?? null, actor_user_id: opts?.actorUserId ?? null }
-    );
-    await afterTourBookingComms("confirm", () =>
-        orchestrateTourBookingConfirmed(supabase, {
-            orgId,
+        capability: "confirm_tour",
+        orgId,
+        bookingId,
+        correlationId: opts?.correlationId ?? null,
+        actorUserId: opts?.actorUserId ?? null,
+        prepare: async () => {
+            const existing = await fetchBooking(supabase, orgId, bookingId);
+            if (!existing) return { ok: false, message: "tour_bookings: not found" };
+            if (existing.status_key !== "pending_approval") {
+                return { ok: false, message: "tour_bookings: confirm only allowed from pending_approval" };
+            }
+            await assertSlotAvailableForWrite(supabase, {
+                orgId,
+                locationId: existing.location_id,
+                userId: existing.requested_by_user_id,
+                startAt: new Date(existing.start_at),
+                endAt: new Date(existing.end_at),
+                excludeBookingId: existing.id,
+            });
+            return {
+                ok: true,
+                existing,
+                patch: { status_key: "confirmed" } as Partial<TourBookingRow>,
+                restoreFields: ["status_key"],
+            };
+        },
+        integration: (row) => ({
             booking: row,
+            kind: "confirmed_mirror",
             actorUserId: opts?.actorUserId ?? null,
-        })
-    );
-    return row;
+            correlationId: opts?.correlationId ?? null,
+        }),
+        lifecycleEvent: (_row, existing) => ({
+            key: "tour_confirmed",
+            previous: {
+                previous_status_key: existing.status_key,
+                previous_start_at: existing.start_at,
+                previous_end_at: existing.end_at,
+            },
+        }),
+        comms: (row) => ({
+            label: "confirm",
+            run: () => orchestrateTourBookingConfirmed(supabase, { orgId, booking: row, actorUserId: opts?.actorUserId ?? null }),
+        }),
+    });
 }
 
 export async function rescheduleTourBooking(
@@ -266,72 +503,72 @@ export async function rescheduleTourBooking(
     bookingId: string,
     input: RescheduleTourBookingInput
 ): Promise<TourBookingRow> {
-    const existing = await fetchBooking(supabase, orgId, bookingId);
-    if (!existing) throw new Error("tour_bookings: not found");
-    if (!["confirmed", "pending_approval", "requested", "rescheduled"].includes(existing.status_key)) {
-        throw new Error("tour_bookings: reschedule not allowed for this status");
-    }
-    const firmForOppMirror = existing.status_key === "confirmed" || existing.status_key === "rescheduled";
-    const nextStart = input.startAt;
-    const nextEnd = input.endAt;
-    if (!(nextEnd > nextStart)) throw new Error("tour_bookings: end_at must be after start_at");
-    const nextLoc = input.locationId != null && String(input.locationId).trim() !== "" ? String(input.locationId).trim() : existing.location_id;
-    const nextTz =
-        input.timezone != null && String(input.timezone).trim() !== "" ? String(input.timezone).trim() : existing.timezone;
+    let firmForOppMirror = false;
 
-    await assertSlotAvailableForWrite(supabase, {
-        orgId,
-        locationId: nextLoc,
-        userId: existing.requested_by_user_id,
-        startAt: nextStart,
-        endAt: nextEnd,
-        excludeBookingId: existing.id,
-    });
-
-    const prevStart = existing.start_at;
-    const prevEnd = existing.end_at;
-    const prevStatus = existing.status_key;
-
-    const { data, error } = await supabase
-        .from("tour_bookings")
-        .update({
-            start_at: nextStart.toISOString(),
-            end_at: nextEnd.toISOString(),
-            timezone: nextTz,
-            location_id: nextLoc,
-        })
-        .eq("org_id", orgId)
-        .eq("id", bookingId)
-        .select("*")
-        .single();
-    if (error) throw new Error(`tour_bookings reschedule: ${error.message}`);
-    const row = toRow(data);
-    if (firmForOppMirror) {
-        await applyTourBookingOpportunityIntegration(supabase, {
-            booking: row,
-            kind: "reschedule_mirror",
-            correlationId: input.correlationId ?? null,
-        });
-    }
-    await emitTourBookingLifecycleEvent(
+    return runTourBookingLifecycleTransition({
         supabase,
-        "tour_rescheduled",
-        row,
-        {
-            previous_status_key: prevStatus,
-            previous_start_at: prevStart,
-            previous_end_at: prevEnd,
-            previous_location_id: existing.location_id,
+        capability: "reschedule_tour",
+        orgId,
+        bookingId,
+        correlationId: input.correlationId ?? null,
+        prepare: async () => {
+            const existing = await fetchBooking(supabase, orgId, bookingId);
+            if (!existing) return { ok: false, message: "tour_bookings: not found" };
+            if (!["confirmed", "pending_approval", "requested", "rescheduled"].includes(existing.status_key)) {
+                return { ok: false, message: "tour_bookings: reschedule not allowed for this status" };
+            }
+            if (!(input.endAt > input.startAt)) {
+                return { ok: false, message: "tour_bookings: end_at must be after start_at" };
+            }
+            firmForOppMirror = existing.status_key === "confirmed" || existing.status_key === "rescheduled";
+            const nextLoc =
+                input.locationId != null && String(input.locationId).trim() !== "" ?
+                    String(input.locationId).trim()
+                :   existing.location_id;
+            const nextTz =
+                input.timezone != null && String(input.timezone).trim() !== "" ?
+                    String(input.timezone).trim()
+                :   existing.timezone;
+
+            await assertSlotAvailableForWrite(supabase, {
+                orgId,
+                locationId: nextLoc,
+                userId: existing.requested_by_user_id,
+                startAt: input.startAt,
+                endAt: input.endAt,
+                excludeBookingId: existing.id,
+            });
+
+            return {
+                ok: true,
+                existing,
+                patch: {
+                    start_at: input.startAt.toISOString(),
+                    end_at: input.endAt.toISOString(),
+                    timezone: nextTz,
+                    location_id: nextLoc,
+                } as Partial<TourBookingRow>,
+                restoreFields: ["start_at", "end_at", "timezone", "location_id"],
+            };
         },
-        { correlation_id: input.correlationId ?? null, actor_user_id: null }
-    );
-    await afterTourBookingComms("reschedule", () =>
-        orchestrateTourBookingRescheduled(supabase, {
-            orgId,
-            booking: row,
-        })
-    );
-    return row;
+        integration: (row) =>
+            firmForOppMirror ?
+                { booking: row, kind: "reschedule_mirror", correlationId: input.correlationId ?? null }
+            :   null,
+        lifecycleEvent: (_row, existing) => ({
+            key: "tour_rescheduled",
+            previous: {
+                previous_status_key: existing.status_key,
+                previous_start_at: existing.start_at,
+                previous_end_at: existing.end_at,
+                previous_location_id: existing.location_id,
+            },
+        }),
+        comms: (row) => ({
+            label: "reschedule",
+            run: () => orchestrateTourBookingRescheduled(supabase, { orgId, booking: row }),
+        }),
+    });
 }
 
 export async function cancelTourBooking(
@@ -345,43 +582,46 @@ export async function cancelTourBooking(
     if (existing.status_key === "canceled" || existing.status_key === "completed" || existing.status_key === "no_show") {
         return existing;
     }
-    const prev = existing.status_key;
-    const now = new Date().toISOString();
-    const { data, error } = await supabase
-        .from("tour_bookings")
-        .update({
-            status_key: "canceled",
-            canceled_at: now,
-            canceled_by: String(input.canceledBy).trim() || "unknown",
-            cancel_reason: input.cancelReason != null ? String(input.cancelReason) : null,
-        })
-        .eq("org_id", orgId)
-        .eq("id", bookingId)
-        .select("*")
-        .single();
-    if (error) throw new Error(`tour_bookings cancel: ${error.message}`);
-    const row = toRow(data);
-    await emitTourBookingLifecycleEvent(
+    return runTourBookingLifecycleTransition({
         supabase,
-        "tour_canceled",
-        row,
-        { previous_status_key: prev, previous_start_at: existing.start_at, previous_end_at: existing.end_at },
-        { correlation_id: input.correlationId ?? null, actor_user_id: null }
-    );
-    await afterTourBookingComms("cancel", () =>
-        orchestrateTourBookingCanceled(supabase, {
-            orgId,
-            booking: row,
-            actorUserId: input.canceledBy,
-        })
-    );
-    await applyTourBookingOpportunityIntegration(supabase, {
-        booking: row,
-        kind: "canceled",
-        actorUserId: input.canceledBy,
+        capability: "cancel_tour",
+        orgId,
+        bookingId,
         correlationId: input.correlationId ?? null,
+        actorUserId: input.canceledBy,
+        prepare: async () => ({
+            ok: true,
+            existing,
+            patch: {
+                status_key: "canceled",
+                canceled_at: new Date().toISOString(),
+                canceled_by: String(input.canceledBy).trim() || "unknown",
+                cancel_reason: input.cancelReason != null ? String(input.cancelReason) : null,
+            } as Partial<TourBookingRow>,
+            restoreFields: ["status_key", "canceled_at", "canceled_by", "cancel_reason"],
+        }),
+        // The cancel signal is what drives the configured attention rule, so it belongs INSIDE
+        // the boundary. It previously ran AFTER the best-effort comms, meaning a downstream
+        // notification could fire for a cancellation the Business Process never learned about.
+        integration: (row) => ({
+            booking: row,
+            kind: "canceled",
+            actorUserId: input.canceledBy,
+            correlationId: input.correlationId ?? null,
+        }),
+        lifecycleEvent: (_row, prior) => ({
+            key: "tour_canceled",
+            previous: {
+                previous_status_key: prior.status_key,
+                previous_start_at: prior.start_at,
+                previous_end_at: prior.end_at,
+            },
+        }),
+        comms: (row) => ({
+            label: "cancel",
+            run: () => orchestrateTourBookingCanceled(supabase, { orgId, booking: row, actorUserId: input.canceledBy }),
+        }),
     });
-    return row;
 }
 
 export async function markTourBookingCompleted(
@@ -390,41 +630,41 @@ export async function markTourBookingCompleted(
     bookingId: string,
     opts?: { correlationId?: string | null; actorUserId?: string | null }
 ): Promise<TourBookingRow> {
-    const existing = await fetchBooking(supabase, orgId, bookingId);
-    if (!existing) throw new Error("tour_bookings: not found");
-    if (existing.status_key !== "confirmed" && existing.status_key !== "rescheduled") {
-        throw new Error("tour_bookings: complete only from confirmed or rescheduled");
-    }
-    const prev = existing.status_key;
-    const { data, error } = await supabase
-        .from("tour_bookings")
-        .update({ status_key: "completed" })
-        .eq("org_id", orgId)
-        .eq("id", bookingId)
-        .select("*")
-        .single();
-    if (error) throw new Error(`tour_bookings complete: ${error.message}`);
-    const row = toRow(data);
-    await applyTourBookingOpportunityIntegration(supabase, {
-        booking: row,
-        kind: "completed",
+    return runTourBookingLifecycleTransition({
+        supabase,
+        capability: "complete_tour",
+        orgId,
+        bookingId,
         correlationId: opts?.correlationId ?? null,
         actorUserId: opts?.actorUserId ?? null,
-    });
-    await emitTourBookingLifecycleEvent(
-        supabase,
-        "tour_completed",
-        row,
-        { previous_status_key: prev },
-        { correlation_id: opts?.correlationId ?? null, actor_user_id: null }
-    );
-    await afterTourBookingComms("complete", () =>
-        orchestrateTourBookingCompleted(supabase, {
-            orgId,
+        prepare: async () => {
+            const existing = await fetchBooking(supabase, orgId, bookingId);
+            if (!existing) return { ok: false, message: "tour_bookings: not found" };
+            if (existing.status_key !== "confirmed" && existing.status_key !== "rescheduled") {
+                return { ok: false, message: "tour_bookings: complete only from confirmed or rescheduled" };
+            }
+            return {
+                ok: true,
+                existing,
+                patch: { status_key: "completed" } as Partial<TourBookingRow>,
+                restoreFields: ["status_key"],
+            };
+        },
+        integration: (row) => ({
             booking: row,
-        })
-    );
-    return row;
+            kind: "completed",
+            correlationId: opts?.correlationId ?? null,
+            actorUserId: opts?.actorUserId ?? null,
+        }),
+        lifecycleEvent: (_row, existing) => ({
+            key: "tour_completed",
+            previous: { previous_status_key: existing.status_key },
+        }),
+        comms: (row) => ({
+            label: "complete",
+            run: () => orchestrateTourBookingCompleted(supabase, { orgId, booking: row }),
+        }),
+    });
 }
 
 export async function markTourBookingNoShow(
@@ -433,39 +673,39 @@ export async function markTourBookingNoShow(
     bookingId: string,
     opts?: { correlationId?: string | null; actorUserId?: string | null }
 ): Promise<TourBookingRow> {
-    const existing = await fetchBooking(supabase, orgId, bookingId);
-    if (!existing) throw new Error("tour_bookings: not found");
-    if (existing.status_key !== "confirmed" && existing.status_key !== "rescheduled") {
-        throw new Error("tour_bookings: no_show only from confirmed or rescheduled");
-    }
-    const prev = existing.status_key;
-    const { data, error } = await supabase
-        .from("tour_bookings")
-        .update({ status_key: "no_show" })
-        .eq("org_id", orgId)
-        .eq("id", bookingId)
-        .select("*")
-        .single();
-    if (error) throw new Error(`tour_bookings no_show: ${error.message}`);
-    const row = toRow(data);
-    await applyTourBookingOpportunityIntegration(supabase, {
-        booking: row,
-        kind: "no_show",
+    return runTourBookingLifecycleTransition({
+        supabase,
+        capability: "no_show_tour",
+        orgId,
+        bookingId,
         correlationId: opts?.correlationId ?? null,
         actorUserId: opts?.actorUserId ?? null,
-    });
-    await emitTourBookingLifecycleEvent(
-        supabase,
-        "tour_no_show",
-        row,
-        { previous_status_key: prev },
-        { correlation_id: opts?.correlationId ?? null, actor_user_id: null }
-    );
-    await afterTourBookingComms("no_show", () =>
-        orchestrateTourBookingNoShow(supabase, {
-            orgId,
+        prepare: async () => {
+            const existing = await fetchBooking(supabase, orgId, bookingId);
+            if (!existing) return { ok: false, message: "tour_bookings: not found" };
+            if (existing.status_key !== "confirmed" && existing.status_key !== "rescheduled") {
+                return { ok: false, message: "tour_bookings: no_show only from confirmed or rescheduled" };
+            }
+            return {
+                ok: true,
+                existing,
+                patch: { status_key: "no_show" } as Partial<TourBookingRow>,
+                restoreFields: ["status_key"],
+            };
+        },
+        integration: (row) => ({
             booking: row,
-        })
-    );
-    return row;
+            kind: "no_show",
+            correlationId: opts?.correlationId ?? null,
+            actorUserId: opts?.actorUserId ?? null,
+        }),
+        lifecycleEvent: (_row, existing) => ({
+            key: "tour_no_show",
+            previous: { previous_status_key: existing.status_key },
+        }),
+        comms: (row) => ({
+            label: "no_show",
+            run: () => orchestrateTourBookingNoShow(supabase, { orgId, booking: row }),
+        }),
+    });
 }
