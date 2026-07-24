@@ -24,12 +24,16 @@ import WorkUnitHeaderSurfaceEditor from "@/components/adminV2/settings/surfaces/
 import WorkspaceHeaderSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkspaceHeaderSurfaceEditor";
 import WorkspaceProcessesSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkspaceProcessesSurfaceEditor";
 import QueueRowSurfaceEditor from "@/components/adminV2/settings/surfaces/QueueRowSurfaceEditor";
-import SurfacesOverviewPanel from "@/components/adminV2/settings/surfaces/SurfacesOverviewPanel";
 import { useQueueRowProcessCatalog } from "@/components/adminV2/settings/surfaces/useQueueRowProcessCatalog";
 import {
     catalogIdFromQueueRowSurfaceId,
 } from "@/lib/adminV2/settings/surfaces/queueRowProcessCatalog";
 import NestedSurfaceEditor from "@/components/adminV2/settings/surfaces/NestedSurfaceEditor";
+import {
+    SurfaceBuilderChromeProvider,
+    useSurfaceBuilderChromeContext,
+} from "@/components/adminV2/settings/surfaces/SurfaceBuilderChromeContext";
+import { SurfaceEditTabActions } from "@/components/adminV2/settings/surfaces/SurfaceEditTabActions";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState as useReactState } from "react";
@@ -38,6 +42,7 @@ import { ADMIN_V2_SETTINGS_PROCESSES_PATH } from "@/lib/adminV2/settings/lifecyc
 import {
     sectionLabel,
     sectionSubtitle,
+    SURFACE_WORKSPACE_DEFAULT_TAB,
     SURFACE_WORKSPACE_TABS,
     type SurfaceWorkspaceTab,
 } from "@/lib/adminV2/settings/surfaces/surfacesNavigationModel";
@@ -97,12 +102,7 @@ function SurfacesCategoryNav({
     );
 }
 
-export default function SurfacesConfigurationPage({
-    initialSection,
-    initialSurfaceId,
-    initialTab,
-    hideCategoryRail = false,
-}: {
+export default function SurfacesConfigurationPage(props: {
     initialSection?: SurfaceConfigSectionKey;
     /** Deep-link target (`?layout=`) — selects the Surface without leaving this shell. */
     initialSurfaceId?: string;
@@ -114,12 +114,33 @@ export default function SurfacesConfigurationPage({
      */
     hideCategoryRail?: boolean;
 } = {}) {
+    return (
+        <SurfaceBuilderChromeProvider>
+            <SurfacesConfigurationPageInner {...props} />
+        </SurfaceBuilderChromeProvider>
+    );
+}
+
+function SurfacesConfigurationPageInner({
+    initialSection,
+    initialSurfaceId,
+    initialTab,
+    hideCategoryRail = false,
+}: {
+    initialSection?: SurfaceConfigSectionKey;
+    initialSurfaceId?: string;
+    initialTab?: SurfaceWorkspaceTab;
+    hideCategoryRail?: boolean;
+} = {}) {
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
+    const { publicationBySurfaceId } = useSurfaceBuilderChromeContext();
     const [pendingCatalogIds, setPendingCatalogIds] = useReactState<string[]>([]);
     const [search, setSearch] = useReactState("");
-    const [tab, setTabState] = useReactState<SurfaceWorkspaceTab>(initialTab ?? "overview");
+    const [tab, setTabState] = useReactState<SurfaceWorkspaceTab>(
+        initialTab ?? SURFACE_WORKSPACE_DEFAULT_TAB,
+    );
     const [nestedSurfaceId, setNestedSurfaceId] = useReactState<string | null>(null);
 
     const {
@@ -164,7 +185,7 @@ export default function SurfacesConfigurationPage({
         params.set("section", next.section);
         if (next.surfaceId) {
             params.set("layout", next.surfaceId);
-            if (next.tab !== "overview") params.set("tab", next.tab);
+            if (next.tab !== SURFACE_WORKSPACE_DEFAULT_TAB) params.set("tab", next.tab);
         }
         const qs = params.toString();
         // Always stay under the Organization Surfaces product path (pathname may still be
@@ -182,21 +203,21 @@ export default function SurfacesConfigurationPage({
         }
     };
 
-    /** User picked a different Surface from the collection rail — default to Overview, never auto-edit. */
+    /** User picked a Surface from the collection rail — open the builder (Edit) immediately. */
     const selectSurface = (id: string, sectionOverride?: SurfaceConfigSectionKey) => {
         openSurface(id);
-        setTabState("overview");
+        setTabState(SURFACE_WORKSPACE_DEFAULT_TAB);
         syncSurfacesUrl({
             section: sectionOverride ?? section,
             surfaceId: id,
-            tab: "overview",
+            tab: SURFACE_WORKSPACE_DEFAULT_TAB,
         });
     };
 
-    /** Category change clears the selection; land back on Overview for whatever is picked next. */
+    /** Category change clears the selection; next pick opens Edit. */
     const selectSection = (key: SurfaceConfigSectionKey) => {
         setSection(key);
-        setTabState("overview");
+        setTabState(SURFACE_WORKSPACE_DEFAULT_TAB);
         setNestedSurfaceId(null);
         // From a category drill-in, changing category is a product navigation back through
         // the landing tile for that category (keeps hideCategoryRail semantics).
@@ -204,18 +225,18 @@ export default function SurfacesConfigurationPage({
             router.push(surfacesSectionHref(key));
             return;
         }
-        syncSurfacesUrl({ section: key, surfaceId: null, tab: "overview" });
+        syncSurfacesUrl({ section: key, surfaceId: null, tab: SURFACE_WORKSPACE_DEFAULT_TAB });
     };
 
     const clearSelection = () => {
         goHome();
-        setTabState("overview");
+        setTabState(SURFACE_WORKSPACE_DEFAULT_TAB);
         setNestedSurfaceId(null);
         if (hideCategoryRail) {
             router.push(SURFACES_LANDING_HREF);
             return;
         }
-        syncSurfacesUrl({ section, surfaceId: null, tab: "overview" });
+        syncSurfacesUrl({ section, surfaceId: null, tab: SURFACE_WORKSPACE_DEFAULT_TAB });
     };
 
     // Resolves the deep link (`?layout=` / `?tab=` / `?editor=1`) into embedded selection + tab
@@ -235,7 +256,7 @@ export default function SurfacesConfigurationPage({
             } else if (initialTab) {
                 setTabState(initialTab);
             } else {
-                setTabState("overview");
+                setTabState(SURFACE_WORKSPACE_DEFAULT_TAB);
             }
             return;
         }
@@ -247,7 +268,7 @@ export default function SurfacesConfigurationPage({
             || sectionParam === "operational-intelligence"
         ) {
             setSection(sectionParam);
-            setTabState("overview");
+            setTabState(SURFACE_WORKSPACE_DEFAULT_TAB);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
@@ -388,29 +409,29 @@ export default function SurfacesConfigurationPage({
             return <OperationalIntelligenceSurfaceBuilder />;
         }
         if (selectedObject.editor === "focus-panel-summary") {
-            return <FocusPanelSummarySurfaceEditor onBack={() => setTab("overview")} />;
+            return <FocusPanelSummarySurfaceEditor onBack={clearSelection} />;
         }
         if (selectedObject.editor === "queue-row-builder" && selectedQueueRowCatalogEntry) {
             return (
                 <QueueRowSurfaceEditor
                     catalogEntry={selectedQueueRowCatalogEntry}
-                    onBack={() => setTab("overview")}
+                    onBack={clearSelection}
                     onPublished={() => void reloadQueueRowCatalog()}
                 />
             );
         }
         if (selectedObject.editor === "workspace-header") {
-            return <WorkspaceHeaderSurfaceEditor onBack={() => setTab("overview")} />;
+            return <WorkspaceHeaderSurfaceEditor onBack={clearSelection} />;
         }
         if (selectedObject.editor === "work-unit-header") {
-            return <WorkUnitHeaderSurfaceEditor onBack={() => setTab("overview")} />;
+            return <WorkUnitHeaderSurfaceEditor onBack={clearSelection} />;
         }
         if (selectedObject.editor === "workspace-processes" && selectedCatalogEntry) {
             return (
                 <WorkspaceProcessesSurfaceEditor
                     catalogEntry={selectedCatalogEntry}
                     configuredEntries={configuredCatalogEntries}
-                    onBack={() => setTab("overview")}
+                    onBack={clearSelection}
                     onSelectProcess={(id) => openSurface(id)}
                     onPublished={() => {
                         setPendingCatalogIds([]);
@@ -504,7 +525,7 @@ export default function SurfacesConfigurationPage({
                 <ConfigurationEmptyState
                     testId="surfaces-no-selection"
                     title="Choose a Surface"
-                    description="Select a Surface to review its composition, assignments, versions, and health."
+                    description="Select a Surface to open its builder and configure composition, assignments, and publication."
                 />
             );
         }
@@ -528,17 +549,11 @@ export default function SurfacesConfigurationPage({
                         onSectionChange={setTab}
                         ariaLabel="Surface sections"
                         testIdPrefix="surfaces-tab"
+                        trailing={tab === "edit" ? <SurfaceEditTabActions /> : null}
                     />
                 </section>
 
-                {tab === "overview" ?
-                    <SurfacesOverviewPanel
-                        section={section}
-                        selectedObject={selectedObject}
-                        catalogEntry={boundCatalogEntry}
-                        onSelectTab={setTab}
-                    />
-                : tab === "edit" ?
+                {tab === "edit" ?
                     <div data-testid="surfaces-edit-tab">{renderEditTab()}</div>
                 : tab === "assignments" ?
                     renderAssignmentsTab()
@@ -595,7 +610,9 @@ export default function SurfacesConfigurationPage({
                                 {listItems.length === 0 ? sectionEmptyListCopy(section) : "No surfaces match your search."}
                             </p>
                         ) : (
-                            filteredListItems.map((item) => (
+                            filteredListItems.map((item) => {
+                                const publication = publicationBySurfaceId[item.id];
+                                return (
                                 <ConfigurationQueueItem
                                     key={item.id}
                                     active={item.id === selectedId}
@@ -612,10 +629,18 @@ export default function SurfacesConfigurationPage({
                                             >
                                                 {item.grain}
                                             </span>
+                                        ) : publication ? (
+                                            <span
+                                                className="flex-shrink-0 text-[10px] font-medium text-alloy-pine"
+                                                data-testid={`surfaces-object-publication-${item.id}`}
+                                            >
+                                                {publication}
+                                            </span>
                                         ) : undefined
                                     }
                                 />
-                            ))
+                                );
+                            })
                         )}
                         {section === "workspaces" && availableToCreate.length > 0 ? (
                             <div className="mt-3 space-y-2 border-t border-alloy-stone/10 pt-3" data-workspace-summary-create>

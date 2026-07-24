@@ -55,9 +55,9 @@ describe("Surfaces page — Configuration Runtime shell + naming", () => {
         expect(page).not.toContain("isFullBleedWorkspaceEditor");
         expect(page).not.toContain("data-focus-panel-builder-wide");
         expect(page).not.toContain('router.replace(`/settings/surfaces?${params.toString()}`)');
-        // Edit renders inline in the main workspace pane, `onBack` returns to Overview (same shell).
+        // Edit renders inline in the main workspace pane; `onBack` returns to the Surfaces collection.
         expect(page).toContain('selectedObject.editor === "focus-panel-summary"');
-        expect(page).toContain('<FocusPanelSummarySurfaceEditor onBack={() => setTab("overview")} />');
+        expect(page).toContain('<FocusPanelSummarySurfaceEditor onBack={clearSelection} />');
     });
 });
 

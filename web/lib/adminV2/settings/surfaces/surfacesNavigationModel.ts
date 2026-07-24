@@ -34,17 +34,20 @@ export function sectionSubtitle(key: SurfaceConfigSectionKey): string {
 /**
  * Selected-Surface workspace tabs. Fixed set, same family as Access / Business Processes.
  * `edit` embeds the existing Surface editor inline — it never navigates to a detached builder.
+ * Overview was removed: selecting a Surface opens Edit (builder) directly.
  */
-export type SurfaceWorkspaceTab = "overview" | "edit" | "assignments" | "versions" | "health" | "history";
+export type SurfaceWorkspaceTab = "edit" | "assignments" | "versions" | "health" | "history";
 
 export const SURFACE_WORKSPACE_TABS: readonly { key: SurfaceWorkspaceTab; label: string }[] = [
-    { key: "overview", label: "Overview" },
     { key: "edit", label: "Edit" },
     { key: "assignments", label: "Assignments" },
     { key: "versions", label: "Versions" },
     { key: "health", label: "Health" },
     { key: "history", label: "History" },
 ];
+
+/** Default tab when a Surface is selected — builder first. */
+export const SURFACE_WORKSPACE_DEFAULT_TAB: SurfaceWorkspaceTab = "edit";
 
 /** Operator-facing label for an editor kind (Overview "Composition Summary" hint). */
 export function editorKindLabel(kind: SurfaceEditorKind | undefined): string | null {

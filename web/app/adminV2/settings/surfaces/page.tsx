@@ -22,7 +22,6 @@ const SURFACE_SECTIONS = new Set<string>([
 ]);
 
 const SURFACE_WORKSPACE_TABS = new Set<string>([
-    "overview",
     "edit",
     "assignments",
     "versions",

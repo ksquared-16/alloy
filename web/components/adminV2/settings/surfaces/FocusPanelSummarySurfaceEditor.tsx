@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
 import FocusPanelRuntimeComposerCanvas from "@/components/admin/focusPanel/FocusPanelRuntimeComposerCanvas";
 import { gridFromPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
@@ -15,7 +14,8 @@ import {
     defaultRowLayoutFromCards,
     withPublishedLayoutMetadata,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayoutOps";
-import FocusPanelSummaryEditBar from "@/components/admin/focusPanel/FocusPanelSummaryEditBar";
+import { SurfaceBuilderInspectorRail } from "@/components/adminV2/settings/surfaces/SurfaceBuilderInspectorRail";
+import { useRegisterSurfaceBuilderChrome } from "@/components/adminV2/settings/surfaces/SurfaceBuilderChromeContext";
 import { buildDemoFocusPanelSummaryViewModel } from "@/lib/adminV2/runtime/focusPanel/demoFocusPanelSummaryViewModel";
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
@@ -147,21 +147,27 @@ function FocusPanelInspectorColumn(props: Parameters<typeof FocusPanelComposerIn
     const identityBuilderDrillIn =
         Boolean(drillIn)
         && (drillIn!.surfaceId === "household_surface" || drillIn!.surfaceId === "children_surface");
+    const widthClassName = identityBuilderDrillIn ? "w-[360px]" : drillIn ? "w-[300px]" : "w-[380px]";
     return (
-        <div
-            className={[
-                "shrink-0 overflow-y-auto rounded-xl border border-alloy-stone/15 bg-white",
-                identityBuilderDrillIn ? "w-[360px]" : drillIn ? "w-[300px]" : "w-[380px]",
-            ].join(" ")}
-            data-surface-inspector="true"
-            data-surface-inspector-mode={identityBuilderDrillIn ? "identity-builder" : drillIn ? "drill-in-metadata" : "card"}
+        <SurfaceBuilderInspectorRail
+            widthClassName={widthClassName}
+            testId="focus-panel-inspector-rail"
+            aria-label="Focus Panel configuration"
         >
-            <FocusPanelComposerInspectorSlot {...props} />
-        </div>
+            <div
+                className="h-full"
+                data-surface-inspector="true"
+                data-surface-inspector-mode={
+                    identityBuilderDrillIn ? "identity-builder" : drillIn ? "drill-in-metadata" : "card"
+                }
+            >
+                <FocusPanelComposerInspectorSlot {...props} />
+            </div>
+        </SurfaceBuilderInspectorRail>
     );
 }
 
-export default function FocusPanelSummarySurfaceEditor({ onBack, onOpenNestedSurface }: Props) {
+export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpenNestedSurface }: Props) {
     void onOpenNestedSurface;
     const { vm, record } = useMemo(() => buildDemoFocusPanelSummaryViewModel(), []);
 
@@ -329,18 +335,6 @@ export default function FocusPanelSummarySurfaceEditor({ onBack, onOpenNestedSur
         }
     }, [layoutState, buildDocWithLayout]);
 
-    const statusLabel = !loaded
-        ? "Loading…"
-        : dirty
-          ? layoutState.published
-              ? `Unpublished changes · live v${layoutState.published.version}`
-              : "Unpublished changes"
-          : layoutState.published
-            ? `Published v${layoutState.published.version}`
-            : layoutState.draft
-              ? "Draft saved"
-              : "Not published";
-
     const undo = useCallback(() => {
         setPast((p) => {
             if (p.length === 0) return p;
@@ -394,6 +388,29 @@ export default function FocusPanelSummarySurfaceEditor({ onBack, onOpenNestedSur
     );
     const nestedSurfaceByCard = useMemo(() => focusPanelNestedSurfaceByCardKey(), []);
 
+    const publicationLabel = layoutState.published
+        ? `Published v${layoutState.published.version}`
+        : layoutState.draft
+          ? "Draft"
+          : null;
+
+    useRegisterSurfaceBuilderChrome({
+        surfaceId: "enrollment-focus-panel-summary",
+        publicationLabel,
+        dirty,
+        saving,
+        publishing,
+        canUndo: past.length > 0,
+        showSaveDraft: true,
+        showHistoryControls: true,
+        onSaveDraft: () => void handleSaveDraft(),
+        onPublish: () => void handlePublish(),
+        onUndo: undo,
+        onReset: reset,
+        saveDisabled: !loaded,
+        publishDisabled: !loaded,
+    });
+
     return (
         <FocusPanelComposerProvider
             initialNestedConfigs={nestedConfigsSeed}
@@ -404,62 +421,11 @@ export default function FocusPanelSummarySurfaceEditor({ onBack, onOpenNestedSur
             data-testid="focus-panel-summary-surface-editor"
             data-focus-panel-builder-wide="true"
         >
-            <div
-                className="process-config-workspace-toolbar flex flex-wrap items-center justify-between gap-3"
-                data-testid="surface-publish-toolbar"
-            >
-                <div className="flex min-w-0 flex-wrap items-baseline gap-3">
-                    {onBack ?
-                        <button
-                            type="button"
-                            onClick={onBack}
-                            className="text-sm font-medium text-alloy-pine hover:underline"
-                            data-testid="focus-panel-surface-back"
-                        >
-                            ← Overview
-                        </button>
-                    :   null}
-                    <span className="config-typo-workspace-title">Enrollment Focus Panel</span>
-                    <span
-                        data-testid="surface-publish-status"
-                        data-surface-dirty={dirty ? "true" : "false"}
-                        className={[
-                            "config-typo-sublabel",
-                            dirty ? "text-amber-800" : layoutState.published ? "text-alloy-pine" : "",
-                        ].join(" ")}
-                    >
-                        {statusLabel}
-                    </span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        data-testid="surface-save-draft"
-                        onClick={handleSaveDraft}
-                        disabled={saving || publishing}
-                        className="config-secondary-btn"
-                    >
-                        {saving ? "Saving…" : "Save draft"}
-                    </button>
-                    <ConfigurationPrimaryButton
-                        data-testid="surface-publish"
-                        onClick={handlePublish}
-                        disabled={saving || publishing}
-                    >
-                        {publishing ? "Publishing…" : "Publish"}
-                    </ConfigurationPrimaryButton>
-                </div>
-            </div>
-
             {statusNote ?
                 <p className="config-typo-sublabel" data-testid="surface-publish-note">
                     {statusNote}
                 </p>
             :   null}
-
-            <div className="flex flex-wrap items-center gap-3">
-                <FocusPanelSummaryEditBar onUndo={undo} canUndo={past.length > 0} onReset={reset} />
-            </div>
 
             {loaded ? (
                 <div className="flex min-h-0 flex-1 gap-4">

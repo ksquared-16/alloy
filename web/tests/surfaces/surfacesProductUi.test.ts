@@ -109,18 +109,21 @@ describe("Surfaces product UI — landing tiles → Collection → Selected Surf
         expect(shell).toContain("SurfacesCategoryNav");
     });
 
-    it("Selected Surface workspace exposes the fixed overview|edit|assignments|versions|health|history tabs", () => {
+    it("Selected Surface workspace starts on Edit (builder) — no Overview tab", () => {
         const tabKeys = SURFACE_WORKSPACE_TABS.map((t) => t.key);
-        expect(tabKeys).toEqual(["overview", "edit", "assignments", "versions", "health", "history"]);
+        expect(tabKeys).toEqual(["edit", "assignments", "versions", "health", "history"]);
+        expect(tabKeys).not.toContain("overview");
         expect(shell).toContain("SURFACE_WORKSPACE_TABS");
+        expect(shell).toContain("SURFACE_WORKSPACE_DEFAULT_TAB");
         expect(shell).toContain("ConfigWorkspaceTabBar");
         expect(shell).toContain('testIdPrefix="surfaces-tab"');
-        expect(shell).toContain('setTabState("overview")');
+        expect(shell).toContain("setTabState(SURFACE_WORKSPACE_DEFAULT_TAB)");
+        expect(shell).not.toContain("SurfacesOverviewPanel");
         expect(shell).toContain("syncSurfacesUrl");
     });
 
-    it("embedded editors return to Overview (not a Surfaces route) via onBack", () => {
-        expect(shell).toContain('onBack={() => setTab("overview")}');
+    it("embedded editors clear selection via the Surfaces collection (no inner ← Surfaces chrome)", () => {
+        expect(shell).toContain("onBack={clearSelection}");
         for (const editorRel of [
             "components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx",
             "components/adminV2/settings/surfaces/QueueRowSurfaceEditor.tsx",
@@ -128,25 +131,54 @@ describe("Surfaces product UI — landing tiles → Collection → Selected Surf
             "components/adminV2/settings/surfaces/WorkUnitHeaderSurfaceEditor.tsx",
             "components/adminV2/settings/surfaces/WorkspaceProcessesSurfaceEditor.tsx",
         ]) {
-            expect(readSrc(editorRel)).toContain("← Overview");
+            expect(readSrc(editorRel)).not.toContain("← Surfaces");
         }
+    });
+
+    it("Surface builders wrap the right configuration rail in a collapsible panel (default collapsed)", () => {
+        expect(readSrc("components/adminV2/settings/surfaces/SurfaceBuilderInspectorRail.tsx")).toContain(
+            "defaultCollapsed = true",
+        );
+        expect(readSrc("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx")).toContain(
+            "SurfaceBuilderInspectorRail",
+        );
+        expect(readSrc("components/adminV2/settings/surfaces/WorkspaceHeaderSurfaceEditor.tsx")).toContain(
+            "SurfaceBuilderInspectorRail",
+        );
+        expect(readSrc("components/adminV2/settings/surfaces/WorkUnitHeaderSurfaceEditor.tsx")).toContain(
+            "SurfaceBuilderInspectorRail",
+        );
+        expect(readSrc("components/adminV2/settings/surfaces/WorkspaceProcessesSurfaceEditor.tsx")).toContain(
+            "SurfaceBuilderInspectorRail",
+        );
+        expect(readSrc("components/adminV2/settings/surfaces/NestedSurfaceEditor.tsx")).toContain(
+            "SurfaceBuilderInspectorRail",
+        );
+    });
+
+    it("lifts Save/Publish/Undo/Reset onto the tab row and keeps version in the collection list", () => {
+        expect(shell).toContain("SurfaceEditTabActions");
+        expect(shell).toContain("SurfaceBuilderChromeProvider");
+        expect(shell).toContain("publicationBySurfaceId");
+        expect(shell).toContain('trailing={tab === "edit" ? <SurfaceEditTabActions /> : null}');
+        expect(readSrc("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx")).toContain(
+            "useRegisterSurfaceBuilderChrome",
+        );
+        expect(readSrc("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx")).not.toContain(
+            "surface-publish-toolbar",
+        );
+        expect(readSrc("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx")).not.toContain(
+            "FocusPanelSummaryEditBar",
+        );
+        expect(readSrc("components/adminV2/settings/configurationRuntime/workspace/ConfigWorkspaceTabBar.tsx")).toContain(
+            "trailing",
+        );
     });
 
     it("marks History (and other not-yet-real surfaces) as Planned, never a fabricated fetch", () => {
         expect(shell).toContain("renderHistoryTab");
         expect(shell).toContain("A verified change history for this Surface is planned");
         expect(shell).toContain('data-capability="planned"');
-    });
-
-    it("Overview tab renders from the dedicated SurfacesOverviewPanel component", () => {
-        expect(shell).toContain("SurfacesOverviewPanel");
-        const overviewPanel = readSrc("components/adminV2/settings/surfaces/SurfacesOverviewPanel.tsx");
-        expect(overviewPanel).toContain("Surface Snapshot");
-        expect(overviewPanel).toContain("Composition Summary");
-        expect(overviewPanel).toContain("Used By / Assignments");
-        expect(overviewPanel).toContain("Publication");
-        expect(overviewPanel).toContain("Health");
-        expect(overviewPanel).not.toMatch(/v\d+(\.\d+)*/);
     });
 
     it("embeds every wired editor inline in the Edit tab (rehosted, not routed)", () => {
@@ -161,6 +193,6 @@ describe("Surfaces product UI — landing tiles → Collection → Selected Surf
         ]) {
             expect(shell).toContain(editor);
         }
-        expect(shell).toContain('onBack={() => setTab("overview")}');
+        expect(shell).toContain("onBack={clearSelection}");
     });
 });

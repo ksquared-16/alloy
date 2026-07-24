@@ -32,7 +32,7 @@ export default function FocusPanelSurfaceEditor({ onBack, onOpenNestedSurface }:
                     className="text-sm font-medium text-alloy-pine hover:underline"
                     data-testid="focus-panel-surface-back"
                 >
-                    ← Overview
+                    ← Surfaces
                 </button>
                 <div className="min-w-0 flex-1">
                     <h1 className="text-lg font-semibold text-alloy-midnight">Enrollment Focus Panel</h1>
