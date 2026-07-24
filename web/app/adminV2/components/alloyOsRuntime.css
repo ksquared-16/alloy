@@ -1599,6 +1599,23 @@ html[data-alloy-os-runtime="on"]
   width: 100%;
 }
 
+/* Unified card reveal (Polish item 1 — Focus Panel loading). Each cell's content settles in
+ * (opacity-only, micro) the moment it MOUNTS. Because a reserved cell and its resolved card are
+ * different elements, the resolved card mounts fresh when Settlement fills the cell — so the fill
+ * reads as one calm settle-in-place, never a hard pop. Top cards settle with the panel; lower cards
+ * settle exactly when they fill. Uniform regardless of position, no card-by-card "loading" cascade.
+ * Opacity-only + `both` retains opacity:1 and sets NO transform, so it never fights the depth/zoom
+ * elevation transforms. A card updating in place (a data patch) does not remount, so it never
+ * re-settles — the motion marks appearance, not every render. Composes existing motion tokens. */
+.alloy-os-focus-panel-grid__cell > * {
+  animation: motion-settle-in var(--motion-micro, 160ms) var(--motion-ease-enter, ease-out) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .alloy-os-focus-panel-grid__cell > * {
+    animation-duration: 1ms;
+  }
+}
+
 /* Universal Card — tier hierarchy + density (white-on-white, quiet borders) */
 .alloy-os-ucard {
   display: flex;
