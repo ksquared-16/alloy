@@ -113,6 +113,19 @@ describe("identityConversation (presentation realization)", () => {
         expect(view.outcome.find((o) => /Confirm Wren Ziptest/.test(o.text))?.pending).toBe(true);
     });
 
+    it("submitted DOB is formatted per the date doctrine — never ISO", () => {
+        const withDob: ReviewDataRaw = {
+            ...MARISOL,
+            resolutions: (MARISOL.resolutions ?? []).map((r) =>
+                r.subject_role === "child" ? { ...r, provisional: { ...r.provisional, dob: "2022-05-10" } } : r,
+            ),
+        };
+        const view = buildIdentityConversation(withDob);
+        const child = view.subjects.find((s) => s.kind === "child")!;
+        expect(child.submitted.dob).toBe("May 10, 2022");
+        expect(child.submitted.dob).not.toMatch(/2022-05-10/);
+    });
+
     it("parent profile card is enriched from candidate details when provided", () => {
         const view = buildIdentityConversation(MARISOL, { candidateProfiles: [{ id: "f644", email: "marisol@x.invalid", zip: "97701", children: ["Wren"] }] });
         const parent = view.subjects.find((s) => s.kind === "parent")!;

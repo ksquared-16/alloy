@@ -11,6 +11,7 @@
 import type { IntakeRecommendation } from "@/lib/forms/intake/resolveIntakeIdentity";
 import type { OperationalIntentKey } from "@/lib/forms/operationalIntentTemplates";
 import { decisionNounForIntent } from "@/lib/pos/decisionPresentation";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 
 export type MatchedRecordTone = "match" | "new" | "review";
 
@@ -49,12 +50,10 @@ function findValue(values: SubmittedValue[], ...needles: string[]): string | nul
 
 function formatDob(raw: string | null): string | null {
     if (!raw) return null;
-    // Parse YYYY-MM-DD as a LOCAL date — `new Date("2022-08-14")` is UTC midnight and shifts a day
-    // in negative-offset timezones. A DOB is a calendar date, not an instant.
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw.trim());
-    const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(raw);
-    if (Number.isNaN(d.getTime())) return raw;
-    return `Born ${d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}`;
+    // Canonical display date (doctrine: typography-and-presentation-doctrine.md) — "Born May 10, 2022",
+    // never ISO. The formatter parses a bare YYYY-MM-DD as a UTC calendar date (no day-shift).
+    const display = formatDisplayDate(raw.trim());
+    return display ? `Born ${display}` : raw;
 }
 
 function parentBasis(rec: IntakeRecommendation): { basis: string; tone: MatchedRecordTone } {

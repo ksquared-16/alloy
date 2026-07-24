@@ -8,6 +8,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 
 export interface CandidateDetail {
     id: string;
@@ -33,10 +34,8 @@ function humanize(s: string | null | undefined): string | null {
 
 function localDateLabel(raw: string | null | undefined): string | null {
     if (!raw) return null;
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(raw).trim());
-    const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(String(raw));
-    if (Number.isNaN(d.getTime())) return String(raw);
-    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    // Canonical display date (doctrine: typography-and-presentation-doctrine.md) — "May 10, 2022", never ISO.
+    return formatDisplayDate(String(raw).trim()) || String(raw);
 }
 
 /** Translate the engine's match identifier into an operator-facing reason. */

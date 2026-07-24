@@ -37,7 +37,7 @@ describe("matchedRecordsPresentation (§4)", () => {
         const child = cards.find((c) => c.role === "child")!;
         expect(child.title).toBe("Child");
         expect(child.name).toBe("Marigold Thistlewood");
-        expect(child.details.join(" ")).toMatch(/Born August 14, 2022/);
+        expect(child.details.join(" ")).toMatch(/Born Aug 14, 2022/);
 
         const lead = cards.find((c) => c.role === "business_object")!;
         expect(lead.title).toBe("Enrollment lead");

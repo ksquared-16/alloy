@@ -7,6 +7,8 @@
  * underlying identity model, endpoints, and decisions are unchanged; this only renames and reshapes.
  */
 
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+
 /** Loose shapes for the bits of the /identity/review payload we present. */
 export interface ReviewCandidateRaw {
     recordId?: string | null;
@@ -123,11 +125,8 @@ function matchReasons(c: ReviewCandidateRaw): string[] {
 
 function formatDob(raw: unknown): string | null {
     if (!raw) return null;
-    const str = String(raw).trim();
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
-    const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(str);
-    if (Number.isNaN(d.getTime())) return str;
-    return d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    // Canonical display date (doctrine: typography-and-presentation-doctrine.md) — "May 10, 2022", never ISO.
+    return formatDisplayDate(String(raw).trim()) || null;
 }
 
 /** Build the operator-facing conversation from the engine review payload. */

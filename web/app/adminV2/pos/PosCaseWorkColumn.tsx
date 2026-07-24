@@ -19,16 +19,23 @@ import ClassificationPanel from "./ClassificationPanel";
 import WhatAlloyFound from "./WhatAlloyFound";
 import { ProcessingCollectionEvidencePanel } from "@/components/pos/ProcessingCollectionEvidencePanel";
 import { buildMatchedRecords } from "@/lib/pos/matchedRecordsPresentation";
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/presentation/presentationDateFormat";
 
 function statusLabel(s: string): string {
     return s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
 function formatWhen(iso: string | null): string {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    // Canonical presentation datetime (doctrine: typography-and-presentation-doctrine.md) — never a raw locale string.
+    return (iso && formatDisplayDateTime(iso)) || "—";
+}
+
+/** A raw ISO calendar date (e.g. a submitted DOB "2022-05-10") must never show as ISO on an operator surface. */
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(?!\d)/;
+function displaySubmittedValue(value: string | null): string {
+    if (value == null || value === "") return "—";
+    const v = String(value).trim();
+    return ISO_DATE_RE.test(v) ? formatDisplayDate(v) : v;
 }
 
 export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
@@ -104,7 +111,7 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                             {submitted.map((v, i) => (
                                 <div key={`${v.label}:${i}`} className="flex gap-2 text-[12.5px]">
                                     <dt className="w-40 shrink-0 text-stone-500">{v.label}</dt>
-                                    <dd className="min-w-0 flex-1 font-medium text-alloy-midnight">{v.value ?? "—"}</dd>
+                                    <dd className="min-w-0 flex-1 font-medium text-alloy-midnight">{displaySubmittedValue(v.value)}</dd>
                                 </div>
                             ))}
                         </dl>
