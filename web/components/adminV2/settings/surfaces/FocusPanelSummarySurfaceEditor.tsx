@@ -35,6 +35,7 @@ import {
     saveFocusPanelSummaryDraft,
     type FocusPanelSummaryLayoutState,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryLayoutService";
+import { validateNestedSurfacesForPublish } from "@/lib/adminV2/settings/surfaces/nestedSurfaceConfigService";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import FocusPanelDrillInInspector from "@/components/admin/focusPanel/drillIn/FocusPanelDrillInInspector";
 import { FocusPanelComposerProvider, useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
@@ -320,7 +321,13 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
         setPublishing(true);
         setStatusNote(null);
         try {
-            const draft = await saveFocusPanelSummaryDraft(layoutState, buildDocWithLayout());
+            const nextDoc = buildDocWithLayout();
+            const nestedError = validateNestedSurfacesForPublish(nextDoc);
+            if (nestedError) {
+                setStatusNote(nestedError);
+                return;
+            }
+            const draft = await saveFocusPanelSummaryDraft(layoutState, nextDoc);
             const published = await publishFocusPanelSummary(draft.id);
             setLayoutState({
                 draft: null,

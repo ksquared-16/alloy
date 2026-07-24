@@ -28,6 +28,7 @@ import {
     SURFACE_FIELD_VISIBILITY_LABELS,
     type SurfaceFieldVisibility,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import { identityFieldVisibilityOptionsForBuilder } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldEditContract";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 import { availableFieldsForNamespaces } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
@@ -489,7 +490,11 @@ function FieldInstance({
                             )}
                             <select
                                 className="fp-inline-field-row__behavior"
-                                value={visibility}
+                                value={
+                                    identityFieldVisibilityOptionsForBuilder(fieldKey).includes(visibility)
+                                        ? visibility
+                                        : "read-only"
+                                }
                                 aria-label={`Display policy for ${label}`}
                                 onChange={(e) =>
                                     onMutate(
@@ -503,7 +508,7 @@ function FieldInstance({
                                     )
                                 }
                             >
-                                {(Object.keys(SURFACE_FIELD_VISIBILITY_LABELS) as SurfaceFieldVisibility[]).map((mode) => (
+                                {identityFieldVisibilityOptionsForBuilder(fieldKey).map((mode) => (
                                     <option key={mode} value={mode}>
                                         {SURFACE_FIELD_VISIBILITY_LABELS[mode]}
                                     </option>

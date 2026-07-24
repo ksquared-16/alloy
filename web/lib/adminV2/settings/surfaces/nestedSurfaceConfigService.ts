@@ -25,8 +25,18 @@ import {
     reconcileNestedSurfaceConfig,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    collectUnsupportedEditableIdentityConfigs,
+    formatUnsupportedEditablePublishError,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldEditContract";
 
 type NestedSurfacesMetadata = Record<string, NestedSurfaceConfig>;
+
+function assertNestedSurfaceEditableContract(config: NestedSurfaceConfig): void {
+    const issues = collectUnsupportedEditableIdentityConfigs(config);
+    if (issues.length === 0) return;
+    throw new Error(formatUnsupportedEditablePublishError(issues));
+}
 
 function readNestedSurfaces(doc: LayoutDoc | undefined | null): NestedSurfacesMetadata {
     const raw = (doc?.metadata?.nestedSurfaces ?? null) as NestedSurfacesMetadata | null;
@@ -55,6 +65,7 @@ export async function loadNestedSurfaceConfig(surfaceId: string): Promise<Nested
  * Returns the published record id.
  */
 export async function saveNestedSurfaceConfig(surfaceId: string, config: NestedSurfaceConfig): Promise<void> {
+    assertNestedSurfaceEditableContract(config);
     const state = await loadFocusPanelSummaryLayout();
     const base = baseDocFrom(state);
     const nextDoc: LayoutDoc = {
@@ -69,4 +80,14 @@ export async function saveNestedSurfaceConfig(surfaceId: string, config: NestedS
     };
     const draft = await saveFocusPanelSummaryDraft(state, nextDoc);
     await publishFocusPanelSummary(draft.id);
+}
+
+/** Validate all nested surfaces on a Focus Panel summary doc before publish. */
+export function validateNestedSurfacesForPublish(doc: LayoutDoc): string | null {
+    const nested = readNestedSurfaces(doc);
+    const issues = Object.values(nested).flatMap((config) =>
+        collectUnsupportedEditableIdentityConfigs(reconcileNestedSurfaceConfig(config.surfaceId, config)),
+    );
+    if (issues.length === 0) return null;
+    return formatUnsupportedEditablePublishError(issues);
 }

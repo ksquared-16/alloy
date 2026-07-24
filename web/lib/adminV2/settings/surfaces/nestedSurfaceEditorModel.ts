@@ -523,7 +523,8 @@ export function moveFieldInNestedGroup(
     const [item] = nextKeys.splice(i, 1);
     nextKeys.splice(j, 0, item);
     let next = patchGroupFieldKeysForPurpose(config, groupKey, purpose, nextKeys);
-    return unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, nextKeys);
+    next = unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, nextKeys);
+    return resyncIdentityFieldPlacementsInGroup(next, groupKey);
 }
 
 /** Which disclosure tier currently owns a field on a group. */
@@ -635,13 +636,28 @@ export function fieldLayoutWidthForNestedGroup(
     return config.groups.find((g) => g.key === groupKey)?.fieldLayoutWidths?.[fieldKey] ?? "full";
 }
 
+/** Rewrite group.fieldPlacements from authoritative key order + fieldLayoutWidths. */
+export function resyncIdentityFieldPlacementsInGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((g) =>
+            g.key === groupKey
+                ? { ...g, fieldPlacements: generateDefaultIdentityFieldPlacements(g) }
+                : g,
+        ),
+    };
+}
+
 export function setFieldLayoutWidthInNestedGroup(
     config: NestedSurfaceConfig,
     groupKey: string,
     fieldKey: string,
     layoutWidth: NestedSurfaceFieldLayoutWidth,
 ): NestedSurfaceConfig {
-    return {
+    const next = {
         ...config,
         groups: config.groups.map((g) =>
             g.key === groupKey
@@ -652,6 +668,7 @@ export function setFieldLayoutWidthInNestedGroup(
                 : g,
         ),
     };
+    return resyncIdentityFieldPlacementsInGroup(next, groupKey);
 }
 
 function patchGroupFieldKeys(
@@ -775,7 +792,8 @@ export function applyNestedSurfaceFieldDrop(
         let next = patchGroupFieldKeysForPurpose(config, groupKey, purpose, reordered);
         next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "half");
         next = setFieldLayoutWidthInNestedGroup(next, groupKey, targetKey, "half");
-        return unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
+        next = unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
+        return resyncIdentityFieldPlacementsInGroup(next, groupKey);
     }
 
     const layoutFor = (fieldKey: string) => fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey);
@@ -792,7 +810,8 @@ export function applyNestedSurfaceFieldDrop(
 
     let next = patchGroupFieldKeysForPurpose(config, groupKey, purpose, reordered);
     next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "full");
-    return unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
+    next = unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
+    return resyncIdentityFieldPlacementsInGroup(next, groupKey);
 }
 
 export function fieldShowLabelForNestedGroup(

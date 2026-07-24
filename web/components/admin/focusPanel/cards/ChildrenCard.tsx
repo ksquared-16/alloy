@@ -926,6 +926,8 @@ const CHILDREN_FIELD_TRUTH_META: Record<string, { icon: LucideIcon; get: (c: Chi
     "child.date_of_birth": { icon: Cake, get: (c) => c.dobAge },
     "child.dob_age": { icon: Cake, get: (c) => c.dobAge },
     "child.age": { icon: Cake, get: (c) => c.dobAge },
+    "child.gender": { icon: User, get: (c) => c.gender ?? null },
+    "child.age_band": { icon: Cake, get: (c) => c.ageBand ?? null },
     "inquiry_child.program": { icon: GraduationCap, get: (c) => c.program },
     "child.room": { icon: DoorOpen, get: (c) => c.room },
     "child.start_date": { icon: CalendarClock, get: (c) => c.startDate },

@@ -44,6 +44,10 @@ export type ChildrenEvidenceChild = {
     /** ISO date-only when present; display via dobAge. */
     dob?: string | null;
     age?: string | null;
+    /** Person gender label when present on the child row (display only unless write contract exists). */
+    gender?: string | null;
+    /** Age band label when present on the child row (computed / projected — read-only). */
+    ageBand?: string | null;
     initial: string;
     /** Identity profile image (evidence model); null → initials fallback. */
     imageUrl: string | null;
@@ -199,6 +203,12 @@ export function buildChildrenCardEvidence(
             nickname: trimOrNull((row as { nickname?: unknown }).nickname),
             dob: trimOrNull(row.dob)?.slice(0, 10) ?? null,
             age: trimOrNull(row.age),
+            gender:
+                trimOrNull((row as { gender_label?: unknown }).gender_label)
+                ?? trimOrNull((row as { gender?: unknown }).gender),
+            ageBand:
+                trimOrNull((row as { age_band?: unknown }).age_band)
+                ?? trimOrNull((row as { age_band_label?: unknown }).age_band_label),
             initial: name.charAt(0).toUpperCase(),
             imageUrl: resolveChildPhotoUrlFromRaw(rawRows[index] ?? {}),
             dobAge,

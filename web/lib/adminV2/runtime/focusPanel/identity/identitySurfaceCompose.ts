@@ -124,6 +124,14 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
         return ("age" in child ? child.age : null) ?? ("dobAge" in child ? child.dobAge : null) ?? null;
     },
     "child.name": (subject) => (subject.kind === "child" ? subject.value.name : null),
+    "child.gender": (subject) =>
+        subject.kind === "child" && "gender" in subject.value
+            ? (subject.value as { gender?: string | null }).gender ?? null
+            : null,
+    "child.age_band": (subject) =>
+        subject.kind === "child" && "ageBand" in subject.value
+            ? (subject.value as { ageBand?: string | null }).ageBand ?? null
+            : null,
     "inquiry_child.program": (subject) =>
         subject.kind === "child" && "program" in subject.value ? subject.value.program ?? null : null,
     "child.room": (subject) =>

@@ -96,7 +96,9 @@ function placementsForIdentityGroupPurpose(
 ): ReturnType<typeof generateDefaultPlacementsForGroup> {
     const group = config.groups.find((g) => g.key === groupKey);
     if (!group) return [];
-    return (group.fieldPlacements ?? generateDefaultPlacementsForGroup(group)).filter((placement) =>
+    // Always re-pack from key order + fieldLayoutWidths. Stored fieldPlacements may be
+    // stale after Builder beside/reorder; regenerate preserves policy/label/icon only.
+    return generateDefaultPlacementsForGroup(group).filter((placement) =>
         storageTierMatchesPurpose(placement.tier, purpose),
     );
 }
