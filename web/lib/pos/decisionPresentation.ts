@@ -58,6 +58,21 @@ export function decisionNounForIntent(intent: OperationalIntentKey | null | unde
     return "record";
 }
 
+/** Human purpose descriptor for a form's intent — used in the {purpose} case-title token. */
+const INTENT_PURPOSE: Record<OperationalIntentKey, string> = {
+    enrollment_lead: "New enrollment lead",
+    existing_family: "Existing family update",
+    waitlist: "Waitlist inquiry",
+    operational_document: "Document",
+    packet_step: "Packet step",
+    custom: "Submission",
+};
+
+export function intentPurposeLabel(intent: OperationalIntentKey | null | undefined): string {
+    if (intent && intent in INTENT_PURPOSE) return INTENT_PURPOSE[intent];
+    return "Submission";
+}
+
 /**
  * Corrected readiness semantics (§2). Separates:
  *   • create-new readiness (no match found + a searched identifier → Ready to create)

@@ -17,13 +17,7 @@ import { POS_SOURCE_KIND_LABELS } from "./posSections";
 import PosPanel from "./PosPanel";
 import ClassificationPanel from "./ClassificationPanel";
 import { ProcessingCollectionEvidencePanel } from "@/components/pos/ProcessingCollectionEvidencePanel";
-
-const RECORD_TYPE_LABELS: Record<string, string> = {
-    person: "CRM · Person",
-    customer: "CRM · Customer",
-    opportunity: "CRM · Opportunity",
-    customer_member: "CRM · Member",
-};
+import { buildMatchedRecords } from "@/lib/pos/matchedRecordsPresentation";
 
 function statusLabel(s: string): string {
     return s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
@@ -37,7 +31,7 @@ function formatWhen(iso: string | null): string {
 }
 
 export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
-    const { detail, evidence, destinations, rec, loading, error, reload } = state;
+    const { detail, evidence, rec, loading, error, reload } = state;
 
     if (loading && !detail) {
         return (
@@ -68,8 +62,14 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
     const submitted = evidence.flatMap((e) => e.proposedValues);
     const collectionGroups = evidence.flatMap((e) => e.collectionEvidence?.groups ?? []);
     const collectionDiagnostics = evidence.flatMap((e) => e.collectionEvidence?.diagnostics ?? []);
-    const candidates = rec?.supported && rec.recommendation ? rec.recommendation.candidates : [];
-    const hasRecordContext = destinations.length > 0 || candidates.length > 0;
+    const matchedRecords =
+        rec?.supported && rec.recommendation
+            ? buildMatchedRecords({
+                  recommendation: rec.recommendation,
+                  intent: rec.intent ?? null,
+                  submitted: submitted.map((v) => ({ label: v.label, value: v.value ?? null })),
+              })
+            : [];
 
     return (
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
@@ -77,7 +77,7 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
             <div className="rounded-lg border border-l-2 border-alloy-juniper border-alloy-stone/15 bg-alloy-bend-pine/[0.06] px-3 py-2.5">
                 <div className="flex items-center gap-2">
                     <span className="truncate text-[14px] font-semibold text-alloy-midnight">
-                        {primary?.display.label ?? "Processing case"}
+                        {detail.caseTitle ?? primary?.display.label ?? "Processing case"}
                     </span>
                     <span className="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-[10.5px] font-medium text-alloy-bend-pine">
                         {statusLabel(detail.status)}
@@ -85,6 +85,7 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-stone-600">
                     <span>{POS_SOURCE_KIND_LABELS[primary?.kind ?? ""] ?? "Source"}</span>
+                    {detail.caseTitle && primary?.display.label ? <span>· Submitted through {primary.display.label}</span> : null}
                     {primary?.display.channel ? <span>· via {primary.display.channel}</span> : null}
                     <span>· received {formatWhen(primary?.display.receivedAt ?? detail.createdAt)}</span>
                 </div>
@@ -152,35 +153,33 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                 onCorrected={reload}
             />
 
-            {/* 3 — Matched records (only when available) */}
-            <PosPanel eyebrow="Matched records" accent={false}>
-                {hasRecordContext ? (
-                    <div className="space-y-2">
-                        {candidates.length > 0 ? (
-                            <div>
-                                <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-stone-400">Possible matches</div>
-                                <ul className="space-y-1">
-                                    {candidates.map((c) => (
-                                        <li key={c.id} className="flex items-center justify-between gap-2 text-[12px]">
-                                            <span className="truncate text-alloy-midnight">{c.label}</span>
-                                            <span className="shrink-0 text-[10px] text-stone-400">{c.matchReason}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        ) : null}
-                        {destinations.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5">
-                                {destinations.map((t) => (
-                                    <span key={t} className="rounded-md bg-stone-100 px-2 py-0.5 text-[11.5px] text-stone-700">
-                                        {RECORD_TYPE_LABELS[t] ?? t}
-                                    </span>
+            {/* 3 — Matched records: the actual proposed/confirmed records in human language */}
+            <PosPanel eyebrow="Records" accent={false}>
+                {matchedRecords.length > 0 ? (
+                    <ul className="space-y-2">
+                        {matchedRecords.map((r, i) => (
+                            <li key={`${r.role}:${i}`} className="rounded-md border border-alloy-stone/25 bg-white px-3 py-2">
+                                <div className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">{r.title}</div>
+                                {r.name ? <div className="mt-0.5 text-[13px] font-medium text-alloy-midnight">{r.name}</div> : null}
+                                {r.details.map((d, j) => (
+                                    <div key={j} className="text-[12px] text-alloy-midnight/70">{d}</div>
                                 ))}
-                            </div>
-                        ) : null}
-                    </div>
+                                <div
+                                    className={`mt-1 text-[11.5px] ${
+                                        r.basisTone === "match"
+                                            ? "text-alloy-bend-pine"
+                                            : r.basisTone === "review"
+                                              ? "text-alloy-gold-dark"
+                                              : "text-alloy-midnight/50"
+                                    }`}
+                                >
+                                    {r.basis}
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
                 ) : (
-                    <div className="text-[12.5px] text-stone-400">No linked records yet — resolved at commit.</div>
+                    <div className="text-[12.5px] text-stone-400">No records to show yet — resolved at commit.</div>
                 )}
             </PosPanel>
 

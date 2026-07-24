@@ -252,7 +252,10 @@ export default function ProcessingQueueList({
 
     const renderRow = (row: QueueDisplayRow) => {
         const selected = selectedCaseId === row.id;
-        const title = row.sourceDisplay?.label ?? row.primarySource?.kind ?? "Untitled source";
+        // Configurable title (person — purpose) instead of the repeated form name; the form name
+        // stays visible below as source context.
+        const title = row.caseTitle ?? row.sourceDisplay?.label ?? row.primarySource?.kind ?? "Untitled source";
+        const sourceContext = row.caseTitle ? row.sourceDisplay?.label ?? null : null;
         const rec = recommendations[row.id] ?? null;
         const lane = deriveWorkLane(row);
         const laneLabel =
@@ -299,6 +302,11 @@ export default function ProcessingQueueList({
                                 </>
                             ) : null}
                         </span>
+                        {sourceContext ? (
+                            <span className={`mt-0.5 block truncate ${PROCESSING_QUEUE_METADATA} text-alloy-midnight/40`}>
+                                Submitted through {sourceContext}
+                            </span>
+                        ) : null}
                     </span>
                 </button>
                 {canDelete || canArchive || canRename ? (

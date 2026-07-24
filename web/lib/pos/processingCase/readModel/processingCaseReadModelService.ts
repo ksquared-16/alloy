@@ -83,6 +83,10 @@ export async function listProcessingCaseQueue(
             primarySource: primary,
             relatedSourceCount: g?.relatedCount ?? 0,
             sourceDisplay,
+            caseTitle: (() => {
+                const raw = (c.metadata as Record<string, unknown> | null)?.case_title;
+                return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+            })(),
             adminCategory: (() => {
                 const raw = (c.metadata as Record<string, unknown> | null)?.admin_category;
                 return typeof raw === "string" && raw.trim() ? raw.trim().toLowerCase() : null;
@@ -142,6 +146,10 @@ export async function getProcessingCaseDetail(
         updatedAt: c.updated_at,
         archivedAt: c.archived_at,
         sources,
+        caseTitle: (() => {
+            const raw = (c.metadata as Record<string, unknown> | null)?.case_title;
+            return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+        })(),
         classification: parseStoredClassification(c.metadata),
         extraction: parseStoredExtraction(c.metadata),
         documentFormPreview: parseStoredDocumentFormPreview(c.metadata),

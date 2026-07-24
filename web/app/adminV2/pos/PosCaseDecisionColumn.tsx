@@ -61,14 +61,17 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
                     </div>
                 )}
 
-                {/* Result */}
-                <PosPanel eyebrow="Result" accent={false}>
-                    {isClosed ? (
+                {/* Result — a full panel only once there IS a result; a quiet one-liner before that,
+                    so an empty Result box never dominates the narrow decision rail (§8). */}
+                {isClosed ? (
+                    <PosPanel eyebrow="Result" accent={false}>
                         <div className="text-[12.5px] text-alloy-midnight">{outputLine(approveResult)}</div>
-                    ) : (
-                        <div className="text-[12.5px] text-stone-400">Nothing yet — saved or linked records appear here after you approve.</div>
-                    )}
-                </PosPanel>
+                    </PosPanel>
+                ) : (
+                    <p className="px-1 text-[11px] leading-snug text-alloy-midnight/40">
+                        Saved or linked records appear here after you approve.
+                    </p>
+                )}
             </div>
 
             {/* Approve bar */}
