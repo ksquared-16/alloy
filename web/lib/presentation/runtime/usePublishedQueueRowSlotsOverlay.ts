@@ -46,6 +46,10 @@ export function usePublishedQueueRowSlotsOverlay(args: {
     useEffect(() => {
         if (!enabled || !surfaceId || typeof window === "undefined") return;
 
+        // Always re-read published layout on mount — D1 `qrl:` cache can lag a Surface Builder
+        // publish from another tab/session, and CondensedQueueRow must show Default children.
+        void refresh();
+
         const onLocal = (event: Event) => {
             const detail = (event as CustomEvent<{ surfaceId?: string }>).detail;
             if (detail?.surfaceId && detail.surfaceId !== surfaceId) return;

@@ -11,6 +11,7 @@ import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts"
 import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
 import { resolveQueueRowVariant, type QueueRowVariantMatchInput } from "./resolveQueueRowVariant";
 import { mapQueueRowSurfaceToCompactConfig, type CompactRowSlots } from "./queueRowSurfaceConfig";
+import { mergeCompactSlotsInheritDefault } from "./mergeCompactSlotsInheritDefault";
 import { resolveQueueRowSubjectFocus, type FocusedSubjectContext } from "./resolveQueueRowSubjectFocus";
 
 /** Build the variant match input from a row's frozen context + the active runtime scope. */
@@ -37,17 +38,28 @@ export function queueRowVariantMatchInputFromContext(
 /**
  * Resolve the compact slots for a single row. Picks the matching variant (else the top-level
  * Default columns) and maps to the fixed compact anatomy. Null config → generic-context slots.
- * Empty matched variant columns inherit Default (never blank the row). Pure; never throws.
+ * Empty matched variant columns inherit Default (never blank the row).
+ * Slots the variant does not configure inherit Default (so Default children.names/count survive
+ * stage variants that only specialize status/work).
  */
 export function resolveQueueRowCompactSlots(
     config: QueueRecordLayoutConfigV3 | null,
     input: QueueRowVariantMatchInput,
 ): CompactRowSlots {
     if (!config) return mapQueueRowSurfaceToCompactConfig(null).slots;
+    const defaultSlots = mapQueueRowSurfaceToCompactConfig({
+        ...config,
+        variants: undefined,
+    }).slots;
     const variant = resolveQueueRowVariant(config.variants, input);
-    const effective =
-        variant && variant.columns.length > 0 ? { ...config, columns: variant.columns } : config;
-    return mapQueueRowSurfaceToCompactConfig(effective).slots;
+    if (!variant || variant.columns.length === 0) return defaultSlots;
+    const variantSlots = mapQueueRowSurfaceToCompactConfig({
+        ...config,
+        columns: variant.columns,
+        fixedControls: variant.fixedControls ?? config.fixedControls,
+        variants: undefined,
+    }).slots;
+    return mergeCompactSlotsInheritDefault(variantSlots, defaultSlots);
 }
 
 /**
@@ -65,9 +77,7 @@ export function resolveQueueRowPresentation(
         return { rowConfig: mapQueueRowSurfaceToCompactConfig(null).slots, focus: null };
     }
     const variant = resolveQueueRowVariant(config.variants, input);
-    const effective =
-        variant && variant.columns.length > 0 ? { ...config, columns: variant.columns } : config;
-    const rowConfig = mapQueueRowSurfaceToCompactConfig(effective).slots;
+    const rowConfig = resolveQueueRowCompactSlots(config, input);
     const focus =
         variant?.subjectFocus != null ? resolveQueueRowSubjectFocus(context, variant.subjectFocus) : null;
     return { rowConfig, focus };

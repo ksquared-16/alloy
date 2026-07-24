@@ -15,6 +15,7 @@ import { useMemo } from "react";
 import { WorkUnitSurfaceBodyFromModel } from "@/components/presentation/workUnit/WorkUnitSurface";
 import { useCommittedWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime";
 import { usePublishedQueueRowSlotsOverlay } from "@/lib/presentation/runtime/usePublishedQueueRowSlotsOverlay";
+import { mergeCompactSlotsInheritDefault } from "@/lib/presentation/runtime/mergeCompactSlotsInheritDefault";
 import { runtimeLabelProps, PRESENTATION_RUNTIME_LABELS } from "@/components/presentation/runtimeLabels";
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import { useCommittedFocus } from "@/lib/runtime/kernel/RuntimeKernelContext";
@@ -42,6 +43,17 @@ export function ProvisionedWorkUnitSurface() {
             queue: {
                 ...model.queue,
                 rowConfig: publishedSlots,
+                // Per-row variant overrides must inherit freshly published Default slots
+                // (children.names/count, contact, work) — otherwise a stale matched variant
+                // keeps wiping Default after Surface Builder publish.
+                rows: model.queue.rows.map((row) =>
+                    row.rowConfig
+                        ? {
+                              ...row,
+                              rowConfig: mergeCompactSlotsInheritDefault(row.rowConfig, publishedSlots),
+                          }
+                        : row,
+                ),
             },
         };
     }, [model, publishedSlots]);

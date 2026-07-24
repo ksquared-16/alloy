@@ -93,4 +93,110 @@ describe("resolveQueueRowCompactSlots", () => {
         const slots = resolveQueueRowCompactSlots(withEmptyVariant, { stageKey: "tour_scheduled" });
         expect(slots.status.label).toBe("Default Status");
     });
+
+    it("stage variant that only sets status still inherits Default children.names/count", () => {
+        const withChildrenDefault: QueueRecordLayoutConfigV3 = {
+            variant: "operational-row",
+            version: 3,
+            columns: [
+                statusColumn("Default Status"),
+                {
+                    id: "col-children",
+                    label: "",
+                    width: "auto",
+                    builderSlot: "groupCount",
+                    blocks: [
+                        {
+                            type: "field_group",
+                            id: "grp-children",
+                            fields: [
+                                { id: "f-names", fieldKey: "children.names", label: "Children names" },
+                                { id: "f-count", fieldKey: "children.count", label: "Children count" },
+                            ],
+                        },
+                    ],
+                },
+            ],
+            fixedControls: { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" },
+            variants: [
+                {
+                    id: "waitlist",
+                    label: "Waitlist",
+                    priority: 10,
+                    appliesWhen: { stage_key: ["waitlist"] },
+                    columns: [statusColumn("Waitlist Status")],
+                },
+            ],
+        };
+        const slots = resolveQueueRowCompactSlots(withChildrenDefault, { stageKey: "waitlist" });
+        expect(slots.status.label).toBe("Waitlist Status");
+        expect(slots.groupCount.visible).toBe(true);
+        expect(slots.groupCount.fieldKeys).toEqual(
+            expect.arrayContaining(["children.names", "children.count"]),
+        );
+    });
+
+    it("inherits Default contact/work when variant omits those slots", () => {
+        const layout: QueueRecordLayoutConfigV3 = {
+            variant: "operational-row",
+            version: 3,
+            columns: [
+                statusColumn("Default Status"),
+                {
+                    id: "col-contact",
+                    label: "",
+                    width: "auto",
+                    builderSlot: "identity",
+                    blocks: [
+                        {
+                            type: "field_group",
+                            id: "grp-contact",
+                            fields: [
+                                {
+                                    id: "f-phone",
+                                    fieldKey: "person.phone",
+                                    label: "Phone",
+                                },
+                            ],
+                        },
+                    ],
+                },
+                {
+                    id: "col-work",
+                    label: "",
+                    width: "auto",
+                    builderSlot: "work",
+                    blocks: [
+                        {
+                            type: "field_group",
+                            id: "grp-work",
+                            fields: [
+                                {
+                                    id: "f-work",
+                                    fieldKey: "opportunity.next_step",
+                                    label: "Next step",
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+            fixedControls: { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" },
+            variants: [
+                {
+                    id: "tour",
+                    label: "Tour",
+                    priority: 10,
+                    appliesWhen: { stage_key: ["tour_scheduled"] },
+                    columns: [statusColumn("Tour Status")],
+                },
+            ],
+        };
+        const slots = resolveQueueRowCompactSlots(layout, { stageKey: "tour_scheduled" });
+        expect(slots.status.label).toBe("Tour Status");
+        expect(slots.contact.visible).toBe(true);
+        expect(slots.contact.fieldKeys).toContain("person.phone");
+        expect(slots.work.visible).toBe(true);
+        expect(slots.work.fieldKeys).toContain("opportunity.next_step");
+    });
 });

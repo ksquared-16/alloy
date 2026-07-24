@@ -35,6 +35,7 @@ import {
     queueRowVariantMatchInputFromContext,
 } from "@/lib/presentation/runtime/queueRowVariantResolve";
 import { resolveQueueRowVariant } from "@/lib/presentation/runtime/resolveQueueRowVariant";
+import { mergeCompactSlotsInheritDefault } from "@/lib/presentation/runtime/mergeCompactSlotsInheritDefault";
 import type { QueueRowVariant, QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutV3";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { WorkspaceHeaderKpiVm, WorkspaceHeaderPresentationModel } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
@@ -50,6 +51,7 @@ import type { OperationalPresentation } from "./operationalPresentation";
  * Match input MUST come from {@link queueRowVariantMatchInputFromContext} (nested QueueRowContext
  * paths) — flat keys like `stage_key` / `grain` are not present on frozen row context.
  * Empty variant columns inherit Default (return undefined → queue-level `rowConfig`).
+ * Slots the variant does not configure inherit from `defaultSlots` (Default children/contact/work).
  */
 function resolveRowVariantSlots(
     context: unknown,
@@ -57,6 +59,7 @@ function resolveRowVariantSlots(
     fixedControls: QueueRecordFixedControls | null,
     workViewId: string | null,
     processKey: string | null,
+    defaultSlots: CompactRowSlots,
 ): CompactRowSlots | undefined {
     if (variants.length === 0 || !fixedControls) return undefined;
     const rowContext = (context ?? {}) as QueueRowContext;
@@ -71,13 +74,14 @@ function resolveRowVariantSlots(
     if (!matched) return undefined;
     // Starter / incomplete variants ship empty columns — inherit Default rather than blanking the row.
     if (!matched.columns.length) return undefined;
-    return mapQueueRowSurfaceToCompactConfig({
+    const variantSlots = mapQueueRowSurfaceToCompactConfig({
         variant: "operational-row",
         version: 3,
         columns: matched.columns,
         fixedControls: matched.fixedControls ?? fixedControls,
         variants: undefined,
     }).slots;
+    return mergeCompactSlotsInheritDefault(variantSlots, defaultSlots);
 }
 
 /**
@@ -179,6 +183,7 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
                               p.queue.rowVariantFixedControls,
                               snapshot.activeWorkView.id,
                               snapshot.businessProcess.key,
+                              p.queue.rowSlots,
                           );
                           if (slots) model.rowConfig = slots;
                       }

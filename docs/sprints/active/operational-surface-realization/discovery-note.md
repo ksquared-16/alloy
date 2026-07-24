@@ -82,18 +82,18 @@ Compact-effective children keys: `children`, legacy `children.*`, `child.name`, 
 
 ### Evidenced root causes (ranked)
 
-1. **Broken D1 variant match input (high)** — Production `resolveRowVariantSlots` in `workUnitSurfaceModelFromSnapshot.ts` reads flat `stage_key` / `grain` / `row_grain` that `QueueRowContext` does not expose. Correct matcher is `queueRowVariantMatchInputFromContext` (nested `drawer_open.active_subject.stage_key`, `row_subject.subject_type`). Preview projection also drops `drawer_open.active_subject`.
-   - Symptom: Children configured only on a stage/grain **variant** never apply; Default-only configs still work if payload is present.
-2. **Empty variant columns wipe Default if matching is fixed (high, latent)** — Starter Enrollment variants ship `columns: []`. `resolveQueueRowCompactSlots` / D1 mapping replaces Default columns with the matched variant’s empty columns.
-3. **Non-compact-effective publish (medium)** — Builder can offer fields marked “Not in row”; publish does not reject them → silent omission on `CondensedQueueRow`.
-4. **Payload omission (medium, secondary)** — Empty `related_subjects_summary` → `children` resolves to null. Default `groupCount` without fieldKeys only shows `grouped_subjects` count labels, not family child names.
-5. **Draft/cache** — Weaker: resolve is published-only; publish busts `qrl:` cache.
+1. **Broken D1 variant match input (high)** — ~~Production `resolveRowVariantSlots` read flat `stage_key`~~ **FIXED** via `queueRowVariantMatchInputFromContext` + stage_focus_key projection.
+2. **Variant columns wipe Default slots (high)** — Once matching worked, stage variants with status-only columns replaced Default entirely → Default `children.names` / `children.count` (and contact/work) disappeared on live rows. **FIXED** `mergeCompactSlotsInheritDefault` (Jul 2026): unconfigured variant slots inherit Default. Publish overlay re-merges per-row overrides; overlay also refreshes on mount.
+3. **Empty variant columns wipe Default if matching is fixed (high, latent)** — Starter Enrollment variants ship `columns: []`. **FIXED** inherit Default when empty.
+4. **Non-compact-effective publish (medium)** — Builder can offer fields marked “Not in row”; publish does not reject them → silent omission on `CondensedQueueRow`.
+5. **Payload omission (medium, secondary)** — Empty `related_subjects_summary` → `children` resolves to null. Default `groupCount` without fieldKeys only shows `grouped_subjects` count labels, not family child names.
+6. **Draft/cache** — Overlay now re-fetches on mount + publish; D1 `qrl:` cache still may lag until remount/overlay.
 
 ### Owning-layer fix (Phase 3)
 
 | Layer | Change |
 |-------|--------|
-| Presentation runtime | `resolveRowVariantSlots` → `queueRowVariantMatchInputFromContext`; inherit Default columns when variant `columns` empty |
+| Presentation runtime | `resolveRowVariantSlots` → `queueRowVariantMatchInputFromContext`; inherit Default columns when variant `columns` empty; **inherit unconfigured slots from Default** |
 | Publish validation | Reject non-`COMPACT_ROW_EFFECTIVE` keys; warn/block empty matching variants; operator-safe messages |
 | Runtime diagnostic | Explicit signal for older invalid saved configs (no silent omit) |
 | Queue payload | Only if live Enrollment still blanks after match/inherit fix |
