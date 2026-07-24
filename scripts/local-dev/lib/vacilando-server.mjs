@@ -251,20 +251,34 @@ const titleFromBranch = (branch, worktree) => {
 };
 
 function registrySprints() {
-  return listSlotIdentities().map((i) => ({
-    slot: i.slot, title: titleFromBranch(i.branch, i.worktree_name),
-    provider: i.provider || "claude", worktree: i.worktree_name, branch: i.branch,
-    port: i.port || null, status: "unknown", server: "unknown", glyph: "spark",
-    updated_at_ms: null, git: null, question_count: 0,
-    enriched: false, identity_ok: i.ok,
-  }));
+  return listSlotIdentities().map((i) => {
+    // A slot whose worktree was deleted (or whose identity is otherwise in
+    // conflict) must not masquerade as a healthy worker. Surface it truthfully so
+    // the operator sees, right after a Delete Worktree, that the slot's checkout
+    // is gone and only needs freeing — never a phantom running worker.
+    const missing = i.conflict?.kind === "worktree_missing";
+    return {
+      slot: i.slot, title: titleFromBranch(i.branch, i.worktree_name),
+      provider: i.provider || "claude", worktree: i.worktree_name, branch: i.branch,
+      port: i.port || null,
+      status: missing ? "worktree-missing" : i.ok ? "unknown" : "identity-conflict",
+      server: "unknown", glyph: "spark",
+      updated_at_ms: null, git: null, question_count: 0,
+      enriched: false, identity_ok: i.ok, identity_conflict: i.conflict || null,
+    };
+  });
 }
 
 /** Merge the live projection over the registry spine. Live always wins per slot. */
 function resilientBoard(snap) {
   const base = registrySprints();
   const live = new Map((snap?.sprints || []).map((s) => [s.slot, s]));
-  const merged = base.map((b) => (live.has(b.slot) ? { ...b, ...live.get(b.slot), enriched: true } : b));
+  const merged = base.map((b) => {
+    // Identity conflict (e.g. worktree deleted) is AUTHORITATIVE — a stale live
+    // frame must never paint a deleted worktree as a healthy running worker.
+    if (b.identity_conflict) return b;
+    return live.has(b.slot) ? { ...b, ...live.get(b.slot), enriched: true } : b;
+  });
   // A live sprint for a slot the registry does not know is still shown (never hide truth).
   for (const [slot, s] of live) if (!merged.some((m) => m.slot === slot)) merged.push({ ...s, enriched: true });
   merged.sort((a, b) => a.slot - b.slot);

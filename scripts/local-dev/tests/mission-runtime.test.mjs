@@ -101,3 +101,19 @@ test("planning documents are classified even inside a new untracked directory", 
   // evidence survives either way (path-based, not extension-based)
   assert.equal(classifyPath(".alloy-agent-evidence/qa/cert-evidence.txt"), "qa-evidence");
 });
+
+// --- closeout destructive-command guards (found by live Closeout certification) ---
+const { getCommand } = await import("../lib/vacilando/commands/registry.mjs");
+
+test("worktree.delete is internal, typed-confirmed, and frees the slot atomically", () => {
+  const d = getCommand("worktree.delete");
+  assert.equal(d.execution, "internal"); // removes worktree AND archives slot in one action
+  assert.equal(d.confirmation, "required");
+  assert.equal(typeof d.typedConfirm, "function");
+  assert.equal(d.typedConfirm({ slot: 5 }), "delete 5"); // destructive phrase gate
+  // eligibility + run resolve the worktree from the AUTHORITATIVE identity, not
+  // the snapshot, so a degraded board can never weaken the guard or target the
+  // wrong (or an undefined) path. The guard is exercised live in cert; here we
+  // assert the contract shape that makes it safe.
+  assert.equal(typeof d.run, "function");
+});

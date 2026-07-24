@@ -18,10 +18,12 @@
  * promotion, merge, and destructive git are intentionally NOT executable
  * (declared unsupported with a reason) — the toolkit prints but never runs them.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
 
+import { resolveSlotIdentity, invalidateIdentity } from "../identity.mjs";
 import { routeInstruction, recordAsk } from "./director.mjs";
 import { PROVIDERS } from "../providers.mjs";
 import { sendViaProvider, verifyProvider, reconnectInfo, providerDiagnostics, ADAPTERS } from "../provider-runtime.mjs";
@@ -94,6 +96,32 @@ export function validateInput(schema, input) {
 // Helpers shared by command definitions.
 // --------------------------------------------------------------------------
 const sprintBySlot = (snap, slot) => (snap?.sprints || []).find((s) => s.slot === slot) || null;
+
+const BASE_REF = "origin/staging";
+/**
+ * AUTHORITATIVE worktree state for a destructive gate — computed live from the
+ * slot's identity-resolved worktree, NEVER from the (possibly-null, possibly
+ * stale, possibly registry-only) snapshot. This is the guard that makes Delete
+ * Worktree safe under host pressure: when the board is registry-only its
+ * `git` field is null, so a `snap.git.state === "dirty"` check would silently
+ * pass. Here we read the real git state and FAIL CLOSED on anything uncertain.
+ * Returns { ok, worktree, path, dirty, ahead, reason }.
+ */
+function authoritativeWorktreeState(slot) {
+  const id = resolveSlotIdentity(slot);
+  if (!id.worktree_name) return { ok: false, reason: `slot ${slot} is not occupied` };
+  if (!id.ok) return { ok: false, worktree: id.worktree_name, reason: `slot identity conflict: ${id.conflict?.detail || "unverified"}` };
+  const path = id.worktree_path;
+  if (!existsSync(path)) return { ok: false, worktree: id.worktree_name, path, reason: "worktree not found on disk" };
+  let dirty, ahead;
+  try {
+    dirty = execFileSync("git", ["-C", path, "status", "--porcelain=v1", "-uall"], { encoding: "utf8", timeout: 12000 }).split("\n").filter(Boolean).length > 0;
+    ahead = Number(execFileSync("git", ["-C", path, "rev-list", "--count", `${BASE_REF}..HEAD`], { encoding: "utf8", timeout: 12000 }).trim() || 0);
+  } catch (e) {
+    return { ok: false, worktree: id.worktree_name, path, reason: `could not read git state (${String(e.code || e.message)}) — refusing to delete` };
+  }
+  return { ok: true, worktree: id.worktree_name, path, dirty, ahead };
+}
 const target = (kind, label, ref) => ({ kind, label, ref });
 
 // Director instructions are engineering-scale. Both provider CLIs read the
@@ -629,18 +657,60 @@ Object.assign(COMMANDS, {
   },
 
   "worktree.delete": {
-    key: "worktree.delete", title: "Delete worktree", risk: "consequential", execution: "cli", bin: "git", confirmation: "required",
+    key: "worktree.delete", title: "Delete worktree", risk: "consequential", execution: "internal", confirmation: "required",
     input: { slot: { type: "slot", required: true }, confirm_text: { type: "name" } },
     typedConfirm: (v) => `delete ${v.slot}`,
-    buildArgv: (v, snap) => ["-C", process.env.HOME + "/Alloy", "worktree", "remove", `${process.env.HOME}/Code/alloy-worktrees/${sprintBySlot(snap, v.slot)?.worktree}`],
-    resolveTarget: (v, snap) => target("repository", `delete ${sprintBySlot(snap, v.slot)?.worktree}`, { slot: v.slot }),
+    // ATOMIC: remove the worktree AND free the slot in one governed action, so the
+    // operator is never left with a dangling registration that the normal
+    // End-Work path (alloy-sprint-finish) then refuses to clean because the
+    // worktree it expects is gone. Path + guards come from the AUTHORITATIVE
+    // identity, never the snapshot.
+    run: (v) => {
+      const w = authoritativeWorktreeState(v.slot);
+      if (!w.ok) return { ok: false, error: w.reason };
+      if (w.dirty) return { ok: false, error: "worktree has uncommitted changes — deletion blocked" };
+      if (w.ahead > 0) return { ok: false, error: `worktree has ${w.ahead} unmerged commit(s) — deletion blocked` };
+      try {
+        execFileSync("git", ["-C", join(os.homedir(), "Alloy"), "worktree", "remove", w.path], { timeout: 30000, stdio: "pipe" });
+      } catch (e) {
+        return { ok: false, error: `git worktree remove failed: ${String(e.stderr || e.message || e).slice(0, 200)}` };
+      }
+      // Free the slot: archive its metadata (never --force, never touch history).
+      let slot_freed = false;
+      try {
+        const metaDir = join(os.homedir(), ".local", "state", "alloy-dev", "metadata");
+        const finDir = join(os.homedir(), ".local", "state", "alloy-dev", "finished");
+        const src = join(metaDir, `${w.worktree}.env`);
+        if (existsSync(src)) { if (!existsSync(finDir)) mkdirSync(finDir, { recursive: true }); renameSync(src, join(finDir, `${w.worktree}.env`)); slot_freed = true; }
+      } catch { /* worktree is gone regardless; slot archival is best-effort */ }
+      invalidateIdentity(v.slot);
+      return { ok: true, worktree: w.worktree, path: w.path, removed: true, slot_freed };
+    },
+    resolveTarget: (v) => target("repository", `delete ${authoritativeWorktreeState(v.slot).worktree || "(unresolved)"}`, { slot: v.slot }),
     eligibility: (t, snap, v) => {
-      const s = sprintBySlot(snap, v.slot);
-      if (!s) return { eligible: false, reason: "slot not occupied" };
-      if (s.git?.state === "dirty") return { eligible: false, reason: "worktree is dirty — commit or discard first (deletion blocked when dirty)" };
+      // FAIL CLOSED on anything uncertain — identity conflict, missing worktree,
+      // unreadable git, dirty tree, or unmerged commits. Independent of the
+      // snapshot, so host pressure can never weaken this gate.
+      const w = authoritativeWorktreeState(v.slot);
+      if (!w.ok) return { eligible: false, reason: w.reason };
+      if (w.dirty) return { eligible: false, reason: "worktree has uncommitted changes — commit, preserve, or discard first (deletion blocked when dirty)" };
+      if (w.ahead > 0) return { eligible: false, reason: `worktree has ${w.ahead} commit(s) not in ${BASE_REF} — they would be orphaned. Push/merge them first.` };
       return { eligible: true };
     },
-    preview: (v, t, snap) => ({ summary: `Delete the worktree for slot ${v.slot} (${sprintBySlot(snap, v.slot)?.worktree}).`, authoritative_target: `git worktree remove <path> (never --force)`, effects: ["DESTRUCTIVE. Removes the worktree checkout. Blocked when dirty; never uses --force.", `Type the phrase "delete ${v.slot}" to confirm.`] }),
+    preview: (v) => {
+      const w = authoritativeWorktreeState(v.slot);
+      return {
+        summary: `Delete the worktree for slot ${v.slot} (${w.worktree || "unresolved"}) and free the slot.`,
+        authoritative_target: `git worktree remove ${w.path || "<path>"} (never --force)`,
+        effects: [
+          `Runs: git -C ~/Alloy worktree remove ${w.path || "<path>"}`,
+          "DESTRUCTIVE — removes only this worktree checkout, then frees the slot.",
+          "Blocked when dirty, when the identity is in conflict, or when it holds unmerged commits; never uses --force.",
+          "Merged repository history and the branch are untouched.",
+          `Type the phrase "delete ${v.slot}" to confirm.`,
+        ],
+      };
+    },
     refresh: ["snapshot"],
   },
 });

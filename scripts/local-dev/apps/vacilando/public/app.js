@@ -311,6 +311,18 @@ function needsYouHtml() {
 function resFor(slot) { return (state.res?.workers || []).find((w) => w.slot === slot) || null; }
 
 function workerCard(sp) {
+  // A slot whose worktree was deleted: tell the truth and offer to free it,
+  // instead of showing a phantom worker with actions that would fail.
+  if (sp.status === "worktree-missing") {
+    return `<div class="wcard missing" data-sel="${sp.slot}" style="--acc:var(--blocked)">
+      <div class="wc-top"><span class="gl">${glyph(sp.glyph)}</span>
+        <div class="wc-id"><b>slot ${sp.slot}</b> · ${esc(sp.provider)}</div>
+        <span class="chip err">worktree deleted</span></div>
+      <div class="wc-obj trunc">${esc(sp.title)}</div>
+      <div class="wc-meta trunc mono">${esc(sp.worktree || "")} — checkout removed</div>
+      <div class="wc-res"><span class="muted">worktree no longer on disk — free the slot to reuse it</span></div>
+      <div class="wc-ctl"><button class="btn sm warn" data-end="${sp.slot}">Free slot</button></div></div>`;
+  }
   const r = resFor(sp.slot);
   const proc = r?.server_process;
   const pend = sp.question_count || 0;
@@ -545,8 +557,8 @@ function tabRepository(sp) {
   const kv = (a, b) => `<dt>${a}</dt><dd>${b}</dd>`;
   return `<div class="sec"><h5>Repository</h5><dl class="kv">
       ${kv("Worktree", `<span class="mono">${esc(sp.worktree)}</span>`)}${kv("Branch", `<span class="mono">${esc(sp.branch || "—")}</span>`)}
-      ${kv("Position", `↑${sp.git.ahead} ↓${sp.git.behind} · <span class="${sp.git.state === "dirty" ? "dirty" : "clean"}">${sp.git.state}</span>`)}
-      ${kv("Base", esc(state.snap.repository.base_ref) + " @ " + esc(state.snap.repository.base_sha || "—"))}
+      ${kv("Position", sp.git ? `↑${sp.git.ahead} ↓${sp.git.behind} · <span class="${sp.git.state === "dirty" ? "dirty" : "clean"}">${sp.git.state}</span>` : `<span class="muted">git detail pending (host busy)</span>`)}
+      ${kv("Base", esc(state.snap.repository?.base_ref || "—") + " @ " + esc(state.snap.repository?.base_sha || "—"))}
       ${kv("Pull request", prHtml)}</dl></div>
     <div class="sec"><h5>Governed actions (preview → confirm)</h5><div class="detail-actions">
       <button class="btn" data-cmd="repository.push" data-slot="${sp.slot}">Push branch</button>
@@ -566,7 +578,7 @@ function tabOverview(sp, w, r) {
   const kv = (a, b, mono) => `<dt>${a}</dt><dd class="${mono ? "mono" : ""}">${b}</dd>`;
   const stat = (l, v, sub) => `<div class="dstat"><div class="dl">${l}</div><div class="dv sm">${v}</div>${sub ? `<div class="ds">${sub}</div>` : ""}</div>`;
   const proc = r?.server_process;
-  const dirty = sp.git.state === "dirty";
+  const dirty = sp.git?.state === "dirty";
   return `<div class="obj-lead">
       <div class="obj">${esc(sp.objective || sp.title)}</div>
       <div class="muted note">Full live instructions live in the worker's session and its worktree package. Vacilando composes and routes new instructions from the Director tab — it does not read the live editor buffer.</div></div>
@@ -574,13 +586,13 @@ function tabOverview(sp, w, r) {
       ${stat("Provider", esc(sp.provider))}
       ${stat("Stage", esc(sp.phase?.label || "—"))}
       ${stat("Health", w ? `<span class="hpill ${w.health}">${w.health}</span>` : "—")}
-      ${stat("Position", `<span class="${dirty ? "dirty" : "clean"}">↑${sp.git.ahead} ↓${sp.git.behind}</span>`, dirty ? "uncommitted changes" : "clean")}
+      ${stat("Position", sp.git ? `<span class="${dirty ? "dirty" : "clean"}">↑${sp.git.ahead} ↓${sp.git.behind}</span>` : `<span class="muted">pending</span>`, sp.git ? (dirty ? "uncommitted changes" : "clean") : "host busy")}
       ${stat("Server", sp.server === "running" && sp.port ? `<span class="clean">:${sp.port}</span>` : esc(sp.server))}
       ${stat("Initiative", sp.initiative_key ? esc(sp.initiative_key) : "managed sprint")}</div>
     <div class="cols2">
       <div class="sec"><h5>Worktree &amp; Git</h5><dl class="kv">
         ${kv("Worktree", esc(sp.worktree), 1)}${kv("Branch", esc(sp.branch || "—"), 1)}
-        ${kv("Base", esc(state.snap.repository.base_ref) + " @ " + esc(state.snap.repository.base_sha || "—"), 1)}</dl></div>
+        ${kv("Base", esc(state.snap.repository?.base_ref || "—") + " @ " + esc(state.snap.repository?.base_sha || "—"), 1)}</dl></div>
       <div class="sec"><h5>This worker</h5><dl class="kv">
         ${proc ? kv("Process", `pid ${proc.pid} · ${proc.cpu_pct}% cpu · ${proc.rss_mb}MB · ${proc.elapsed}`) : kv("Process", '<span class="muted">no active process</span>')}
         ${r?.disk_mb != null ? kv("Disk", `${(r.disk_mb / 1024).toFixed(1)} GB`) : ""}
@@ -1174,10 +1186,20 @@ function showDelete(slot) {
   ov.innerHTML = `<div class="dlg"><h3>Delete worktree · slot ${slot}</h3><span class="risk consequential">destructive</span>
     <div class="b">${esc(sp?.worktree || "")} — DESTRUCTIVE. Blocked when dirty; never uses --force.
       <label>Type <b>${esc(phrase)}</b> to confirm</label><input class="f-ct" placeholder="${esc(phrase)}"></div>
-    <div class="foot"><button class="btn cancel">Cancel</button><button class="btn go ok">Preview →</button></div></div>`;
+    <div class="foot"><button class="btn cancel">Cancel</button><button class="btn go ok">Delete worktree</button></div></div>`;
   ov.querySelector(".cancel").onclick = () => { ov.remove(); render(true); };
   ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
-  ov.querySelector(".ok").onclick = () => { const ct = ov.querySelector(".f-ct").value.trim(); ov.remove(); execute("worktree.delete", { slot, confirm_text: ct }, true, ct); };
+  // Genuine preview → confirm: resolve eligibility + the authoritative target
+  // FIRST (fails closed on dirty/conflict/unmerged), show it, then execute only
+  // on an explicit second confirm. The typed phrase is carried through both.
+  ov.querySelector(".ok").onclick = async () => {
+    const ct = ov.querySelector(".f-ct").value.trim();
+    if (ct !== `delete ${slot}`) { toast("err", "Phrase mismatch", `Type exactly: delete ${slot}`); return; }
+    ov.remove();
+    const { data: pv } = await api("/api/commands/preview", { command: "worktree.delete", input: { slot, confirm_text: ct } });
+    if (!pv.ok) { toast("err", "Delete blocked", pv.reason || (pv.errors || []).join("; ") || pv.code); return; }
+    showConfirm({ ...pv, title: "Delete worktree", risk: "consequential" }, () => execute("worktree.delete", { slot, confirm_text: ct }, true, ct));
+  };
   document.body.appendChild(ov);
 }
 $("#refresh-btn").addEventListener("click", async (ev) => { ev.target.disabled = true; const x = ev.target.textContent; ev.target.textContent = "↻ …"; await execute("runtime.refresh", {}, false); fetchResources(); ev.target.disabled = false; ev.target.textContent = x; });
