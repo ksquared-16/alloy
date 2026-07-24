@@ -37,6 +37,8 @@ type Props = {
     inlineEdit?: InlineEditProps;
     /** Legacy: open full edit surface (Children) when inline save is unavailable. */
     onEdit?: () => void;
+    /** Linked policy: navigate to owning Focus Panel card. */
+    onLink?: () => void;
 };
 
 const ICONS: Record<string, LucideIcon> = {
@@ -56,7 +58,7 @@ function resolveIcon(name?: string): LucideIcon | null {
     return ICONS[name] ?? null;
 }
 
-export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit }: Props) {
+export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit, onLink }: Props) {
     const [draft, setDraft] = useState(cell.value ?? "");
     const inputId = useId();
     const inputRef = useRef<HTMLInputElement>(null);
@@ -86,6 +88,7 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
     const eyebrow = cell.labelMode === "eyebrow";
     const canInlineEdit = Boolean(cell.editable && inlineEdit);
     const canLegacyEdit = Boolean(cell.editable && onEdit && !inlineEdit);
+    const canLink = Boolean(cell.linked && onLink && !canInlineEdit);
 
     const commit = async () => {
         if (!inlineEdit || inlineEdit.busy) return;
@@ -97,6 +100,7 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
             className={clsx(
                 "identity-field-value",
                 (canInlineEdit || canLegacyEdit) && "identity-field-value--inline-editable",
+                canLink && "identity-field-value--linked",
                 className,
             )}
             data-identity-field={cell.fieldRef}
@@ -106,6 +110,8 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
             // gate, not config. Config owns the base decision; the runtime only gates on permission/persistence.
             data-identity-policy={cell.policy}
             data-identity-editable={cell.editable ? "true" : "false"}
+            data-identity-linked={cell.linked ? "true" : "false"}
+            data-identity-link-destination={cell.linkDestination ?? undefined}
         >
             {showLabel ? (
                 <span className={clsx("identity-field-value__label", eyebrow && "identity-field-value__label--eyebrow")}>
@@ -159,6 +165,21 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
                         >
                             {cell.value ?? "—"}
                         </button>
+                    ) : canLink && onLink ? (
+                        <button
+                            type="button"
+                            className="identity-field-value__value identity-field-value__value--clickable identity-field-value__value--linked"
+                            title={cell.linkLabel ?? `Open ${cell.label}`}
+                            onClick={onLink}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    onLink();
+                                }
+                            }}
+                        >
+                            {cell.value ?? "—"}
+                        </button>
                     ) : (
                         <span
                             className="identity-field-value__value"
@@ -175,6 +196,15 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
                             aria-label={`Edit ${cell.label}`}
                         >
                             Edit
+                        </button>
+                    ) : canLink && onLink ? (
+                        <button
+                            type="button"
+                            className="identity-field-value__edit identity-field-value__link"
+                            onClick={onLink}
+                            aria-label={cell.linkLabel ?? `Open ${cell.label}`}
+                        >
+                            {cell.linkLabel ?? "Open"}
                         </button>
                     ) : canLegacyEdit ? (
                         <button

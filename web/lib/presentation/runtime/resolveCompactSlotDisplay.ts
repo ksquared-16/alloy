@@ -146,6 +146,7 @@ export function resolveCompactSlotDisplay(
     context: QueueRowContext,
     config: CompactRowSlotConfig | undefined,
     focus: FocusedSubjectContext | null | undefined,
+    options?: { publishedAuthority?: boolean },
 ): string | null {
     const resolvedFocus = focus ?? null;
     if (config?.fieldKeys?.length) {
@@ -166,6 +167,11 @@ export function resolveCompactSlotDisplay(
             })
             .filter((value): value is string => Boolean(value?.trim()));
         return parts.length ? parts.join(" · ") : null;
+    }
+    // Published surfaces are sparse by contract — never inject Lead Status / contact-line /
+    // group defaults into empty slots. Defaults only when no published authority exists.
+    if (options?.publishedAuthority || config?.visible === false) {
+        return null;
     }
     return defaultSlotDisplay(slot, context, resolvedFocus);
 }

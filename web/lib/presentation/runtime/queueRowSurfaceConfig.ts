@@ -317,8 +317,10 @@ function routePersonContactFieldsToContactSlot(slots: CompactRowSlots): CompactR
             ...(remaining.length > 0
                 ? {}
                 : {
+                      visible: false,
                       label: null,
                       nameDisplayByFieldKey: undefined,
+                      collectionPresentationByFieldKey: undefined,
                   }),
         };
     }
@@ -386,6 +388,40 @@ function hiddenSlot(): CompactRowSlotConfig {
     return { visible: false, label: null };
 }
 
+function slotHasFieldKeys(slot: CompactRowSlotConfig | undefined): boolean {
+    return Boolean(slot?.fieldKeys && slot.fieldKeys.length > 0);
+}
+
+/**
+ * After contact routing (and any other remaps), slots with no remaining fieldKeys must be
+ * hidden. Leaving them visible:true with empty keys let CondensedQueueRow fall through to
+ * defaultSlotDisplay (Lead Status / contact-line defaults) — forbidden under published authority.
+ */
+export function finalizePublishedCompactSlots(slots: CompactRowSlots): CompactRowSlots {
+    const next = { ...slots } as CompactRowSlots;
+    for (const key of SLOT_KEYS) {
+        if (!slotHasFieldKeys(next[key])) {
+            next[key] = hiddenSlot();
+        }
+    }
+    return next;
+}
+
+/**
+ * True when compact slots came from a published surface (any fieldKeys or explicit hides),
+ * not the all-generic null-config fallback.
+ */
+export function compactSlotsUsePublishedAuthority(slots: CompactRowSlots | null | undefined): boolean {
+    if (!slots) return false;
+    for (const key of SLOT_KEYS) {
+        const slot = slots[key];
+        if (!slot) continue;
+        if (slot.visible === false) return true;
+        if (slotHasFieldKeys(slot)) return true;
+    }
+    return false;
+}
+
 /**
  * Map a published Queue Row surface config onto the compact row's fixed slots.
  *
@@ -443,7 +479,7 @@ export function mapQueueRowSurfaceToCompactConfig(
     }
 
     return {
-        slots: routePersonContactFieldsToContactSlot(slots),
+        slots: finalizePublishedCompactSlots(routePersonContactFieldsToContactSlot(slots)),
         fallbackSlots,
         ineffectiveFieldKeys: ineffectiveFieldKeys.sort(),
     };

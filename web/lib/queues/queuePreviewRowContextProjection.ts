@@ -77,6 +77,8 @@ export const QUEUE_PREVIEW_CONTEXT_READ_MANIFEST = [
     "related_subjects_summary[].date_of_birth",
     "related_subjects_summary[].age_label",
     "related_subjects_summary[].gender_label",
+    "related_subjects_summary[].room_label",
+    "related_subjects_summary[].location_label",
     "attention_summary.needs_attention",
     "attention_summary.primary_reason_label",
     "current_work_summary.label",
@@ -124,8 +126,7 @@ export const QUEUE_PREVIEW_CONTEXT_DROPPED_PATHS = [
     "placement_context.room_id",
     "placement_context.schedule_key",
     "related_subjects_summary[].location_id",
-    "related_subjects_summary[].location_label",
-    "related_subjects_summary[].room_label",
+    // room_label / location_label kept on related subjects for collection + schedule projections
 ] as const;
 
 function nonEmptyString(value: unknown): string | null {
@@ -149,7 +150,7 @@ function projectSubject(subject: QueueRowSubjectPresentation): QueueRowSubjectPr
 
 /**
  * Narrow one related subject to the fields the children-collection / siblings / focus adapters read.
- * `status_label` is type-required but unread → emptied. Location/room detail dropped.
+ * `status_label` is type-required but unread → emptied. Keep room/location for collection + schedule.
  */
 function projectRelatedSubject(subject: RelatedSubjectSummary): RelatedSubjectSummary {
     const out: RelatedSubjectSummary = {
@@ -164,6 +165,8 @@ function projectRelatedSubject(subject: RelatedSubjectSummary): RelatedSubjectSu
     if (subject.date_of_birth != null) out.date_of_birth = subject.date_of_birth;
     if (subject.age_label != null) out.age_label = subject.age_label;
     if (subject.gender_label != null) out.gender_label = subject.gender_label;
+    if (subject.room_label != null) out.room_label = subject.room_label;
+    if (subject.location_label != null) out.location_label = subject.location_label;
     return out;
 }
 

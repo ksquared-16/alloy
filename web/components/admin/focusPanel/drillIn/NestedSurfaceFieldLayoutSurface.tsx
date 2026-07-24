@@ -193,6 +193,13 @@ export default function NestedSurfaceFieldLayoutSurface({
                                 : undefined);
                         if (!meta) return null;
 
+                        const catalogLabel = catalogLabelFor(
+                            surfaceId,
+                            groupKey,
+                            fieldKey,
+                            tenantFieldDefinitions,
+                        );
+
                         if (meta.renderBlock) {
                             return (
                                 <FieldInstance
@@ -200,14 +207,16 @@ export default function NestedSurfaceFieldLayoutSurface({
                                     surfaceId={surfaceId}
                                     groupKey={groupKey}
                                     fieldKey={fieldKey}
+                                    catalogLabel={catalogLabel}
                                     label={fieldPresentationLabel(
                                         config!,
                                         groupKey,
                                         fieldKey,
-                                        catalogLabelFor(surfaceId, groupKey, fieldKey, tenantFieldDefinitions),
+                                        catalogLabel,
                                     )}
                                     config={config!}
                                     composing={composing}
+                                    blockComposerHint="Schedule block"
                                     selected={
                                         composer?.selection?.kind === "field" &&
                                         composer.selection.surfaceId === surfaceId &&
@@ -235,20 +244,12 @@ export default function NestedSurfaceFieldLayoutSurface({
                                     }
                                     tier={tier}
                                     className="fp-layout-field--block"
-                                >
-                                    {meta.renderBlock()}
-                                </FieldInstance>
+                                />
                             );
                         }
 
                         const showLabel = fieldShowLabelForNestedGroup(config!, groupKey, fieldKey);
                         const showIcon = fieldShowIconForNestedGroup(config!, groupKey, fieldKey);
-                        const catalogLabel = catalogLabelFor(
-                            surfaceId,
-                            groupKey,
-                            fieldKey,
-                            tenantFieldDefinitions,
-                        );
                         const resolvedLabel = fieldPresentationLabel(config!, groupKey, fieldKey, catalogLabel);
                         const label =
                             displayLabelLooksLikeRawRef(resolvedLabel) || displayLabelLooksLikeRawRef(meta.label)
@@ -261,7 +262,11 @@ export default function NestedSurfaceFieldLayoutSurface({
                                 surfaceId={surfaceId}
                                 groupKey={groupKey}
                                 fieldKey={fieldKey}
+                                catalogLabel={catalogLabel}
                                 label={label}
+                                icon={meta.icon}
+                                showLabel={showLabel}
+                                showIcon={showIcon}
                                 config={config!}
                                 composing={composing}
                                 selected={
@@ -291,11 +296,13 @@ export default function NestedSurfaceFieldLayoutSurface({
                                 }
                                 tier={tier}
                             >
-                                <RuntimeFieldRow
-                                    field={{ ...meta, label }}
-                                    showLabel={showLabel}
-                                    showIcon={showIcon}
-                                />
+                                {!composing ? (
+                                    <RuntimeFieldRow
+                                        field={{ ...meta, label }}
+                                        showLabel={showLabel}
+                                        showIcon={showIcon}
+                                    />
+                                ) : null}
                             </FieldInstance>
                         );
                     })}
@@ -336,10 +343,40 @@ function RuntimeFieldRow({
     );
 }
 
+/** Builder-only row — field identity without runtime preview values. */
+function BuilderFieldIdentityRow({
+    catalogLabel,
+    showLabel,
+    showIcon,
+    icon: Icon,
+    blockHint,
+}: {
+    catalogLabel: string;
+    showLabel: boolean;
+    showIcon: boolean;
+    icon?: LucideIcon;
+    blockHint?: string;
+}) {
+    return (
+        <div className="fp-builder-field-row" data-builder-field-row="true">
+            {showIcon && Icon ? (
+                <span className="alloy-os-child-truth__icon" aria-hidden>
+                    <Icon size={15} strokeWidth={1.75} />
+                </span>
+            ) : (
+                <span className="alloy-os-child-truth__icon" aria-hidden />
+            )}
+            {showLabel ? <span className="fp-builder-field-row__label">{catalogLabel}</span> : null}
+            {blockHint ? <span className="fp-builder-field-row__hint">{blockHint}</span> : null}
+        </div>
+    );
+}
+
 function FieldInstance({
     surfaceId,
     groupKey,
     fieldKey,
+    catalogLabel,
     label,
     config,
     composing,
@@ -358,11 +395,16 @@ function FieldInstance({
     onAfterRemove,
     tier,
     className = "",
+    icon,
+    showLabel: showLabelProp,
+    showIcon: showIconProp,
+    blockComposerHint,
     children,
 }: {
     surfaceId: string;
     groupKey: string;
     fieldKey: string;
+    catalogLabel: string;
     label: string;
     config: NestedSurfaceConfig;
     composing: boolean;
@@ -381,12 +423,17 @@ function FieldInstance({
     onAfterRemove: () => void;
     tier?: IdentityFieldTier;
     className?: string;
-    children: React.ReactNode;
+    icon?: LucideIcon;
+    showLabel?: boolean;
+    showIcon?: boolean;
+    blockComposerHint?: string;
+    children?: React.ReactNode;
 }) {
     const visibility = fieldVisibilityForNestedGroup(config, groupKey, fieldKey, tier ? { tier } : undefined);
-    const showLabel = fieldShowLabelForNestedGroup(config, groupKey, fieldKey);
-    const showIcon = fieldShowIconForNestedGroup(config, groupKey, fieldKey);
+    const showLabel = showLabelProp ?? fieldShowLabelForNestedGroup(config, groupKey, fieldKey);
+    const showIcon = showIconProp ?? fieldShowIconForNestedGroup(config, groupKey, fieldKey);
     const editingLabel = editingLabelKey === fieldKey;
+    const hasCustomLabel = label.trim() !== catalogLabel.trim();
 
     const onDragOver = (e: DragEvent, zone: NestedSurfaceFieldDropZone) => {
         if (!composing) return;
@@ -425,7 +472,17 @@ function FieldInstance({
                 onSelect();
             }}
         >
-            {children}
+            {composing ? (
+                <BuilderFieldIdentityRow
+                    catalogLabel={catalogLabel}
+                    showLabel={showLabel}
+                    showIcon={showIcon}
+                    icon={icon}
+                    blockHint={blockComposerHint}
+                />
+            ) : (
+                children
+            )}
             {composing ? (
                 <>
                     {canPairBeside ? (
@@ -459,35 +516,44 @@ function FieldInstance({
                         <button
                             type="button"
                             className="fp-layout-field__grip"
-                            aria-label={`Drag ${label}`}
+                            aria-label={`Drag ${catalogLabel}`}
                             tabIndex={-1}
                         >
                             <GripVertical className="h-3 w-3" aria-hidden />
                         </button>
                         <div className="fp-field-instance__controls">
-                            {editingLabel ? (
-                                <input
-                                    className="fp-inline-field-row__label-input"
-                                    autoFocus
-                                    defaultValue={label}
-                                    onBlur={(e) => {
-                                        onMutate(setFieldPresentationLabel(config, groupKey, fieldKey, e.target.value));
-                                        onEditLabel(null);
-                                    }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                                        if (e.key === "Escape") onEditLabel(null);
-                                    }}
-                                />
-                            ) : (
-                                <button
-                                    type="button"
-                                    className="fp-layout-field__control"
-                                    onClick={() => onEditLabel(fieldKey)}
-                                >
-                                    Rename
-                                </button>
-                            )}
+                            <div className="fp-field-instance__identity">
+                                {editingLabel ? (
+                                    <input
+                                        className="fp-inline-field-row__label-input"
+                                        autoFocus
+                                        defaultValue={label}
+                                        aria-label={`Rename ${catalogLabel}`}
+                                        onBlur={(e) => {
+                                            onMutate(setFieldPresentationLabel(config, groupKey, fieldKey, e.target.value));
+                                            onEditLabel(null);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                            if (e.key === "Escape") onEditLabel(null);
+                                        }}
+                                    />
+                                ) : (
+                                    <>
+                                        <span className="fp-field-instance__name">{catalogLabel}</span>
+                                        {hasCustomLabel ? (
+                                            <span className="fp-field-instance__alias">as {label}</span>
+                                        ) : null}
+                                        <button
+                                            type="button"
+                                            className="fp-layout-field__control fp-layout-field__control--secondary"
+                                            onClick={() => onEditLabel(fieldKey)}
+                                        >
+                                            Rename
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                             <select
                                 className="fp-inline-field-row__behavior"
                                 value={
@@ -495,7 +561,7 @@ function FieldInstance({
                                         ? visibility
                                         : "read-only"
                                 }
-                                aria-label={`Display policy for ${label}`}
+                                aria-label={`Display policy for ${catalogLabel}`}
                                 onChange={(e) =>
                                     onMutate(
                                         setFieldVisibilityInNestedGroup(
@@ -546,7 +612,7 @@ function FieldInstance({
                         <button
                             type="button"
                             className="fp-field-instance__remove"
-                            aria-label={`Remove ${label}`}
+                            aria-label={`Remove ${catalogLabel}`}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 onMutate(removeFieldFromNestedGroup(config, groupKey, fieldKey, { tier }));

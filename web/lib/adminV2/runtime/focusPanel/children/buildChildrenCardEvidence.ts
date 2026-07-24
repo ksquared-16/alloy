@@ -14,6 +14,10 @@
 
 import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { resolveChildPhotoUrlFromRaw } from "@/lib/adminV2/runtime/focusPanel/children/resolveChildPhotoUrl";
+import {
+    projectCompactScheduleForIdentity,
+    readSchedulingProjectionByMemberId,
+} from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
 import { humanizeStatusKey } from "@/lib/admin/status/humanizeStatusKey";
 import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 import { resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
@@ -73,6 +77,8 @@ export type ChildrenEvidenceChild = {
     missingLine: string | null;
     /** Real flags only (medical/document); empty when none present. */
     flags: ChildEvidenceFlag[];
+    /** OCM participation notes when present. */
+    notes?: string | null;
 };
 
 export type ChildrenCardEvidence = {
@@ -132,12 +138,22 @@ export function buildChildrenCardEvidence(
     options: BuildChildrenCardEvidenceOptions = {},
 ): ChildrenCardEvidence {
     const { rows, rawRows } = normalizeFocusPanelChildrenRowsFromTruth(context.truth);
+    const schedulingByMember = readSchedulingProjectionByMemberId(context.truth);
 
     const children: ChildrenEvidenceChild[] = rows.map((row, index) => {
         const name = childName(row);
+        const memberId =
+            trimOrNull((row as { customer_member_id?: unknown }).customer_member_id)
+            ?? trimOrNull(row.id)
+            ?? trimOrNull(row.person_id);
+        const schedulingProjection = memberId ? schedulingByMember[memberId] ?? null : null;
+        const scheduleCompact = projectCompactScheduleForIdentity(schedulingProjection);
         const program = trimOrNull(row.desired_program_label);
-        const room = trimOrNull(row.program_room_cohort_label) ?? trimOrNull(row.location_label);
-        const schedule = trimOrNull(row.desired_schedule_label);
+        const room =
+            scheduleCompact.roomLabel
+            ?? trimOrNull(row.program_room_cohort_label)
+            ?? trimOrNull(row.location_label);
+        const schedule = scheduleCompact.scheduleLabel ?? trimOrNull(row.desired_schedule_label);
         const teacher = trimOrNull((row as { teacher_label?: unknown }).teacher_label);
         const startDateIso = trimOrNull(row.start_date)?.slice(0, 10) ?? null;
         const startDate = formatFocusPanelDate(startDateIso);
@@ -225,6 +241,7 @@ export function buildChildrenCardEvidence(
             detailLine,
             missingLine,
             flags: [],
+            notes: trimOrNull((row as { notes?: unknown }).notes),
         };
     });
 

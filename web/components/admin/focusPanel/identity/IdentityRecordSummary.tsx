@@ -26,6 +26,7 @@ type Props = {
     /** Atomic multi-field save (preferred for person-level Edit). */
     onSaveFields?: (args: IdentityFieldBatchSaveArgs) => Promise<{ ok: boolean } | void>;
     onEditField?: (fieldRef: string) => void;
+    onLinkField?: (fieldRef: string) => void;
     onActivate?: (recordId: string) => void;
     dataAttr?: string;
 };
@@ -59,6 +60,7 @@ export default function IdentityRecordSummary({
     onSaveField,
     onSaveFields,
     onEditField,
+    onLinkField,
     onActivate,
     dataAttr,
 }: Props) {
@@ -203,6 +205,7 @@ export default function IdentityRecordSummary({
                         personId={record.id}
                         onSaveField={onSaveField}
                         onEditField={batchEditing ? undefined : onEditField}
+                        onLinkField={batchEditing ? undefined : onLinkField}
                         batchEdit={batchEditSession}
                     />
                     {showInlineDetails && detailRows.length > 0 ? (
@@ -211,6 +214,7 @@ export default function IdentityRecordSummary({
                             personId={record.id}
                             onSaveField={onSaveField}
                             onEditField={batchEditing ? undefined : onEditField}
+                            onLinkField={batchEditing ? undefined : onLinkField}
                             batchEdit={batchEditSession}
                             defaultOpen
                         />

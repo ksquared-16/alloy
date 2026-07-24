@@ -95,6 +95,7 @@ export function childFocusEditDirtyForPolicy(
 export type ChildFocusSavePatch = {
     identityPatch: InquiryChildIdentityPatch;
     ocmPatch: InquiryChildOcmPatch;
+    profilePatch?: Record<string, unknown>;
 };
 
 /** Build identity + OCM patches including only editable, changed fields. Pure. */

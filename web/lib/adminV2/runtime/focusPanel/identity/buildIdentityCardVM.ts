@@ -9,7 +9,7 @@ import {
     nestedGroupLabel,
     groupDefsFor,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import { fieldIsLinked, fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import type {
     HouseholdEvidenceChild,
     HouseholdEvidenceContact,
@@ -30,6 +30,8 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompose";
 import { resolveIdentityFieldRows, type IdentityFieldRowInput } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows";
 import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
+import { isIdentityFieldInlineSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityInlineChildSave";
+import { resolveIdentityFieldLinkContract } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
@@ -146,8 +148,24 @@ function buildRecordRows(args: {
             : resolveIdentityFieldValue(args.subject, placement.fieldRef);
         const saveSupported =
             args.isFieldSaveSupported?.(placement.fieldRef)
-            ?? (args.groupKey === args.editGroupKey && Boolean(args.editGroupKey));
-        const editable = args.canMutate && fieldIsSaveable(policy) && saveSupported;
+            ?? isIdentityFieldInlineSaveSupported(placement.fieldRef);
+        const linkContract = resolveIdentityFieldLinkContract(placement.fieldRef);
+        const hasExplicitPolicy = Boolean(
+            placement.policy
+            || group.fieldPolicies?.[placement.fieldRef]
+            || (args.editGroupKey
+                ? args.config.groups.find((g) => g.key === args.editGroupKey)?.fieldPolicies?.[
+                      placement.fieldRef
+                  ]
+                : undefined),
+        );
+        // Enrollment fields default to Linked when no explicit policy is stored.
+        const effectivePolicy =
+            policy === "read-only" && linkContract.canOfferLinked && !hasExplicitPolicy
+                ? "linked"
+                : policy;
+        const editable = args.canMutate && fieldIsSaveable(effectivePolicy) && saveSupported;
+        const linked = fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked;
         const placementForRuntime = {
             ...placement,
             labelMode: resolveIdentityPlacementLabelMode(placement, group.fieldModes, placement.fieldRef),
@@ -162,8 +180,11 @@ function buildRecordRows(args: {
             ),
             value,
             icon: resolveIdentityFieldIcon({ group, fieldRef: placement.fieldRef }),
-            policy,
+            policy: effectivePolicy,
             editable,
+            linked,
+            linkLabel: linked ? linkContract.linkLabel : null,
+            linkDestination: linked ? linkContract.destinationCard : null,
         });
     }
     return resolveIdentityFieldRows(inputs);

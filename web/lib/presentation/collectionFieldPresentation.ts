@@ -440,11 +440,12 @@ function formatItemLine(item: CollectionItem, includedFields: readonly Collectio
 
     let head = nameSegment ?? "";
     if (includesAge && ageLabel) {
-        head = head ? `${head} (${ageLabel})` : ageLabel;
+        // Operator-facing list shape: "Blake Wenc · 3" (not parentheses).
+        head = head ? `${head} · ${ageLabel}` : ageLabel;
     } else if (!head && dobLabel) {
         head = dobLabel;
     } else if (head && includesDob && dobLabel) {
-        head = `${head} ${dobLabel}`;
+        head = `${head} · ${dobLabel}`;
     } else if (!head) {
         head = item.displayName.trim();
     }

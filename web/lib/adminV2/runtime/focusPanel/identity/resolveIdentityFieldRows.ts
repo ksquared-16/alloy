@@ -17,6 +17,9 @@ export type IdentityFieldRowInput = {
     icon?: string;
     policy: IdentityFieldCellVM["policy"];
     editable: boolean;
+    linked?: boolean;
+    linkLabel?: string | null;
+    linkDestination?: IdentityFieldCellVM["linkDestination"];
 };
 
 /** Build row VMs from ordered placements (summary or expanded tier). */
@@ -54,6 +57,9 @@ export function resolveIdentityFieldRows(
                 labelMode: input.placement.labelMode ?? "visible",
                 policy: input.policy,
                 editable: input.editable,
+                linked: input.linked ?? false,
+                linkLabel: input.linkLabel ?? null,
+                linkDestination: input.linkDestination ?? null,
                 hideWhenEmpty: input.placement.hideWhenEmpty ?? false,
                 width,
                 column: (columnIndex + 1) as 1 | 2 | 3,

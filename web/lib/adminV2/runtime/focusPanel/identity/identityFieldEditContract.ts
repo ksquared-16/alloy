@@ -11,6 +11,8 @@ import {
     IDENTITY_UNSUPPORTED_SAVE_REFS,
     isIdentityFieldSaveSupported,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
+import { isIdentityFieldInlineSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityInlineChildSave";
+import { resolveIdentityFieldLinkContract } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     fieldIsSaveable,
@@ -63,10 +65,16 @@ export function resolveIdentityFieldEditContract(fieldRef: string): IdentityFiel
     if (RELATIONSHIP_ACTION_ONLY_REFS.has(trimmed)) {
         return { fieldRef: trimmed, canOfferEditable: false, reason: "relationship_action" };
     }
-    if (!isIdentityFieldSaveSupported(trimmed)) {
-        return { fieldRef: trimmed, canOfferEditable: false, reason: "no_write_adapter" };
+    if (isIdentityFieldInlineSaveSupported(trimmed)) {
+        return { fieldRef: trimmed, canOfferEditable: true, reason: "supported" };
     }
-    return { fieldRef: trimmed, canOfferEditable: true, reason: "supported" };
+    if (
+        isIdentityFieldSaveSupported(trimmed)
+        && !resolveIdentityFieldLinkContract(trimmed).canOfferLinked
+    ) {
+        return { fieldRef: trimmed, canOfferEditable: true, reason: "supported" };
+    }
+    return { fieldRef: trimmed, canOfferEditable: false, reason: "no_write_adapter" };
 }
 
 export function identityFieldVisibilityOptionsForBuilder(
@@ -75,6 +83,10 @@ export function identityFieldVisibilityOptionsForBuilder(
     const contract = resolveIdentityFieldEditContract(fieldRef);
     if (contract.canOfferEditable) {
         return ["editable", "read-only", "hidden"];
+    }
+    const link = resolveIdentityFieldLinkContract(fieldRef);
+    if (link.canOfferLinked) {
+        return ["linked", "read-only", "hidden"];
     }
     return ["read-only", "hidden"];
 }

@@ -31,6 +31,7 @@ import {
 } from "@/lib/presentation/runtime";
 import type { FocusedSubjectContext } from "@/lib/presentation/runtime/resolveQueueRowSubjectFocus";
 import { resolveCompactSlotDisplay } from "@/lib/presentation/runtime/resolveCompactSlotDisplay";
+import { compactSlotsUsePublishedAuthority } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -151,42 +152,54 @@ export function CondensedQueueRow({
 
     // Per-slot visibility from the published surface (absent config → all visible). The
     // subject slot is the row's identity anchor and is always rendered; config visibility
-    // gates only the secondary slots.
-    const showStatus = slotVisible(rowConfig?.status);
-    const showContact = slotVisible(rowConfig?.contact);
-    const showAttention = slotVisible(rowConfig?.attention);
-    const showWork = slotVisible(rowConfig?.work);
-    const showGroupCount = slotVisible(rowConfig?.groupCount);
+    // gates only the secondary slots. Under published authority, empty slots stay empty —
+    // never substitute Lead Status / default contact-line fields.
+    const publishedAuthority = compactSlotsUsePublishedAuthority(rowConfig);
+    const showStatus = publishedAuthority
+        ? Boolean(rowConfig?.status.fieldKeys?.length)
+        : slotVisible(rowConfig?.status);
+    const showContact = publishedAuthority
+        ? Boolean(rowConfig?.contact.fieldKeys?.length)
+        : slotVisible(rowConfig?.contact);
+    const showAttention = publishedAuthority
+        ? Boolean(rowConfig?.attention.fieldKeys?.length)
+        : slotVisible(rowConfig?.attention);
+    const showWork = publishedAuthority
+        ? Boolean(rowConfig?.work.fieldKeys?.length)
+        : slotVisible(rowConfig?.work);
+    const showGroupCount = publishedAuthority
+        ? Boolean(rowConfig?.groupCount.fieldKeys?.length)
+        : slotVisible(rowConfig?.groupCount);
 
     // Subject Focus (Phase 3): the focused primary subject anchors the identity slot; its supporting
     // lines + sibling rollup feed the contact + group slots. All fall back to frozen-context values
     // when focus is absent or empty — never invents data, same slots, one renderer.
     const displayName =
-        resolveCompactSlotDisplay("subject", context, rowConfig?.subject, focus)
+        resolveCompactSlotDisplay("subject", context, rowConfig?.subject, focus, { publishedAuthority })
         ?? focus?.primary.display_name?.trim()
         ?? queueRowSubjectDisplayName(context);
     const stageLabel = showStatus
-        ? resolveCompactSlotDisplay("status", context, rowConfig?.status, focus)
+        ? resolveCompactSlotDisplay("status", context, rowConfig?.status, focus, { publishedAuthority })
         : null;
     const needsAttention = showAttention && context.attention_summary?.needs_attention === true;
     const attentionReason = needsAttention
-        ? resolveCompactSlotDisplay("attention", context, rowConfig?.attention, focus)
+        ? resolveCompactSlotDisplay("attention", context, rowConfig?.attention, focus, { publishedAuthority })
         : null;
     const line2 = showContact
-        ? resolveCompactSlotDisplay("contact", context, rowConfig?.contact, focus)
+        ? resolveCompactSlotDisplay("contact", context, rowConfig?.contact, focus, { publishedAuthority })
         : null;
     const countChip = showGroupCount
-        ? resolveCompactSlotDisplay("groupCount", context, rowConfig?.groupCount, focus)
+        ? resolveCompactSlotDisplay("groupCount", context, rowConfig?.groupCount, focus, { publishedAuthority })
         : null;
     const workLabel = showWork
-        ? resolveCompactSlotDisplay("work", context, rowConfig?.work, focus)
+        ? resolveCompactSlotDisplay("work", context, rowConfig?.work, focus, { publishedAuthority })
         : null;
     const dueLabel =
-        showWork ?
-            context.current_work_summary?.blocker_hint
-            ?? context.current_work_summary?.due_label
-            ?? null
-        :   null;
+        showWork && !publishedAuthority
+            ? context.current_work_summary?.blocker_hint
+              ?? context.current_work_summary?.due_label
+              ?? null
+            : null;
     const hasFooterLine = countChip != null || workLabel != null || dueLabel != null;
 
     return (

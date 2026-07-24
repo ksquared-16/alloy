@@ -140,6 +140,8 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
         subject.kind === "child" && "schedule" in subject.value ? subject.value.schedule ?? null : null,
     "inquiry_child.desired_schedule_type": (subject) =>
         subject.kind === "child" && "schedule" in subject.value ? subject.value.schedule ?? null : null,
+    "child.schedule": (subject) =>
+        subject.kind === "child" && "schedule" in subject.value ? subject.value.schedule ?? null : null,
     "child.start_date": (subject) =>
         subject.kind === "child" && "startDate" in subject.value ? subject.value.startDate ?? null : null,
     "child.desired_start_date": (subject) =>
@@ -156,7 +158,14 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
     "child.documents_summary": () => null,
     "child.pickup_summary": () => null,
     "child.communications_summary": () => null,
-    "child.notes_summary": () => null,
+    "child.notes_summary": (subject) =>
+        subject.kind === "child" && "notes" in subject.value
+            ? (subject.value as { notes?: string | null }).notes ?? null
+            : null,
+    "inquiry_child.notes": (subject) =>
+        subject.kind === "child" && "notes" in subject.value
+            ? (subject.value as { notes?: string | null }).notes ?? null
+            : null,
 };
 
 const CONTACT_EDIT_RESOLVERS: Record<string, Resolver> = {

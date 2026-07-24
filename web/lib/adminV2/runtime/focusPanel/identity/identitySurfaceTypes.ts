@@ -8,6 +8,7 @@
  */
 
 import type { SurfaceFieldVisibility } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import type {
     IdentityFieldLabelMode,
@@ -90,6 +91,9 @@ export type IdentityFieldCellVM = {
     labelMode: IdentityFieldLabelMode;
     policy: SurfaceFieldVisibility;
     editable: boolean;
+    linked?: boolean;
+    linkLabel?: string | null;
+    linkDestination?: FocusPanelCardKey | null;
     hideWhenEmpty: boolean;
     width: NestedSurfaceFieldLayoutWidth;
 };
