@@ -25,6 +25,7 @@ const { checkStartPreconditions, serializePackagePrompt, parseOutcome } = await 
 const { composeCounsel, selectFrontier, attemptCounsel, readinessCounsel, frontierPhrase } = await import("../lib/vacilando/counsel.mjs");
 const { assembleConversation } = await import("../lib/vacilando/conversation.mjs");
 const { composeUnderstanding } = await import("../lib/vacilando/shared-understanding.mjs");
+const { classifyCommandState, assessCommand, budgetFor, isValidTurnEnd, turnEndViolation, runGoverned, VALID_TURN_ENDS, WORKER_POLICY, COMMAND_CLASSES } = await import("../lib/vacilando/command-budget.mjs");
 const { composeOperations, stateKeyFor, assembleReview, STATES, conversationStage, understandingQuestions } = await import("../lib/vacilando/operations.mjs");
 const { close: directorCloseFn } = await import("../lib/vacilando/mission-director.mjs");
 
@@ -982,4 +983,78 @@ test("understanding: answering clears the verdict's blocking findings → Ready"
   const pkgReady = { readiness_status: "ready" };
   assert.equal(deriveVerdict(gap, pkgReady).verdict, "Needs Clarification");            // conflict blocks
   assert.equal(deriveVerdict(gap, pkgReady, { answered: ["c1"] }).verdict, "Ready");     // answered → cleared
+});
+
+// ============================================================================
+// Worker Operating Policy — forward progress + command budgets. A managed worker
+// owns forward progress and can never end a turn because a command is "still
+// running". Encodes the exact typecheck regression.
+// ============================================================================
+
+test("command state: running-but-recent-progress is progressing; no progress past soft is stalled", () => {
+  const soft = budgetFor("typecheck").soft_ms;
+  // Output appeared just now → progressing.
+  assert.equal(classifyCommandState({ startedAt: 0, now: 5 * 60000, lastProgressAt: 5 * 60000 - 1000, soft_ms: soft }), "progressing");
+  // Alive but no new output for longer than the soft budget → stalled (a PID is not progress).
+  assert.equal(classifyCommandState({ startedAt: 0, now: 5 * 60000, lastProgressAt: 0, soft_ms: soft }), "stalled");
+  assert.equal(classifyCommandState({ exited: true, exitCode: 0, startedAt: 0 }), "complete");
+  assert.equal(classifyCommandState({ exited: true, exitCode: 1, startedAt: 0 }), "failed");
+  assert.equal(classifyCommandState({ blocker: "missing credential", startedAt: 0 }), "blocked");
+});
+
+test("command budget: within → continue; soft+progress → parallel; soft+stall → diagnose; hard → corrective", () => {
+  const b = budgetFor("typecheck");
+  assert.equal(assessCommand({ cls: "typecheck", startedAt: 0, now: 30 * 1000, lastProgressAt: 29 * 1000 }).directive, "continue");
+  assert.equal(assessCommand({ cls: "typecheck", startedAt: 0, now: b.soft_ms + 5000, lastProgressAt: b.soft_ms + 4000 }).directive, "continue_with_parallel_work");
+  assert.equal(assessCommand({ cls: "typecheck", startedAt: 0, now: b.soft_ms + 5000, lastProgressAt: 0 }).directive, "diagnose");
+  const hard = assessCommand({ cls: "typecheck", startedAt: 0, now: b.hard_ms + 5000, lastProgressAt: 0 });
+  assert.equal(hard.phase, "hard_exceeded");
+  assert.equal(hard.directive, "corrective_action"); // never "keep waiting"
+  assert.ok(hard.fallback && hard.escalation);
+});
+
+test("turn-end: only complete/needs-operator/blocked/failed/paused can end a turn", () => {
+  for (const ok of ["complete", "needs_operator", "blocked", "failed", "paused"]) assert.ok(isValidTurnEnd(ok));
+  for (const bad of ["running", "still_running", "waiting_for_typecheck", "waiting_for_tests", "waiting_for_server", "monitoring", "no_errors_so_far", "will_notify", "status_unchanged", "stalled"]) {
+    assert.equal(isValidTurnEnd(bad), false, `${bad} must not end a turn`);
+    assert.ok(turnEndViolation(bad).message.length > 0);
+  }
+});
+
+test("REGRESSION (the typecheck failure): a worker cannot end its turn on 'still running'", () => {
+  // 1) edit a trivial file, 2) start a full typecheck, 3) it exceeds the soft
+  // threshold, 4) worker polls, 5) worker tries to end with "still running".
+  const v = turnEndViolation("waiting_for_typecheck");
+  assert.ok(v && !v.ok);
+  assert.match(v.message, /forward progress|not a valid turn end/i);
+  // At 7 minutes with no progress, the typecheck is past its hard budget and STALLED —
+  // the required directive is corrective action, not another poll.
+  const a = assessCommand({ cls: "typecheck", startedAt: 0, now: 7 * 60000, lastProgressAt: 0 });
+  assert.equal(a.state, "stalled");
+  assert.equal(a.phase, "hard_exceeded");
+  assert.equal(a.directive, "corrective_action");
+});
+
+test("governed runner: a completing command returns complete with output", async () => {
+  const r = await runGoverned({ command: "node", args: ["-e", "process.stdout.write('ok')"], cls: "targeted_test" });
+  assert.equal(r.state, "complete");
+  assert.match(r.output, /ok/);
+  assert.ok(!r.killed_at_hard);
+});
+
+test("governed runner: a stalled command is terminated at the hard budget — never left 'running'", async () => {
+  // A command that produces no output and would outlive its budget → hard-killed,
+  // returned as a diagnosed stall, NOT "still running". Tiny budget for the test.
+  const r = await runGoverned({ command: "node", args: ["-e", "setTimeout(()=>{}, 60000)"], budget: { soft_ms: 60, hard_ms: 200, fallback: "narrow", escalation: "isolate" } });
+  assert.notEqual(r.state, "complete");
+  assert.ok(r.killed_at_hard, "the command was terminated at the hard budget");
+  assert.match(r.summary, /hard budget|terminated/i);
+});
+
+test("policy is one canonical text carrying the load-bearing rules", () => {
+  assert.match(WORKER_POLICY, /forward progress/i);
+  assert.match(WORKER_POLICY, /still running/i);
+  assert.match(WORKER_POLICY, /soft/i);
+  assert.match(WORKER_POLICY, /hard/i);
+  assert.ok(Object.keys(COMMAND_CLASSES).includes("typecheck") && Object.keys(COMMAND_CLASSES).includes("full_test_suite"));
 });

@@ -27,6 +27,7 @@ import { evaluateMission } from "./acceptance.mjs";
 import { precheckProvider, providerResumable, invalidateProviderProbe } from "./provider-runtime.mjs";
 import { startMissionTurn } from "./providers.mjs";
 import { REPO_ROOT } from "./knowledge.mjs";
+import { WORKER_POLICY } from "./command-budget.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(os.homedir(), ".local", "state", "alloy-dev");
 const OUT_ROOT = join(RUNTIME_ROOT, "vacilando", "missions", "outputs");
@@ -75,6 +76,9 @@ const TURN_PROTOCOL = `
 You are executing ONE turn of a durable engineering mission. Everything you need is in this package; do NOT rediscover context.
 Hard governance (never violate): do not push, merge, promote, or open/modify pull requests; do not broaden scope beyond the objective; ask before any irreversible or consequential action.
 Turn discipline: do the requested work within THIS turn; do not invent and execute unlimited successive work.
+
+${WORKER_POLICY}
+
 When finished, emit as the FINAL line exactly ONE control token and nothing after it:
   <<VACILANDO status=completed>>            — the objective is fully satisfied
   <<VACILANDO status=waiting_for_operator>> — you need an operator answer/decision (write the question on the lines just above)

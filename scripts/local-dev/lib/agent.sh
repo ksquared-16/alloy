@@ -377,6 +377,16 @@ Stay in the lane of slot ${slot}: **${role}**.
 Ask before expanding into another slot's specialty.
 EOF
 
+  # Inject the canonical Worker Operating Policy (forward progress + command budgets).
+  # ONE source, shared with the mission-runtime TURN PROTOCOL, so every managed slot
+  # worker — Claude or Cursor, Director-started or opened directly — is governed the
+  # same way: it owns forward progress and never ends a turn on "still running".
+  local policy_file="${ALLOY_LOCAL_DEV_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/lib/vacilando/worker-operating-policy.md"
+  if [[ -f "$policy_file" ]]; then
+    printf '\n' >>"$out_wt"
+    cat "$policy_file" >>"$out_wt"
+  fi
+
   cp "$out_wt" "$out_rt"
 
   # Ignore instructions file in git (same pattern as .env.local.agent).
