@@ -7,6 +7,13 @@ import ProcessingLandingActionCard from "./ProcessingLandingActionCard";
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import {
+    WorkspaceOverviewActionRow,
+    WorkspaceOverviewActivityBand,
+    WorkspaceOverviewInfoGrid,
+    WorkspaceOverviewInfoPrimary,
+    WorkspaceOverviewStack,
+} from "@/components/workspace/WorkspaceOverviewLayout";
+import {
     WS_ICON_STRUCTURAL,
     WS_TEXT_DISABLED,
     WS_TEXT_PRIMARY,
@@ -146,8 +153,8 @@ export default function ProcessingOverviewLanding({
                 }}
             />
 
-            <div className="mx-auto max-w-6xl space-y-5">
-                <section className="grid gap-3 md:grid-cols-3">
+            <WorkspaceOverviewStack>
+                <WorkspaceOverviewActionRow>
                             <ProcessingLandingActionCard
                                 tier="primary"
                                 disabled={uploading}
@@ -187,14 +194,13 @@ export default function ProcessingOverviewLanding({
                         onClick={onOpenStudio}
                         testId="processing-studio-card"
                     />
-                </section>
+                </WorkspaceOverviewActionRow>
                 {importErr ? <p className={`text-[11px] ${WS_TEXT_SECONDARY}`}>{importErr}</p> : null}
 
-                <section data-testid="processing-overview-activity-kpis">
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/35">
-                        Today&apos;s activity
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-busy={overviewKpisLoading}>
+                <WorkspaceOverviewActivityBand
+                    testId="processing-overview-activity-kpis"
+                    busy={overviewKpisLoading}
+                >
                         {overviewKpis.map((kpi) => (
                             <SurfaceHeaderKpiCard
                                 key={kpi.slot}
@@ -203,10 +209,10 @@ export default function ProcessingOverviewLanding({
                                 density="compact"
                             />
                         ))}
-                    </div>
-                </section>
+                </WorkspaceOverviewActivityBand>
 
-                <div className="grid gap-4 lg:grid-cols-3">
+                <WorkspaceOverviewInfoGrid>
+                    <WorkspaceOverviewInfoPrimary>
                     <ContinuePanel title="Recent work" action="View all" onAction={onOpenWork}>
                         {recentRows.length === 0 ? (
                             <EmptyHint>No active imports yet — import a form to begin.</EmptyHint>
@@ -237,6 +243,7 @@ export default function ProcessingOverviewLanding({
                             </ul>
                         )}
                     </ContinuePanel>
+                    </WorkspaceOverviewInfoPrimary>
 
                     <ContinuePanel title="Recent forms" action="View all" onAction={onOpenStudio}>
                         {recentForms.length === 0 ? (
@@ -286,7 +293,7 @@ export default function ProcessingOverviewLanding({
                             ))}
                         </ul>
                     </WorkspaceCard>
-                </div>
+                </WorkspaceOverviewInfoGrid>
                 {process.env.NODE_ENV !== "production" ? (
                     <div className="rounded-lg border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-[11px] text-amber-950">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -304,7 +311,7 @@ export default function ProcessingOverviewLanding({
                         </div>
                     </div>
                 ) : null}
-            </div>
+            </WorkspaceOverviewStack>
             <ProcessingDevCleanupDialog
                 open={cleanupOpen}
                 onClose={() => setCleanupOpen(false)}
