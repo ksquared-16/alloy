@@ -48,19 +48,19 @@ export const FINANCIALS_WORKSPACE_CHAPTER_META: Record<
 > = {
     tuition: {
         label: "Tuition",
-        description: "Organization tuition rates, inheritance, and Location overrides.",
-    },
-    catalog: {
-        label: "Catalog",
-        description: "Fees, add-ons, deposits, and commercial products published for Programs.",
-    },
-    policies: {
-        label: "Policies",
-        description: "Discount, deposit, and commercial policy rules scoped across the organization.",
+        description: "Tuition Plans, enrollment commitments, organization pricing, and location overrides.",
     },
     accounting: {
         label: "Accounting",
-        description: "Revenue categories and GL mapping for commercial charges.",
+        description: "GL Codes, revenue mappings, and where tuition and fees post.",
+    },
+    catalog: {
+        label: "Catalog",
+        description: "Fees, optional services, and other chargeable offerings outside recurring tuition.",
+    },
+    policies: {
+        label: "Policies",
+        description: "How operational events affect financial execution.",
     },
     simulator: {
         label: "Simulator",
@@ -92,9 +92,34 @@ export function normalizeProgramsWorkspaceChapter(
 
 export function organizationFinancialsChapterHref(
     chapter: FinancialsWorkspaceChapter | null | undefined,
+    options?: {
+        planId?: string | null;
+        tab?: string | null;
+        setup?: string | null;
+        accountId?: string | null;
+        itemId?: string | null;
+        policyId?: string | null;
+    },
 ): string {
     if (!chapter) return CANONICAL_ORGANIZATION_FINANCIALS_HREF;
-    return `${CANONICAL_ORGANIZATION_FINANCIALS_HREF}?chapter=${encodeURIComponent(chapter)}`;
+    const params = new URLSearchParams();
+    params.set("chapter", chapter);
+    if (options?.planId?.trim()) params.set("planId", options.planId.trim());
+    if (options?.tab?.trim()) params.set("tab", options.tab.trim());
+    if (options?.setup?.trim()) params.set("setup", options.setup.trim());
+    if (options?.accountId?.trim()) params.set("accountId", options.accountId.trim());
+    if (options?.itemId?.trim()) params.set("itemId", options.itemId.trim());
+    if (options?.policyId?.trim()) params.set("policyId", options.policyId.trim());
+    return `${CANONICAL_ORGANIZATION_FINANCIALS_HREF}?${params.toString()}`;
+}
+
+/** Tuition Plans collection / selected plan under Financials. */
+export function organizationTuitionPlansHref(options?: {
+    planId?: string | null;
+    tab?: string | null;
+    setup?: string | null;
+}): string {
+    return organizationFinancialsChapterHref("tuition", options);
 }
 
 /**

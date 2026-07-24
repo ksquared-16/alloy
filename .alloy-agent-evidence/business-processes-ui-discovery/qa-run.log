@@ -1,0 +1,27 @@
+{
+  "checks": {
+    "collection": {
+      "onLogin": false,
+      "rail": 1,
+      "shell": 1,
+      "conceptualCards": false,
+      "noDomainTiles": true
+    },
+    "selected": {
+      "header": 1,
+      "overviewTab": 1,
+      "noDuplicateNav": true
+    },
+    "overview": {
+      "panel": 1,
+      "journey": 1
+    },
+    "stages": {
+      "list": 1
+    },
+    "automationPlanned": 1,
+    "historyPlanned": 1
+  },
+  "errors": []
+}
+QA ok → /Users/Kelly/Code/alloy-worktrees/wt2-org-config-financials/.alloy-agent-evidence/business-processes-ui-discovery/qa

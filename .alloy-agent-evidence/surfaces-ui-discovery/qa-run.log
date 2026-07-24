@@ -1,0 +1,30 @@
+{
+  "checks": {},
+  "errors": [
+    {
+      "name": "shell",
+      "message": "page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3012/organization/surfaces\nCall log:\n  - navigating to \"http://localhost:3012/organization/surfaces\", waiting until \"domcontentloaded\"\n"
+    },
+    {
+      "name": "focus-panels",
+      "message": "Surfaces shell did not stabilize"
+    },
+    {
+      "name": "tabs",
+      "message": "Timed out waiting for 1+ of [data-testid=\"surfaces-tab-edit\"]"
+    },
+    {
+      "name": "queue-rows",
+      "message": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('[data-testid=\"surfaces-category-item-queue-rows\"]')\n"
+    },
+    {
+      "name": "deep-link-edit",
+      "message": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('[data-testid=\"surfaces-category-item-focus-panels\"]')\n"
+    },
+    {
+      "name": "narrow",
+      "message": "page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3012/organization/surfaces\nCall log:\n  - navigating to \"http://localhost:3012/organization/surfaces\", waiting until \"domcontentloaded\"\n"
+    }
+  ]
+}
+QA failed

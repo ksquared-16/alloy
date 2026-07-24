@@ -30,6 +30,7 @@ import {
     loadQueueRowSurfaceConfig,
     publishQueueRowSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/queueRowSurfaceService";
+import { useRegisterSurfaceBuilderChrome } from "@/components/adminV2/settings/surfaces/SurfaceBuilderChromeContext";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
 import QueueRowVariantSettings from "@/components/adminV2/settings/surfaces/QueueRowVariantSettings";
@@ -45,7 +46,7 @@ type VariantTab = { id: string; label: string; isDefault: boolean };
 
 export default function QueueRowSurfaceEditor({
     catalogEntry,
-    onBack,
+    onBack: _onBack,
     onPublished,
 }: QueueRowSurfaceEditorProps) {
     const surfaceId = `queue-row-${catalogEntry.id.replace(/:/g, "-")}`;
@@ -55,6 +56,7 @@ export default function QueueRowSurfaceEditor({
     const [loading, setLoading] = useState(true);
     const [dirty, setDirty] = useState(false);
     const [publishing, setPublishing] = useState(false);
+    const [publishedAt, setPublishedAt] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
     const [processStages, setProcessStages] = useState<ProcessStageOption[]>([]);
@@ -206,6 +208,7 @@ export default function QueueRowSurfaceEditor({
             await publishQueueRowSurfaceConfig({ surfaceId, envelope });
             dispatchQueueRowSurfacePublished(surfaceId);
             setDirty(false);
+            setPublishedAt(true);
             onPublished?.();
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Publish failed");
@@ -226,45 +229,39 @@ export default function QueueRowSurfaceEditor({
     });
     const rowFocusUi = subjectFocusToUi(activeVariant?.subjectFocus);
 
+    useRegisterSurfaceBuilderChrome({
+        surfaceId,
+        publicationLabel: publishedAt ? "Published" : null,
+        dirty,
+        publishing,
+        showSaveDraft: false,
+        showHistoryControls: false,
+        onPublish: () => void handlePublish(),
+        publishDisabled: !dirty || publishing || loading || !envelope,
+    });
+
     return (
         <div className="flex min-h-0 flex-1 flex-col" data-testid="queue-row-surface-editor">
-            <header className="flex flex-wrap items-center gap-3 border-b border-alloy-stone/10 px-4 py-3">
-                <button
-                    type="button"
-                    onClick={onBack}
-                    className="text-sm font-medium text-alloy-pine hover:underline"
-                    data-testid="queue-row-surface-back"
-                >
-                    ← Surfaces
-                </button>
-                <div className="min-w-0 flex-1">
-                    <input
-                        type="text"
-                        value={envelope?.name ?? ""}
-                        onChange={(e) => patchEnvelope({ name: e.target.value })}
-                        className="w-full max-w-md border-0 bg-transparent text-lg font-semibold text-alloy-midnight outline-none focus:ring-0"
-                        aria-label="Queue row surface name"
-                        data-testid="queue-row-surface-name"
-                        disabled={loading || !envelope}
-                    />
-                    <p className="text-sm text-alloy-midnight/55">{catalogEntry.lifecycle_name} · click the row to add content</p>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => void handlePublish()}
-                    disabled={!dirty || publishing || loading || !envelope}
-                    className="rounded-lg bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:bg-alloy-pine/90 disabled:opacity-40"
-                    data-testid="queue-row-surface-publish"
-                >
-                    {publishing ? "Publishing…" : "Publish"}
-                </button>
-            </header>
-
             {error ? (
                 <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
             ) : null}
 
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
+                <label className="block max-w-md">
+                    <span className="sr-only">Queue row surface name</span>
+                    <input
+                        type="text"
+                        value={envelope?.name ?? ""}
+                        onChange={(e) => patchEnvelope({ name: e.target.value })}
+                        className="w-full border-0 bg-transparent text-base font-semibold text-alloy-midnight outline-none focus:ring-0"
+                        aria-label="Queue row surface name"
+                        data-testid="queue-row-surface-name"
+                        disabled={loading || !envelope}
+                    />
+                    <span className="text-sm text-alloy-midnight/55">
+                        {catalogEntry.lifecycle_name} · click the row to add content
+                    </span>
+                </label>
                 <div className="flex flex-wrap items-center gap-2" data-testid="queue-row-variant-tabs">
                     {variantTabs.map((tab) => (
                         <button

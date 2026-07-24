@@ -1,0 +1,135 @@
+{
+  "startedAt": "2026-07-23T18:32:04.238Z",
+  "base": "http://127.0.0.1:3012",
+  "checks": {
+    "financialsLanding": {
+      "tiles": 1,
+      "helper": 1,
+      "noScopeBar": true,
+      "bodyHasConceptual": false,
+      "onLogin": false
+    },
+    "programsLocationsLanding": {
+      "tiles": 1,
+      "helper": 1,
+      "noScopeBar": true,
+      "bodyHasConceptual": false
+    },
+    "accessLanding": {
+      "launcher": 1,
+      "users": 1,
+      "roles": 1,
+      "scopes": 1,
+      "security": 1,
+      "bodyHasConceptual": false
+    },
+    "usersPage": {
+      "surface": 1,
+      "collection": 1,
+      "invite": 1
+    },
+    "selectedUser": {
+      "overview": 1,
+      "workspace": 1
+    },
+    "userSecurityPlanned": 2,
+    "inviteDialog": {
+      "open": 1,
+      "steps": 1,
+      "accessPlanned": 1
+    },
+    "rolesPage": {
+      "collection": 1
+    },
+    "permissionsNoRawKeySample": true,
+    "selectedRole": {
+      "ok": true
+    },
+    "scopes": {
+      "page": 1
+    },
+    "securityPlanned": 6,
+    "securityPage": 1
+  },
+  "steps": [
+    {
+      "name": "01-financials-landing",
+      "url": "http://127.0.0.1:3012/organization/financials"
+    },
+    {
+      "name": "02-programs-locations-landing",
+      "url": "http://127.0.0.1:3012/organization/programs-locations"
+    },
+    {
+      "name": "03-access-landing",
+      "url": "http://127.0.0.1:3012/settings/users-roles"
+    },
+    {
+      "name": "04-users-collection",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=users"
+    },
+    {
+      "name": "05-user-overview",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=users"
+    },
+    {
+      "name": "06-user-roles",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=users"
+    },
+    {
+      "name": "07-user-access",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=users"
+    },
+    {
+      "name": "08-user-security",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=users"
+    },
+    {
+      "name": "09-user-history",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=users"
+    },
+    {
+      "name": "10-invite-dialog",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=users"
+    },
+    {
+      "name": "11-roles-collection",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=roles"
+    },
+    {
+      "name": "12-role-overview",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=roles"
+    },
+    {
+      "name": "13-role-permissions",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=roles"
+    },
+    {
+      "name": "14-role-users",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=roles"
+    },
+    {
+      "name": "15-role-experience-access",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=roles"
+    },
+    {
+      "name": "16-role-history",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=roles"
+    },
+    {
+      "name": "17-access-scopes",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=scopes"
+    },
+    {
+      "name": "18-security-landing",
+      "url": "http://127.0.0.1:3012/settings/users-roles?section=security"
+    },
+    {
+      "name": "19-access-landing-narrow",
+      "url": "http://127.0.0.1:3012/settings/users-roles"
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "finishedAt": "2026-07-23T18:32:43.946Z"
+}

@@ -21,8 +21,11 @@ import BusinessProcessActionsListColumn, {
 } from "@/components/adminV2/settings/businessProcess/BusinessProcessActionsQueueWorkspace";
 import BusinessProcessAutomationShell from "@/components/adminV2/settings/businessProcess/BusinessProcessAutomationShell";
 import BusinessProcessHealthListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessHealthQueueWorkspace";
+import BusinessProcessOverviewPanel from "@/components/adminV2/settings/businessProcess/BusinessProcessOverviewPanel";
 import {
     BUSINESS_PROCESS_CONFIGURATION_HEALTH_SUMMARY,
+    BUSINESS_PROCESS_HISTORY_PLANNED,
+    BUSINESS_PROCESS_HISTORY_TITLE,
 } from "@/lib/lifecycle/businessProcessUiLabels";
 import BusinessProcessConfigurationShell from "@/components/adminV2/settings/businessProcess/BusinessProcessConfigurationShell";
 import BusinessProcessStagesListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessStagesListColumn";
@@ -124,6 +127,9 @@ export default function LifecycleActivationBoard({
     catalogSummary = null,
     onBackToCatalog,
     onContextActionsChange,
+    activeProcessSection,
+    onProcessSectionChange,
+    onRenameTriggerReady,
 }: {
     identity: LifecycleRuntimeIdentity | null;
     catalog?: LifecycleCatalogEntry[];
@@ -143,6 +149,11 @@ export default function LifecycleActivationBoard({
     catalogSummary?: { trackCount: number; stageCount: number; queueCount: number } | null;
     onBackToCatalog?: () => void;
     onContextActionsChange?: (actions: ReactNode) => void;
+    /** Controlled Selected-Process header tab (overview/stages/.../history) — parent owns the tab bar. */
+    activeProcessSection?: BusinessProcessWorkspaceSection;
+    onProcessSectionChange?: (section: BusinessProcessWorkspaceSection) => void;
+    /** Registers a direct "open rename modal" trigger so the parent header can offer an Edit action. */
+    onRenameTriggerReady?: (trigger: () => void) => void;
 }) {
     const runtimeDepartmentId = identity?.runtimeDepartmentId?.trim() ?? "";
     const catalogEntry =
@@ -176,7 +187,27 @@ export default function LifecycleActivationBoard({
     const [stageSaveState, setStageSaveState] = useState<LifecycleStageSaveUiState>("idle");
     const [stageSaveError, setStageSaveError] = useState<string | null>(null);
     const [readyCheckRevision, setReadyCheckRevision] = useState(0);
-    const [processSection, setProcessSection] = useState<BusinessProcessWorkspaceSection>(initialSection);
+    const [processSection, setProcessSection] = useState<BusinessProcessWorkspaceSection>(
+        activeProcessSection ?? initialSection
+    );
+
+    /** Two-way sync with the parent-owned Selected-Process header tab bar — no new nav runtime. */
+    useEffect(() => {
+        if (activeProcessSection && activeProcessSection !== processSection) {
+            setProcessSection(activeProcessSection);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeProcessSection]);
+
+    useEffect(() => {
+        onProcessSectionChange?.(processSection);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [processSection]);
+
+    useEffect(() => {
+        onRenameTriggerReady?.(() => setRenameOpen(true));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [onRenameTriggerReady]);
     const [selectedActionKey, setSelectedActionKey] = useState<LifecycleBaseActionKey | null>(null);
     const workspaceHandleRef = useRef<StageEditorV2Handle | null>(null);
     const stageDirtyRef = useRef(false);
@@ -1721,7 +1752,9 @@ export default function LifecycleActivationBoard({
                         activeSection={processSection}
                         onSelectSection={setProcessSection}
                         listColumn={
-                            processSection === "work-views" && processId ?
+                            processSection === "overview" || processSection === "history" ?
+                                null
+                            : processSection === "work-views" && processId ?
                                 <BusinessProcessWorkViewsListColumn />
                             : processSection === "stages" ?
                                 <BusinessProcessStagesListColumn
@@ -1876,6 +1909,37 @@ export default function LifecycleActivationBoard({
                                     }}
                                 />
                             :   null}
+                        </div>
+                    :   null}
+
+                    {processSection === "overview" ?
+                        <BusinessProcessOverviewPanel
+                            lifecycleName={builderProcess?.name ?? lifecycleName}
+                            isActive={catalogEntry?.workspace.department_is_active ?? true}
+                            stageLabels={builderStages.map((s) => s.label)}
+                            trackLabels={processTracks?.tracks.map((t) => t.label) ?? null}
+                            workViewsCount={workViewQueueLanes.length > 0 ? workViewQueueLanes.length : (
+                                pipeline ? 0 : null
+                            )}
+                            runtimeSummary={runtimeSummary}
+                            onNavigateSection={setProcessSection}
+                        />
+                    :   null}
+
+                    {processSection === "history" ?
+                        <div className="process-config-setup-card p-4" data-testid="business-process-history-workspace">
+                            <header className="mb-3">
+                                <h3 className="text-lg font-semibold text-alloy-midnight">
+                                    {BUSINESS_PROCESS_HISTORY_TITLE}
+                                </h3>
+                            </header>
+                            <p
+                                className="text-sm leading-6 text-alloy-midnight/55"
+                                data-capability="planned"
+                                data-testid="business-process-history-planned"
+                            >
+                                {BUSINESS_PROCESS_HISTORY_PLANNED}
+                            </p>
                         </div>
                     :   null}
                     </BusinessProcessConfigurationShell>

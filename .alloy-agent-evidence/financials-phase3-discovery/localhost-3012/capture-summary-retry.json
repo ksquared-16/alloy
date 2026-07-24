@@ -1,0 +1,65 @@
+[
+  {
+    "name": "02-financials-tuition",
+    "path": "/organization/financials?chapter=tuition",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=tuition",
+    "ok": true,
+    "preview": "1 4 ⌘K KK Organization financials Financials Organization tuition rates, inheritance, and Location overrides. Organization›Financials›Tuition Tuition Catalog Policies Accounting Simulator Funding Tuition rates Organization defaults and Location overrides for Program offerings. Tuition Grid Organization default rates inherit to Locations. Location override replaces the inherited value until restored. Effective value = Location override ?? Organization default. Edit Compare Locations Readine"
+  },
+  {
+    "name": "03-financials-catalog",
+    "path": "/organization/financials?chapter=catalog",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=catalog",
+    "ok": true,
+    "preview": "1 4 ⌘K KK Organization financials Financials Fees, add-ons, deposits, and commercial products published for Programs. Organization›Financials›Catalog Tuition Catalog Policies Accounting Simulator Funding Commercial Catalog Everything beyond tuition — 0 items configured. + Add item Nothing configured yet. Add your first fee, add-on, or deposit. + Add one Revenue mapping Category groups products for your team. Revenue category is the reference Accounting maps to a GL code — Commercial defi"
+  },
+  {
+    "name": "04-financials-policies",
+    "path": "/organization/financials?chapter=policies",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=policies",
+    "ok": true,
+    "preview": "1 4 ⌘K KK Organization financials Financials Discount, deposit, and commercial policy rules scoped across the organization. Organization›Financials›Policies Tuition Catalog Policies Accounting Simulator Funding Commercial policies Organization-authored discount, deposit, and commercial rules. Policies Rules that adjust what you charge — discounts, sibling discounts, waivers, proration, and review requirements. Policies change prices in the Simulator and in billing; they never create new cha"
+  },
+  {
+    "name": "05-financials-accounting",
+    "path": "/organization/financials?chapter=accounting",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=accounting",
+    "ok": true,
+    "preview": "1 4 ⌘K KK Organization financials Financials Revenue categories and GL mapping for commercial charges. Organization›Financials›Accounting Tuition Catalog Policies Accounting Simulator Funding Accounting Commercial product → revenue category → GL account. Accounting owns the chart of accounts. Revenue Categories GL Accounts Mapping Review Commercial-owned categories that map to a GL account. + Revenue category No revenue categories yet. + Add the first one What lives here GL accounts ar"
+  },
+  {
+    "name": "06-financials-simulator",
+    "path": "/organization/financials?chapter=simulator",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=simulator",
+    "ok": true,
+    "preview": "1 4 ⌘K KK Organization financials Financials Preview how commercial execution resolves for a Program and schedule. Organization›Financials›Simulator Tuition Catalog Policies Accounting Simulator Funding Commercial simulator Preview how commercial execution resolves for a Program and schedule. Simulator See exactly what a family will pay, using your current configuration. Program Select a program… Infant Toddler Preschool Pre-K Kindergarten School Age Stage4 OK3 w9k7sx Offering Select a pro"
+  },
+  {
+    "name": "07-financials-funding",
+    "path": "/organization/financials?chapter=funding",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=funding",
+    "ok": true,
+    "preview": "1 4 ⌘K KK Organization financials Financials Who pays remains owned by Processing — this chapter documents the boundary. Organization›Financials›Funding Tuition Catalog Policies Accounting Simulator Funding Funding Payment responsibility stays in Processing. Funding is managed in Processing Who pays — private pay, subsidies, employer sponsorship, and splits — is configured through the Processing Platform. Programs and Financials set price and catalog; Processing decides responsibility. BOS"
+  },
+  {
+    "name": "08-settings-financials-engine",
+    "path": "/settings/financials",
+    "finalUrl": "http://127.0.0.1:3012/settings/financials",
+    "ok": true,
+    "preview": "⌘K KK Organization financials Financials Configure how your organization gets paid — what you sell, how you price it, and how it posts. FINANCIALS Overview WHAT YOU SELL Services Rate Plans MONEY RULES Financial Policies Charge Templates MONEY MOVEMENT Accounting Posting Payments WHO PAYS Financial Responsibility Subsidy TOOLS Charge Preview RUNTIME Consumption Draft Obligations Read-only This is how your organization gets paid. Configure the Services you sell, the Rate Pla"
+  },
+  {
+    "name": "09-programs-reference",
+    "path": "/organization/programs",
+    "finalUrl": "http://127.0.0.1:3012/organization/programs",
+    "ok": true,
+    "preview": "1 4 ⌘K KK Organization programs Programs Manage the Programs your organization offers. Add Program Programs & Locations›Programs Programs 6 of 12 Programs · Active Search Programs Status Active Archived All Sort by Name — A to Z Name — Z to A Age range — Youngest first Age range — Oldest first Locations — Most first Locations — Fewest first Date updated — Newest first Date updated — Oldest first Date created — Newest first Date created — Oldest first Available from — Soonest first Available "
+  },
+  {
+    "name": "10-locations-reference",
+    "path": "/organization/locations",
+    "finalUrl": "http://127.0.0.1:3012/organization/locations",
+    "ok": true,
+    "preview": "1 4 ⌘K KK Organization locations Locations Organization · Location · Programs & Locations · delivery Programs & Locations›Locations 3 Active Locations 16 Programs Offered 17 Rooms Locations Add location 3 shown Search locations North Campus Bend, Oregon Active South Campus Bend, Oregon Active West Campus Bend, Oregon Active Locations The places where your organization operates. Add Location ACTIVE LOCATIONS 3 PROGRAMS OFFERED 16 ROOMS 17 TOTAL CAPACITY 159 Locations at a glance Sel"
+  }
+]

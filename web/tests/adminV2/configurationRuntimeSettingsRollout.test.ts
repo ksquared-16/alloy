@@ -25,18 +25,23 @@ describe("Configuration Runtime settings rollout", () => {
             const src = read(page);
             expect(src).not.toContain("ConfigurationPatternPlaceholder");
         }
-        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("FieldsConfigurationPage");
+        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("dataModelSectionHref");
         expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
         expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("UsersRolesConfigurationPage");
         expect(read("app/adminV2/settings/communications/page.tsx")).toContain("CommunicationsConfigurationPage");
-        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("EntitiesConfigurationPage");
+        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("dataModelSectionHref");
+        // Data Model's primary experience is the Entity workspace, not a legacy category embed.
+        expect(read("components/adminV2/settings/dataModel/DataModelWorkspaceSurface.tsx")).toContain(
+            "EntitiesWorkspaceSurface",
+        );
     });
 
     it("priority rollout surfaces use Platform Configuration shell primitives", () => {
         expect(read("components/adminV2/settings/fields/FieldsConfigurationPage.tsx")).toContain("ConfigurationShell");
         expect(read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx")).toContain(
-            "SettingsConfigurationSurfaceShell",
+            "AccessWorkspaceSurface",
         );
+        expect(read("components/adminV2/settings/access/AccessWorkspaceSurface.tsx")).toContain("ConfigurationShell");
         expect(read("components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx")).toContain(
             "SettingsConfigurationSurfaceShell",
         );
@@ -51,9 +56,12 @@ describe("Configuration Runtime settings rollout", () => {
         expect(fieldsPage).toContain("fields-configuration-entity-queue");
     });
 
-    it("Users & Roles and Communications embed existing workspace clients under configuration shell", () => {
+    it("Access (Users & Roles) and Communications embed their product workspaces under configuration shell", () => {
         expect(read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx")).toContain(
-            "UsersRolesSettingsClient",
+            "AccessWorkspaceSurface",
+        );
+        expect(read("components/adminV2/settings/access/AccessWorkspaceSurface.tsx")).toContain(
+            "AccessUsersConfigurationPage",
         );
         expect(read("components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx")).toContain(
             "CommunicationsSetupClient",
@@ -64,6 +72,11 @@ describe("Configuration Runtime settings rollout", () => {
         for (const component of [
             "components/adminV2/settings/fields/FieldsConfigurationPage.tsx",
             "components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx",
+            "components/adminV2/settings/access/AccessWorkspaceSurface.tsx",
+            "components/adminV2/settings/access/AccessUsersConfigurationPage.tsx",
+            "components/adminV2/settings/access/AccessRolesConfigurationPage.tsx",
+            "components/adminV2/settings/access/AccessScopesPage.tsx",
+            "components/adminV2/settings/access/AccessSecurityPage.tsx",
             "components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx",
             "components/adminV2/settings/entities/EntitiesConfigurationPage.tsx",
         ]) {

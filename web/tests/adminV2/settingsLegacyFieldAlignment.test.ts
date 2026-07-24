@@ -16,34 +16,31 @@ function readConfig(): string {
 }
 
 describe("settings legacy field alignment", () => {
-    it("fields page uses Platform Configuration shell component", () => {
+    it("fields page redirects into the Data Model Fields category", () => {
         const page = readPage("app/adminV2/settings/fields/page.tsx");
-        expect(page).toContain("FieldsConfigurationPage");
+        expect(page).toContain("dataModelSectionHref");
+        expect(page).toContain('"fields"');
         expect(page).not.toContain("ConfigurationPatternPlaceholder");
         expect(page).not.toContain("SettingsFieldsHubClient");
     });
 
-    it("entity label aliases redirect to /settings/entities", () => {
+    it("entity label aliases redirect into Data Model Entities", () => {
         for (const path of [
             "app/adminV2/settings/entity-labels/page.tsx",
             "app/adminV2/settings/label-entities/page.tsx",
             "app/legacy-admin/system/entity-labels/page.tsx",
         ]) {
             const src = readPage(path);
-            expect(src).toContain('redirect("/settings/entities")');
+            expect(src).toMatch(/redirect\("\/(settings\/entities|organization\/data-model)/);
         }
+        expect(readConfig()).toContain("/organization/data-model?section=entities");
     });
 
-    it("legacy per-entity field routes redirect into /settings/fields", () => {
-        expect(readPage("app/legacy-admin/system/person-fields/page.tsx")).toContain(
-            'redirect("/settings/fields?entity=person")',
-        );
-        expect(readPage("app/legacy-admin/system/customer-fields/page.tsx")).toContain(
-            'redirect("/settings/fields?entity=customer")',
-        );
-        expect(readPage("app/legacy-admin/system/opportunity-fields/page.tsx")).toContain(
-            'redirect("/settings/fields?entity=opportunity")',
-        );
+    it("legacy per-entity field routes redirect into Data Model Fields", () => {
+        const config = readConfig();
+        expect(config).toContain("/organization/data-model?section=fields&entity=person");
+        expect(config).toContain("/organization/data-model?section=fields&entity=customer");
+        expect(config).toContain("/organization/data-model?section=fields&entity=opportunity");
     });
 
     it("legacy statuses and layouts redirect to modern configuration pages", () => {
@@ -53,6 +50,7 @@ describe("settings legacy field alignment", () => {
         expect(readPage("app/legacy-admin/system/layouts/page.tsx")).toContain(
             'redirect("/settings/surfaces")',
         );
+        expect(readConfig()).toContain("/organization/data-model?section=statuses");
     });
 
     it("child gender exists in customer_member field registry", () => {
@@ -68,7 +66,7 @@ describe("settings legacy closeout", () => {
         for (const [path, component] of [
             ["app/adminV2/settings/users-roles/page.tsx", "UsersRolesConfigurationPage"],
             ["app/adminV2/settings/communications/page.tsx", "CommunicationsConfigurationPage"],
-            ["app/adminV2/settings/entities/page.tsx", "EntitiesConfigurationPage"],
+            ["app/adminV2/settings/entities/page.tsx", "dataModelSectionHref"],
             ["app/adminV2/settings/actions/page.tsx", "SettingsConfigurationSurfaceShell"],
         ] as const) {
             const src = readPage(path);
@@ -108,11 +106,11 @@ describe("settings legacy closeout", () => {
     it("next.config redirects legacy admin and /admin/system aliases to settings", () => {
         const config = readConfig();
         expect(config).toContain('source: "/legacy-admin/system/access-control"');
-        expect(config).toContain('destination: "/settings/users-roles"');
+        expect(config).toContain('destination: "/organization/access"');
         expect(config).toContain('source: "/admin/system/person-fields"');
-        expect(config).toContain('destination: "/settings/fields?entity=person"');
+        expect(config).toContain('destination: "/organization/data-model?section=fields&entity=person"');
         expect(config).toContain('source: "/legacy-admin/system/pipelines"');
-        expect(config).toContain('destination: "/settings/processes"');
+        expect(config).toContain('destination: "/organization/processes"');
     });
 
     it("legacy admin layout points data model links at /settings", () => {

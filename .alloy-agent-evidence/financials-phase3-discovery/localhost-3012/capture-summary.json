@@ -1,0 +1,90 @@
+[
+  {
+    "name": "01-financials-landing",
+    "path": "/organization/financials",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials",
+    "title": "Alloy | A Platform For Operational Workflows",
+    "ok": true,
+    "consoleErrors": [],
+    "preview": "⌘K Organization financials Financials Configure tuition, billable items, funding, financial rules, and accounting relationships. Organization · Location · All financial domains Organization›Financials FINANCIAL DOMAINS 6 Tuition, catalog, policies, accounting, simulator, and funding boundary HOW TO START Choose a domain Open Tuition for rates, Catalog for fees, or Policies for discounts — "
+  },
+  {
+    "name": "02-financials-tuition",
+    "path": "/organization/financials?chapter=tuition",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=tuition",
+    "title": "Alloy | A Platform For Operational Workflows",
+    "ok": true,
+    "consoleErrors": [
+      "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:\n\n- A server/client branch `if (typeof window !== 'undefined')`.\n- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.\n- Date formatting in a user's locale which doesn't match the server.\n- External changing data without sending a snapshot of it along with the HTML.\n- Invalid HTML tag nesting.\n\nIt can also happen if the client has a browser extension installed which messes with the HTML before React loaded.\n\n%s%s https://react.dev/link/hydration-mismatch \n\n  ...\n    <WorkspaceCommandRailRegistryProvider>\n      <DrawerCommandRailActionsProvider>\n        <BosDrawerGeometryDiagnostics>\n        <AskBosHandoffListener>\n        <WorkspaceSiteFilterProvider>\n          <div className=\"flex h-scr...\" style={{...}} data-adminv2-app-shell=\"workspace-v2\" ...>\n            <Sidebar>\n            <div className=\"flex flex-...\">\n              <div className=\"relative z...\" data-adminv2-shell-header-mount=\"persistent\">\n                <TopNavBar>\n                  <header className=\"adminv2-sh...\" style={{...}}>\n                    <div className=\"flex min-w...\">\n                      <GlobalSearchBox>\n                        <div ref={{current:null}} className=\"relative m...\" data-adminv2-global-search-box=\"true\">\n                          <div className=\"flex items...\" style={{...}}>\n                            <Search>\n                            <input\n                              ref={{current:null}}\n                              type=\"search\"\n                              value=\"\"\n                              onChange={function onChange}\n                              onFocus={function onFocus}\n                              onKeyDown={function onInputKeyDown}\n                              placeholder=\"Search records…\"\n                              className=\"min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:opacity-75\"\n                              style={{\n+                               color: \"#FFFFFF\"\n-                               color: \"rgb(255, 255, 255)\"\n                              }}\n                              aria-label=\"Search records\"\n                              aria-expanded={false}\n                              aria-controls=\"adminv2-global-search-results\"\n                              aria-autocomplete=\"list\"\n                              autoComplete=\"off\"\n                              spellCheck={false}\n                              data-global-search-input=\"true\"\n                            >\n                            ...\n                    ...\n              ...\n",
+      "TypeError: Failed to fetch\n    at http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:598:23\n    at _handleRequest (http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:952:24)\n    at _request (http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:939:24)\n    at http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:4181:220\n    at SupabaseAuthClient._useSession (http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:4050:26)\n    at async SupabaseAuthClient._getUser (http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:4166:20)\n    at async http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:4150:20"
+    ],
+    "preview": "⌘K KK Thinking... BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Explain this configuration Summarize the active state and working changes Review configuration attention Identify setup, publication, or assignment issues Review unpublished changes Explain what remains private to Organization ↵ to send · ⇧↵ new line BOS uses AI. Review "
+  },
+  {
+    "name": "03-financials-catalog",
+    "path": "/organization/financials?chapter=catalog",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=catalog",
+    "title": "Alloy | A Platform For Operational Workflows",
+    "ok": true,
+    "consoleErrors": [],
+    "preview": "⌘K Organization financials Financials Fees, add-ons, deposits, and commercial products published for Programs. Organization›Financials›Catalog Tuition Catalog Policies Accounting Simulator Funding Loading Catalog…"
+  },
+  {
+    "name": "04-financials-policies",
+    "path": "/organization/financials?chapter=policies",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=policies",
+    "title": "Alloy | A Platform For Operational Workflows",
+    "ok": true,
+    "consoleErrors": [
+      "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:\n\n- A server/client branch `if (typeof window !== 'undefined')`.\n- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.\n- Date formatting in a user's locale which doesn't match the server.\n- External changing data without sending a snapshot of it along with the HTML.\n- Invalid HTML tag nesting.\n\nIt can also happen if the client has a browser extension installed which messes with the HTML before React loaded.\n\n%s%s https://react.dev/link/hydration-mismatch \n\n  ...\n    <WorkspaceCommandRailRegistryProvider>\n      <DrawerCommandRailActionsProvider>\n        <BosDrawerGeometryDiagnostics>\n        <AskBosHandoffListener>\n        <WorkspaceSiteFilterProvider>\n          <div className=\"flex h-scr...\" style={{...}} data-adminv2-app-shell=\"workspace-v2\" ...>\n            <Sidebar>\n            <div className=\"flex flex-...\">\n              <div className=\"relative z...\" data-adminv2-shell-header-mount=\"persistent\">\n                <TopNavBar>\n                  <header className=\"adminv2-sh...\" style={{...}}>\n                    <div className=\"flex min-w...\">\n                      <GlobalSearchBox>\n                        <div ref={{current:null}} className=\"relative m...\" data-adminv2-global-search-box=\"true\">\n                          <div className=\"flex items...\" style={{...}}>\n                            <Search>\n                            <input\n                              ref={{current:null}}\n                              type=\"search\"\n                              value=\"\"\n                              onChange={function onChange}\n                              onFocus={function onFocus}\n                              onKeyDown={function onInputKeyDown}\n                              placeholder=\"Search records…\"\n                              className=\"min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:opacity-75\"\n                              style={{\n+                               color: \"#FFFFFF\"\n-                               color: \"rgb(255, 255, 255)\"\n                              }}\n                              aria-label=\"Search records\"\n                              aria-expanded={false}\n                              aria-controls=\"adminv2-global-search-results\"\n                              aria-autocomplete=\"list\"\n                              autoComplete=\"off\"\n                              spellCheck={false}\n                              data-global-search-input=\"true\"\n                            >\n                            ...\n                    ...\n              ...\n",
+      "TypeError: Failed to fetch\n    at http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:598:23\n    at _handleRequest (http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:952:24)\n    at _request (http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:939:24)\n    at http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:4181:220\n    at SupabaseAuthClient._useSession (http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:4050:26)\n    at async SupabaseAuthClient._getUser (http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:4166:20)\n    at async http://127.0.0.1:3012/_next/static/chunks/node_modules_%40supabase_auth-js_dist_module_e6c70351._.js:4150:20"
+    ],
+    "preview": "1 ⌘K KK Thinking.. BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Explain this configuration Summarize the active state and working changes Review configuration attention Identify setup, publication, or assignment issues Review unpublished changes Explain what remains private to Organization ↵ to send · ⇧↵ new line BOS uses AI. Review"
+  },
+  {
+    "name": "05-financials-accounting",
+    "path": "/organization/financials?chapter=accounting",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=accounting",
+    "title": "Alloy | A Platform For Operational Workflows",
+    "ok": true,
+    "consoleErrors": [],
+    "preview": "1 ⌘K KK Thinking. BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Explain this configuration Summarize the active state and working changes Review configuration attention Identify setup, publication, or assignment issues Review unpublished changes Explain what remains private to Organization ↵ to send · ⇧↵ new line BOS uses AI. Review "
+  },
+  {
+    "name": "06-financials-simulator",
+    "path": "/organization/financials?chapter=simulator",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=simulator",
+    "title": "Alloy | A Platform For Operational Workflows",
+    "ok": true,
+    "consoleErrors": [],
+    "preview": "1 ⌘K Thinking. BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Explain this configuration Summarize the active state and working changes Review configuration attention Identify setup, publication, or assignment issues Review unpublished changes Explain what remains private to Organization ↵ to send · ⇧↵ new line BOS uses AI. Review for"
+  },
+  {
+    "name": "07-financials-funding",
+    "path": "/organization/financials?chapter=funding",
+    "finalUrl": "http://127.0.0.1:3012/organization/financials?chapter=funding",
+    "title": "Alloy | A Platform For Operational Workflows",
+    "ok": true,
+    "consoleErrors": [],
+    "preview": "1 ⌘K KK Thinking.. BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Explain this configuration Summarize the active state and working changes Review configuration attention Identify setup, publication, or assignment issues Review unpublished changes Explain what remains private to Organization ↵ to send · ⇧↵ new line BOS uses AI. Review"
+  },
+  {
+    "name": "08-settings-financials-engine",
+    "path": "/settings/financials",
+    "finalUrl": "http://127.0.0.1:3012/settings/financials",
+    "title": "Alloy | A Platform For Operational Workflows",
+    "ok": true,
+    "consoleErrors": [],
+    "preview": "⌘K Organization financials Financials Configure how your organization gets paid — what you sell, how you price it, and how it posts. FINANCIALS Overview WHAT YOU SELL Services Rate Plans MONEY RULES Financial Policies Charge Templates MONEY MOVEMENT Accounting Posting Payments WHO PAYS Financial Responsibility Subsidy TOOLS Charge Preview RUNTIME Consumption Draft Obligations "
+  },
+  {
+    "name": "09-programs-reference",
+    "path": "/organization/programs",
+    "error": "TimeoutError: page.goto: Timeout 60000ms exceeded.\nCall log:\n  - navigating to \"http://127.0.0.1:3012/organization/programs\", waiting until \"domcontentloaded\"\n"
+  },
+  {
+    "name": "10-locations-reference",
+    "path": "/organization/locations",
+    "error": "TimeoutError: page.goto: Timeout 60000ms exceeded.\nCall log:\n  - navigating to \"http://127.0.0.1:3012/organization/locations\", waiting until \"domcontentloaded\"\n"
+  }
+]

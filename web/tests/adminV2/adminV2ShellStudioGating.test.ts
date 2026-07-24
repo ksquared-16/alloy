@@ -37,7 +37,10 @@ describe("AdminV2Shell studio gating — operational path never reads search par
         for (const path of OPERATIONAL_PATHS) {
             expect(isExperienceBuilderStudioActive(path, studioLikeParams)).toBe(false);
         }
-        // and active only when the studio route + the full param set line up
-        expect(isExperienceBuilderStudioActive("/settings/surfaces", studioLikeParams)).toBe(true);
+        // Surfaces embeds Edit in-shell (Category → Collection → Selected Surface workspace) and
+        // never activates the full-bleed studio chrome, even with the legacy editor query params.
+        expect(isExperienceBuilderStudioActive("/settings/surfaces", studioLikeParams)).toBe(false);
+        // The legacy `/settings/layouts` entity_layouts gallery still opens the full-bleed studio.
+        expect(isExperienceBuilderStudioActive("/settings/layouts", studioLikeParams)).toBe(true);
     });
 });

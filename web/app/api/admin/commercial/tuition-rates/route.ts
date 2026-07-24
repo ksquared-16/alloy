@@ -4,7 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { TuitionRateRow } from "@/lib/commercial/tuitionRates";
 
 const SELECT_COLS =
-    "id, org_id, location_id, variant_id, cadence_key, payer_type, rate_cents, is_active, not_offered, effective_start, effective_end, metadata, created_at, updated_at";
+    "id, org_id, location_id, variant_id, cadence_key, payer_type, rate_cents, is_active, not_offered, effective_start, effective_end, revenue_category_id, metadata, created_at, updated_at";
 
 function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
     return {
@@ -19,6 +19,7 @@ function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
         not_offered: r.not_offered === true,
         effective_start: (r.effective_start as string | null | undefined) ?? null,
         effective_end: (r.effective_end as string | null | undefined) ?? null,
+        revenue_category_id: (r.revenue_category_id as string | null | undefined) ?? null,
         metadata:
             r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
                 ? (r.metadata as Record<string, unknown>)
@@ -114,6 +115,12 @@ export async function POST(request: NextRequest) {
     const is_active = body.is_active !== false;
     const effective_start = body.effective_start != null ? String(body.effective_start).trim() || null : null;
     const effective_end = body.effective_end != null ? String(body.effective_end).trim() || null : null;
+    const revenue_category_id =
+        body.revenue_category_id != null ? String(body.revenue_category_id).trim() || null : null;
+    const metadata =
+        body.metadata != null && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+            ? (body.metadata as Record<string, unknown>)
+            : null;
 
     if (!variant_id) return NextResponse.json({ error: "variant_id is required" }, { status: 400 });
     if (!cadence_key) return NextResponse.json({ error: "cadence_key is required" }, { status: 400 });
@@ -158,7 +165,7 @@ export async function POST(request: NextRequest) {
 
     const { data: existingRow } = await filteredQ.maybeSingle();
 
-    const payload = {
+    const payload: Record<string, unknown> = {
         rate_cents: Math.round(rate_cents ?? 0),
         not_offered,
         is_active,
@@ -166,6 +173,10 @@ export async function POST(request: NextRequest) {
         effective_end: effective_end ?? null,
         updated_at: new Date().toISOString(),
     };
+    if (revenue_category_id !== null || "revenue_category_id" in body) {
+        payload.revenue_category_id = revenue_category_id;
+    }
+    if (metadata) payload.metadata = metadata;
 
     let data: Record<string, unknown> | null = null;
     let dbError: { message: string } | null = null;
