@@ -227,6 +227,16 @@ export async function POST(
                 )
                 .single();
             if (error) throw new Error(error.message);
+            // Demote sibling published rows for the same layout_key (legacy work-view-scoped
+            // layouts). Otherwise D1's workView-aware resolver can keep serving a stale sibling.
+            for (const row of sameKey) {
+                if (row.id !== latestPublished.id && row.status === "published") {
+                    await supabase
+                        .from("entity_layouts")
+                        .update({ status: "draft", updated_at: new Date().toISOString() })
+                        .eq("id", row.id);
+                }
+            }
             // B5 — a queue-row layout publish changes the `qrl:` config the provisioning answer caches
             // (its dominant ~700ms read). Bust this tenant's `qrl:` entries so the next operator
             // navigation reflects the publish immediately, not after the TTL.

@@ -160,6 +160,12 @@ export function enrichProvidersWithChildEnrollmentProjections(
         return {
             ...provider,
             label: projection.displayLabelOverride ?? provider.label,
+            // Projection kind owns the operator category — never collapse to a hardcoded
+            // "enrollment" / "general" bucket that hides Inquiry Participation in composers.
+            categoryKey:
+                projection.projectionKind === "inquiry_participation"
+                    ? "inquiry_participation"
+                    : provider.categoryKey,
             projection,
             settingsEntity: provider.settingsEntity ?? projection.ownerEntity,
         };

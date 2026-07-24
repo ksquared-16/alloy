@@ -105,7 +105,7 @@ export function useQueueRowPublish(surfaceId: string): UseQueueRowPublishResult 
                 }
                 // Same-tab + BroadcastChannel refresh for live Work Unit CondensedQueueRow.
                 // QueueRowSurfaceEditor also dispatches; this covers the standalone builder path.
-                dispatchQueueRowSurfacePublished(surfaceId);
+                dispatchQueueRowSurfacePublished(surfaceId, null);
                 setPublishedAt(new Date());
             } catch (err: unknown) {
                 setError((err as Error).message);

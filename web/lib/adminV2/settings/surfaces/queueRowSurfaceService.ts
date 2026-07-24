@@ -51,14 +51,21 @@ export async function publishQueueRowSurfaceConfig(args: {
 export const QUEUE_ROW_SURFACE_PUBLISHED_EVENT = "alloy:queue-row-surface-published";
 export const QUEUE_ROW_SURFACE_PUBLISHED_CHANNEL = "alloy-queue-row-surface";
 
-export function dispatchQueueRowSurfacePublished(surfaceId: string): void {
+export function dispatchQueueRowSurfacePublished(
+    surfaceId: string,
+    processKey?: string | null,
+): void {
     if (typeof window === "undefined") return;
+    const detail = {
+        surfaceId,
+        processKey: processKey?.trim() || null,
+    };
     window.dispatchEvent(
-        new CustomEvent(QUEUE_ROW_SURFACE_PUBLISHED_EVENT, { detail: { surfaceId } }),
+        new CustomEvent(QUEUE_ROW_SURFACE_PUBLISHED_EVENT, { detail }),
     );
     try {
         const channel = new BroadcastChannel(QUEUE_ROW_SURFACE_PUBLISHED_CHANNEL);
-        channel.postMessage({ type: "published", surfaceId });
+        channel.postMessage({ type: "published", ...detail });
         channel.close();
     } catch {
         /* BroadcastChannel unavailable */

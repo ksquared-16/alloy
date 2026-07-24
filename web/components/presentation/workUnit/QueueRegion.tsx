@@ -217,6 +217,18 @@ export function QueueRegion({
             // P2-V config-consumption provenance — proves in the browser WHICH surface drove the rows.
             data-queue-row-source={queue.provenance?.source ?? undefined}
             data-queue-surface-id={queue.provenance?.surfaceId ?? undefined}
+            data-queue-surface-source={queue.provenance?.resolvedSource ?? queue.provenance?.source ?? undefined}
+            data-queue-surface-variant={queue.provenance?.variant ?? undefined}
+            data-queue-column-keys={
+                [
+                    ...(queue.rowConfig?.subject.fieldKeys ?? []),
+                    ...(queue.rowConfig?.status.fieldKeys ?? []),
+                    ...(queue.rowConfig?.contact.fieldKeys ?? []),
+                    ...(queue.rowConfig?.attention.fieldKeys ?? []),
+                    ...(queue.rowConfig?.work.fieldKeys ?? []),
+                    ...(queue.rowConfig?.groupCount.fieldKeys ?? []),
+                ].join("|") || undefined
+            }
             data-queue-row-resolved-source={queue.provenance?.resolvedSource ?? undefined}
             data-queue-row-variant={queue.provenance?.variant ?? undefined}
             data-queue-row-ineffective-fields={

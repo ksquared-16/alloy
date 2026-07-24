@@ -30,9 +30,13 @@ export const FIELDS_ENTITY_DESCRIPTIONS: Readonly<Record<string, string>> = {
 
 /** Operator-facing section labels for grouped Fields cards. */
 export const FIELDS_SECTION_OPERATOR_LABELS: Readonly<Record<string, string>> = {
-    child_profile: "Profile",
-    inquiry_participation: "Enrollment",
-    medical: "Health / Notes",
+    child_profile: "Child profile",
+    enrollment: "Enrollment",
+    inquiry_participation: "Inquiry Participation",
+    medical: "Medical",
+    requirements: "Requirements",
+    profile: "Profile",
+    runtime_signals: "Runtime Signals",
     identity: "Identity",
     custom: "Custom",
     system: "System",

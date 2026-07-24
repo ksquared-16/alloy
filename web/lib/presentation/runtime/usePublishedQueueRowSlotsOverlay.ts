@@ -9,6 +9,10 @@
  * Critical: replacing only Default slots and merging into STALE per-row variant configs
  * leaves old contact email (and other variant-owned fieldKeys) in place after Default edits.
  * Rematch from the full published layout document.
+ *
+ * Publish events match by surfaceId OR processKey so a Builder publish on
+ * `queue-row-{dept}-{process}` still refreshes a live WU that retained legacy
+ * `pipeline-queue-row` provenance (same process layout key).
  */
 
 "use client";
@@ -34,7 +38,22 @@ export type PublishedQueueRowLayoutOverlay = {
     surfaceId: string;
     processKey: string | null;
     fetchedAt: string;
+    loadError: string | null;
 };
+
+function publishEventMatches(args: {
+    eventSurfaceId?: string | null;
+    eventProcessKey?: string | null;
+    surfaceId: string;
+    processKey: string | null;
+}): boolean {
+    const eventSurfaceId = args.eventSurfaceId?.trim() || null;
+    const eventProcessKey = args.eventProcessKey?.trim() || null;
+    if (!eventSurfaceId && !eventProcessKey) return true;
+    if (eventSurfaceId && eventSurfaceId === args.surfaceId) return true;
+    if (eventProcessKey && args.processKey && eventProcessKey === args.processKey) return true;
+    return false;
+}
 
 export function usePublishedQueueRowSlotsOverlay(args: {
     surfaceId: string | null | undefined;
@@ -59,9 +78,19 @@ export function usePublishedQueueRowSlotsOverlay(args: {
                 surfaceId,
                 processKey,
                 fetchedAt: new Date().toISOString(),
+                loadError: null,
             });
-        } catch {
-            /* keep prior override / committed snapshot slots */
+        } catch (e) {
+            /* Keep prior successful override; expose loadError for DOM diagnostics. */
+            setOverride((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          loadError: e instanceof Error ? e.message : "overlay_load_failed",
+                          fetchedAt: new Date().toISOString(),
+                      }
+                    : null,
+            );
         }
     }, [surfaceId, processKey, enabled]);
 
@@ -73,8 +102,17 @@ export function usePublishedQueueRowSlotsOverlay(args: {
         void refresh();
 
         const onLocal = (event: Event) => {
-            const detail = (event as CustomEvent<{ surfaceId?: string }>).detail;
-            if (detail?.surfaceId && detail.surfaceId !== surfaceId) return;
+            const detail = (event as CustomEvent<{ surfaceId?: string; processKey?: string }>).detail;
+            if (
+                !publishEventMatches({
+                    eventSurfaceId: detail?.surfaceId,
+                    eventProcessKey: detail?.processKey,
+                    surfaceId,
+                    processKey,
+                })
+            ) {
+                return;
+            }
             void refresh();
         };
 
@@ -84,8 +122,17 @@ export function usePublishedQueueRowSlotsOverlay(args: {
         try {
             channel = new BroadcastChannel(QUEUE_ROW_SURFACE_PUBLISHED_CHANNEL);
             channel.onmessage = (msg) => {
-                const data = msg.data as { surfaceId?: string } | null;
-                if (data?.surfaceId && data.surfaceId !== surfaceId) return;
+                const data = msg.data as { surfaceId?: string; processKey?: string } | null;
+                if (
+                    !publishEventMatches({
+                        eventSurfaceId: data?.surfaceId,
+                        eventProcessKey: data?.processKey,
+                        surfaceId,
+                        processKey,
+                    })
+                ) {
+                    return;
+                }
                 void refresh();
             };
         } catch {
@@ -96,7 +143,7 @@ export function usePublishedQueueRowSlotsOverlay(args: {
             window.removeEventListener(QUEUE_ROW_SURFACE_PUBLISHED_EVENT, onLocal);
             channel?.close();
         };
-    }, [enabled, surfaceId, refresh]);
+    }, [enabled, surfaceId, processKey, refresh]);
 
     return override;
 }

@@ -69,6 +69,7 @@ export function ProvisionedWorkUnitSurface() {
                 // Do not merge into stale D1 variant slots — those freeze pre-publish fieldKeys
                 // (e.g. contact email) and ignore Default edits (children.names).
                 rows: model.queue.rows.map((row) => {
+                    if (!row.context) return row;
                     const input = queueRowVariantMatchInputFromContext(row.context, {
                         workViewId,
                         workViewKey: null,
@@ -121,7 +122,7 @@ export function ProvisionedWorkUnitSurface() {
             },
             firstRow: first
                 ? {
-                      id: first.id,
+                      id: first.entityId,
                       rowConfigFieldKeys: {
                           subject: first.rowConfig?.subject.fieldKeys ?? [],
                           status: first.rowConfig?.status.fieldKeys ?? [],
@@ -178,10 +179,27 @@ export function ProvisionedWorkUnitSurface() {
             }
             data-context-frame={snapshot.terminal !== "error" ? snapshot.contextFrame.workViewId : undefined}
             data-queue-row-slots-source={publishedOverlay ? "published_overlay_rematch" : "committed_snapshot"}
+            data-queue-surface-id={effectiveModel.queue.provenance?.surfaceId ?? undefined}
+            data-queue-surface-version={publishedOverlay?.fetchedAt ?? undefined}
+            data-queue-surface-variant={effectiveModel.queue.provenance?.variant ?? undefined}
+            data-queue-surface-source={
+                publishedOverlay?.source ?? effectiveModel.queue.provenance?.resolvedSource ?? undefined
+            }
+            data-queue-column-keys={
+                [
+                    ...(firstRowKeys?.subject.fieldKeys ?? []),
+                    ...(firstRowKeys?.status.fieldKeys ?? []),
+                    ...(firstRowKeys?.contact.fieldKeys ?? []),
+                    ...(firstRowKeys?.attention.fieldKeys ?? []),
+                    ...(firstRowKeys?.work.fieldKeys ?? []),
+                    ...(firstRowKeys?.groupCount.fieldKeys ?? []),
+                ].join("|") || undefined
+            }
             data-queue-row-surface-id={effectiveModel.queue.provenance?.surfaceId ?? undefined}
             data-queue-row-resolved-source={
                 publishedOverlay?.source ?? effectiveModel.queue.provenance?.resolvedSource ?? undefined
             }
+            data-queue-row-overlay-error={publishedOverlay?.loadError ?? undefined}
             data-queue-row-has-children-names={
                 firstRowKeys?.groupCount.fieldKeys?.includes("children.names") ? "true" : "false"
             }
