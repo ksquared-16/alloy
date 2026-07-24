@@ -29,12 +29,23 @@ export const QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE =
 
 /** Operator-facing message when a field cannot render on the compact Work View row. */
 export const QUEUE_ROW_PUBLISH_INEFFECTIVE_FIELD_MESSAGE =
-    "This field is not supported on Work View queue rows. Choose a field that appears in the compact row (for example Children, contact, or status), or remove it before publishing.";
+    "This field is not supported on Work View queue rows. Remove it, or choose a compact-row field such as a Children summary, contact, or status.";
+
+export type IneffectiveQueueRowFieldDiagnostic = {
+    fieldKey: string;
+    /** Operator label when present on the layout field; otherwise the field key. */
+    fieldLabel: string;
+    /** `default` or the variant id / match label. */
+    variantKey: string;
+    path: string;
+    message: string;
+};
 
 function collectColumnFieldKeys(
     columns: QueueRecordLayoutConfigV3["columns"],
-): { path: string; fieldKey: string }[] {
-    const out: { path: string; fieldKey: string }[] = [];
+    pathPrefix = "columns",
+): { path: string; fieldKey: string; fieldLabel: string }[] {
+    const out: { path: string; fieldKey: string; fieldLabel: string }[] = [];
     columns.forEach((column, ci) => {
         column.blocks.forEach((block, bi) => {
             if (block.type !== "field_group" && block.type !== "repeated_record_block") return;
@@ -42,13 +53,25 @@ function collectColumnFieldKeys(
                 const fieldKey = field.fieldKey.trim();
                 if (!fieldKey) return;
                 out.push({
-                    path: `columns[${ci}].blocks[${bi}].fields[${fi}].fieldKey`,
+                    path: `${pathPrefix}[${ci}].blocks[${bi}].fields[${fi}].fieldKey`,
                     fieldKey,
+                    fieldLabel: (field.label ?? "").trim() || fieldKey,
                 });
             });
         });
     });
     return out;
+}
+
+function variantDiagnosticKey(
+    variant: NonNullable<QueueRecordLayoutConfigV3["variants"]>[number],
+    index: number,
+): string {
+    const id = typeof variant.id === "string" ? variant.id.trim() : "";
+    if (id) return id;
+    const label = typeof variant.label === "string" ? variant.label.trim() : "";
+    if (label) return label;
+    return `variant_${index}`;
 }
 
 function isValidQueueRecordFieldInBlock(
@@ -164,29 +187,18 @@ export function validateQueueRecordLayoutConfig(
     }
 
     if (requireCompact) {
-        const allColumns = [
-            ...collectColumnFieldKeys(config.columns),
-            ...(config.variants ?? []).flatMap((variant, vi) =>
-                collectColumnFieldKeys(variant.columns ?? []).map((f) => ({
-                    ...f,
-                    path: `variants[${vi}].${f.path}`,
-                })),
-            ),
-        ];
-        for (const entry of allColumns) {
-            if (!isCompactRowEffectiveFieldKey(entry.fieldKey)) {
-                errors.push({
-                    path: entry.path,
-                    message: `${QUEUE_ROW_PUBLISH_INEFFECTIVE_FIELD_MESSAGE} (field: ${entry.fieldKey})`,
-                });
-            }
+        for (const issue of diagnoseIneffectiveQueueRowFields(config)) {
+            errors.push({
+                path: issue.path,
+                message: issue.message,
+            });
         }
     } else {
         for (const entry of collectColumnFieldKeys(config.columns)) {
             if (!isCompactRowEffectiveFieldKey(entry.fieldKey)) {
                 warnings.push({
                     path: entry.path,
-                    message: `Field "${entry.fieldKey}" is not rendered on Work View queue rows (compact anatomy).`,
+                    message: `Field "${entry.fieldLabel}" (${entry.fieldKey}) is not rendered on Work View queue rows (compact anatomy).`,
                 });
             }
         }
@@ -196,21 +208,49 @@ export function validateQueueRecordLayoutConfig(
 }
 
 /**
+ * Structured diagnostics for published/draft fields that are not compact-row effective.
+ * Scans Default columns and only variants that actually contain fields (empty inherited
+ * variants do not produce false failures).
+ */
+export function diagnoseIneffectiveQueueRowFields(
+    config: QueueRecordLayoutConfigV3 | null | undefined,
+): IneffectiveQueueRowFieldDiagnostic[] {
+    if (!config?.columns) return [];
+    const out: IneffectiveQueueRowFieldDiagnostic[] = [];
+
+    const pushEntries = (
+        entries: ReturnType<typeof collectColumnFieldKeys>,
+        variantKey: string,
+    ) => {
+        for (const entry of entries) {
+            if (isCompactRowEffectiveFieldKey(entry.fieldKey)) continue;
+            out.push({
+                fieldKey: entry.fieldKey,
+                fieldLabel: entry.fieldLabel,
+                variantKey,
+                path: entry.path,
+                message: `${QUEUE_ROW_PUBLISH_INEFFECTIVE_FIELD_MESSAGE} (field: ${entry.fieldLabel} · key: ${entry.fieldKey} · variant: ${variantKey})`,
+            });
+        }
+    };
+
+    pushEntries(collectColumnFieldKeys(config.columns, "columns"), "default");
+
+    (config.variants ?? []).forEach((variant, vi) => {
+        const entries = collectColumnFieldKeys(variant.columns ?? [], `variants[${vi}].columns`);
+        if (entries.length === 0) return;
+        pushEntries(entries, variantDiagnosticKey(variant, vi));
+    });
+
+    return out;
+}
+
+/**
  * List published field keys that are not compact-row effective — runtime diagnostic for older
  * invalid saved configurations (silent omit → explicit signal).
  */
 export function diagnoseIneffectiveQueueRowFieldKeys(
     config: QueueRecordLayoutConfigV3 | null | undefined,
 ): string[] {
-    if (!config?.columns) return [];
-    const keys = new Set<string>();
-    for (const entry of collectColumnFieldKeys(config.columns)) {
-        if (!isCompactRowEffectiveFieldKey(entry.fieldKey)) keys.add(entry.fieldKey);
-    }
-    for (const variant of config.variants ?? []) {
-        for (const entry of collectColumnFieldKeys(variant.columns ?? [])) {
-            if (!isCompactRowEffectiveFieldKey(entry.fieldKey)) keys.add(entry.fieldKey);
-        }
-    }
-    return [...keys].sort();
+    return [...new Set(diagnoseIneffectiveQueueRowFields(config).map((d) => d.fieldKey))].sort();
 }

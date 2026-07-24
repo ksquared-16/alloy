@@ -133,6 +133,16 @@ const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
 const SLOT_KEYS = Object.keys(SLOT_FIELD_KEYS) as (keyof CompactRowSlots)[];
 
 /**
+ * Authored aliases that resolve to the same compact slot as a canonical key.
+ * Family/case-grain Program labels historically used program_category(_id); compact
+ * vocabulary owns `inquiry_child.program` for the aggregate projection.
+ */
+const COMPACT_ROW_FIELD_KEY_ALIASES: Readonly<Record<string, string>> = {
+    "inquiry_child.program_category": "inquiry_child.program",
+    "inquiry_child.program_category_id": "inquiry_child.program",
+};
+
+/**
  * THE vocabulary of published field keys the compact CondensedQueueRow can actually render
  * (flattened from SLOT_FIELD_KEYS). A published field whose key is not in this set is NOT
  * runtime-effective in the compact row — the Queue Row Builder marks it so operators aren't misled
@@ -142,13 +152,20 @@ export const COMPACT_ROW_EFFECTIVE_FIELD_KEYS: ReadonlySet<string> = new Set(
     Object.values(SLOT_FIELD_KEYS).flat(),
 );
 
+/** Canonical compact key for an authored field (aliases → vocabulary member). */
+export function canonicalizeCompactRowFieldKey(fieldKey: string): string {
+    const key = (fieldKey ?? "").trim();
+    if (!key) return "";
+    return COMPACT_ROW_FIELD_KEY_ALIASES[key] ?? key;
+}
+
 /**
  * The compact slot a published field key feeds, or null when the key does NOT render in the compact
  * CondensedQueueRow. Deterministic + total (never throws). Used by the runtime mapper AND the
  * builder's effective/disabled annotation so both share one vocabulary — no silent fallback.
  */
 export function compactSlotForFieldKey(fieldKey: string): keyof CompactRowSlots | null {
-    const key = (fieldKey ?? "").trim();
+    const key = canonicalizeCompactRowFieldKey(fieldKey);
     if (!key) return null;
     for (const slot of SLOT_KEYS) {
         if (SLOT_FIELD_KEYS[slot].includes(key)) return slot;
@@ -172,6 +189,8 @@ function fieldsByKey(config: QueueRecordLayoutConfigV3): Map<string, QueueRecord
                 // First occurrence wins — a slot's label override is stable regardless of
                 // where the field appears in the (server-owned) column ordering.
                 if (key && !map.has(key)) map.set(key, field);
+                const canonical = canonicalizeCompactRowFieldKey(key);
+                if (canonical && canonical !== key && !map.has(canonical)) map.set(canonical, field);
             }
         }
     }
@@ -385,7 +404,7 @@ export function mapQueueRowSurfaceToCompactConfig(
 
     for (const [, field] of byKey) {
         const key = field.fieldKey.trim();
-        if (key && !COMPACT_ROW_EFFECTIVE_FIELD_KEYS.has(key) && !ineffectiveFieldKeys.includes(key)) {
+        if (key && !isCompactRowEffectiveFieldKey(key) && !ineffectiveFieldKeys.includes(key)) {
             ineffectiveFieldKeys.push(key);
         }
     }

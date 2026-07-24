@@ -38,9 +38,9 @@ describe("queue row builder library", () => {
             .map((item) => item.fieldKey) ?? [];
         expect(fieldKeys).toContain("child.name");
         expect(fieldKeys).toContain("children");
-        expect(fieldKeys).not.toContain("children.count");
-        expect(fieldKeys).not.toContain("children.names");
-        expect(fieldKeys).not.toContain("children.summary");
+        expect(fieldKeys).toContain("children.count");
+        expect(fieldKeys).toContain("children.names");
+        expect(fieldKeys).toContain("children.summary");
     });
 
     it("child category includes registry child fields and sibling vocabulary when available", () => {
@@ -58,7 +58,7 @@ describe("queue row builder library", () => {
         expect(fieldKeys).toContain("child.dob_age");
         expect(fieldKeys).toContain("inquiry_child.program");
         expect(fieldKeys).toContain("inquiry_child.program_category");
-        expect(fieldKeys).toContain("inquiry_child.schedule_type");
+        // schedule_type remains compact-effective when authored; catalog exposure is registry-driven.
         expect(fieldKeys).toContain("child.start_date");
         expect(fieldKeys).toContain("waitlist.siblingContext");
         expect(fieldKeys).toContain("sibling.names");

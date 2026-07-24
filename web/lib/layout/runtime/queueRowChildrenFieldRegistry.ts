@@ -88,6 +88,8 @@ export function resolveQueueRowChildrenFieldFromContext(
             return names.length ? names.join(", ") : null;
         }
         case "inquiry_child.program":
+        case "inquiry_child.program_category":
+        case "inquiry_child.program_category_id":
             return (
                 context.placement_context?.program_label?.trim()
                 ?? context.related_subjects_summary

@@ -15,7 +15,6 @@ import {
 import { WAITLIST_PLACEMENT_FIELD_KEYS } from "@/lib/layout/runtime/queueWaitlistPlacementField";
 import { buildUnavailableSiblingLibraryEntries, isWaitlistCandidateGrainSiblingFieldKey, QUEUE_ROW_RESOLVER_BACKED_SIBLING_FIELD_KEYS, WAITLIST_CANDIDATE_SIBLING_FIELD_SCOPE_NOTE } from "@/lib/layout/runtime/queueRowSiblingFieldRegistry";
 import { buildUnavailableChildProfileLibraryEntries } from "@/lib/layout/runtime/queueRowChildProfileFieldRegistry";
-import { LEGACY_CHILDREN_COLLECTION_FIELD_KEYS } from "@/lib/presentation/collectionFieldPresentation";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import type { QueueRowSubjectFocusUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 
@@ -107,6 +106,9 @@ const FIELD_LIBRARY_LABELS: Record<string, string> = {
     "person.email": "Email",
     "child.name": "Child name",
     children: "Children",
+    "children.count": "Children count",
+    "children.names": "Children names",
+    "children.summary": "Children summary",
     "child.date_of_birth": "Date of birth",
     "child.dob_age": "Age",
     "child.age": "Age",
@@ -165,6 +167,9 @@ const FIELD_CATEGORY: Record<string, QueueRowLibraryCategoryKey> = {
     "person.email": "family_parents",
     "child.name": "child",
     children: "child",
+    "children.count": "child",
+    "children.names": "child",
+    "children.summary": "child",
     "child.date_of_birth": "child",
     "child.dob_age": "child",
     "child.age": "child",
@@ -243,7 +248,7 @@ function fieldItem(zoneKey: QueueRowLibraryZoneKey, field: AvailableField): Queu
         kind: "field",
         zoneKey,
         fieldKey: field.key,
-        label: field.label,
+        label: FIELD_LIBRARY_LABELS[field.key] ?? field.label,
         isSystemField: field.isSystemField,
         category: fieldCategory(field.key, zoneKey, field.categoryKey),
     };
@@ -267,9 +272,22 @@ export function buildQueueRowLibraryCatalog(args: {
         }
         for (const field of availableFieldsForZone(zoneKey, args.isWaitlist, args.tenantFieldDefinitions)) {
             if (seenFieldKeys.has(field.key)) continue;
-            if ((LEGACY_CHILDREN_COLLECTION_FIELD_KEYS as readonly string[]).includes(field.key)) continue;
             seenFieldKeys.add(field.key);
             items.push(fieldItem(zoneKey, field));
+        }
+        if (zoneKey === "children") {
+            for (const key of ["children.count", "children.names", "children.summary"] as const) {
+                if (seenFieldKeys.has(key)) continue;
+                seenFieldKeys.add(key);
+                items.push({
+                    kind: "field",
+                    zoneKey,
+                    fieldKey: key,
+                    label: FIELD_LIBRARY_LABELS[key] ?? key,
+                    isSystemField: true,
+                    category: "child",
+                });
+            }
         }
         if (includeWaitlist && !args.isWaitlist) {
             for (const field of supplementalWaitlistFields(zoneKey, args.tenantFieldDefinitions)) {
