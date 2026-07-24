@@ -17,6 +17,7 @@ const { getProductDefinitionForCapability, addAcceptedDecision, recordMissionInH
 const { retrieveForCapability, readSnapshot } = await import("../lib/vacilando/knowledge.mjs");
 const { createMission, getMission, recoverMissions, updateMission } = await import("../lib/vacilando/commands/missions.mjs");
 const { compile } = await import("../lib/vacilando/mission-compiler.mjs");
+const { analyzeGap } = await import("../lib/vacilando/gap-analysis.mjs");
 const { checkStartPreconditions, serializePackagePrompt, parseOutcome } = await import("../lib/vacilando/mission-executor.mjs");
 
 test("readiness is computed: a complete package is ready", () => {
@@ -99,6 +100,35 @@ test("the knowledge snapshot is sectioned context and reproducible", () => {
   // reproducible: same state → same snapshot_id (pure function of state)
   const s2 = retrieveForCapability(cap);
   assert.equal(s2.snapshot_id, s1.snapshot_id, "snapshot id is deterministic for unchanged state");
+});
+
+// --- Gap Analysis Runtime V1: the first reasoning stage (step 4) ---
+
+test("gap analysis suggests criteria from roadmap + known issues, and is reproducible", () => {
+  const cap = retrieveCapability("Build Access & Roles V2").capability;
+  const snap = retrieveForCapability(cap);
+  const r1 = analyzeGap({ intent: "Build Access & Roles V2", capability: cap, snapshot: snap });
+  assert.equal(r1.schema_version, "vacilando.gap-report.v1");
+  assert.equal(r1.analyzer_version, "gap/v1-deterministic");
+  // one suggested criterion per planned roadmap item (rm1..rm3) + the open known issue
+  const froms = r1.findings.suggested_acceptance_criteria.map((c) => c.from);
+  assert.ok(froms.includes("roadmap:rm1") && froms.includes("known_issue:ki1"), "criteria suggested from roadmap + issues");
+  assert.ok(r1.findings.suggested_acceptance_criteria.every((c) => c.feeds_verdict === "Needs Acceptance"));
+  assert.ok(r1.confidence > 0 && r1.confidence <= 1, "confidence is a real coverage ratio");
+  // reproducible: same intent + snapshot + reasoner → same report id
+  const r2 = analyzeGap({ intent: "Build Access & Roles V2", capability: cap, snapshot: snap });
+  assert.equal(r2.gap_report_id, r1.gap_report_id);
+});
+
+test("a capability with no product definition yields a blocking Needs Decisions gap", () => {
+  const reg = registerCapability({ name: "Billing Gap Test", description: "bare capability, no product definition" });
+  const cap = getCapability(reg.capability.capability_id);
+  const snap = retrieveForCapability(cap);
+  const report = analyzeGap({ intent: "Build Billing V2", capability: cap, snapshot: snap });
+  const block = report.findings.missing_information.find((m) => m.id === "m_pd");
+  assert.ok(block, "missing product definition is surfaced");
+  assert.equal(block.severity, "block");
+  assert.equal(block.feeds_verdict, "Needs Decisions");
 });
 
 test("an incomplete package is BLOCKED and start is refused", () => {
