@@ -23,6 +23,7 @@ import { join } from "node:path";
 
 import { getMission, updateMission } from "./commands/missions.mjs";
 import { getPackage } from "./commands/mission-packages.mjs";
+import { evaluateMission } from "./acceptance.mjs";
 import { precheckProvider, providerResumable, invalidateProviderProbe } from "./provider-runtime.mjs";
 import { startMissionTurn } from "./providers.mjs";
 import { REPO_ROOT } from "./knowledge.mjs";
@@ -237,8 +238,16 @@ export async function runMissionTurn(mission, pkg, { provider, identity, resume 
   } else if (token === "blocked") {
     updateMission(mid, { ...common, status: "blocked", error_code: "blocked", error_message: pending_question || "The worker reported it is blocked." });
   } else if (token === "completed") {
-    // NEVER auto-complete: a provider completion CLAIM advances to waiting_for_acceptance.
-    updateMission(mid, { ...common, status: "waiting_for_acceptance", pending_approval: "Provider claims the objective is complete — pending acceptance evaluation.", completion_report: report || null, provider_completion_claim: true });
+    // NEVER auto-complete: a completion CLAIM advances to waiting_for_acceptance,
+    // then Vacilando VERIFIES it — completion is "evidence satisfies acceptance,"
+    // not "the engine stopped." The gate is computed here so the operator lands
+    // in Ready-for-Review with evidence in hand, never a raw provider claim.
+    updateMission(mid, { ...common, status: "waiting_for_acceptance", pending_approval: "Provider claims the objective is complete — verifying evidence against acceptance.", completion_report: report || null, provider_completion_claim: true });
+    try {
+      const fresh = getMission(mid);
+      const result = evaluateMission(fresh, pkg, { worktreePath: cwd });
+      updateMission(mid, { acceptance_gate: result.gate, acceptance_at: result.evaluated_at });
+    } catch (e) { updateMission(mid, { acceptance_gate: null, acceptance_error: String(e?.message || e) }); }
   } else {
     // No control token → the provider did not assert completion → operator-paced default.
     updateMission(mid, { ...common, status: "waiting_for_operator", pending_question: "The provider ended its turn without a completion signal. Review the output and steer or accept.", completion_report: report || null });

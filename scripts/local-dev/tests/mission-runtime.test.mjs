@@ -24,6 +24,8 @@ const { checkStartPreconditions, serializePackagePrompt, parseOutcome } = await 
 const { composeCounsel, selectFrontier, attemptCounsel, readinessCounsel, frontierPhrase } = await import("../lib/vacilando/counsel.mjs");
 const { assembleConversation } = await import("../lib/vacilando/conversation.mjs");
 const { composeUnderstanding } = await import("../lib/vacilando/shared-understanding.mjs");
+const { composeOperations, stateKeyFor, assembleReview, STATES } = await import("../lib/vacilando/operations.mjs");
+const { close: directorCloseFn } = await import("../lib/vacilando/mission-director.mjs");
 
 test("readiness is computed: a complete package is ready", () => {
   const cap = retrieveCapability("Build Access & Roles V2");
@@ -691,4 +693,149 @@ test("SU composition: no internal taxonomy leaks into the surface text", () => {
   const u = U({ capability: capWith({ name: "Communications" }), pkg: pkgU({ verdict: readyV(0.4), findings: { unknowns: [{ id: "u_maturity", question: "q", blocking: false }] }, suggested: [{ statement: "x" }] }) });
   const strings = [u.intent, ...u.relied_upon.flatMap((r) => [r.text, r.why]), ...u.frontier.flatMap((f) => [f.question, f.why]), ...u.carrying.map((c) => c.text), u.basis?.continuation].filter(Boolean);
   for (const s of strings) assert.doesNotMatch(s, TAXONOMY_LEAK, `taxonomy leaked in: ${s}`);
+});
+
+// ============================================================================
+// Engineering Operations (Product Realization V1, Phase 3) — work-centric
+// operational states, meaningful progress, interruption rules, verification,
+// review assembly, acceptance, and closure. Behavioural over provider activity.
+// ============================================================================
+
+const mReady = (o = {}) => ({ mission_id: "cur", status: o.status || "ready", ...o });
+const pReady = { readiness_verdict: { verdict: "Ready" }, readiness_status: "ready", acceptance_criteria: [] };
+const OPS = (mission, pkg = pReady, acceptance = []) => composeOperations({ mission, package: pkg, acceptance });
+
+// ---- Operational states are honest and distinct ----------------------------
+
+test("ops states: each raw status maps to the right engineering state", () => {
+  assert.equal(stateKeyFor({ status: "draft" }, {}), "preparing");
+  assert.equal(stateKeyFor({ status: "ready" }, pReady), "ready");
+  assert.equal(stateKeyFor({ status: "running" }, pReady), "executing");
+  assert.equal(stateKeyFor({ status: "waiting_for_operator" }, pReady), "needs_operator");
+  assert.equal(stateKeyFor({ status: "blocked" }, pReady), "blocked");
+  assert.equal(stateKeyFor({ status: "waiting_for_acceptance" }, pReady), "verifying");
+  assert.equal(stateKeyFor({ status: "waiting_for_acceptance", acceptance_gate: "pass" }, pReady), "review");
+  assert.equal(stateKeyFor({ status: "completed" }, pReady), "accepted");
+  assert.equal(stateKeyFor({ status: "closed" }, pReady), "closed");
+  assert.equal(stateKeyFor({ status: "failed" }, pReady), "at_risk");
+});
+
+test("ops states: complete-vs-accepted and accepted-vs-closed are distinct", () => {
+  assert.equal(stateKeyFor({ status: "waiting_for_acceptance", acceptance_gate: "pass" }, pReady), "review"); // system's claim
+  assert.equal(stateKeyFor({ status: "completed" }, pReady), "accepted"); // operator's judgment
+  assert.equal(stateKeyFor({ status: "closed" }, pReady), "closed"); // wound down
+  assert.notEqual("review", "accepted");
+});
+
+// ---- Interruption: only needs-operator interrupts --------------------------
+
+test("ops interruption: exactly one state interrupts the operator", () => {
+  const interrupting = Object.entries(STATES).filter(([, v]) => v.interrupts).map(([k]) => k);
+  assert.deepEqual(interrupting, ["needs_operator"]);
+});
+
+test("ops interruption: routine progress never interrupts", () => {
+  assert.equal(OPS(mReady({ status: "running" })).state.interrupts, false);
+  assert.equal(OPS(mReady({ status: "verifying" ? "waiting_for_acceptance" : "waiting_for_acceptance" })).state.interrupts, false);
+  assert.equal(OPS(mReady({ status: "waiting_for_operator", pending_question: "Which scope?" })).state.interrupts, true);
+});
+
+test("ops needs-operator: surfaces the reason, and auth is distinguished from a decision", () => {
+  const decision = OPS(mReady({ status: "waiting_for_operator", pending_question: "Broaden scope?" }));
+  assert.equal(decision.needs_operator.kind, "decision");
+  assert.match(decision.needs_operator.prompt, /scope/i);
+  const auth = OPS(mReady({ status: "waiting_for_operator", error_code: "auth" }));
+  assert.equal(auth.needs_operator.kind, "authentication");
+});
+
+// ---- Progress is engineering, not provider activity ------------------------
+
+test("ops progress: 'what changed' is engineering artifacts, phase is engineering not tools", () => {
+  const o = OPS(mReady({ status: "running", current_phase: "using Edit", latest_summary: "Adding the audit-trail section", completion_report: { changed_files: ["docs/a.md", "docs/b.md"] } }));
+  assert.equal(o.progress.phase, "editing files"); // translated from "using Edit" — not a provider tool name
+  assert.match(o.progress.headline, /audit-trail/);
+  assert.deepEqual(o.progress.what_changed, ["docs/a.md", "docs/b.md"]);
+  assert.doesNotMatch(o.progress.phase, /provider|claude|token|using/i);
+});
+
+test("ops progress: the engine stays beneath the work (no provider brand in routine state)", () => {
+  const o = OPS(mReady({ status: "running", current_phase: "running" }));
+  assert.equal(o.engine_problem, null);
+  assert.match(o.engine_note, /engine/i);
+  assert.doesNotMatch(o.engine_note, /claude|cursor|provider window is/i);
+});
+
+test("ops progress: the engine surfaces ONLY when the engine itself failed", () => {
+  const authFail = OPS(mReady({ status: "failed", error_code: "auth", error_message: "authentication required" }));
+  assert.ok(authFail.engine_problem);
+  const workFail = OPS(mReady({ status: "failed", error_code: "blocked" }));
+  assert.equal(workFail.engine_problem, null); // a work failure is not an engine failure
+});
+
+// ---- Verification + review assembly ----------------------------------------
+
+test("ops verification: a completion CLAIM is 'verifying', a gated result is 'review'", () => {
+  assert.equal(OPS(mReady({ status: "waiting_for_acceptance" })).state.key, "verifying");
+  assert.equal(OPS(mReady({ status: "waiting_for_acceptance", acceptance_gate: "pass" })).state.key, "review");
+});
+
+test("ops review: assembles what-changed, evidence vs acceptance, risks, recommendation, action", () => {
+  const mission = mReady({ status: "waiting_for_acceptance", acceptance_gate: "pass",
+    completion_report: { implementation_summary: "Wrote the V2 proposal.", changed_files: ["docs/p.md"], deviations_from_package: [], unresolved_items: ["confirm rollout window"] } });
+  const acc = [{ gate: "pass", criteria: [{ statement: "Proposal exists", status: "met", evidence: [{ detail: "p.md exists (2kb)" }] }], missing_evidence: [] }];
+  const r = assembleReview(mission, pReady, acc[0]);
+  assert.match(r.summary, /V2 proposal/);
+  assert.deepEqual(r.what_changed, ["docs/p.md"]);
+  assert.equal(r.evidence[0].status, "met");
+  assert.ok(r.risks.includes("confirm rollout window"));
+  assert.match(r.recommendation, /ready to accept/i);
+  assert.equal(r.requested_action, "accept");
+});
+
+test("ops review: gate needs_operator asks for judgment, fail asks for another pass", () => {
+  const acc = [{ gate: "needs_operator", criteria: [{ statement: "cited as rejected", status: "operator_review", evidence: [] }] }];
+  const r1 = assembleReview(mReady({ status: "waiting_for_acceptance", acceptance_gate: "needs_operator" }), pReady, acc[0]);
+  assert.equal(r1.requested_action, "review");
+  assert.match(r1.recommendation, /judgment/i);
+  const r2 = assembleReview(mReady({ status: "waiting_for_acceptance", acceptance_gate: "fail" }), pReady, { gate: "fail", criteria: [], missing_evidence: ["AC1"] });
+  assert.equal(r2.requested_action, "send_back");
+  assert.match(r2.recommendation, /not yet met|another pass/i);
+});
+
+// ---- Actions: the work's next step, never the substrate --------------------
+
+test("ops actions: each state offers the right operator move", () => {
+  assert.deepEqual(OPS(mReady({ status: "ready" })).actions, ["start"]);
+  assert.deepEqual(OPS(mReady({ status: "running" })).actions, ["stop"]);
+  assert.deepEqual(OPS(mReady({ status: "waiting_for_operator" })).actions, ["reply", "stop"]);
+  assert.deepEqual(OPS(mReady({ status: "waiting_for_acceptance", acceptance_gate: "pass" }), pReady, [{ gate: "pass", criteria: [] }]).actions, ["accept", "close"]);
+  assert.deepEqual(OPS(mReady({ status: "completed" })).actions, ["close"]);
+  assert.deepEqual(OPS(mReady({ status: "closed" })).actions, []);
+});
+
+test("ops actions: a failing review routes back to reply, not accept", () => {
+  const o = OPS(mReady({ status: "waiting_for_acceptance", acceptance_gate: "fail", completion_report: {} }), pReady, [{ gate: "fail", criteria: [], missing_evidence: ["AC1"] }]);
+  assert.ok(o.actions.includes("reply"));
+  assert.ok(!o.actions.includes("accept"));
+});
+
+// ---- Closure: only accepted work closes ------------------------------------
+
+test("ops closure: close is refused unless the work is accepted", () => {
+  process.env.__unused = ""; // keep lints quiet
+  const notAccepted = createMission({ slot: 6, provider: "claude", title: "t", objective: "o", status: "ready" });
+  const r = directorCloseFn({ mission_id: notAccepted.mission_id, confirm: true });
+  assert.equal(r.ok, false);
+  assert.equal(r.error, "not_accepted");
+});
+
+test("ops closure: accepted work closes, freeing capacity and preserving artifacts", () => {
+  const m = createMission({ slot: 6, provider: "claude", title: "t", objective: "o", status: "ready" });
+  updateMission(m.mission_id, { status: "completed" });
+  const pre = directorCloseFn({ mission_id: m.mission_id }); // no confirm → preview gate
+  assert.equal(pre.error, "confirmation_required");
+  const r = directorCloseFn({ mission_id: m.mission_id, confirm: true });
+  assert.equal(r.ok, true);
+  assert.equal(r.status, "closed");
+  assert.equal(getMission(m.mission_id).status, "closed");
 });

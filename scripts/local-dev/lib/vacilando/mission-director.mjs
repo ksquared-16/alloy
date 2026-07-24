@@ -27,7 +27,7 @@ import { createRequest, updateRequest } from "./commands/director-requests.mjs";
 import { resolveSlotIdentity } from "./identity.mjs";
 
 /** Consequential mission actions require explicit confirmation, like every other. */
-const CONSEQUENTIAL = new Set(["start", "steer", "stop", "accept"]);
+const CONSEQUENTIAL = new Set(["start", "steer", "stop", "accept", "close"]);
 
 const audit = (action, target, outcome, extra = {}) =>
   writeAuditEvent({
@@ -199,6 +199,7 @@ export function previewAction(action, mission_id) {
   if (action === "stop") return { ...base, summary: `Stop "${mission.title}"`, effects: ["Terminates the provider process", "Preserves all mission state and outputs"] };
   if (action === "steer") return { ...base, summary: `Send a steering instruction to "${mission.title}"`, effects: [`Resumes provider session ${mission.provider_session_id || "(none — a fresh turn)"}`, `Runs another turn in ${identity.worktree_name}`] };
   if (action === "accept") return { ...base, summary: `Accept "${mission.title}"`, effects: ["Runs the acceptance gate", "Marks the mission completed (operator sign-off)", "Writes the mission into capability history"] };
+  if (action === "close") return { ...base, summary: `Close "${mission.title}"`, effects: ["Winds the work down (accepted → closed)", "Frees the capacity it held", "Preserves all artifacts and evidence"] };
   return { ...base, ok: false, error: "unknown_action" };
 }
 
@@ -345,6 +346,27 @@ export function accept({ mission_id, confirm }) {
   } catch { /* write-back best-effort; acceptance already recorded */ }
   audit("accept", targetOf(mission, identity), "succeeded", { confirmed: true, summary: `accepted (gate=${result.gate})` });
   return { ok: true, result, status: "completed" };
+}
+
+/**
+ * Close accepted work: the tidy terminal state (Engineering Operations Center,
+ * Part III). Accepted → closed winds the work down and returns its capacity;
+ * artifacts and evidence are preserved, never deleted. Only accepted work closes.
+ */
+export function close({ mission_id, confirm }) {
+  const mission = getMission(mission_id);
+  if (!mission) return { ok: false, error: "unknown_mission" };
+  const identity = resolveSlotIdentity(mission.worker_slot);
+  if (mission.status !== "completed" && mission.status !== "closed") {
+    return { ok: false, error: "not_accepted", detail: "Only accepted work can be closed." };
+  }
+  if (confirm !== true) {
+    audit("close", targetOf(mission, identity), "refused", { error: "confirmation_required" });
+    return { ok: false, error: "confirmation_required", preview: previewAction("close", mission_id) };
+  }
+  updateMission(mission_id, { status: "closed", closed_at: new Date().toISOString(), pending_approval: null });
+  audit("close", targetOf(mission, identity), "succeeded", { confirmed: true, summary: "wound down; capacity freed; artifacts preserved" });
+  return { ok: true, status: "closed" };
 }
 
 export { readAcceptance };

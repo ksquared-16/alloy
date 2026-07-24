@@ -39,8 +39,11 @@ export const LIVE = new Set(["starting", "running", "stopping"]);
 export const WAITING = new Set(["waiting_for_operator", "blocked"]);
 export const ALL_STATUSES = new Set([
   "draft", "ready", "starting", "running", "waiting_for_operator",
-  "blocked", "stopping", "stopped", "completed", "failed", "interrupted",
+  "waiting_for_acceptance", "blocked", "stopping", "stopped",
+  "completed", "closed", "failed", "interrupted",
 ]);
+// Terminal states past which no further execution is expected. `closed` is the
+// tidy terminal (accepted + wound down: capacity freed, artifacts preserved).
 
 function ensureDir() { if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true }); }
 function append(ev) { ensureDir(); appendFileSync(MISSION_LOG, JSON.stringify(ev) + "\n", "utf8"); }

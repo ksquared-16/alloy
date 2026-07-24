@@ -18,6 +18,7 @@ import { getProductDefinitionForCapability } from "./product-definition.mjs";
 import { readAcceptance } from "./acceptance.mjs";
 import { composeCounsel } from "./counsel.mjs";
 import { composeUnderstanding } from "./shared-understanding.mjs";
+import { composeOperations, stateKeyFor, STATES } from "./operations.mjs";
 
 const firstSentence = (s) => { const t = String(s || "").trim(); const i = t.search(/[.!?]/); return i > 0 ? t.slice(0, i) : t; };
 const time = (x) => (x ? new Date(x).getTime() : 0);
@@ -28,15 +29,28 @@ function conversationTitle(m, cap) {
   return String(m.title || "").replace(/\s*V\d+\b.*$/i, "").trim() || "Untitled";
 }
 
-/** What state is this conversation in, in the operator's words. */
-export function conversationState(m, V) {
-  if (m.status === "completed") return { label: "Accepted", tone: "ok", action: "Open" };
-  if (["starting", "running", "stopping"].includes(m.status)) return { label: "Executing", tone: "run", action: "Open" };
-  if (m.status === "waiting_for_operator") return { label: "Waiting on you", tone: "attn", action: "Continue" };
-  if (m.status === "failed") return { label: "Needs another look", tone: "attn", action: "Continue" };
-  if (V?.verdict === "Ready") return { label: "Ready for review", tone: "ok", action: "Review" };
-  if (V?.verdict) return { label: V.verdict, tone: "attn", action: "Continue" };
-  return { label: "Preparing…", tone: "muted", action: "Open" };
+// The operator-facing verb for each engineering state (one word, the next move).
+const STATE_ACTION = {
+  preparing: "Open", ready: "Start", executing: "Open", waiting: "Open",
+  needs_operator: "Continue", blocked: "Continue", verifying: "Open",
+  review: "Review", accepted: "Open", closed: "Open", at_risk: "Continue",
+};
+
+/**
+ * What engineering state this work is in — the SINGLE state vocabulary shared by
+ * the inbox, the header, and the operational band (Engineering Operations Center,
+ * Part III). A blocking verdict (Needs Product Decisions) still shows its own
+ * label so the send-back reads honestly.
+ */
+export function conversationState(m, pkg) {
+  const V = pkg?.readiness_verdict || null;
+  // A prepared-but-not-ready package names its send-back verdict, not "Preparing".
+  if (!["completed", "closed", "failed", "interrupted"].includes(m.status) && V && V.verdict !== "Ready" && !["starting", "running", "stopping", "waiting_for_operator", "waiting_for_acceptance", "blocked"].includes(m.status)) {
+    return { label: V.verdict, tone: "attn", action: "Continue", key: "preparing" };
+  }
+  const key = stateKeyFor(m, pkg);
+  const st = STATES[key];
+  return { label: st.label, tone: st.tone, action: STATE_ACTION[key] || "Open", key };
 }
 
 /**
@@ -46,10 +60,13 @@ export function conversationState(m, V) {
  * frontier), composed upstream, instead of a flat "Ready" badge.
  */
 function directorSays(V, m, title, counsel) {
+  if (m.status === "closed") return "This work is accepted and closed.";
   if (m.status === "completed") return "This work is done and accepted.";
-  if (["starting", "running", "stopping"].includes(m.status)) return "This is executing now — I'll let you know when it needs you.";
+  if (m.status === "waiting_for_acceptance") return "I've finished a pass and checked the evidence against acceptance — here's what I found.";
+  if (["starting", "running", "stopping"].includes(m.status)) return "This is executing now — you can close the provider window; I'll let you know when it needs you.";
   if (m.status === "waiting_for_operator") return "I'm waiting on your input to continue.";
-  if (m.status === "failed") return "The last run didn't finish cleanly — let's take another look before sending it again.";
+  if (m.status === "blocked") return "This is blocked on something in the work — let's clear it before it goes on.";
+  if (m.status === "failed" || m.status === "interrupted") return "The last run didn't finish cleanly — let's take another look before sending it again.";
   if (counsel?.closing) return counsel.closing;
   if (V) return `${V.why || "I need a little more before this is ready."} ${V.what_to_do || ""}`.trim();
   return `Let me pull together what I know about ${title}.`;
@@ -83,6 +100,10 @@ export function assembleConversation(mission_id) {
   // The visible Shared Understanding — the curated reliance surface, projected
   // from the SAME durable state (one source of truth with the counsel above).
   const understanding = composeUnderstanding({ mission: m, capability: cap, package: pkg, capabilityMissions, capName: title });
+
+  // The work-centric operational view — engineering state, progress, needs-you,
+  // verification, and review — so the operator manages WORK, not the provider.
+  const operations = composeOperations({ mission: m, package: pkg, acceptance: readAcceptance(mission_id) });
 
   // ---- narrative transcript (a story, from real facts) ----
   const opening = [];
@@ -121,13 +142,13 @@ export function assembleConversation(mission_id) {
   // so a computed unknown is never suppressed behind a green verdict.
   const needs = counsel.needs;
 
-  const st = conversationState(m, V);
+  const st = conversationState(m, pkg);
   return {
     schema_version: "vacilando.conversation.v1",
     conversation_id: mission_id, mission_id, title, intent,
     state: st, verdict: V, capability_id: m.capability_id || null,
     messages, insights: { goal: intent, knows, needs },
-    understanding,
+    understanding, operations,
     package: pkg || null, mission: m,
     acceptance: readAcceptance(mission_id),
   };
@@ -140,10 +161,9 @@ export function listConversations() {
     .map((m) => {
       const pkg = m.package_id ? getPackage(m.package_id) : null;
       const cap = m.capability_id ? getCapability(m.capability_id) : null;
-      const V = pkg?.readiness_verdict || null;
       return {
         conversation_id: m.mission_id, title: conversationTitle(m, cap),
-        intent: m.intent || m.objective || "", state: conversationState(m, V),
+        intent: m.intent || m.objective || "", state: conversationState(m, pkg),
         updated_at: m.updated_at,
       };
     })

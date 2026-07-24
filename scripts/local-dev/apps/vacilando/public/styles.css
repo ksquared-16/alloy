@@ -548,4 +548,28 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .su-basis{margin:2px 0 0;font-size:12px;color:var(--ink-2);line-height:1.5;}
 .su-aside{font-size:12px;color:var(--ink-4);line-height:1.5;margin:0 0 5px;text-decoration:line-through;text-decoration-color:var(--line-strong);}
 .su-aside .su-why{text-decoration:none;color:var(--ink-4);}
+/* engineering operations — the work-centric operational band (Phase 3) */
+.opband{border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:12px;background:var(--card-2);}
+.opband.run{border-color:var(--terra-line);background:linear-gradient(180deg,#fff,#fdf7f2);}
+.opband.attn{border-color:var(--terra-line);background:var(--terra-soft);}
+.opband.review{border-color:var(--green-soft);background:linear-gradient(180deg,#fff,#f3f9f4);}
+.opband.done{background:var(--done-bg);}
+.opstate{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:6px;background:var(--bg-tint);color:var(--ink-2);}
+.opstate.ok{background:var(--green-soft);color:var(--green-ink);}
+.opstate.run{background:var(--terra-soft);color:var(--terra);}
+.opstate.attn{background:var(--blocked-bg);color:var(--blocked);}
+.opstate.muted{background:var(--bg-tint);color:var(--ink-3);}
+.opphase{margin-left:8px;font-size:11px;color:var(--ink-3);font-style:italic;}
+.opsum{margin:8px 0 0;font-size:12.5px;color:var(--ink);line-height:1.5;}
+.opnote{margin-top:8px;font-size:11px;color:var(--ink-3);font-style:italic;}
+.opsec{margin-top:10px;}
+.opfile{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);padding:1px 0;}
+.opneed p{margin:3px 0 0;font-size:12.5px;color:var(--ink);line-height:1.5;}
+.opev{display:flex;gap:7px;align-items:flex-start;margin:4px 0;font-size:12px;color:var(--ink);line-height:1.45;}
+.opev-b{flex:none;width:16px;height:16px;border-radius:5px;display:grid;place-items:center;font-size:10px;font-weight:800;}
+.opev-b.met{background:var(--green-soft);color:var(--green-ink);}
+.opev-b.review{background:var(--terra-soft);color:var(--terra);}
+.opev-b.unmet{background:var(--blocked-bg);color:var(--blocked);}
+.oprisk{font-size:12px;color:var(--ink-2);line-height:1.5;}
+.oprec{margin-top:10px;font-size:12.5px;color:var(--ink);line-height:1.55;border-top:1px solid var(--line);padding-top:8px;}
 @media(max-width:900px){.cvgrid{grid-template-columns:1fr;}}
