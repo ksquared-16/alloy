@@ -9,6 +9,7 @@ function detailWith(sources: { kind: ProcessingCaseSourceKind; id: string; role:
         id: "c1",
         status: "needs_review",
         caseType: null,
+        caseTitle: null,
         createdAt: "2026-06-12T00:00:00Z",
         updatedAt: null,
         archivedAt: null,
