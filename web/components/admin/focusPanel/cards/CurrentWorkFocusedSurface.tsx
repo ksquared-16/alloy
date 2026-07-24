@@ -24,6 +24,7 @@ import { useState } from "react";
 import clsx from "clsx";
 
 import { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWorkReadinessSummary";
+import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
 import type { CurrentWorkActivityPreviewItem } from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
 import { isCurrentWorkActionExecutable } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
@@ -214,7 +215,7 @@ export default function CurrentWorkFocusedSurface({
                                     onMouseEnter={() => onWarm(dominant)}
                                     onFocus={() => onWarm(dominant)}
                                 >
-                                    {dominant.label}
+                                    <CurrentWorkActionButtonContent action={dominant} />
                                 </button>
                             :   null}
                             {helpful.map((action) => (
@@ -227,7 +228,7 @@ export default function CurrentWorkFocusedSurface({
                                     onMouseEnter={() => onWarm(action)}
                                     onFocus={() => onWarm(action)}
                                 >
-                                    {action.label}
+                                    <CurrentWorkActionButtonContent action={action} />
                                 </button>
                             ))}
                             {subordinateOutcome ?
@@ -237,7 +238,7 @@ export default function CurrentWorkFocusedSurface({
                                     data-work-action="record-outcome"
                                     onClick={() => onActionButton(subordinateOutcome)}
                                 >
-                                    {subordinateOutcome.label}
+                                    <CurrentWorkActionButtonContent action={subordinateOutcome} />
                                 </button>
                             :   null}
                         </div>

@@ -24,6 +24,8 @@ export type ActionRegistryEntry = {
      * never from the action name/label. Omit to derive the host from `category`.
      */
     interactionHost?: CapabilityInteractionHost;
+    /** Optional Lucide icon name for operator action buttons (What's Next, etc.). */
+    icon?: string;
 };
 
 /** Generic interaction hosts a capability may declare. Not business- or action-name specific. */
@@ -48,6 +50,7 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
             "Open a message composer for the selected record. The user reviews and sends manually.",
         defaultSurface: "queue_row",
         defaultSlot: "row_inline",
+        icon: "MessageSquare",
     },
     {
         key: "ask_bos",
@@ -140,6 +143,7 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         defaultSurface: "record_header",
         defaultSlot: "primary",
         interactionHost: "inline_form",
+        icon: "Calendar",
     },
     {
         key: "reschedule_tour",
@@ -150,6 +154,7 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         defaultSurface: "record_header",
         defaultSlot: "secondary",
         interactionHost: "inline_form",
+        icon: "Calendar",
     },
     {
         key: "send_form",
@@ -162,6 +167,7 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         // Declared interaction host: the generic form-delivery surface (which form → who receives
         // it → what it relates to → how delivered), rendered inline in the centered What's Next card.
         interactionHost: "form_delivery",
+        icon: "Send",
     },
     {
         key: "send_enrollment_packet",
@@ -171,6 +177,7 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         description: "Start the enrollment packet workflow for this family when your org has one configured.",
         defaultSurface: "record_header",
         defaultSlot: "secondary",
+        icon: "Send",
     },
     {
         key: "mark_lost",

@@ -22,6 +22,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkRequirementOwner";
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
+import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
 import type {
     CurrentWorkActionVM,
     CurrentWorkChecklistItemVM,
@@ -567,7 +568,7 @@ function SummaryBody({
                             onMouseEnter={() => onWarm(dominant)}
                             onFocus={() => onWarm(dominant)}
                         >
-                            {dominant.label}
+                            <CurrentWorkActionButtonContent action={dominant} />
                         </button>
                         {helpful.map((action) => (
                             <button
@@ -579,7 +580,7 @@ function SummaryBody({
                                 onMouseEnter={() => onWarm(action)}
                                 onFocus={() => onWarm(action)}
                             >
-                                {action.label}
+                                <CurrentWorkActionButtonContent action={action} />
                             </button>
                         ))}
                         {subordinateOutcome ?
@@ -589,7 +590,7 @@ function SummaryBody({
                                 data-work-action="record-outcome"
                                 onClick={() => onAction(subordinateOutcome)}
                             >
-                                {subordinateOutcome.label}
+                                <CurrentWorkActionButtonContent action={subordinateOutcome} />
                             </button>
                         :   null}
                     </div>
