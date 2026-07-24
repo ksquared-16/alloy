@@ -1,0 +1,118 @@
+{
+  "correlation_id": "final-cert-1784913936258",
+  "http_status": 400,
+  "response": {
+    "error": "Stage \"qualification\" is not part of the configured Business Process \"enrollment\". Configured stages: lead, tour, decision, waitlist, enrolling, enrolled. This is a configuration error — no change was made.",
+    "outcome_execution": {
+      "applied_targets": [
+        {
+          "kind": "update_family_case_status",
+          "status_key": "open"
+        },
+        {
+          "kind": "mark_stage_work_complete"
+        }
+      ],
+      "failed_targets": [
+        {
+          "kind": "move_to_stage",
+          "stage_key": "qualification"
+        }
+      ],
+      "errors": [
+        "Stage \"qualification\" is not part of the configured Business Process \"enrollment\". Configured stages: lead, tour, decision, waitlist, enrolling, enrolled. This is a configuration error — no change was made."
+      ],
+      "degraded": [],
+      "queue_refresh_opportunity_id": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+      "needs_attention_set": false,
+      "status_updated": true
+    },
+    "changed": false,
+    "transaction": {
+      "outcome": "aborted",
+      "ok": false,
+      "changed": false,
+      "correlation_id": "final-cert-1784913936258",
+      "capability": "record_outcome",
+      "message": "Stage \"qualification\" is not part of the configured Business Process \"enrollment\". Configured stages: lead, tour, decision, waitlist, enrolling, enrolled. This is a configuration error — no change was made.",
+      "failed_step": "apply_outcome_rules",
+      "failed_stage": "business_process",
+      "steps": [
+        {
+          "name": "validate",
+          "stage": "validate",
+          "boundary": "inside",
+          "status": "ok",
+          "duration_ms": 0
+        },
+        {
+          "name": "work_state",
+          "stage": "persist",
+          "boundary": "inside",
+          "status": "ok",
+          "duration_ms": 1069
+        },
+        {
+          "name": "apply_outcome_rules",
+          "stage": "business_process",
+          "boundary": "inside",
+          "status": "failed",
+          "duration_ms": 1451,
+          "error": "Stage \"qualification\" is not part of the configured Business Process \"enrollment\". Configured stages: lead, tour, decision, waitlist, enrolling, enrolled. This is a configuration error — no change was made."
+        },
+        {
+          "name": "contact_outcome_trace",
+          "stage": "activity",
+          "boundary": "inside",
+          "status": "skipped",
+          "duration_ms": 0
+        },
+        {
+          "name": "apply_outcome_rules:compensate",
+          "stage": "business_process",
+          "boundary": "inside",
+          "status": "compensated",
+          "duration_ms": 371
+        },
+        {
+          "name": "work_state:compensate",
+          "stage": "persist",
+          "boundary": "inside",
+          "status": "compensated",
+          "duration_ms": 458
+        }
+      ],
+      "degraded": [],
+      "duration_ms": 3349
+    },
+    "correlation_id": "final-cert-1784913936258"
+  },
+  "before": {
+    "opp_stage_key": null,
+    "opp_status_key": null,
+    "work_state": "open",
+    "attempt_count": 3,
+    "last_outcome": {
+      "outcome_key": "left_message",
+      "label": "Left Message",
+      "at": "2026-07-24T02:33:52.134Z"
+    },
+    "due_at": "2026-07-26T02:33:53.167+00:00",
+    "activity_count": 12,
+    "bookings_count": 1
+  },
+  "after": {
+    "opp_stage_key": null,
+    "opp_status_key": null,
+    "work_state": "open",
+    "attempt_count": 3,
+    "last_outcome": {
+      "outcome_key": "left_message",
+      "label": "Left Message",
+      "at": "2026-07-24T02:33:52.134Z"
+    },
+    "due_at": "2026-07-26T02:33:53.167+00:00",
+    "activity_count": 12,
+    "bookings_count": 1
+  }
+}

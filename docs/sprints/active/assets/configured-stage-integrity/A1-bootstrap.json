@@ -1,0 +1,18 @@
+{
+  "qualification": {
+    "status": 400,
+    "body": {
+      "error": "Stage \"qualification\" is not part of the configured Business Process \"enrollment\". Configured stages: lead, tour, decision, waitlist, enrolling, enrolled. This is a configuration error — no change was made.",
+      "code": "stage_not_configured",
+      "configured_stages": [
+        "lead",
+        "tour",
+        "decision",
+        "waitlist",
+        "enrolling",
+        "enrolled"
+      ]
+    }
+  },
+  "decision_status": 200
+}
