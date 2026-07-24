@@ -77,8 +77,11 @@ export function createPackage(input, { origin = "compiled", nowMs } = {}) {
   const now = nowMs ?? Date.now();
   const id = "pkg_" + createHash("sha256").update(`${now}:${input.mission_id}:${input.title}:${Math.random()}`).digest("hex").slice(0, 18);
   const base = {
-    schema_version: "vacilando.mission-package.v1",
+    schema_version: "vacilando.mission-package.v2",
     package_id: id, version: input.version || 1,
+    // Lineage: stable across versions of the same mission's package (v1 → v2 → …).
+    package_lineage_id: input.package_lineage_id || id,
+    supersedes_package_id: input.supersedes_package_id || null,
     package_origin: PACKAGE_ORIGIN.has(origin) ? origin : "compiled",
     mission_id: input.mission_id || null, project_id: input.project_id || "alloy",
     capability_id: input.capability_id || null, worker_slot: input.worker_slot ?? null,
@@ -88,9 +91,17 @@ export function createPackage(input, { origin = "compiled", nowMs } = {}) {
     inherited_product_rules: arr(input.inherited_product_rules),
     accepted_decisions: arr(input.accepted_decisions), rejected_patterns: arr(input.rejected_patterns),
     acceptance_criteria: arr(input.acceptance_criteria), required_evidence: arr(input.required_evidence),
+    suggested_acceptance_criteria: arr(input.suggested_acceptance_criteria),
     unresolved_questions: arr(input.unresolved_questions), operator_decision_gates: arr(input.operator_decision_gates),
+    risks: arr(input.risks), questions: arr(input.questions),
     governance_constraints: input.governance_constraints || {},
     QA_plan: arr(input.QA_plan), expected_deliverables: arr(input.expected_deliverables),
+    // Embedded upstream artifacts (reproducibility): the exact gap report +
+    // product definition the package was compiled against are frozen here.
+    gap_report: input.gap_report || null,
+    product_definition_snapshot: input.product_definition_snapshot || null,
+    readiness_verdict: input.readiness_verdict || null,
+    diff_from_previous: input.diff_from_previous || null,
     compiled_at: iso(now), compiler_version: input.compiler_version || "manual/v1",
     compiler_trace: input.compiler_trace || null, knowledge_snapshot: input.knowledge_snapshot || null,
   };
@@ -132,4 +143,46 @@ export function getPackage(package_id) {
 /** The active (newest, non-superseded) package for a mission. */
 export function packageForMission(mission_id) {
   return readPackages(1000).find((p) => p.mission_id === mission_id && p.readiness_status !== "superseded") || null;
+}
+
+/** All versions in a package's lineage, newest version first. */
+export function packageLineage(package_lineage_id) {
+  return readPackages(1000).filter((p) => (p.package_lineage_id || p.package_id) === package_lineage_id).sort((a, b) => b.version - a.version);
+}
+
+/** Deterministic diff between two package versions (set differences + verdict change). */
+export function computeDiff(prev, next) {
+  if (!prev) return { added: [], removed: [], resolved: [], verdict_change: next?.readiness_verdict?.verdict ? `→ ${next.readiness_verdict.verdict}` : null };
+  const crit = (p) => new Set(arr(p.acceptance_criteria).map((c) => c.id || c.statement));
+  const refs = (p) => new Set([...arr(p.relevant_documents), ...arr(p.approved_references)].map((r) => r.uri).filter(Boolean));
+  const qs = (p) => new Set(arr(p.questions).map((q) => q.id || q.question));
+  const diff = (a, b) => [...b].filter((x) => !a.has(x));
+  const pc = crit(prev), nc = crit(next), pr = refs(prev), nr = refs(next), pq = qs(prev), nq = qs(next);
+  return {
+    added: [...diff(pc, nc).map((c) => `criterion ${c}`), ...diff(pr, nr).map((r) => `reference ${r}`)],
+    removed: [...diff(nc, pc).map((c) => `criterion ${c}`), ...diff(nr, pr).map((r) => `reference ${r}`)],
+    resolved: diff(nq, pq).map((q) => `question ${q}`), // present before, gone now → resolved
+    verdict_change: (prev.readiness_verdict?.verdict || "?") !== (next.readiness_verdict?.verdict || "?")
+      ? `${prev.readiness_verdict?.verdict || "?"} → ${next.readiness_verdict?.verdict || "?"}` : null,
+  };
+}
+
+/**
+ * Revise a package into a NEW version in the same lineage. The prior version is
+ * marked superseded; the new one carries a computed diff_from_previous. Reuses the
+ * existing supersede plumbing — a package is never mutated in place.
+ */
+export function revisePackage(prev_package_id, input, { nowMs } = {}) {
+  const prev = getPackage(prev_package_id);
+  if (!prev) return null;
+  const next = createPackage({
+    ...input,
+    version: (prev.version || 1) + 1,
+    package_lineage_id: prev.package_lineage_id || prev.package_id,
+    supersedes_package_id: prev.package_id,
+  }, { origin: "revised", nowMs });
+  const diff = computeDiff(prev, next);
+  const withDiff = updatePackage(next.package_id, { diff_from_previous: diff }, { nowMs });
+  updatePackage(prev.package_id, { readiness_status: "superseded", superseded: true }, { nowMs });
+  return withDiff || next;
 }

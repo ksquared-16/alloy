@@ -11,7 +11,8 @@ import { mkdtempSync } from "node:fs";
 
 process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-test-"));
 
-const { validatePackage, createPackage, getPackage } = await import("../lib/vacilando/commands/mission-packages.mjs");
+const { validatePackage, createPackage, getPackage, revisePackage, computeDiff, packageLineage } = await import("../lib/vacilando/commands/mission-packages.mjs");
+const { deriveVerdict } = await import("../lib/vacilando/director-review.mjs");
 const { retrieveCapability, getCapability, registerCapability, listCapabilities } = await import("../lib/vacilando/capability.mjs");
 const { getProductDefinitionForCapability, addAcceptedDecision, recordMissionInHistory, ensureSeeded: ensurePdSeeded } = await import("../lib/vacilando/product-definition.mjs");
 const { retrieveForCapability, readSnapshot } = await import("../lib/vacilando/knowledge.mjs");
@@ -129,6 +130,54 @@ test("a capability with no product definition yields a blocking Needs Decisions 
   assert.ok(block, "missing product definition is surfaced");
   assert.equal(block.severity, "block");
   assert.equal(block.feeds_verdict, "Needs Decisions");
+});
+
+// --- Mission Package v2 + Director Review verdict (steps 5–6) ---
+
+test("compile embeds the gap report, risks/questions, and honest reasoning_invocations", () => {
+  const cap = retrieveCapability("Build Access & Roles V2").capability;
+  const snap = retrieveForCapability(cap);
+  const gap = analyzeGap({ intent: "Build Access & Roles V2", capability: cap, snapshot: snap });
+  const m = createMission({ slot: 6, provider: "claude", title: "t", objective: "o", status: "draft" });
+  const { package: pkg } = compile({ capability: cap, snapshot: snap, mission: m, gapReport: gap });
+  assert.equal(pkg.schema_version, "vacilando.mission-package.v2");
+  assert.equal(pkg.gap_report?.gap_report_id, gap.gap_report_id, "gap report embedded");
+  assert.ok(pkg.product_definition_snapshot, "product definition snapshot embedded");
+  assert.equal(pkg.compiler_trace.reasoning_invocations.length, 1, "reasoning_invocations now honestly populated");
+  assert.ok(pkg.questions.length >= 1, "questions populated from gap unknowns");
+  assert.equal(pkg.package_lineage_id, pkg.package_id, "v1 lineage id == its own id");
+});
+
+test("readiness verdict: mature capability → Ready; missing product definition → Needs Decisions", () => {
+  // Ready: no blocking gaps + a ready package.
+  const cap = retrieveCapability("Build Access & Roles V2").capability;
+  const snap = retrieveForCapability(cap);
+  const gap = analyzeGap({ intent: "Build Access & Roles V2", capability: cap, snapshot: snap });
+  const m = createMission({ slot: 6, provider: "claude", title: "t", objective: "o", status: "draft" });
+  const { package: pkg } = compile({ capability: cap, snapshot: snap, mission: m, gapReport: gap });
+  const ready = deriveVerdict(gap, pkg);
+  assert.equal(ready.verdict, "Ready");
+  assert.equal(ready.send_back_to, null);
+  assert.ok(ready.advisory.length >= 1, "non-blocking gaps surface as advisory, not blockers");
+  // Needs Decisions: a bare capability with a blocking missing-PD gap.
+  const bareGap = { findings: { missing_information: [{ id: "m_pd", what: "no PD", severity: "block", feeds_verdict: "Needs Decisions" }] }, confidence: 0.2 };
+  const v = deriveVerdict(bareGap, pkg);
+  assert.equal(v.verdict, "Needs Decisions");
+  assert.equal(v.send_back_to, "product-definition");
+  assert.ok(v.reasons.length >= 1);
+});
+
+test("package versioning: revise creates v2 with a diff and supersedes v1", () => {
+  const base = { mission_id: "m_rev", title: "t", objective: "o", scope_included: ["a"], scope_excluded: ["b"], acceptance_criteria: [{ id: "AC1" }], QA_plan: [{ id: "Q1" }], expected_deliverables: [{ id: "D1" }], governance_constraints: { no_push: true, no_merge: true, no_promote: true, no_scope_broadening: true }, readiness_verdict: { verdict: "Needs Acceptance" } };
+  const v1 = createPackage(base, { origin: "compiled" });
+  const v2 = revisePackage(v1.package_id, { ...base, acceptance_criteria: [{ id: "AC1" }, { id: "AC2" }], readiness_verdict: { verdict: "Ready" } });
+  assert.equal(v2.version, 2);
+  assert.equal(v2.package_lineage_id, v1.package_lineage_id, "same lineage");
+  assert.equal(v2.supersedes_package_id, v1.package_id);
+  assert.ok(v2.diff_from_previous.added.some((a) => /AC2/.test(a)), "diff records the added criterion");
+  assert.equal(v2.diff_from_previous.verdict_change, "Needs Acceptance → Ready");
+  assert.equal(getPackage(v1.package_id).readiness_status, "superseded", "v1 superseded");
+  assert.equal(packageLineage(v1.package_lineage_id).length, 2, "lineage has both versions");
 });
 
 test("an incomplete package is BLOCKED and start is refused", () => {

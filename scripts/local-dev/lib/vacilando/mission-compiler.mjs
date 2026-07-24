@@ -34,7 +34,7 @@ export function proposalPath(capability_id) {
  * Returns { package, trace }. The package is persisted (durable) and its
  * readiness is computed on write.
  */
-export function compile({ capability, snapshot, mission }) {
+export function compile({ capability, snapshot, mission, gapReport = null }) {
   const cid = capability.capability_id;
   const outPath = proposalPath(cid);
   const roadmapV2 = (capability.roadmap || []).filter((r) => /v2/i.test(r.item) || r.status === "planned");
@@ -43,12 +43,16 @@ export function compile({ capability, snapshot, mission }) {
     stages: [
       { stage: "capability_retrieval", runtime: "capability", request: cid, result_ref: cid, at: new Date().toISOString() },
       { stage: "knowledge_retrieval", runtime: "knowledge", request: cid, result_ref: snapshot?.snapshot_id || null, at: new Date().toISOString() },
+      ...(gapReport ? [{ stage: "gap_analysis", runtime: "gap-analysis", request: cid, result_ref: gapReport.gap_report_id, at: new Date().toISOString() }] : []),
       { stage: "compilation", runtime: "compiler", request: "assemble", result_ref: null, at: new Date().toISOString() },
     ],
     sources_used: (snapshot?.items || []).map((i) => i.uri),
     decisions_used: (capability.accepted_decisions || []).map((d) => d.id),
     references_used: (capability.documentation_index || []).map((d) => d.uri),
-    reasoning_invocations: [], // V1 gap-analysis is not wired; recorded as empty, honestly.
+    // Now honestly populated when gap analysis has run upstream.
+    reasoning_invocations: gapReport
+      ? [{ runtime: "gap-analysis", analyzer: gapReport.analyzer_version, report_ref: gapReport.gap_report_id, confidence: gapReport.confidence }]
+      : [],
   };
 
   const criteria = [
@@ -98,6 +102,17 @@ export function compile({ capability, snapshot, mission }) {
     expected_deliverables: [
       { id: "D1", kind: "document", description: `${capability.name} V2 implementation proposal`, path: outPath, criterion_ids: ["AC1", "AC2"] },
     ],
+    // Upstream artifacts embedded for reproducibility + operator review.
+    gap_report: gapReport || null,
+    product_definition_snapshot: capability.product_definition || null,
+    suggested_acceptance_criteria: gapReport?.findings?.suggested_acceptance_criteria || [],
+    // Risks + questions are populated FROM the gap report — an incomplete package
+    // always explains itself.
+    risks: [
+      ...(gapReport?.findings?.conflicts || []).map((c) => ({ id: `r_${c.id}`, risk: c.detail, from: `gap:${c.id}`, severity: c.severity })),
+      ...(gapReport?.findings?.missing_files || []).map((f, i) => ({ id: `r_mf_${i}`, risk: `Missing reference: ${f.uri}`, from: "gap:missing_files", severity: "warn" })),
+    ],
+    questions: (gapReport?.findings?.unknowns || []).map((u) => ({ id: u.id, question: u.question, blocking: u.blocking === true, from: "gap:unknowns" })),
     compiler_version: COMPILER_VERSION,
     compiler_trace: trace,
     knowledge_snapshot: snapshot || null,

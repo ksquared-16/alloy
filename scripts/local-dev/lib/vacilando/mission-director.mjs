@@ -15,9 +15,11 @@
 import { retrieveCapability, getCapability, updateCapability } from "./capability.mjs";
 import { getProductDefinitionForCapability, recordMissionInHistory } from "./product-definition.mjs";
 import { retrieveForCapability } from "./knowledge.mjs";
+import { analyzeGap } from "./gap-analysis.mjs";
+import { deriveVerdict } from "./director-review.mjs";
 import { compile } from "./mission-compiler.mjs";
 import { createMission, getMission, updateMission } from "./commands/missions.mjs";
-import { getPackage, packageForMission } from "./commands/mission-packages.mjs";
+import { getPackage, packageForMission, updatePackage } from "./commands/mission-packages.mjs";
 import { checkStartPreconditions, runMissionTurn, stopMission, isLive } from "./mission-executor.mjs";
 import { evaluateMission, readAcceptance } from "./acceptance.mjs";
 import { writeAuditEvent } from "./commands/audit.mjs";
@@ -50,8 +52,13 @@ function identityFor(slot) {
 }
 
 /**
- * Stage 1–4: intent → Capability → Knowledge → Compiler → Draft Package.
- * Compilation is durable but not destructive; it is audited, not gated.
+ * The full upstream preparation pipeline:
+ *   intent → Capability → Knowledge Snapshot → GAP ANALYSIS → Compiler →
+ *   Mission Package → Readiness VERDICT.
+ * Preparation is durable but not destructive; it is audited, not gated. The
+ * operator approves the resulting package (see startMission) — they never author
+ * it. Director stays the deterministic conductor: the only reasoning is the Gap
+ * Analysis stage, which reasons deterministically in V1.
  */
 export function compileMissionForIntent({ slot, intent }) {
   const idr = identityFor(slot);
@@ -69,21 +76,31 @@ export function compileMissionForIntent({ slot, intent }) {
   const capability = cap.capability;
   const snapshot = retrieveForCapability(capability);
 
+  // Stage: Gap Analysis (the reasoning stage) — compares intent vs the prepared context.
+  const gapReport = analyzeGap({ intent, capability, snapshot });
+
   const mission = createMission({
     slot, worktree: identity.worktree_name, branch: identity.branch, provider: identity.provider || "claude",
     title: `${capability.name} V2`, objective: `(compiling from ${capability.capability_id})`, status: "draft",
   });
 
-  const { package: pkg } = compile({ capability, snapshot, mission });
+  const { package: pkgRaw } = compile({ capability, snapshot, mission, gapReport });
+
+  // Stage: Readiness Verdict — Director rolls the gap report + package validation
+  // into the six-state operator verdict, then binds it to the package.
+  const verdict = deriveVerdict(gapReport, pkgRaw);
+  const pkg = updatePackage(pkgRaw.package_id, { readiness_verdict: verdict }) || pkgRaw;
+
   updateMission(mission.mission_id, {
     title: pkg.title, objective: pkg.objective, capability_id: capability.capability_id,
     package_id: pkg.package_id, package_version: pkg.version,
-    status: pkg.readiness_status === "ready" ? "ready" : "draft",
+    gap_report_id: gapReport.gap_report_id, readiness_verdict: verdict.verdict,
+    status: verdict.verdict === "Ready" && pkg.readiness_status === "ready" ? "ready" : "draft",
   });
 
   const m = getMission(mission.mission_id);
-  audit("compile", targetOf(m, identity), "succeeded", { summary: `compiled ${pkg.package_id} (${pkg.readiness_status})`, input: { intent } });
-  return { ok: true, mission: m, package: pkg, capability, snapshot, identity };
+  audit("compile", targetOf(m, identity), "succeeded", { summary: `compiled ${pkg.package_id} → ${verdict.verdict}`, input: { intent } });
+  return { ok: true, mission: m, package: pkg, capability, snapshot, gap_report: gapReport, verdict, identity };
 }
 
 /** Build a preview for a consequential mission action (pure; never executes). */
