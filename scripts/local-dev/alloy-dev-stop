@@ -25,53 +25,83 @@ main() {
   alloy_load_metadata "$name"
 
   local path="$ALLOY_WORKTREE_PATH"
+  local port="${PORT:-}"
   local pid_path pid
   pid_path="$(alloy_pid_path "$name")"
 
-  if [[ ! -f "$pid_path" ]]; then
-    alloy_info "no PID file for $name (already stopped)"
-    exit 0
-  fi
+  # SINGLE SOURCE OF TRUTH: a dev server "is running" iff something is LISTENING
+  # on this slot's port — that is exactly what dev-status counts and what server
+  # capacity is measured against. The PID file is only a hint: it can record a
+  # wrapper instead of the real listener, or be missing entirely for a server
+  # started outside the toolkit. So stop is authoritative on the PORT, and never
+  # reports success while a listener survives. (Historically stop trusted the PID
+  # file, silently reported "already stopped" on a miss, and left the real server
+  # running — pinning capacity at max.)
+  local stopped_any=0
 
-  pid="$(alloy_read_pid_file "$pid_path" || true)"
-  if [[ -z "${pid:-}" ]] || ! alloy_pid_alive "$pid"; then
-    rm -f "$pid_path"
-    alloy_info "removed dead PID record for $name"
-    exit 0
-  fi
-
-  if ! alloy_pid_belongs_to_worktree "$pid" "$path"; then
-    alloy_die "refusing to kill PID $pid — does not appear to belong to worktree $path"
-  fi
-
-  alloy_info "Sending SIGTERM to PID $pid ($name)..."
-  # Prefer terminating children first (e.g. npm → node), then the recorded PID.
-  if alloy_have_cmd pkill; then
-    pkill -TERM -P "$pid" 2>/dev/null || true
-  fi
-  kill -TERM "$pid" 2>/dev/null || true
-
-  local i child
-  for i in 1 2 3 4 5 6 7 8 9 10; do
-    if ! alloy_pid_alive "$pid"; then
-      rm -f "$pid_path"
-      alloy_info "stopped $name (PID $pid)"
-      exit 0
+  # (1) The recorded PID — a hint. Stop it if it is alive and ours.
+  if [[ -f "$pid_path" ]]; then
+    pid="$(alloy_read_pid_file "$pid_path" || true)"
+    if [[ -n "${pid:-}" ]] && alloy_pid_alive "$pid"; then
+      if alloy_pid_belongs_to_worktree "$pid" "$path"; then
+        alloy_info "Stopping recorded PID $pid ($name)..."
+        alloy_stop_pid_tree "$pid" && stopped_any=1
+      else
+        alloy_info "recorded PID $pid does not belong to $path — ignoring the stale record"
+      fi
     fi
+    rm -f "$pid_path"
+  fi
+
+  # (2) The real listener on this slot's port — the authoritative target. This
+  # catches the wrapper-vs-listener drift and the missing-PID-file case.
+  if [[ -n "$port" ]]; then
+    local lpid
+    lpid="$(alloy_port_listener_pid "$port" 2>/dev/null || true)"
+    if [[ -n "${lpid:-}" ]] && alloy_pid_alive "$lpid"; then
+      if alloy_pid_belongs_to_worktree "$lpid" "$path"; then
+        alloy_info "Stopping the live dev server on :$port (PID $lpid)..."
+        alloy_stop_pid_tree "$lpid" && stopped_any=1
+      else
+        alloy_die "port :$port is held by PID $lpid, which does not appear to belong to $path — refusing to kill it."
+      fi
+    fi
+  fi
+
+  # (3) Verify against the SAME truth dev-status uses. Never claim stopped while a
+  # listener still holds the port.
+  if [[ -n "$port" ]] && alloy_port_in_use "$port"; then
+    local rem; rem="$(alloy_port_listener_pid "$port" 2>/dev/null || true)"
+    cat >&2 <<EOF
+error: a dev server is still listening on :$port (PID ${rem:-?}) after SIGTERM.
+alloy-dev-stop does not send SIGKILL automatically.
+Manual force-kill (only if you have verified ownership):
+  kill -KILL ${rem:-<pid>}
+EOF
+    exit 1
+  fi
+
+  if [[ "$stopped_any" == 1 ]]; then
+    alloy_info "stopped $name"
+  else
+    alloy_info "no running dev server for $name (nothing to stop)"
+  fi
+  exit 0
+}
+
+# Gracefully terminate a PID and its immediate children; return 0 once it is gone,
+# 1 if it survives the grace period (caller decides; we never auto-SIGKILL).
+alloy_stop_pid_tree() {
+  local target="$1" i
+  if alloy_have_cmd pkill; then
+    pkill -TERM -P "$target" 2>/dev/null || true
+  fi
+  kill -TERM "$target" 2>/dev/null || true
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    alloy_pid_alive "$target" || return 0
     sleep 0.5
   done
-
-  cat >&2 <<EOF
-error: process PID $pid still alive after SIGTERM.
-PID file left in place: ${pid_path}
-
-Manual force-kill (only if you have verified ownership):
-  kill -KILL ${pid}
-  rm -f ${pid_path}
-
-alloy-dev-stop does not send SIGKILL automatically.
-EOF
-  exit 1
+  return 1
 }
 
 main "$@"
