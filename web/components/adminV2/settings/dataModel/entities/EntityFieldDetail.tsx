@@ -3,20 +3,23 @@
 /**
  * Selected-field workspace inside Entity → Fields.
  *
- * Overview / Definition / Validation / Usage / History for one field, hosted in
- * the Entity — no navigation to a Fields destination. Editing rehosts the
+ * Definition / Usage / History — lands on Definition. Editing rehosts the
  * existing `field-definitions` mutation path (`PATCH /api/admin/field-definitions/:id`)
  * for tenant-configured fields; platform catalog and computed fields render as
- * protected because no persisted override layer exists for them.
+ * protected. Usage points at Surfaces (Focus Panels and Queue Rows).
  */
 
 import { useEffect, useState } from "react";
+import ConfigurationAdvancedToggle from "@/components/adminV2/configuration/ConfigurationAdvancedToggle";
+import { fieldTypeOperatorLabel } from "@/lib/fields/dataModelWorkspaceOperatorUi";
 import { ConfigWorkspaceTabBar } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 import { EntityOptionSetPanel } from "@/components/adminV2/settings/dataModel/entities/EntityOptionSetPanel";
+import { EntitySurfacesUsageCard } from "@/components/adminV2/settings/dataModel/entities/EntitySurfacesUsageCard";
 import {
     ENTITY_FIELD_DETAIL_TABS,
     withFieldSummaryPatch,
+    withOptionSetReplaced,
     type EntityFieldDetailTabKey,
     type EntityFieldSummaryVm,
     type EntityWorkspaceVm,
@@ -24,7 +27,7 @@ import {
 
 const OWNERSHIP_LABEL: Record<"platform" | "custom" | "computed", string> = {
     platform: "Platform",
-    custom: "Custom",
+    custom: "Organization",
     computed: "Computed",
 };
 
@@ -39,15 +42,6 @@ function FactRow({ label, value }: { label: string; value: string }) {
             <dt className="text-[10px] uppercase tracking-wide text-alloy-midnight/40">{label}</dt>
             <dd className="mt-0.5 text-[12px] text-alloy-midnight">{value}</dd>
         </div>
-    );
-}
-
-function VisibilityRow({ label, on }: { label: string; on: boolean }) {
-    return (
-        <li className="flex items-baseline justify-between gap-2 text-[11px]">
-            <span className="text-alloy-midnight">{label}</span>
-            <span className={on ? "text-[#007d68]" : "text-alloy-midnight/35"}>{on ? "Yes" : "No"}</span>
-        </li>
     );
 }
 
@@ -66,23 +60,28 @@ export function EntityFieldDetail({
     onEntityChanged: (entity: EntityWorkspaceVm) => void;
     testId?: string;
 }) {
-    const [activeTab, setActiveTab] = useState<EntityFieldDetailTabKey>("overview");
-    const [editing, setEditing] = useState(false);
+    const [activeTab, setActiveTab] = useState<EntityFieldDetailTabKey>("definition");
     const [label, setLabel] = useState(field.label);
     const [description, setDescription] = useState(field.description ?? "");
     const [categoryKey, setCategoryKey] = useState(field.categoryKey);
+    const [active, setActive] = useState(field.isActive);
     const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [optionSetOpen, setOptionSetOpen] = useState(false);
 
     useEffect(() => {
-        setEditing(false);
+        setActiveTab("definition");
         setError(null);
+        setSaved(false);
+        setAdvancedOpen(false);
         setOptionSetOpen(false);
         setLabel(field.label);
         setDescription(field.description ?? "");
         setCategoryKey(field.categoryKey);
-    }, [field.refKey, field.label, field.description, field.categoryKey]);
+        setActive(field.isActive);
+    }, [field.refKey, field.label, field.description, field.categoryKey, field.isActive]);
 
     const editable =
         canMutate &&
@@ -90,23 +89,36 @@ export function EntityFieldDetail({
         field.editMode !== "view" &&
         field.fieldDefinitionId != null;
 
+    /** Only tenant-owned fields may be switched off; system rows keep their lifecycle. */
+    const canToggleActive = editable && field.editMode === "full";
+
     const optionSet = field.optionSetKey
         ? entity.optionSets.find((set) => set.setKey === field.optionSetKey)
         : undefined;
+
+    const dirty =
+        label.trim() !== field.label ||
+        (description.trim() || null) !== (field.description ?? null) ||
+        categoryKey !== field.categoryKey ||
+        active !== field.isActive;
 
     const save = async () => {
         if (!editable || !field.fieldDefinitionId) return;
         setSaving(true);
         setError(null);
+        setSaved(false);
         try {
+            const body: Record<string, unknown> = {
+                label: label.trim(),
+                description: description.trim() || null,
+                section_key: categoryKey,
+            };
+            if (canToggleActive) body.is_active = active;
+
             const res = await fetch(`/api/admin/field-definitions/${field.fieldDefinitionId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    label: label.trim(),
-                    description: description.trim() || null,
-                    section_key: categoryKey,
-                }),
+                body: JSON.stringify(body),
             });
             const json = (await res.json().catch(() => ({}))) as { error?: string };
             if (!res.ok) throw new Error(json.error ?? "Save failed");
@@ -117,9 +129,10 @@ export function EntityFieldDetail({
                     description: description.trim() || null,
                     categoryKey,
                     categoryLabel: nextCategory?.label ?? categoryKey,
+                    isActive: canToggleActive ? active : field.isActive,
                 }),
             );
-            setEditing(false);
+            setSaved(true);
         } catch (err) {
             setError((err as Error).message);
         } finally {
@@ -137,7 +150,8 @@ export function EntityFieldDetail({
                 </p>
                 <h2 className="text-lg font-semibold leading-tight text-alloy-midnight">{field.label}</h2>
                 <p className="mt-0.5 text-[11px] text-alloy-midnight/50">
-                    {OWNERSHIP_LABEL[field.ownership]} · {field.fieldType} · {field.categoryLabel}
+                    {OWNERSHIP_LABEL[field.ownership]} · {fieldTypeOperatorLabel(field.fieldType)} · {field.categoryLabel}
+                    {field.isActive ? "" : " · Inactive"}
                 </p>
             </header>
 
@@ -151,55 +165,35 @@ export function EntityFieldDetail({
             />
 
             <div className="space-y-3 pt-3" data-testid={`${testId}-${activeTab}`}>
-                {activeTab === "overview" ?
-                    <ConfigWorkspaceCard title="What this field means" compact testId={`${testId}-overview-card`}>
-                        <p className="text-[12px] leading-5 text-alloy-midnight/70">
-                            {field.description ?? field.helpText ?? "No description has been written for this field."}
-                        </p>
-                        <dl className="mt-3 grid grid-cols-2 gap-2.5">
-                            <FactRow label="Label" value={field.label} />
-                            <FactRow label="Type" value={field.fieldType} />
-                            <FactRow label="Ownership" value={OWNERSHIP_LABEL[field.ownership]} />
-                            <FactRow label="Category" value={field.categoryLabel} />
-                        </dl>
-                    </ConfigWorkspaceCard>
-
-                : activeTab === "definition" ?
+                {activeTab === "definition" ?
                     <>
                         <ConfigWorkspaceCard title="Definition" compact testId={`${testId}-definition-card`}>
-                            <dl className="grid grid-cols-2 gap-2.5">
-                                <FactRow label="Reference key" value={field.refKey} />
-                                <FactRow label="Record type" value={field.entityType} />
-                                <FactRow label="Type" value={field.fieldType} />
-                                <FactRow label="Storage" value={field.storageLine ?? "Not recorded"} />
-                            </dl>
-
                             {editable ?
-                                editing ?
-                                    <div className="mt-3 space-y-2.5 border-t border-alloy-stone/25 pt-3">
-                                        <label className="block space-y-0.5">
-                                            <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                                                Label
-                                            </span>
-                                            <input
-                                                value={label}
-                                                onChange={(event) => setLabel(event.target.value)}
-                                                className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
-                                                data-testid={`${testId}-label-input`}
-                                            />
-                                        </label>
-                                        <label className="block space-y-0.5">
-                                            <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                                                Description
-                                            </span>
-                                            <textarea
-                                                value={description}
-                                                onChange={(event) => setDescription(event.target.value)}
-                                                rows={2}
-                                                className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
-                                                data-testid={`${testId}-description-input`}
-                                            />
-                                        </label>
+                                <div className="space-y-2.5">
+                                    <label className="block space-y-0.5">
+                                        <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                            Field label
+                                        </span>
+                                        <input
+                                            value={label}
+                                            onChange={(event) => setLabel(event.target.value)}
+                                            className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
+                                            data-testid={`${testId}-label-input`}
+                                        />
+                                    </label>
+                                    <label className="block space-y-0.5">
+                                        <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                            Description
+                                        </span>
+                                        <textarea
+                                            value={description}
+                                            onChange={(event) => setDescription(event.target.value)}
+                                            rows={2}
+                                            className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
+                                            data-testid={`${testId}-description-input`}
+                                        />
+                                    </label>
+                                    <div className="grid gap-2.5 sm:grid-cols-2">
                                         <label className="block space-y-0.5">
                                             <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
                                                 Category
@@ -217,60 +211,112 @@ export function EntityFieldDetail({
                                                 ))}
                                             </select>
                                         </label>
-                                        {error ?
-                                            <p className="text-xs text-alloy-ember" data-testid={`${testId}-error`}>
-                                                {error}
+                                        <div className="space-y-0.5">
+                                            <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                                Type
+                                            </span>
+                                            <p className="pt-1.5 text-[12px] text-alloy-midnight/70">
+                                                {fieldTypeOperatorLabel(field.fieldType)}
+                                                <span className="ml-1 text-[10px] text-alloy-midnight/40">
+                                                    cannot change after creation
+                                                </span>
                                             </p>
-                                        :   null}
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                disabled={saving}
-                                                onClick={() => void save()}
-                                                className="rounded-lg bg-alloy-bend-pine px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-                                                data-testid={`${testId}-save`}
-                                            >
-                                                {saving ? "Saving…" : "Save"}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setEditing(false)}
-                                                className="text-[11px] font-medium text-alloy-midnight/55 hover:underline"
-                                                data-testid={`${testId}-cancel`}
-                                            >
-                                                Cancel
-                                            </button>
                                         </div>
-                                        {field.editMode === "presentation" ?
-                                            <p className="text-[10px] text-alloy-midnight/45">
-                                                System field — only label, description, and category can change.
-                                            </p>
+                                    </div>
+                                    {canToggleActive ?
+                                        <label className="flex items-center gap-2 text-[12px] text-alloy-midnight">
+                                            <input
+                                                type="checkbox"
+                                                checked={active}
+                                                onChange={(event) => setActive(event.target.checked)}
+                                                data-testid={`${testId}-active-input`}
+                                            />
+                                            Active — staff can see and use this field
+                                        </label>
+                                    :   null}
+
+                                    {error ?
+                                        <p className="text-xs text-alloy-ember" data-testid={`${testId}-error`}>
+                                            {error}
+                                        </p>
+                                    :   null}
+
+                                    <div className="flex items-center gap-2 border-t border-alloy-stone/25 pt-2.5">
+                                        <button
+                                            type="button"
+                                            disabled={saving || !dirty}
+                                            onClick={() => void save()}
+                                            className="config-primary-btn rounded-lg bg-alloy-bend-pine px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                                            data-testid={`${testId}-save`}
+                                        >
+                                            {saving ? "Saving…" : "Save Field"}
+                                        </button>
+                                        {saved && !dirty ?
+                                            <span className="text-[11px] text-[#007d68]" data-testid={`${testId}-saved`}>
+                                                Saved
+                                            </span>
                                         :   null}
                                     </div>
-                                :   <button
-                                        type="button"
-                                        onClick={() => setEditing(true)}
-                                        className="mt-3 text-[11px] font-medium text-alloy-bend-pine hover:underline"
-                                        data-testid={`${testId}-edit`}
-                                    >
-                                        Edit field
-                                    </button>
+                                    {field.editMode === "presentation" ?
+                                        <p className="text-[10px] text-alloy-midnight/45">
+                                            System field — only the label, description, and category can change.
+                                        </p>
+                                    :   null}
+                                </div>
 
-                            :   <p
-                                    className="mt-3 border-t border-alloy-stone/25 pt-2.5 text-[11px] text-alloy-midnight/50"
-                                    data-testid={`${testId}-protected`}
-                                >
-                                    {field.ownership === "custom" ?
-                                        configLocked ? "Configuration is locked for this organization."
-                                        : !canMutate ? "You do not have permission to change fields."
-                                        : "This field is not operator-configurable."
-                                    :   PROTECTED_REASON[field.ownership]}
-                                </p>
+                            :   <>
+                                    <dl className="grid grid-cols-2 gap-2.5">
+                                        <FactRow label="Field label" value={field.label} />
+                                        <FactRow label="Type" value={fieldTypeOperatorLabel(field.fieldType)} />
+                                        <FactRow label="Category" value={field.categoryLabel} />
+                                        <FactRow label="Required" value={field.required ? "Yes" : "No"} />
+                                    </dl>
+                                    <p
+                                        className="mt-3 border-t border-alloy-stone/25 pt-2.5 text-[11px] text-alloy-midnight/50"
+                                        data-testid={`${testId}-protected`}
+                                    >
+                                        {field.ownership === "custom" ?
+                                            configLocked ? "Configuration is locked for this organization."
+                                            : !canMutate ? "You do not have permission to change fields."
+                                            : "This field is not operator-configurable."
+                                        :   PROTECTED_REASON[field.ownership]}
+                                    </p>
+                                </>
                             }
+
+                            <div className="mt-3 border-t border-alloy-stone/20 pt-2.5">
+                                <ConfigurationAdvancedToggle
+                                    open={advancedOpen}
+                                    onToggle={() => setAdvancedOpen((open) => !open)}
+                                />
+                                {advancedOpen ?
+                                    <dl
+                                        className="mt-2 grid grid-cols-2 gap-2.5"
+                                        data-testid={`${testId}-advanced`}
+                                    >
+                                        <div>
+                                            <dt className="text-[10px] uppercase tracking-wide text-alloy-midnight/40">
+                                                Internal reference
+                                            </dt>
+                                            <dd className="mt-0.5 font-mono text-[11px] text-alloy-midnight/70">
+                                                {field.refKey}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-[10px] uppercase tracking-wide text-alloy-midnight/40">
+                                                Storage location
+                                            </dt>
+                                            <dd className="mt-0.5 font-mono text-[11px] text-alloy-midnight/70">
+                                                {field.storageLine ?? "Not recorded"}
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                :   null}
+                            </div>
                         </ConfigWorkspaceCard>
 
                         {field.optionSetKey ?
-                            <ConfigWorkspaceCard title="Source" compact testId={`${testId}-source-card`}>
+                            <ConfigWorkspaceCard title="Answer options" compact testId={`${testId}-source-card`}>
                                 <button
                                     type="button"
                                     onClick={() => setOptionSetOpen((open) => !open)}
@@ -278,7 +324,7 @@ export function EntityFieldDetail({
                                     aria-expanded={optionSetOpen}
                                     data-testid={`${testId}-option-set-toggle`}
                                 >
-                                    Option set · {optionSet?.label ?? field.optionSetKey}
+                                    Shared list · {optionSet?.label ?? field.optionSetKey}
                                 </button>
                                 {optionSetOpen ?
                                     <div className="mt-2.5">
@@ -294,6 +340,11 @@ export function EntityFieldDetail({
                                                 }
                                             }
                                             fieldLabelByRefKey={fieldLabelByRefKey}
+                                            canMutate={canMutate}
+                                            configLocked={configLocked}
+                                            onOptionSetChanged={(next) =>
+                                                onEntityChanged(withOptionSetReplaced(entity, next))
+                                            }
                                         />
                                     </div>
                                 :   null}
@@ -301,58 +352,19 @@ export function EntityFieldDetail({
                         :   null}
                     </>
 
-                : activeTab === "validation" ?
-                    <ConfigWorkspaceCard title="Validation" compact testId={`${testId}-validation-card`}>
-                        {field.visibility ?
-                            <>
-                                <dl className="grid grid-cols-2 gap-2.5">
-                                    <FactRow label="Required" value={field.required ? "Yes" : "No"} />
-                                    <FactRow label="Type" value={field.fieldType} />
-                                </dl>
-                                <ul className="mt-3 space-y-1 border-t border-alloy-stone/25 pt-2.5">
-                                    <VisibilityRow label="Shown in forms" on={field.visibility.form} />
-                                    <VisibilityRow label="Shown in drawers" on={field.visibility.drawer} />
-                                    <VisibilityRow label="Shown in tables" on={field.visibility.table} />
-                                    <VisibilityRow label="Filterable" on={field.visibility.filterable} />
-                                    <VisibilityRow label="Sortable" on={field.visibility.sortable} />
-                                </ul>
-                            </>
-                        :   <p className="text-[12px] leading-5 text-alloy-midnight/55">
-                                {PROTECTED_REASON[field.ownership === "computed" ? "computed" : "platform"]} No
-                                per-field validation rules are stored for it.
-                            </p>
-                        }
-                    </ConfigWorkspaceCard>
-
                 : activeTab === "usage" ?
-                    <ConfigWorkspaceCard title="Where this field is used" compact testId={`${testId}-usage-card`}>
-                        {field.visibility ?
-                            <ul className="space-y-1" data-testid={`${testId}-usage-list`}>
-                                <VisibilityRow label="Forms" on={field.visibility.form} />
-                                <VisibilityRow label="Drawers" on={field.visibility.drawer} />
-                                <VisibilityRow label="Queue rows and tables" on={field.visibility.table} />
-                            </ul>
-                        :   <p className="text-[12px] leading-5 text-alloy-midnight/55">
-                                Per-field usage tracking is not wired for {OWNERSHIP_LABEL[field.ownership].toLowerCase()}{" "}
-                                fields yet. The Usage tab on this entity lists the surfaces its data reaches.
-                            </p>
-                        }
-                        {optionSet ?
-                            <p className="mt-2.5 border-t border-alloy-stone/25 pt-2 text-[11px] text-alloy-midnight/50">
-                                Shares the {optionSet.label} option set with {optionSet.usedByFieldRefKeys.length - 1}{" "}
-                                other field
-                                {optionSet.usedByFieldRefKeys.length - 1 === 1 ? "" : "s"}.
-                            </p>
-                        :   null}
-                    </ConfigWorkspaceCard>
+                    <EntitySurfacesUsageCard
+                        title="Where this field is used"
+                        testId={`${testId}-usage`}
+                    />
 
                 :   <ConfigWorkspaceCard title="History" compact testId={`${testId}-history-card`}>
                         <p
                             className="text-[12px] leading-5 text-alloy-midnight/55"
                             data-testid={`${testId}-history-planned-empty-state`}
                         >
-                            Change history for individual fields is planned but not wired yet. Once an audit trail
-                            exists for field_definitions changes, it will appear here.
+                            Change history for individual fields is planned but not wired yet. Once Alloy keeps an
+                            audit trail for field changes, it will appear here.
                         </p>
                     </ConfigWorkspaceCard>
                 }

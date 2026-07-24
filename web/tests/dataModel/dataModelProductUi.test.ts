@@ -14,6 +14,7 @@ import {
     ENTITY_CHILD_DETAIL_TABS,
     ENTITY_FIELD_DETAIL_TABS,
     ENTITY_WORKSPACE_TABS,
+    parseEntityWorkspaceTab,
 } from "@/lib/dataModel/dataModelWorkspaceVm";
 
 const webRoot = path.resolve(__dirname, "../..");
@@ -152,11 +153,13 @@ describe("Data Model shell is Entity-centric", () => {
         expect(breadcrumb).not.toContain("Entities</span>");
     });
 
-    it("keeps Operational Calculations reachable as a deferred compat pane, not a primary rail entry", () => {
+    it("keeps Operational Calculations reachable as a deep-link-only compat pane", () => {
         const surface = read("components/adminV2/settings/dataModel/DataModelWorkspaceSurface.tsx");
         expect(surface).toContain("AnalyticsSettingsClient");
-        expect(surface).toContain("data-model-calculations-entry");
+        expect(surface).toContain("data-model-calculations-pane");
         expect(surface).toContain("data-model-calculations-baseline-note");
+        // Reachable by deep link, but never advertised from an Entity page.
+        expect(surface).not.toContain("data-model-calculations-entry");
 
         const rail = read(`${ENTITIES_DIR}/EntitiesCollectionRail.tsx`);
         expect(rail).not.toContain("Calculations");
@@ -185,23 +188,24 @@ describe("Entity tabs resolve in place", () => {
         expect(fields).not.toContain("fieldsHref");
     });
 
-    it("Field detail exposes Overview / Definition / Validation / Usage / History and preserves the mutation API", () => {
+    it("Field detail lands on Definition with Usage (Surfaces) and History — no Overview/Validation", () => {
         expect(ENTITY_FIELD_DETAIL_TABS.map((tab) => tab.key)).toEqual([
-            "overview",
             "definition",
-            "validation",
             "usage",
             "history",
         ]);
 
         const detail = read(`${ENTITIES_DIR}/EntityFieldDetail.tsx`);
         expect(detail).toContain("ENTITY_FIELD_DETAIL_TABS");
+        expect(detail).toContain('useState<EntityFieldDetailTabKey>("definition")');
         expect(detail).toContain("/api/admin/field-definitions/");
         expect(detail).toContain('method: "PATCH"');
+        expect(detail).toContain("EntitySurfacesUsageCard");
+        expect(detail).not.toContain('activeTab === "overview"');
+        expect(detail).not.toContain('activeTab === "validation"');
         // Platform / computed fields are protected rather than fake-editable.
         expect(detail).toContain("-protected");
         expect(detail).toContain("PROTECTED_REASON");
-        expect(detail).not.toContain("next/link");
     });
 
     it("Option Sets open inside the field Definition tab instead of a destination", () => {
@@ -211,13 +215,35 @@ describe("Entity tabs resolve in place", () => {
 
         const panel = read(`${ENTITIES_DIR}/EntityOptionSetPanel.tsx`);
         expect(panel).toContain("Values");
-        expect(panel).not.toContain("next/link");
         expect(panel).not.toContain("OptionSetsClient");
+    });
+
+    it("Relationships and Status land on Definition with Surfaces usage", () => {
+        expect(ENTITY_CHILD_DETAIL_TABS.map((tab) => tab.key)).toEqual([
+            "definition",
+            "usage",
+            "history",
+        ]);
+        const relationships = read(`${ENTITIES_DIR}/EntityRelationshipsTab.tsx`);
+        expect(relationships).toContain('useState<EntityChildDetailTabKey>("definition")');
+        expect(relationships).toContain("EntitySurfacesUsageCard");
+        expect(relationships).not.toContain('activeTab === "overview"');
+
+        const status = read(`${ENTITIES_DIR}/EntityStatusTab.tsx`);
+        expect(status).toContain('useState<EntityChildDetailTabKey>("definition")');
+        expect(status).toContain("EntitySurfacesUsageCard");
+        expect(status).not.toContain('activeTab === "overview"');
+    });
+
+    it("Entity workspace has no top-level Usage tab", () => {
+        expect(ENTITY_WORKSPACE_TABS.map((tab) => tab.key)).not.toContain("usage");
+        const selected = read(`${ENTITIES_DIR}/EntitySelectedWorkspace.tsx`);
+        expect(selected).not.toContain("EntityUsageTab");
+        expect(parseEntityWorkspaceTab("usage")).toBe("overview");
     });
 
     it("Relationships select in place with read-only platform truth", () => {
         expect(ENTITY_CHILD_DETAIL_TABS.map((tab) => tab.key)).toEqual([
-            "overview",
             "definition",
             "usage",
             "history",

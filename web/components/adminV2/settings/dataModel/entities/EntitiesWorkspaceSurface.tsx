@@ -5,8 +5,10 @@
  *
  * The Entity collection rail is the Data Model selector (there is no category
  * rail above it), and the selected Entity owns every Data Model concern for that
- * record type. Mutation paths (`/api/admin/entity-labels`, `/api/admin/org/industry`,
- * `/api/admin/field-definitions`) are unchanged — only the navigation model is new.
+ * record type. Mutation paths (`/api/admin/entity-labels`,
+ * `/api/admin/field-definitions`, `/api/admin/field-sections`,
+ * `/api/admin/status-definitions`, `/api/admin/option-sets`, and the relationship
+ * role-type APIs) are unchanged — the Entity workspace rehosts them in place.
  */
 
 import { useEffect, useState } from "react";
@@ -25,11 +27,9 @@ import {
     type EntityWorkspaceTabKey,
     type EntityWorkspaceVm,
 } from "@/lib/dataModel/dataModelWorkspaceVm";
-import type { DataModelIndustryOption } from "@/lib/dataModel/loadDataModelEntitiesWorkspaceVm";
 import type { SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
 
 type EntityLabelsApiPayload = {
-    org_industry_id: string | null;
     defaults: { entity_type: string; singular: string | null; plural: string | null }[];
     overrides: { entity_type: string; singular: string | null; plural: string | null }[];
     effective: { entity_type: string; singular: string | null; plural: string | null }[];
@@ -38,16 +38,12 @@ type EntityLabelsApiPayload = {
 export function EntitiesWorkspaceSurface({
     initialVm,
     initialConfigLocked,
-    initialIndustries,
-    initialOrgIndustryId,
     initialHubKey,
     initialTab,
     initialField,
 }: {
     initialVm: DataModelEntitiesWorkspaceVm;
     initialConfigLocked: boolean;
-    initialIndustries: readonly DataModelIndustryOption[];
-    initialOrgIndustryId: string | null;
     initialHubKey?: string;
     initialTab?: string;
     initialField?: string;
@@ -55,7 +51,6 @@ export function EntitiesWorkspaceSurface({
     const router = useRouter();
     const { canMutate } = useAdminAuth();
     const [vm, setVm] = useState(initialVm);
-    const [orgIndustryId, setOrgIndustryId] = useState(initialOrgIndustryId);
     const [selectedHubKey, setSelectedHubKey] = useState<SettingsHubEntityKey>(() =>
         parseEntitySelection(initialHubKey, initialVm),
     );
@@ -80,7 +75,6 @@ export function EntitiesWorkspaceSurface({
     };
 
     const onVocabularyPayload = (payload: EntityLabelsApiPayload) => {
-        setOrgIndustryId(payload.org_industry_id);
         setVm((current) => rebuildEntitiesWorkspaceVocabulary(current, payload));
     };
 
@@ -127,8 +121,6 @@ export function EntitiesWorkspaceSurface({
                         onTabChange={changeTab}
                         canMutate={canMutate}
                         configLocked={initialConfigLocked}
-                        industries={initialIndustries}
-                        orgIndustryId={orgIndustryId}
                         onVocabularyPayload={onVocabularyPayload}
                         onEntityChanged={onEntityChanged}
                         initialFieldRefKey={initialField}

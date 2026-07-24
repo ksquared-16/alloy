@@ -6,17 +6,14 @@ import { EntityHistoryTab } from "@/components/adminV2/settings/dataModel/entiti
 import { EntityOverviewTab } from "@/components/adminV2/settings/dataModel/entities/EntityOverviewTab";
 import { EntityRelationshipsTab } from "@/components/adminV2/settings/dataModel/entities/EntityRelationshipsTab";
 import { EntityStatusTab } from "@/components/adminV2/settings/dataModel/entities/EntityStatusTab";
-import { EntityUsageTab } from "@/components/adminV2/settings/dataModel/entities/EntityUsageTab";
 import { EntityVocabularyTab } from "@/components/adminV2/settings/dataModel/entities/EntityVocabularyTab";
 import {
     ENTITY_WORKSPACE_TABS,
     type EntityWorkspaceTabKey,
     type EntityWorkspaceVm,
 } from "@/lib/dataModel/dataModelWorkspaceVm";
-import type { DataModelIndustryOption } from "@/lib/dataModel/loadDataModelEntitiesWorkspaceVm";
 
 type EntityLabelsApiPayload = {
-    org_industry_id: string | null;
     defaults: { entity_type: string; singular: string | null; plural: string | null }[];
     overrides: { entity_type: string; singular: string | null; plural: string | null }[];
     effective: { entity_type: string; singular: string | null; plural: string | null }[];
@@ -26,6 +23,7 @@ type EntityLabelsApiPayload = {
  * The selected Entity workspace. Every Data Model concern for this record type
  * resolves in one of these tabs — nothing here navigates to a Fields, Statuses,
  * Option Sets, or Relationships destination. Overview is the default tab.
+ * Field / relationship / status usage lives on those objects (Surfaces).
  */
 export function EntitySelectedWorkspace({
     entity,
@@ -33,8 +31,6 @@ export function EntitySelectedWorkspace({
     onTabChange,
     canMutate,
     configLocked,
-    industries,
-    orgIndustryId,
     onVocabularyPayload,
     onEntityChanged,
     initialFieldRefKey,
@@ -45,8 +41,6 @@ export function EntitySelectedWorkspace({
     onTabChange: (tab: EntityWorkspaceTabKey) => void;
     canMutate: boolean;
     configLocked: boolean;
-    industries: readonly DataModelIndustryOption[];
-    orgIndustryId: string | null;
     onVocabularyPayload: (payload: EntityLabelsApiPayload) => void;
     onEntityChanged: (entity: EntityWorkspaceVm) => void;
     initialFieldRefKey?: string;
@@ -98,8 +92,6 @@ export function EntitySelectedWorkspace({
                     entity={entity}
                     canMutate={canMutate}
                     configLocked={configLocked}
-                    industries={industries}
-                    orgIndustryId={orgIndustryId}
                     onVocabularyPayload={onVocabularyPayload}
                 />
             : activeTab === "fields" ?
@@ -111,11 +103,19 @@ export function EntitySelectedWorkspace({
                     initialFieldRefKey={initialFieldRefKey}
                 />
             : activeTab === "relationships" ?
-                <EntityRelationshipsTab entity={entity} />
+                <EntityRelationshipsTab
+                    entity={entity}
+                    canMutate={canMutate}
+                    configLocked={configLocked}
+                    onEntityChanged={onEntityChanged}
+                />
             : activeTab === "status" ?
-                <EntityStatusTab entity={entity} />
-            : activeTab === "usage" ?
-                <EntityUsageTab entity={entity} />
+                <EntityStatusTab
+                    entity={entity}
+                    canMutate={canMutate}
+                    configLocked={configLocked}
+                    onEntityChanged={onEntityChanged}
+                />
             : activeTab === "history" ?
                 <EntityHistoryTab entity={entity} />
             :   null}

@@ -5,37 +5,32 @@ import ConfigLockBanner from "@/components/admin/ConfigLockBanner";
 import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import type { EntityWorkspaceVm } from "@/lib/dataModel/dataModelWorkspaceVm";
-import type { DataModelIndustryOption } from "@/lib/dataModel/loadDataModelEntitiesWorkspaceVm";
 
 type EntityLabelsApiPayload = {
-    org_industry_id: string | null;
     defaults: { entity_type: string; singular: string | null; plural: string | null }[];
     overrides: { entity_type: string; singular: string | null; plural: string | null }[];
     effective: { entity_type: string; singular: string | null; plural: string | null }[];
 };
 
-const GENERIC_VALUE = "__generic__";
-
 /**
- * Entities → Vocabulary. Extracted from the legacy `EntitiesWorkspaceClient`
- * expand-in-row editor — same mutation paths (`/api/admin/entity-labels`,
- * `/api/admin/org/industry`), now the primary editing surface for this tab
- * rather than an inline row toggle.
+ * Entity → Vocabulary. The names this organization uses for one record type.
+ *
+ * This tab owns exactly one decision: what this Entity is called. It does not
+ * expose the organization's industry — industry is an organization-profile
+ * setting that happens to seed defaults, not a per-Entity vocabulary control, and
+ * putting it here made a global switch look like a field on the Person entity.
+ * Mutation path (`/api/admin/entity-labels`) is unchanged.
  */
 export function EntityVocabularyTab({
     entity,
     canMutate,
     configLocked,
-    industries,
-    orgIndustryId,
     onVocabularyPayload,
     testId = "entity-vocabulary-tab",
 }: {
     entity: EntityWorkspaceVm;
     canMutate: boolean;
     configLocked: boolean;
-    industries: readonly DataModelIndustryOption[];
-    orgIndustryId: string | null;
     /** Fired with the full entity-labels payload after any successful mutation. */
     onVocabularyPayload: (payload: EntityLabelsApiPayload) => void;
     testId?: string;
@@ -44,7 +39,6 @@ export function EntityVocabularyTab({
     const [singular, setSingular] = useState(entity.vocabulary.singular);
     const [plural, setPlural] = useState(entity.vocabulary.plural);
     const [saving, setSaving] = useState(false);
-    const [industrySaving, setIndustrySaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -53,21 +47,15 @@ export function EntityVocabularyTab({
         setError(null);
     }, [entity.hubKey, entity.vocabulary.singular, entity.vocabulary.plural]);
 
-    const fetchLabelsPayload = async (): Promise<EntityLabelsApiPayload> => {
+    const afterMutation = async () => {
         const res = await fetch("/api/admin/entity-labels");
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load vocabulary");
-        return json as EntityLabelsApiPayload;
-    };
-
-    const afterMutation = async () => {
-        const payload = await fetchLabelsPayload();
-        onVocabularyPayload(payload);
+        onVocabularyPayload(json as EntityLabelsApiPayload);
         await refreshEntityLabels();
     };
 
     const canEdit = canMutate && !configLocked;
-    const locked = configLocked;
 
     const save = async () => {
         if (!canEdit) return;
@@ -111,54 +99,11 @@ export function EntityVocabularyTab({
         }
     };
 
-    const changeIndustry = async (value: string) => {
-        if (!canEdit) return;
-        setIndustrySaving(true);
-        setError(null);
-        try {
-            const res = await fetch("/api/admin/org/industry", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ industry_id: value === GENERIC_VALUE ? null : value }),
-            });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to update industry");
-            await afterMutation();
-        } catch (err) {
-            setError((err as Error).message);
-        } finally {
-            setIndustrySaving(false);
-        }
-    };
-
     const dirty = singular.trim() !== entity.vocabulary.singular || plural.trim() !== entity.vocabulary.plural;
 
     return (
         <div className="space-y-3" data-testid={testId}>
-            {locked ? <ConfigLockBanner /> : null}
-
-            {industries.length > 1 ?
-                <ConfigWorkspaceCard title="Organization industry" compact testId="entity-vocabulary-industry">
-                    <p className="mb-2 text-[11px] leading-4 text-alloy-midnight/55">
-                        Sets the industry-default vocabulary used across all Entities before organization overrides.
-                    </p>
-                    <select
-                        value={orgIndustryId ?? GENERIC_VALUE}
-                        onChange={(event) => void changeIndustry(event.target.value)}
-                        disabled={!canEdit || industrySaving}
-                        className="rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm disabled:opacity-60"
-                        data-testid="entity-vocabulary-industry-select"
-                    >
-                        <option value={GENERIC_VALUE}>Generic</option>
-                        {industries.map((industry) => (
-                            <option key={industry.id} value={industry.id}>
-                                {industry.label}
-                            </option>
-                        ))}
-                    </select>
-                    {industrySaving ? <span className="ml-2 text-[11px] text-alloy-midnight/45">Saving…</span> : null}
-                </ConfigWorkspaceCard>
-            :   null}
+            {configLocked ? <ConfigLockBanner /> : null}
 
             <ConfigWorkspaceCard
                 title={`${entity.displayName} vocabulary`}
@@ -192,8 +137,8 @@ export function EntityVocabularyTab({
                         />
                     </label>
                 </div>
-                <p className="mt-2 text-[10px] text-alloy-midnight/40">
-                    Industry default: {entity.vocabulary.defaultSingular} / {entity.vocabulary.defaultPlural}
+                <p className="mt-2 text-[10px] text-alloy-midnight/40" data-testid="entity-vocabulary-default-hint">
+                    Alloy default: {entity.vocabulary.defaultSingular} / {entity.vocabulary.defaultPlural}
                 </p>
                 {error ?
                     <p className="mt-2 text-xs text-alloy-ember" data-testid="entity-vocabulary-error">
@@ -209,7 +154,7 @@ export function EntityVocabularyTab({
                             className="text-[11px] font-medium text-alloy-midnight/55 hover:underline disabled:opacity-50"
                             data-testid="entity-vocabulary-reset"
                         >
-                            Reset to industry default
+                            Reset to Alloy default
                         </button>
                     :   <span />}
                     {canEdit ?

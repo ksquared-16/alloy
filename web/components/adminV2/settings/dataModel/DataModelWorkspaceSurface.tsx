@@ -5,8 +5,12 @@
  *
  * There is no Data Model category rail. Fields, Relationships, Statuses, and
  * Option Sets are not destinations; they resolve inside the selected Entity.
- * Operational Calculations remains a quiet deferred compat pane reachable from
- * the context actions, not a peer of the Entity selector.
+ *
+ * Operational Calculations is a deferred compat pane reachable only by an
+ * explicit `?section=calculations` / `?mode=calculations` deep link. It is
+ * deliberately NOT promoted anywhere on an Entity page — no header action, no
+ * rail entry — because it is not something an operator configuring an Entity
+ * should be steered into.
  */
 
 import { Boxes } from "lucide-react";
@@ -17,10 +21,7 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import { EntitiesWorkspaceSurface } from "@/components/adminV2/settings/dataModel/entities/EntitiesWorkspaceSurface";
 import AnalyticsSettingsClient from "@/app/adminV2/settings/analytics/AnalyticsSettingsClient";
-import {
-    DATA_MODEL_CALCULATIONS_HREF,
-    dataModelEntityHref,
-} from "@/lib/dataModel/dataModelChapterRoutes";
+import { dataModelEntityHref } from "@/lib/dataModel/dataModelChapterRoutes";
 import type { DataModelEntitiesWorkspaceLoadResult } from "@/lib/dataModel/loadDataModelEntitiesWorkspaceVm";
 
 const DATA_MODEL_SUBTITLE =
@@ -75,17 +76,6 @@ export default function DataModelWorkspaceSurface({
                 titleIcon={<Boxes className="h-5 w-5" strokeWidth={2} />}
                 subtitle={DATA_MODEL_SUBTITLE}
                 testId="data-model-configuration-context"
-                actions={
-                    mode === "entity" ?
-                        <Link
-                            href={DATA_MODEL_CALCULATIONS_HREF}
-                            className="text-[11px] font-medium text-alloy-midnight/50 hover:text-alloy-bend-pine hover:underline"
-                            data-testid="data-model-calculations-entry"
-                        >
-                            Operational Calculations
-                        </Link>
-                    :   null
-                }
             />
 
             {mode === "calculations" ?
@@ -94,8 +84,6 @@ export default function DataModelWorkspaceSurface({
                 <EntitiesWorkspaceSurface
                     initialVm={entitiesLoad.vm}
                     initialConfigLocked={entitiesLoad.configLocked}
-                    initialIndustries={entitiesLoad.industries}
-                    initialOrgIndustryId={entitiesLoad.orgIndustryId}
                     initialHubKey={initialEntity}
                     initialTab={initialTab}
                     initialField={initialField}

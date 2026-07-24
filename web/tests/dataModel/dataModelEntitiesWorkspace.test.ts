@@ -205,6 +205,7 @@ describe("Entity → Fields VM (in-entity field experience)", () => {
             optionSetKey: null,
             fieldDefinitionId: "abc",
             isSystem: false,
+            isActive: true,
             editMode: "full" as const,
             visibility: null,
         };

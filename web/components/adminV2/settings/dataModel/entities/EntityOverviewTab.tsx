@@ -11,7 +11,8 @@ import type { EntityWorkspaceVm, EntityWorkspaceTabKey } from "@/lib/dataModel/d
  * Entity → Overview. Read-only meaningful cards — Snapshot, Vocabulary summary,
  * Structure counts, Used Across, Status domain. Counts come straight from
  * `entity.structure` (the unified resolver) — never re-derived. Every drill-in
- * opens another tab on this entity; nothing leaves the Entity workspace.
+ * opens another tab on this entity; nothing leaves the Entity workspace, and the
+ * organization's industry is not surfaced here.
  */
 export function EntityOverviewTab({
     entity,
@@ -55,7 +56,9 @@ export function EntityOverviewTab({
                                     key: "fields-total",
                                     label: "Fields",
                                     value: String(fields.total),
-                                    hint: `${fields.platform} platform · ${fields.custom} custom · ${fields.computed} computed`,
+                                    hint: `${fields.platform} platform · ${fields.custom} organization · ${fields.computed} computed${
+                                        fields.inactive > 0 ? ` · ${fields.inactive} inactive` : ""
+                                    }`,
                                     onSelect: () => onOpenTab("fields"),
                                 },
                                 {
@@ -75,7 +78,7 @@ export function EntityOverviewTab({
                             {entity.vocabulary.singular} / {entity.vocabulary.plural}
                         </p>
                         <p className="mt-1 text-[11px] text-alloy-midnight/45">
-                            Industry default: {entity.vocabulary.defaultSingular} / {entity.vocabulary.defaultPlural}
+                            Alloy default: {entity.vocabulary.defaultSingular} / {entity.vocabulary.defaultPlural}
                         </p>
                         {entity.vocabulary.isOverridden ?
                             <span

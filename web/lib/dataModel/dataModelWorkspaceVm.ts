@@ -14,7 +14,11 @@
  * - `configurationEntityCatalog.ts` — hub entity identity, description, surfaces line.
  * - `fieldCatalogForSettings.ts` — platform + custom + computed field catalog and edit capability.
  * - `configurationCategoryCatalog.ts` — entity-owned category seeds + org registry labels/order.
- * - `entityRelationshipCatalog.ts` — relationship + usage-surface + builder catalogs.
+ * - `entityRelationshipCatalog.ts` — platform relationship edges + usage-surface + builder catalogs.
+ *   Organization relationship *vocabulary* (family roles / person connection types) is a
+ *   separate VM slice fetched from the role-type APIs, so `relationshipsTotal` keeps
+ *   meaning exactly one thing: the number of platform edges on the entity.
+ * - `fieldLifecycleModel.ts` — the active/hidden/archived truth behind the Inactive filter.
  * - `statusCategoryRegistry.ts` (via `dataModelEntityStatusDomain.ts`) — status domain ownership.
  * - `dataModelWorkspaceModel.ts` — usage-surface count hints (Fields workspace parity).
  * - `entity-labels` API / `resolveEntityLabelsForOrg` — vocabulary.
@@ -36,6 +40,7 @@ import type { EntityLabelsMap } from "@/lib/admin/entityLabelDisplay";
 import type { FieldSectionRegistryRow } from "@/lib/admin/fieldSectionSelectOptions";
 import { getOptionSetKeyFromConfig } from "@/lib/admin/fieldDefinitionOptionSetConfig";
 import { statusDomainForHubEntity } from "@/lib/dataModel/dataModelEntityStatusDomain";
+import { readFieldLifecycleState } from "@/lib/fields/fieldLifecycleModel";
 import { usageSurfaceCountHint } from "@/lib/fields/dataModelWorkspaceModel";
 import {
     DATA_MODEL_BUILDER_AVAILABILITY,
@@ -59,12 +64,28 @@ export type EntityFieldOwnershipCountsVm = {
     custom: number;
     computed: number;
     total: number;
+    /**
+     * Cross-cutting count of fields the organization has switched off. Deliberately
+     * NOT part of the platform/custom/computed partition — those three still sum to
+     * `total`, so no surface can drift by reading `inactive` as a fourth bucket.
+     */
+    inactive: number;
 };
 
 export type EntityStructureCountsVm = {
     fields: EntityFieldOwnershipCountsVm;
     relationshipsTotal: number;
 };
+
+/**
+ * Where a relationship row comes from, which decides whether Definition is
+ * editable. Platform edges are compiled catalog truth; organization vocabulary
+ * rows are real tenant rows behind the role-type APIs.
+ */
+export type EntityRelationshipSource = "platform_edge" | "organization_vocabulary";
+
+/** Which role-type API owns an organization relationship vocabulary row. */
+export type EntityRelationshipVocabularyKind = "family_role" | "person_relationship";
 
 export type EntityRelationshipSummaryVm = {
     id: string;
@@ -77,6 +98,13 @@ export type EntityRelationshipSummaryVm = {
     roleNote: string | null;
     kind: "platform" | "custom";
     whereUsed: readonly string[];
+    source: EntityRelationshipSource;
+    /** Set only for organization vocabulary rows — selects the mutation endpoint. */
+    vocabularyKind: EntityRelationshipVocabularyKind | null;
+    /** `customer_person_role_types.id` / `person_relationship_types.id` when tenant-owned. */
+    vocabularyRowId: string | null;
+    description: string | null;
+    isActive: boolean;
 };
 
 export type EntityVocabularyVm = {
@@ -136,15 +164,25 @@ export type EntityFieldSummaryVm = {
      */
     editMode: FieldEditMode;
     visibility: EntityFieldVisibilityVm | null;
+    /** False when the organization has switched a configured field off. */
+    isActive: boolean;
 };
 
 export type EntityFieldCategoryVm = {
     key: string;
     label: string;
     fieldCount: number;
+    /** `field_section_definitions.id` — present only when an org row already owns this category. */
+    registryId: string | null;
+    description: string | null;
+    sortOrder: number;
+    /** True when a platform seed supplies this category for the entity. */
+    isPlatformSeed: boolean;
 };
 
 export type EntityOptionSetValueVm = {
+    /** `option_set_items.id` — required to edit the value in place. */
+    id: string;
     key: string;
     label: string;
     sortOrder: number;
@@ -204,7 +242,13 @@ export type EntityWorkspaceVm = {
     fields: EntityFieldSummaryVm[];
     fieldCategories: EntityFieldCategoryVm[];
     optionSets: EntityOptionSetVm[];
+    /** Platform edges only — the same set `structure.relationshipsTotal` counts. */
     relationships: EntityRelationshipSummaryVm[];
+    /**
+     * Organization-owned relationship vocabulary (family roles / person connection
+     * types), loaded client-side from the role-type APIs. Empty until fetched.
+     */
+    relationshipVocabulary: EntityRelationshipSummaryVm[];
     statusDomain: EntityStatusDomainVm | null;
     usageSurfaces: EntityUsageSurfaceVm[];
     builderAvailability: EntityBuilderAvailabilityVm[];
@@ -242,7 +286,14 @@ export type EntityOptionSetInput = {
     values: readonly EntityOptionSetValueVm[];
 };
 
-/** THE single field-catalog resolver — every count and every field list must derive from this. */
+/**
+ * THE single field-catalog resolver — every count and every field list must derive from this.
+ *
+ * Hidden (organization-deactivated) fields are included so the Fields tab can
+ * offer a real Inactive filter instead of pretending switched-off fields do not
+ * exist. Archived fields stay excluded: archival is a stronger retirement state
+ * than "inactive" and is not an Entity-workspace concern.
+ */
 export function resolveEntityFieldCatalog(
     hubEntity: SettingsHubEntityKey,
     customFieldsForEntity: readonly FieldDef[],
@@ -251,7 +302,13 @@ export function resolveEntityFieldCatalog(
         hubEntity,
         entityTypes: hubEntityApiTypes(hubEntity),
         customFields: customFieldsForEntity,
+        includeHiddenCustom: true,
     });
+}
+
+/** Inactive == the catalog's own lifecycle truth, never a re-derived guess. */
+function isCatalogEntryActive(entry: SettingsFieldCatalogEntry): boolean {
+    return readFieldLifecycleState(entry.fieldDef) === "active";
 }
 
 /**
@@ -272,6 +329,7 @@ export function resolveEntityStructureCounts(
             custom: counts.custom,
             computed: counts.computed,
             total: counts.total,
+            inactive: catalogEntries.filter((entry) => !isCatalogEntryActive(entry)).length,
         },
         relationshipsTotal: relationships.length,
     };
@@ -289,6 +347,11 @@ function toRelationshipSummary(rel: EntityRelationshipDefinition): EntityRelatio
         roleNote: rel.role_note ?? null,
         kind: rel.kind,
         whereUsed: rel.where_used,
+        source: "platform_edge",
+        vocabularyKind: null,
+        vocabularyRowId: null,
+        description: null,
+        isActive: true,
     };
 }
 
@@ -324,6 +387,7 @@ function toFieldSummary(
         isSystem: def?.is_system === true,
         // Permission is applied at render time; the VM records the maximum surface.
         editMode: fieldRowEditCapability(entry, true).mode,
+        isActive: isCatalogEntryActive(entry),
         visibility:
             def ?
                 {
@@ -353,18 +417,30 @@ export function buildEntityFieldCategories(
     }
 
     const keys = new Set<string>(counts.keys());
-    for (const seed of entityCategorySeeds(hubKey)) keys.add(seed.key);
+    const seeds = new Map(entityCategorySeeds(hubKey).map((seed) => [seed.key, seed] as const));
+    for (const seed of seeds.values()) keys.add(seed.key);
+
+    const registryByKey = new Map<string, FieldSectionRegistryRow>();
     for (const row of registry) {
-        if (row.is_archived === true) continue;
-        if (row.section_key.trim()) keys.add(row.section_key.trim());
+        const key = row.section_key.trim();
+        if (!key) continue;
+        registryByKey.set(key, row);
+        if (row.is_archived !== true) keys.add(key);
     }
 
     const labelByField = new Map(fields.map((field) => [field.categoryKey, field.categoryLabel] as const));
-    return orderedEntityCategoryKeys(hubKey, keys, registry).map((key) => ({
-        key,
-        label: labelByField.get(key) ?? resolveConfigurationCategoryLabel(key, registry, hubKey),
-        fieldCount: counts.get(key) ?? 0,
-    }));
+    return orderedEntityCategoryKeys(hubKey, keys, registry).map((key) => {
+        const row = registryByKey.get(key);
+        return {
+            key,
+            label: labelByField.get(key) ?? resolveConfigurationCategoryLabel(key, registry, hubKey),
+            fieldCount: counts.get(key) ?? 0,
+            registryId: row?.id ?? null,
+            description: row?.description ?? null,
+            sortOrder: row?.sort_order ?? seeds.get(key)?.sort_order ?? 999,
+            isPlatformSeed: seeds.has(key),
+        };
+    });
 }
 
 /** Show All grouping — ordered categories, each with its fields (empty categories dropped). */
@@ -387,7 +463,15 @@ export function groupFieldsByCategory(
     for (const [key, list] of byKey) {
         if (covered.has(key)) continue;
         ordered.push({
-            category: { key, label: list[0]?.categoryLabel ?? key, fieldCount: list.length },
+            category: {
+                key,
+                label: list[0]?.categoryLabel ?? key,
+                fieldCount: list.length,
+                registryId: null,
+                description: null,
+                sortOrder: 999,
+                isPlatformSeed: false,
+            },
             fields: list,
         });
     }
@@ -472,7 +556,13 @@ export function buildEntityWorkspaceVm(params: {
     const counts = countFieldsByOwnership(catalogEntries);
     const relationshipDefs = relationshipsForHubEntity(entity.hubKey);
     const structure: EntityStructureCountsVm = {
-        fields: { platform: counts.platform, custom: counts.custom, computed: counts.computed, total: counts.total },
+        fields: {
+            platform: counts.platform,
+            custom: counts.custom,
+            computed: counts.computed,
+            total: counts.total,
+            inactive: catalogEntries.filter((catalogEntry) => !isCatalogEntryActive(catalogEntry)).length,
+        },
         relationshipsTotal: relationshipDefs.length,
     };
 
@@ -505,6 +595,7 @@ export function buildEntityWorkspaceVm(params: {
         fieldCategories: buildEntityFieldCategories(entity.hubKey, fields, registry),
         optionSets: buildEntityOptionSets(fields, params.optionSetsByKey ?? new Map()),
         relationships: relationshipDefs.map(toRelationshipSummary),
+        relationshipVocabulary: [],
         statusDomain: buildStatusDomainVm(entity.hubKey, params.statusDefinitionsByEntityType ?? new Map()),
         usageSurfaces: DATA_MODEL_USAGE_SURFACES.map((surface) => ({
             id: surface.id,
@@ -593,7 +684,6 @@ export const ENTITY_WORKSPACE_TABS = [
     { key: "fields", label: "Fields" },
     { key: "relationships", label: "Relationships" },
     { key: "status", label: "Status" },
-    { key: "usage", label: "Usage" },
     { key: "history", label: "History" },
 ] as const;
 
@@ -601,23 +691,21 @@ export type EntityWorkspaceTabKey = (typeof ENTITY_WORKSPACE_TABS)[number]["key"
 
 export function parseEntityWorkspaceTab(raw: string | null | undefined): EntityWorkspaceTabKey {
     const key = raw?.trim().toLowerCase();
+    if (key === "usage") return "overview";
     return ENTITY_WORKSPACE_TABS.some((tab) => tab.key === key) ? (key as EntityWorkspaceTabKey) : "overview";
 }
 
-/** Selected-field workspace tabs inside the Entity → Fields tab. */
+/** Selected-field workspace tabs inside Entity → Fields. Lands on Definition. */
 export const ENTITY_FIELD_DETAIL_TABS = [
-    { key: "overview", label: "Overview" },
     { key: "definition", label: "Definition" },
-    { key: "validation", label: "Validation" },
     { key: "usage", label: "Usage" },
     { key: "history", label: "History" },
 ] as const;
 
 export type EntityFieldDetailTabKey = (typeof ENTITY_FIELD_DETAIL_TABS)[number]["key"];
 
-/** Selected-object workspace tabs shared by Relationships, Status, and Option Set details. */
+/** Selected-object tabs for Relationships and Status. Lands on Definition. */
 export const ENTITY_CHILD_DETAIL_TABS = [
-    { key: "overview", label: "Overview" },
     { key: "definition", label: "Definition" },
     { key: "usage", label: "Usage" },
     { key: "history", label: "History" },
@@ -626,6 +714,55 @@ export const ENTITY_CHILD_DETAIL_TABS = [
 export type EntityChildDetailTabKey = (typeof ENTITY_CHILD_DETAIL_TABS)[number]["key"];
 
 export const SHOW_ALL_CATEGORY_KEY = "__all__";
+
+/**
+ * Ownership / lifecycle filter for the Fields tab. Every option maps onto truth
+ * already present on `EntityFieldSummaryVm` — nothing here is inferred.
+ * `organization` is the operator name for tenant-configured (`custom`) fields.
+ */
+export const ENTITY_FIELD_OWNERSHIP_FILTERS = [
+    { key: "all", label: "All" },
+    { key: "platform", label: "Platform" },
+    { key: "organization", label: "Organization" },
+    { key: "computed", label: "Computed" },
+    { key: "inactive", label: "Inactive" },
+] as const;
+
+export type EntityFieldOwnershipFilterKey = (typeof ENTITY_FIELD_OWNERSHIP_FILTERS)[number]["key"];
+
+export function matchesEntityFieldOwnershipFilter(
+    field: Pick<EntityFieldSummaryVm, "ownership" | "isActive">,
+    filter: EntityFieldOwnershipFilterKey,
+): boolean {
+    switch (filter) {
+        case "all":
+            return true;
+        case "platform":
+            return field.ownership === "platform";
+        case "organization":
+            return field.ownership === "custom";
+        case "computed":
+            return field.ownership === "computed";
+        case "inactive":
+            return !field.isActive;
+    }
+}
+
+export function entityFieldOwnershipFilterCount(
+    fields: readonly Pick<EntityFieldSummaryVm, "ownership" | "isActive">[],
+    filter: EntityFieldOwnershipFilterKey,
+): number {
+    return fields.filter((field) => matchesEntityFieldOwnershipFilter(field, filter)).length;
+}
+
+/**
+ * `field_definitions.entity_type` / `field_section_definitions.entity_type` that
+ * owns new rows for a hub entity. Child records write to `customer_member`; every
+ * other hub entity uses its own key.
+ */
+export function entityDefinitionApiType(hubKey: SettingsHubEntityKey | string): string {
+    return hubKey === "inquiry_child" ? "customer_member" : String(hubKey);
+}
 
 /** Resolve a `?field=` param (or stale local selection) against the entity's real field list. */
 export function parseFieldSelection(
@@ -638,9 +775,9 @@ export function parseFieldSelection(
 }
 
 /**
- * Live vocabulary overlay — applied client-side after a label save/reset/industry
- * change so header, collection row, and Overview stay in sync without waiting on a
- * full server VM re-compose. Structure counts (fields/relationships) are untouched;
+ * Live vocabulary overlay — applied client-side after a label save or reset so the
+ * header, collection row, and Overview stay in sync without waiting on a full
+ * server VM re-compose. Structure counts (fields/relationships) are untouched;
  * they do not change when vocabulary changes.
  */
 export function withVocabularyOverride(
@@ -669,17 +806,148 @@ export function withVocabularyOverride(
 export function withFieldSummaryPatch(
     entity: EntityWorkspaceVm,
     refKey: string,
-    patch: Partial<Pick<EntityFieldSummaryVm, "label" | "description" | "helpText" | "categoryKey" | "categoryLabel">>,
+    patch: Partial<
+        Pick<
+            EntityFieldSummaryVm,
+            "label" | "description" | "helpText" | "categoryKey" | "categoryLabel" | "required" | "isActive"
+        >
+    >,
 ): EntityWorkspaceVm {
     const fields = entity.fields.map((field) => (field.refKey === refKey ? { ...field, ...patch } : field));
+    return withFieldListReplaced(entity, fields);
+}
+
+/**
+ * Re-seat a rewritten field list, keeping every derived slice consistent:
+ * category counts, the inactive count, and the ownership partition. Field
+ * creation is the one field mutation that legitimately moves `structure` totals,
+ * so totals are recomputed from the list rather than preserved.
+ */
+function withFieldListReplaced(
+    entity: EntityWorkspaceVm,
+    fields: readonly EntityFieldSummaryVm[],
+): EntityWorkspaceVm {
+    const next = [...fields];
+    return {
+        ...entity,
+        fields: next,
+        structure: {
+            ...entity.structure,
+            fields: {
+                platform: next.filter((field) => field.ownership === "platform").length,
+                custom: next.filter((field) => field.ownership === "custom").length,
+                computed: next.filter((field) => field.ownership === "computed").length,
+                total: next.length,
+                inactive: next.filter((field) => !field.isActive).length,
+            },
+        },
+        fieldCategories: entity.fieldCategories.map((category) => ({
+            ...category,
+            fieldCount: next.filter((field) => field.categoryKey === category.key).length,
+        })),
+    };
+}
+
+/** Add a just-created organization field to the VM without a server round trip. */
+export function withFieldSummaryAdded(
+    entity: EntityWorkspaceVm,
+    field: EntityFieldSummaryVm,
+): EntityWorkspaceVm {
+    if (entity.fields.some((existing) => existing.refKey === field.refKey)) {
+        return withFieldSummaryPatch(entity, field.refKey, field);
+    }
+    return withFieldListReplaced(entity, [...entity.fields, field]);
+}
+
+/**
+ * Replace the category list after an in-place Categories mutation. Field
+ * assignments are untouched, so counts are recomputed from the existing fields
+ * rather than trusted from the caller.
+ */
+export function withFieldCategoriesReplaced(
+    entity: EntityWorkspaceVm,
+    categories: readonly EntityFieldCategoryVm[],
+): EntityWorkspaceVm {
+    const labelByKey = new Map(categories.map((category) => [category.key, category.label] as const));
+    const fields = entity.fields.map((field) =>
+        labelByKey.has(field.categoryKey) ?
+            { ...field, categoryLabel: labelByKey.get(field.categoryKey) ?? field.categoryLabel }
+        :   field,
+    );
     return {
         ...entity,
         fields,
-        fieldCategories: entity.fieldCategories.map((category) => ({
+        fieldCategories: categories.map((category) => ({
             ...category,
             fieldCount: fields.filter((field) => field.categoryKey === category.key).length,
         })),
     };
+}
+
+/** Replace the selected entity's status values after a status-definitions mutation. */
+export function withStatusDomainStatuses(
+    entity: EntityWorkspaceVm,
+    statuses: readonly EntityStatusValueVm[],
+): EntityWorkspaceVm {
+    if (!entity.statusDomain) return entity;
+    return {
+        ...entity,
+        statusDomain: {
+            ...entity.statusDomain,
+            statuses: [...statuses].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label)),
+        },
+    };
+}
+
+/** Replace one option set after a create / add-value / edit-value mutation. */
+export function withOptionSetReplaced(
+    entity: EntityWorkspaceVm,
+    optionSet: EntityOptionSetVm,
+): EntityWorkspaceVm {
+    const exists = entity.optionSets.some((set) => set.setKey === optionSet.setKey);
+    return {
+        ...entity,
+        optionSets:
+            exists ?
+                entity.optionSets.map((set) => (set.setKey === optionSet.setKey ? optionSet : set))
+            :   [...entity.optionSets, optionSet].sort((a, b) => a.setKey.localeCompare(b.setKey)),
+    };
+}
+
+/**
+ * Replace the organization relationship vocabulary rows. These live in their own
+ * VM slice rather than inside `relationships` so that `structure.relationshipsTotal`
+ * keeps meaning exactly one thing: the number of platform edges on this entity.
+ */
+export function withRelationshipVocabulary(
+    entity: EntityWorkspaceVm,
+    vocabulary: readonly EntityRelationshipSummaryVm[],
+): EntityWorkspaceVm {
+    return {
+        ...entity,
+        relationshipVocabulary: [...vocabulary].sort((a, b) => a.label.localeCompare(b.label)),
+    };
+}
+
+/**
+ * Which relationship vocabulary an entity may extend, or `false` when the entity
+ * has no operator-editable relationship terms. Family roles hang off the household
+ * grain; person connections hang off people. Other entities relate through platform
+ * edges only, so offering a create action there would promise a row nobody reads.
+ */
+export function entitySupportsRelationshipVocabulary(
+    hubKey: SettingsHubEntityKey,
+): EntityRelationshipVocabularyKind | false {
+    if (hubKey === "person") return "person_relationship";
+    if (hubKey === "customer") return "family_role";
+    return false;
+}
+
+/** Collection endpoint that owns a relationship vocabulary kind. */
+export function relationshipVocabularyEndpoint(kind: EntityRelationshipVocabularyKind): string {
+    return kind === "family_role" ?
+            "/api/admin/customer-person-role-types"
+        :   "/api/admin/person-relationship-type-settings";
 }
 
 export type EntityLabelEffectiveRow = { entity_type: string; singular: string | null; plural: string | null };

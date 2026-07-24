@@ -6,10 +6,14 @@
  * payload — there is no category rail to fan out into, and no client waterfall
  * before the operator can read the selected Entity.
  *
- * One pass loads: entity labels (industry defaults + org overrides), custom
+ * One pass loads: entity labels (platform defaults + org overrides), custom
  * `field_definitions`, org `field_section_definitions` (real configured
  * categories), effective `status_definitions` for each entity's status domain,
  * and the `option_sets` referenced by option-backed fields.
+ *
+ * The organization's industry is deliberately NOT loaded here. Industry selection
+ * is an organization-profile concern, not an Entity vocabulary control, and the
+ * Entity workspace no longer exposes it.
  */
 
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
@@ -32,15 +36,11 @@ import {
     type EntityStatusDefinitionInput,
 } from "@/lib/dataModel/dataModelWorkspaceVm";
 
-export type DataModelIndustryOption = { id: string; key: string; label: string };
-
 export type DataModelEntitiesWorkspaceLoadResult =
     | {
           ok: true;
           orgId: string;
           configLocked: boolean;
-          industries: DataModelIndustryOption[];
-          orgIndustryId: string | null;
           vm: DataModelEntitiesWorkspaceVm;
       }
     | { ok: false };
@@ -112,7 +112,7 @@ async function loadReferencedOptionSets(
 
     const { data: items } = await supabase
         .from("option_set_items")
-        .select("option_set_id, item_key, label, sort_order")
+        .select("id, option_set_id, item_key, label, sort_order")
         .in(
             "option_set_id",
             setRows.map((row) => row.id),
@@ -123,6 +123,7 @@ async function loadReferencedOptionSets(
         const setId = String(raw.option_set_id);
         const list = valuesBySetId.get(setId) ?? [];
         list.push({
+            id: String(raw.id ?? ""),
             key: String(raw.item_key ?? ""),
             label: raw.label != null ? String(raw.label) : String(raw.item_key ?? ""),
             sortOrder: typeof raw.sort_order === "number" ? raw.sort_order : Number(raw.sort_order) || 0,
@@ -153,11 +154,10 @@ export async function loadDataModelEntitiesWorkspaceVm(): Promise<DataModelEntit
     const statusEntityTypes = statusEntityTypesForHubEntities(entities.map((entity) => entity.hubKey));
 
     const supabase = createAdminClient();
-    const [labelsPayload, configLocked, industriesResult, fieldDefsResult, sectionDefsResult, statusRows] =
+    const [labelsPayload, configLocked, fieldDefsResult, sectionDefsResult, statusRows] =
         await Promise.all([
             resolveEntityLabelsForOrgCached(supabase, ctx.orgId),
             getOrgConfigLocked(ctx.orgId),
-            supabase.from("industries").select("id, key, label").eq("is_active", true).order("label", { ascending: true }),
             supabase.from("field_definitions").select("*").eq("org_id", ctx.orgId).in("entity_type", apiEntityTypes),
             supabase
                 .from("field_section_definitions")
@@ -188,8 +188,9 @@ export async function loadDataModelEntitiesWorkspaceVm(): Promise<DataModelEntit
     const customFieldsByEntityType = new Map<string, FieldDef[]>();
     const optionSetKeys = new Set<string>();
     for (const raw of (fieldDefsResult.data ?? []) as Record<string, unknown>[]) {
+        // Deactivated rows are kept: the catalog resolver owns the active/hidden/archived
+        // decision, and the Fields tab needs hidden rows for its Inactive filter.
         const def = toFieldDefRow(raw);
-        if (def.is_active === false) continue;
         const list = customFieldsByEntityType.get(def.entity_type) ?? [];
         list.push(def);
         customFieldsByEntityType.set(def.entity_type, list);
@@ -235,16 +236,10 @@ export async function loadDataModelEntitiesWorkspaceVm(): Promise<DataModelEntit
         optionSetsByKey,
     });
 
-    const industries = ((industriesResult.data ?? []) as DataModelIndustryOption[]).filter(
-        (industry) => industry.key !== "generic",
-    );
-
     return {
         ok: true,
         orgId: ctx.orgId,
         configLocked,
-        industries,
-        orgIndustryId: labelsPayload.org_industry_id,
         vm,
     };
 }
