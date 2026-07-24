@@ -99,6 +99,7 @@
         "date-fns-tz": "^3.2.0",
         "lucide-react": "^0.575.0",
         "next": "16.0.8",
+        "pdf-lib": "^1.17.1",
         "react": "19.2.1",
         "react-dom": "19.2.1",
         "reactflow": "^11.11.4",
