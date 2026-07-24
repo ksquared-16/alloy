@@ -2,6 +2,7 @@ import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContex
 import type { LeadActivityPreviewEntry, LeadActivityPreviewKind } from "@/lib/layout/runtime/resolveLeadActivityPreview";
 import { resolveLeadActivityPreview } from "@/lib/layout/runtime/resolveLeadActivityPreview";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import { formatActivityTimestamp } from "@/lib/presentation/presentationDateFormat";
 
 import type { CurrentWorkActivityPreviewItem } from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
 
@@ -45,11 +46,13 @@ export function buildCurrentWorkActivityPreviewItems(input: {
     currentWorkId?: string;
     workTemplateKey?: string;
     limit?: number;
+    /** Resolved operator timezone (canonical local-time doctrine); UTC only if absent. */
+    timeZone?: string;
 }): CurrentWorkActivityPreviewItem[] {
     const limit = input.limit ?? 5;
     const canonical =
         input.activityItems
-        ?? resolveLeadActivityPreview(input.context.truth as ProofRuntimeRecord);
+        ?? resolveLeadActivityPreview(input.context.truth as ProofRuntimeRecord, input.timeZone);
 
     const sorted = [...canonical].sort((a, b) => kindPriority(a.kind) - kindPriority(b.kind));
     const items = sorted.map(toPreviewItem);
@@ -64,7 +67,11 @@ export function buildCurrentWorkActivityPreviewItems(input: {
                 label: "Tour scheduled",
                 detail: input.context.signals.tour.statusLabel ?? undefined,
                 category: "Scheduled actions",
-                occurredAt: input.context.signals.tour.startAt,
+                occurredAt:
+                    formatActivityTimestamp(
+                        input.context.signals.tour.startAt,
+                        input.timeZone ? { timeZone: input.timeZone } : undefined,
+                    ) || input.context.signals.tour.startAt,
             },
         ];
     }
@@ -75,12 +82,13 @@ export function buildCurrentWorkActivityPreviewItems(input: {
 /** Back-compat wrapper for card callers that pass OperationalContext directly. */
 export function buildCurrentWorkActivityPreviewItemsFromContext(
     context: OperationalContext,
-    options?: { currentWorkId?: string; workTemplateKey?: string; limit?: number },
+    options?: { currentWorkId?: string; workTemplateKey?: string; limit?: number; timeZone?: string },
 ): CurrentWorkActivityPreviewItem[] {
     return buildCurrentWorkActivityPreviewItems({
         context,
         currentWorkId: options?.currentWorkId,
         workTemplateKey: options?.workTemplateKey,
         limit: options?.limit,
+        timeZone: options?.timeZone,
     });
 }

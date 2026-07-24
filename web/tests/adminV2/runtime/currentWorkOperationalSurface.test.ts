@@ -612,7 +612,6 @@ describe("Current Work operational surface", () => {
         expect(cardSource).not.toMatch(/\bschedule_tour\b/);
         expect(cardSource).not.toMatch(/\bcontact_family\b/);
         expect(cardSource).not.toMatch(/Open work →/);
-        expect(cardSource).toMatch(/Open workspace/);
     });
 
     it("does not hardcode helpful actions or alternate paths in the surface builder", () => {

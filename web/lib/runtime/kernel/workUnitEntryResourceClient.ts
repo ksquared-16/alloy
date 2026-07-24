@@ -11,10 +11,15 @@
 import type { AttentionRef } from "./attention";
 import type { EntryResource } from "./provisioning";
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
-import { provisioningAnswerUrl, consumeFreshProvisioning } from "./workUnitProvisioningPrefetch";
+import {
+    provisioningAnswerUrl,
+    consumeFreshProvisioning,
+    fetchProvisioningEntryDeduped,
+} from "./workUnitProvisioningPrefetch";
+import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 
 export function workUnitEntryResourceClient(): EntryResource {
-    return async (ref: AttentionRef, signal: AbortSignal): Promise<ProvisioningAnswer> => {
+    return async (ref: AttentionRef, _signal: AbortSignal): Promise<ProvisioningAnswer> => {
         const url = provisioningAnswerUrl(ref.target, ref.lens, ref.subject);
 
         // Blank-time removal: if operator intent (hover/focus) warmed this exact answer, K2's single
@@ -22,22 +27,28 @@ export function workUnitEntryResourceClient(): EntryResource {
         // prefetch that errored falls through to the live fetch below; kernel semantics are unchanged.
         const warm = consumeFreshProvisioning(url);
         if (warm) {
+            logCurrentWorkInit("provisioning.client.warm-hit", { cacheKey: url, cache: "hit", preloadSource: "prefetch" });
             try {
                 const answer = await warm;
                 if (answer.terminal !== "error") return answer;
             } catch {
                 /* fall through to a fresh fetch */
             }
+        } else {
+            logCurrentWorkInit("provisioning.client.warm-miss", { cacheKey: url, cache: "miss", note: "no intent-warmed answer — cold entry" });
         }
 
-        const res = await fetch(url, { signal, headers: { accept: "application/json" } });
-        if (!res.ok) {
+        // ONE round-trip per identical entry, even under React Strict Mode's dev double-invoke or a
+        // fast unmount→remount: the cold fetch is in-flight de-duplicated so a second overlapping
+        // request for the SAME answer reuses the first's promise instead of hitting the network twice.
+        const result = await fetchProvisioningEntryDeduped(url);
+        if (!result.ok) {
             // A transport fault is an honest terminal `error` — never a false-empty (U-O7). K2 will
             // map it 1:1; the surface commits an error that is a workable place with a reachable retry.
             return {
                 terminal: "error",
                 code: "records_unavailable",
-                message: `provisioning answer unavailable (HTTP ${res.status})`,
+                message: `provisioning answer unavailable (HTTP ${result.status})`,
                 orgId: ref.tenant,
                 workUnit: null,
                 timings: {
@@ -46,6 +57,6 @@ export function workUnitEntryResourceClient(): EntryResource {
                 },
             } as ProvisioningAnswer;
         }
-        return (await res.json()) as ProvisioningAnswer;
+        return result.answer;
     };
 }

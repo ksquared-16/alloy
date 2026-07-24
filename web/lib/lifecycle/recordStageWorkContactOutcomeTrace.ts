@@ -46,6 +46,13 @@ export async function recordStageWorkContactOutcomeTrace(input: {
     outcomeLabel: string;
     plan: StageOperatingPlanV1;
     departmentMetadata?: Record<string, unknown> | null;
+    declaration?: { provenance: "integrated" | "external_manual"; channel?: string | null } | null;
+    /**
+     * The transaction's correlation id, stamped onto the activity row so the click, the writes
+     * and the activity record are tied together by ONE id. Without it an activity row cannot be
+     * traced back to the transaction that produced it.
+     */
+    correlationId?: string | null;
 }): Promise<{ logged: boolean; event_id?: string; error?: string }> {
     if (
         !workOutcomeRequiresCommunicationTrace({
@@ -78,6 +85,9 @@ export async function recordStageWorkContactOutcomeTrace(input: {
                 work_template_key: input.workTemplateKey,
                 communication_trace: true,
                 actor_user_id: input.userId,
+                contact_provenance: input.declaration?.provenance ?? null,
+                contact_channel: input.declaration?.channel ?? null,
+                correlation_id: input.correlationId ?? null,
             },
         });
 
@@ -96,6 +106,8 @@ export async function recordStageWorkContactOutcomeTrace(input: {
         md.last_contact_outcome_key = input.outcomeKey;
         md.last_contact_outcome_label = input.outcomeLabel;
         md.last_stage_work_outcome_event_id = event_id;
+        if (input.declaration?.provenance) md.last_contact_provenance = input.declaration.provenance;
+        if (input.declaration?.channel) md.last_contact_channel = input.declaration.channel;
 
         await input.supabase
             .from("opportunities")

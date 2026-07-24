@@ -40,6 +40,7 @@ import {
     lifecycleBuilderProcessNotFoundError,
     lifecycleBuilderV1MissingError,
 } from "@/lib/lifecycle/lifecycleBuilderRouteErrors";
+import { validateConfiguredStageReferences } from "@/lib/lifecycle/validateConfiguredStageReferences";
 
 function processIdInConfig(config: LifecycleBuilderV1, processId: string): boolean {
     const pid = processId.trim();
@@ -311,6 +312,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
             }
             default:
                 return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+        }
+
+        // PUBLISH-TIME REFERENTIAL INTEGRITY (Configured Stage Referential Integrity).
+        // Reject any config that references a stage outside its own inventory — no silent drops.
+        const referenceCheck = validateConfiguredStageReferences(config);
+        if (!referenceCheck.ok) {
+            return NextResponse.json(
+                {
+                    error:
+                        "Business Process contains stage references that are not in its own stage inventory. " +
+                        "Fix or remove them before saving.",
+                    code: "dangling_stage_reference",
+                    violations: referenceCheck.violations,
+                },
+                { status: 422 },
+            );
         }
 
         await saveConfig(ctx.orgId, departmentId, config);

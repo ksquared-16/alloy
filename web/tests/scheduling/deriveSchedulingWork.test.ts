@@ -20,6 +20,7 @@ function child(status: ChildSchedulingStatus, name = "Ethan Rivera"): ChildSched
         },
         status,
         current: null,
+        proposed: null,
         upcoming: [],
         temporary: [],
         history: [],

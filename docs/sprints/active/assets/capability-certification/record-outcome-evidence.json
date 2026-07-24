@@ -1,0 +1,350 @@
+{
+  "capability": "record_outcome",
+  "outcome_key": "left_message",
+  "subject": {
+    "oppId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "deptId": "3933ac47-077a-4de8-aaac-8aed48d80413",
+    "stageKey": "lead",
+    "workId": "130064f9-6f73-4b3e-aaa1-9faec2fdf3b0"
+  },
+  "correlation_id": "fa2b48bb-ddfc-4e15-81b2-5738eca7121f",
+  "http": {
+    "status": 200,
+    "server_ms": 6004
+  },
+  "timings": {
+    "click_to_settled_ms": 12049
+  },
+  "transaction": {
+    "outcome": "committed",
+    "ok": true,
+    "changed": true,
+    "correlation_id": "fa2b48bb-ddfc-4e15-81b2-5738eca7121f",
+    "capability": "record_outcome",
+    "steps": [
+      {
+        "name": "validate",
+        "stage": "validate",
+        "boundary": "inside",
+        "status": "ok",
+        "duration_ms": 0
+      },
+      {
+        "name": "work_state",
+        "stage": "persist",
+        "boundary": "inside",
+        "status": "ok",
+        "duration_ms": 1055
+      },
+      {
+        "name": "apply_outcome_rules",
+        "stage": "business_process",
+        "boundary": "inside",
+        "status": "ok",
+        "duration_ms": 1023
+      },
+      {
+        "name": "contact_outcome_trace",
+        "stage": "activity",
+        "boundary": "inside",
+        "status": "ok",
+        "duration_ms": 1746
+      }
+    ],
+    "degraded": [],
+    "duration_ms": 3824
+  },
+  "outcome_execution": {
+    "applied_targets": [
+      {
+        "kind": "reopen_work",
+        "template_key": "contact_family",
+        "due_days": 2
+      }
+    ],
+    "failed_targets": [],
+    "errors": [],
+    "degraded": [],
+    "queue_refresh_opportunity_id": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "needs_attention_set": false,
+    "status_updated": false
+  },
+  "runtime_integrity": {
+    "hard_navigations_during_execution": 0,
+    "spa_marker_survived": "alive",
+    "duplicate_outcome_posts": 1,
+    "api_calls_during_execution": 6
+  },
+  "canonical_before": {
+    "stage_work": {
+      "stage_key": "lead",
+      "stage_label": "Lead",
+      "purpose": "Review inbound lead and reach the family.",
+      "journey_segment": "family",
+      "template_keys": [
+        "contact_family"
+      ],
+      "primary": {
+        "template_key": "contact_family",
+        "label": "Contact Family",
+        "description": "Reach the family, understand their needs, and determine the next step.",
+        "role": "primary",
+        "state": "open",
+        "requires_outcome_picker": true,
+        "work_id": "130064f9-6f73-4b3e-aaa1-9faec2fdf3b0",
+        "due_at": "2026-07-26T02:29:42.518+00:00",
+        "due_urgency": "upcoming",
+        "attempt_count": 2,
+        "last_outcome": {
+          "outcome_key": "left_message",
+          "label": "Left Message",
+          "at": "2026-07-24T02:29:40.788Z"
+        },
+        "completed_at": null,
+        "outcomes": [
+          {
+            "outcome_key": "reached_qualified",
+            "label": "Reached / Qualified",
+            "successful": true
+          },
+          {
+            "outcome_key": "left_message",
+            "label": "Left Message"
+          },
+          {
+            "outcome_key": "awaiting_response",
+            "label": "Awaiting Response"
+          },
+          {
+            "outcome_key": "unable_to_reach",
+            "label": "Unable To Reach"
+          },
+          {
+            "outcome_key": "contact_closed_lost",
+            "label": "Closed Lost"
+          }
+        ],
+        "completion_policy_summary": "Requires 3 attempts within 7 days. Repeats every 2 days until resolved",
+        "completion_policy_min_attempts": 3,
+        "completion_policy_max_attempts": 3,
+        "outcome_automation_preview": [
+          {
+            "outcome_key": "reached_qualified",
+            "outcome_label": "Reached / Qualified",
+            "effect_label": "Qualification"
+          },
+          {
+            "outcome_key": "left_message",
+            "outcome_label": "Left Message",
+            "effect_label": "Continue Contact Family work"
+          },
+          {
+            "outcome_key": "awaiting_response",
+            "outcome_label": "Awaiting Response",
+            "effect_label": "Needs attention: Awaiting family response"
+          },
+          {
+            "outcome_key": "unable_to_reach",
+            "outcome_label": "Unable To Reach",
+            "effect_label": "Continue Contact Family work"
+          },
+          {
+            "outcome_key": "contact_closed_lost",
+            "outcome_label": "Closed Lost",
+            "effect_label": "Close Lead"
+          }
+        ]
+      },
+      "additional": [],
+      "execution": {
+        "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+        "requires_outcome_picker": true,
+        "subject": {
+          "journey_segment": "family",
+          "opportunity_id": "b13ecce9-74d4-442d-9891-7c88f587bc23"
+        }
+      }
+    },
+    "activity_count": 11,
+    "activity_head": [
+      {
+        "id": "203272b8-7587-40eb-965c-8a84d29306e0",
+        "occurred_at": "2026-07-24T02:29:42.859+00:00",
+        "event_type": "stage_work_outcome_recorded",
+        "action_type": "stage_work_outcome",
+        "correlation_id": null
+      },
+      {
+        "id": "fde844d1-7e0d-4a32-8bff-07d87c2ddec9",
+        "occurred_at": "2026-07-24T02:27:15.443+00:00",
+        "event_type": "stage_work_outcome_recorded",
+        "action_type": "stage_work_outcome",
+        "correlation_id": null
+      },
+      {
+        "id": "2e3abef3-b935-48d4-99e8-eb13e481b301",
+        "occurred_at": "2026-07-22T17:51:07.101+00:00",
+        "event_type": "action_executed",
+        "action_type": null,
+        "correlation_id": null
+      },
+      {
+        "id": "3a2523c6-6693-4dba-ae34-b5cc898bada0",
+        "occurred_at": "2026-07-22T17:17:54.645+00:00",
+        "event_type": "action_executed",
+        "action_type": null,
+        "correlation_id": null
+      },
+      {
+        "id": "d3248652-91ee-4641-87d0-8793cd1e35d1",
+        "occurred_at": "2026-07-22T16:46:06.896+00:00",
+        "event_type": "action_executed",
+        "action_type": null,
+        "correlation_id": null
+      }
+    ],
+    "bookings_count": 1,
+    "opportunity_status": null,
+    "opportunity_stage": null
+  },
+  "canonical_after": {
+    "stage_work": {
+      "stage_key": "lead",
+      "stage_label": "Lead",
+      "purpose": "Review inbound lead and reach the family.",
+      "journey_segment": "family",
+      "template_keys": [
+        "contact_family"
+      ],
+      "primary": {
+        "template_key": "contact_family",
+        "label": "Contact Family",
+        "description": "Reach the family, understand their needs, and determine the next step.",
+        "role": "primary",
+        "state": "open",
+        "requires_outcome_picker": true,
+        "work_id": "130064f9-6f73-4b3e-aaa1-9faec2fdf3b0",
+        "due_at": "2026-07-26T02:33:53.167+00:00",
+        "due_urgency": "upcoming",
+        "attempt_count": 3,
+        "last_outcome": {
+          "outcome_key": "left_message",
+          "label": "Left Message",
+          "at": "2026-07-24T02:33:52.134Z"
+        },
+        "completed_at": null,
+        "outcomes": [
+          {
+            "outcome_key": "reached_qualified",
+            "label": "Reached / Qualified",
+            "successful": true
+          },
+          {
+            "outcome_key": "left_message",
+            "label": "Left Message"
+          },
+          {
+            "outcome_key": "awaiting_response",
+            "label": "Awaiting Response"
+          },
+          {
+            "outcome_key": "unable_to_reach",
+            "label": "Unable To Reach"
+          },
+          {
+            "outcome_key": "contact_closed_lost",
+            "label": "Closed Lost"
+          }
+        ],
+        "completion_policy_summary": "Requires 3 attempts within 7 days. Repeats every 2 days until resolved",
+        "completion_policy_min_attempts": 3,
+        "completion_policy_max_attempts": 3,
+        "outcome_automation_preview": [
+          {
+            "outcome_key": "reached_qualified",
+            "outcome_label": "Reached / Qualified",
+            "effect_label": "Qualification"
+          },
+          {
+            "outcome_key": "left_message",
+            "outcome_label": "Left Message",
+            "effect_label": "Continue Contact Family work"
+          },
+          {
+            "outcome_key": "awaiting_response",
+            "outcome_label": "Awaiting Response",
+            "effect_label": "Needs attention: Awaiting family response"
+          },
+          {
+            "outcome_key": "unable_to_reach",
+            "outcome_label": "Unable To Reach",
+            "effect_label": "Continue Contact Family work"
+          },
+          {
+            "outcome_key": "contact_closed_lost",
+            "outcome_label": "Closed Lost",
+            "effect_label": "Close Lead"
+          }
+        ]
+      },
+      "additional": [],
+      "execution": {
+        "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+        "requires_outcome_picker": true,
+        "subject": {
+          "journey_segment": "family",
+          "opportunity_id": "b13ecce9-74d4-442d-9891-7c88f587bc23"
+        }
+      }
+    },
+    "activity_count": 12,
+    "activity_head": [
+      {
+        "id": "7fa3d21f-1188-42e1-9ba4-3f6cd3a0bfb0",
+        "occurred_at": "2026-07-24T02:33:53.496+00:00",
+        "event_type": "stage_work_outcome_recorded",
+        "action_type": "stage_work_outcome",
+        "correlation_id": "fa2b48bb-ddfc-4e15-81b2-5738eca7121f"
+      },
+      {
+        "id": "203272b8-7587-40eb-965c-8a84d29306e0",
+        "occurred_at": "2026-07-24T02:29:42.859+00:00",
+        "event_type": "stage_work_outcome_recorded",
+        "action_type": "stage_work_outcome",
+        "correlation_id": null
+      },
+      {
+        "id": "fde844d1-7e0d-4a32-8bff-07d87c2ddec9",
+        "occurred_at": "2026-07-24T02:27:15.443+00:00",
+        "event_type": "stage_work_outcome_recorded",
+        "action_type": "stage_work_outcome",
+        "correlation_id": null
+      },
+      {
+        "id": "2e3abef3-b935-48d4-99e8-eb13e481b301",
+        "occurred_at": "2026-07-22T17:51:07.101+00:00",
+        "event_type": "action_executed",
+        "action_type": null,
+        "correlation_id": null
+      },
+      {
+        "id": "3a2523c6-6693-4dba-ae34-b5cc898bada0",
+        "occurred_at": "2026-07-22T17:17:54.645+00:00",
+        "event_type": "action_executed",
+        "action_type": null,
+        "correlation_id": null
+      }
+    ],
+    "bookings_count": 1,
+    "opportunity_status": null,
+    "opportunity_stage": null
+  },
+  "network_after_click": [
+    "GET 200 2495ms http://127.0.0.1:3011/api/admin/communications/drawer-recipients?entity_type=opportunities&entity_id=b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "GET 200 10640ms http://127.0.0.1:3011/api/admin/layout-runtime/opportunity-drawer-body?opportunityId=b13ecce9-74d4-442d-9891-7c88f587bc23&departmentId=3933ac47-077a-4de8-aaac-8aed48d80413&workUnitId=587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+    "GET 200 1754ms http://127.0.0.1:3011/api/admin/view-models/drawer/opportunity/df771481-841f-4329-b7bb-c0a03d9fb621/stage-work?stage_key=lead&department_id=3933ac47-077a-4de8-aaac-8aed48d80413&stage_label=Lead",
+    "GET 200 1840ms http://127.0.0.1:3011/api/admin/view-models/drawer/opportunity/c78a8e14-4e4f-4a17-acd4-0ad3245cc81a/stage-work?stage_key=lead&department_id=3933ac47-077a-4de8-aaac-8aed48d80413&stage_label=Lead",
+    "POST 200 6004ms http://127.0.0.1:3011/api/admin/lifecycle-builder/complete-stage-work",
+    "GET 200 1802ms http://127.0.0.1:3011/api/admin/view-models/drawer/opportunity/b13ecce9-74d4-442d-9891-7c88f587bc23/stage-work?stage_key=lead&department_id=3933ac47-077a-4de8-aaac-8aed48d80413&stage_label=Lead"
+  ]
+}

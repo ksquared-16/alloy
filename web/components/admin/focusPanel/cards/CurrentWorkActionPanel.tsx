@@ -4,7 +4,8 @@ import { useCallback } from "react";
 
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
 import CurrentWorkStageTransitionPanel from "@/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel";
-import { isScheduleTourRegistryAction } from "@/lib/admin/actions/scheduleTourWorkUnitActions";
+import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
+import FormDeliverySurface from "@/components/admin/focusPanel/cards/FormDeliverySurface";
 import { resolveOpportunityTourScheduleFromTruth } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveOpportunityTourScheduleFromTruth";
 import {
     resolveCurrentWorkActionSurface,
@@ -64,6 +65,60 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
         );
     }
 
+    if (surface === "form_delivery") {
+        return (
+            <FormDeliverySurface
+                opportunityId={opportunityId}
+                onClose={onClose}
+                onComplete={onComplete}
+            />
+        );
+    }
+
+    if (surface === "communications_composer") {
+        // #1: the communication host renders the REAL communications runtime inline in the centered
+        // surface — reusing the SAME embedded section + fill/scroll/pinned-footer layout contract the
+        // Focus Panel Activity uses (`.alloy-os-activity-cockpit__comms` → `.alloy-os-activity-
+        // workspace__embed` → activity_embed variant). The composer fills the host height with an
+        // internal-scroll thread and its Send / Send later / BOS Assist footer stays visible.
+        return (
+            <div
+                className="alloy-os-currentwork__composer-host"
+                data-work-action-panel="true"
+                data-work-action-panel-key={action.key}
+                data-work-action-surface="communications_composer"
+                aria-label={`${action.label} composer`}
+            >
+                <div className="alloy-os-currentwork__action-panel-header alloy-os-currentwork__composer-header">
+                    <div>
+                        <p className="alloy-os-currentwork__action-panel-eyebrow">Communication</p>
+                        <h3 className="alloy-os-currentwork__action-panel-title">{action.label}</h3>
+                    </div>
+                    <button
+                        type="button"
+                        className="alloy-os-currentwork__action-panel-close"
+                        onClick={onClose}
+                        aria-label="Close composer"
+                        data-work-action-panel-close="true"
+                    >
+                        Close
+                    </button>
+                </div>
+                <div className="alloy-os-activity-cockpit__comms">
+                    <div className="alloy-os-activity-workspace__embed" data-activity-cockpit-embed="true">
+                        <CommunicationsDrawerSection
+                            apiEntityType="opportunities"
+                            entityId={opportunityId}
+                            embedded
+                            embeddedHeaderMode="description_only"
+                            surfaceVariant="activity_embed"
+                        />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const canRunInline = Boolean(mutation?.canEdit) && !action.disabled;
 
     return (
@@ -105,8 +160,10 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
                     }}
                     surface={surface}
                 />
-            : surface === "inline_form"
-                && isScheduleTourRegistryAction({ key: actionKey, payload: action.resolved?.payload ?? null }) ?
+            : surface === "inline_form" ?
+                // `inline_form` is the scheduling capability's declared interaction host (metadata,
+                // not the action name). It is the only inline_form capability today; when more exist,
+                // resolve the component from a host registry rather than assuming the scheduler.
                 <OpportunityTourScheduleActionModal
                     open
                     variant="embedded"

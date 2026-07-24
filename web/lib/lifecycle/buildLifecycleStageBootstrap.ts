@@ -4,6 +4,11 @@ import { dbListFormDefinitions } from "@/lib/admin/forms/formsAdminDb";
 import { parseLifecycleProgressionRequirementsOverride } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { asOperatorStageKey, lifecycleBuilderFromDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    configuredStageInventoryFromMetadata,
+    isStageInConfiguredInventory,
+} from "@/lib/lifecycle/configuredStageInventory";
+import { CURRENT_ENROLLMENT_TEMPLATE_STAGE_KEYS } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
 import { buildEnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import {
     configuredStageKeysForMetadata,
@@ -276,10 +281,27 @@ export async function buildLifecycleStageBootstrap(params: {
     };
 }
 
+/**
+ * A stage is valid for bootstrap ONLY when it is part of the department's configured Business
+ * Process. Built-in lists (LIFECYCLE_STAGE_ORDER, ENROLLMENT_TEMPLATE_STAGE_KEYS) no longer
+ * grant runtime validity — that is exactly the defect that let a removed `qualification` stage
+ * be served (see docs/sprints/active/qualification-provenance-investigation.md).
+ *
+ * The single sanctioned built-in use remains: when a department has NO configured process yet
+ * (first-time setup), the enrollment template stage set is allowed so the builder can bootstrap
+ * an initial configuration. Once any process is configured, only its stages are valid.
+ */
 export function isValidBootstrapBuilderStage(
     metadata: Record<string, unknown> | null,
     builderStageKey: string
 ): boolean {
-    if ((LIFECYCLE_STAGE_ORDER as readonly string[]).includes(builderStageKey)) return true;
-    return isConfiguredStageKey(metadata, builderStageKey);
+    const inventory = configuredStageInventoryFromMetadata(metadata);
+    if (inventory.hasConfiguredProcess) {
+        // Configured process is authoritative — no built-in fallback.
+        return isStageInConfiguredInventory(inventory, builderStageKey);
+    }
+    // No process configured yet: allow ONLY the current enrollment template stages, purely to
+    // seed first-time configuration. This set excludes `qualification` (Part 9). The stale
+    // operator-stage list (LIFECYCLE_STAGE_ORDER) is presentation-only and never grants validity.
+    return CURRENT_ENROLLMENT_TEMPLATE_STAGE_KEYS.has(builderStageKey);
 }

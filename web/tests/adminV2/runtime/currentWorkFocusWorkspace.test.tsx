@@ -26,6 +26,21 @@ function action(partial: Partial<CurrentWorkActionVM> & Pick<CurrentWorkActionVM
     };
 }
 
+/** Registry-resolved client object — record-header actions carry this in production. */
+function resolvedFor(key: string): CurrentWorkActionVM["resolved"] {
+    return {
+        key,
+        label: key,
+        description: null,
+        action_type: "registry",
+        icon: null,
+        style: null,
+        display_style: "outline",
+        payload: {},
+        workflow_id: null,
+    };
+}
+
 const minimalSurface = {
     title: "Contact Family",
     description: "Reach out to understand needs",
@@ -52,6 +67,7 @@ const minimalSurface = {
         category: "primary",
         placement: "current_work_primary",
         handlerKey: "send_email",
+        resolved: resolvedFor("send_email"),
     }),
     recordOutcomeAction: action({
         key: "record_outcome",
@@ -74,6 +90,7 @@ const minimalSurface = {
             category: "supporting",
             placement: "current_work_supporting",
             handlerKey: "send_form",
+            resolved: resolvedFor("send_form"),
         }),
         action({
             key: "add_child",
@@ -81,6 +98,7 @@ const minimalSurface = {
             category: "supporting",
             placement: "current_work_supporting",
             handlerKey: "add_child",
+            resolved: resolvedFor("add_child"),
         }),
         action({
             key: "create_task",
@@ -88,6 +106,7 @@ const minimalSurface = {
             category: "supporting",
             placement: "current_work_supporting",
             handlerKey: "create_task",
+            resolved: resolvedFor("create_task"),
         }),
     ],
     communicationActions: [],
@@ -117,8 +136,15 @@ describe("Current Work action execution planner", () => {
         expect(resolveCurrentWorkActionSurface(minimalSurface.supportingActions[0]!)).toBe("inline_form");
     });
 
-    it("plans send_form / add_child / create_task as header_delegate", () => {
-        for (const row of minimalSurface.supportingActions.slice(1)) {
+    it("plans send_form as its declared form_delivery inline host", () => {
+        const sendForm = minimalSurface.supportingActions.find((a) => a.key === "send_form")!;
+        expect(resolveCurrentWorkActionSurface(sendForm)).toBe("form_delivery");
+        expect(isCurrentWorkActionExecutable(sendForm)).toBe(true);
+        expect(planCurrentWorkActionExecution(sendForm).kind).toBe("open_inline_panel");
+    });
+
+    it("plans add_child / create_task as header_delegate", () => {
+        for (const row of minimalSurface.supportingActions.filter((a) => a.key === "add_child" || a.key === "create_task")) {
             expect(resolveCurrentWorkActionSurface(row)).toBe("header_delegate");
             expect(isCurrentWorkActionExecutable(row)).toBe(true);
             expect(planCurrentWorkActionExecution(row).kind).toBe("header_delegate");
@@ -146,8 +172,8 @@ describe("Current Work action execution planner", () => {
 });
 
 describe("Current Work Focus workspace composition", () => {
-    it("does not elevate Current Work as a centered Focus Card", () => {
-        expect(isFocusElevatingCard("current_work")).toBe(false);
+    it("elevates Current Work as a centered Focus Card (Slice A)", () => {
+        expect(isFocusElevatingCard("current_work")).toBe(true);
         expect(isFocusElevatingCard("household")).toBe(true);
     });
 
@@ -237,25 +263,27 @@ describe("Current Work Focus workspace composition", () => {
         expect(html).not.toContain("data-work-primary-action");
     });
 
-    it("ModeGrid hosts current_work workspace replace", () => {
+    it("ModeGrid elevates current_work via the standard depth path — no canvas replace (Slice A)", () => {
         const source = readFileSync(
             path.join(process.cwd(), "components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx"),
             "utf8",
         );
-        expect(source).toContain('data-focus-panel-workspace="current_work"');
-        expect(source).toContain('presentation="workspace"');
-        expect(source).toContain("openCurrentWorkWorkspace");
-        expect(source).toContain("closeCurrentWorkWorkspace");
+        // Slice A removed the full-canvas workspace replace; current_work elevates like truth cards.
+        expect(source).not.toContain('data-focus-panel-workspace="current_work"');
+        expect(source).not.toContain('presentation="workspace"');
+        expect(source).toContain("elevatedCellKey");
     });
 
-    it("summary card opens workspace instead of local focused elevation", () => {
+    it("current_work card reports centered-elevation depth (Slice A)", () => {
         const source = readFileSync(
             path.join(process.cwd(), "components/admin/focusPanel/cards/CurrentWorkCard.tsx"),
             "utf8",
         );
         expect(source).toContain('presentation?: "summary" | "workspace"');
-        expect(source).toContain("openCurrentWorkWorkspace");
+        // Opening now elevates the card (reports "focused") instead of a canvas replace; the
+        // coordination host raises the cell (backdrop + centered) via activeDepth/elevatedCellKey.
+        expect(source).toContain('useReportPerspective(coordination, "current_work"');
+        expect(source).toContain("useDismissSignal(coordination, \"current_work\"");
         expect(source).not.toContain("setFocused(true)");
-        expect(source).toContain("Open workspace");
     });
 });

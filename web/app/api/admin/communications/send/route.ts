@@ -141,25 +141,35 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    let contact_attempt_association: { associated: boolean; task_id?: string; outcome_key?: string } | undefined;
+    let contact_attempt_association:
+        | { associated: boolean; task_id?: string; outcome_key?: string; error?: string }
+        | undefined;
     if (
         primaryEntityType === "opportunities" &&
         (channel === "email" || channel === "sms") &&
         ctx.userId
     ) {
-        const assoc = await associateOutboundCommunicationToContactAttempt({
-            supabase,
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-            opportunityId: entityId,
-            channel,
-            communicationMessageId: exec.communication_message_id,
-        });
-        if (assoc.associated) {
+        // TRANSACTION BOUNDARY: the message row is COMMITTED and the delivery queue already triggered
+        // above. Contact-attempt association is DOWNSTREAM bookkeeping — it must never convert a
+        // delivered message into a failed response (the operator would re-send and double-message the
+        // family). Failures are reported honestly on the payload, never thrown and never swallowed.
+        try {
+            const assoc = await associateOutboundCommunicationToContactAttempt({
+                supabase,
+                orgId: ctx.orgId,
+                userId: ctx.userId,
+                opportunityId: entityId,
+                channel,
+                communicationMessageId: exec.communication_message_id,
+            });
+            contact_attempt_association =
+                assoc.associated ?
+                    { associated: true, task_id: assoc.task_id, outcome_key: assoc.outcome_key }
+                :   { associated: false, error: assoc.error };
+        } catch (e) {
             contact_attempt_association = {
-                associated: true,
-                task_id: assoc.task_id,
-                outcome_key: assoc.outcome_key,
+                associated: false,
+                error: e instanceof Error ? e.message : String(e),
             };
         }
     }

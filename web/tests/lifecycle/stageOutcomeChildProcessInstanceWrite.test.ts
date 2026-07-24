@@ -23,10 +23,39 @@ type PiRow = {
 };
 type OcmRow = { id: string; org_id: string; opportunity_id: string; customer_member_id: string; stage_key?: string | null };
 
+/** Department metadata configuring the child stages these tests move between, so the canonical
+ *  stage-move guard (configured-membership check) passes. */
+const GUARD_DEPT_METADATA = {
+    lifecycle_builder_v1: {
+        version: 1,
+        active_process_id: "proc-enrollment",
+        processes: [
+            {
+                id: "proc-enrollment",
+                key: "enrollment",
+                name: "Enrollment",
+                primary_entity: "opportunity",
+                sort_order: 0,
+                is_active: true,
+                stages: ["lead", "tour", "decision", "waitlist", "enrolling", "enrolled", "closed_withdrawn"].map(
+                    (key, i) => ({ id: `stage-${key}`, key, label: key, sort_order: i, is_active: true }),
+                ),
+            },
+        ],
+    },
+};
+
 /** Minimal chainable Supabase mock over in-memory process_instances + OCM bridge rows. */
 function makeSupabase(state: { process_instances: PiRow[]; ocm: OcmRow[] }) {
     return {
         from(table: string) {
+            if (table === "departments") {
+                const chain: Record<string, unknown> = {};
+                chain.select = () => chain;
+                chain.eq = () => chain;
+                chain.maybeSingle = () => Promise.resolve({ data: { metadata: GUARD_DEPT_METADATA }, error: null });
+                return chain;
+            }
             let op: "select" | "update" = "select";
             let patch: Record<string, unknown> | null = null;
             const filters: Record<string, unknown> = {};

@@ -1,0 +1,46 @@
+{
+  "request_correlation_id": "cert-1784854159389",
+  "http_status": 400,
+  "response_correlation_header": "cert-1784854159389",
+  "wall_ms": 736,
+  "subject": {
+    "opportunity_id": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "stage_key": "lead",
+    "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+    "work_id": "130064f9-6f73-4b3e-aaa1-9faec2fdf3b0",
+    "outcomes": [
+      "reached_qualified",
+      "left_message",
+      "awaiting_response",
+      "unable_to_reach",
+      "contact_closed_lost"
+    ]
+  },
+  "body": {
+    "error": "Unknown outcome for stage",
+    "changed": false,
+    "transaction": {
+      "outcome": "aborted",
+      "ok": false,
+      "changed": false,
+      "correlation_id": "cert-1784854159389",
+      "capability": "record_outcome",
+      "message": "Unknown outcome for stage",
+      "failed_step": "validate",
+      "failed_stage": "validate",
+      "steps": [
+        {
+          "name": "validate",
+          "stage": "validate",
+          "boundary": "inside",
+          "status": "failed",
+          "duration_ms": 0,
+          "error": "Unknown outcome for stage"
+        }
+      ],
+      "degraded": [],
+      "duration_ms": 0
+    },
+    "correlation_id": "cert-1784854159389"
+  }
+}

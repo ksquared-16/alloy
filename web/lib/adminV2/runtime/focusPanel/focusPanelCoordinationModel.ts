@@ -160,8 +160,9 @@ const OPERATIONAL_TRUTH_CARDS: ReadonlySet<FocusPanelCardKey> = new Set<FocusPan
 ]);
 
 /**
- * Work-owning cards own stage-work completion. Current Work no longer elevates as a
- * centered Focus Card — operators drill into a full Focus Panel workspace instead.
+ * Work-owning cards own stage-work completion. Current Work elevates as a centered Focus
+ * Card (Slice A) — the same activeDepth/elevatedCellKey path the operational-truth cards
+ * use — instead of the legacy full-canvas workspace replace.
  */
 const WORK_OWNING_CARDS: ReadonlySet<FocusPanelCardKey> = new Set<FocusPanelCardKey>(["current_work"]);
 
@@ -176,11 +177,11 @@ export function isWorkOwningCard(card: FocusPanelCardKey): boolean {
 }
 
 /**
- * True when a card may report focused/edit depth (centered Focus Card).
- * Current Work is excluded — it uses `openCurrentWorkWorkspace` canvas replace.
+ * True when a card may report focused/edit depth (centered Focus Card). Operational-truth
+ * cards and the work-owning card (Current Work, Slice A) elevate through the same path.
  */
 export function isFocusElevatingCard(card: FocusPanelCardKey): boolean {
-    return isOperationalTruthCard(card);
+    return isOperationalTruthCard(card) || isWorkOwningCard(card);
 }
 
 /**

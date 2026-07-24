@@ -1,0 +1,86 @@
+{
+  "activity": {
+    "events": [
+      {
+        "id": "203272b8-7587-40eb-965c-8a84d29306e0",
+        "occurred_at": "2026-07-24T02:29:42.859+00:00",
+        "event_type": "stage_work_outcome_recorded",
+        "entity_type": "opportunities",
+        "entity_id": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+        "action_type": "stage_work_outcome",
+        "payload": {
+          "summary": "Contact attempt recorded — Left Message",
+          "work_id": "130064f9-6f73-4b3e-aaa1-9faec2fdf3b0",
+          "stage_key": "lead",
+          "outcome_key": "left_message",
+          "actor_user_id": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+          "outcome_label": "Left Message",
+          "contact_channel": null,
+          "work_template_key": "contact_family",
+          "contact_provenance": null,
+          "communication_trace": true
+        }
+      },
+      {
+        "id": "fde844d1-7e0d-4a32-8bff-07d87c2ddec9",
+        "occurred_at": "2026-07-24T02:27:15.443+00:00",
+        "event_type": "stage_work_outcome_recorded",
+        "entity_type": "opportunities",
+        "entity_id": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+        "action_type": "stage_work_outcome",
+        "payload": {
+          "summary": "Contact attempt recorded — Left Message",
+          "work_id": "130064f9-6f73-4b3e-aaa1-9faec2fdf3b0",
+          "stage_key": "lead",
+          "outcome_key": "left_message",
+          "actor_user_id": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+          "outcome_label": "Left Message",
+          "contact_channel": null,
+          "work_template_key": "contact_family",
+          "contact_provenance": null,
+          "communication_trace": true
+        }
+      },
+      {
+        "id": "2e3abef3-b935-48d4-99e8-eb13e481b301",
+        "occurred_at": "2026-07-22T17:51:07.101+00:00",
+        "event_type": "action_executed",
+        "entity_type": "opportunities",
+        "entity_id": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+        "action_type": null,
+        "payload": {
+          "action_key": "send_form",
+          "actor_user_id": "b2562c99-24dd-404b-b692-a0c4676d5bdf"
+        }
+      },
+      {
+        "id": "3a2523c6-6693-4dba-ae34-b5cc898bada0",
+        "occurred_at": "2026-07-22T17:17:54.645+00:00",
+        "event_type": "action_executed",
+        "entity_type": "opportunities",
+        "entity_id": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+        "action_type": null,
+        "payload": {
+          "action_key": "send_form",
+          "actor_user_id": "b2562c99-24dd-404b-b692-a0c4676d5bdf"
+        }
+      },
+      {
+        "id": "d3248652-91ee-4641-87d0-8793cd1e35d1",
+        "occurred_at": "2026-07-22T16:46:06.896+00:00",
+        "event_type": "action_executed",
+        "entity_type": "opportunities",
+        "entity_id": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+        "action_type": null,
+        "payload": {
+          "action_key": "send_form",
+          "actor_user_id": "b2562c99-24dd-404b-b692-a0c4676d5bdf"
+        }
+      }
+    ]
+  },
+  "opportunity_route": {
+    "status": 405,
+    "body": ""
+  }
+}

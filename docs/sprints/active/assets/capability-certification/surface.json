@@ -1,0 +1,85 @@
+{
+  "summary_card_text": "WHAT'S NEXT\nBlocked\n\nContact Family\n\nReach the family, understand their needs, and determine the next step.\n\nMessage\nSchedule tour\nSend form\nRecord outcome\n\nSTILL NEEDED\n\nChildren\n→\n○\nProgram\n○\nDate of Birth\nView details →",
+  "exposed_capabilities": [
+    "quick_message",
+    "schedule_tour",
+    "send_form"
+  ],
+  "scoped_but_not_exposed": [
+    "add_child",
+    "add_family_member",
+    "add_household_member",
+    "update_enrollment_status",
+    "mark_lost",
+    "mark_won",
+    "reschedule_tour"
+  ],
+  "focused": {
+    "all_work_actions": [
+      {
+        "attrs": {
+          "data-work-action": "close-focused"
+        },
+        "label": "✕"
+      },
+      {
+        "attrs": {
+          "data-work-action": "record-outcome"
+        },
+        "label": "Record outcome"
+      }
+    ],
+    "primary_actions": [
+      {
+        "attrs": {
+          "data-work-primary-action": "quick_message"
+        },
+        "label": "Message"
+      }
+    ],
+    "supporting_actions": [
+      {
+        "attrs": {
+          "data-work-supporting-action": "schedule_tour"
+        },
+        "label": "Schedule tour"
+      },
+      {
+        "attrs": {
+          "data-work-supporting-action": "send_form"
+        },
+        "label": "Send form"
+      }
+    ],
+    "requirement_owners": [
+      {
+        "attrs": {
+          "data-work-readiness-owner": "children"
+        },
+        "label": "Children→○Program○Date of Birth"
+      },
+      {
+        "attrs": {
+          "data-work-readiness-owner-link": "children"
+        },
+        "label": "Children→"
+      }
+    ],
+    "checklist_items": [
+      {
+        "attrs": {
+          "data-work-checklist-item": "child:program_interest"
+        },
+        "label": "○Program"
+      },
+      {
+        "attrs": {
+          "data-work-checklist-item": "child:date_of_birth"
+        },
+        "label": "○Date of Birth"
+      }
+    ],
+    "transitions": [],
+    "body_text": "1\n3\n⌘K\nSite filter\nAll locations\nNorth Campus\nSouth Campus\nWest Campus\nKK\nEnrollment\n\nPipeline\n\n3\nNeeds attention\n3\nOverdue work\n6\nPipeline Children\nActions (2)\n▶\nNew Leads\n3\nActive Pipeline\n0\nRegistration\n0\nWaitlist\n0\nTours\n0\nFilters\nW\nWenc Family\nNew Leads\nTaryn Wenc · (408) 885-9652 · tarynw@hotmail.com\nK\nKurzman Family\nNew Leads\nKelly Kurzman · (602) 290-4816 · kelly.kurzman@gmail.com\nD\nDigan Family\nNew Leads\nRob Digan · (480) 484-4844 · rob@digan.com\nWenc Family\nOpen\nNorth Campus\nBOS\nManage\n▾\nWork\nActivity\nWHAT'S NEXT\nBlocked\n\nContact Family\n\nReach the family, understand their needs, and determine the next step.\n\nStage age > 7 days\n\n✕\nMessage\nSchedule tour\nSend form\nRecord outcome\n\nSTILL NEEDED\n\nChildren\n→\n○\nProgram\n○\nDate of Birth\n\nRecent activity\n\nstage_work_outcome_recorded\nToday • 7:33 PM\n2 children\nOpen\nJul 13 • 1:27 PM\nBILLING PREVIEW\n2 missing\n\n2 items missing\n\nBilling contact or tuition rate not yet configured\n\nView configuration →\nCHILDREN\nNeeds info\n\n2 children\n\n2 children need program & schedule\n\nBW\nBlake Wenc\nDetails →\nNeeds program\nJW\nJarek Wenc\nDetails →\nNeeds program, schedule & start date\nView children →\nHOUSEHOLD\nNeeds contact\n\nWenc household\n\nUpdated Jul 13, 2026\n\nTW\nTaryn Wenc\nPrimary\ntarynw@hotmail.com\n(408) 885-9652\n—\n—\nDetails →\nDW\nDan Wenc\nParent\n—\n—\n—\n—\nDetails →\n2\nChildren\n1\nOther parents\nAdd emergency contact →\nView household →\nBOS\n\nOperational Intelligence\n\nReset\nPin\nClose\n\nHelping with\n\nSubject: Wenc Family\nAttention\n· No urgent issues\nHere are some ways I can help\n▾\nSummarize this lead\nGet a quick overview of details and history\nIdentify missing information\nSee what's needed to move forward\nDraft follow-up\nCreate a personalized follow-up message\n↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy."
+  }
+}

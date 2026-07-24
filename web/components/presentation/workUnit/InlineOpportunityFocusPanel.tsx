@@ -42,6 +42,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+    logCurrentWorkInit,
+    nextCurrentWorkInstanceId,
+} from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 import { MOTION_SETTLE } from "@/lib/motion/motionTokens";
 import { markPerceived } from "@/lib/perf/perceivedPerf";
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
@@ -86,6 +90,9 @@ export function InlineOpportunityFocusPanel() {
     // Record of Attention comes from COMMITTED FOCUS — the sole subject owner. No drawer read.
     const operational = useOperationalSubject();
     const { subjectId: operationalSubjectId } = operational;
+    // Phase A duplicate-init diagnostics — stable id for this Focus Panel instance.
+    const componentIdRef = useRef<string>("");
+    if (!componentIdRef.current) componentIdRef.current = nextCurrentWorkInstanceId("focusPanel");
     // The close affordance is hidden in the inline panel (the panel host stays mounted); a no-op keeps
     // the shared header contract without a drawer close semantic.
     const closeDrawer = useCallback(() => {}, []);
@@ -361,6 +368,38 @@ export function InlineOpportunityFocusPanel() {
     );
     const isActivityMode = focusPanelMode === "activity";
     const activityBodyFillClass = "flex min-h-0 flex-1 flex-col overflow-hidden";
+
+    // Phase A — the body source is the authoritative "which loading/content shell rendered" signal.
+    // Cold-loader is LOADING #2; commit-critical-seed is instant seed content; enriched is the live VM.
+    const bodySource =
+        error && !resolved && !holdPriorPayload ? "error"
+        : resolved ? "enriched:resolved"
+        : heldPrior ? "enriched:held-prior"
+        : operationallyResolved ? "commit-critical-seed"
+        :   "cold-loader";
+    useEffect(() => {
+        logCurrentWorkInit("focusPanel.mount", {
+            subjectId: operationalSubjectId,
+            componentId: componentIdRef.current,
+        });
+        return () =>
+            logCurrentWorkInit("focusPanel.unmount", {
+                subjectId: operationalSubjectId,
+                componentId: componentIdRef.current,
+            });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- one mount/unmount pair per instance
+    }, []);
+    useEffect(() => {
+        logCurrentWorkInit("focusPanel.body", {
+            subjectId: operationalSubjectId,
+            componentId: componentIdRef.current,
+            note: bodySource,
+            cache:
+                bodySource === "commit-critical-seed" ? "seed"
+                : bodySource.startsWith("enriched") ? "live"
+                :   undefined,
+        });
+    }, [bodySource, operationalSubjectId]);
 
     return (
         <FocusPanelSummaryDocProvider

@@ -1,0 +1,13 @@
+{
+  "label": "cold",
+  "mode": "direct",
+  "currentUrl": "http://127.0.0.1:3011/workspace/work-unit/new-leads",
+  "eventCount": 24,
+  "coldFetches": 5,
+  "coldDedupHits": 0,
+  "warmHits": 0,
+  "provisioningNetwork": 7,
+  "requestCensus": {
+    "/api/admin/work-units/new-leads/provisioning-answer": 7
+  }
+}

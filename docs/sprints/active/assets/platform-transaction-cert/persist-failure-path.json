@@ -1,0 +1,72 @@
+{
+  "request_correlation_id": "cert-persist-1784854186102",
+  "http_status": 400,
+  "subject": {
+    "opportunity_id": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "stage_key": "lead",
+    "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+    "work_id": "130064f9-6f73-4b3e-aaa1-9faec2fdf3b0",
+    "outcomes": [
+      "reached_qualified",
+      "left_message",
+      "awaiting_response",
+      "unable_to_reach",
+      "contact_closed_lost"
+    ]
+  },
+  "body": {
+    "error": "Task not found.",
+    "changed": false,
+    "transaction": {
+      "outcome": "aborted",
+      "ok": false,
+      "changed": false,
+      "correlation_id": "cert-persist-1784854186102",
+      "capability": "record_outcome",
+      "message": "Task not found.",
+      "failed_step": "work_state",
+      "failed_stage": "persist",
+      "steps": [
+        {
+          "name": "validate",
+          "stage": "validate",
+          "boundary": "inside",
+          "status": "ok",
+          "duration_ms": 0
+        },
+        {
+          "name": "work_state",
+          "stage": "persist",
+          "boundary": "inside",
+          "status": "failed",
+          "duration_ms": 1026,
+          "error": "Task not found."
+        },
+        {
+          "name": "apply_outcome_rules",
+          "stage": "business_process",
+          "boundary": "inside",
+          "status": "skipped",
+          "duration_ms": 0
+        },
+        {
+          "name": "contact_outcome_trace",
+          "stage": "activity",
+          "boundary": "inside",
+          "status": "skipped",
+          "duration_ms": 0
+        },
+        {
+          "name": "work_state:compensate",
+          "stage": "persist",
+          "boundary": "inside",
+          "status": "compensated",
+          "duration_ms": 0
+        }
+      ],
+      "degraded": [],
+      "duration_ms": 1027
+    },
+    "correlation_id": "cert-persist-1784854186102"
+  }
+}

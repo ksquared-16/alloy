@@ -30,11 +30,38 @@ const emitMock = vi.mocked(emitChildLifecycleStatusChangedEvent);
 type PiRow = { id: string; org_id: string; process_key: string; context_id: string; subject_id: string; stage_key: string | null; state: string | null; close_reason_key: string | null };
 
 /** Mock Supabase that counts every access to the OCM table (to prove the child path never touches it). */
+const GUARD_DEPT_METADATA = {
+    lifecycle_builder_v1: {
+        version: 1,
+        active_process_id: "proc-enrollment",
+        processes: [
+            {
+                id: "proc-enrollment",
+                key: "enrollment",
+                name: "Enrollment",
+                primary_entity: "opportunity",
+                sort_order: 0,
+                is_active: true,
+                stages: ["lead", "tour", "decision", "waitlist", "enrolling", "enrolled", "closed_withdrawn"].map(
+                    (key, i) => ({ id: `stage-${key}`, key, label: key, sort_order: i, is_active: true }),
+                ),
+            },
+        ],
+    },
+};
+
 function makeSupabase(process_instances: PiRow[]) {
     let ocmAccess = 0;
     let ocmWrites = 0;
     const client = {
         from(table: string) {
+            if (table === "departments") {
+                const chain: Record<string, unknown> = {};
+                chain.select = () => chain;
+                chain.eq = () => chain;
+                chain.maybeSingle = () => Promise.resolve({ data: { metadata: GUARD_DEPT_METADATA }, error: null });
+                return chain;
+            }
             if (table === "opportunity_customer_members") ocmAccess++;
             let op: "select" | "update" = "select";
             let patch: Record<string, unknown> | null = null;

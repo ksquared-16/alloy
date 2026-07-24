@@ -5,7 +5,9 @@
  * 1. First-class `stage_operating_plan_v1.outgoing_transitions` when present
  * 2. Legacy outcome-rule / split-rule fallback only when that field is absent
  *
- * Never generates transitions from a stage inventory or domain assumptions.
+ * Never GENERATES transitions from a stage inventory or domain assumptions. It does apply
+ * referential integrity: an edge whose target stage is not in the (known) process stage
+ * inventory is dropped, so stale/deprecated targets never surface as operator transitions.
  */
 
 import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
@@ -40,6 +42,21 @@ function stageLabelForKey(
     const match = processStages.find((row) => row.key === stageKey);
     if (match?.label?.trim()) return match.label.trim();
     return stageKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Referential integrity: a transition may only target a stage that actually exists in this
+ * process's stage inventory. When the inventory is known (non-empty), drop edges pointing at
+ * stages that are not in it — this suppresses stale/deprecated targets (e.g. a removed
+ * `qualification` stage lingering in an org's published plan) without hardcoding any stage name.
+ * When the inventory is unknown (empty), keep everything rather than over-filter.
+ */
+function isKnownStage(
+    stageKey: string,
+    processStages: ReadonlyArray<{ key: string; label: string }>,
+): boolean {
+    if (processStages.length === 0) return true;
+    return processStages.some((row) => row.key === stageKey);
 }
 
 function outcomeLabelForKey(
@@ -186,6 +203,7 @@ export function resolveOutgoingProcessTransitions(input: {
     if (explicit !== undefined) {
         return explicit
             .filter((row) => row.source_stage_key.trim() === currentStageKey)
+            .filter((row) => isKnownStage(row.target_stage_key.trim(), processStages))
             .map((row) => ({
                 transition_ref: row.transition_ref,
                 label: row.label,
@@ -218,5 +236,5 @@ export function resolveOutgoingProcessTransitions(input: {
         if (!merged.has(row.transition_ref)) merged.set(row.transition_ref, row);
     }
 
-    return [...merged.values()];
+    return [...merged.values()].filter((row) => isKnownStage(row.target_stage_key, processStages));
 }

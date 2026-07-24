@@ -74,14 +74,12 @@ function placementForCategory(category: CurrentWorkActionCategory): CurrentWorkA
     }
 }
 
-function isEnrollmentIntentAction(actionKey: string): boolean {
+function isLifecycleIntentAction(actionKey: string): boolean {
     const key = actionKey.trim();
     if (!key) return false;
-    const intent = workTemplateActionIntentForKey(key);
-    if (!intent) return false;
-    return intent.intentKey === "move_to_waitlist"
-        || intent.intentKey === "enroll_subject"
-        || intent.intentKey === "close_lead";
+    // Generic: intents the catalog declares as `category: "lifecycle"` are surfaced as lifecycle
+    // transitions, not as generic record-header actions — regardless of which process defines them.
+    return workTemplateActionIntentForKey(key)?.category === "lifecycle";
 }
 
 function isContextuallyAllowedRecordHeaderAction(
@@ -96,7 +94,7 @@ function isContextuallyAllowedRecordHeaderAction(
         return allowedActionKeys.has(key) || allowedActionKeys.has(intentKey);
     }
 
-    if (isEnrollmentIntentAction(key)) return false;
+    if (isLifecycleIntentAction(key)) return false;
 
     const category = canonicalActionDefinition(key)?.category;
     if (category === "status_lifecycle") return false;

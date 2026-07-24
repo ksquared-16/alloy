@@ -1,0 +1,24 @@
+{
+  "label": "diag",
+  "matchedSelector": "a[href*=\"/work-unit/\"]",
+  "cardVisible": true,
+  "currentUrl": "http://127.0.0.1:3011/workspace/work-unit/new-leads",
+  "timeToStableMs": 4416,
+  "eventCount": 20,
+  "loadingShellsRendered": [
+    "commit-critical-seed",
+    "commit-critical-seed",
+    "enriched:resolved"
+  ],
+  "focusPanelMounts": 2,
+  "recordRuntimeFetchStarts": 2,
+  "recordRuntimeApplies": 1,
+  "deferredStageWorkFetches": 0,
+  "eventReloads": 0,
+  "cardComposes": 2,
+  "requestCensus": {
+    "/api/admin/layout-runtime/opportunity-drawer-body": 1,
+    "/api/admin/work-units/new-leads/provisioning-answer": 2
+  },
+  "totalInterestingRequests": 3
+}

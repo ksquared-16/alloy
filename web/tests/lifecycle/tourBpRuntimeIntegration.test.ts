@@ -67,11 +67,27 @@ function granularTourDepartmentMetadata(): Record<string, unknown> {
 }
 
 // S4: move_to_stage now persists stage_key via supabase.update — chainable no-op stub.
+// Targets also READ their prior value before writing, so the transaction has an inverse to
+// compensate with; the stub answers that read with a plausible pre-move row.
 function makeChainableUpdateSupabase() {
-    const chain: Record<string, unknown> = {};
-    chain.update = () => chain;
-    chain.eq = () => chain;
-    return { from: vi.fn(() => chain) };
+    // The canonical stage-move guard reads department metadata to verify the target stage is
+    // configured; `departments` must return the granular process (which contains decision_pending).
+    const stagePatches: Array<Record<string, unknown>> = [];
+    const from = vi.fn((table: string) => {
+        const chain: Record<string, unknown> = {};
+        chain.update = (patch: Record<string, unknown>) => {
+            if (table === "opportunities") stagePatches.push(patch);
+            return chain;
+        };
+        chain.select = () => chain;
+        chain.eq = () => chain;
+        chain.maybeSingle = async () =>
+            table === "departments"
+                ? { data: { metadata: granularTourDepartmentMetadata() }, error: null }
+                : { data: { status_key: "tour_completed", close_reason_key: null, stage_key: "tour_completed" }, error: null };
+        return chain;
+    });
+    return { from, stagePatches };
 }
 
 function makeSupabaseForStageEntry(statusMetadata: Record<string, unknown> | null = null) {
@@ -402,8 +418,9 @@ describe("tourBpRuntimeIntegration", () => {
 
     it("advances to decision_pending after tour_completed outcome", async () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
+        const supabase = makeChainableUpdateSupabase();
         const result = await executeStageOperatingOutcome({
-            supabase: makeChainableUpdateSupabase() as never,
+            supabase: supabase as never,
             orgId,
             userId,
             departmentId,
@@ -414,9 +431,10 @@ describe("tourBpRuntimeIntegration", () => {
 
         expect(result.errors).toEqual([]);
         expect(result.status_updated).toBe(true);
-        expect(mockUpdateStatus).toHaveBeenCalledWith(
-            expect.objectContaining({ newStatusKey: "decision_pending" }),
-        );
+        // The tour_completed rule sets the family case status open and advances the STAGE to
+        // decision_pending (which is configured in the granular process — the guard allows it).
+        expect(mockUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ newStatusKey: "open" }));
+        expect(supabase.stagePatches).toContainEqual(expect.objectContaining({ stage_key: "decision_pending" }));
     });
 
     it("domain lifecycle bridge delegates to updateOpportunityStatusWithEvent with domain metadata", async () => {
