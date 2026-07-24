@@ -243,7 +243,14 @@ was not folded into the non-destructive certification spec.
 | `tests/tours/tourLifecycleTransactionIntegrity.test.ts` | 7 passing |
 | `tests/lifecycle/` | 88 failing before and after — **identical set**, all pre-existing builder/UI suites; 969 → 998 passing |
 | `tests/tours/` | 5 failing before and after — identical set, pre-existing UX suite; 127 → 135 passing |
+| **Full vitest suite vs. the true pre-session baseline** (`c76ecd005`) | **zero net-new failures across the whole repository.** 926 → 924 failing; 15233 → 15277 passing; 16213 → 16255 tests. The failing-test sets differ by exactly the two fixed below — nothing was swapped. |
 | Live certification | 2 passing against the running app |
+
+The repository carries ~924 pre-existing failures unrelated to this work; the number that
+matters is the **set difference**, which is empty in the new-failure direction. (A first attempt
+at this comparison was invalid — `git stash` does not remove committed work, so the "baseline"
+still contained the session's commits. The numbers above come from a detached checkout of
+`c76ecd005`.)
 
 Two pre-existing failures were also fixed: `completeStageWorkWithOutcome.test.ts` asserted
 outcomes (`qualified`, `closed_lost`) that the lead stage plan does not configure.
