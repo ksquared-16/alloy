@@ -20,6 +20,7 @@ export type IdentityFieldRowInput = {
     linked?: boolean;
     linkLabel?: string | null;
     linkDestination?: IdentityFieldCellVM["linkDestination"];
+    linkTarget?: IdentityFieldCellVM["linkTarget"];
 };
 
 /** Build row VMs from ordered placements (summary or expanded tier). */
@@ -60,6 +61,7 @@ export function resolveIdentityFieldRows(
                 linked: input.linked ?? false,
                 linkLabel: input.linkLabel ?? null,
                 linkDestination: input.linkDestination ?? null,
+                linkTarget: input.linkTarget ?? null,
                 hideWhenEmpty: input.placement.hideWhenEmpty ?? false,
                 width,
                 column: (columnIndex + 1) as 1 | 2 | 3,

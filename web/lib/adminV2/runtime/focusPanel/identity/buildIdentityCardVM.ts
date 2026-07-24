@@ -31,7 +31,7 @@ import {
 import { resolveIdentityFieldRows, type IdentityFieldRowInput } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows";
 import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
 import { isIdentityFieldInlineSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityInlineChildSave";
-import { resolveIdentityFieldLinkContract } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
+import { resolveIdentityFieldLinkContract, normalizeIdentityFieldLinkTarget } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
@@ -166,6 +166,10 @@ function buildRecordRows(args: {
                 : policy;
         const editable = args.canMutate && fieldIsSaveable(effectivePolicy) && saveSupported;
         const linked = fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked;
+        const linkTarget = linked
+            ? normalizeIdentityFieldLinkTarget(placement.linkTarget, placement.fieldRef)
+                ?? linkContract.defaultTarget
+            : null;
         const placementForRuntime = {
             ...placement,
             labelMode: resolveIdentityPlacementLabelMode(placement, group.fieldModes, placement.fieldRef),
@@ -184,7 +188,8 @@ function buildRecordRows(args: {
             editable,
             linked,
             linkLabel: linked ? linkContract.linkLabel : null,
-            linkDestination: linked ? linkContract.destinationCard : null,
+            linkDestination: linked ? (linkTarget?.toCard ?? linkContract.destinationCard) : null,
+            linkTarget,
         });
     }
     return resolveIdentityFieldRows(inputs);

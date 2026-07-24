@@ -1,12 +1,14 @@
 /**
- * Compact schedule projection for identity cards — same Schedule card VM, fewer lines.
+ * Canonical compact schedule summary — shared by Scheduling card rows and
+ * Children-card Schedule fields.
  *
- * Consumes the canonical `ChildScheduling` read model attached at first paint
- * (`context.truth._scheduling_projection.byMemberId`) so Children roster fields
- * match Scheduling card room / days / site / effective / status semantics.
+ * Default line: Room · weekly pattern · effective start
+ * Example: Toddler 2 · Monday–Friday · from Aug 4, 2026
+ *
+ * Never appends “open-ended.” Null effective end omits the end segment entirely.
+ * Hours / site / schedule type / status are optional (off by default).
  */
 
-import { formatWeekdays } from "@/lib/scheduling/projection/buildSchedulingProjection";
 import type {
     ChildScheduling,
     ChildSchedulingStatus,
@@ -14,14 +16,26 @@ import type {
 } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 
 export type CompactScheduleIdentityProjection = {
+    /** Default compact summary (Room · pattern · effective). */
     scheduleLabel: string | null;
     roomLabel: string | null;
     siteLabel: string | null;
     daysLabel: string | null;
     hoursLabel: string | null;
+    /** Effective segment only — never includes “open-ended.” */
     effectiveLabel: string | null;
     statusLabel: string | null;
+    /** Alias of scheduleLabel (default compact). */
     compactLine: string | null;
+};
+
+export type CompactScheduleProjectionOptions = {
+    includeHours?: boolean;
+    includeSite?: boolean;
+    includeScheduleType?: boolean;
+    includeStatus?: boolean;
+    /** When no schedule view exists, emit this instead of null (Scheduling roster). */
+    emptyLabel?: string | null;
 };
 
 const STATUS_LABELS: Record<ChildSchedulingStatus, string> = {
@@ -32,11 +46,13 @@ const STATUS_LABELS: Record<ChildSchedulingStatus, string> = {
     ended: "Ended",
 };
 
-function existingScheduleView(scheduling: ChildScheduling): ScheduleView | null {
+const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export function existingScheduleView(scheduling: ChildScheduling): ScheduleView | null {
     return scheduling.current ?? scheduling.proposed ?? null;
 }
 
-function formatIsoDate(iso: string | null | undefined): string | null {
+export function formatCompactScheduleIsoDate(iso: string | null | undefined): string | null {
     if (!iso) return null;
     const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
     if (!y || !m || !d) return iso;
@@ -48,7 +64,18 @@ function formatIsoDate(iso: string | null | undefined): string | null {
     });
 }
 
-function formatHours(arrive: string | null, depart: string | null): string | null {
+/** Mon–Fri → "Monday–Friday"; otherwise short weekday list. */
+export function formatCompactScheduleWeekdays(weekdays: readonly number[]): string | null {
+    if (!weekdays.length) return null;
+    const sorted = [...weekdays].sort((a, b) => a - b);
+    if (sorted.join(",") === "1,2,3,4,5") return "Monday–Friday";
+    return sorted.map((d) => WEEKDAY_NAMES[d] ?? String(d)).join(", ");
+}
+
+export function formatCompactScheduleHours(
+    arrive: string | null | undefined,
+    depart: string | null | undefined,
+): string | null {
     if (!arrive && !depart) return null;
     const fmt = (raw: string) => {
         const [hh, mm] = raw.split(":").map(Number);
@@ -61,8 +88,35 @@ function formatHours(arrive: string | null, depart: string | null): string | nul
     return arrive ? fmt(arrive) : depart ? fmt(depart) : null;
 }
 
+/**
+ * Effective date segment for compact summaries.
+ * - open-ended / null end → "from {start}" (never "open-ended")
+ * - both ends → "{start}–{end}"
+ */
+export function formatCompactScheduleEffective(args: {
+    effectiveFrom: string | null | undefined;
+    effectiveTo?: string | null | undefined;
+    openEnded?: boolean;
+}): string | null {
+    const from = formatCompactScheduleIsoDate(args.effectiveFrom);
+    if (!from) return null;
+    const toRaw = args.effectiveTo?.trim() || null;
+    if (!toRaw || args.openEnded) {
+        return `from ${from}`;
+    }
+    const to = formatCompactScheduleIsoDate(toRaw);
+    if (!to) return `from ${from}`;
+    return `${from}–${to}`;
+}
+
+function joinCompactParts(parts: Array<string | null | undefined>): string | null {
+    const filtered = parts.map((p) => (typeof p === "string" ? p.trim() : "")).filter(Boolean);
+    return filtered.length > 0 ? filtered.join(" · ") : null;
+}
+
 export function projectCompactScheduleForIdentity(
     scheduling: ChildScheduling | null | undefined,
+    options: CompactScheduleProjectionOptions = {},
 ): CompactScheduleIdentityProjection {
     const empty: CompactScheduleIdentityProjection = {
         scheduleLabel: null,
@@ -74,46 +128,54 @@ export function projectCompactScheduleForIdentity(
         statusLabel: null,
         compactLine: null,
     };
-    if (!scheduling) return empty;
+    if (!scheduling) {
+        const emptyLabel = options.emptyLabel ?? null;
+        return emptyLabel
+            ? { ...empty, scheduleLabel: emptyLabel, compactLine: emptyLabel }
+            : empty;
+    }
 
     const statusLabel = STATUS_LABELS[scheduling.status] ?? scheduling.status;
     const siteLabel = scheduling.child.siteName?.trim() || null;
     const view = existingScheduleView(scheduling);
     if (!view) {
+        const emptyLabel = options.emptyLabel ?? null;
+        const fallback = emptyLabel ?? null;
         return {
             ...empty,
             siteLabel,
             statusLabel,
-            scheduleLabel: statusLabel,
-            compactLine: [siteLabel, statusLabel].filter(Boolean).join(" · ") || statusLabel,
+            scheduleLabel: fallback,
+            compactLine: fallback,
         };
     }
 
     const assignment = view.assignments[0] ?? null;
     const roomLabel = assignment?.room.name?.trim() || null;
-    const daysLabel = assignment?.weekdays?.length ? formatWeekdays(assignment.weekdays) : null;
+    const daysLabel = assignment?.weekdays?.length
+        ? formatCompactScheduleWeekdays(assignment.weekdays)
+        : null;
     const hoursLabel = assignment
-        ? formatHours(assignment.arriveTime, assignment.departTime)
+        ? formatCompactScheduleHours(assignment.arriveTime, assignment.departTime)
         : null;
     const scheduleTypeLabel = view.scheduleTypeLabel?.trim() || view.scheduleType?.trim() || null;
-    const effectiveLabel = view.effectiveFrom
-        ? `from ${formatIsoDate(view.effectiveFrom)}${view.openEnded ? " · open-ended" : ""}`
-        : null;
+    const effectiveLabel = formatCompactScheduleEffective({
+        effectiveFrom: view.effectiveFrom,
+        effectiveTo: view.effectiveTo,
+        openEnded: view.openEnded,
+    });
 
-    const parts = [
-        daysLabel,
-        hoursLabel,
-        siteLabel,
-        roomLabel,
-        scheduleTypeLabel,
-        effectiveLabel,
-        statusLabel,
-    ].filter(Boolean) as string[];
+    // Default canonical: Room · weekly pattern · effective start
+    const defaultParts: Array<string | null> = [roomLabel, daysLabel, effectiveLabel];
+    if (options.includeHours) defaultParts.splice(2, 0, hoursLabel);
+    if (options.includeSite) defaultParts.push(siteLabel);
+    if (options.includeScheduleType) defaultParts.push(scheduleTypeLabel);
+    if (options.includeStatus) defaultParts.push(statusLabel);
 
-    const compactLine = parts.length > 0 ? parts.join(" · ") : null;
+    const compactLine = joinCompactParts(defaultParts);
 
     return {
-        scheduleLabel: compactLine ?? scheduleTypeLabel ?? statusLabel,
+        scheduleLabel: compactLine,
         roomLabel,
         siteLabel,
         daysLabel,

@@ -71,6 +71,11 @@ import {
     type IdentityEvidenceCollectionConfig,
 } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { splitDefaultFieldsForIdentityGroup } from "@/lib/adminV2/settings/surfaces/identityDisclosureDefaults";
+import {
+    defaultIdentityFieldLinkTarget,
+    normalizeIdentityFieldLinkTarget,
+    type IdentityFieldLinkTarget,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 
 export const HOUSEHOLD_SURFACE_ID = "household_surface";
 export const CHILDREN_SURFACE_ID = "children_surface";
@@ -589,20 +594,88 @@ export function setFieldVisibilityInNestedGroup(
     visibility: SurfaceFieldVisibility,
     options?: { tier?: IdentityFieldPolicyTier },
 ): NestedSurfaceConfig {
-    if (options?.tier) {
-        return setFieldVisibilityForIdentityTier(config, groupKey, fieldKey, options.tier, visibility);
+    let next = options?.tier
+        ? setFieldVisibilityForIdentityTier(config, groupKey, fieldKey, options.tier, visibility)
+        : {
+              ...config,
+              groups: config.groups.map((g) =>
+                  g.key === groupKey
+                      ? {
+                            ...g,
+                            fieldPolicies: { ...(g.fieldPolicies ?? {}), [fieldKey]: visibility },
+                        }
+                      : g,
+              ),
+          };
+    if (visibility === "linked") {
+        const seeded = defaultIdentityFieldLinkTarget(fieldKey);
+        if (seeded) {
+            next = setFieldLinkTargetInNestedGroup(next, groupKey, fieldKey, seeded, options);
+        }
     }
+    return next;
+}
+
+export function setFieldLinkTargetInNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    linkTarget: IdentityFieldLinkTarget,
+    options?: { tier?: IdentityFieldPolicyTier },
+): NestedSurfaceConfig {
+    const tierFilter = options?.tier ? normalizeIdentityStorageTier(options.tier) : null;
     return {
         ...config,
-        groups: config.groups.map((g) =>
-            g.key === groupKey
-                ? {
-                      ...g,
-                      fieldPolicies: { ...(g.fieldPolicies ?? {}), [fieldKey]: visibility },
-                  }
-                : g,
-        ),
+        groups: config.groups.map((g) => {
+            if (g.key !== groupKey) return g;
+            const placements = [...(g.fieldPlacements ?? generateDefaultIdentityFieldPlacements(g))];
+            let found = false;
+            const nextPlacements = placements.map((placement) => {
+                if (placement.fieldRef !== fieldKey) return placement;
+                if (
+                    tierFilter
+                    && normalizeIdentityStorageTier(placement.tier) !== tierFilter
+                ) {
+                    return placement;
+                }
+                found = true;
+                return { ...placement, linkTarget, policy: placement.policy ?? "linked" };
+            });
+            if (!found) {
+                nextPlacements.push({
+                    fieldRef: fieldKey,
+                    tier: tierFilter ?? "summary",
+                    row: nextPlacements.length + 1,
+                    column: 1,
+                    width: "full",
+                    policy: "linked",
+                    linkTarget,
+                });
+            }
+            return {
+                ...g,
+                fieldPolicies: { ...(g.fieldPolicies ?? {}), [fieldKey]: "linked" },
+                fieldPlacements: nextPlacements,
+            };
+        }),
     };
+}
+
+export function fieldLinkTargetForNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    options?: { tier?: IdentityFieldPolicyTier },
+): IdentityFieldLinkTarget | null {
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (!group) return defaultIdentityFieldLinkTarget(fieldKey);
+    const tierFilter = options?.tier ? normalizeIdentityStorageTier(options.tier) : null;
+    const placement = (group.fieldPlacements ?? []).find((row) => {
+        if (row.fieldRef !== fieldKey) return false;
+        if (!tierFilter) return true;
+        return normalizeIdentityStorageTier(row.tier) === tierFilter;
+    });
+    return normalizeIdentityFieldLinkTarget(placement?.linkTarget, fieldKey);
 }
 
 export function fieldVisibilityForNestedGroup(

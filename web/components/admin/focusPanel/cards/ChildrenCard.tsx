@@ -53,6 +53,7 @@ import {
     isIdentityFieldInlineSaveSupported,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityInlineChildSave";
 import { navigateIdentityFieldLink } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
+import { fieldLinkTargetForNestedGroup } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     createEmptyFocusPanelCardLinkNavState,
     type FocusPanelCardLinkNavState,
@@ -199,12 +200,26 @@ export default function ChildrenCard({
     );
 
     const linkChildIdentityField = (fieldRef: string, childId: string) => {
+        const child =
+            evidence.children.find((row) => row.id === childId)
+            ?? evidence.children.find((row) => row.customerMemberId === childId)
+            ?? null;
+        const scheduleSubjectId = child?.customerMemberId?.trim() || child?.id || childId;
+        const sourceFocus = child?.id ?? childId;
+        const authoredTarget =
+            childrenSurfaceConfig
+                ? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "identity", fieldRef)
+                    ?? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "placement", fieldRef)
+                    ?? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "roster", fieldRef)
+                : null;
         const result = navigateIdentityFieldLink({
             coordination,
             fromCard: "children",
             fieldRef,
-            destinationFocus: childId,
-            sourceFocus: childId,
+            sourceItemId: scheduleSubjectId,
+            personId: child?.personId ?? null,
+            sourceFocus,
+            authoredTarget,
             nav: cardLinkNav,
         });
         setCardLinkNav(result.nav);

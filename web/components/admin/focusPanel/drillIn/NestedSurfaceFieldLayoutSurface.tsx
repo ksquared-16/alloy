@@ -18,6 +18,8 @@ import { namespacesForNestedGroupPicker,
     setFieldPresentationLabel,
     setFieldPresentationModeInNestedGroup,
     setFieldVisibilityInNestedGroup,
+    setFieldLinkTargetInNestedGroup,
+    fieldLinkTargetForNestedGroup,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { IdentityFieldTier } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
@@ -29,6 +31,12 @@ import {
     type SurfaceFieldVisibility,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import { identityFieldVisibilityOptionsForBuilder } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldEditContract";
+import {
+    IDENTITY_LINK_CARD_OPTIONS,
+    IDENTITY_LINK_OPEN_OPTIONS,
+    IDENTITY_LINK_SUBJECT_OPTIONS,
+    type IdentityFieldLinkTarget,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 import { availableFieldsForNamespaces } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
@@ -580,6 +588,26 @@ function FieldInstance({
                                     </option>
                                 ))}
                             </select>
+                            {visibility === "linked" ? (
+                                <LinkedTargetControls
+                                    fieldKey={fieldKey}
+                                    catalogLabel={catalogLabel}
+                                    linkTarget={
+                                        fieldLinkTargetForNestedGroup(config, groupKey, fieldKey, tier ? { tier } : undefined)
+                                    }
+                                    onChange={(nextTarget) =>
+                                        onMutate(
+                                            setFieldLinkTargetInNestedGroup(
+                                                config,
+                                                groupKey,
+                                                fieldKey,
+                                                nextTarget,
+                                                tier ? { tier } : undefined,
+                                            ),
+                                        )
+                                    }
+                                />
+                            ) : null}
                             <button
                                 type="button"
                                 className={clsx("fp-layout-field__toggle", showLabel && "is-on")}
@@ -625,6 +653,85 @@ function FieldInstance({
                 </div>
                 </>
             ) : null}
+        </div>
+    );
+}
+
+function LinkedTargetControls({
+    fieldKey,
+    catalogLabel,
+    linkTarget,
+    onChange,
+}: {
+    fieldKey: string;
+    catalogLabel: string;
+    linkTarget: IdentityFieldLinkTarget | null;
+    onChange: (next: IdentityFieldLinkTarget) => void;
+}) {
+    if (!linkTarget) return null;
+    return (
+        <div
+            className="fp-linked-target-controls"
+            data-linked-target-controls={fieldKey}
+            onClick={(e) => e.stopPropagation()}
+        >
+            <label className="fp-linked-target-controls__row">
+                <span>Link to card</span>
+                <select
+                    aria-label={`Link ${catalogLabel} to card`}
+                    value={linkTarget.toCard}
+                    onChange={(e) =>
+                        onChange({
+                            ...linkTarget,
+                            toCard: e.target.value as IdentityFieldLinkTarget["toCard"],
+                        })
+                    }
+                >
+                    {IDENTITY_LINK_CARD_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </option>
+                    ))}
+                </select>
+            </label>
+            <label className="fp-linked-target-controls__row">
+                <span>Open</span>
+                <select
+                    aria-label={`Open mode for ${catalogLabel}`}
+                    value={linkTarget.open}
+                    onChange={(e) =>
+                        onChange({
+                            ...linkTarget,
+                            open: e.target.value as IdentityFieldLinkTarget["open"],
+                        })
+                    }
+                >
+                    {IDENTITY_LINK_OPEN_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </option>
+                    ))}
+                </select>
+            </label>
+            <label className="fp-linked-target-controls__row">
+                <span>Subject</span>
+                <select
+                    aria-label={`Subject for ${catalogLabel}`}
+                    value={linkTarget.subject}
+                    onChange={(e) =>
+                        onChange({
+                            ...linkTarget,
+                            subject: e.target.value as IdentityFieldLinkTarget["subject"],
+                        })
+                    }
+                >
+                    {IDENTITY_LINK_SUBJECT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </option>
+                    ))}
+                </select>
+            </label>
         </div>
     );
 }

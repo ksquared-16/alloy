@@ -78,7 +78,7 @@ describe("identity Editable / Linked / schedule compact", () => {
         );
     });
 
-    it("projects compact schedule with room · days · hours (not shallow type alone)", () => {
+    it("projects compact schedule with Room · Monday–Friday · from date (shared projector)", () => {
         const scheduling = {
             status: "scheduled",
             child: { siteName: "North Campus" },
@@ -86,11 +86,12 @@ describe("identity Editable / Linked / schedule compact", () => {
                 scheduleType: "full_day",
                 scheduleTypeLabel: "Full Day",
                 effectiveFrom: "2026-08-01",
+                effectiveTo: null,
                 openEnded: true,
                 assignments: [
                     {
                         room: { name: "Preschool A" },
-                        weekdays: ["mon", "tue", "wed", "thu", "fri"],
+                        weekdays: [1, 2, 3, 4, 5],
                         arriveTime: "08:00",
                         departTime: "17:00",
                     },
@@ -100,10 +101,11 @@ describe("identity Editable / Linked / schedule compact", () => {
         } as unknown as ChildScheduling;
         const compact = projectCompactScheduleForIdentity(scheduling);
         expect(compact.roomLabel).toBe("Preschool A");
-        expect(compact.daysLabel).toBeTruthy();
+        expect(compact.daysLabel).toBe("Monday–Friday");
         expect(compact.hoursLabel).toMatch(/8:00/);
-        expect(compact.compactLine).toContain("Preschool A");
+        expect(compact.compactLine).toBe("Preschool A · Monday–Friday · from Aug 1, 2026");
         expect(compact.scheduleLabel).toBe(compact.compactLine);
-        expect(compact.scheduleLabel).not.toBe("Full Day");
+        expect(compact.compactLine).not.toContain("open-ended");
+        expect(compact.compactLine).not.toContain("Full Day");
     });
 });

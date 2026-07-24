@@ -94,6 +94,7 @@ export type IdentityFieldCellVM = {
     linked?: boolean;
     linkLabel?: string | null;
     linkDestination?: FocusPanelCardKey | null;
+    linkTarget?: import("@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract").IdentityFieldLinkTarget | null;
     hideWhenEmpty: boolean;
     width: NestedSurfaceFieldLayoutWidth;
 };

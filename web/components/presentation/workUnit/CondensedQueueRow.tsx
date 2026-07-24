@@ -30,7 +30,10 @@ import {
     type QueueRowModel,
 } from "@/lib/presentation/runtime";
 import type { FocusedSubjectContext } from "@/lib/presentation/runtime/resolveQueueRowSubjectFocus";
-import { resolveCompactSlotDisplay } from "@/lib/presentation/runtime/resolveCompactSlotDisplay";
+import {
+    resolveCompactSecondaryBand,
+    resolveCompactSlotDisplay,
+} from "@/lib/presentation/runtime/resolveCompactSlotDisplay";
 import { compactSlotsUsePublishedAuthority } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import {
     PRESENTATION_RUNTIME_LABELS,
@@ -188,8 +191,8 @@ export function CondensedQueueRow({
     const line2 = showContact
         ? resolveCompactSlotDisplay("contact", context, rowConfig?.contact, focus, { publishedAuthority })
         : null;
-    const countChip = showGroupCount
-        ? resolveCompactSlotDisplay("groupCount", context, rowConfig?.groupCount, focus, { publishedAuthority })
+    const secondaryBand = showGroupCount
+        ? resolveCompactSecondaryBand(context, rowConfig?.groupCount, { publishedAuthority })
         : null;
     const workLabel = showWork
         ? resolveCompactSlotDisplay("work", context, rowConfig?.work, focus, { publishedAuthority })
@@ -200,7 +203,8 @@ export function CondensedQueueRow({
               ?? context.current_work_summary?.due_label
               ?? null
             : null;
-    const hasFooterLine = countChip != null || workLabel != null || dueLabel != null;
+    const hasWorkFooter = workLabel != null || dueLabel != null;
+    const secondaryRendered = secondaryBand?.left || secondaryBand?.right || null;
 
     return (
         <button
@@ -215,7 +219,8 @@ export function CondensedQueueRow({
             data-queue-row-vm-group={rowConfig?.groupCount.fieldKeys?.join("|") || undefined}
             data-queue-row-vm-work={rowConfig?.work.fieldKeys?.join("|") || undefined}
             data-queue-row-rendered-contact={line2 ?? undefined}
-            data-queue-row-rendered-group={countChip ?? undefined}
+            data-queue-row-rendered-group={secondaryRendered ?? undefined}
+            data-queue-row-has-secondary={secondaryBand ? "true" : undefined}
             onPointerDown={warm}
             onPointerEnter={warm}
             onFocus={warm}
@@ -248,6 +253,34 @@ export function CondensedQueueRow({
                             {line2}
                         </span>
                     ) : null}
+                    {secondaryBand ? (
+                        <span
+                            data-queue-row-secondary
+                            className="mt-0.5 flex min-w-0 items-baseline justify-between gap-2 text-[11px] leading-4 text-alloy-midnight/60"
+                        >
+                            {secondaryBand.left ? (
+                                <span
+                                    data-queue-row-secondary-left
+                                    className="min-w-0 truncate"
+                                    title={secondaryBand.left}
+                                >
+                                    {secondaryBand.left}
+                                </span>
+                            ) : (
+                                <span />
+                            )}
+                            {secondaryBand.right ? (
+                                <span
+                                    data-queue-row-secondary-right
+                                    data-queue-row-count
+                                    className="shrink-0 whitespace-nowrap text-alloy-midnight/55"
+                                    title={secondaryBand.right}
+                                >
+                                    {secondaryBand.right}
+                                </span>
+                            ) : null}
+                        </span>
+                    ) : null}
                     {needsAttention ? (
                         <span
                             className="mt-1 flex min-w-0 items-center gap-1.5"
@@ -266,16 +299,8 @@ export function CondensedQueueRow({
                             )}
                         </span>
                     ) : null}
-                    {hasFooterLine ? (
-                        <span className="mt-1 flex items-baseline gap-2">
-                            {countChip ? (
-                                <span
-                                    data-queue-row-count
-                                    className="shrink-0 rounded-full border border-alloy-stone/25 bg-white px-2 py-0.5 text-[11px] leading-4 text-alloy-midnight/60"
-                                >
-                                    {countChip}
-                                </span>
-                            ) : null}
+                    {hasWorkFooter ? (
+                        <span className="mt-1 flex items-baseline gap-2" data-queue-row-work-footer>
                             <span className="ml-auto flex min-w-0 shrink items-baseline gap-2">
                                 {workLabel ? (
                                     <span className="max-w-[16rem] truncate text-[11px] leading-4 text-alloy-midnight/60">

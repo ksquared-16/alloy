@@ -9,6 +9,7 @@ import {
     normalizeIdentityStorageTier,
     type IdentityStorageTier,
 } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import type { IdentityFieldLinkTarget } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 
 /** @deprecated Prefer storage tier helpers; legacy tier aliases accepted on read. */
 export type IdentityFieldTier = IdentityStorageTier;
@@ -37,6 +38,8 @@ export type IdentityFieldPlacement = {
     icon?: string;
     labelMode?: IdentityFieldLabelMode;
     policy?: SurfaceFieldVisibility;
+    /** When policy is Linked — destination card / open mode / subject. */
+    linkTarget?: IdentityFieldLinkTarget;
     hideWhenEmpty?: boolean;
 };
 
@@ -73,6 +76,7 @@ function seedPlacement(args: {
         icon: args.existing?.icon,
         labelMode: args.existing?.labelMode,
         policy: args.existing?.policy ?? args.policy,
+        linkTarget: args.existing?.linkTarget,
         hideWhenEmpty: args.existing?.hideWhenEmpty,
     };
     const resolvedLabelMode = resolveIdentityPlacementLabelMode(seeded, args.fieldModes, args.fieldRef);

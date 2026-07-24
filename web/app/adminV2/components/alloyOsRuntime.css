@@ -3606,6 +3606,33 @@ html[data-alloy-os-runtime-split="true"]
   font-size: 10px;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
+.fp-linked-target-controls {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  background: rgba(244, 246, 249, 0.7);
+}
+.fp-linked-target-controls__row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.fp-linked-target-controls__row select {
+  font-size: 11px;
+  border-radius: 6px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  padding: 2px 6px;
+  background: #fff;
+  color: inherit;
+  min-width: 0;
+}
 .fp-layout-surface {
   display: flex;
   flex-direction: column;

@@ -151,20 +151,7 @@ export function resolveCompactSlotDisplay(
     const resolvedFocus = focus ?? null;
     if (config?.fieldKeys?.length) {
         const parts = config.fieldKeys
-            .map((key) => {
-                if (isCollectionFieldKey(key)) {
-                    return resolveQueueRowChildrenFieldFromContext(key, context, {
-                        collectionPresentation: config.collectionPresentationByFieldKey?.[key],
-                        nameDisplay: config.nameDisplayByFieldKey?.[key],
-                    });
-                }
-                const raw = resolveQueueRowFieldValueFromContext(key, context);
-                if (!raw?.trim()) return null;
-                if (key === "person.phone" || key === "person.primary_phone") {
-                    return formatQueueRowPhoneDisplay(raw);
-                }
-                return formatQueueRowNameDisplay(raw, config.nameDisplayByFieldKey?.[key], key);
-            })
+            .map((key) => resolveConfiguredFieldDisplay(key, context, config))
             .filter((value): value is string => Boolean(value?.trim()));
         return parts.length ? parts.join(" · ") : null;
     }
@@ -174,4 +161,71 @@ export function resolveCompactSlotDisplay(
         return null;
     }
     return defaultSlotDisplay(slot, context, resolvedFocus);
+}
+
+function resolveConfiguredFieldDisplay(
+    key: string,
+    context: QueueRowContext,
+    config: CompactRowSlotConfig | undefined,
+): string | null {
+    if (isCollectionFieldKey(key)) {
+        return resolveQueueRowChildrenFieldFromContext(key, context, {
+            collectionPresentation: config?.collectionPresentationByFieldKey?.[key],
+            nameDisplay: config?.nameDisplayByFieldKey?.[key],
+        });
+    }
+    const raw = resolveQueueRowFieldValueFromContext(key, context);
+    if (!raw?.trim()) return null;
+    if (key === "person.phone" || key === "person.primary_phone") {
+        return formatQueueRowPhoneDisplay(raw);
+    }
+    return formatQueueRowNameDisplay(raw, config?.nameDisplayByFieldKey?.[key], key);
+}
+
+export type CompactSecondaryBand = {
+    left: string | null;
+    right: string | null;
+};
+
+/**
+ * Secondary band (groupCount): left/right from authored fieldKeys.
+ * Prefer names left + count right when both resolve; otherwise first fields left, last right.
+ */
+export function resolveCompactSecondaryBand(
+    context: QueueRowContext,
+    config: CompactRowSlotConfig | undefined,
+    options?: { publishedAuthority?: boolean },
+): CompactSecondaryBand | null {
+    if (!config?.fieldKeys?.length) {
+        if (options?.publishedAuthority || config?.visible === false) return null;
+        const fallback = defaultSlotDisplay("groupCount", context, null);
+        return fallback ? { left: fallback, right: null } : null;
+    }
+    const resolved = config.fieldKeys
+        .map((key) => ({ key, value: resolveConfiguredFieldDisplay(key, context, config) }))
+        .filter((row): row is { key: string; value: string } => Boolean(row.value?.trim()));
+    if (!resolved.length) return null;
+
+    const names = resolved.find(
+        (row) =>
+            row.key === "children.names"
+            || row.key === "children"
+            || row.key.endsWith(".names"),
+    );
+    const count = resolved.find(
+        (row) => row.key === "children.count" || row.key.endsWith(".count"),
+    );
+    if (names && count) {
+        return { left: names.value, right: count.value };
+    }
+    if (resolved.length >= 2) {
+        return {
+            left: resolved
+                .slice(0, -1)
+                .map((row) => row.value)
+                .join(" · "),
+            right: resolved[resolved.length - 1]!.value,
+        };
+    }
+    return { left: resolved[0]!.value, right: null };
 }

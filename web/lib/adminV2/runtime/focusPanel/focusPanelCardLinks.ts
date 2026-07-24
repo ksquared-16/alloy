@@ -23,6 +23,19 @@ export type FocusPanelCardLink = {
     fromFieldKey?: string | null;
     /** Operator-facing label for the link control. */
     label?: string | null;
+    /** Destination presentation: base summary vs focused detail. */
+    destinationOpen?: "base" | "detail" | null;
+    /**
+     * Subject resolver for the destination card.
+     * `this_child` / `current_schedule` → source item id (child/member).
+     */
+    destinationSubject?:
+        | "this_child"
+        | "selected_person"
+        | "household"
+        | "current_enrollment"
+        | "current_schedule"
+        | null;
 };
 
 export type FocusPanelCardLinkHistoryEntry = {
