@@ -223,6 +223,10 @@ describe("Focus Panel header composition guards", () => {
         expect(css).toMatch(
             /\.alloy-os-ucard--tier-work,\s*\n\.alloy-os-ucard\[data-card-role="active-work"\]\s*\{\s*\n\s*border-left-width:\s*1px;/,
         );
+        // What's Next must not keep a Bend Pine summary accent rail.
+        expect(css).not.toMatch(
+            /\.alloy-os-currentwork\[data-work-card-perspective="summary"\][\s\S]{0,120}border-left:\s*4px\s+solid\s+var\(--alloy-os-bend-pine/,
+        );
     });
 
     it("header identity uses System 5 chip language", () => {
