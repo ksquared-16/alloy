@@ -39,6 +39,7 @@ export const QUEUE_ROW_ACTIVE_CHILD_FIELD_KEYS = [
     "child.name",
     "inquiry_child.program",
     "inquiry_child.schedule_type",
+    "child.room",
 ] as const;
 
 export const QUEUE_ROW_CHILDREN_COMPACT_FIELD_KEYS = [
@@ -104,6 +105,15 @@ export function resolveQueueRowChildrenFieldFromContext(
                 ?? context.related_subjects_summary
                     .filter((s) => s.visibility !== "hidden")
                     .map((s) => s.schedule_label?.trim())
+                    .find(Boolean)
+                ?? null
+            );
+        case "child.room":
+            return (
+                context.placement_context?.room_label?.trim()
+                ?? context.related_subjects_summary
+                    .filter((s) => s.visibility !== "hidden")
+                    .map((s) => s.room_label?.trim())
                     .find(Boolean)
                 ?? null
             );

@@ -43,7 +43,7 @@ describe("queue row builder library", () => {
         expect(fieldKeys).toContain("children.summary");
     });
 
-    it("child category includes registry child fields and sibling vocabulary when available", () => {
+    it("child category includes compact-effective child and waitlist fields only", () => {
         const items = buildQueueRowLibraryCatalog({
             isWaitlist: true,
             includeWaitlistFields: true,
@@ -54,17 +54,16 @@ describe("queue row builder library", () => {
             .filter((item) => item.kind === "field")
             .map((item) => item.fieldKey) ?? [];
         expect(fieldKeys).toContain("child.name");
-        expect(fieldKeys).toContain("child.date_of_birth");
-        expect(fieldKeys).toContain("child.dob_age");
+        expect(fieldKeys).toContain("children");
+        expect(fieldKeys).toContain("children.count");
         expect(fieldKeys).toContain("inquiry_child.program");
         expect(fieldKeys).toContain("inquiry_child.program_category");
-        // schedule_type remains compact-effective when authored; catalog exposure is registry-driven.
-        expect(fieldKeys).toContain("child.start_date");
-        expect(fieldKeys).toContain("waitlist.siblingContext");
-        expect(fieldKeys).toContain("sibling.names");
-        expect(fieldKeys).toContain("sibling.count");
-        expect(fieldKeys).toContain("sibling.enrolled");
-        expect(fieldKeys).toContain("household.otherChildren");
+        expect(fieldKeys).toContain("child.room");
+        // Non-compact child profile fields are hidden (not grayed).
+        expect(fieldKeys).not.toContain("child.date_of_birth");
+        expect(fieldKeys).not.toContain("child.start_date");
+        // Sibling vocabulary is not yet compact-effective — omit until restored.
+        expect(fieldKeys).not.toContain("sibling.names");
     });
 
     it("does not show placeholder unavailable entries once registry is complete", () => {
@@ -87,10 +86,9 @@ describe("queue row builder library", () => {
         expect(pipelineFieldKeys).not.toContain("waitlist.siblingContext");
 
         const unavailable = pipelineOnly.filter((item) => item.kind === "unavailable");
-        expect(unavailable.length).toBeGreaterThan(0);
-        const siblingUnavailable = unavailable.filter((item) => item.fieldKey.startsWith("sibling."));
-        expect(siblingUnavailable.every((item) => item.reason.includes("Waitlist candidate rows only"))).toBe(true);
-        expect(unavailable.some((item) => item.fieldKey === "sibling.names")).toBe(true);
+        // Unsupported / waitlist-only fields are hidden entirely — not grayed as unavailable.
+        expect(unavailable).toEqual([]);
+        expect(pipelineFieldKeys).not.toContain("sibling.names");
     });
 
     it("children zone registry exposes expanded child field keys", () => {
