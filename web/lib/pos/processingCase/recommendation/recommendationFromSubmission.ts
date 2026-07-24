@@ -21,6 +21,7 @@ import {
     listPersonIdsByPhone,
 } from "@/lib/forms/intake/intakeIdentityLookups";
 import { readStoredOperationalIntent, type OperationalIntentKey } from "@/lib/forms/operationalIntentTemplates";
+import { enrichCandidateDetail, type CandidateDetail } from "./candidateDetail";
 
 export type FormSubmissionRecommendation =
     | {
@@ -28,6 +29,8 @@ export type FormSubmissionRecommendation =
           recommendation: IntakeRecommendation;
           /** Configured operational intent of the source form — drives operator-facing decision language. */
           intent: OperationalIntentKey | null;
+          /** Identifying detail for each existing-match candidate (§3), keyed by candidate id. */
+          candidateDetails: CandidateDetail[];
           source: { kind: "form_submission"; hasEmailBinding: boolean; mappedPersonValues: number };
       }
     | { supported: false; reason: string };
@@ -35,7 +38,9 @@ export type FormSubmissionRecommendation =
 export async function recommendationFromFormSubmission(
     supabase: SupabaseClient,
     orgId: string,
-    submissionId: string
+    submissionId: string,
+    /** Enrich candidates with identifying detail (§3) — only for the per-case view, not the queue. */
+    options?: { enrichCandidates?: boolean }
 ): Promise<FormSubmissionRecommendation> {
     const { data: sub, error: subErr } = await supabase
         .from("form_submissions")
@@ -94,11 +99,20 @@ export async function recommendationFromFormSubmission(
         person: { email: bound.email, phone: bound.phone, firstName: bound.firstName, lastName: bound.lastName },
     });
 
+    // Enrich each existing-match candidate with identifying context (§3). Usually 0–1 candidates.
+    // Skipped on the queue path (compact summary only) to avoid per-row joins.
+    const candidateDetails = options?.enrichCandidates
+        ? await Promise.all(
+              recommendation.candidates.map((c) => enrichCandidateDetail(supabase, orgId, { id: c.id, matchReason: c.matchReason }))
+          )
+        : [];
+
     const mappedPersonValues = [bound.email, bound.phone, bound.firstName, bound.lastName].filter(Boolean).length;
     return {
         supported: true,
         recommendation,
         intent,
+        candidateDetails,
         source: { kind: "form_submission", hasEmailBinding: bound.hasEmailBinding, mappedPersonValues },
     };
 }
