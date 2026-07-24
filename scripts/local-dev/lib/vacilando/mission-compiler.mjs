@@ -36,8 +36,11 @@ export function proposalPath(capability_id) {
  */
 export function compile({ capability, snapshot, mission, gapReport = null, reviseOf = null }) {
   const cid = capability.capability_id;
-  const outPath = proposalPath(cid);
+  // Use the human-readable slug in the deliverable path — never the raw cap_ id.
+  const outPath = proposalPath(capability.slug || cid);
   const roadmapV2 = (capability.roadmap || []).filter((r) => /v2/i.test(r.item) || r.status === "planned");
+  const codePaths = (capability.current_implementation?.code_paths || []).join(", ");
+  const roadmapStr = roadmapV2.map((r) => r.item).join("; ");
 
   const trace = {
     stages: [
@@ -67,10 +70,9 @@ export function compile({ capability, snapshot, mission, gapReport = null, revis
     worker_slot: mission.worker_slot,
     title: `${capability.name} V2 — Implementation Proposal`,
     objective:
-      `Analyze the current ${capability.name} implementation (${(capability.current_implementation?.code_paths || []).join(", ")}) ` +
-      `and produce the ${capability.name} V2 implementation proposal covering the roadmap items ` +
-      `[${roadmapV2.map((r) => r.item).join("; ")}]. Write the proposal to ${outPath}. ` +
-      `Do NOT modify any source code — this is a planning proposal only.`,
+      `Analyze the current ${capability.name} implementation${codePaths ? ` (${codePaths})` : ""} ` +
+      `and produce the ${capability.name} V2 implementation proposal${roadmapStr ? ` covering the roadmap items [${roadmapStr}]` : ""}. ` +
+      `Write the proposal to ${outPath}. Do NOT modify any source code — this is a planning proposal only.`,
     scope_included: [
       `Analyze the current ${capability.name} implementation and product decisions.`,
       `Produce a written V2 implementation proposal at ${outPath}.`,

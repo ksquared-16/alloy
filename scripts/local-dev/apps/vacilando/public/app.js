@@ -184,6 +184,9 @@ document.addEventListener("input", (e) => {
   if (t && t.id === "m-intent" && t.dataset.slot != null) {
     state.missionIntent[Number(t.dataset.slot)] = t.value; // persist so a poll re-render never wipes typing
   }
+  // Director conversation: keep the intent box + reply composer intact across polls.
+  if (t && t.id === "d-intent") state._dirIntent = t.value;
+  if (t && t.id === "cv-reply") state._cvReply = t.value;
 });
 
 // -------- routing (Command Center / Work History / Settings) --------
@@ -1170,95 +1173,102 @@ function dirStageState(key, m, pkg) {
 }
 const DIR_MARK = { done: "✓", current: "•", review: "!", blocked: "⛔", pending: "○" };
 
+async function fetchConversations() { try { const r = await fetch("/api/director/conversations"); state._convos = (await r.json()).conversations || []; render(true); } catch { /* keep last */ } }
+async function fetchConversation(id) { try { const r = await fetch("/api/director/conversation?id=" + encodeURIComponent(id)); (state._convo = state._convo || {})[id] = (await r.json()).conversation; render(true); } catch { /* keep last */ } }
+
 function viewDirector() {
   const r = parseRoute();
-  if (!state._allMissions) { fetchAllMissions(); return `<div class="empty"><div class="big"><span class="spin"></span> Opening Director…</div></div>`; }
-  if (r.sub === "mission" && r.param) return directorMission(r.param);
-  return directorHome();
+  if (r.sub === "mission" && r.param) return conversationWorkspace(r.param);
+  if (!state._convos) { fetchConversations(); return `<div class="empty"><div class="big"><span class="spin"></span> Opening Director…</div></div>`; }
+  return conversationInbox();
 }
 
-function directorHome() {
-  const missions = (state._allMissions || []).filter((m) => m.capability_id);
+// The home is an inbox of ongoing CONVERSATIONS — not a grid of records.
+function conversationInbox() {
+  const cs = state._convos || [];
   const intent = esc(state._dirIntent || "");
   const def = state._dirDefine;
-  const cards = missions.length ? missions.map((m) => {
-    const v = m.readiness_verdict || "—";
-    return `<div class="dcard" data-dmission="${m.mission_id}">
-      <div class="dcard-t">${esc(m.title || "(mission)")}</div>
-      <div class="dcard-s trunc">${esc(m.intent || m.objective || "")}</div>
-      <div class="dcard-f"><span class="mbadge ${verdictBadgeClass(v)}">${esc(v)}</span><span class="muted">${m.status === "completed" ? "accepted" : esc(m.status)}</span></div>
-    </div>`;
-  }).join("") : `<div class="rempty">No missions yet — tell Director what you want to build.</div>`;
+  const rows = cs.length ? cs.map((c) => `<div class="cvrow" data-dmission="${c.conversation_id}">
+      <div class="cvrow-m"><div class="cvrow-t">${esc(c.title)}</div><div class="cvrow-s trunc">${esc(c.intent)}</div></div>
+      <div class="cvrow-r"><span class="cvstate ${c.state.tone}">${esc(c.state.label)}</span><span class="cvgo">${esc(c.state.action)} →</span></div>
+    </div>`).join("") : `<div class="rempty">No conversations yet — tell Director about a piece of work.</div>`;
   return `<div class="dwrap">
     <div class="dhero">
-      <h2>What should we build?</h2>
-      <p class="dsub">Tell Director in a sentence. It prepares the work — you review and approve.</p>
-      <div class="dintent"><input id="d-intent" class="d-intent" placeholder="e.g. Build Access &amp; Roles V2   ·   Improve Scheduling   ·   Communications V2" value="${intent}" />
-        <button class="btn go" data-dprepare>Prepare</button></div>
-      ${def ? `<div class="ddefine"><span>Director doesn't know <b>${esc(def.name || def.intent)}</b> yet.</span>
-        <button class="btn go sm" data-ddefine="${esc(def.intent)}">Define &amp; prepare</button>
+      <h2>What are we working on?</h2>
+      <p class="dsub">Tell Director about a piece of work — you'll talk it through together.</p>
+      <div class="dintent"><input id="d-intent" class="d-intent" placeholder="e.g. Improve Scheduling   ·   Redesign Financials   ·   Access &amp; Roles V2" value="${intent}" />
+        <button class="btn go" data-dprepare>Start</button></div>
+      ${def ? `<div class="ddefine"><span>Director hasn't worked on <b>${esc(def.name || def.intent)}</b> before.</span>
+        <button class="btn go sm" data-ddefine="${esc(def.intent)}">Start it anyway</button>
         <button class="btn sm" data-ddismiss>Dismiss</button></div>` : ""}
     </div>
-    <div class="dsec-h">Missions <span class="muted">· ${missions.length}</span></div>
-    <div class="dgrid">${cards}</div>
+    <div class="dsec-h">Conversations <span class="muted">· ${cs.length}</span></div>
+    <div class="cvlist">${rows}</div>
   </div>`;
 }
 
-function directorMission(id) {
-  const d = state.mission[id];
-  if (!d) { fetchMissionDetail(id); return `<div class="dwrap"><button class="btn sm" data-dback>← Missions</button><div class="m-loading"><span class="spin"></span> Opening mission…</div></div>`; }
-  const m = d.mission, pkg = d.package;
-  if (!m) return `<div class="dwrap"><button class="btn sm" data-dback>← Missions</button><div class="empty">Mission not found.</div></div>`;
-  const V = pkg?.readiness_verdict || null;
+// Selecting a conversation opens the workspace: left history, center preparation,
+// right insights. One window — the operator never bounces between pages.
+function conversationWorkspace(id) {
+  const c = state._convo?.[id];
+  if (!c) { fetchConversation(id); return `<div class="dwrap"><button class="btn sm" data-dback>← Conversations</button><div class="m-loading"><span class="spin"></span> Opening the conversation…</div></div>`; }
+  const m = c.mission, pkg = c.package, V = c.verdict;
   const vk = V ? verdictBadgeClass(V.verdict) : "muted";
-  const gr = pkg?.gap_report || null;
-  const conf = gr ? `${Math.round((gr.confidence || 0) * 100)}%` : "—";
-  const diff = pkg?.diff_from_previous;
+  const attn = V && V.verdict !== "Ready" && !["starting", "running", "stopping", "completed"].includes(m.status);
+  const list = (arr, f) => (arr && arr.length ? `<ul class="dul">${arr.slice(0, 6).map((x) => `<li>${esc(f(x))}</li>`).join("")}</ul>` : `<span class="muted">—</span>`);
 
-  // Preparation timeline.
-  const timeline = `<div class="dtl">${DIR_STAGES.map((s) => {
+  // LEFT — the conversation, as a dialogue.
+  const bubbles = c.messages.map((msg) => `<div class="cvmsg ${msg.from}"><div class="cvbub">${esc(msg.text)}</div></div>`).join("");
+  const composer = attn ? `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Reply to Director — e.g. a decision that shapes this work…" />
+      <button class="btn go sm" data-cvreply="${id}" data-cap="${esc(c.capability_id || "")}">Send</button></div>`
+    : (V?.verdict === "Ready" ? `<div class="cvcompose ready"><button class="btn go" data-dapprove="${id}">Approve &amp; Send to Worker</button><button class="btn sm" data-drecompile="${id}">Ask Director to prepare again</button></div>` : "");
+  const left = `<div class="cvcol cvhistory"><div class="cvcol-h">Conversation</div><div class="cvthread">${bubbles}</div>${composer}</div>`;
+
+  // CENTER — where things stand: the preparation + what Director prepared.
+  const timeline = `<div class="dtl vert">${DIR_STAGES.map((s) => {
     const st = dirStageState(s.key, m, pkg);
     return `<div class="dtl-step ${st}"><span class="dtl-dot">${DIR_MARK[st]}</span><span class="dtl-lbl">${s.label}</span></div>`;
   }).join('<span class="dtl-line"></span>')}</div>`;
-
-  // Readiness card — operator language, one-click send-back.
-  const readiness = V ? `<div class="dpanel ${V.verdict === "Ready" ? "ok" : "attn"}">
-    <div class="dpanel-h"><h4>Readiness</h4><span class="mbadge ${vk} big">${esc(V.verdict)}</span></div>
-    ${V.why ? `<p class="dwhy">${esc(V.why)}</p>` : ""}
-    ${V.verdict !== "Ready" ? `<div class="dwhat"><b>What to do:</b> ${esc(V.what_to_do || "")}</div>
-      ${V.reasons?.length ? `<ul class="dreasons">${V.reasons.slice(0, 5).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
-      <div class="dactions"><button class="btn go" data-dsendback="${m.mission_id}" data-verdict="${esc(V.verdict)}" data-cap="${esc(pkg.capability_id || "")}">${esc(V.where_label || "Resolve")}</button></div>`
-    : `<div class="dactions"><button class="btn go big" data-dapprove="${m.mission_id}">Approve &amp; Send to Worker</button>
-        <button class="btn" data-drecompile="${m.mission_id}">Prepare again</button></div>`}
-  </div>` : "";
-
-  // Package review — understand the mission in under two minutes.
-  const list = (arr, f) => (arr && arr.length ? `<ul class="dul">${arr.slice(0, 8).map((x) => `<li>${esc(f(x))}</li>`).join("")}</ul>` : `<span class="muted">—</span>`);
-  const review = pkg ? `<div class="dpanel">
-    <div class="dpanel-h"><h4>Mission package</h4><span class="muted">v${pkg.version}${diff && diff.verdict_change ? ` · ${esc(diff.verdict_change)}` : ""}</span></div>
-    <div class="dkv"><span>Summary</span><div>${esc(pkg.objective || "")}</div></div>
-    <div class="dkv"><span>Capability</span><div>${esc(m.title?.replace(/ V2.*$/, "") || pkg.capability_id)} <span class="muted">— Director matched your intent to this capability.</span></div></div>
-    <div class="dcols">
-      <div><div class="dlabel">Deliverables</div>${list(pkg.expected_deliverables, (x) => x.description)}</div>
-      <div><div class="dlabel">Acceptance</div>${list(pkg.acceptance_criteria, (x) => x.statement)}</div>
-      <div><div class="dlabel">Product decisions</div>${list(pkg.accepted_decisions, (x) => x.statement)}</div>
-      <div><div class="dlabel">References</div>${list(pkg.relevant_documents?.concat(pkg.approved_references || []), (x) => x.uri || x.title)}</div>
-      <div><div class="dlabel">Risks</div>${list(pkg.risks, (x) => x.risk)}</div>
-      <div><div class="dlabel">Questions</div>${list(pkg.questions, (x) => x.question)}</div>
-    </div>
-    <div class="dkv"><span>Gap analysis</span><div>Confidence ${conf} · ${(pkg.suggested_acceptance_criteria || []).length} suggested criteria · ${(gr?.findings?.unknowns || []).length} open questions</div></div>
-    ${diff ? `<div class="dkv"><span>Changed</span><div>${(diff.added || []).length} added · ${(diff.resolved || []).length} resolved${diff.verdict_change ? ` · ${esc(diff.verdict_change)}` : ""}</div></div>` : ""}
-  </div>` : "";
-
-  return `<div class="dwrap">
-    <div class="dmhead"><button class="btn sm" data-dback>← Missions</button>
-      <div class="dmtitle"><h2>${esc(m.title || "(mission)")}</h2><span class="dmintent">“${esc(m.intent || m.objective || "")}”</span></div>
-      ${V ? `<span class="mbadge ${vk} big">${esc(V.verdict)}</span>` : ""}</div>
-    <div class="dsec-h">Preparation</div>
+  const center = `<div class="cvcol cvprep"><div class="cvcol-h">Where things stand</div>
     ${timeline}
-    ${readiness}
-    ${review}
+    ${pkg ? `<div class="cvpkg"><div class="cvpkg-h"><b>What Director prepared</b> <span class="muted">v${pkg.version}${pkg.diff_from_previous?.verdict_change ? ` · ${esc(pkg.diff_from_previous.verdict_change)}` : ""}</span></div>
+      <div class="dkv"><span>Goal</span><div>${esc(pkg.objective || "")}</div></div>
+      <div class="dcols">
+        <div><div class="dlabel">Deliverables</div>${list(pkg.expected_deliverables, (x) => x.description)}</div>
+        <div><div class="dlabel">How we'll know it's done</div>${list(pkg.acceptance_criteria, (x) => x.statement)}</div>
+        <div><div class="dlabel">Decisions so far</div>${list(pkg.accepted_decisions, (x) => x.statement)}</div>
+        <div><div class="dlabel">Risks</div>${list(pkg.risks, (x) => x.risk)}</div>
+      </div></div>` : `<div class="muted">Director is still pulling this together.</div>`}
   </div>`;
+
+  // RIGHT — Director's read: goal, what it knows, what it still needs.
+  const ins = c.insights;
+  const right = `<div class="cvcol cvinsights"><div class="cvcol-h">Director's read</div>
+    <div class="cvins"><div class="dlabel">What we're doing</div><p class="cvgoal">${esc(ins.goal || "—")}</p></div>
+    <div class="cvins"><div class="dlabel">What Director knows</div>${list(ins.knows, (x) => x)}</div>
+    <div class="cvins"><div class="dlabel">What Director still needs</div>${ins.needs.length ? `<ul class="dul need">${ins.needs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<span class="muted">Nothing — ready for your review.</span>`}</div>
+  </div>`;
+
+  return `<div class="dwrap wide">
+    <div class="dmhead"><button class="btn sm" data-dback>← Conversations</button>
+      <div class="dmtitle"><h2>${esc(c.title)}</h2><span class="dmintent">${esc(c.state.label)}</span></div>
+      ${V ? `<span class="mbadge ${vk} big">${esc(V.verdict)}</span>` : ""}</div>
+    <div class="cvgrid">${left}${center}${right}</div>
+  </div>`;
+}
+
+// The operator "replies" to Director; a reply that shapes the work is recorded as
+// a product decision, and Director updates the package.
+async function replyToDirector(id, cap) {
+  const el2 = document.getElementById("cv-reply");
+  const text = (el2?.value || "").trim();
+  if (!text) { toast("err", "Type a reply to Director"); return; }
+  if (!cap) { toast("err", "This conversation has no capability yet"); return; }
+  const { data } = await api("/api/director/product-decision", { capability_id: cap, statement: text });
+  if (!data.ok) { toast("err", "Couldn't record that", data.error); return; }
+  const { data: rc } = await api("/api/missions/recompile", { mission_id: id });
+  await fetchConversations(); await fetchConversation(id);
+  toast("ok", "Director updated the package", rc.diff?.verdict_change || (rc.package ? "v" + rc.package.version : ""));
 }
 
 async function prepareDirectorMission() {
@@ -1270,9 +1280,9 @@ async function prepareDirectorMission() {
     toast("err", "Couldn't prepare", data.error || status); return;
   }
   state._dirIntent = ""; state._dirDefine = null;
-  await fetchAllMissions();
+  await fetchConversations();
   go("director/mission/" + data.mission.mission_id);
-  toast("ok", "Mission prepared", data.verdict?.verdict || "");
+  toast("ok", "Director is on it", data.verdict?.verdict || "");
 }
 async function defineDirectorCapability(intent) {
   const { data } = await api("/api/director/define-capability", { intent });
@@ -1284,8 +1294,8 @@ async function defineDirectorCapability(intent) {
 async function recompileDirector(id) {
   const { data } = await api("/api/missions/recompile", { mission_id: id });
   if (!data.ok) { toast("err", "Couldn't prepare again", data.error); return; }
-  await fetchAllMissions(); await fetchMissionDetail(id);
-  toast("ok", "Prepared again", data.diff?.verdict_change || ("v" + data.package.version + " · " + data.verdict.verdict));
+  await fetchConversations(); await fetchConversation(id);
+  toast("ok", "Director updated the package", data.diff?.verdict_change || ("v" + data.package.version + " · " + data.verdict.verdict));
 }
 function showDecisionDialog(cid, id) {
   const ov = el("div", "ov");
@@ -1324,8 +1334,9 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-dmission]"))) { go("director/mission/" + n.dataset.dmission); return; }
   if ((n = t("[data-dback]"))) { go("director"); return; }
   if ((n = t("[data-dsendback]"))) { directorSendBack(n.dataset.dsendback, n.dataset.verdict, n.dataset.cap); return; }
+  if ((n = t("[data-cvreply]"))) { replyToDirector(n.dataset.cvreply, n.dataset.cap); return; }
   if ((n = t("[data-drecompile]"))) { recompileDirector(n.dataset.drecompile); return; }
-  if ((n = t("[data-dapprove]"))) { missionAct("start", n.dataset.dapprove, {}, "Approved — sending to worker"); return; }
+  if ((n = t("[data-dapprove]"))) { missionAct("start", n.dataset.dapprove, {}, "Approved — sending to the worker"); return; }
   // Specific actions win over container selection: a worker-dock card is a
   // [data-sel] container that WRAPS its own action buttons, so [data-sel] must
   // be the LAST fallback — otherwise every button click just selects the card.

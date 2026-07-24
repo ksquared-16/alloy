@@ -32,7 +32,7 @@ const SEND_BACK = {
 
 // Operator language — every blocker answers Why? / What should I do? / Where do I go?
 const GUIDANCE = {
-  "Needs Product Decisions": { why: "Director doesn't yet have the product decisions this mission depends on.", what: "Record the decisions, goals, or constraints that shape this capability.", where_label: "Open Product Definition" },
+  "Needs Product Decisions": { why: "Director doesn't yet have the product decisions this work depends on.", what: "Record the decisions, goals, or constraints that shape this capability.", where_label: "Open Product Definition" },
   "Needs References": { why: "A document or file this mission points at can't be found.", what: "Repoint or remove the missing references.", where_label: "Open Knowledge" },
   "Needs Acceptance Criteria": { why: "Some of the work isn't yet covered by a way to check it's done.", what: "Adopt or adjust the suggested acceptance criteria.", where_label: "Open Acceptance" },
   "Needs Clarification": { why: "Director found open questions it can't answer on its own.", what: "Answer the open questions so Director can finish preparing.", where_label: "Answer Questions" },

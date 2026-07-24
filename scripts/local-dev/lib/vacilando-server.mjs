@@ -51,6 +51,7 @@ import { readMissionOutputs, readTurnOutput, liveMissionIds } from "./vacilando/
 import { providerResumable } from "./vacilando/provider-runtime.mjs";
 import { compileMissionForIntent, recompileMission, defineCapability, addProductDecision, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, previewAction, readAcceptance } from "./vacilando/mission-director.mjs";
 import { listCapabilities, getCapability, registerCapability } from "./vacilando/capability.mjs";
+import { assembleConversation, listConversations } from "./vacilando/conversation.mjs";
 import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
 import { resolveSlotIdentity, runtimeHost, hostRegistration, listSlotIdentities, hostIdentity } from "./vacilando/identity.mjs";
 
@@ -764,6 +765,17 @@ export function createVacilandoServer() {
       if (slot != null && (!Number.isInteger(slot) || slot < 1 || slot > 6)) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, missions: readMissions(slot) });
     }
+    // Director Conversations — the mission re-told as a living dialogue.
+    if (path === "/api/director/conversations") {
+      return sendJson(res, 200, { conversations: listConversations() });
+    }
+    if (path === "/api/director/conversation") {
+      const id = url.searchParams.get("id") || "";
+      const c = assembleConversation(id);
+      if (!c) return sendJson(res, 404, { error: "unknown_conversation" });
+      return sendJson(res, 200, { conversation: c });
+    }
+
     // Capability Runtime (registry). Read-only projections; enriched at read time.
     if (path === "/api/capabilities") {
       return sendJson(res, 200, { capabilities: listCapabilities() });
