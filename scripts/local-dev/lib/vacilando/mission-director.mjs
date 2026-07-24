@@ -13,6 +13,7 @@
  *     so it appears in the same request timeline as every other worker instruction.
  */
 import { retrieveCapability, getCapability, updateCapability } from "./capability.mjs";
+import { getProductDefinitionForCapability, recordMissionInHistory } from "./product-definition.mjs";
 import { retrieveForCapability } from "./knowledge.mjs";
 import { compile } from "./mission-compiler.mjs";
 import { createMission, getMission, updateMission } from "./commands/missions.mjs";
@@ -248,6 +249,9 @@ export function accept({ mission_id, confirm }) {
         mission_history: [...(cap.mission_history || []), { mission_id, title: mission.title, outcome: "completed", at: new Date().toISOString() }],
         active_missions: (cap.active_missions || []).filter((m) => m.mission_id !== mission_id),
       });
+      // Learning loop: the Product Definition is the capability's long-term memory.
+      const pd = getProductDefinitionForCapability(mission.capability_id);
+      if (pd) recordMissionInHistory(pd.product_definition_id, { mission_id, title: mission.title, outcome: "completed" });
     }
   } catch { /* write-back best-effort; acceptance already recorded */ }
   audit("accept", targetOf(mission, identity), "succeeded", { confirmed: true, summary: `accepted (gate=${result.gate})` });

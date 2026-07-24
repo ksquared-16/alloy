@@ -16,6 +16,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
+import { getProductDefinitionForCapability } from "./product-definition.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(os.homedir(), ".local", "state", "alloy-dev");
 const DIR = join(RUNTIME_ROOT, "vacilando", "capabilities");
@@ -59,7 +60,7 @@ function seedAccessRoles(nowMs) {
     },
     current_runtime_behavior: { summary: "Operators assign roles to users; roles grant capability access.", health: "ok" },
     // ---- authoritative references (resolve to owning runtimes; not copies) ----
-    product_definition_ref: { runtime: "product-definition", scope: "capability", ref: "cap_access_roles/product-definition" },
+    product_definition_ref: { runtime: "product-definition", product_definition_id: "pd_access_roles", scope: "capability" },
     acceptance_ref: { runtime: "acceptance", ref: "cap_access_roles/acceptance" },
     architecture_ref: { uri: "docs/platform/planning/vacilando-os/CAPABILITY-RUNTIME-V1.md" },
     documentation_index: [
@@ -67,14 +68,9 @@ function seedAccessRoles(nowMs) {
       { uri: "docs/platform/planning/vacilando-os/CAPABILITY-RUNTIME-V1.md", title: "Capability Runtime V1", kind: "architecture" },
       { uri: "web/app/adminV2/settings/users-roles/UsersRolesSettingsClient.tsx", title: "Users & Roles settings client", kind: "code" },
     ],
-    accepted_decisions: [
-      { id: "ad1", statement: "Roles are the unit of permission grant; users receive capability access via roles, never directly.", ref: "cap_access_roles/product-definition#ad1" },
-      { id: "ad2", statement: "Permission taxonomy is capability-scoped (one permission set per capability).", ref: "cap_access_roles/product-definition#ad2" },
-    ],
-    rejected_patterns: [
-      { id: "rp1", statement: "Per-user direct permission grants (bypassing roles).", reason: "Ungovernable at scale; V1 explicitly rejected it.", ref: "cap_access_roles/product-definition#rp1" },
-      { id: "rp2", statement: "A single global admin flag instead of granular capability permissions.", reason: "Too coarse; the V2 delta exists precisely to replace it.", ref: "cap_access_roles/product-definition#rp2" },
-    ],
+    // accepted_decisions + rejected_patterns are OWNED by the Product Definition
+    // Runtime (pd_access_roles) and hydrated onto this object at read time — they
+    // are no longer inlined here. See hydrateFromProductDefinition().
     approved_screenshots: [],
     visual_references: [],
     qa_evidence_ref: { runtime: "acceptance", evidence_index_ref: "cap_access_roles/evidence" },
@@ -114,10 +110,32 @@ export function readCapabilities() {
 }
 
 /**
+ * Overlay the capability's product truth from its Product Definition at read time.
+ * Truth lives in the Product Definition Runtime; the capability RESOLVES to it and
+ * never duplicates it. Hydration is authoritative: it overrides any stale inline
+ * decisions a pre-migration seed may still carry in the durable log, so a live
+ * store and a fresh store converge on the same source of truth without rewriting
+ * history. Downstream consumers (compiler, knowledge, gap analysis) read the
+ * hydrated fields exactly as before.
+ */
+export function hydrateFromProductDefinition(capability) {
+  if (!capability) return capability;
+  const pd = getProductDefinitionForCapability(capability.capability_id);
+  if (!pd) return capability;
+  return {
+    ...capability,
+    accepted_decisions: pd.accepted_decisions || [],
+    rejected_patterns: pd.rejected_patterns || [],
+    product_definition: pd,
+  };
+}
+
+/**
  * Retrieve ONE capability object. Director calls this to RESOLVE an intent to a
  * capability — deterministic id or fuzzy name match. Returns { ok, capability }
  * or { ok:false, reason:"no_capability", suggestion } so Director can escalate to
- * "register a new capability" rather than silently discovering.
+ * "register a new capability" rather than silently discovering. The returned
+ * capability is hydrated from its Product Definition.
  */
 export function retrieveCapability(query) {
   ensureSeeded();
@@ -132,10 +150,11 @@ export function retrieveCapability(query) {
     hit = caps.find((c) => c.name.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2).every((w) => q.includes(w)));
   }
   if (!hit) return { ok: false, reason: "no_capability", query, known: caps.map((c) => ({ id: c.capability_id, name: c.name })) };
-  return { ok: true, capability: hit };
+  return { ok: true, capability: hydrateFromProductDefinition(hit) };
 }
 
 export function getCapability(capability_id) {
   ensureSeeded();
-  return readCapabilities().find((c) => c.capability_id === capability_id) || null;
+  const hit = readCapabilities().find((c) => c.capability_id === capability_id) || null;
+  return hit ? hydrateFromProductDefinition(hit) : null;
 }

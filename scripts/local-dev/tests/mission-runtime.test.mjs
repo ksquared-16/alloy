@@ -12,7 +12,8 @@ import { mkdtempSync } from "node:fs";
 process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-test-"));
 
 const { validatePackage, createPackage, getPackage } = await import("../lib/vacilando/commands/mission-packages.mjs");
-const { retrieveCapability } = await import("../lib/vacilando/capability.mjs");
+const { retrieveCapability, getCapability } = await import("../lib/vacilando/capability.mjs");
+const { getProductDefinitionForCapability, addAcceptedDecision, recordMissionInHistory, ensureSeeded: ensurePdSeeded } = await import("../lib/vacilando/product-definition.mjs");
 const { retrieveForCapability } = await import("../lib/vacilando/knowledge.mjs");
 const { createMission, getMission, recoverMissions, updateMission } = await import("../lib/vacilando/commands/missions.mjs");
 const { compile } = await import("../lib/vacilando/mission-compiler.mjs");
@@ -28,6 +29,35 @@ test("readiness is computed: a complete package is ready", () => {
   assert.equal(pkg.package_origin, "compiled");
   assert.ok(pkg.knowledge_snapshot?.snapshot_id, "snapshot bound for reproducibility");
   assert.ok(pkg.compiler_trace?.sources_used.length >= 1, "compiler trace records sources");
+});
+
+// --- Product Definition Runtime V1 (Director Intelligence, step 1) ---
+
+test("product truth is OWNED by the Product Definition, hydrated onto the capability", () => {
+  const pd = getProductDefinitionForCapability("cap_access_roles");
+  assert.ok(pd, "a product definition exists for the capability");
+  assert.equal(pd.product_definition_id, "pd_access_roles");
+  assert.ok(pd.accepted_decisions.length >= 2 && pd.rejected_patterns.length >= 2, "PD owns decisions + rejected patterns");
+  assert.ok(pd.constraints.length >= 1 && pd.goals.length >= 1, "PD owns constraints + goals (long-term memory)");
+  // the capability resolves to the PD and hydrates those fields — it does not own them
+  const cap = retrieveCapability("Build Access & Roles V2");
+  assert.equal(cap.ok, true);
+  assert.deepEqual(cap.capability.accepted_decisions.map((d) => d.id), pd.accepted_decisions.map((d) => d.id));
+  assert.deepEqual(cap.capability.rejected_patterns.map((p) => p.id), pd.rejected_patterns.map((p) => p.id));
+  assert.equal(cap.capability.product_definition?.product_definition_id, "pd_access_roles");
+});
+
+test("the learning loop accretes decisions + mission history (idempotent)", () => {
+  const first = addAcceptedDecision("pd_access_roles", { id: "ad_learned", statement: "V2 audit records are immutable.", provenance: "mission:msn_test" });
+  assert.equal(first.ok, true); assert.equal(first.added, true);
+  const again = addAcceptedDecision("pd_access_roles", { id: "ad_learned", statement: "dup", provenance: "mission:msn_test" });
+  assert.equal(again.added, false, "same decision id is not duplicated");
+  // hydration reflects the newly-learned decision immediately
+  const cap = getCapability("cap_access_roles");
+  assert.ok(cap.accepted_decisions.some((d) => d.id === "ad_learned"), "learned decision hydrates onto the capability");
+  const h = recordMissionInHistory("pd_access_roles", { mission_id: "msn_test", title: "t", outcome: "completed", decisions_added: ["ad_learned"] });
+  assert.equal(h.added, true);
+  assert.equal(recordMissionInHistory("pd_access_roles", { mission_id: "msn_test" }).added, false, "mission history is idempotent");
 });
 
 test("an incomplete package is BLOCKED and start is refused", () => {
