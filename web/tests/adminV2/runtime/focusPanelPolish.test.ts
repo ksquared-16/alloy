@@ -232,6 +232,18 @@ describe("Focus Panel header composition guards", () => {
         );
     });
 
+    it("queue row shell reuses Focus Panel card elevation tokens", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        const shell = readSrc("lib/presentation/runtime/queueRowCardShell.ts");
+        expect(shell).toContain("alloy-os-queue-row-card");
+        expect(css).toContain(".alloy-os-queue-row-card");
+        expect(css).toContain("--alloy-os-queue-row-shadow");
+        expect(css).toMatch(
+            /\.alloy-os-queue-row-card\s*\{[^}]*box-shadow:\s*var\(--alloy-os-queue-row-shadow/,
+        );
+        expect(css).toContain("var(--alloy-os-fp-card-shadow)");
+    });
+
     it("header identity uses System 5 chip language", () => {
         const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
         expect(css).toContain("alloy-os-fp-header-compact__subject-tile");

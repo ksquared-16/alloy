@@ -1599,6 +1599,27 @@ html[data-alloy-os-runtime="on"]
   width: 100%;
 }
 
+/* Queue row card shell — same soft stone perimeter + layered elevation as Universal Card.
+ * Owned by QUEUE_ROW_CARD_SHELL_CLASS → `.alloy-os-queue-row-card` (runtime + Builder). */
+.alloy-os-queue-row-card {
+  border-color: var(--alloy-os-queue-row-border, var(--alloy-os-fp-card-border));
+  border-radius: var(--alloy-os-fp-card-radius, 14px);
+  background: var(--alloy-os-surface, #fff);
+  box-shadow: var(--alloy-os-queue-row-shadow, var(--alloy-os-fp-card-shadow));
+  transition:
+    box-shadow var(--alloy-os-motion-hover, 80ms) ease,
+    border-color var(--alloy-os-motion-hover, 80ms) ease,
+    background var(--alloy-os-motion-hover, 80ms) ease;
+}
+.alloy-os-queue-row-card:hover {
+  box-shadow: var(--alloy-os-queue-row-shadow-hover, var(--alloy-os-fp-card-shadow-hover));
+}
+.alloy-os-queue-row-card.alloy-os-queue-row-card--selected,
+.alloy-os-queue-row-card[data-queue-row-active="true"] {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 42%, var(--alloy-os-fp-card-border));
+  box-shadow: var(--alloy-os-queue-row-shadow-hover, var(--alloy-os-fp-card-shadow-hover));
+}
+
 /* Universal Card — shared shell (white surface, soft stone perimeter, layered elevation).
  * No decorative left rails / domain tints — Bend Pine stays on actions/selected/status only.
  * overflow visible so layered box-shadow is not clipped by the shell. */
@@ -3217,6 +3238,10 @@ html[data-alloy-os-runtime-split="true"]
     0 1px 2px rgba(20, 25, 34, 0.08),
     0 6px 18px -4px rgba(20, 25, 34, 0.14),
     0 18px 32px -14px rgba(20, 25, 34, 0.16);
+  /* Queue rows share the same soft depth language as Focus Panel cards. */
+  --alloy-os-queue-row-border: var(--alloy-os-fp-card-border);
+  --alloy-os-queue-row-shadow: var(--alloy-os-fp-card-shadow);
+  --alloy-os-queue-row-shadow-hover: var(--alloy-os-fp-card-shadow-hover);
   --alloy-os-fp-overlay-shadow:
     0 1px 0 0 rgba(255, 255, 255, 0.8) inset,
     0 2px 6px -2px rgba(15, 23, 42, 0.12),
