@@ -79,7 +79,7 @@ export async function preserveOutputs(sprint) {
   const evDir = join(wt, ".alloy-agent-evidence");
   if (existsSync(evDir)) { try { cpSync(evDir, join(dest, "alloy-agent-evidence"), { recursive: true, force: true }); copied.push(".alloy-agent-evidence/"); } catch (e) { return { ok: false, error: `evidence copy failed: ${e.message}` }; } }
   // 2) unique untracked planning docs
-  const porcelain = (await git(wt, ["status", "--porcelain=v1"])).out;
+  const porcelain = (await git(wt, ["status", "--porcelain=v1", "-uall"])).out;
   for (const line of porcelain ? porcelain.split("\n") : []) {
     if (!line || line.slice(0, 2) !== "??") continue;
     const p = line.slice(3).replace(/^"|"$/g, "");
@@ -102,7 +102,7 @@ export async function discardGenerated(sprint, { requirePreserved = true } = {})
   if (!existsSync(wt)) return { ok: false, error: "worktree not found" };
   const preservedDir = join(EVID_STORE_ROOT, sprint.worktree, "preserved");
   if (requirePreserved && !existsSync(preservedDir)) return { ok: false, error: "preserve outputs first (nothing has been copied to the durable store)" };
-  const porcelain = (await git(wt, ["status", "--porcelain=v1"])).out;
+  const porcelain = (await git(wt, ["status", "--porcelain=v1", "-uall"])).out;
   const removed = [], skipped = [];
   for (const line of porcelain ? porcelain.split("\n") : []) {
     if (!line || line.slice(0, 2) !== "??") continue; // untracked only — never touch tracked/source
@@ -115,6 +115,13 @@ export async function discardGenerated(sprint, { requirePreserved = true } = {})
 }
 
 /**
+ * NOTE on `-uall`: plain `--porcelain=v1` COLLAPSES untracked files into their
+ * directory (`?? docs/platform/planning/certification/`). classifyPath keys off
+ * the file extension, so a unique planning document inside a NEW directory was
+ * classified as "other" — it never reached planning.unique_docs and never
+ * appeared in would_lose. Closeout therefore under-reported what deleting the
+ * worktree would destroy. `-uall` lists every untracked FILE individually.
+ *
  * Compute the closeout readiness for one worker.
  *   sprint: { slot, worktree, branch, provider, ... } from the snapshot
  *   opts.devServerRunning / opts.providerRunning: live runtime facts (from resources / dev-status)
@@ -131,7 +138,7 @@ export async function computeCloseout(sprint, opts = {}) {
   const baseSha = (await git(wt, ["rev-parse", "--short", BASE])).out || null;
 
   // ---- dirty changes (tracked vs untracked) + classification ----
-  const porcelain = (await git(wt, ["status", "--porcelain=v1"])).out;
+  const porcelain = (await git(wt, ["status", "--porcelain=v1", "-uall"])).out;
   const files = [];
   for (const line of porcelain ? porcelain.split("\n") : []) {
     if (!line) continue;

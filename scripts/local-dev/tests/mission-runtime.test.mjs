@@ -85,3 +85,19 @@ test("package projection round-trips through the durable store", () => {
   assert.equal(got.readiness_status, "ready");
   assert.equal(got.package_origin, "manual");
 });
+
+// --- closeout classification regression (found by live certification) ---
+const { classifyPath } = await import("../lib/vacilando/closeout.mjs");
+
+test("planning documents are classified even inside a new untracked directory", () => {
+  // `git status --porcelain=v1` collapses untracked files into their directory;
+  // closeout must run with -uall so each FILE is classified. If a planning doc
+  // were classified as "other" it would vanish from would_lose and closeout
+  // could report a worktree as safe to delete while unique planning work exists.
+  assert.equal(classifyPath("docs/platform/planning/certification/closeout-cert-planning-note.md"), "planning-doc");
+  assert.equal(classifyPath("docs/audits/active/some-spec-2026-07.md"), "planning-doc");
+  // the collapsed DIRECTORY form must not be mistaken for a planning doc
+  assert.notEqual(classifyPath("docs/platform/planning/certification/"), "planning-doc");
+  // evidence survives either way (path-based, not extension-based)
+  assert.equal(classifyPath(".alloy-agent-evidence/qa/cert-evidence.txt"), "qa-evidence");
+});
