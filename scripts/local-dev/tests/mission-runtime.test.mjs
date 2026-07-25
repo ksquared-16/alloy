@@ -28,6 +28,7 @@ const { composeUnderstanding } = await import("../lib/vacilando/shared-understan
 const { classifyCommandState, assessCommand, budgetFor, isValidTurnEnd, turnEndViolation, runGoverned, VALID_TURN_ENDS, WORKER_POLICY, COMMAND_CLASSES, classifyPassiveWaitEnding, buildStopDecision, buildSessionStartContext } = await import("../lib/vacilando/command-budget.mjs");
 const { composeOperations, stateKeyFor, assembleReview, STATES, conversationStage, understandingQuestions } = await import("../lib/vacilando/operations.mjs");
 const { close: directorCloseFn } = await import("../lib/vacilando/mission-director.mjs");
+const { composePresence, isLaunching, launchSequence, executionEvent, LAUNCH_STEPS } = await import("../lib/vacilando/presence.mjs");
 
 test("readiness is computed: a complete package is ready", () => {
   const cap = retrieveCapability("Build Access & Roles V2");
@@ -1051,6 +1052,68 @@ test("governed runner: a stalled command is terminated at the hard budget — ne
   assert.notEqual(r.state, "complete");
   assert.ok(r.killed_at_hard, "the command was terminated at the hard budget");
   assert.match(r.summary, /hard budget|terminated/i);
+});
+
+// ============================================================================
+// Operational Presence — Director stays quietly present across the lifecycle. A
+// single, event-driven voice: the operator never has to ask "what is happening?".
+// Pure projection over durable state; silence (a stable line) is correct.
+// ============================================================================
+
+test("presence: every lifecycle stage has an honest, non-empty voice", () => {
+  const cases = [
+    ["understanding", { mission: { status: "draft" }, stage: "understanding", questions: [{ id: "u1" }] }],
+    ["preparing", { mission: { status: "draft" }, stateKey: "preparing", counsel: { closing: "I need a decision first." } }],
+    ["ready", { mission: { status: "draft" }, stateKey: "ready", counsel: { closing: "I'd go ahead." } }],
+    ["launching", { mission: { status: "starting", current_phase: "attaching engine" } }],
+    ["executing", { mission: { status: "running", current_phase: "using Write", last_activity_at: "2026-07-25T14:00:00Z" } }],
+    ["reviewing", { mission: { status: "waiting_for_acceptance" } }],
+    ["accepted", { mission: { status: "completed" } }],
+    ["closed", { mission: { status: "closed" } }],
+    ["needs_operator", { mission: { status: "waiting_for_operator" } }],
+    ["blocked", { mission: { status: "blocked" } }],
+    ["at_risk", { mission: { status: "failed" } }],
+  ];
+  for (const [phase, inp] of cases) {
+    const p = composePresence(inp);
+    assert.equal(p.phase, phase, `${phase} → phase`);
+    assert.ok(p.line && p.line.trim().length > 0, `${phase} has a voice`);
+    // No manufactured reassurance / "still here" narration.
+    assert.doesNotMatch(p.line, /still here|just checking|hang tight/i);
+  }
+});
+
+test("presence: LAUNCHING is distinct from executing until the worker actually produces activity", () => {
+  // Dispatched but no activity yet → still launching (fixes the 'running with dead air').
+  assert.equal(isLaunching({ status: "running", current_phase: "dispatching work" }), true);
+  assert.equal(composePresence({ mission: { status: "running", current_phase: "dispatching work" } }).phase, "launching");
+  // First real activity flips it to executing.
+  const execMission = { status: "running", current_phase: "using Bash", last_activity_at: "2026-07-25T14:00:00Z" };
+  assert.equal(isLaunching(execMission), false);
+  assert.equal(composePresence({ mission: execMission }).phase, "executing");
+});
+
+test("presence: the launch sequence is an ordered, honest set of real steps", () => {
+  const seq = launchSequence({ current_phase: "attaching engine" });
+  assert.deepEqual(LAUNCH_STEPS.map((s) => s.key), ["preparing", "verifying", "attaching", "dispatching"]);
+  assert.equal(seq.current, "attaching");
+  const active = seq.steps.find((s) => s.active);
+  assert.equal(active.key, "attaching");
+  assert.ok(seq.steps.slice(0, 2).every((s) => s.done), "earlier steps are done");
+  assert.ok(seq.steps[3].active === false && seq.steps[3].done === false, "later steps are pending");
+});
+
+test("presence: executing is event-driven from the phase, coarse not twitchy", () => {
+  assert.equal(executionEvent({ current_phase: "using Write" }).key, "writing");
+  assert.equal(executionEvent({ current_phase: "using Read" }).key, "exploring");
+  assert.equal(executionEvent({ current_phase: "running vitest" }).key, "verifying");
+  // A running worker with a writing phase speaks the deliverable event.
+  assert.match(composePresence({ mission: { status: "running", current_phase: "using Write", last_activity_at: "x" } }).line, /writing the deliverable/i);
+});
+
+test("presence: silence is stable — identical state yields an identical line (no manufactured updates)", () => {
+  const m = { mission: { status: "running", current_phase: "using Bash", last_activity_at: "2026-07-25T14:00:00Z" } };
+  assert.equal(composePresence(m).line, composePresence(m).line);
 });
 
 test("policy is one canonical text carrying the load-bearing rules", () => {

@@ -174,8 +174,12 @@ export async function runMissionTurn(mission, pkg, { provider, identity, resume 
   // Baseline the already-dirty tree ONCE (first turn) so Acceptance attributes
   // only mission-caused changes — the worktree carries unrelated dev work.
   const baseline = mission.git_baseline || gitDirtyPaths(cwd);
-  updateMission(mid, { status: "starting", started_at: mission.started_at || new Date().toISOString(), current_phase: "starting provider turn", ...(mission.git_baseline ? {} : { git_baseline: baseline }) });
+  // LAUNCH is a visible sequence, not dead air: each phase below maps to the REAL
+  // step it names (see presence.mjs LAUNCH_STEPS), so the operator watches the worker
+  // come online instead of interpreting a silent "running".
+  updateMission(mid, { status: "starting", started_at: mission.started_at || new Date().toISOString(), current_phase: "preparing worker", ...(mission.git_baseline ? {} : { git_baseline: baseline }) });
 
+  updateMission(mid, { current_phase: "verifying environment" });
   const auth = await precheckProvider(provider);
   if (!auth.ok) {
     updateMission(mid, { status: "failed", error_code: auth.auth_required ? "auth" : "unsupported", error_message: auth.error, current_phase: null });
@@ -191,6 +195,7 @@ export async function runMissionTurn(mission, pkg, { provider, identity, resume 
       if (abs.startsWith(cwd)) { try { mkdirSync(join(abs, ".."), { recursive: true }); } catch { /* best-effort */ } }
     }
   }
+  updateMission(mid, { current_phase: "attaching engine" });
 
   let base = serializePackagePrompt(pkg);
   if (instruction) base = `[OPERATOR STEERING / ANSWER]\n${instruction}\n\n${base}`;
@@ -208,7 +213,9 @@ export async function runMissionTurn(mission, pkg, { provider, identity, resume 
 
   const handle = startMissionTurn({ provider, message: base, cwd, resume, maxTurnMs: PER_TURN_MAX_MS, inactivityMs: INACTIVITY_MS, onActivity });
   live.set(mid, { kill: handle.kill, pid: handle.pid, startedAt: t0 });
-  updateMission(mid, { status: "running", current_phase: "provider turn", turn_count: turn });
+  // Dispatched: the engine is running but has not reported activity yet. Presence keeps
+  // this as "launching" until the first onActivity flips it to a real execution event.
+  updateMission(mid, { status: "running", current_phase: "dispatching work", turn_count: turn });
 
   let r;
   try { r = await handle.done; } finally { live.delete(mid); }

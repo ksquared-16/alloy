@@ -1300,10 +1300,18 @@ function opBand(c) {
   const pill = `<span class="opstate ${o.state.tone}">${esc(o.state.label)}</span>`;
   const engine = o.engine_note ? `<div class="opnote">${esc(o.engine_note)}</div>` : "";
   if (k === "review" || k === "accepted") return opReview(o);
+  // LAUNCHING — the worker is coming online. Show the honest sequence so the operator
+  // watches it attach instead of interpreting dead air. (No separate state key: the
+  // presence layer carries the launching/executing distinction.)
+  if (c.presence?.phase === "launching") {
+    const steps = (c.presence.launch?.steps || []).map((s) =>
+      `<div class="oplaunch-step ${s.done ? "done" : s.active ? "active" : "pending"}"><span class="oplaunch-mark">${s.done ? "✓" : s.active ? "•" : "○"}</span>${esc(s.label)}${s.active ? "…" : ""}</div>`).join("");
+    return `<div class="opband run"><span class="opstate run">Launching</span><p class="opsum">${esc(c.presence.line)}</p><div class="oplaunch">${steps}</div>${engine}</div>`;
+  }
   if (k === "executing" || k === "verifying") {
     const wc = (o.progress.what_changed || []).length ? `<div class="opsec"><div class="dlabel">What changed</div>${o.progress.what_changed.map(opFileRow).join("")}</div>` : "";
     return `<div class="opband run">${pill}${o.progress.phase ? `<span class="opphase">${esc(o.progress.phase)}</span>` : ""}
-      ${o.progress.headline ? `<p class="opsum">${esc(o.progress.headline)}</p>` : `<p class="muted">Working — no summary yet.</p>`}${wc}${engine}</div>`;
+      ${o.progress.headline ? `<p class="opsum">${esc(o.progress.headline)}</p>` : `<p class="opsum">${esc(c.presence?.line || "Working…")}</p>`}${wc}${engine}</div>`;
   }
   if (k === "needs_operator") return `<div class="opband attn">${pill}<div class="opneed"><div class="dlabel">Needs your input${o.needs_operator?.kind === "authentication" ? " — sign-in" : ""}</div><p>${esc(o.needs_operator?.prompt || "")}</p></div></div>`;
   if (k === "blocked" || k === "at_risk") return `<div class="opband attn">${pill}<p class="opsum">${esc(c.mission?.error_message || c.mission?.pending_question || "This needs a look before it can go on.")}</p></div>`;
@@ -1372,8 +1380,8 @@ function opFooter(c, id) {
 }
 
 // Conversation STAGES — the operator sees only the stage they are in.
-const STAGE_LABEL = { understanding: "Understanding", preparing: "Preparing", executing: "Executing", reviewing: "Reviewing", closed: "Closed" };
-const STAGE_TONE = { understanding: "run", preparing: "ok", executing: "run", reviewing: "ok", closed: "muted" };
+const STAGE_LABEL = { understanding: "Understanding", preparing: "Preparing", launching: "Launching", executing: "Executing", reviewing: "Reviewing", closed: "Closed" };
+const STAGE_TONE = { understanding: "run", preparing: "ok", launching: "run", executing: "run", reviewing: "ok", closed: "muted" };
 
 // The Understanding stage: Director's open questions, shown — not buried under
 // preparation. Each question says why it matters, whether it blocks, and what it tests.
@@ -1426,11 +1434,14 @@ function conversationWorkspace(id) {
   // RIGHT — Shared Understanding, gated so it doesn't look fully-formed mid-understanding.
   const right = sharedUnderstanding(c, stage);
 
-  const stageLabel = STAGE_LABEL[stage] || o?.state?.label || "";
+  // The header follows presence: while the worker is coming online the whole view
+  // reads "Launching", not "Executing" — one coherent signal, no split-brain.
+  const headStage = c.presence?.phase === "launching" ? "launching" : stage;
+  const stageLabel = STAGE_LABEL[headStage] || o?.state?.label || "";
   return `<div class="dwrap wide">
     <div class="dmhead"><button class="btn sm" data-dback>← Conversations</button>
       <div class="dmtitle"><h2>${esc(c.title)}</h2><span class="dmintent">${esc(stageLabel)}</span></div>
-      ${o ? `<span class="mbadge ${STAGE_TONE[stage] || o.state.tone} big">${esc(stageLabel)}</span>` : ""}</div>
+      ${o ? `<span class="mbadge ${STAGE_TONE[headStage] || o.state.tone} big">${esc(stageLabel)}</span>` : ""}</div>
     <div class="cvgrid">${left}${center}${right}</div>
   </div>`;
 }
