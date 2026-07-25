@@ -12,7 +12,7 @@ import { projectPacketResponsibilities, type PacketFormInput, type PacketProject
 import type { EnumerableFormSchema } from "./requirementResponsibility";
 
 /** Defensively coerce a stored schema_json into the structural subset enumeration needs. */
-function coerceSchema(schemaJson: unknown): EnumerableFormSchema | null {
+export function coerceSchema(schemaJson: unknown): EnumerableFormSchema | null {
     if (!schemaJson || typeof schemaJson !== "object") return null;
     const s = schemaJson as Record<string, unknown>;
     const sections = Array.isArray(s.sections) ? s.sections : [];
