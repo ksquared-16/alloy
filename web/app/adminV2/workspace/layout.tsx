@@ -47,6 +47,20 @@ async function loadOperationalTimezoneSafe(orgId: string): Promise<string> {
     }
 }
 
+/** Cap a first-paint seed load so a slow/N+1 query can never gate the shared layout composition;
+ *  on timeout (or error) degrade to `fallback` and let the client refinement path fill it in. */
+async function withTimeoutOrDefault<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), timeoutMs);
+    });
+    try {
+        return await Promise.race([promise.catch(() => fallback), timeout]);
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
 export default async function AdminV2WorkspaceLayout({
     children,
 }: {
@@ -85,7 +99,11 @@ export default async function AdminV2WorkspaceLayout({
             ),
             // First-paint lifecycle tiles for the workspace Route VM. Loads in parallel with the
             // existing bundle; graceful [] on no-access/error keeps the client refinement path intact.
-            loadOperatorLifecycleLandingCardsServer(),
+            // TIMEOUT (same doctrine as entity-labels above): this is a landing-only seed with a
+            // per-unit N+1, so on a WORK-UNIT route it is dead weight, and even on the landing the
+            // client refinement path fills it in. Cap it so it can never gate the shared layout's first
+            // composition — degrade to [] and let the client refine, rather than block the reveal.
+            withTimeoutOrDefault(loadOperatorLifecycleLandingCardsServer(), 600, []),
         ]);
 
     if (!access.ok) {
