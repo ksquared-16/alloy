@@ -22,6 +22,7 @@ import { maybeClassifyProcessingCaseFromDocumentSafe } from "@/lib/pos/processin
 import { maybeExtractProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/extraction/maybeExtractProcessingCaseFromDocumentSafe";
 import { maybeBuildDocumentFormPreviewSafe } from "@/lib/pos/processingCase/structure/maybeBuildDocumentFormPreviewSafe";
 import { buildDocumentTextUpdate, extractPdfText, looksLikePdf } from "@/lib/pos/processingCase/structure/pdfTextExtract";
+import { OCR_METHOD, looksLikeImage, ocrImageBytes } from "@/lib/pos/processingCase/structure/ocrExtract";
 import {
     capabilitiesForFormat,
     detectProcessingSourceFormat,
@@ -228,6 +229,34 @@ export async function POST(request: NextRequest) {
                 .eq("id", docId);
         } catch (e) {
             console.warn("[documents/upload] text file extraction", e instanceof Error ? e.message : e);
+        }
+    } else if (looksLikeImage(mimeType, origName)) {
+        // Governed OCR path (Phase 7 Stage B): scanned / image-based source has no native text or form
+        // fields. OCR it server-side and preserve text + confidence + method; the same review-and-
+        // correction flow then runs over the OCR text. Best-effort — never blocks the upload.
+        try {
+            const ocr = await ocrImageBytes(new Uint8Array(buffer));
+            if (ocr) {
+                const baseMeta = (row as { metadata?: Record<string, unknown> }).metadata ?? {};
+                await supabase
+                    .from("documents")
+                    .update({
+                        extracted_text: ocr.text,
+                        extraction_status: ocr.text.trim() ? "complete" : "empty",
+                        extraction_provider: OCR_METHOD,
+                        metadata: {
+                            ...baseMeta,
+                            ocr_derived: true,
+                            ocr_confidence: ocr.confidence,
+                            ocr_low_confidence: ocr.lowConfidence,
+                            ocr_method: ocr.method,
+                        },
+                    })
+                    .eq("org_id", ctx.orgId)
+                    .eq("id", docId);
+            }
+        } catch (e) {
+            console.warn("[documents/upload] image OCR extraction", e instanceof Error ? e.message : e);
         }
     }
 
