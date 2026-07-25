@@ -111,9 +111,10 @@ async function completeVmWithStageWork(
 
 /**
  * Prewarm a subject's COMPLETE record work (VM + stage-work) into the shared caches, so a later
- * `useRecordWorkRuntime(subjectId)` resolves and reveals atomically without a fetch. Used by adjacent
- * subject preparation (#6): since the reveal now waits for stage-work, warming the VM alone would
- * still leave a stage-work fetch on click — warm both. Fire-and-forget; failures are ignored.
+ * `useRecordWorkRuntime(subjectId)` resolves and reveals COMPLETE without a fetch. Used by adjacent
+ * subject preparation (#6): the reveal no longer blocks on stage-work, but the deferred Tier-2
+ * resolver serves it synchronously from warm cache — so warming BOTH lets a prepared subject reveal
+ * Current Work fully-resolved with no post-paint patch. Fire-and-forget; failures are ignored.
  */
 export async function prewarmRecordWork(subjectId: string): Promise<void> {
     const id = subjectId.trim();
@@ -222,21 +223,24 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
                 setError("vm_preload_missing");
                 return;
             }
-            // ATOMIC COMPLETE REVEAL (Kelly): resolve the deferred stage-work BEFORE applying, so the
-            // panel's FIRST and only paint is complete — all cards, final size, no "Loading current
-            // work…" → resize. The prior subject stays held throughout (never cleared), so a row → row
-            // swap reveals the new subject atomically instead of flashing a half-built card.
-            const completeVm = await completeVmWithStageWork(result.preload.viewModel);
-            if (gen !== fetchGenRef.current) return; // superseded during the stage-work resolve
+            // FAST REVEAL: apply the Tier-1 enriched VM immediately so EVERY card (household, children,
+            // billing, …) paints the instant the compose returns — never gated behind a SECOND, serial
+            // stage-work round-trip. Current Work's stage-work detail settles in right after via the
+            // deferred Tier-2 resolver below — the SAME non-blocking pattern the drawer path already
+            // uses (useOpportunityDrawerVmPayload) — served synchronously from warm cache for
+            // prepared/adjacent subjects, so those still reveal complete. The prior subject stays held
+            // throughout, so a row → row swap never flashes a half-built card, and the reserved →
+            // ready fill settles in place (motion-settle) rather than popping. (Previously an atomic
+            // pre-resolve of stage-work: it made ALL cards wait on the slowest, most-avoidable hop.)
             logCurrentWorkInit("recordRuntime.fetch.apply", {
                 subjectId: validSubject,
                 runtimeId: runtimeIdRef.current,
                 reqGen: gen,
                 preloadSource: "live",
                 cache: "live",
-                note: "atomic complete reveal (stage-work pre-resolved)",
+                note: "fast reveal (stage-work deferred to Tier-2)",
             });
-            applyVm(completeVm, "cold_fetch");
+            applyVm(result.preload.viewModel, "cold_fetch");
         });
     }, [validSubject, displayVm, applyVm]);
 
@@ -261,10 +265,9 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         const result = await loadOpportunityDrawerViaViewModel(validSubject, null);
         if (subjectGen !== fetchGenRef.current || reloadGen !== reloadGenRef.current) return;
         if (!result.ok || !isOpportunityDrawerViewModelPreload(result.preload)) return;
-        const completeVm = await completeVmWithStageWork(result.preload.viewModel);
-        if (subjectGen !== fetchGenRef.current || reloadGen !== reloadGenRef.current) return;
-        // Same atomic contract as the initial load — reload reveals a complete VM, not a resize.
-        applyVm(completeVm, "reload");
+        // Same fast-reveal contract as the initial load — apply Tier-1 immediately; the deferred
+        // Tier-2 resolver patches stage-work in place (warm cache → synchronous for prepared subjects).
+        applyVm(result.preload.viewModel, "reload");
     }, [validSubject, applyVm]);
 
     // ── Targeted refresh: record-patch + queue-updated events (same contracts as the drawer path). ──
