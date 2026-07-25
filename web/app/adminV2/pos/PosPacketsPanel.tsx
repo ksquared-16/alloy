@@ -77,13 +77,24 @@ function formGroup(f: FormOption): string {
     return typeof cat === "string" && cat.trim() ? cat.trim() : "Forms";
 }
 
-export default function PosPacketsPanel({ embedded = false }: { embedded?: boolean }) {
+export default function PosPacketsPanel({
+    embedded = false,
+    composerOnly = false,
+    onClose,
+    onCreated,
+}: {
+    embedded?: boolean;
+    /** Render ONLY the responsibility composer (no packet list/header) — hosted by the Packet Studio. */
+    composerOnly?: boolean;
+    onClose?: () => void;
+    onCreated?: () => void;
+}) {
     const [packets, setPackets] = useState<PosPacketSummary[] | null>(null);
     const [err, setErr] = useState<string | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
     // Composer state
-    const [showCreate, setShowCreate] = useState(false);
+    const [showCreate, setShowCreate] = useState(composerOnly);
     const [formOptions, setFormOptions] = useState<FormOption[] | null>(null);
     const [selectedFormIds, setSelectedFormIds] = useState<string[]>([]);
     const [name, setName] = useState("");
@@ -117,8 +128,14 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
     }, []);
 
     useEffect(() => {
-        void load();
-    }, [load]);
+        if (!composerOnly) void load();
+    }, [load, composerOnly]);
+
+    // Composer-only mode (hosted by the Packet Studio): open the create composer immediately.
+    useEffect(() => {
+        if (composerOnly) void openCreate();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [composerOnly]);
 
     const openCreate = useCallback(async () => {
         setShowCreate(true);
@@ -212,13 +229,14 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
             setSelectedFormIds([]);
             setName("");
             setDescription("");
-            await load();
+            if (!composerOnly) await load();
+            onCreated?.();
         } catch (e) {
             setComposeErr(e instanceof Error ? e.message : "Failed to create packet");
         } finally {
             setComposing(false);
         }
-    }, [name, description, selectedFormIds, target, selectedChildIds, selectedRecipientIds, responsibilityRules, load]);
+    }, [name, description, selectedFormIds, target, selectedChildIds, selectedRecipientIds, responsibilityRules, composerOnly, onCreated, load]);
 
     const copy = useCallback((id: string, url: string) => {
         void navigator.clipboard?.writeText(url).then(
@@ -231,24 +249,35 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
 
     return (
         <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${embedded ? "bg-alloy-stone/[0.04]" : ""}`}>
-            {embedded ? null : (
+            {embedded || composerOnly ? null : (
                 <WorkspaceSectionHeader title="Packets" subtitle="Reusable packets built from your forms. Build one, choose who it's for, and send a link per child + recipient." />
             )}
 
             <div className={`min-h-0 flex-1 overflow-y-auto ${embedded ? "p-5" : "p-3"}`}>
-                <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
-                        {packets ? `${packets.length} packet${packets.length === 1 ? "" : "s"}` : "Packets"}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                        <button type="button" data-testid="packet-new-button" onClick={() => (showCreate ? setShowCreate(false) : void openCreate())} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-alloy-juniper/90">
-                            <Plus className="h-3 w-3" aria-hidden /> {showCreate ? "Close" : "New packet"}
-                        </button>
-                        <button type="button" onClick={() => void load()} className="inline-flex items-center gap-1 rounded border border-stone-200 px-1.5 py-0.5 text-[10px] font-medium text-stone-500 hover:bg-stone-50">
-                            <RefreshCw className="h-3 w-3" aria-hidden /> Refresh
-                        </button>
+                {composerOnly ? (
+                    <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-alloy-midnight">Compose a packet</span>
+                        {onClose ? (
+                            <button type="button" data-testid="packet-composer-close" onClick={onClose} className="inline-flex items-center gap-1 rounded border border-stone-200 px-1.5 py-0.5 text-[10px] font-medium text-stone-500 hover:bg-stone-50">
+                                Back to packets
+                            </button>
+                        ) : null}
                     </div>
-                </div>
+                ) : (
+                    <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+                            {packets ? `${packets.length} packet${packets.length === 1 ? "" : "s"}` : "Packets"}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                            <button type="button" data-testid="packet-new-button" onClick={() => (showCreate ? setShowCreate(false) : void openCreate())} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-alloy-juniper/90">
+                                <Plus className="h-3 w-3" aria-hidden /> {showCreate ? "Close" : "New packet"}
+                            </button>
+                            <button type="button" onClick={() => void load()} className="inline-flex items-center gap-1 rounded border border-stone-200 px-1.5 py-0.5 text-[10px] font-medium text-stone-500 hover:bg-stone-50">
+                                <RefreshCw className="h-3 w-3" aria-hidden /> Refresh
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {showCreate ? (
                     <div className="mb-3 space-y-3 rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.05] p-3" data-testid="packet-composer">
@@ -378,6 +407,8 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
                     </div>
                 ) : null}
 
+                {composerOnly ? null : (
+                <>
                 {err ? <div className="mb-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11.5px] text-amber-800">{err}</div> : null}
 
                 {!packets ? (
@@ -425,6 +456,8 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
                             );
                         })}
                     </ul>
+                )}
+                </>
                 )}
             </div>
         </div>

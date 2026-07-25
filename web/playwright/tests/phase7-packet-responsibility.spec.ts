@@ -74,7 +74,8 @@ async function openStudioPackets(page: Page) {
     await studioBtn.first().click();
     const packetsTab = modal(page).getByRole("tab", { name: /^Packets$/ }).or(modal(page).getByRole("button", { name: /^Packets$/ }));
     await packetsTab.first().click();
-    await expect(modal(page).getByTestId("packet-new-button")).toBeVisible({ timeout: 30_000 });
+    // The Packets tab is the definition MANAGER; "New packet" opens the responsibility composer.
+    await expect(modal(page).getByTestId("packets-studio-new-packet")).toBeVisible({ timeout: 30_000 });
 }
 
 test.describe("Phase 7 Slice 2 — packet responsibility (operator + projection seams)", () => {
@@ -87,8 +88,8 @@ test.describe("Phase 7 Slice 2 — packet responsibility (operator + projection 
         await openStudioPackets(page);
         await snap(page, "01-composer");
 
-        // 2-3. New packet → select the seeded enrollment form → requirements enumerate.
-        await modal(page).getByTestId("packet-new-button").click();
+        // 2-3. New packet (opens the responsibility composer) → select form → requirements enumerate.
+        await modal(page).getByTestId("packets-studio-new-packet").click();
         await expect(modal(page).getByTestId("packet-composer")).toBeVisible({ timeout: 20_000 });
         const formCheckbox = modal(page).locator("label", { hasText: formName }).locator('input[type="checkbox"]');
         await formCheckbox.waitFor({ state: "visible", timeout: 30_000 });
