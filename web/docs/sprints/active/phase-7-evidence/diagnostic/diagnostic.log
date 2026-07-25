@@ -1,0 +1,119 @@
+{
+  "label": "01-modal-open",
+  "url": "http://127.0.0.1:3011/workspace",
+  "tabs": [
+    "Work",
+    "Studio",
+    "Overview",
+    "Queue"
+  ],
+  "headings": [
+    "Digital Mailroom",
+    "Import document",
+    "Active work",
+    "Form library",
+    "Recent work",
+    "Recent forms",
+    "Folders"
+  ],
+  "buttons": [
+    "Close",
+    "Import document Upload a document and choose what Alloy should do with it. Open →",
+    "Active work Resume imports and question review. Open →",
+    "Form library Forms and assets in Studio. Open →",
+    "View all →",
+    "Incoming (0)",
+    "Enrollment (0)",
+    "Medical (0)",
+    "Subsidy (0)",
+    "Licensing (0)",
+    "Completed (0)",
+    "Reset test data"
+  ],
+  "setupColElements": 0
+}
+{
+  "label": "02-queue-view",
+  "url": "http://127.0.0.1:3011/workspace",
+  "tabs": [
+    "Work",
+    "Studio",
+    "Overview",
+    "Queue"
+  ],
+  "headings": [
+    "Digital Mailroom",
+    "QUEUE"
+  ],
+  "buttons": [
+    "Close",
+    "Import document"
+  ],
+  "setupColElements": 0
+}
+{
+  "label": "03-incoming-expanded",
+  "url": "http://127.0.0.1:3011/workspace",
+  "tabs": [
+    "Work",
+    "Studio",
+    "Overview",
+    "Queue"
+  ],
+  "headings": [
+    "Digital Mailroom",
+    "QUEUE"
+  ],
+  "buttons": [
+    "Close",
+    "Import document",
+    "Incoming 9",
+    "Upload 1784938115642 — 07/24/2026 3h Needs review · Manual review Review",
+    "Upload 1784937623709 — 07/24/2026 3h Needs review · Manual review Review",
+    "Upload 1784937223777 — 07/24/2026 3h Needs review · Manual review Review",
+    "Upload 1784936787878 — 07/24/2026 3h Needs review · Manual review Review",
+    "Untitled source 5h Needs review · Manual review Review",
+    "Firefly Lead Capture 2d Needs review · Route for review Review",
+    "Wi3 Slice5c Qa 1783742158836 Needs Review — 07/10/2026 Jul 10 Needs review · Manual review Review",
+    "MO School Age Child Health Report Jul 10 Ready to publish · Manual review Review",
+    "Enrollment 0",
+    "Medical 1",
+    "Subsidy 0",
+    "Licensing 0",
+    "Completed 5"
+  ],
+  "setupColElements": 0
+}
+{
+  "label": "04-after-case-open",
+  "url": "http://127.0.0.1:3011/workspace",
+  "tabs": [
+    "Work",
+    "Studio",
+    "Overview",
+    "Queue"
+  ],
+  "headings": [
+    "Digital Mailroom",
+    "QUEUE"
+  ],
+  "buttons": [
+    "Close",
+    "Import document",
+    "Incoming 9",
+    "Upload 1784938115642 — 07/24/2026 3h Needs review · Manual review Review",
+    "Upload 1784937623709 — 07/24/2026 3h Needs review · Manual review Review",
+    "Upload 1784937223777 — 07/24/2026 3h Needs review · Manual review Review",
+    "Upload 1784936787878 — 07/24/2026 3h Needs review · Manual review Review",
+    "Untitled source 5h Needs review · Manual review Review",
+    "Firefly Lead Capture 2d Needs review · Route for review Review",
+    "Wi3 Slice5c Qa 1783742158836 Needs Review — 07/10/2026 Jul 10 Needs review · Manual review Review",
+    "MO School Age Child Health Report Jul 10 Ready to publish · Manual review Review",
+    "Enrollment 0",
+    "Medical 1",
+    "Subsidy 0",
+    "Licensing 0",
+    "Completed 5"
+  ],
+  "setupColElements": 0
+}

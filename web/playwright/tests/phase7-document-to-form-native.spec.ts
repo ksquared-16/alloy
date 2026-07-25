@@ -47,6 +47,13 @@ async function openProcessingWorkModal(page: Page) {
         await expect(modal(page)).toBeVisible({ timeout: 60_000 });
     }
     await expect(modal(page).locator('[data-alloy-mode="work"]')).toBeVisible({ timeout: 30_000 });
+    // The modal opens on the Work/Overview landing; switch to the Queue view (PosProcessingWorkspace),
+    // where import + case detail (the document-to-form setup column) live.
+    const queueTab = modal(page).getByRole("tab", { name: /^Queue$/i });
+    if (await queueTab.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await queueTab.click();
+        await page.waitForTimeout(800);
+    }
 }
 
 async function ensureDetected(page: Page) {
@@ -72,16 +79,17 @@ test.describe("Phase 7 Stage A — document → reviewed published form (native)
 
     test("upload real enrollment PDF → review + disposition → publish → retrievable", async ({ page }) => {
         test.skip(!fs.existsSync(FIXTURE_PDF), `Missing fixture ${FIXTURE_PDF}`);
-        // KNOWN-INCOMPLETE (Phase 7 Stage A cert, 2026-07-24): VERIFIED through the real product surface —
-        // service-role auth, Digital Mailroom Work modal, intent-modal upload of a real multi-section
-        // enrollment PDF, processing-case creation, and queue navigation (evidence screenshots captured).
-        // REMAINING: after opening the imported case, the automated run does not reach the document form-SETUP
-        // review panel (PosTemplateSetupColumn) — the uploaded case opens as a regular review case; the
-        // setup/"detect questions" flow needs one more product step to be identified interactively. The
-        // section-disposition + type-editing + confidence + preservation capability itself is unit-tested
-        // (tests/pos/sectionDisposition.test.ts) and typecheck-clean. Remove this fixme once the setup-panel
-        // entry step is wired into the flow below.
-        test.fixme(true, "Setup-review panel entry step from an uploaded case not yet reached in the automated flow");
+        // KNOWN-INCOMPLETE (2026-07-24). The underlying PRODUCT DEFECT is fixed and verified: form-setup
+        // capability detection now uses the document's real filename (SourceDisplayDescriptor.originalFilename)
+        // instead of the extension-less display label, so a valid PDF no longer hits the "question detection
+        // not available" dead-end. Verified via the dev server log: opening a document case now fires
+        // POST /form-draft (auto-detect) — which it did NOT before the fix. Verified in this harness up to
+        // auth + intent-modal upload + case creation + queue navigation. NOT yet green: in the authenticated
+        // Playwright modal the setup review panel (PosTemplateSetupColumn) is not observable in the DOM after
+        // case selection (center detail renders empty) — reproduces with warm routes and with BOS closed, so
+        // it is a modal/case-detail render quirk under the test harness, not cold-compile or occlusion. Needs
+        // interactive DOM/React-state debugging. Remove this fixme once the harness renders the case detail.
+        test.fixme(true, "Product defect fixed + log-verified; setup review panel not observable in the Playwright modal harness after case selection");
 
         // 1–2. Warm routes + authenticate through the sanctioned helper.
         await ensureAdminPlaywrightSession(page);
@@ -90,20 +98,24 @@ test.describe("Phase 7 Stage A — document → reviewed published form (native)
 
         // 3. Open the canonical import surface (Digital Mailroom / Processing Work).
         await openProcessingWorkModal(page);
+        // Close the BOS assistant panel if open — in this narrow modal it can crowd out the case-detail
+        // column, leaving the setup review panel unrendered.
+        const bosPanel = page.getByRole("complementary", { name: /Operator assistant/i });
+        if (await bosPanel.isVisible({ timeout: 3_000 }).catch(() => false)) {
+            await bosPanel.getByRole("button", { name: /^Close$/i }).first().click().catch(() => {});
+            await page.waitForTimeout(500);
+        }
 
         // 4. Upload the real enrollment PDF through the intent modal (choose-purpose → import).
         const uniquePdf = path.join(SHOTS, `upload-${Date.now()}.pdf`);
         fs.mkdirSync(SHOTS, { recursive: true });
         fs.copyFileSync(FIXTURE_PDF, uniquePdf);
-        const importCard = modal(page).getByTestId("processing-import-action-card");
-        if (await importCard.isVisible({ timeout: 10_000 }).catch(() => false)) {
-            await importCard.click();
-        } else {
-            await modal(page).getByRole("button", { name: /Import document/i }).first().click();
-        }
+        // Set the file on the import action's hidden input → opens the intent modal with the file
+        // pre-loaded (initialFile), which auto-fills the display name. (Setting the file on the intent
+        // modal's own input after opening it empty does not register.)
+        await modal(page).locator('input[type="file"]').first().setInputFiles(uniquePdf);
         const intentModal = page.getByTestId("processing-import-intent-modal");
         await expect(intentModal).toBeVisible({ timeout: 20_000 });
-        await intentModal.locator('input[type="file"]').setInputFiles(uniquePdf);
         // "Generate a native form" is the default intent; display name auto-fills from the filename.
         await expect(intentModal.getByTestId("processing-import-display-name")).not.toHaveValue("", { timeout: 10_000 });
         const [uploadRes] = await Promise.all([
