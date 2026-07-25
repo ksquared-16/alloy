@@ -11,6 +11,7 @@
  */
 
 import type { DraftFormField, DraftFormFieldType, DraftFormSection, StoredFormDraftPreview } from "./types";
+import type { SectionDisposition } from "./sectionDisposition";
 
 export const MANUAL_FORM_DRAFT_VERSION = "manual-1";
 
@@ -33,12 +34,22 @@ export interface ManualFieldInput {
     description?: string;
 }
 
+/** Operator-set intent for a section (by title), carried into the draft + emitted schema. */
+export interface SectionDispositionInput {
+    title: string;
+    disposition: SectionDisposition;
+    /** Preserved instructional/consent/signature prose. When absent for a non-"fields" disposition, it
+     * is derived from the section's field labels so meaningful text is never silently dropped. */
+    static_text?: string;
+}
+
 export interface BuildManualDraftInput {
     title: string;
     sourceDocumentId: string | null;
     fields: ManualFieldInput[];
     extractedTextLength?: number;
     extractedTextAvailable?: boolean;
+    sectionDispositions?: SectionDispositionInput[];
 }
 
 function coerceType(t: string | undefined): DraftFormFieldType {
@@ -80,11 +91,30 @@ export function buildManualFormDraft(input: BuildManualDraftInput): StoredFormDr
         });
     }
 
-    const sections: DraftFormSection[] = order.map((title, i) => ({
-        id: `section_${i + 1}`,
-        title,
-        field_ids: bySection.get(title)!.map((f) => f.id),
-    }));
+    const dispByTitle = new Map((input.sectionDispositions ?? []).map((d) => [d.title, d]));
+    const sections: DraftFormSection[] = order.map((title, i) => {
+        const sectionFields = bySection.get(title)!;
+        const disp = dispByTitle.get(title);
+        const disposition = disp?.disposition;
+        let staticText = disp?.static_text?.trim() || undefined;
+        // No silent data loss: for a non-"fields" disposition without explicit prose, preserve the
+        // section's detected labels as static text (they are the instructional/consent lines that would
+        // otherwise become junk form fields).
+        if (disposition && disposition !== "fields" && !staticText) {
+            const preserved = sectionFields
+                .map((f) => f.label.trim())
+                .filter(Boolean)
+                .join("\n");
+            staticText = preserved || undefined;
+        }
+        return {
+            id: `section_${i + 1}`,
+            title,
+            field_ids: sectionFields.map((f) => f.id),
+            ...(disposition ? { disposition } : {}),
+            ...(staticText ? { static_text: staticText } : {}),
+        };
+    });
     const fields: DraftFormField[] = order.flatMap((t) => bySection.get(t)!);
 
     return {

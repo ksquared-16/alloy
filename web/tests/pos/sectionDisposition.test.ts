@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { recommendSectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
 import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1";
+import { buildManualFormDraft } from "@/lib/pos/processingCase/formDraft/buildManualFormDraft";
 import type { StoredFormDraftPreview, DraftFormField, DraftFormSection } from "@/lib/pos/processingCase/formDraft/types";
 import { validateFormSchema } from "@/lib/forms/schema";
 
@@ -115,6 +116,31 @@ describe("draftFormToFormSchemaV1 — disposition-aware conversion", () => {
         const schema = draftFormToFormSchemaV1(d);
         expect(schema.fields.map((f) => f.id)).toEqual(["f1", "f2"]);
         expect(schema.fields.find((f) => f.id === "f2")!.type).toBe("date");
+        expect(() => validateFormSchema(schema)).not.toThrow();
+    });
+
+    it("buildManualFormDraft persists disposition + derives static_text from section labels (no data loss)", () => {
+        const draft = buildManualFormDraft({
+            title: "Enrollment",
+            sourceDocumentId: "doc-1",
+            fields: [
+                { label: "Child name", type: "text", section: "Child" },
+                { label: "I consent to the parent handbook policies", section: "Consent" },
+            ],
+            sectionDispositions: [{ title: "Consent", disposition: "acknowledgement" }],
+        });
+        const consent = draft.sections.find((s) => s.title === "Consent")!;
+        expect(consent.disposition).toBe("acknowledgement");
+        // The consent line (which would otherwise become a junk field) is preserved as static text.
+        expect(consent.static_text).toContain("I consent to the parent handbook policies");
+        const child = draft.sections.find((s) => s.title === "Child")!;
+        expect(child.disposition).toBeUndefined(); // default fields — unchanged
+
+        const schema = draftFormToFormSchemaV1(draft);
+        // Consent section: preserved text_block + acknowledgement boolean; child field still a text field.
+        expect(schema.fields.some((f) => f.type === "text_block")).toBe(true);
+        expect(schema.fields.some((f) => f.type === "boolean")).toBe(true);
+        expect(schema.fields.some((f) => f.type === "text" && f.label === "Child name")).toBe(true);
         expect(() => validateFormSchema(schema)).not.toThrow();
     });
 

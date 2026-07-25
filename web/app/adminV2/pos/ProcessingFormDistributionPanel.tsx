@@ -26,6 +26,8 @@ type MintArgs = {
     publishedVersionId?: string | null;
     locationId?: string;
     locationName?: string;
+    /** Rotate to a fresh token, deactivating any prior link for this scope. */
+    regenerate?: boolean;
 };
 
 type Props = {

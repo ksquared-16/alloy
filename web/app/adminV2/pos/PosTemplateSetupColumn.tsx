@@ -35,6 +35,7 @@ import {
     type ProcessingCanvasState,
 } from "@/lib/pos/processingCase/formDraft/processingCanvasInteraction";
 import { ProcessingQuestionReviewList } from "./ProcessingQuestionReviewList";
+import { recommendSectionDisposition, type SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
 import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
@@ -127,9 +128,37 @@ export default function PosTemplateSetupColumn({
     const [pendingSaveBusy, setPendingSaveBusy] = useState(false);
     const pendingSaveLockRef = useRef(false);
     const [phase, setPhase] = useState<"review" | "generate">("review");
+    const [dispositionOverrides, setDispositionOverrides] = useState<Record<string, SectionDisposition>>({});
     const [formName, setFormName] = useState("");
     const [creatingPhase, setCreatingPhase] = useState(0);
     const [generateAnywayOpen, setGenerateAnywayOpen] = useState(false);
+
+    // Per-section disposition: Alloy recommends an intent (with operator-language confidence); the
+    // operator confirms/overrides. Effective disposition drives the emitted schema on create.
+    const sectionInfo = useMemo(() => {
+        const byTitle = new Map<string, string[]>();
+        const order: string[] = [];
+        for (const q of reviewQuestions) {
+            if (q.ignored) continue;
+            const title = (q.section ?? "").trim() || "Questions";
+            if (!byTitle.has(title)) {
+                byTitle.set(title, []);
+                order.push(title);
+            }
+            byTitle.get(title)!.push(q.displayLabel || q.evidenceLabel || "");
+        }
+        const out: Record<string, { disposition: SectionDisposition; recommended: SectionDisposition; confidence: "high" | "medium" | "low" }> = {};
+        for (const title of order) {
+            const labels = byTitle.get(title)!;
+            const rec = recommendSectionDisposition({ title, fieldLabels: labels, sectionText: labels.join("\n") });
+            out[title] = {
+                recommended: rec.disposition,
+                confidence: rec.confidence,
+                disposition: dispositionOverrides[title] ?? rec.disposition,
+            };
+        }
+        return out;
+    }, [reviewQuestions, dispositionOverrides]);
     const autoDetectAttemptedRef = useRef<string | null>(null);
 
     const clearSelection = () => {
@@ -540,6 +569,9 @@ export default function PosTemplateSetupColumn({
                         ...(f.description ? { description: f.description } : {}),
                         ...(f.field_source ? { field_source: f.field_source } : {}),
                     })),
+                    section_dispositions: Object.entries(sectionInfo)
+                        .filter(([, info]) => info.disposition !== "fields")
+                        .map(([title, info]) => ({ title, disposition: info.disposition })),
                 }),
             });
             const saveBody = (await saveRes.json().catch(() => ({}))) as { error?: string };
@@ -955,6 +987,10 @@ export default function PosTemplateSetupColumn({
                                     onIgnore={toggleIgnoreQuestion}
                                     onRemove={removeQuestion}
                                     onStartMapping={startMapping}
+                                    sectionInfo={sectionInfo}
+                                    onSectionDisposition={(title, disposition) =>
+                                        setDispositionOverrides((prev) => ({ ...prev, [title]: disposition }))
+                                    }
                                 />
                                 <button
                                     type="button"
