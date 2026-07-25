@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import ProcessingCreateFormDialog from "./ProcessingCreateFormDialog";
 import ProcessingFormsAssetLibrary, { type FormAssetFilter } from "./ProcessingFormsAssetLibrary";
 import ProcessingFormBuilder from "./ProcessingFormBuilder";
-import ProcessingPacketsStudio from "./ProcessingPacketsStudio";
+import PosPacketsPanel from "./PosPacketsPanel";
 import ProcessingStudioShell, { ProcessingStudioPlaceholder, type ProcessingStudioTab } from "./ProcessingStudioShell";
 import { useProcessingFormApi } from "./useProcessingFormApi";
 
@@ -102,7 +102,7 @@ export default function ProcessingFormsStudio({
                         focusFolderId={focusFolderId}
                     />
                 ) : studioTab === "packets" ? (
-                    <ProcessingPacketsStudio />
+                    <PosPacketsPanel embedded />
                 ) : studioTab === "fields" ? (
                     <ProcessingStudioPlaceholder
                         title="Fields"
