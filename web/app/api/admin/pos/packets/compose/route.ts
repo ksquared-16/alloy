@@ -133,7 +133,10 @@ export async function POST(request: NextRequest) {
                 name: baseName,
                 description,
                 is_active: true,
-                metadata: { created_via: "pos_packet_compose", form_count: itemsPlan.items.length },
+                // pos_connected marks this packet so completing it opens a Processing Case (the
+                // packet→Processing on-ramp gates on isPosConnectedSurface). Composer packets must
+                // reach Processing; without this marker the journey dead-ends at completion.
+                metadata: { created_via: "pos_packet_compose", form_count: itemsPlan.items.length, pos_connected: true },
             })
             .select("id")
             .single();
