@@ -98,7 +98,9 @@ export function normalizeGridColumnStacking(grid: FocusPanelGridLayout): FocusPa
     const sorted = [...grid.areas].sort((a, b) => {
         if (a.colStart !== b.colStart) return a.colStart - b.colStart;
         if (a.rowStart !== b.rowStart) return a.rowStart - b.rowStart;
-        return (order.get(a.card) ?? 0) - (order.get(b.card) ?? 0);
+        // Same start row: later array entry (just-placed move target) wins the slot
+        // so insert-above / swap onto the top of a column works.
+        return (order.get(b.card) ?? 0) - (order.get(a.card) ?? 0);
     });
     const placed: FocusPanelGridArea[] = [];
     for (const area of sorted) {
@@ -118,6 +120,7 @@ export function normalizeGridColumnStacking(grid: FocusPanelGridLayout): FocusPa
 /** Place (or replace) a card's region. Snaps/clamps to the grid. PURE. */
 export function placeArea(grid: FocusPanelGridLayout, area: FocusPanelGridArea): FocusPanelGridLayout {
     const next = clampArea(grid, area);
+    // Append the placed card last so normalize prefers it on same-row ties.
     const areas = [...grid.areas.filter((a) => a.card !== area.card), next];
     return normalizeGridColumnStacking({ ...grid, areas });
 }
@@ -186,28 +189,54 @@ export function snapMoveTarget(
 ): FocusPanelGridArea {
     let next = clampArea(grid, { ...moving, colStart, rowStart });
     const rightHalfStart = Math.floor(grid.columns / 2) + 1;
+    const halfSpan = Math.max(1, Math.floor(grid.columns / 2));
 
-    // Right-column cards snap their top to the left column's primary anchor (e.g. Current Work).
+    // Half-width cards snap cleanly into left or right column (common 6/6 layout).
+    if (next.colSpan >= halfSpan - 1) {
+        if (next.colStart >= rightHalfStart) {
+            next = clampArea(grid, { ...next, colStart: rightHalfStart, colSpan: Math.min(next.colSpan, halfSpan) });
+        } else if (next.colStart + next.colSpan <= rightHalfStart + 1) {
+            next = clampArea(grid, { ...next, colStart: 1, colSpan: Math.min(next.colSpan, halfSpan) });
+        }
+    }
+
+    // Right-column cards near the top align with the left-column anchor (e.g. What's Next).
+    // Tight ±1 window — do not yank lower-half drops up to row 1.
     if (next.colStart >= rightHalfStart) {
         const leftAnchors = grid.areas
             .filter((area) => area.card !== moving.card && area.colStart < rightHalfStart)
             .map((area) => area.rowStart);
         if (leftAnchors.length > 0) {
             const alignTop = Math.min(...leftAnchors);
-            if (Math.abs(next.rowStart - alignTop) <= 2) {
+            if (Math.abs(next.rowStart - alignTop) <= 1) {
                 next = { ...next, rowStart: alignTop };
             }
         }
     }
 
-    // Stack directly beneath cards already occupying this column (including overlaps).
-    for (const neighbor of grid.areas) {
-        if (neighbor.card === moving.card || !sameStackColumn(neighbor, next)) continue;
+    // Same-column neighbors: drop in the upper half → insert above (push neighbor down via
+    // placeArea normalize). Drop in the lower half → stack below.
+    const neighbors = grid.areas
+        .filter((area) => area.card !== moving.card && sameStackColumn(area, next))
+        .sort((a, b) => a.rowStart - b.rowStart);
+
+    for (const neighbor of neighbors) {
         const stackBelow = neighbor.rowStart + neighbor.rowSpan;
         const nextEnd = next.rowStart + next.rowSpan;
         const overlaps = next.rowStart < stackBelow && nextEnd > neighbor.rowStart;
+        const neighborMid = neighbor.rowStart + neighbor.rowSpan / 2;
+        const insertAbove =
+            next.rowStart <= neighbor.rowStart
+            || (overlaps && next.rowStart < neighborMid)
+            || (next.rowStart > neighbor.rowStart && next.rowStart <= neighbor.rowStart + 1);
+
+        if (insertAbove) {
+            next = { ...next, rowStart: neighbor.rowStart };
+            break;
+        }
         if (overlaps || (next.rowStart > neighbor.rowStart && next.rowStart < stackBelow + 1)) {
             next = { ...next, rowStart: stackBelow };
+            // Keep scanning — may still overlap a card further down after stacking.
         }
     }
 

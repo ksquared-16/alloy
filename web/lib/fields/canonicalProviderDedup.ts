@@ -12,8 +12,9 @@ import type { CanonicalDataProvider } from "@/lib/fields/canonicalDataProviderMo
 export const CANONICAL_PICKER_ALIAS_TO_CANONICAL: Readonly<Record<string, string>> = {
     "child.display_name": "child.first_name",
     "child.name": "child.first_name",
+    // dob_age is a legacy combined label — collapse to DOB. Age stays a separate computed field
+    // so Children identity cards can select Date of birth independently from Age / Age band.
     "child.dob_age": "child.date_of_birth",
-    "child.age": "child.date_of_birth",
     "inquiry_child.program_category": "inquiry_child.program",
     "inquiry_child.program_category_id": "inquiry_child.program",
     "child.program": "inquiry_child.program",

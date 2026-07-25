@@ -202,8 +202,11 @@ export const childrenSurface: SurfaceSpec = {
                                     { key: "child.last_name", label: "Last Name", kind: "field", namespace: "child" },
                                     { key: "child.preferred_name", label: "Preferred Name", kind: "field", namespace: "child" },
                                     { key: "child.nickname", label: "Nickname", kind: "field", namespace: "child" },
-                                    { key: "child.date_of_birth", label: "DOB", kind: "field", namespace: "child" },
+                                    { key: "child.date_of_birth", label: "Date of Birth", kind: "field", namespace: "child" },
+                                    { key: "child.gender", label: "Gender", kind: "field", namespace: "child" },
                                     { key: "child.dob_age", label: "Age", kind: "field", namespace: "child" },
+                                    { key: "child.age", label: "Age (years)", kind: "field", namespace: "child" },
+                                    { key: "child.age_band", label: "Age band", kind: "field", namespace: "child" },
                                 ],
                             },
                             {
@@ -232,10 +235,11 @@ export const childrenSurface: SurfaceSpec = {
                                 purpose: "Where is this child placed?",
                                 owner: "child_component",
                                 items: [
+                                    { key: "inquiry_child.location_id", label: "Location", kind: "field", namespace: "inquiry_child" },
                                     { key: "inquiry_child.program", label: "Program", kind: "field", namespace: "inquiry_child" },
-                                    { key: "child.room", label: "Room", kind: "field", namespace: "child" },
-                                    { key: "inquiry_child.desired_schedule_type", label: "Schedule", kind: "field", namespace: "inquiry_child" },
-                                    { key: "child.desired_start_date", label: "Desired Start", kind: "field", namespace: "child" },
+                                    { key: "inquiry_child.program_room_cohort_key", label: "Room", kind: "field", namespace: "inquiry_child" },
+                                    { key: "inquiry_child.schedule_type", label: "Schedule", kind: "field", namespace: "inquiry_child" },
+                                    { key: "inquiry_child.start_date", label: "Start date", kind: "field", namespace: "inquiry_child" },
                                 ],
                             },
                             {

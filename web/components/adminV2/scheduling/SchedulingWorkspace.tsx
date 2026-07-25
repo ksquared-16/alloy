@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarCheck } from "lucide-react";
 
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
-import { WS_EYEBROW } from "@/components/workspace/workspaceTokens";
+import { WS_EYEBROW, WS_OVERVIEW_CONTENT } from "@/components/workspace/workspaceTokens";
 import SchedulingWorkspaceShell, { type Site } from "@/app/adminV2/scheduling/SchedulingWorkspaceShell";
 import SchedulingKpiStrip from "@/app/adminV2/scheduling/SchedulingKpiStrip";
 import {
@@ -478,7 +478,7 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
 
 function AttendanceScreen({ siteName }: { siteName: string }) {
     return (
-        <div className="mx-auto flex w-full max-w-[1180px] flex-col">
+        <div className={`${WS_OVERVIEW_CONTENT} flex flex-col`} data-scheduling-attendance-placeholder="true">
             <p className={WS_EYEBROW}>Attendance</p>
             <div className="mt-3 flex flex-col items-center justify-center rounded-xl border border-dashed border-alloy-stone/25 bg-white px-6 py-16 text-center">
                 <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-alloy-stone/40 text-alloy-midnight">

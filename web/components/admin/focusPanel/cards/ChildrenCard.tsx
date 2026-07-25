@@ -40,6 +40,7 @@ import {
 import {
     childFocusViewFromConfig,
     isChildFocusFieldSaveSupported,
+    isChildIdentityFieldInlineSaveSupported,
     type ChildFocusFieldKey,
     type ChildFocusView,
 } from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
@@ -47,6 +48,16 @@ import {
     childFocusMutationValueKeyForRef,
     isIdentityFieldSaveSupported,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
+import {
+    buildIdentityInlineChildSavePatch,
+    isIdentityFieldInlineSaveSupported,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityInlineChildSave";
+import { navigateIdentityFieldLink } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
+import { fieldLinkTargetForNestedGroup } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    createEmptyFocusPanelCardLinkNavState,
+    type FocusPanelCardLinkNavState,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLinkNavigation";
 import type { ChildFocusEditValueKey } from "@/lib/adminV2/runtime/focusPanel/children/childFocusFieldPolicy";
 import {
     buildChildFocusSavePatch,
@@ -66,6 +77,7 @@ import {
 import {
     CHILDREN_SURFACE_ID,
     fieldPresentationLabel,
+    groupDefsFor,
     groupShowAvatarForNestedGroup,
     isNestedGroupEnabled,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -178,18 +190,45 @@ export default function ChildrenCard({
     );
 
     const hasEditableChildFields = childFocusView.focusFields.some((field) => field.editable);
-    const canEditChild = Boolean(mutation?.canEdit && hasEditableChildFields && !composerPreview);
+    const canMutateIdentity = Boolean(mutation?.canEdit && !composerPreview);
+    const canEditChild = Boolean(canMutateIdentity && hasEditableChildFields);
     const opportunityStartDate =
         context.truth.start_date != null ? String(context.truth.start_date).slice(0, 10) : null;
 
+    const [cardLinkNav, setCardLinkNav] = useState<FocusPanelCardLinkNavState>(() =>
+        createEmptyFocusPanelCardLinkNavState(),
+    );
+
     const saveChildIdentityField =
-        canEditChild && mutation
+        canMutateIdentity && mutation
             ? async (args: IdentityFieldSaveArgs) => {
+                  const seed = seedChildFocusEditValues(context.truth, args.personId);
+                  if (!seed) return { ok: false as const };
+
+                  if (isIdentityFieldInlineSaveSupported(args.fieldRef)) {
+                      const patch = buildIdentityInlineChildSavePatch({
+                          fieldRef: args.fieldRef,
+                          value: args.value,
+                          row: seed.row,
+                          identityBaseline: seed.identityBaseline,
+                      });
+                      if (!patch) return { ok: false as const };
+                      const hasChanges =
+                          Object.keys(patch.identityPatch).length > 0
+                          || Object.keys(patch.ocmPatch).length > 0
+                          || Boolean(patch.profilePatch && Object.keys(patch.profilePatch).length > 0);
+                      if (!hasChanges) return { ok: true as const };
+                      return mutation.saveInquiryChild({
+                          childId: seed.childId,
+                          row: seed.row,
+                          patch,
+                          identityBaseline: seed.identityBaseline,
+                      });
+                  }
+
                   if (!isIdentityFieldSaveSupported(args.fieldRef)) return { ok: false as const };
                   const valueKey = childFocusMutationValueKeyForRef(args.fieldRef);
                   if (!valueKey) return { ok: false as const };
-                  const seed = seedChildFocusEditValues(context.truth, args.personId);
-                  if (!seed) return { ok: false as const };
                   const editableKeys = new Set<ChildFocusEditValueKey>([valueKey]);
                   const draft = { ...seed.values, [valueKey]: args.value.trim() };
                   const patch = buildChildFocusSavePatch({
@@ -222,6 +261,49 @@ export default function ChildrenCard({
         back: backDisclosure,
         reset: resetDisclosure,
     } = useIdentityDisclosureState();
+
+    /**
+     * Linked navigate-away: history keeps exact prior Detail for Back; card default
+     * returns to Summary so a later reopen is not stuck on the prior child.
+     */
+    const linkChildIdentityField = (fieldRef: string, childId: string) => {
+        const child =
+            evidence.children.find((row) => row.id === childId)
+            ?? evidence.children.find((row) => row.customerMemberId === childId)
+            ?? null;
+        const scheduleSubjectId = child?.customerMemberId?.trim() || child?.id || childId;
+        const sourceFocus = child?.id ?? childId;
+        const authoredTarget =
+            childrenSurfaceConfig
+                ? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "identity", fieldRef)
+                    ?? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "placement", fieldRef)
+                    ?? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "roster", fieldRef)
+                : null;
+        const result = navigateIdentityFieldLink({
+            coordination,
+            fromCard: "children",
+            fieldRef,
+            sourceItemId: scheduleSubjectId,
+            personId: child?.personId ?? null,
+            sourceFocus,
+            authoredTarget,
+            nav: cardLinkNav,
+        });
+        setCardLinkNav(result.nav);
+        if (result.ok) {
+            setEditing(false);
+            setRelatedViewId(null);
+            resetDisclosure();
+        }
+    };
+
+    // Fresh queue subject → Summary default (no stale Lennon after Wrigley select).
+    useEffect(() => {
+        setEditing(false);
+        setRelatedViewId(null);
+        resetDisclosure();
+        setCardLinkNav(createEmptyFocusPanelCardLinkNavState());
+    }, [context.subject.id, resetDisclosure]);
 
     const request = coordination?.request;
     const requestNonce = request?.card === "children" ? request.nonce : null;
@@ -434,11 +516,10 @@ export default function ChildrenCard({
             config: childrenSurfaceConfig,
             child: focused,
             groupKey: "identity",
-            canMutate: canEditChild,
-            isFieldSaveSupported: (fieldRef) =>
-                isChildFocusFieldSaveSupported(fieldRef as ChildFocusFieldKey),
+            canMutate: canMutateIdentity,
+            isFieldSaveSupported: (fieldRef) => isChildIdentityFieldInlineSaveSupported(fieldRef),
         });
-    }, [focused, childrenSurfaceConfig, canEditChild]);
+    }, [focused, childrenSurfaceConfig, canMutateIdentity]);
 
     const contextRosterRecords = useMemo(
         () =>
@@ -447,10 +528,12 @@ export default function ChildrenCard({
                     config: childrenSurfaceConfig,
                     child,
                     groupKey: "roster",
+                    canMutate: canMutateIdentity,
+                    isFieldSaveSupported: (fieldRef) => isChildIdentityFieldInlineSaveSupported(fieldRef),
                 }),
                 badge: child.status,
             })),
-        [evidence.children, childrenSurfaceConfig],
+        [evidence.children, childrenSurfaceConfig, canMutateIdentity],
     );
 
     let lifecycle: "empty" | "summary" | "focus" | "edit" | "expanded" | "related";
@@ -583,6 +666,7 @@ export default function ChildrenCard({
                     record={{ ...focusedIdentityRecord, badge: focused.status }}
                     depth={disclosure.depth}
                     onSaveField={saveChildIdentityField}
+                    onLinkField={(fieldRef) => linkChildIdentityField(fieldRef, focused.id)}
                     onEnterEvidence={
                         disclosure.depth === "details" && evidenceSections.length > 0
                             ? () => enterEvidence(focused.id, "roster")
@@ -617,6 +701,7 @@ export default function ChildrenCard({
                         selectable
                         onSelectIdentity={selectChildIdentity}
                         onSaveField={saveChildIdentityField}
+                        onLinkField={linkChildIdentityField}
                     />
             </ComposableRegionShell>
         );
@@ -637,7 +722,9 @@ export default function ChildrenCard({
                                 child={child}
                                 depth="summary"
                                 childrenSurfaceConfig={childrenSurfaceConfig}
+                                canMutate={canMutateIdentity}
                                 onSaveField={saveChildIdentityField}
+                                onLinkField={linkChildIdentityField}
                                 onActivate={
                                     composingChildrenSurface ? undefined : selectChildIdentity
                                 }
@@ -729,17 +816,23 @@ function ChildSummaryRow({
     depth = "summary",
     onActivate,
     onSaveField,
+    onLinkField,
+    canMutate = false,
 }: {
     child: ChildrenEvidenceChild;
     childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
     depth?: "summary" | "context";
     onActivate?: (childId: string) => void;
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
+    onLinkField?: (fieldRef: string, childId: string) => void;
+    canMutate?: boolean;
 }) {
     const record = buildChildIdentityRecordVM({
         config: childrenSurfaceConfig,
         child,
         groupKey: "roster",
+        canMutate,
+        isFieldSaveSupported: (fieldRef) => isChildIdentityFieldInlineSaveSupported(fieldRef),
     });
     return (
         <div className="alloy-os-children__summary-row" data-children-child={child.id}>
@@ -748,6 +841,9 @@ function ChildSummaryRow({
                 depth={depth}
                 onActivate={onActivate}
                 onSaveField={onSaveField}
+                onLinkField={
+                    onLinkField ? (fieldRef) => onLinkField(fieldRef, child.id) : undefined
+                }
             />
             {child.missingLine ? (
                 <span className="alloy-os-children__summary-line alloy-os-card-detail--risk" data-children-missing={child.id}>
@@ -875,15 +971,26 @@ function ConfiguredChildEnrollmentBody({
     if (composingChildrenSurface && childrenSurfaceConfig) {
         return (
             <div className="alloy-os-child-edit" data-children-enrollment={child.id}>
-                {CHILDREN_FOCUS_GROUP_KEYS.map((groupKey) => (
-                    <NestedSurfaceFieldLayoutSurface
-                        key={groupKey}
-                        surfaceId={CHILDREN_SURFACE_ID}
-                        groupKey={groupKey}
-                        fields={fieldsByGroup.get(groupKey) ?? []}
-                        tier="details"
-                    />
-                ))}
+                {CHILDREN_FOCUS_GROUP_KEYS.map((groupKey) => {
+                    const groupLabel =
+                        groupDefsFor(CHILDREN_SURFACE_ID).find((group) => group.key === groupKey)?.label
+                        ?? groupKey;
+                    return (
+                        <section
+                            key={groupKey}
+                            className="fp-composer-field-section"
+                            data-children-focus-group={groupKey}
+                        >
+                            <p className="fp-composer-tier-label">{groupLabel}</p>
+                            <NestedSurfaceFieldLayoutSurface
+                                surfaceId={CHILDREN_SURFACE_ID}
+                                groupKey={groupKey}
+                                fields={fieldsByGroup.get(groupKey) ?? []}
+                                tier="details"
+                            />
+                        </section>
+                    );
+                })}
             </div>
         );
     }
@@ -926,6 +1033,8 @@ const CHILDREN_FIELD_TRUTH_META: Record<string, { icon: LucideIcon; get: (c: Chi
     "child.date_of_birth": { icon: Cake, get: (c) => c.dobAge },
     "child.dob_age": { icon: Cake, get: (c) => c.dobAge },
     "child.age": { icon: Cake, get: (c) => c.dobAge },
+    "child.gender": { icon: User, get: (c) => c.gender ?? null },
+    "child.age_band": { icon: Cake, get: (c) => c.ageBand ?? null },
     "inquiry_child.program": { icon: GraduationCap, get: (c) => c.program },
     "child.room": { icon: DoorOpen, get: (c) => c.room },
     "child.start_date": { icon: CalendarClock, get: (c) => c.startDate },

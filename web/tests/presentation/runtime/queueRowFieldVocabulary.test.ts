@@ -34,9 +34,11 @@ describe("Queue Row field vocabulary", () => {
         expect(compactSlotForFieldKey("children.count")).toBe("groupCount");
         expect(compactSlotForFieldKey("children.names")).toBe("groupCount");
         expect(compactSlotForFieldKey("children.summary")).toBe("groupCount");
-        // Selectable-but-not-runtime-effective in the compact row:
         expect(compactSlotForFieldKey("opportunity.tour_date")).toBeNull();
-        expect(compactSlotForFieldKey("waitlist.positionLabel")).toBeNull();
+        expect(compactSlotForFieldKey("waitlist.positionLabel")).toBe("status");
+        expect(compactSlotForFieldKey("waitlist.waitSince")).toBe("status");
+        expect(compactSlotForFieldKey("opportunity.next_step")).toBe("work");
+        expect(compactSlotForFieldKey("child.room")).toBe("groupCount");
         expect(compactSlotForFieldKey("")).toBeNull();
     });
 

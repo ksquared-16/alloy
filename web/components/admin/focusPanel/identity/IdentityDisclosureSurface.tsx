@@ -15,6 +15,7 @@ type Props = {
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
     onSaveFields?: (args: IdentityFieldBatchSaveArgs) => Promise<{ ok: boolean } | void>;
     onEditField?: (fieldRef: string) => void;
+    onLinkField?: (fieldRef: string) => void;
     onSelectEvidenceCollection?: (key: string) => void;
     onEnterEvidence?: () => void;
 };
@@ -28,6 +29,7 @@ export default function IdentityDisclosureSurface({
     onSaveField,
     onSaveFields,
     onEditField,
+    onLinkField,
     onSelectEvidenceCollection,
     onEnterEvidence,
 }: Props) {
@@ -44,6 +46,7 @@ export default function IdentityDisclosureSurface({
                 onSaveField={onSaveField}
                 onSaveFields={onSaveFields}
                 onEditField={onEditField}
+                onLinkField={onLinkField}
             />
             {depth === "details" ?
                 <>

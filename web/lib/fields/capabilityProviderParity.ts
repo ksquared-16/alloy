@@ -73,7 +73,8 @@ export function assertCapabilityProviderParityForChildProfileSeeds(
     const unexpected: string[] = [];
 
     for (const seed of seeds) {
-        const refKey = `child.${seed.field_key.trim()}`;
+        const fieldKey = seed.field_key.trim();
+        const refKey = `child.${fieldKey === "dob" ? "date_of_birth" : fieldKey}`;
         const capable = consumerSurfaceSupportsTenantField(seed, consumer);
         const hasProvider = providers.has(refKey);
         if (capable && !hasProvider) missing.push(refKey);
@@ -97,7 +98,10 @@ export function filterProvidersByConsumerCapability(
         tenantFieldDefinitions.map((def) => {
             const entity = def.entity_type.trim().toLowerCase();
             const key = def.field_key.trim();
-            const refKey = entity === "customer_member" ? `child.${key}` : `${entity}.${key}`;
+            const refKey =
+                entity === "customer_member"
+                    ? `child.${key === "dob" ? "date_of_birth" : key}`
+                    : `${entity}.${key}`;
             return [refKey, def] as const;
         }),
     );

@@ -15,7 +15,8 @@ import WorkspaceCard from "@/components/workspace/WorkspaceCard";
 import WorkspaceOperationalHealth, {
     type WorkspaceOperationalHealthItem,
 } from "@/components/workspace/WorkspaceOperationalHealth";
-import { WS_EYEBROW } from "@/components/workspace/workspaceTokens";
+import { WorkspaceOverviewStack } from "@/components/workspace/WorkspaceOverviewLayout";
+import { WS_EYEBROW, WS_OVERVIEW_INFO_SPLIT, WS_OVERVIEW_LAUNCH_GRID } from "@/components/workspace/workspaceTokens";
 
 export type OverviewChild = { agreementId: string; customerMemberId: string; name: string; startDate?: string | null };
 export type OverviewStart = { agreementId: string; name: string; startDate: string };
@@ -141,10 +142,10 @@ export default function SchedulingOverview({
     ];
 
     return (
-        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5" data-scheduling-overview="true">
+        <WorkspaceOverviewStack className="gap-5 space-y-0" data-scheduling-overview="true" testId="scheduling-overview">
             <div>
                 <p className={WS_EYEBROW}>Needs attention today</p>
-                <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div className={`mt-3 ${WS_OVERVIEW_LAUNCH_GRID}`}>
                     <LaunchCard
                         testId="needs-placement"
                         icon={<UserPlus className="h-4 w-4" strokeWidth={2} />}
@@ -197,7 +198,7 @@ export default function SchedulingOverview({
                 />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.25fr_1fr]">
+            <div className={WS_OVERVIEW_INFO_SPLIT}>
                 <Zone
                     title="Needs a decision"
                     testId="needs-decision"
@@ -266,14 +267,14 @@ export default function SchedulingOverview({
             </div>
 
             <div
-                className="rounded-xl border border-dashed border-alloy-stone/25 bg-alloy-stone/[0.03] px-4 py-3"
+                className="rounded-xl border border-alloy-stone/18 bg-white px-4 py-4 shadow-[0_2px_10px_rgba(24,39,58,0.05)]"
                 data-scheduling-overview-zone="recent-changes"
             >
-                <p className="text-[12px] font-semibold text-alloy-midnight/70">Recent schedule changes</p>
-                <p className="mt-0.5 text-[11.5px] text-alloy-slate">
+                <p className="text-[13px] font-semibold text-alloy-midnight">Recent schedule changes</p>
+                <p className="mt-1 text-[12px] leading-snug text-alloy-slate">
                     Placements and schedule changes made recently will appear here as the change history feed comes online.
                 </p>
             </div>
-        </div>
+        </WorkspaceOverviewStack>
     );
 }

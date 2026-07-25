@@ -70,7 +70,7 @@ export function planCurrentWorkActionExecution(
                 kind: "unsupported",
                 reason:
                     action.disabledReason?.trim()
-                    || "This action is not available from Current Work.",
+                    || "This action is not available from What's Next.",
                 action,
             };
     }

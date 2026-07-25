@@ -222,7 +222,7 @@ describe("focusPanelGridLayoutOps", () => {
         });
     });
 
-    it("snapMoveTarget aligns right-column cards to the left-column anchor row", () => {
+    it("snapMoveTarget inserts above a same-column neighbor when dropping near its top", () => {
         const grid: FocusPanelGridLayout = {
             columns: 12,
             areas: [
@@ -233,8 +233,45 @@ describe("focusPanelGridLayoutOps", () => {
         };
         const moving = grid.areas.find((a) => a.card === "children")!;
         const snapped = snapMoveTarget(grid, moving, 7, 2);
-        // Left-column alignment pulls toward row 1, then same-column stack lands under Household.
-        expect(snapped.rowStart).toBe(3);
+        // Near top of right column → insert above Household (not forced under it).
+        expect(snapped.rowStart).toBe(1);
+        expect(snapped.colStart).toBe(7);
+    });
+
+    it("moveArea can place Household beside What's Next and push Children down", () => {
+        // Kelly scenario: drag Household up on the right to sit next to What's Next / above Children.
+        const grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "current_work", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "children", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "household", colStart: 7, colSpan: 6, rowStart: 4, rowSpan: 3 },
+            ],
+        };
+        const next = moveArea(grid, "household", 7, 1);
+        const household = next.areas.find((a) => a.card === "household")!;
+        const children = next.areas.find((a) => a.card === "children")!;
+        expect(household).toMatchObject({ colStart: 7, rowStart: 1 });
+        expect(children.rowStart).toBeGreaterThanOrEqual(household.rowStart + household.rowSpan);
+        expect(next.areas.find((a) => a.card === "current_work")).toMatchObject({
+            colStart: 1,
+            rowStart: 1,
+        });
+    });
+
+    it("snapMoveTarget stacks below when dropping in the lower half of a neighbor", () => {
+        const grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "current_work", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "children", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "household", colStart: 7, colSpan: 6, rowStart: 4, rowSpan: 2 },
+            ],
+        };
+        const moving = grid.areas.find((a) => a.card === "household")!;
+        // Drop toward bottom of Children (row 3 is in lower half of Children rows 1–3).
+        const snapped = snapMoveTarget(grid, moving, 7, 3);
+        expect(snapped.rowStart).toBe(4);
         expect(snapped.colStart).toBe(7);
     });
 

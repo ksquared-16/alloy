@@ -217,8 +217,25 @@ export function QueueRegion({
             // P2-V config-consumption provenance — proves in the browser WHICH surface drove the rows.
             data-queue-row-source={queue.provenance?.source ?? undefined}
             data-queue-surface-id={queue.provenance?.surfaceId ?? undefined}
+            data-queue-surface-source={queue.provenance?.resolvedSource ?? queue.provenance?.source ?? undefined}
+            data-queue-surface-variant={queue.provenance?.variant ?? undefined}
+            data-queue-column-keys={
+                [
+                    ...(queue.rowConfig?.subject.fieldKeys ?? []),
+                    ...(queue.rowConfig?.status.fieldKeys ?? []),
+                    ...(queue.rowConfig?.contact.fieldKeys ?? []),
+                    ...(queue.rowConfig?.attention.fieldKeys ?? []),
+                    ...(queue.rowConfig?.work.fieldKeys ?? []),
+                    ...(queue.rowConfig?.groupCount.fieldKeys ?? []),
+                ].join("|") || undefined
+            }
             data-queue-row-resolved-source={queue.provenance?.resolvedSource ?? undefined}
             data-queue-row-variant={queue.provenance?.variant ?? undefined}
+            data-queue-row-ineffective-fields={
+                queue.provenance?.ineffectiveFieldKeys?.length
+                    ? queue.provenance.ineffectiveFieldKeys.join(",")
+                    : undefined
+            }
         >
             {showFilterControls ? (
                 <div
@@ -251,7 +268,7 @@ export function QueueRegion({
                         role="list"
                         aria-busy="true"
                         aria-label="Loading queue rows"
-                        className="flex flex-col gap-1.5"
+                        className="flex flex-col gap-2"
                     >
                         {Array.from({ length: QUEUE_SKELETON_ROW_COUNT }, (_, i) => (
                             <QueueRowSkeleton key={`queue-row-skeleton-${i}`} />
@@ -260,7 +277,7 @@ export function QueueRegion({
                 ) : renderState === "empty" ? (
                     // Empty state holds the queue STRUCTURE: dashed ghost rows inside the panel.
                     <div data-queue-empty="true">
-                        <ul className="flex flex-col gap-1.5" aria-hidden="true">
+                        <ul className="flex flex-col gap-2" aria-hidden="true">
                             {Array.from({ length: QUEUE_SKELETON_ROW_COUNT }, (_, i) => (
                                 <li
                                     key={`queue-empty-ghost-${i}`}
@@ -296,7 +313,7 @@ export function QueueRegion({
                                 {queue.error}
                             </p>
                         ) : null}
-                        <ul role="list" aria-busy={queue.loading || undefined} className="flex flex-col gap-1.5">
+                        <ul role="list" aria-busy={queue.loading || undefined} className="flex flex-col gap-2">
                         {rowsForList.map((row, index) => (
                             <li key={`${row.entityType}:${row.entityId}`}>
                                 <CondensedQueueRow

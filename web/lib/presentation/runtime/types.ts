@@ -243,6 +243,8 @@ export type WorkUnitSurfaceModel = {
             resolvedSource: string | null;
             /** The compact row anatomy variant. */
             variant: string;
+            /** Non-compact-effective published keys — explicit diagnostic for older invalid configs. */
+            ineffectiveFieldKeys?: readonly string[];
         };
     };
     activeWorkViewId: string | null;

@@ -3,11 +3,13 @@
  */
 
 import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
+import { chunkNestedSurfaceFieldsForHalfRowLayout } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import type { SurfaceFieldVisibility } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import {
     normalizeIdentityStorageTier,
     type IdentityStorageTier,
 } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import type { IdentityFieldLinkTarget } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 
 /** @deprecated Prefer storage tier helpers; legacy tier aliases accepted on read. */
 export type IdentityFieldTier = IdentityStorageTier;
@@ -36,6 +38,8 @@ export type IdentityFieldPlacement = {
     icon?: string;
     labelMode?: IdentityFieldLabelMode;
     policy?: SurfaceFieldVisibility;
+    /** When policy is Linked — destination card / open mode / subject. */
+    linkTarget?: IdentityFieldLinkTarget;
     hideWhenEmpty?: boolean;
 };
 
@@ -60,16 +64,19 @@ function seedPlacement(args: {
     fieldModes?: Record<string, { showLabel?: boolean }>;
 }): IdentityFieldPlacement {
     const normalizedTier = normalizeIdentityStorageTier(args.tier);
-    const keepExistingLayout = args.existing?.width === args.width;
+    // Layout coordinates always come from current key-order + fieldLayoutWidths packing.
+    // Preserving prior row/column when width is unchanged broke reorder/beside publish parity
+    // (Gender↔Age Band swap kept stale columns). Policy/label/icon remain sticky.
     const seeded: IdentityFieldPlacement = {
         fieldRef: args.fieldRef,
         tier: normalizedTier,
-        row: keepExistingLayout ? (args.existing?.row ?? args.row) : args.row,
-        column: keepExistingLayout ? (args.existing?.column ?? args.column) : args.column,
+        row: args.row,
+        column: args.column,
         width: args.width,
         icon: args.existing?.icon,
         labelMode: args.existing?.labelMode,
         policy: args.existing?.policy ?? args.policy,
+        linkTarget: args.existing?.linkTarget,
         hideWhenEmpty: args.existing?.hideWhenEmpty,
     };
     const resolvedLabelMode = resolveIdentityPlacementLabelMode(seeded, args.fieldModes, args.fieldRef);
@@ -105,42 +112,29 @@ export function generateDefaultIdentityFieldPlacements(
     const placements: IdentityFieldPlacement[] = [];
 
     const appendTier = (tier: "summary" | "context_fact" | "details", fieldRefs: readonly string[]) => {
-        let row = 1;
-        let column: 1 | 2 | 3 = 1;
-        let rowUnits = 0;
-        for (const fieldRef of fieldRefs) {
-            const width = group.fieldLayoutWidths?.[fieldRef] ?? "full";
-            const prior = existingByTierAndRef.get(`${tier}:${fieldRef}`);
-            const widthUnits = width === "third" ? 1 : width === "half" ? 2 : 3;
-            if (rowUnits > 0 && rowUnits + widthUnits > 3) {
-                row += 1;
-                column = 1;
-                rowUnits = 0;
-            }
-            placements.push(
-                seedPlacement({
-                    fieldRef,
-                    tier,
-                    row: prior?.row ?? row,
-                    column: prior?.column ?? column,
-                    width,
-                    policy: prior?.policy ?? group.fieldPolicies?.[fieldRef] ?? options?.defaultPolicy,
-                    existing: prior,
-                    fieldModes: group.fieldModes,
-                }),
-            );
-            if (width === "third" && column < 3) {
-                column = (column + 1) as 1 | 2 | 3;
-                rowUnits += 1;
-            } else if (width === "half" && column === 1) {
-                column = 2;
-                rowUnits += 2;
-            } else {
-                row += 1;
-                column = 1;
-                rowUnits = 0;
-            }
-        }
+        const layoutFor = (fieldRef: string): NestedSurfaceFieldLayoutWidth =>
+            group.fieldLayoutWidths?.[fieldRef] ?? "full";
+        // Same pairing rules as runtime IdentityFieldGrid / NestedSurfaceFieldLayoutSurface.
+        // (Do not use a 3-unit half=2 packer — two halves must share one row.)
+        const chunks = chunkNestedSurfaceFieldsForHalfRowLayout(fieldRefs, layoutFor);
+        chunks.forEach((chunk, rowIndex) => {
+            chunk.forEach((fieldRef, columnIndex) => {
+                const width = layoutFor(fieldRef);
+                const prior = existingByTierAndRef.get(`${tier}:${fieldRef}`);
+                placements.push(
+                    seedPlacement({
+                        fieldRef,
+                        tier,
+                        row: rowIndex + 1,
+                        column: (columnIndex + 1) as 1 | 2 | 3,
+                        width,
+                        policy: prior?.policy ?? group.fieldPolicies?.[fieldRef] ?? options?.defaultPolicy,
+                        existing: prior,
+                        fieldModes: group.fieldModes,
+                    }),
+                );
+            });
+        });
     };
 
     appendTier("summary", summaryKeys);

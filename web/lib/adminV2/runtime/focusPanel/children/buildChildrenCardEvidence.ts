@@ -14,6 +14,10 @@
 
 import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { resolveChildPhotoUrlFromRaw } from "@/lib/adminV2/runtime/focusPanel/children/resolveChildPhotoUrl";
+import {
+    projectCompactScheduleForIdentity,
+    readSchedulingProjectionByMemberId,
+} from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
 import { humanizeStatusKey } from "@/lib/admin/status/humanizeStatusKey";
 import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 import { resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
@@ -44,6 +48,10 @@ export type ChildrenEvidenceChild = {
     /** ISO date-only when present; display via dobAge. */
     dob?: string | null;
     age?: string | null;
+    /** Person gender label when present on the child row (display only unless write contract exists). */
+    gender?: string | null;
+    /** Age band label when present on the child row (computed / projected — read-only). */
+    ageBand?: string | null;
     initial: string;
     /** Identity profile image (evidence model); null → initials fallback. */
     imageUrl: string | null;
@@ -69,6 +77,8 @@ export type ChildrenEvidenceChild = {
     missingLine: string | null;
     /** Real flags only (medical/document); empty when none present. */
     flags: ChildEvidenceFlag[];
+    /** OCM participation notes when present. */
+    notes?: string | null;
 };
 
 export type ChildrenCardEvidence = {
@@ -128,12 +138,22 @@ export function buildChildrenCardEvidence(
     options: BuildChildrenCardEvidenceOptions = {},
 ): ChildrenCardEvidence {
     const { rows, rawRows } = normalizeFocusPanelChildrenRowsFromTruth(context.truth);
+    const schedulingByMember = readSchedulingProjectionByMemberId(context.truth);
 
     const children: ChildrenEvidenceChild[] = rows.map((row, index) => {
         const name = childName(row);
+        const memberId =
+            trimOrNull((row as { customer_member_id?: unknown }).customer_member_id)
+            ?? trimOrNull(row.id)
+            ?? trimOrNull(row.person_id);
+        const schedulingProjection = memberId ? schedulingByMember[memberId] ?? null : null;
+        const scheduleCompact = projectCompactScheduleForIdentity(schedulingProjection);
         const program = trimOrNull(row.desired_program_label);
-        const room = trimOrNull(row.program_room_cohort_label) ?? trimOrNull(row.location_label);
-        const schedule = trimOrNull(row.desired_schedule_label);
+        const room =
+            scheduleCompact.roomLabel
+            ?? trimOrNull(row.program_room_cohort_label)
+            ?? trimOrNull(row.location_label);
+        const schedule = scheduleCompact.scheduleLabel ?? trimOrNull(row.desired_schedule_label);
         const teacher = trimOrNull((row as { teacher_label?: unknown }).teacher_label);
         const startDateIso = trimOrNull(row.start_date)?.slice(0, 10) ?? null;
         const startDate = formatFocusPanelDate(startDateIso);
@@ -199,6 +219,12 @@ export function buildChildrenCardEvidence(
             nickname: trimOrNull((row as { nickname?: unknown }).nickname),
             dob: trimOrNull(row.dob)?.slice(0, 10) ?? null,
             age: trimOrNull(row.age),
+            gender:
+                trimOrNull((row as { gender_label?: unknown }).gender_label)
+                ?? trimOrNull((row as { gender?: unknown }).gender),
+            ageBand:
+                trimOrNull((row as { age_band?: unknown }).age_band)
+                ?? trimOrNull((row as { age_band_label?: unknown }).age_band_label),
             initial: name.charAt(0).toUpperCase(),
             imageUrl: resolveChildPhotoUrlFromRaw(rawRows[index] ?? {}),
             dobAge,
@@ -215,6 +241,7 @@ export function buildChildrenCardEvidence(
             detailLine,
             missingLine,
             flags: [],
+            notes: trimOrNull((row as { notes?: unknown }).notes),
         };
     });
 

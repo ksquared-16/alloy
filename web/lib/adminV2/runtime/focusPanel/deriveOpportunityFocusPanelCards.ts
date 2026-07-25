@@ -105,7 +105,7 @@ export function buildCurrentWorkCardModel(input: {
     const primaryOpen = input.stageWorkRuntime?.primary?.state === "open";
     return card({
         key: "current_work",
-        title: "Current Work",
+        title: "What's Next",
         insight: stageWorkInsight(input.stageWorkRuntime),
         secondaryInsight: primaryOpen
             ? "Due today · continue stage steps"
@@ -473,6 +473,24 @@ function schedulingCollectionItems(record: Record<string, unknown>): {
  * (configured) is launched from the card action. Room · weekly pattern · dates are
  * set at Registration once enrollment creates the operational agreement.
  */
+/** Canonical Milestones card model — composer + runtime share this producer. */
+export function buildMilestonesCardModel(record: Record<string, unknown>): FocusPanelCardModel {
+    const raw = record["milestones"];
+    const count = Array.isArray(raw) ? raw.length : 0;
+    return card({
+        key: "milestones",
+        title: "Milestones",
+        insight: count > 0 ? `${count} milestone${count === 1 ? "" : "s"}` : "No milestones yet",
+        secondaryInsight: count > 0 ? "Completed · committed · upcoming outcomes" : null,
+        tier: "context",
+        span: 1,
+        density: "compact",
+        statusChip: count > 0 ? String(count) : null,
+        statusTone: count > 0 ? "ready" : "neutral",
+        primaryAction: null,
+    });
+}
+
 export function buildSchedulingCardModel(record: Record<string, unknown>): FocusPanelCardModel {
     const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
     const count = rows.length;
@@ -625,6 +643,7 @@ function buildCardModels(input: {
     map.set("household", buildHouseholdCardModel(record, title));
     map.set("children", buildChildrenCardModel(record));
     map.set("scheduling", buildSchedulingCardModel(record));
+    map.set("milestones", buildMilestonesCardModel(record));
 
     map.set(
         "communications",

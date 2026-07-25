@@ -343,7 +343,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                 className="rounded border border-alloy-forge/10 bg-alloy-midnight/[0.02] px-2 py-1.5 text-[10px] text-alloy-midnight/55"
                 data-testid={`work-template-transitions-note-${work.template_key}`}
             >
-                Outgoing transitions are owned by this stage and appear on Current Work when configured.
+                Outgoing transitions are owned by this stage and appear on What's Next when configured.
                 Outcome automation moves records through those transitions — never by destination text alone.
             </p>
 

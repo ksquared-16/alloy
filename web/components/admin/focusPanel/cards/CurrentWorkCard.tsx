@@ -22,6 +22,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkRequirementOwner";
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
+import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
 import type {
     CurrentWorkActionVM,
     CurrentWorkChecklistItemVM,
@@ -292,7 +293,7 @@ export default function CurrentWorkCard({
                 invokeHeaderDelegate(plan.action);
                 return;
             default:
-                setHandoffNotice("This action is not available from Current Work.");
+                setHandoffNotice("This action is not available from What's Next.");
         }
     };
 
@@ -463,13 +464,13 @@ export default function CurrentWorkCard({
     const body =
         stageWorkPending ? (
             <div className="alloy-os-household__summary" data-work-pending="true" aria-busy="true">
-                <p className="alloy-os-household__row-detail alloy-os-currentwork__pending" aria-label="Loading current work">
-                    Loading current work…
+                <p className="alloy-os-household__row-detail alloy-os-currentwork__pending" aria-label="Loading What's Next">
+                    Loading What&apos;s Next…
                 </p>
             </div>
         ) : evidence.isEmpty ? (
             <div className="alloy-os-household__summary" data-work-empty="true">
-                <p className="alloy-os-household__row-detail">No current work configured</p>
+                <p className="alloy-os-household__row-detail">No What&apos;s Next configured</p>
             </div>
         ) : completionPhase === "complete" && completionSummary ?
             <OutcomeCompleteBody
@@ -506,6 +507,17 @@ export default function CurrentWorkCard({
             data-capability-active={capabilityActive ? "true" : undefined}
             data-current-work-surface="true"
         >
+            {capabilityActive ?
+                <button
+                    type="button"
+                    className="alloy-os-currentwork__capability-close"
+                    onClick={closeActionPanel}
+                    aria-label="Close composer"
+                    data-work-action-panel-close="true"
+                >
+                    Close
+                </button>
+            :   null}
             <UniversalCard
                 title={vm.microLabel}
                 insight={surface.title}
@@ -567,7 +579,7 @@ function SummaryBody({
                             onMouseEnter={() => onWarm(dominant)}
                             onFocus={() => onWarm(dominant)}
                         >
-                            {dominant.label}
+                            <CurrentWorkActionButtonContent action={dominant} />
                         </button>
                         {helpful.map((action) => (
                             <button
@@ -579,7 +591,7 @@ function SummaryBody({
                                 onMouseEnter={() => onWarm(action)}
                                 onFocus={() => onWarm(action)}
                             >
-                                {action.label}
+                                <CurrentWorkActionButtonContent action={action} />
                             </button>
                         ))}
                         {subordinateOutcome ?
@@ -589,7 +601,7 @@ function SummaryBody({
                                 data-work-action="record-outcome"
                                 onClick={() => onAction(subordinateOutcome)}
                             >
-                                {subordinateOutcome.label}
+                                <CurrentWorkActionButtonContent action={subordinateOutcome} />
                             </button>
                         :   null}
                     </div>

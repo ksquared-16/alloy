@@ -71,6 +71,11 @@ import {
     type IdentityEvidenceCollectionConfig,
 } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { splitDefaultFieldsForIdentityGroup } from "@/lib/adminV2/settings/surfaces/identityDisclosureDefaults";
+import {
+    defaultIdentityFieldLinkTarget,
+    normalizeIdentityFieldLinkTarget,
+    type IdentityFieldLinkTarget,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 
 export const HOUSEHOLD_SURFACE_ID = "household_surface";
 export const CHILDREN_SURFACE_ID = "children_surface";
@@ -200,16 +205,39 @@ export function groupDefsFor(surfaceId: string): NestedSurfaceGroupDef[] {
     const groups: NestedSurfaceGroupDef[] = [];
     for (const component of surfaceComponents(surface)) {
         for (const group of component.evidenceGroups) {
+            const fromItems = namespacesForEvidenceGroup(group.items);
             groups.push({
                 key: group.key,
                 label: group.label,
                 purpose: group.purpose,
-                acceptedNamespaces: namespacesForEvidenceGroup(group.items),
+                // Seed items alone must not define the picker catalog. Children identity
+                // cards may project child profile + inquiry participation + calculated
+                // fields; namespaces come from surface grain policy + seed items.
+                acceptedNamespaces: acceptedNamespacesForNestedGroup(surfaceId, group.key, fromItems),
                 defaultFieldKeys: group.items.filter((item) => item.kind === "field").map((item) => item.key),
             });
         }
     }
     return groups;
+}
+
+/**
+ * Applicable entity namespaces for a nested surface group picker.
+ * Broader than seed items so /fields inquiry participation (and related) remain selectable
+ * on Children identity cards without duplicating field definitions.
+ */
+export function acceptedNamespacesForNestedGroup(
+    surfaceId: string,
+    groupKey: string,
+    fromItems: readonly AvailableFieldEntityNamespace[],
+): AvailableFieldEntityNamespace[] {
+    const base = new Set<AvailableFieldEntityNamespace>(fromItems);
+    if (surfaceId === CHILDREN_SURFACE_ID || surfaceId === "child_surface") {
+        base.add("child");
+        base.add("inquiry_child");
+        if (groupKey === "readiness") base.add("opportunity");
+    }
+    return [...base];
 }
 
 export function nestedSurfaceLabel(surfaceId: string): string {
@@ -523,7 +551,8 @@ export function moveFieldInNestedGroup(
     const [item] = nextKeys.splice(i, 1);
     nextKeys.splice(j, 0, item);
     let next = patchGroupFieldKeysForPurpose(config, groupKey, purpose, nextKeys);
-    return unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, nextKeys);
+    next = unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, nextKeys);
+    return resyncIdentityFieldPlacementsInGroup(next, groupKey);
 }
 
 /** Which disclosure tier currently owns a field on a group. */
@@ -565,20 +594,88 @@ export function setFieldVisibilityInNestedGroup(
     visibility: SurfaceFieldVisibility,
     options?: { tier?: IdentityFieldPolicyTier },
 ): NestedSurfaceConfig {
-    if (options?.tier) {
-        return setFieldVisibilityForIdentityTier(config, groupKey, fieldKey, options.tier, visibility);
+    let next = options?.tier
+        ? setFieldVisibilityForIdentityTier(config, groupKey, fieldKey, options.tier, visibility)
+        : {
+              ...config,
+              groups: config.groups.map((g) =>
+                  g.key === groupKey
+                      ? {
+                            ...g,
+                            fieldPolicies: { ...(g.fieldPolicies ?? {}), [fieldKey]: visibility },
+                        }
+                      : g,
+              ),
+          };
+    if (visibility === "linked") {
+        const seeded = defaultIdentityFieldLinkTarget(fieldKey);
+        if (seeded) {
+            next = setFieldLinkTargetInNestedGroup(next, groupKey, fieldKey, seeded, options);
+        }
     }
+    return next;
+}
+
+export function setFieldLinkTargetInNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    linkTarget: IdentityFieldLinkTarget,
+    options?: { tier?: IdentityFieldPolicyTier },
+): NestedSurfaceConfig {
+    const tierFilter = options?.tier ? normalizeIdentityStorageTier(options.tier) : null;
     return {
         ...config,
-        groups: config.groups.map((g) =>
-            g.key === groupKey
-                ? {
-                      ...g,
-                      fieldPolicies: { ...(g.fieldPolicies ?? {}), [fieldKey]: visibility },
-                  }
-                : g,
-        ),
+        groups: config.groups.map((g) => {
+            if (g.key !== groupKey) return g;
+            const placements = [...(g.fieldPlacements ?? generateDefaultIdentityFieldPlacements(g))];
+            let found = false;
+            const nextPlacements = placements.map((placement) => {
+                if (placement.fieldRef !== fieldKey) return placement;
+                if (
+                    tierFilter
+                    && normalizeIdentityStorageTier(placement.tier) !== tierFilter
+                ) {
+                    return placement;
+                }
+                found = true;
+                return { ...placement, linkTarget, policy: placement.policy ?? "linked" };
+            });
+            if (!found) {
+                nextPlacements.push({
+                    fieldRef: fieldKey,
+                    tier: tierFilter ?? "summary",
+                    row: nextPlacements.length + 1,
+                    column: 1,
+                    width: "full",
+                    policy: "linked",
+                    linkTarget,
+                });
+            }
+            return {
+                ...g,
+                fieldPolicies: { ...(g.fieldPolicies ?? {}), [fieldKey]: "linked" },
+                fieldPlacements: nextPlacements,
+            };
+        }),
     };
+}
+
+export function fieldLinkTargetForNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    options?: { tier?: IdentityFieldPolicyTier },
+): IdentityFieldLinkTarget | null {
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (!group) return defaultIdentityFieldLinkTarget(fieldKey);
+    const tierFilter = options?.tier ? normalizeIdentityStorageTier(options.tier) : null;
+    const placement = (group.fieldPlacements ?? []).find((row) => {
+        if (row.fieldRef !== fieldKey) return false;
+        if (!tierFilter) return true;
+        return normalizeIdentityStorageTier(row.tier) === tierFilter;
+    });
+    return normalizeIdentityFieldLinkTarget(placement?.linkTarget, fieldKey);
 }
 
 export function fieldVisibilityForNestedGroup(
@@ -635,13 +732,28 @@ export function fieldLayoutWidthForNestedGroup(
     return config.groups.find((g) => g.key === groupKey)?.fieldLayoutWidths?.[fieldKey] ?? "full";
 }
 
+/** Rewrite group.fieldPlacements from authoritative key order + fieldLayoutWidths. */
+export function resyncIdentityFieldPlacementsInGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((g) =>
+            g.key === groupKey
+                ? { ...g, fieldPlacements: generateDefaultIdentityFieldPlacements(g) }
+                : g,
+        ),
+    };
+}
+
 export function setFieldLayoutWidthInNestedGroup(
     config: NestedSurfaceConfig,
     groupKey: string,
     fieldKey: string,
     layoutWidth: NestedSurfaceFieldLayoutWidth,
 ): NestedSurfaceConfig {
-    return {
+    const next = {
         ...config,
         groups: config.groups.map((g) =>
             g.key === groupKey
@@ -652,6 +764,7 @@ export function setFieldLayoutWidthInNestedGroup(
                 : g,
         ),
     };
+    return resyncIdentityFieldPlacementsInGroup(next, groupKey);
 }
 
 function patchGroupFieldKeys(
@@ -775,7 +888,8 @@ export function applyNestedSurfaceFieldDrop(
         let next = patchGroupFieldKeysForPurpose(config, groupKey, purpose, reordered);
         next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "half");
         next = setFieldLayoutWidthInNestedGroup(next, groupKey, targetKey, "half");
-        return unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
+        next = unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
+        return resyncIdentityFieldPlacementsInGroup(next, groupKey);
     }
 
     const layoutFor = (fieldKey: string) => fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey);
@@ -792,7 +906,8 @@ export function applyNestedSurfaceFieldDrop(
 
     let next = patchGroupFieldKeysForPurpose(config, groupKey, purpose, reordered);
     next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "full");
-    return unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
+    next = unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
+    return resyncIdentityFieldPlacementsInGroup(next, groupKey);
 }
 
 export function fieldShowLabelForNestedGroup(

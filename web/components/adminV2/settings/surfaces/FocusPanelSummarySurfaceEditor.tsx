@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
 import FocusPanelRuntimeComposerCanvas from "@/components/admin/focusPanel/FocusPanelRuntimeComposerCanvas";
+import FocusPanelVisibilityZones from "@/components/adminV2/settings/surfaces/FocusPanelVisibilityZones";
 import { gridFromPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import {
     readFocusPanelPublishedLayout,
@@ -14,6 +15,10 @@ import {
     defaultRowLayoutFromCards,
     withPublishedLayoutMetadata,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayoutOps";
+import {
+    filterPublishedLayoutToVisibleCards,
+    visibilityMapFromSummaryOrder,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardVisibility";
 import { SurfaceBuilderInspectorRail } from "@/components/adminV2/settings/surfaces/SurfaceBuilderInspectorRail";
 import { useRegisterSurfaceBuilderChrome } from "@/components/adminV2/settings/surfaces/SurfaceBuilderChromeContext";
 import { buildDemoFocusPanelSummaryViewModel } from "@/lib/adminV2/runtime/focusPanel/demoFocusPanelSummaryViewModel";
@@ -35,6 +40,7 @@ import {
     saveFocusPanelSummaryDraft,
     type FocusPanelSummaryLayoutState,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryLayoutService";
+import { validateNestedSurfacesForPublish } from "@/lib/adminV2/settings/surfaces/nestedSurfaceConfigService";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import FocusPanelDrillInInspector from "@/components/admin/focusPanel/drillIn/FocusPanelDrillInInspector";
 import { FocusPanelComposerProvider, useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
@@ -284,18 +290,31 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
             const keys = cardsInLayout(layout);
             setOrder((prev) => {
                 const byKey = new Map(prev.map((e) => [e.key, e]));
-                const next = keys
+                // Visible composition follows the canvas; preserve Linked/Hidden entries
+                // so moving a card out of the grid does not destroy its config identity.
+                const preserved = prev.filter((e) => e.visibility === "linked" || e.visibility === "hidden");
+                const preservedKeys = new Set(preserved.map((e) => e.key));
+                const visible = keys
+                    .filter((key) => !preservedKeys.has(key as FocusPanelCardKey))
                     .map((key) => {
                         const k = key as FocusPanelCardKey;
                         const existing = byKey.get(k);
-                        if (existing) return existing;
+                        if (existing) return { ...existing, visibility: "visible" as const };
                         const model = cards.get(k);
                         return model
-                            ? ({ key: k, span: model.span, density: model.density, tier: model.tier, gridRow: 0, instanceId: k } as SummaryCardOrderEntry)
+                            ? ({
+                                  key: k,
+                                  span: model.span,
+                                  density: model.density,
+                                  tier: model.tier,
+                                  gridRow: 0,
+                                  instanceId: k,
+                                  visibility: "visible" as const,
+                              } as SummaryCardOrderEntry)
                             : null;
                     })
                     .filter((e): e is SummaryCardOrderEntry => e !== null);
-                return next;
+                return [...visible, ...preserved];
             });
         },
         [cards],
@@ -320,7 +339,13 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
         setPublishing(true);
         setStatusNote(null);
         try {
-            const draft = await saveFocusPanelSummaryDraft(layoutState, buildDocWithLayout());
+            const nextDoc = buildDocWithLayout();
+            const nestedError = validateNestedSurfacesForPublish(nextDoc);
+            if (nestedError) {
+                setStatusNote(nestedError);
+                return;
+            }
+            const draft = await saveFocusPanelSummaryDraft(layoutState, nextDoc);
             const published = await publishFocusPanelSummary(draft.id);
             setLayoutState({
                 draft: null,
@@ -430,7 +455,24 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
             {loaded ? (
                 <div className="flex min-h-0 flex-1 gap-4">
                     {/* Wide builder stage — runtime-shaped Focus Panel sits in the full canvas. */}
-                    <div className="process-config-setup-card flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-4">
+                    <div className="process-config-setup-card flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-auto p-4">
+                        <FocusPanelVisibilityZones
+                            order={order}
+                            onChange={(next) => {
+                                commit(next);
+                                const visMap = visibilityMapFromSummaryOrder(next);
+                                setRowLayout((prev) => {
+                                    const base =
+                                        prev
+                                        ?? defaultRowLayoutFromCards(
+                                            next
+                                                .filter((e) => (e.visibility ?? "visible") === "visible")
+                                                .map((e) => e.key),
+                                        );
+                                    return filterPublishedLayoutToVisibleCards(base, visMap);
+                                });
+                            }}
+                        />
                         <FocusPanelRuntimeComposerCanvas
                             initialGrid={builderInitialGrid}
                             catalog={builderCatalog}

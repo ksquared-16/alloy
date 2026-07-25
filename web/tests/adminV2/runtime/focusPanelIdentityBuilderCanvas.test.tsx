@@ -228,6 +228,10 @@ describe("Household composer parity with Children", () => {
         act(() => {});
         expect(document.querySelector('[data-nested-layout-surface] .fp-layout-field__grip, [data-nested-layout-surface] .fp-field-instance__toolbar, [data-canvas-add-field]')).toBeTruthy();
         expect(document.querySelector('[data-identity-disclosure-surface="true"]')).toBeFalsy();
+        expect(document.querySelector('[data-builder-field-row="true"]')).toBeTruthy();
+        expect(document.querySelector(".fp-layout-surface--composing .alloy-os-child-truth__value")).toBeFalsy();
+        const layoutSurface = document.querySelector('[data-identity-canonical-composer="true"] [data-nested-layout-surface]');
+        expect(layoutSurface?.querySelectorAll("[data-canvas-add-field]").length).toBe(1);
     });
 
     it("Household Details mounts focused person composer after selection", () => {
