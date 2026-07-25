@@ -29,6 +29,10 @@ import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/Runtim
 import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRuntime";
 import { prepareOperationalDestination } from "@/lib/runtime/prep/prepareOperationalDestination";
 import { prefetchWorkUnitProvisioning } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
+import {
+    beginWorkUnitPrimaryReveal,
+    isWorkUnitPrimaryRevealActive,
+} from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 
 /**
@@ -47,6 +51,12 @@ import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 function prewarmSubjectDestination(target: string, lens: string | null, subjectId: string): void {
     const id = subjectId.trim();
     if (!id || !target) return;
+    // AMPLIFICATION FIX: this warms NEIGHBOUR queue-row subjects (provisioning + VM). While the
+    // primary Work Unit reveal is in progress, that speculative work saturates the (remote) DB and
+    // inflates the selected subject's own reveal — measured as the 8–10s Focus Panel gap. Skip it
+    // during the reveal; neighbours warm normally on the next intent (hover/idle) once the panel is
+    // meaningful. The selected subject's own load never comes through here.
+    if (isWorkUnitPrimaryRevealActive()) return;
     void prefetchWorkUnitProvisioning(target, { lens: lens ?? null, subject: id });
     void prewarmRecordWork(id);
 }
@@ -82,6 +92,17 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         () => (operationalModel ? mergeWorkUnitSettlement(operationalModel, settlement) : null),
         [operationalModel, settlement],
     );
+
+    // AMPLIFICATION FIX: mark the primary reveal ACTIVE the instant a Work Unit commits — BEFORE the
+    // commit-critical provisioning + its answer-triggered neighbour/view prewarm storm — so that
+    // speculative work defers instead of saturating the DB and inflating the selected reveal. The
+    // window is ended when the selected subject's VM is applied (useRecordWorkRuntime, every path).
+    const committedRevealKey = focus.current
+        ? `${focus.current.ref.target ?? ""}::${focus.current.ref.subject ?? ""}`
+        : null;
+    useEffect(() => {
+        if (committedRevealKey) beginWorkUnitPrimaryReveal();
+    }, [committedRevealKey]);
 
     // SUBJECT OWNERSHIP — settled, and worth recording because the wrong shape was tried twice.
     // The Focus Panel once read its subject from AdminDrawerContext, making the drawer a SECOND
