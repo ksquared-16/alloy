@@ -4,12 +4,19 @@
  * The runtime always renders live QueueRowContext from the queue API.
  * The builder synthesizes placeholder context from the operator's in-progress
  * config so placed items appear on the real CondensedQueueRow canvas.
+ *
+ * Children names/count/summary MUST seed `related_subjects_summary` — the same
+ * payload path CondensedQueueRow uses live — so Live Preview is truthful.
  */
 
 import type { QueueRowModel } from "@/lib/presentation/runtime";
 import { mapQueueRowSurfaceToCompactConfig } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
-import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
+import type { QueueRowContext, RelatedSubjectSummary } from "@/lib/workUnits/lifecycleSubjectContracts";
+import {
+    isCollectionFieldKey,
+    isLegacyChildrenCollectionFieldKey,
+} from "@/lib/presentation/collectionFieldPresentation";
 
 /** Minimal frozen context — empty row before the operator adds anything. */
 export function blankPreviewRowModel(): QueueRowModel {
@@ -70,9 +77,49 @@ function enabledFieldsFromConfig(config: QueueRecordLayoutConfigV3): EnabledPrev
     return fields;
 }
 
+const PREVIEW_CHILDREN: readonly RelatedSubjectSummary[] = [
+    {
+        subject_type: "child",
+        subject_id: "preview-child-1",
+        display_name: "Blake Wenc",
+        status_label: "—",
+        date_of_birth: "2023-04-12",
+        age_label: "3",
+        gender_label: "Male",
+        program_label: "Toddler",
+        schedule_label: "Full Day",
+        room_label: "Toddler 2",
+        location_label: "North Campus",
+    },
+    {
+        subject_type: "child",
+        subject_id: "preview-child-2",
+        display_name: "Jarek Wenc",
+        status_label: "—",
+        date_of_birth: "2022-01-08",
+        age_label: "4",
+        gender_label: "Male",
+        program_label: "Preschool",
+        schedule_label: "Full Day",
+        room_label: "Preschool 1",
+        location_label: "North Campus",
+    },
+];
+
+function configNeedsChildrenPreview(fields: readonly EnabledPreviewField[]): boolean {
+    return fields.some(
+        (field) =>
+            isCollectionFieldKey(field.fieldKey)
+            || isLegacyChildrenCollectionFieldKey(field.fieldKey)
+            || field.fieldKey === "child.name",
+    );
+}
+
 /**
  * Build a preview row whose visible lines reflect configured fields/widgets.
- * Uses field labels as placeholder values — not live record data.
+ * Uses field labels as placeholder values for scalar slots — and real sample
+ * child subjects for children.names / count / summary so CondensedQueueRow
+ * resolves the same way as the live queue.
  */
 export function previewRowModelFromConfig(config: QueueRecordLayoutConfigV3): QueueRowModel {
     const base = blankPreviewRowModel();
@@ -106,13 +153,25 @@ export function previewRowModelFromConfig(config: QueueRecordLayoutConfigV3): Qu
             blocker_hint: null,
         };
     }
-    if (compactConfig.slots.groupCount.label) {
+
+    const enabled = enabledFieldsFromConfig(config);
+    if (configNeedsChildrenPreview(enabled) || compactConfig.slots.groupCount.fieldKeys?.some(isCollectionFieldKey)) {
+        ctx.related_subjects_summary = [...PREVIEW_CHILDREN];
+        ctx.row_count = PREVIEW_CHILDREN.length;
+        ctx.row_count_unit = "children";
+        // Keep single_subject + related_subjects — same path as family enrollment rows.
+        ctx.row_presentation_mode = "single_subject";
+        if (!ctx.row_subject.display_name) {
+            ctx.row_subject.display_name = "Wenc";
+            ctx.case_context.display_name = "Wenc";
+        }
+    } else if (compactConfig.slots.groupCount.label) {
         ctx.row_presentation_mode = "grouped_subjects";
         ctx.row_count = 2;
         ctx.row_count_unit = "children";
     }
 
-    for (const { fieldKey, label } of enabledFieldsFromConfig(config)) {
+    for (const { fieldKey, label } of enabled) {
         if (fieldKey.startsWith("widget:")) {
             const widgetKey = fieldKey.slice("widget:".length);
             if (widgetKey === "attention" || widgetKey === "follow_ups") {

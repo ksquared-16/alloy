@@ -26,6 +26,7 @@ import {
 import { applyPersonPatchToOpportunityInquiryChildren } from "@/lib/admin/person/applyPersonPatchToOpportunityInquiryChildren";
 import {
     patchChildParticipation,
+    patchCustomerMemberFromInquiryChild,
     patchInquiryChildIdentityFromDrawer,
     type InquiryChildIdentityPatch,
     type InquiryChildOcmPatch,
@@ -300,6 +301,8 @@ export function mergeInquiryChildIntoFocusPanelTruth(
         if (rowId !== targetId && rowPersonId !== targetId) return raw;
 
         const next: Record<string, unknown> = { ...r };
+        if (identity.first_name !== undefined) next.first_name = identity.first_name;
+        if (identity.last_name !== undefined) next.last_name = identity.last_name;
         if (identity.dob !== undefined) {
             next.dob = identity.dob ? String(identity.dob).slice(0, 10) : null;
         }
@@ -310,12 +313,23 @@ export function mergeInquiryChildIntoFocusPanelTruth(
         }
         if (ocm.location_id !== undefined) next.location_id = ocm.location_id;
         if (ocm.start_date !== undefined) next.start_date = ocm.start_date;
+        if (ocm.notes !== undefined) next.notes = ocm.notes;
+        if (args.patch.profilePatch) {
+            for (const [key, value] of Object.entries(args.patch.profilePatch)) {
+                next[key] = value;
+            }
+        }
         return next;
     });
 
     let merged: Record<string, unknown> = { ...truth, _inquiry_children: nextRows };
-    if (personId && identity.dob !== undefined) {
-        const personPatch = { date_of_birth: identity.dob ? String(identity.dob).slice(0, 10) : null };
+    if (personId && (identity.dob !== undefined || identity.first_name !== undefined || identity.last_name !== undefined)) {
+        const personPatch: Record<string, unknown> = {};
+        if (identity.first_name !== undefined) personPatch.first_name = identity.first_name;
+        if (identity.last_name !== undefined) personPatch.last_name = identity.last_name;
+        if (identity.dob !== undefined) {
+            personPatch.date_of_birth = identity.dob ? String(identity.dob).slice(0, 10) : null;
+        }
         merged = applyPersonPatchToOpportunityInquiryChildren(merged, personId, personPatch, args.savedPerson ?? null);
     }
     return merged;
@@ -411,6 +425,9 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                             }),
                         );
                     }
+                }
+                if (patch.profilePatch && Object.keys(patch.profilePatch).length > 0) {
+                    await patchCustomerMemberFromInquiryChild(cmId, patch.profilePatch);
                 }
             } catch (e) {
                 return {

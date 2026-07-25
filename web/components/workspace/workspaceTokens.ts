@@ -155,6 +155,42 @@ export const WS_EXECUTION_BODY =
 export const WS_SURFACE_CONTENT_PAD = "p-4 lg:p-6";
 
 /**
+ * Overview content column — expands intentionally on large desktops (1440–1920) without
+ * stretching empty cards. Narrow/tablet keeps the former max-w-6xl comfort width.
+ */
+export const WS_OVERVIEW_CONTENT =
+    "mx-auto w-full max-w-6xl xl:max-w-[80rem] 2xl:max-w-[90rem]";
+
+/** Vertical rhythm for overview landings (action → activity → information). */
+export const WS_OVERVIEW_STACK = "space-y-5";
+
+/** Three-card action row — full width of the overview column from md up. */
+export const WS_OVERVIEW_ACTION_GRID = "grid gap-3 md:grid-cols-3 xl:gap-4";
+
+/** Four-up launch / attention cards (Scheduling overview). */
+export const WS_OVERVIEW_LAUNCH_GRID = "grid grid-cols-2 gap-3 md:grid-cols-4 xl:gap-4";
+
+/** Today's activity tiles — 2×2 → four columns at large widths. */
+export const WS_OVERVIEW_ACTIVITY_GRID = "grid grid-cols-2 gap-2 lg:grid-cols-4 xl:gap-3";
+
+/**
+ * Lower information zones — two equal columns from lg; at xl a calm 2/3 + 1/3 + 1/3 track
+ * so the primary continue/recent panel reads wider without stretching empty cards.
+ */
+export const WS_OVERVIEW_INFO_GRID =
+    "grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)_minmax(0,1fr)] 2xl:gap-5";
+
+/** Apply to the primary continue/recent panel inside WS_OVERVIEW_INFO_GRID (full-width on lg). */
+export const WS_OVERVIEW_INFO_PRIMARY = "min-w-0 lg:col-span-2 xl:col-span-1";
+
+/**
+ * Alternate 2/3 + 1/3 information split for two-zone overviews (e.g. Scheduling decisions + week).
+ * Pair with a full-width recent-changes band below.
+ */
+export const WS_OVERVIEW_INFO_SPLIT =
+    "grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] 2xl:gap-5";
+
+/**
  * Artifact canvas — white document surface with stone border and soft depth.
  * Wraps scroll/viewport content inside artifact-heavy module zones (Processing source document).
  */

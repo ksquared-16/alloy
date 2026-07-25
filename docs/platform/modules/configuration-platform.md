@@ -24,6 +24,8 @@ Configuration control plane — configuration steers presentation within platfor
 
 Plus: statuses, business processes, placement priority, and organization configuration.
 
+**Queue Row Surfaces publish rule:** `POST /api/admin/queue-row-layout/{surfaceId}` rejects field keys outside the compact CondensedQueueRow vocabulary (`COMPACT_ROW_EFFECTIVE_FIELD_KEYS`, including Children summary keys and Program aliases that canonicalize to `inquiry_child.program`). Unsupported combinations cannot publish silently; diagnostics name the exact field label, key, and variant. Older invalid published configs surface `data-queue-row-ineffective-fields` at runtime. See `docs/platform/experience/presentation-runtime-v2.md` (Queue Row compact field contract).
+
 ---
 
 ## Rules (frozen)

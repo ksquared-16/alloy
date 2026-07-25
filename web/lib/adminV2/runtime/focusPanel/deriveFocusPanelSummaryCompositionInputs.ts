@@ -36,22 +36,32 @@ import type { FocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel
 import type { CardCompositionPreference } from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
 import type { FocusPanelGridRow } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import { readFocusPanelCardSectionMeta } from "@/lib/adminV2/runtime/focusPanel/focusPanelLayoutDocModel";
+import {
+    cardVisibilityFromMeta,
+    filterPublishedLayoutToVisibleCards,
+    type FocusPanelCardVisibility,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardVisibility";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 
 /** Card MODEL map keyed by card TYPE — the resolved body's derived models. */
 export type FocusPanelCardModelMap = Map<FocusPanelCardKey, FocusPanelCardModel>;
 
 export type FocusPanelSummaryCompositionInputs = {
-    /** Grid rows (visibility-filtered when `cards` provided), for the legacy grid path. */
+    /** Grid rows (Visible cards only), for the legacy grid path. */
     gridRows: FocusPanelGridRow[];
-    /** Operator-published explicit layout (source of truth) — record-free. */
+    /** Operator-published explicit layout — Visible cards only. */
     publishedLayout: FocusPanelPublishedLayout | null;
     /** Composition Engine input — reading order + type, record-free given gridRows. */
     composeCards: CompositionCardInput[];
     /** Per-type composition overrides — record-free. */
     compositionOverrides: Partial<Record<FocusPanelCardKey, Partial<CardCompositionPreference>>>;
-    /** instanceKey → { typeKey, config } for model + config resolution. */
+    /** instanceKey → { typeKey, config } for model + config resolution (includes Linked). */
     cellResolution: Map<string, { typeKey: FocusPanelCardKey; config: FocusPanelCardConfig | null }>;
+    /** Card-type → visibility for link destinations / Linked open host. */
+    visibilityByCardKey: Map<FocusPanelCardKey, FocusPanelCardVisibility>;
+    /** Linked card type keys (navigable, not in initial composition). */
+    linkedCardKeys: FocusPanelCardKey[];
 };
 
 /**
@@ -68,35 +78,49 @@ export function deriveFocusPanelSummaryCompositionInputs(
     opts?: { cards?: FocusPanelCardModelMap },
 ): FocusPanelSummaryCompositionInputs {
     const cards = opts?.cards ?? null;
+    const visibilityByCardKey = new Map<FocusPanelCardKey, FocusPanelCardVisibility>();
+    const linkedCardKeys: FocusPanelCardKey[] = [];
+    if (activeDoc?.sections) {
+        for (const section of activeDoc.sections) {
+            const meta = readFocusPanelCardSectionMeta(section);
+            if (!meta) continue;
+            const visibility = cardVisibilityFromMeta(meta);
+            visibilityByCardKey.set(meta.key, visibility);
+            if (visibility === "linked") linkedCardKeys.push(meta.key);
+        }
+    }
+
     const grid = deriveFocusPanelGridFromLayoutDoc(activeDoc);
     const instanceMap = activeDoc ? deriveFocusPanelInstanceMap(activeDoc) : new Map();
-    const publishedLayout = readFocusPanelPublishedLayout(activeDoc);
+    const rawPublishedLayout = readFocusPanelPublishedLayout(activeDoc);
+    const publishedLayout = filterPublishedLayoutToVisibleCards(rawPublishedLayout, visibilityByCardKey);
 
     const cellResolution = new Map<
         string,
         { typeKey: FocusPanelCardKey; config: FocusPanelCardConfig | null }
     >();
-    grid.rows.forEach((row) => {
-        row.cells.forEach((cell) => {
-            const cellKey = cell.instanceKey ?? cell.key;
-            cellResolution.set(cellKey, {
-                typeKey: cell.key as FocusPanelCardKey,
-                config: instanceMap.get(cellKey)?.config ?? null,
-            });
+    // Include ALL configured instances (Visible + Linked) so Linked open can resolve config.
+    for (const [instanceKey, resolution] of instanceMap) {
+        const typeKey = resolution.typeKey as FocusPanelCardKey;
+        if ((visibilityByCardKey.get(typeKey) ?? "visible") === "hidden") continue;
+        cellResolution.set(instanceKey, {
+            typeKey,
+            config: resolution.config,
         });
-    });
+    }
 
-    // COMPOSITION IS CONFIGURATION-DRIVEN (A). Every published cell is included, ALWAYS — a missing
-    // settlement value RESERVES the cell, it never removes it. `visible:false` no longer drops a
-    // configured card; per-card readiness (not data presence) decides content vs reserved geometry.
+    // Initial composition = Visible only. Linked cards stay in cellResolution/focusTargets
+    // but do not occupy published layout / grid geometry until opened.
     void cards;
     const gridRows = grid.rows
         .map((row) => ({
-            cells: row.cells.map((cell) => ({
-                key: cell.instanceKey ?? cell.key,
-                span: cell.span,
-                density: cell.density,
-            })),
+            cells: row.cells
+                .filter((cell) => (visibilityByCardKey.get(cell.key as FocusPanelCardKey) ?? "visible") === "visible")
+                .map((cell) => ({
+                    key: cell.instanceKey ?? cell.key,
+                    span: cell.span,
+                    density: cell.density,
+                })),
         }))
         .filter((row) => row.cells.length > 0);
 
@@ -111,5 +135,13 @@ export function deriveFocusPanelSummaryCompositionInputs(
         Array.from(cellResolution.values()).map((r) => ({ typeKey: r.typeKey, config: r.config })),
     );
 
-    return { gridRows, publishedLayout, composeCards, compositionOverrides, cellResolution };
+    return {
+        gridRows,
+        publishedLayout,
+        composeCards,
+        compositionOverrides,
+        cellResolution,
+        visibilityByCardKey,
+        linkedCardKeys,
+    };
 }

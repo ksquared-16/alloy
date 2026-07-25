@@ -16,6 +16,7 @@
 
 | Objective | Doc |
 |-----------|-----|
+| **Operational Surface Realization** | [`operational-surface-realization/discovery-note.md`](./operational-surface-realization/discovery-note.md) |
 | **Adaptive Workspace Presentation Contract** | [`adaptive-workspace-presentation/discovery-and-implementation-plan.md`](./adaptive-workspace-presentation/discovery-and-implementation-plan.md) |
 
 ## Active (June 2026)

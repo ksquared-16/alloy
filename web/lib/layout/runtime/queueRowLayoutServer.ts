@@ -70,7 +70,27 @@ export function resolveQueueRowSurfaceSpec(
     surfaceId: string,
     processKeyHint?: string | null,
 ): QueueRowSurfaceSpec | null {
-    if (surfaceId === LEGACY_PIPELINE_QUEUE_ROW_SURFACE_ID) return legacyPipelineSpec();
+    // Legacy pipeline id + a process key → resolve the process Surface Builder layout
+    // (`queue_row_${processKey}`). Otherwise live Work Units that still carry
+    // `pipeline-queue-row` provenance never read the published Enrollment surface.
+    if (surfaceId === LEGACY_PIPELINE_QUEUE_ROW_SURFACE_ID) {
+        const processKey = processKeyHint?.trim();
+        if (processKey) {
+            return {
+                entityType: "opportunities",
+                isWaitlist: false,
+                layoutKey: queueRowLayoutKeyForProcessKey(processKey),
+                queueType: "pipeline",
+                defaultEnvelope: () =>
+                    buildDefaultQueueRowSurfaceEnvelope({
+                        catalogId: "",
+                        processKey,
+                        processName: "Enrollment",
+                    }),
+            };
+        }
+        return legacyPipelineSpec();
+    }
     if (surfaceId === LEGACY_WAITLIST_QUEUE_ROW_SURFACE_ID) {
         return {
             entityType: WAITLIST_CANDIDATE_ENTITY_TYPE,
@@ -186,17 +206,38 @@ export async function resolveQueueRowLayoutServer(args: {
         // published, else the legacy pipeline rows for `queue_row_*` surfaces; the resolver then picks
         // the most applicable published version within that set. The former filter+sort is deleted.
         const exactRecords = orgRecords.filter((r) => r.layoutKey === spec.layoutKey);
-        const candidateRecords =
-            exactRecords.some((r) => r.status === "published")
-                ? exactRecords
-                : spec.layoutKey.startsWith("queue_row_")
-                  ? orgRecords.filter((r) => r.layoutKey === "pipeline_queue_row")
-                  : [];
-        const variant = resolveSurfaceVariant(
-            { businessProcessKey: processKey, workViewId: args.workViewId ?? null, entityType: spec.entityType, surface },
-            candidateRecords.map((r) => queueRecordToVariantCandidate(r, spec.entityType, surface)),
-        );
-        const published = variant ? candidateRecords.find((r) => r.id === variant.candidate.layoutId) ?? null : null;
+        const publishedExact = exactRecords.filter((r) => r.status === "published");
+        /**
+         * Process queue-row surfaces (`queue_row_*`) are authored as ONE Surface Builder document.
+         * Work View / stage applicability lives in **in-doc variants** (`appliesWhen`), not as
+         * separate `entity_layouts` rows with metadata.workViewId. Legacy work-view-scoped
+         * published rows must not defeat a newer Builder publish when D1 passes workViewId.
+         */
+        let published: EntityLayoutRecord | null = null;
+        if (publishedExact.length > 0 && spec.layoutKey.startsWith("queue_row_")) {
+            published = [...publishedExact].sort(
+                (a, b) => b.version - a.version || a.id.localeCompare(b.id),
+            )[0] ?? null;
+        } else {
+            const candidateRecords =
+                publishedExact.length > 0
+                    ? exactRecords
+                    : spec.layoutKey.startsWith("queue_row_")
+                      ? orgRecords.filter((r) => r.layoutKey === "pipeline_queue_row")
+                      : [];
+            const variant = resolveSurfaceVariant(
+                {
+                    businessProcessKey: processKey,
+                    workViewId: args.workViewId ?? null,
+                    entityType: spec.entityType,
+                    surface,
+                },
+                candidateRecords.map((r) => queueRecordToVariantCandidate(r, spec.entityType, surface)),
+            );
+            published = variant
+                ? candidateRecords.find((r) => r.id === variant.candidate.layoutId) ?? null
+                : null;
+        }
         const doc = published?.doc ?? resolution.doc;
         const envelope = published ? envelopeFromResolution(spec, doc, catalogId, processKey) : spec.defaultEnvelope();
         const queueCtx = (doc?.metadata as Record<string, unknown> | undefined)?.queue_context as

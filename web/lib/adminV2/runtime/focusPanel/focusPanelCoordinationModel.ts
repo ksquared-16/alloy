@@ -128,7 +128,7 @@ export function focusPanelCardBackLabel(card: FocusPanelCardKey): string {
         case "documents":
             return "Documents";
         case "current_work":
-            return "Current Work";
+            return "What's Next";
         default:
             return "panel";
     }

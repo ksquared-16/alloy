@@ -49,7 +49,6 @@ import {
 import { CHILDREN_SURFACE_ID, HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
-import NestedSurfaceAddField from "@/components/admin/focusPanel/drillIn/NestedSurfaceAddField";
 import AddSectionMenu from "@/components/admin/focusPanel/drillIn/AddSectionMenu";
 import InlineSectionControls from "@/components/admin/focusPanel/drillIn/InlineSectionControls";
 import {
@@ -1098,7 +1097,6 @@ function ExpandedBody({
                         composePurpose={composePurpose}
                         composePickerOnly={composePickerOnly}
                     />
-                    {composing && !composePickerOnly && composePurpose !== "context_facts" ? <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey={group.key} /> : null}
                 </ComposableRegionShell>
             ))}
             {composing ? <AddSectionMenu surfaceId={HOUSEHOLD_SURFACE_ID} /> : null}

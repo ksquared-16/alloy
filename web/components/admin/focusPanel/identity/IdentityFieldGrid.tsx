@@ -24,6 +24,7 @@ type Props = {
     personId?: string;
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
     onEditField?: (fieldRef: string) => void;
+    onLinkField?: (fieldRef: string) => void;
     /** When set, every editable field opens with one shared Cancel/Save owned by the parent. */
     batchEdit?: IdentityFieldBatchEditSession | null;
 };
@@ -34,6 +35,7 @@ export default function IdentityFieldGrid({
     personId,
     onSaveField,
     onEditField,
+    onLinkField,
     batchEdit = null,
 }: Props) {
     const [editingFieldRef, setEditingFieldRef] = useState<string | null>(null);
@@ -69,6 +71,11 @@ export default function IdentityFieldGrid({
                                 onEdit={
                                     cell.editable && onEditField && !canInline
                                         ? () => onEditField(cell.fieldRef)
+                                        : undefined
+                                }
+                                onLink={
+                                    cell.linked && onLinkField
+                                        ? () => onLinkField(cell.fieldRef)
                                         : undefined
                                 }
                                 inlineEdit={

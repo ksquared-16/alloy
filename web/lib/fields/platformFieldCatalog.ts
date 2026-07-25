@@ -194,7 +194,8 @@ function buildInquiryChildPlatformFields(): PlatformFieldDefinition[] {
             refKey,
             label: starter?.pickerLabel ?? manifest?.label ?? fieldKey.replace(/_/g, " "),
             field_type: starter?.fieldType ?? manifest?.fieldType ?? "text",
-            section_key: "enrollment",
+            // Match inquiryChildFieldRegistry / Settings → Fields Child categories.
+            section_key: "inquiry_participation",
             sort_order: starter?.sortOrder ?? (index + 1) * 10,
             ownership: "native_column" as const,
             storage_table: "opportunity_customer_members",

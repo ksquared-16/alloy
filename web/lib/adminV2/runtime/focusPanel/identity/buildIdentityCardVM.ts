@@ -9,7 +9,7 @@ import {
     nestedGroupLabel,
     groupDefsFor,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import { fieldIsLinked, fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import type {
     HouseholdEvidenceChild,
     HouseholdEvidenceContact,
@@ -30,10 +30,16 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompose";
 import { resolveIdentityFieldRows, type IdentityFieldRowInput } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows";
 import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
+import { isIdentityFieldInlineSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityInlineChildSave";
+import { resolveIdentityFieldLinkContract, normalizeIdentityFieldLinkTarget } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { resolveIdentityPlacementLabelMode } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import {
+    isCompactTitleRedundantIdentityField,
+    resolveCompactIdentitySummaryLabelMode,
+} from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
 import { composeContextCollectionRows } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import {
     enabledEvidenceSections,
@@ -96,7 +102,9 @@ function placementsForIdentityGroupPurpose(
 ): ReturnType<typeof generateDefaultPlacementsForGroup> {
     const group = config.groups.find((g) => g.key === groupKey);
     if (!group) return [];
-    return (group.fieldPlacements ?? generateDefaultPlacementsForGroup(group)).filter((placement) =>
+    // Always re-pack from key order + fieldLayoutWidths. Stored fieldPlacements may be
+    // stale after Builder beside/reorder; regenerate preserves policy/label/icon only.
+    return generateDefaultPlacementsForGroup(group).filter((placement) =>
         storageTierMatchesPurpose(placement.tier, purpose),
     );
 }
@@ -135,6 +143,24 @@ function buildRecordRows(args: {
             tier: args.purpose,
         });
         if (!fieldShouldRender(policy)) continue;
+        const authoredLabelModeEarly =
+            placement.labelMode === "hidden"
+            || placement.labelMode === "eyebrow"
+            || placement.labelMode === "visible"
+                ? placement.labelMode
+                : group.fieldModes?.[placement.fieldRef]?.showLabel === false
+                  ? ("hidden" as const)
+                  : group.fieldModes?.[placement.fieldRef]?.showLabel === true
+                    ? ("visible" as const)
+                    : null;
+        // Compact summary: omit title-redundant name parts entirely (runtime projection only).
+        if (
+            args.purpose === "summary"
+            && authoredLabelModeEarly == null
+            && isCompactTitleRedundantIdentityField(placement.fieldRef)
+        ) {
+            continue;
+        }
         const isMaskedChannel =
             args.maskedChannels
             && args.subject.kind === "person"
@@ -144,11 +170,39 @@ function buildRecordRows(args: {
             : resolveIdentityFieldValue(args.subject, placement.fieldRef);
         const saveSupported =
             args.isFieldSaveSupported?.(placement.fieldRef)
-            ?? (args.groupKey === args.editGroupKey && Boolean(args.editGroupKey));
-        const editable = args.canMutate && fieldIsSaveable(policy) && saveSupported;
+            ?? isIdentityFieldInlineSaveSupported(placement.fieldRef);
+        const linkContract = resolveIdentityFieldLinkContract(placement.fieldRef);
+        const hasExplicitPolicy = Boolean(
+            placement.policy
+            || group.fieldPolicies?.[placement.fieldRef]
+            || (args.editGroupKey
+                ? args.config.groups.find((g) => g.key === args.editGroupKey)?.fieldPolicies?.[
+                      placement.fieldRef
+                  ]
+                : undefined),
+        );
+        // Enrollment fields default to Linked when no explicit policy is stored.
+        const effectivePolicy =
+            policy === "read-only" && linkContract.canOfferLinked && !hasExplicitPolicy
+                ? "linked"
+                : policy;
+        const editable = args.canMutate && fieldIsSaveable(effectivePolicy) && saveSupported;
+        const linked = fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked;
+        const linkTarget = linked
+            ? normalizeIdentityFieldLinkTarget(placement.linkTarget, placement.fieldRef)
+                ?? linkContract.defaultTarget
+            : null;
+        const authoredLabelMode = authoredLabelModeEarly;
         const placementForRuntime = {
             ...placement,
-            labelMode: resolveIdentityPlacementLabelMode(placement, group.fieldModes, placement.fieldRef),
+            labelMode: resolveCompactIdentitySummaryLabelMode({
+                fieldRef: placement.fieldRef,
+                authoredLabelMode:
+                    authoredLabelMode
+                    ?? resolveIdentityPlacementLabelMode(placement, group.fieldModes, placement.fieldRef),
+                purpose: args.purpose,
+                treatResolvedVisibleAsUnauthored: authoredLabelMode == null,
+            }),
         };
         inputs.push({
             placement: placementForRuntime,
@@ -160,8 +214,12 @@ function buildRecordRows(args: {
             ),
             value,
             icon: resolveIdentityFieldIcon({ group, fieldRef: placement.fieldRef }),
-            policy,
+            policy: effectivePolicy,
             editable,
+            linked,
+            linkLabel: linked ? linkContract.linkLabel : null,
+            linkDestination: linked ? (linkTarget?.toCard ?? linkContract.destinationCard) : null,
+            linkTarget,
         });
     }
     return resolveIdentityFieldRows(inputs);

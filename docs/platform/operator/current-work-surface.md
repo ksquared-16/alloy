@@ -98,7 +98,7 @@ The UI **never writes `stage_key` directly**. Outcome execution uses `useWorkInt
 
 ### Summary (compact)
 
-- Micro-label: **Current Work** · subtle status badge (**Open** / **In progress** / **Completed**) + progress **percent**
+- Micro-label: **What's Next** · subtle status badge (**Open** / **In progress** / **Completed**)
 - Title + description from work template (config/runtime — not hardcoded)
 - **Progress bar** + `N of M complete`
 - **Horizontal checklist stepper** (readiness/config requirements — clickable when actionRef or handoff exists)

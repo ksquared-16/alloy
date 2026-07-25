@@ -39,11 +39,11 @@ function entry(partial: Partial<SettingsFieldCatalogEntry> & Pick<SettingsFieldC
 }
 
 describe("Enrollment Child surface projections", () => {
-    it("defines Current Program/Location/Room as Enrollment-owned with Child projection subject", () => {
+    it("defines Program/Location/Room as inquiry-participation owned with Child projection subject", () => {
         for (const row of CHILD_ENROLLMENT_PROJECTIONS) {
             expect(row.ownerEntity).toBe("inquiry_child");
             expect(row.projectionSubject).toBe("child");
-            expect(row.projectionKind).toBe("current_enrollment");
+            expect(row.projectionKind).toBe("inquiry_participation");
         }
         expect(enrollmentAssignmentOwnerEntity("inquiry_child.program")).toBe("inquiry_child");
         expect(enrollmentAssignmentOwnerEntity("inquiry_child.location_id")).toBe("inquiry_child");
@@ -67,14 +67,14 @@ describe("Enrollment Child surface projections", () => {
         expect(validateFieldDefinitionOwnership("customer_member", "program_category_id")).toMatch(/inquiry_child|enrollment/i);
     });
 
-    it("Focus Panel Children picker includes Enrollment projections with Current labels", () => {
+    it("Focus Panel Children picker includes Enrollment projections with inquiry labels", () => {
         const fields = availableFieldsForFocusPanelCard("children");
         const program = fields.find((f) => f.key === "inquiry_child.program");
         expect(program).toBeTruthy();
         const providers = assembleFocusPanelNestedProviders();
         const enriched = providers.find((p) => p.refKey === "inquiry_child.program");
         expect(enriched?.projection?.ownerEntity).toBe("inquiry_child");
-        expect(enriched?.label).toBe("Current Program");
+        expect(enriched?.label).toBe("Program");
         expect(fields.some((f) => f.key === "inquiry_child.location_id")).toBe(true);
         expect(fields.some((f) => f.key === "inquiry_child.program_room_cohort_key")).toBe(true);
     });

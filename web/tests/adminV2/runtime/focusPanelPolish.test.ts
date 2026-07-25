@@ -214,6 +214,53 @@ describe("Focus Panel header composition guards", () => {
         expect(css).toMatch(/alloy-os-focus-panel-mode-switch__tab--active[\s\S]*font-weight: 600/);
     });
 
+    it("UniversalCard shared shell uses soft perimeter + layered elevation tokens (no decorative left rails)", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toContain("--alloy-os-fp-card-border");
+        expect(css).toContain("--alloy-os-fp-card-shadow");
+        expect(css).toContain("--alloy-os-fp-card-shadow-hover");
+        // ~8% stronger perimeter (22% → 30% midnight mix) without changing white cards / shadow.
+        expect(css).toMatch(
+            /--alloy-os-fp-card-border:\s*color-mix\(in srgb, var\(--alloy-os-midnight[^)]*\)\s*30%/,
+        );
+        expect(css).toMatch(/\.alloy-os-ucard\s*\{[^}]*box-shadow:\s*var\(--alloy-os-fp-card-shadow/);
+        expect(css).toMatch(
+            /\.alloy-os-ucard--tier-work,\s*\n\.alloy-os-ucard\[data-card-role="active-work"\]\s*\{\s*\n\s*border-left-width:\s*1px;/,
+        );
+        // What's Next / work cards must not keep Bend Pine accent rails.
+        expect(css).not.toMatch(
+            /\.alloy-os-currentwork\[data-work-card-perspective="summary"\][\s\S]{0,120}border-left:\s*4px\s+solid\s+var\(--alloy-os-bend-pine/,
+        );
+        expect(css).not.toMatch(
+            /data-card-role="active-work"\][\s\S]{0,160}inset\s+2px\s+0\s+0\s+0\s+color-mix\(in\s+srgb,\s*var\(--alloy-os-bend-pine/,
+        );
+    });
+
+    it("What's Next summary adds breath between description, actions, and Still Needed", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toContain(".alloy-os-currentwork__summary-controls");
+        expect(css).toMatch(
+            /\.alloy-os-currentwork__summary-controls\s*\{[^}]*gap:\s*14px/,
+        );
+        expect(css).toMatch(
+            /\.alloy-os-ucard\[data-universal-card-key="current_work"\] \.alloy-os-ucard__body\s*\{[^}]*padding-top:\s*6px/,
+        );
+    });
+
+    it("queue row shell uses lighter soft-depth tokens (not Focus Panel shadow intensity)", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        const shell = readSrc("lib/presentation/runtime/queueRowCardShell.ts");
+        expect(shell).toContain("alloy-os-queue-row-card");
+        expect(css).toContain(".alloy-os-queue-row-card");
+        expect(css).toContain("--alloy-os-queue-row-shadow");
+        expect(css).toMatch(
+            /\.alloy-os-queue-row-card\s*\{[^}]*box-shadow:\s*var\(--alloy-os-queue-row-shadow/,
+        );
+        // ~30% lighter shade vs Focus Panel card shadow opacities.
+        expect(css).toMatch(/--alloy-os-queue-row-shadow:[\s\S]*?0\.05/);
+        expect(css).toContain("--alloy-os-fp-card-shadow");
+    });
+
     it("header identity uses System 5 chip language", () => {
         const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
         expect(css).toContain("alloy-os-fp-header-compact__subject-tile");
@@ -256,19 +303,38 @@ describe("Surface Builder composer chrome", () => {
         const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
         expect(css).toMatch(/\.alloy-os-fp-composer-cell__chrome\s*\{[^}]*z-index:\s*8/);
         expect(css).toMatch(/\.alloy-os-fp-composer-cell__drag-bar\s*\{[^}]*z-index:\s*6/);
-        expect(css).toMatch(/\.alloy-os-fp-composer-cell__drag-bar\s*\{[^}]*right:\s*104px/);
+        // Drag bar ends before the stable top-right Configure toolbar.
+        expect(css).toMatch(/\.alloy-os-fp-composer-cell__drag-bar\s*\{[^}]*right:\s*156px/);
+        expect(css).toContain("alloy-os-fp-composer-cell__toolbar");
+        expect(css).toMatch(/\.alloy-os-fp-composer-cell__configure\s*\{[^}]*opacity:\s*0\.78/);
         const composer = readSrc("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
         expect(composer).toContain("onRemove");
         expect(composer).toContain("removeArea");
+        expect(composer).toContain("alloy-os-fp-composer-cell__toolbar");
     });
 
-    it("centers elevated cards for all composer depth states (not edit-mode only)", () => {
+    it("Linked card host ignores mount-time base reports and clears on dismiss", () => {
+        const host = readSrc("components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx");
+        expect(host).toContain('visibilityByCardKey.get(card) === "linked"');
+        expect(host).toContain("setActiveDepth((prev) => (prev?.card === card ? null : prev))");
+        expect(host).toContain("alloy-os-focus-panel-linked-host");
+        const composer = readSrc("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
+        expect(composer).toContain('entry.visibility ?? "visible") === "visible"');
+        expect(composer).toContain("toRemove");
+        expect(composer).toContain("toAdd");
+    });
+
+    it("top-pins elevated cards for all composer depth states (not vertically centered)", () => {
         const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
         expect(css).toMatch(
-            /\[data-fp-composer-depth-active="true"\][\s\S]*\.alloy-os-ucard\s*\{[^}]*top:\s*50%/,
+            /\[data-fp-composer-depth-active="true"\][\s\S]*\.alloy-os-ucard\s*\{[^}]*top:\s*12px/,
+        );
+        expect(css).toContain("alloy-os-focus-panel-linked-host");
+        expect(css).toMatch(
+            /\.alloy-os-focus-panel-linked-host\s*\{[^}]*align-items:\s*start/,
         );
         expect(css).not.toMatch(
-            /\[data-fp-composer-edit-mode="true"\]\[data-fp-composer-depth-active="true"\][\s\S]*top:\s*50%/,
+            /\.alloy-os-focus-panel-linked-host\s*\{[^}]*place-items:\s*center/,
         );
     });
 });
@@ -309,7 +375,8 @@ describe("Targeted contact editing + depth history (QA)", () => {
 describe("Canvas builder mounted in the settings editor (Experience Builder V4)", () => {
     it("FocusPanelSummarySurfaceEditor mounts the canvas-first builder + persists via the existing flow", () => {
         const editor = readSrc("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx");
-        expect(editor).toContain("FocusPanelGridCanvasBuilder"); // V5: the responsive GRID canvas IS the editor
+        expect(editor).toContain("FocusPanelRuntimeComposerCanvas"); // runtime-shaped composer is the editor canvas
+        expect(editor).toContain("FocusPanelVisibilityZones"); // Visible / Linked compact overlays
         expect(editor).not.toContain("FocusPanelRowLayoutBuilder"); // the row-control panel is gone
         expect(editor).toContain("onSelectCard"); // selecting a card on the canvas opens the Inspector
         expect(editor).toContain("readFocusPanelPublishedLayout"); // loads existing metadata
@@ -320,12 +387,15 @@ describe("Canvas builder mounted in the settings editor (Experience Builder V4)"
     });
 
     it("Canvas owns composition (drag + grid span resize); inspector owns behavior", () => {
-        const canvas = readSrc("components/admin/focusPanel/FocusPanelGridCanvasBuilder.tsx");
-        expect(canvas).toContain("data-grid-resize-w"); // right edge → span columns
-        expect(canvas).toContain("data-grid-resize-h"); // bottom edge → span rows (vertical spans)
+        const canvas = readSrc("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
+        expect(canvas).toContain("alloy-os-fp-composer-cell__handle--w"); // right edge → span columns
+        expect(canvas).toContain("alloy-os-fp-composer-cell__handle--h"); // bottom edge → span rows
+        expect(canvas).toContain("alloy-os-fp-composer-cell__toolbar"); // stable top-right Configure
+        expect(canvas).toContain("alloy-os-fp-composer-cell__configure");
         expect(canvas).toContain("moveArea"); // drag to move a region (snaps to grid)
         expect(canvas).toContain("resizeArea"); // edge drag resizes the region
         expect(canvas).toContain("onSelectCard"); // click selects → inspector
+        expect(canvas).toContain("snapMoveTarget");
     });
 });
 

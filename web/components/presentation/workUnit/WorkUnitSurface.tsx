@@ -55,6 +55,9 @@ export function WorkUnitSurfaceBodyFromModel({
         model.workViews.find((view) => view.isActive) ??
         model.workViews.find((view) => view.id === model.activeWorkViewId) ??
         null;
+    // Selection already lives on the committed model — drive the shared header Focus state
+    // without touching Focus Panel payload, reveal, or VM authority.
+    const headerDensity = model.selectedRecordId ? "focus" : "browse";
     return (
         <>
         <>
@@ -62,6 +65,7 @@ export function WorkUnitSurfaceBodyFromModel({
                 <div className="shrink-0 space-y-1">
                     <WorkUnitHeader
                         model={model.header}
+                        density={headerDensity}
                         actionsSlot={
                             <WorkUnitRightRailActions
                                 actions={model.rightRailActions}

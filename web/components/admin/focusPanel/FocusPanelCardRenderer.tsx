@@ -12,6 +12,7 @@ import TourCard from "@/components/admin/focusPanel/cards/TourCard";
 import CommunicationsCard from "@/components/admin/focusPanel/cards/CommunicationsCard";
 import BillingPreviewCard from "@/components/admin/focusPanel/cards/BillingPreviewCard";
 import TimelineCard from "@/components/admin/focusPanel/cards/TimelineCard";
+import MilestonesCard from "@/components/admin/focusPanel/cards/MilestonesCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
@@ -164,6 +165,16 @@ export default function FocusPanelCardRenderer({
     }
     if (model.key === "billing_preview") {
         return <BillingPreviewCard model={model} context={context} receded={receded} coordination={coordination} />;
+    }
+    if (model.key === "milestones") {
+        return (
+            <MilestonesCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+            />
+        );
     }
     if (model.key === "timeline") {
         return <TimelineCard model={model} context={context} receded={receded} />;

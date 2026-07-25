@@ -19,6 +19,7 @@ import { OperationalMetricCard } from "@/components/adminV2/intelligence/Operati
 import { AnalyticsSection, DiagnosticPanel, AffectedWorkPanel } from "@/app/dev/analytics-surface-mocks/slice2/primitives";
 import { BarChart } from "@/app/dev/analytics-surface-mocks/slice2/charts";
 import type { ChartBar, AffectedWorkItem } from "@/app/dev/analytics-surface-mocks/slice2/types";
+import { WS_OVERVIEW_CONTENT } from "@/components/workspace/workspaceTokens";
 
 /**
  * Operational Intelligence runtime surface — rendered INSIDE the existing Workspace →
@@ -86,7 +87,11 @@ export function OperationalIntelligencePanel() {
 
     if (loading && !model) {
         return (
-            <div className="space-y-3" data-operational-intelligence-loading="true" aria-busy="true">
+            <div
+                className={`${WS_OVERVIEW_CONTENT} space-y-3`}
+                data-operational-intelligence-loading="true"
+                aria-busy="true"
+            >
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
                     {Array.from({ length: 5 }).map((_, i) => (
                         <div key={i} className="h-24 animate-pulse rounded-xl bg-alloy-forge/8" />
@@ -99,7 +104,10 @@ export function OperationalIntelligencePanel() {
 
     if (error) {
         return (
-            <p className="rounded-lg border border-alloy-ember/30 bg-white px-3 py-2 text-xs text-alloy-ember" data-operational-intelligence-error="true">
+            <p
+                className={`${WS_OVERVIEW_CONTENT} rounded-lg border border-alloy-ember/30 bg-white px-3 py-2 text-xs text-alloy-ember`}
+                data-operational-intelligence-error="true"
+            >
                 {error}
             </p>
         );
@@ -124,8 +132,11 @@ export function OperationalIntelligencePanel() {
     }));
 
     return (
-        <div className="space-y-5" data-analytics-surface="operational_intelligence">
-            <div
+        <div
+            className={`${WS_OVERVIEW_CONTENT} space-y-5`}
+            data-analytics-surface="operational_intelligence"
+            data-workspace-overview-width="true"
+        >            <div
                 className="flex flex-wrap items-center gap-2 rounded-xl border border-alloy-stone/15 bg-white p-2.5"
                 data-operational-filter-bar="true"
                 aria-busy={loading}

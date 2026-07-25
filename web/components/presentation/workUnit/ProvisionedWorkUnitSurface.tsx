@@ -11,52 +11,161 @@
  * already operational. `WorkUnitSurfaceBody` is the SAME canonical presentation tree the old runtime
  * used — the difference is where its model comes from, not what renders it.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { WorkUnitSurfaceBodyFromModel } from "@/components/presentation/workUnit/WorkUnitSurface";
 import { useCommittedWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime";
+import { usePublishedQueueRowSlotsOverlay } from "@/lib/presentation/runtime/usePublishedQueueRowSlotsOverlay";
+import {
+    queueRowVariantMatchInputFromContext,
+    resolveQueueRowCompactSlots,
+} from "@/lib/presentation/runtime/queueRowVariantResolve";
 import { runtimeLabelProps, PRESENTATION_RUNTIME_LABELS } from "@/components/presentation/runtimeLabels";
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import { useCommittedFocus } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { OperationalSubjectProvider } from "@/components/presentation/workUnit/OperationalSubjectContext";
 import { focusPanelSeedForSubject } from "@/lib/presentation/runtime/focusPanelSeedFromQueueRow";
 
+declare global {
+    interface Window {
+        __ALLOY_QUEUE_ROW_SURFACE_DIAG__?: Record<string, unknown>;
+    }
+}
+
 export function ProvisionedWorkUnitSurface() {
     const { model, intents } = useCommittedWorkUnitSurfaceRuntime();
     const focus = useCommittedFocus();
     const committed = focus.current;
 
-    // INSTANT-IDENTITY SEED — the committed subject's row identity, from the SAME committed queue
-    // the row was rendered from. Keyed by `recordOfAttention.id`, so it re-derives on a subject
-    // commit and never drifts from what the operator clicked. Feeds the Focus Panel pending header
-    // so a cold open shows the family name immediately instead of the generic entity noun. Computed
-    // before the commit gate below so hook order is stable; a null subject seeds nothing.
     const committedOp =
         committed?.snapshot.terminal === "operational" ? committed.snapshot : null;
+
+    const processKey =
+        committed && committed.snapshot.terminal !== "error"
+            ? committed.snapshot.businessProcess.key
+            : null;
+    const workViewId =
+        committed && committed.snapshot.terminal !== "error"
+            ? committed.snapshot.activeWorkView.id
+            : null;
+
+    const publishedOverlay = usePublishedQueueRowSlotsOverlay({
+        surfaceId: model?.queue.provenance?.surfaceId ?? null,
+        processKey,
+    });
+
+    const effectiveModel = useMemo(() => {
+        if (!model) return null;
+        if (!publishedOverlay) return model;
+
+        const layout = publishedOverlay.layout;
+        const defaultSlots = publishedOverlay.defaultSlots;
+
+        return {
+            ...model,
+            queue: {
+                ...model.queue,
+                rowConfig: defaultSlots,
+                // Rematch every row against the freshly published layout (Default + variants).
+                // Do not merge into stale D1 variant slots — those freeze pre-publish fieldKeys
+                // (e.g. contact email) and ignore Default edits (children.names).
+                rows: model.queue.rows.map((row) => {
+                    if (!row.context) return row;
+                    const input = queueRowVariantMatchInputFromContext(row.context, {
+                        workViewId,
+                        workViewKey: null,
+                    });
+                    if (!input.processKey && processKey) {
+                        input.processKey = processKey;
+                    }
+                    return {
+                        ...row,
+                        rowConfig: resolveQueueRowCompactSlots(layout, input),
+                    };
+                }),
+            },
+        };
+    }, [model, publishedOverlay, processKey, workViewId]);
+
+    useEffect(() => {
+        if (typeof window === "undefined" || !effectiveModel) return;
+        const first = effectiveModel.queue.rows[0];
+        const diag = {
+            editedOrResolvedSurfaceId: effectiveModel.queue.provenance?.surfaceId ?? null,
+            committedResolvedSource: effectiveModel.queue.provenance?.resolvedSource ?? null,
+            committedSource: effectiveModel.queue.provenance?.source ?? null,
+            overlay: publishedOverlay
+                ? {
+                      surfaceId: publishedOverlay.surfaceId,
+                      processKey: publishedOverlay.processKey,
+                      source: publishedOverlay.source,
+                      fetchedAt: publishedOverlay.fetchedAt,
+                      defaultFieldKeys: {
+                          subject: publishedOverlay.defaultSlots.subject.fieldKeys ?? [],
+                          status: publishedOverlay.defaultSlots.status.fieldKeys ?? [],
+                          contact: publishedOverlay.defaultSlots.contact.fieldKeys ?? [],
+                          attention: publishedOverlay.defaultSlots.attention.fieldKeys ?? [],
+                          work: publishedOverlay.defaultSlots.work.fieldKeys ?? [],
+                          groupCount: publishedOverlay.defaultSlots.groupCount.fieldKeys ?? [],
+                      },
+                  }
+                : null,
+            activeWorkViewId: workViewId,
+            processKey,
+            slotsSource: publishedOverlay ? "published_overlay_rematch" : "committed_snapshot",
+            queueDefaultFieldKeys: {
+                subject: effectiveModel.queue.rowConfig?.subject.fieldKeys ?? [],
+                status: effectiveModel.queue.rowConfig?.status.fieldKeys ?? [],
+                contact: effectiveModel.queue.rowConfig?.contact.fieldKeys ?? [],
+                attention: effectiveModel.queue.rowConfig?.attention.fieldKeys ?? [],
+                work: effectiveModel.queue.rowConfig?.work.fieldKeys ?? [],
+                groupCount: effectiveModel.queue.rowConfig?.groupCount.fieldKeys ?? [],
+            },
+            firstRow: first
+                ? {
+                      id: first.entityId,
+                      rowConfigFieldKeys: {
+                          subject: first.rowConfig?.subject.fieldKeys ?? [],
+                          status: first.rowConfig?.status.fieldKeys ?? [],
+                          contact: first.rowConfig?.contact.fieldKeys ?? [],
+                          attention: first.rowConfig?.attention.fieldKeys ?? [],
+                          work: first.rowConfig?.work.fieldKeys ?? [],
+                          groupCount: first.rowConfig?.groupCount.fieldKeys ?? [],
+                      },
+                      hasChildrenNames: Boolean(
+                          first.rowConfig?.groupCount.fieldKeys?.includes("children.names"),
+                      ),
+                      hasContactEmail: Boolean(
+                          first.rowConfig?.contact.fieldKeys?.some((k) =>
+                              k === "person.email" || k === "person.primary_email" || k.includes("email"),
+                          ),
+                      ),
+                  }
+                : null,
+        };
+        window.__ALLOY_QUEUE_ROW_SURFACE_DIAG__ = diag;
+    }, [effectiveModel, publishedOverlay, processKey, workViewId]);
+
     const identitySeed = useMemo(
         () =>
             focusPanelSeedForSubject(
                 committedOp ? committedOp.recordOfAttention.id : null,
-                model?.queue.rows,
-                model?.queue.rowConfig,
+                effectiveModel?.queue.rows,
+                effectiveModel?.queue.rowConfig,
             ),
-        [committedOp, model?.queue.rows, model?.queue.rowConfig],
+        [committedOp, effectiveModel?.queue.rows, effectiveModel?.queue.rowConfig],
     );
 
-    // Cannot happen: the Host mounts this only when Focus has committed. Rendering nothing is the
-    // honest response to an impossible state — never a skeleton, which would BE visible construction.
-    if (!model || !committed) return null;
+    if (!effectiveModel || !committed) return null;
 
     const snapshot = committed.snapshot;
-    // The operational variant, narrowed once. Empty/error terminals carry no subject truth.
     const op = snapshot.terminal === "operational" ? snapshot : null;
+    const firstRowKeys = effectiveModel.queue.rows[0]?.rowConfig;
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workUnitSurface)}
             className="flex min-h-0 flex-1 flex-col"
             data-component="ProvisionedWorkUnitSurface"
             data-build-sha={BUILD_SHA}
-            // K4 certification markers. `data-surface-ready` is always true because this component
-            // only exists after commit — the harness reads it, but the runtime never consults it.
             data-surface-ready="true"
             data-surface-mode="live"
             data-commit-version={committed.commitVersion}
@@ -69,27 +178,43 @@ export function ProvisionedWorkUnitSurface() {
                 snapshot.terminal === "operational" ? snapshot.recordOfAttention.id : undefined
             }
             data-context-frame={snapshot.terminal !== "error" ? snapshot.contextFrame.workViewId : undefined}
-            // The three-state projection, exposed for certification (D4 requirement).
+            data-queue-row-slots-source={publishedOverlay ? "published_overlay_rematch" : "committed_snapshot"}
+            data-queue-surface-id={effectiveModel.queue.provenance?.surfaceId ?? undefined}
+            data-queue-surface-version={publishedOverlay?.fetchedAt ?? undefined}
+            data-queue-surface-variant={effectiveModel.queue.provenance?.variant ?? undefined}
+            data-queue-surface-source={
+                publishedOverlay?.source ?? effectiveModel.queue.provenance?.resolvedSource ?? undefined
+            }
+            data-queue-column-keys={
+                [
+                    ...(firstRowKeys?.subject.fieldKeys ?? []),
+                    ...(firstRowKeys?.status.fieldKeys ?? []),
+                    ...(firstRowKeys?.contact.fieldKeys ?? []),
+                    ...(firstRowKeys?.attention.fieldKeys ?? []),
+                    ...(firstRowKeys?.work.fieldKeys ?? []),
+                    ...(firstRowKeys?.groupCount.fieldKeys ?? []),
+                ].join("|") || undefined
+            }
+            data-queue-row-surface-id={effectiveModel.queue.provenance?.surfaceId ?? undefined}
+            data-queue-row-resolved-source={
+                publishedOverlay?.source ?? effectiveModel.queue.provenance?.resolvedSource ?? undefined
+            }
+            data-queue-row-overlay-error={publishedOverlay?.loadError ?? undefined}
+            data-queue-row-has-children-names={
+                firstRowKeys?.groupCount.fieldKeys?.includes("children.names") ? "true" : "false"
+            }
+            data-queue-row-has-contact-email={
+                firstRowKeys?.contact.fieldKeys?.some((k) => k.includes("email")) ? "true" : "false"
+            }
             data-focus-panel-scope={
                 snapshot.terminal !== "error" ? snapshot.focusPanelScopeState : undefined
             }
             data-operational-at-first-sight={committed.outcome === "operational" ? "true" : "false"}
         >
             <div
-                // Key by the WORK UNIT (target), NOT the full surfaceId (target::lens). A Work View
-                // pill is a LENS move — same work unit, new lens — and keying by surfaceId remounted the
-                // entire body (header + pills + queue + focus panel) on every pill click, so the shell
-                // visibly "reloaded" as if it were a new page (Kelly). Keyed by target, a pill switch
-                // keeps the header + pill strip mounted and fixed; only the model changes, so the queue
-                // and Focus Panel swap in place while the chrome stays put. A real Work Unit change
-                // (different target) still changes the key → the surface-enter animation still plays.
                 key={committed.ref.target}
                 className="motion-surface-enter-forward flex min-h-0 flex-1 flex-col gap-5 lg:flex-row lg:items-stretch"
             >
-                {/* The Focus Panel's operational truth comes from the COMMITTED SNAPSHOT — not from
-                    a record VM fetch. D1 already resolved Situation/Decision/Action (U-P5/U-O4/U-O5);
-                    reading them here is what makes the first visible frame operational instead of
-                    "named but unresolved". */}
                 <OperationalSubjectProvider
                     subjectId={op ? op.recordOfAttention.id : null}
                     identitySeed={identitySeed}
@@ -114,20 +239,13 @@ export function ProvisionedWorkUnitSurface() {
                             : null
                     }
                     action={op ? { actionRef: op.primaryAction.actionRef, label: op.primaryAction.label } : null}
-                    // COMMIT-CRITICAL Current Work — the answer OWNS this projection; the Focus Panel
-                    // renders Current Work from it at commit, the drawer VM only enriches (Settlement).
-                    // The published stage config + work-intent runtime travel with it so the atomic
-                    // commit-critical Focus Panel renders the SAME CurrentWorkCard the resolved VM does (A).
                     stageWorkRuntime={op ? op.focusPanelStageWork?.stage_work_runtime ?? null : null}
                     publishedStageInputs={op ? op.focusPanelStageWork?.published_stage_inputs ?? null : null}
                     workIntentRuntime={op ? op.focusPanelStageWork?.work_intent_runtime ?? null : null}
-                    // A — commit-critical Household + Children snapshot (renders those cards meaningful at commit).
                     subjectSnapshot={op ? op.focusPanelSubjectSnapshot ?? null : null}
-                    // A — the published Summary composition for the committed scope: the panel presents
-                    // the PUBLISHED composition at commit, not the code default standing in for a fetch.
                     summaryDocSeed={op ? op.focusPanelSummaryDoc ?? null : null}
                 >
-                    <WorkUnitSurfaceBodyFromModel model={model} intents={intents} />
+                    <WorkUnitSurfaceBodyFromModel model={effectiveModel} intents={intents} />
                 </OperationalSubjectProvider>
             </div>
         </div>

@@ -29,24 +29,12 @@
  *   groupCount → "queue_row.group_count_label"      (grouped-row count chip)
  *
  * ── Visibility rule ───────────────────────────────────────────────────────────────────
- * For each slot:
- *   - If a mapped field is PRESENT in config and NOT statically hidden → slot.visible=true,
- *     slot.label = field.label ?? null.
- *     `visibleWhen` here is ALWAYS record-conditional (exists/equals/not_equals/count_gt —
- *     see LAYOUT_CONDITION_TYPES); there is no static-true/false primitive. Per spec we
- *     treat record-conditional visibility as VISIBLE and let the row's own frozen context
- *     gate whether the slot has content. So a present field is visible.
- *   - If NO mapped field is present in config → FALLBACK to generic-context behavior:
- *     slot.visible=true, slot.label=null (absent config never HIDES a compact slot; it just
- *     does not override the generic anatomy).
- *   - When config is null (unpublished / fetch failed) → ALL slots visible, no label
- *     overrides — pure generic-context fallback.
- *
- * NOTE — no static-hide primitive today: `QueueRecordLayoutConfigV3` fields cannot express
- * "always hide" (only record-conditional `visibleWhen`). The `visible:false` state is
- * therefore never produced from a real published config today, but the type + the compact
- * row honor it so a future explicit-hide mapping needs no row change (and tests exercise it
- * directly). See `fallbackSlots` in the return for slots that fell back to generic context.
+ * When a published config is present:
+ *   - Mapped field(s) → slot.visible=true + fieldKeys (builder / SLOT vocabulary order).
+ *   - No mapped field → slot.visible=false (published config is authoritative — do NOT fall
+ *     back to hardcoded contact/work/children defaults that re-show removed fields).
+ * When config is null (unpublished / fetch failed) → ALL slots visible via generic-context
+ * fallback (`fallbackSlots` lists every slot).
  */
 
 import type {
@@ -56,6 +44,7 @@ import type {
 } from "@/lib/layout/queueRecordLayoutV3";
 import { compactSlotForCanvasRegion, type CanvasAnatomyRegion } from "@/lib/adminV2/settings/surfaces/queueRowCanvasRegions";
 import type { CollectionFieldPresentationConfig } from "@/lib/presentation/collectionFieldPresentation";
+import { collectionPresentationForFieldKey } from "@/lib/presentation/collectionFieldPresentation";
 
 /** One compact-anatomy slot's resolved config: whether to render it + configured field keys. */
 export type CompactRowSlotConfig = {
@@ -89,6 +78,11 @@ export type CompactRowConfig = {
     slots: CompactRowSlots;
     /** Slots with NO published field mapped (fell back to generic-context behavior). */
     fallbackSlots: (keyof CompactRowSlots)[];
+    /**
+     * Published field keys that are NOT compact-row effective — older invalid saved configs.
+     * Runtime surfaces these as an explicit diagnostic rather than silently omitting content.
+     */
+    ineffectiveFieldKeys: string[];
 };
 
 /** Person contact refKeys — render on the compact row contact line (line 2). */
@@ -106,13 +100,22 @@ export function isQueueRowPersonContactFieldKey(fieldKey: string): boolean {
     return (QUEUE_ROW_PERSON_CONTACT_FIELD_KEYS as readonly string[]).includes(fieldKey.trim());
 }
 
-/** Compact slot → published fieldKey(s), first present wins for legacy label metadata. */
+/** Compact slot → published fieldKey(s); builder canvas order wins when present. */
 const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
     subject: ["customer.display_name", "queue_row.subject_label"],
-    status: ["opportunity.status_label", "queue_row.stage_label"],
+    status: [
+        "opportunity.status_label",
+        "queue_row.stage_label",
+        "waitlist.positionLabel",
+        "waitlist.waitSince",
+    ],
     contact: [...QUEUE_ROW_PERSON_CONTACT_FIELD_KEYS],
     attention: ["opportunity.attention_reason"],
-    work: ["queue_row.work_summary", "queue_row.next_best_action_label"],
+    work: [
+        "queue_row.work_summary",
+        "queue_row.next_best_action_label",
+        "opportunity.next_step",
+    ],
     groupCount: [
         "queue_row.group_count_label",
         "child.name",
@@ -122,10 +125,21 @@ const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
         "children.summary",
         "inquiry_child.program",
         "inquiry_child.schedule_type",
+        "child.room",
     ],
 } as const;
 
 const SLOT_KEYS = Object.keys(SLOT_FIELD_KEYS) as (keyof CompactRowSlots)[];
+
+/**
+ * Authored aliases that resolve to the same compact slot as a canonical key.
+ * Family/case-grain Program labels historically used program_category(_id); compact
+ * vocabulary owns `inquiry_child.program` for the aggregate projection.
+ */
+const COMPACT_ROW_FIELD_KEY_ALIASES: Readonly<Record<string, string>> = {
+    "inquiry_child.program_category": "inquiry_child.program",
+    "inquiry_child.program_category_id": "inquiry_child.program",
+};
 
 /**
  * THE vocabulary of published field keys the compact CondensedQueueRow can actually render
@@ -137,13 +151,20 @@ export const COMPACT_ROW_EFFECTIVE_FIELD_KEYS: ReadonlySet<string> = new Set(
     Object.values(SLOT_FIELD_KEYS).flat(),
 );
 
+/** Canonical compact key for an authored field (aliases → vocabulary member). */
+export function canonicalizeCompactRowFieldKey(fieldKey: string): string {
+    const key = (fieldKey ?? "").trim();
+    if (!key) return "";
+    return COMPACT_ROW_FIELD_KEY_ALIASES[key] ?? key;
+}
+
 /**
  * The compact slot a published field key feeds, or null when the key does NOT render in the compact
  * CondensedQueueRow. Deterministic + total (never throws). Used by the runtime mapper AND the
  * builder's effective/disabled annotation so both share one vocabulary — no silent fallback.
  */
 export function compactSlotForFieldKey(fieldKey: string): keyof CompactRowSlots | null {
-    const key = (fieldKey ?? "").trim();
+    const key = canonicalizeCompactRowFieldKey(fieldKey);
     if (!key) return null;
     for (const slot of SLOT_KEYS) {
         if (SLOT_FIELD_KEYS[slot].includes(key)) return slot;
@@ -167,6 +188,8 @@ function fieldsByKey(config: QueueRecordLayoutConfigV3): Map<string, QueueRecord
                 // First occurrence wins — a slot's label override is stable regardless of
                 // where the field appears in the (server-owned) column ordering.
                 if (key && !map.has(key)) map.set(key, field);
+                const canonical = canonicalizeCompactRowFieldKey(key);
+                if (canonical && canonical !== key && !map.has(canonical)) map.set(canonical, field);
             }
         }
     }
@@ -210,7 +233,15 @@ function slotsFromBuilderAssignment(
                     nameDisplayBySlot.set(compactSlot, nameDisplay);
                 }
 
-                if (field.collectionPresentation) {
+                const derivedPresentation = collectionPresentationForFieldKey(fieldKey, {
+                    collectionPresentation: field.collectionPresentation,
+                    nameDisplay: field.nameDisplay,
+                });
+                if (derivedPresentation) {
+                    const collectionPresentation = collectionPresentationBySlot.get(compactSlot) ?? {};
+                    collectionPresentation[fieldKey] = derivedPresentation;
+                    collectionPresentationBySlot.set(compactSlot, collectionPresentation);
+                } else if (field.collectionPresentation) {
                     const collectionPresentation = collectionPresentationBySlot.get(compactSlot) ?? {};
                     collectionPresentation[fieldKey] = field.collectionPresentation;
                     collectionPresentationBySlot.set(compactSlot, collectionPresentation);
@@ -286,8 +317,10 @@ function routePersonContactFieldsToContactSlot(slots: CompactRowSlots): CompactR
             ...(remaining.length > 0
                 ? {}
                 : {
+                      visible: false,
                       label: null,
                       nameDisplayByFieldKey: undefined,
+                      collectionPresentationByFieldKey: undefined,
                   }),
         };
     }
@@ -330,7 +363,11 @@ function slotConfigFromPublishedFields(
     for (const field of fields) {
         const key = field.fieldKey.trim();
         if (field.nameDisplay) nameDisplayByFieldKey[key] = field.nameDisplay;
-        if (field.collectionPresentation) collectionPresentationByFieldKey[key] = field.collectionPresentation;
+        const derived = collectionPresentationForFieldKey(key, {
+            collectionPresentation: field.collectionPresentation,
+            nameDisplay: field.nameDisplay,
+        });
+        if (derived) collectionPresentationByFieldKey[key] = derived;
     }
     return {
         visible: true,
@@ -346,13 +383,51 @@ function genericSlot(): CompactRowSlotConfig {
     return { visible: true, label: null };
 }
 
+/** Published config omitted this slot — hide it (do not reintroduce hardcoded defaults). */
+function hiddenSlot(): CompactRowSlotConfig {
+    return { visible: false, label: null };
+}
+
+function slotHasFieldKeys(slot: CompactRowSlotConfig | undefined): boolean {
+    return Boolean(slot?.fieldKeys && slot.fieldKeys.length > 0);
+}
+
+/**
+ * After contact routing (and any other remaps), slots with no remaining fieldKeys must be
+ * hidden. Leaving them visible:true with empty keys let CondensedQueueRow fall through to
+ * defaultSlotDisplay (Lead Status / contact-line defaults) — forbidden under published authority.
+ */
+export function finalizePublishedCompactSlots(slots: CompactRowSlots): CompactRowSlots {
+    const next = { ...slots } as CompactRowSlots;
+    for (const key of SLOT_KEYS) {
+        if (!slotHasFieldKeys(next[key])) {
+            next[key] = hiddenSlot();
+        }
+    }
+    return next;
+}
+
+/**
+ * True when compact slots came from a published surface (any fieldKeys or explicit hides),
+ * not the all-generic null-config fallback.
+ */
+export function compactSlotsUsePublishedAuthority(slots: CompactRowSlots | null | undefined): boolean {
+    if (!slots) return false;
+    for (const key of SLOT_KEYS) {
+        const slot = slots[key];
+        if (!slot) continue;
+        if (slot.visible === false) return true;
+        if (slotHasFieldKeys(slot)) return true;
+    }
+    return false;
+}
+
 /**
  * Map a published Queue Row surface config onto the compact row's fixed slots.
  *
  * Pure + unit-testable. Null config (unpublished / fetch failed) → all slots generic
- * (visible, no override). Present mapped field → visible + label override. Absent field →
- * generic fallback (recorded in `fallbackSlots`). See the file doc comment for the full
- * slot↔fieldKey mapping and visibility rule.
+ * (visible, no override). Present mapped field → visible + fieldKeys. Absent field on a
+ * published config → hidden (authoritative). See the file doc comment for the mapping.
  */
 export function mapQueueRowSurfaceToCompactConfig(
     config: QueueRecordLayoutConfigV3 | null,
@@ -368,6 +443,7 @@ export function mapQueueRowSurfaceToCompactConfig(
                 groupCount: genericSlot(),
             },
             fallbackSlots: [...SLOT_KEYS],
+            ineffectiveFieldKeys: [],
         };
     }
 
@@ -375,6 +451,14 @@ export function mapQueueRowSurfaceToCompactConfig(
     const operatorAssigned = slotsFromBuilderAssignment(config);
     const slots = {} as CompactRowSlots;
     const fallbackSlots: (keyof CompactRowSlots)[] = [];
+    const ineffectiveFieldKeys: string[] = [];
+
+    for (const [, field] of byKey) {
+        const key = field.fieldKey.trim();
+        if (key && !isCompactRowEffectiveFieldKey(key) && !ineffectiveFieldKeys.includes(key)) {
+            ineffectiveFieldKeys.push(key);
+        }
+    }
 
     for (const slot of SLOT_KEYS) {
         const operatorSlot = operatorAssigned[slot];
@@ -386,13 +470,17 @@ export function mapQueueRowSurfaceToCompactConfig(
             .map((key) => byKey.get(key))
             .filter((f): f is QueueRecordFieldConfig => f != null);
         if (!mappedFields.length) {
-            // No published field for this slot → generic-context fallback (never a hide).
-            slots[slot] = genericSlot();
-            fallbackSlots.push(slot);
+            // Published config with no field for this slot → hide (never generic email/work fallback).
+            slots[slot] = hiddenSlot();
             continue;
         }
+        // Preserve all mapped published fields in SLOT_FIELD_KEYS order (not first-key-only).
         slots[slot] = slotConfigFromPublishedFields(slot, mappedFields);
     }
 
-    return { slots: routePersonContactFieldsToContactSlot(slots), fallbackSlots };
+    return {
+        slots: finalizePublishedCompactSlots(routePersonContactFieldsToContactSlot(slots)),
+        fallbackSlots,
+        ineffectiveFieldKeys: ineffectiveFieldKeys.sort(),
+    };
 }

@@ -7,7 +7,10 @@ import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import {
+    focusPanelCardBackLabel,
+    type FocusPanelCoordination,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
     useDismissSignal,
     useReportPerspective,
@@ -15,6 +18,11 @@ import {
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { allowedPatternWeekdays } from "@/lib/locations/locationSchedulingConfig";
 import { resolveVisibleDayPills } from "@/lib/scheduling/dayPills";
+import {
+    formatCompactScheduleEffective,
+    projectCompactScheduleForIdentity,
+} from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
+import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -107,12 +115,6 @@ const WEEKDAYS = [
 const WEEKDAY_LABEL: Record<number, string> = { 0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat" };
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-function formatDays(weekdays: number[]): string {
-    if (!weekdays.length) return "—";
-    const s = [...weekdays].sort((a, b) => a - b);
-    if (s.join(",") === "1,2,3,4,5") return "Monday–Friday";
-    return s.map((d) => WEEKDAY_NAMES[d]).join(", ");
-}
 function formatDate(iso: string | null): string {
     if (!iso) return "";
     const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
@@ -243,8 +245,33 @@ export default function SchedulingCard({ model, context, receded = false, coordi
         if (composerPreview?.perspective === "expanded" && children[0]) setActiveChildId(children[0].id);
     }, [composerPreview, children]);
 
+    // Card Link / Linked field handoff — open this child's Schedule Detail.
+    const request = coordination?.request;
+    const requestNonce = request?.card === "scheduling" ? request.nonce : null;
+    useEffect(() => {
+        if (request?.card !== "scheduling") return;
+        const focus = request.focus?.trim() || null;
+        if (!focus) {
+            setActiveChildId(null);
+            return;
+        }
+        const match =
+            children.find((c) => c.id === focus)
+            ?? children.find((c) => c.personId === focus)
+            ?? null;
+        setActiveChildId(match?.id ?? focus);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
+    }, [requestNonce, children]);
+
     const activeChild = children.find((c) => c.id === activeChildId) ?? null;
-    useReportPerspective(coordination, "scheduling", activeChild ? "focused" : "base");
+    // While the Linked host elevates Scheduling, keep reporting focused even before
+    // the request effect resolves activeChildId (avoids a mount-time "base" flash).
+    const hostElevated = coordination?.activeDepth?.card === "scheduling";
+    useReportPerspective(
+        coordination,
+        "scheduling",
+        activeChild || hostElevated ? "focused" : "base",
+    );
     useDismissSignal(coordination, "scheduling", () => setActiveChildId(null));
 
     const insight = children.length === 0 ? "No children to schedule" : children.length === 1 ? "1 child" : `${children.length} children`;
@@ -274,7 +301,12 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                         projection={projById[activeChild.id] ?? null}
                         config={schedConfig}
                         reloadChild={() => reloadChild(activeChild.id, activeChild.name)}
+                        coordination={coordination}
                         onClose={() => setActiveChildId(null)}
+                        onBack={() => {
+                            setActiveChildId(null);
+                            coordination?.back?.();
+                        }}
                     />
                 ) : children.length === 0 ? (
                     <p style={{ fontSize: 12.5, color: T.muted }}>Link children to schedule them.</p>
@@ -282,20 +314,23 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                     <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
                         {children.map((child) => {
                             const proj = projById[child.id];
-                            const view = existingView(proj ?? null);
-                            const a = view?.assignments[0] ?? null;
                             const chrome = proj ? summaryStatus(proj) : { label: "…", color: T.muted };
-                            const roomProgram = a?.room.name ? (a.room.program ? `${a.room.name} · ${a.room.program}` : a.room.name) : null;
-                            const detail = view
-                                ? [roomProgram, formatDays(a?.weekdays ?? []), view.effectiveFrom ? `from ${formatDate(view.effectiveFrom)}${view.openEnded ? " · open-ended" : ""}` : null].filter(Boolean).join(" · ")
-                                : "No schedule yet";
+                            const detail =
+                                projectCompactScheduleForIdentity(proj as ChildScheduling | null | undefined, {
+                                    emptyLabel: "No schedule yet",
+                                }).compactLine ?? "No schedule yet";
                             return (
                                 <li key={child.id} data-scheduling-child={child.id}>
                                     <button type="button" onClick={() => setActiveChildId(child.id)} data-scheduling-open={child.id} style={rowBtnStyle}>
                                         <CardAvatar name={child.name} imageUrl={child.imageUrl} size={30} recordId={child.id} />
                                         <span style={{ display: "grid", gap: 2, minWidth: 0, flex: 1 }}>
                                             <span style={{ fontSize: 13.5, fontWeight: 600, color: T.forge }}>{child.name}</span>
-                                            <span style={{ fontSize: 11.5, color: T.slate, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{detail}</span>
+                                            <span
+                                                style={{ fontSize: 11.5, color: T.slate, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                                                data-scheduling-summary={child.id}
+                                            >
+                                                {detail}
+                                            </span>
                                         </span>
                                         <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
                                             <span data-scheduling-status={proj?.status} style={{ fontSize: 10.5, fontWeight: 700, color: chrome.color }}>{chrome.label}</span>
@@ -323,14 +358,18 @@ function ScheduleWorkSurface({
     projection,
     config,
     reloadChild,
+    coordination,
     onClose,
+    onBack,
 }: {
     child: SchedChild;
     opportunityId: string | null;
     projection: ChildProj | null;
     config: SchedConfig;
     reloadChild: () => Promise<ChildProj | null>;
+    coordination?: FocusPanelCoordination;
     onClose: () => void;
+    onBack: () => void;
 }) {
     const [proj, setProj] = useState<ChildProj | null>(projection);
     const existing = existingView(proj);
@@ -356,9 +395,50 @@ function ScheduleWorkSurface({
         };
     }, [mode, existing?.scheduleType, existing?.effectiveFrom, proj?.child.siteId, child.id]);
 
+    const previousFocus = coordination?.previousFocus ?? null;
+    const backLabel = previousFocus
+        ? `← Back to ${focusPanelCardBackLabel(previousFocus.card)}`
+        : null;
+
     const header = (
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 2 }}>
-            <button type="button" onClick={onClose} aria-label="Close" data-schedule-close="true" style={{ all: "unset", marginLeft: "auto", cursor: "pointer", color: T.mid40, fontSize: 15, lineHeight: 1, padding: 2 }}>
+        <div
+            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}
+            data-schedule-nav="true"
+        >
+            {backLabel ? (
+                <button
+                    type="button"
+                    onClick={onBack}
+                    aria-label={backLabel}
+                    data-schedule-back="true"
+                    style={{
+                        all: "unset",
+                        cursor: "pointer",
+                        color: T.slate,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        lineHeight: 1.2,
+                        padding: "2px 0",
+                    }}
+                >
+                    {backLabel}
+                </button>
+            ) : null}
+            <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                data-schedule-close="true"
+                style={{
+                    all: "unset",
+                    marginLeft: "auto",
+                    cursor: "pointer",
+                    color: T.mid40,
+                    fontSize: 15,
+                    lineHeight: 1,
+                    padding: 2,
+                }}
+            >
                 ✕
             </button>
         </div>
@@ -577,10 +657,15 @@ function ScheduleDetail({
                 </div>
             }
             effective={
-                <Value>
-                    {view?.effectiveFrom ? `from ${formatDate(view.effectiveFrom)}` : "—"}
-                    <span style={{ color: T.muted, fontWeight: 500 }}>{view?.openEnded ? " · open-ended" : view?.effectiveTo ? ` · until ${formatDate(view.effectiveTo)}` : ""}</span>
-                </Value>
+                <span data-schedule-effective="true">
+                    <Value>
+                        {formatCompactScheduleEffective({
+                            effectiveFrom: view?.effectiveFrom ?? null,
+                            effectiveTo: view?.effectiveTo ?? null,
+                            openEnded: view?.openEnded,
+                        }) ?? "—"}
+                    </Value>
+                </span>
             }
             footer={
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

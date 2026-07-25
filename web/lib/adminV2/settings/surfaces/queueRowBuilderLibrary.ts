@@ -5,17 +5,16 @@
 
 import { QUEUE_RECORD_LAYOUT_ZONES } from "@/lib/layout/surfaceLayoutRegistry";
 import {
-    buildQueueRecordWidgetPickerCatalog,
-    QUEUE_RECORD_WIDGET_PICKER_EXCLUSIONS,
-} from "@/lib/layout/queueRecordLayoutAllowList";
-import {
     availableFieldsForZone,
     type AvailableField,
 } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import { WAITLIST_PLACEMENT_FIELD_KEYS } from "@/lib/layout/runtime/queueWaitlistPlacementField";
-import { buildUnavailableSiblingLibraryEntries, isWaitlistCandidateGrainSiblingFieldKey, QUEUE_ROW_RESOLVER_BACKED_SIBLING_FIELD_KEYS, WAITLIST_CANDIDATE_SIBLING_FIELD_SCOPE_NOTE } from "@/lib/layout/runtime/queueRowSiblingFieldRegistry";
+import {
+    buildUnavailableSiblingLibraryEntries,
+    isWaitlistCandidateGrainSiblingFieldKey,
+} from "@/lib/layout/runtime/queueRowSiblingFieldRegistry";
 import { buildUnavailableChildProfileLibraryEntries } from "@/lib/layout/runtime/queueRowChildProfileFieldRegistry";
-import { LEGACY_CHILDREN_COLLECTION_FIELD_KEYS } from "@/lib/presentation/collectionFieldPresentation";
+import { isCompactRowEffectiveFieldKey } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import type { QueueRowSubjectFocusUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 
@@ -107,6 +106,9 @@ const FIELD_LIBRARY_LABELS: Record<string, string> = {
     "person.email": "Email",
     "child.name": "Child name",
     children: "Children",
+    "children.count": "Children count",
+    "children.names": "Children names",
+    "children.summary": "Children summary",
     "child.date_of_birth": "Date of birth",
     "child.dob_age": "Age",
     "child.age": "Age",
@@ -122,12 +124,12 @@ const FIELD_LIBRARY_LABELS: Record<string, string> = {
     "opportunity.status_label": "Status pill",
     "opportunity.attention_reason": "Follow-up needed",
     "queue_row.next_best_action_label": "Readiness",
-    "opportunity.next_step": "Next action",
+    "opportunity.next_step": "Next step",
     "opportunity.tour_date": "Tour date",
     "opportunity.location": "Location / room",
-    "queue_row.work_summary": "Tasks",
+    "queue_row.work_summary": "Current work",
     "queue_row.group_count_label": "Grouped count",
-    "waitlist.positionLabel": "Waitlist rank",
+    "waitlist.positionLabel": "Waitlist position",
     "waitlist.tierLabel": "Child priority",
     "waitlist.priorityLabel": "Child priority",
     "waitlist.waitSince": "Wait since",
@@ -165,6 +167,9 @@ const FIELD_CATEGORY: Record<string, QueueRowLibraryCategoryKey> = {
     "person.email": "family_parents",
     "child.name": "child",
     children: "child",
+    "children.count": "child",
+    "children.names": "child",
+    "children.summary": "child",
     "child.date_of_birth": "child",
     "child.dob_age": "child",
     "child.age": "child",
@@ -243,7 +248,7 @@ function fieldItem(zoneKey: QueueRowLibraryZoneKey, field: AvailableField): Queu
         kind: "field",
         zoneKey,
         fieldKey: field.key,
-        label: field.label,
+        label: FIELD_LIBRARY_LABELS[field.key] ?? field.label,
         isSystemField: field.isSystemField,
         category: fieldCategory(field.key, zoneKey, field.categoryKey),
     };
@@ -267,80 +272,53 @@ export function buildQueueRowLibraryCatalog(args: {
         }
         for (const field of availableFieldsForZone(zoneKey, args.isWaitlist, args.tenantFieldDefinitions)) {
             if (seenFieldKeys.has(field.key)) continue;
-            if ((LEGACY_CHILDREN_COLLECTION_FIELD_KEYS as readonly string[]).includes(field.key)) continue;
+            // Picker shows only fields the CondensedQueueRow can actually render.
+            if (!isCompactRowEffectiveFieldKey(field.key)) continue;
             seenFieldKeys.add(field.key);
             items.push(fieldItem(zoneKey, field));
+        }
+        if (zoneKey === "children") {
+            for (const key of [
+                "children.count",
+                "children.names",
+                "children.summary",
+                "child.room",
+            ] as const) {
+                if (seenFieldKeys.has(key)) continue;
+                if (!isCompactRowEffectiveFieldKey(key)) continue;
+                seenFieldKeys.add(key);
+                items.push({
+                    kind: "field",
+                    zoneKey,
+                    fieldKey: key,
+                    label: FIELD_LIBRARY_LABELS[key] ?? key,
+                    isSystemField: true,
+                    category: "child",
+                });
+            }
         }
         if (includeWaitlist && !args.isWaitlist) {
             for (const field of supplementalWaitlistFields(zoneKey, args.tenantFieldDefinitions)) {
                 if (seenFieldKeys.has(field.key)) continue;
+                if (!isCompactRowEffectiveFieldKey(field.key)) continue;
                 seenFieldKeys.add(field.key);
                 items.push(fieldItem(zoneKey, field));
             }
         }
     }
 
-    for (const widget of buildQueueRecordWidgetPickerCatalog()) {
-        const zoneKey = WIDGET_ZONE[widget.widgetKey] ?? "attention";
-        items.push({
-            kind: "widget",
-            zoneKey,
-            widgetKey: widget.widgetKey,
-            label: WIDGET_LIBRARY_LABELS[widget.widgetKey] ?? widget.label,
-            description: widget.description ?? QUEUE_RECORD_WIDGET_PICKER_EXCLUSIONS[widget.widgetKey],
-            category: WIDGET_CATEGORY[widget.widgetKey] ?? "operational",
-        });
-    }
-
-    const registeredKeys = new Set(
-        items.filter((item): item is QueueRowLibraryPickableItem => item.kind === "field" || item.kind === "widget").map(
-            (item) => (item.kind === "field" ? item.fieldKey : item.widgetKey),
-        ),
-    );
-    for (const unavailable of QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY) {
-        if (!registeredKeys.has(unavailable.fieldKey)) {
-            items.push(unavailable);
-        }
-    }
-    for (const unavailable of QUEUE_ROW_UNAVAILABLE_CHILD_PROFILE_LIBRARY) {
-        if (!registeredKeys.has(unavailable.fieldKey)) {
-            items.push(unavailable);
-        }
-    }
+    // Widgets are not CondensedQueueRow-effective — omit from the operator picker entirely.
+    // Publish already rejects non-compact fields; the picker must match runtime capability.
 
     if (!args.isWaitlist) {
-        return applyPipelineSiblingFieldScope(items);
+        // Pipeline: omit waitlist-candidate sibling fields (do not gray them — hide entirely).
+        return items.filter(
+            (item) =>
+                !(item.kind === "field" && isWaitlistCandidateGrainSiblingFieldKey(item.fieldKey)),
+        );
     }
 
     return items;
-}
-
-function applyPipelineSiblingFieldScope(items: QueueRowLibraryItem[]): QueueRowLibraryItem[] {
-    const scoped: QueueRowLibraryItem[] = [];
-    const presentKeys = new Set<string>();
-
-    for (const item of items) {
-        if (item.kind === "field" && isWaitlistCandidateGrainSiblingFieldKey(item.fieldKey)) {
-            continue;
-        }
-        scoped.push(item);
-        if (item.kind === "field" || item.kind === "unavailable") {
-            presentKeys.add(item.kind === "field" ? item.fieldKey : item.fieldKey);
-        }
-    }
-
-    for (const fieldKey of QUEUE_ROW_RESOLVER_BACKED_SIBLING_FIELD_KEYS) {
-        if (presentKeys.has(fieldKey)) continue;
-        scoped.push({
-            kind: "unavailable",
-            fieldKey,
-            label: FIELD_LIBRARY_LABELS[fieldKey] ?? fieldKey,
-            reason: WAITLIST_CANDIDATE_SIBLING_FIELD_SCOPE_NOTE,
-            category: fieldCategory(fieldKey, "children"),
-        });
-    }
-
-    return scoped;
 }
 
 function supplementalWaitlistFields(

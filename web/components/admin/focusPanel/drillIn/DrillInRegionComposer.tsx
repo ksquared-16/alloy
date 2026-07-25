@@ -17,9 +17,9 @@ import {
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import {
     SURFACE_FIELD_VISIBILITY_LABELS,
-    type SurfaceFieldVisibility,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import { availableFieldsForNamespaces, type AvailableField } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { identityFieldVisibilityOptionsForBuilder } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldEditContract";
 
 type Props = {
     surfaceId: string;
@@ -217,7 +217,7 @@ export default function DrillInRegionComposer({
                         {labelForKey(surfaceId, groupKey, selectedField, tenantFieldDefinitions)}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1">
-                        {(["displayed", "read-only", "editable"] as SurfaceFieldVisibility[]).map((mode) => (
+                        {identityFieldVisibilityOptionsForBuilder(selectedField).map((mode) => (
                             <button
                                 key={mode}
                                 type="button"

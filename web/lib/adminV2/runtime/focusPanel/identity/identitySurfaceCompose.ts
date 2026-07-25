@@ -124,6 +124,14 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
         return ("age" in child ? child.age : null) ?? ("dobAge" in child ? child.dobAge : null) ?? null;
     },
     "child.name": (subject) => (subject.kind === "child" ? subject.value.name : null),
+    "child.gender": (subject) =>
+        subject.kind === "child" && "gender" in subject.value
+            ? (subject.value as { gender?: string | null }).gender ?? null
+            : null,
+    "child.age_band": (subject) =>
+        subject.kind === "child" && "ageBand" in subject.value
+            ? (subject.value as { ageBand?: string | null }).ageBand ?? null
+            : null,
     "inquiry_child.program": (subject) =>
         subject.kind === "child" && "program" in subject.value ? subject.value.program ?? null : null,
     "child.room": (subject) =>
@@ -131,6 +139,8 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
     "inquiry_child.schedule_type": (subject) =>
         subject.kind === "child" && "schedule" in subject.value ? subject.value.schedule ?? null : null,
     "inquiry_child.desired_schedule_type": (subject) =>
+        subject.kind === "child" && "schedule" in subject.value ? subject.value.schedule ?? null : null,
+    "child.schedule": (subject) =>
         subject.kind === "child" && "schedule" in subject.value ? subject.value.schedule ?? null : null,
     "child.start_date": (subject) =>
         subject.kind === "child" && "startDate" in subject.value ? subject.value.startDate ?? null : null,
@@ -148,7 +158,14 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
     "child.documents_summary": () => null,
     "child.pickup_summary": () => null,
     "child.communications_summary": () => null,
-    "child.notes_summary": () => null,
+    "child.notes_summary": (subject) =>
+        subject.kind === "child" && "notes" in subject.value
+            ? (subject.value as { notes?: string | null }).notes ?? null
+            : null,
+    "inquiry_child.notes": (subject) =>
+        subject.kind === "child" && "notes" in subject.value
+            ? (subject.value as { notes?: string | null }).notes ?? null
+            : null,
 };
 
 const CONTACT_EDIT_RESOLVERS: Record<string, Resolver> = {

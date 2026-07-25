@@ -47,6 +47,8 @@ describe("WorkUnitHeader presentation", () => {
         expect(el.querySelector("[data-work-unit-header-subtitle]")?.textContent).toBe("Active Pipeline");
         expect(el.querySelectorAll("[data-work-unit-header-kpi]")).toHaveLength(3);
         expect(el.querySelector("[data-alloy-section='WU.HEADER_CALCULATIONS']")).not.toBeNull();
+        expect(el.querySelector("[data-work-unit-header-mode='browse']")).not.toBeNull();
+        expect(el.querySelector("[data-adaptive-metric-row]")).not.toBeNull();
     });
 
     it("KPI icon inherits configured accent color", () => {
@@ -58,5 +60,32 @@ describe("WorkUnitHeader presentation", () => {
         const el = render(<WorkUnitHeader model={model} />);
         const goldKpiIcon = el.querySelector("[data-work-unit-header-kpi='2'] [data-work-unit-header-kpi-icon]");
         expect(goldKpiIcon?.getAttribute("class")).toContain("text-alloy-gold-dark");
+    });
+
+    it("focus density keeps compact metric objects from the Work Unit KPI model", () => {
+        const model = buildWorkUnitHeaderPresentationForRuntime(
+            { ...DEFAULT_WORK_UNIT_HEADER_SURFACE_CONFIG, title: "Enrollment", subtitle: "Active Pipeline" },
+            { fallbackTitle: "Org", fallbackSubtitle: "View", resolved: null },
+        );
+        const el = render(<WorkUnitHeader model={model} density="focus" />);
+        expect(el.querySelector("[data-work-unit-header-mode='focus']")).not.toBeNull();
+        expect(el.querySelector("[data-work-unit-header-kpi-compact-row='true']")).not.toBeNull();
+        expect(el.querySelector("[data-work-unit-header-kpi-inline='true']")).toBeNull();
+        expect(el.querySelectorAll("[data-work-unit-header-kpi]")).toHaveLength(3);
+        expect(el.querySelectorAll("[data-work-unit-header-kpi-compact='true']")).toHaveLength(3);
+        expect(el.querySelector("[data-work-unit-header-title]")?.className).toContain("text-[18px]");
+        expect(el.querySelector("[data-work-unit-header-kpi-value]")).not.toBeNull();
+        expect(el.querySelector("[data-settlement-reserved='kpi']")).not.toBeNull();
+    });
+
+    it("browse density remains valid with no record selected", () => {
+        const model = buildWorkUnitHeaderPresentationForRuntime(
+            { ...DEFAULT_WORK_UNIT_HEADER_SURFACE_CONFIG, title: "Enrollment", subtitle: "Active Pipeline" },
+            { fallbackTitle: "Org", fallbackSubtitle: "View", resolved: null },
+        );
+        const el = render(<WorkUnitHeader model={model} density="browse" />);
+        expect(el.querySelector("[data-work-unit-header-mode='browse']")).not.toBeNull();
+        expect(el.querySelector("[data-adaptive-metric-row]")).not.toBeNull();
+        expect(el.querySelectorAll("[data-work-unit-header-kpi-compact='true']")).toHaveLength(0);
     });
 });

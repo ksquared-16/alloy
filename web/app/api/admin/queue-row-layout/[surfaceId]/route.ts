@@ -53,6 +53,9 @@ import {
     QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE,
     type QueueRowSurfaceEnvelope,
 } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
+import {
+    diagnoseIneffectiveQueueRowFields,
+} from "@/lib/layout/runtime/validateQueueRecordLayoutConfig";
 
 
 
@@ -160,6 +163,27 @@ export async function POST(
         return NextResponse.json({ error: QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE }, { status: 400 });
     }
 
+    // Compact CondensedQueueRow contract — reject fields the Work View row cannot render.
+    // Full allow-list validation stays on the visual editor path; Surfaces publish must not
+    // silently accept non-compact keys (e.g. child.date_of_birth) that omit at runtime.
+    const ineffective = diagnoseIneffectiveQueueRowFields(envelope.layout);
+    if (ineffective.length > 0) {
+        const first = ineffective[0]!;
+        return NextResponse.json(
+            {
+                error: first.message,
+                details: ineffective.map((issue) => ({
+                    path: issue.path,
+                    fieldKey: issue.fieldKey,
+                    fieldLabel: issue.fieldLabel,
+                    variantKey: issue.variantKey,
+                    message: issue.message,
+                })),
+            },
+            { status: 400 },
+        );
+    }
+
     const placementOverrideEnabled = body.placementOverrideEnabled === true;
     const doc = buildLayoutDoc(spec, envelope, placementOverrideEnabled);
     const validated = parseLayoutDoc(doc, { inferSurfaceKey: true });
@@ -203,6 +227,16 @@ export async function POST(
                 )
                 .single();
             if (error) throw new Error(error.message);
+            // Demote sibling published rows for the same layout_key (legacy work-view-scoped
+            // layouts). Otherwise D1's workView-aware resolver can keep serving a stale sibling.
+            for (const row of sameKey) {
+                if (row.id !== latestPublished.id && row.status === "published") {
+                    await supabase
+                        .from("entity_layouts")
+                        .update({ status: "draft", updated_at: new Date().toISOString() })
+                        .eq("id", row.id);
+                }
+            }
             // B5 — a queue-row layout publish changes the `qrl:` config the provisioning answer caches
             // (its dominant ~700ms read). Bust this tenant's `qrl:` entries so the next operator
             // navigation reflects the publish immediately, not after the TTL.

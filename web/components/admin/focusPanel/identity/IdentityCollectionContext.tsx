@@ -13,6 +13,7 @@ type Props = {
     onEditContact?: (recordId: string) => void;
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
     onSaveFields?: (args: IdentityFieldBatchSaveArgs) => Promise<{ ok: boolean } | void>;
+    onLinkField?: (fieldRef: string, recordId: string) => void;
     /** When true, rows are selectable for Details depth. */
     selectable?: boolean;
     /**
@@ -35,6 +36,7 @@ export default function IdentityCollectionContext({
     onEditContact,
     onSaveField,
     onSaveFields,
+    onLinkField,
     selectable = true,
     collectionSummaryOnly = false,
 }: Props) {
@@ -51,6 +53,9 @@ export default function IdentityCollectionContext({
                     onEditContact={onEditContact}
                     onSaveField={onSaveField}
                     onSaveFields={onSaveFields}
+                    onLinkField={
+                        onLinkField ? (fieldRef) => onLinkField(fieldRef, record.id) : undefined
+                    }
                     dataAttr={record.id}
                 />
             ))}

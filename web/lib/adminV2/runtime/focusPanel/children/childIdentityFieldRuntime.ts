@@ -21,6 +21,7 @@ import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusP
 import {
     isIdentityFieldSaveSupported,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
+import { isIdentityFieldInlineSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityInlineChildSave";
 import { resolveIdentityFieldValue } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompose";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
@@ -38,6 +39,11 @@ function canonicalChildrenSurfaceConfig(config: NestedSurfaceConfig | null): Nes
 
 export function isChildFocusFieldSaveSupported(fieldKey: string): boolean {
     return isIdentityFieldSaveSupported(fieldKey);
+}
+
+/** Inline identity-card save support (scalar profile — not enrollment link fields). */
+export function isChildIdentityFieldInlineSaveSupported(fieldKey: string): boolean {
+    return isIdentityFieldInlineSaveSupported(fieldKey);
 }
 
 export type ChildFocusFieldRow = {
