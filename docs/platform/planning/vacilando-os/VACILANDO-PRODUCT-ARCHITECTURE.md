@@ -123,6 +123,8 @@ Three rules govern that boundary:
 
 The Validation already draws the first line across this boundary: the doctrine is sound, the ten-move repertoire is sufficient, and the smallest transformative slice is unambiguous and fully signalled by data that already exists. That slice is the start of realization.
 
+**Operational record of a realization initiative.** Each long-running initiative maintains one [Sprint Runtime](SPRINT-RUNTIME.md) — the canonical specification for the durable operational record an initiative is tracked, resumed, and handed off through. It is a realization artifact, not a pillar: it *references* the foundation systems (Shared Understanding, Mission History, Operational Learning, Engineering Sessions, Persistent Continuity) rather than duplicating them, and adds no architecture.
+
 ---
 
 ## 6. Initial Product Realization Roadmap
