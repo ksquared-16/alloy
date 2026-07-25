@@ -21,6 +21,8 @@ dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 
 const FIXTURE_PDF = path.join(process.cwd(), "tests/fixtures/processing/enrollment-multisection-acroform.pdf");
 const SHOTS = path.join(process.cwd(), "docs/sprints/active/phase-7-evidence/stage-a-native");
+// Throwaway per-run upload copies go to the gitignored test-results dir (never the committed evidence dir).
+const UPLOADS = path.join(process.cwd(), "test-results", "phase7-uploads");
 
 async function snap(page: Page, name: string) {
     fs.mkdirSync(SHOTS, { recursive: true });
@@ -125,8 +127,8 @@ test.describe("Phase 7 Stage A — document → reviewed published form (native)
         });
 
         // 4. Upload the real enrollment PDF through the intent modal (choose-purpose → import).
-        const uniquePdf = path.join(SHOTS, `upload-${Date.now()}.pdf`);
-        fs.mkdirSync(SHOTS, { recursive: true });
+        const uniquePdf = path.join(UPLOADS, `upload-${Date.now()}.pdf`);
+        fs.mkdirSync(UPLOADS, { recursive: true });
         fs.copyFileSync(FIXTURE_PDF, uniquePdf);
         // Set the file on the import action's hidden input → opens the intent modal with the file
         // pre-loaded (initialFile), which auto-fills the display name. (Setting the file on the intent

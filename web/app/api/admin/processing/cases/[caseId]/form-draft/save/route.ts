@@ -9,6 +9,7 @@ import {
 } from "@/lib/pos/processingCase/formDraft/buildManualFormDraft";
 import { SECTION_DISPOSITIONS, type SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
 import { dbStoreFormDraftPreview, stampFormDraftPreview } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
+import { ocrProvenanceFromDocument } from "@/lib/pos/processingCase/formDraft/ocrDraftProvenance";
 
 export const dynamic = "force-dynamic";
 
@@ -111,15 +112,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const sourceDocumentId = source?.source_kind === "document" && source.source_id ? source.source_id : null;
 
         let docTitle: string | null = null;
+        // OCR provenance is preserved across the operator-review save so the create step keeps
+        // source→OCR→published lineage (the document row is the single source of truth).
+        let ocr: ReturnType<typeof ocrProvenanceFromDocument> = null;
         if (sourceDocumentId) {
             const { data: docRow } = await supabase
                 .from("documents")
-                .select("title, original_filename")
+                .select("title, original_filename, extraction_provider, metadata")
                 .eq("org_id", ctx.orgId)
                 .eq("id", sourceDocumentId)
                 .maybeSingle();
-            const doc = (docRow ?? {}) as { title?: string | null; original_filename?: string | null };
+            const doc = (docRow ?? {}) as {
+                title?: string | null;
+                original_filename?: string | null;
+                extraction_provider?: string | null;
+                metadata?: Record<string, unknown> | null;
+            };
             docTitle = doc.title ?? doc.original_filename ?? null;
+            ocr = ocrProvenanceFromDocument(doc);
         }
 
         const title = (typeof body.title === "string" && body.title.trim()) || docTitle || "Untitled form";
@@ -129,6 +139,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const draft = stampFormDraftPreview({
             ...buildManualFormDraft({ title, sourceDocumentId, fields, sectionDispositions }),
             ...(generatedFormName ? { generated_form_name: generatedFormName } : {}),
+            ...(ocr ? { ocr } : {}),
         });
         const stored = await dbStoreFormDraftPreview(supabase, { orgId: ctx.orgId, caseId, draft });
         return jsonData({ caseId, form_draft_preview: stored });

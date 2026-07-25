@@ -241,7 +241,7 @@ function makeDocumentResolver(supabase: SupabaseClient, orgId: string): BatchedS
         // queue/detail. Use `title` + the same cleaned display name as the Documents list.
         const { data: docs } = await supabase
             .from("documents")
-            .select("id, title, original_filename, created_at")
+            .select("id, title, original_filename, created_at, extraction_provider, metadata")
             .eq("org_id", orgId)
             .in("id", ids);
         for (const d of (docs ?? []) as {
@@ -249,10 +249,22 @@ function makeDocumentResolver(supabase: SupabaseClient, orgId: string): BatchedS
             title: string | null;
             original_filename: string | null;
             created_at: string;
+            extraction_provider: string | null;
+            metadata: Record<string, unknown> | null;
         }[]) {
+            const md = d.metadata ?? {};
+            const ocrDerived = md.ocr_derived === true;
             out.set(d.id, {
                 label: deriveDocumentDisplayName(d.title, d.original_filename),
                 originalFilename: d.original_filename,
+                ocr: ocrDerived
+                    ? {
+                          derived: true,
+                          method: typeof d.extraction_provider === "string" ? d.extraction_provider : (md.ocr_method as string) ?? "ocr",
+                          confidence: typeof md.ocr_confidence === "number" ? md.ocr_confidence : 0,
+                          lowConfidence: md.ocr_low_confidence === true,
+                      }
+                    : null,
                 receivedAt: d.created_at,
                 channel: "document",
             });

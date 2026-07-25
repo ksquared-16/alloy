@@ -78,6 +78,19 @@ export interface StoredFormDraftPreview {
     diagnostics: FormDraftDiagnostics;
     /** PDF page dimensions + text context for the review schematic (AcroForm drafts only). */
     pdf_pages?: import("../structure/pdfAcroForm").PdfPageContext[];
+    /**
+     * OCR provenance when the draft was built from OCR text (scanned / image source). Preserved into the
+     * published form for source→OCR→correction→published lineage, and drives the OCR-derived review state.
+     */
+    ocr?: {
+        derived: true;
+        method: string;
+        /** Overall confidence 0–100. */
+        confidence: number;
+        low_confidence: boolean;
+        /** Whether OCR read a directly-uploaded image or a rasterized scanned PDF. */
+        source_kind?: "image" | "scanned_pdf";
+    } | null;
     generated_at: string;
     generator_version: string;
 }

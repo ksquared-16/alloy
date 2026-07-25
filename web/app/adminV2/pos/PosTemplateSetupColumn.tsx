@@ -66,6 +66,14 @@ function formatWhen(iso: string | null | undefined): string {
 }
 
 /** Build the editable reviewed question list from the stored draft, preserving provenance. */
+/** Translate OCR confidence (0–100) into operator language (numeric is supporting detail, not primary). */
+function ocrConfidenceLabel(confidence: number): string {
+    if (confidence <= 0) return "Could not determine";
+    if (confidence >= 85) return "High confidence";
+    if (confidence >= 70) return "Review recommended";
+    return "Needs attention";
+}
+
 function seedReviewQuestions(draft: StoredFormDraftPreview | null): ReviewQuestionInput[] {
     if (!draft) return [];
     const out: ReviewQuestionInput[] = [];
@@ -196,7 +204,12 @@ export default function PosTemplateSetupColumn({
     const sourceFilenameEarly = primary?.display.originalFilename ?? primary?.display.label ?? draft?.title ?? "Untitled document";
     const sourceFormat = detectProcessingSourceFormat(sourceFilenameEarly, "");
     const sourceCapabilities = capabilitiesForFormat(sourceFormat);
-    const shouldAutoDetect = processingIntent === "generate_form" && sourceCapabilities.questionDetection;
+    // OCR provenance (scanned / image source). An OCR-derived document is eligible for form setup even
+    // when its native format has no question detection — the review runs over the OCR text.
+    const ocrProvenance = primary?.display.ocr ?? null;
+    const isOcrDerived = !!ocrProvenance?.derived;
+    const questionDetectionAvailable = sourceCapabilities.questionDetection || isOcrDerived;
+    const shouldAutoDetect = processingIntent === "generate_form" && questionDetectionAvailable;
 
     // Re-seed the reviewed list when the stored draft changes (detect / save / case switch).
     useEffect(() => {
@@ -606,7 +619,7 @@ export default function PosTemplateSetupColumn({
 
     // ---- no draft yet: auto-detect for generate_form, manual gate otherwise ----
     if (!draft) {
-        if (processingIntent === "generate_form" && !sourceCapabilities.questionDetection) {
+        if (processingIntent === "generate_form" && !questionDetectionAvailable) {
             return (
                 <div className="flex h-full min-h-0 flex-col items-center justify-center bg-white p-6 text-center">
                     <div className="max-w-sm">
@@ -681,6 +694,25 @@ export default function PosTemplateSetupColumn({
                     </p>
                 </div>
             </div>
+
+            {isOcrDerived ? (
+                <div
+                    className="mb-2 shrink-0 rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1"
+                    data-testid="ocr-derived-banner"
+                >
+                    <span className="text-[10px] font-semibold text-amber-800">Detected using OCR — review recommended</span>
+                    <span className="mx-1.5 text-amber-300" aria-hidden>
+                        ·
+                    </span>
+                    <span className="text-[10px] font-medium text-amber-800" data-testid="ocr-confidence">
+                        {ocrConfidenceLabel(ocrProvenance?.confidence ?? 0)}
+                    </span>
+                    <span className="ml-1 text-[9px] text-amber-700/70">({ocrProvenance?.confidence ?? 0}% overall)</span>
+                    <p className="mt-0.5 text-[9px] text-amber-700/80">
+                        Read from a scanned/image document — verify each field against the original before publishing.
+                    </p>
+                </div>
+            ) : null}
 
             {creating ? (
                 <ProcessingNativeFormCreatingState

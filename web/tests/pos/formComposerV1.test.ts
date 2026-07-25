@@ -27,7 +27,8 @@ describe("Form Composer V1 helpers", () => {
     it("labels acroform detection distinctly from text-assisted detection", () => {
         const acro = draft({ generator_version: "fp11-acroform-v2", fields: [{ id: "f1", label: "Name", type: "text" }] as StoredFormDraftPreview["fields"] });
         expect(resolveDetectionMode(acro)).toBe("acroform");
-        expect(detectionModeLabel(acro)).toMatch(/AcroForm/i);
+        // Operator language (no "AcroForm" jargon leaking to the operator).
+        expect(detectionModeLabel(acro)).toMatch(/fillable PDF/i);
 
         const text = draft({ generator_version: "fp12-text-v1", fields: [{ id: "f1", label: "Name", type: "text" }] as StoredFormDraftPreview["fields"] });
         expect(resolveDetectionMode(text)).toBe("text_assisted");
@@ -37,6 +38,6 @@ describe("Form Composer V1 helpers", () => {
     it("surfaces manual setup when no questions were detected", () => {
         const empty = draft({ fields: [], generator_version: "fp12-text-v1" });
         expect(resolveDetectionMode(empty)).toBe("manual_required");
-        expect(detectionModeLabel(empty)).toMatch(/Manual setup/i);
+        expect(detectionModeLabel(empty)).toMatch(/could not reliably read/i);
     });
 });
