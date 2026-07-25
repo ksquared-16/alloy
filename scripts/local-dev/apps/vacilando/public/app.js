@@ -1255,8 +1255,10 @@ function sharedUnderstanding(c, stage) {
   // These sections are premature while still understanding — hidden until preparing.
   const carrying = (!understanding && u.carrying.length)
     ? `<div class="cvins"><div class="dlabel">Knowingly carrying</div>${u.carrying.map((k) => claim(tag(CARRY_LABEL[k.kind] || "Carrying", "carry"), k.text, k.why)).join("")}</div>` : "";
-  const advises = (!understanding && u.advises)
-    ? `<div class="cvins"><div class="dlabel">Director advises</div>${claim(tag("Not yet decided", "advise"), u.advises.headline, null)}</div>` : "";
+  // Only at the pre-start gate, and clearly OPTIONAL — an informed tradeoff the
+  // operator accepts by starting, not a pending decision that blocks the gate.
+  const advises = (stage === "preparing" && u.advises)
+    ? `<div class="cvins"><div class="dlabel">Director also suggests</div>${claim(tag("Optional", "advise"), u.advises.headline, "Not required to start — you're ready without these. Starting proceeds without them; broaden the objective and prepare again to include them.")}</div>` : "";
   const basis = (!understanding && u.basis)
     ? `<div class="cvins"><div class="dlabel">Continuing from</div><p class="su-basis">${esc(u.basis.continuation)}</p></div>` : "";
   const aside = (!understanding && u.set_aside.length)
@@ -1317,8 +1319,8 @@ function opBand(c) {
       <div class="opsec"><div class="dlabel">Objective — what will run</div><div class="opobjective">${esc(objective) || "—"}</div></div>
       <div class="opsec"><div class="dlabel">Expected outcome</div>${outcome}</div>
       ${outScope ? `<div class="opsec"><div class="dlabel">Out of scope</div><ul class="dul">${outScope}</ul></div>` : ""}
-      <div class="opsec"><div class="dlabel">How we'll know it's done</div><ul class="dul">${crit || "<li>—</li>"}</ul></div>
-      <div class="opnote">Starting runs exactly this on an engine in an isolated workspace — you don't manage the provider, branch, or server. Change it above before starting.</div></div>`;
+      <div class="opsec"><div class="dlabel">How we'll know it's done</div><ul class="dul">${crit || "<li>—</li>"}</ul><div class="opsub">You'll confirm the results against these after the run — nothing to decide now.</div></div>
+      <div class="opnote">Starting runs exactly this on an engine in an isolated workspace — you don't manage the provider, branch, or server.</div></div>`;
   }
   return `<div class="opband">${pill}</div>`;
 }
@@ -1349,12 +1351,16 @@ function opFooter(c, id) {
   // — the direction becomes the authoritative objective (recompiled), never a side
   // note while a generic objective stays in charge. Available at Ready too.
   if (k === "preparing" || k === "ready") {
-    const shape = `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Describe what this mission should do — this becomes the objective, e.g. “inventory the real authority paths, define the security model; do not build V2”…" />
+    const reframe = `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Describe what this mission should do — this becomes the objective, e.g. “inventory the real authority paths, define the security model; do not build V2”…" />
       <button class="btn go sm" data-cvreframe="${id}">Set the objective</button></div>`;
-    const btns = [];
-    if (acts.includes("start")) btns.push(`<button class="btn go" data-dstart="${id}">Start this work</button>`);
-    if (k === "ready") btns.push(`<button class="btn sm" data-drecompile="${id}">Ask Director to prepare again</button>`);
-    return `${shape}${btns.length ? `<div class="cvcompose ready">${btns.join("")}</div>` : ""}`;
+    // Not ready yet: shaping the objective IS the primary move, so keep it prominent.
+    if (!acts.includes("start")) return reframe;
+    // Ready: Start is the obvious primary; redefining the objective is a secondary
+    // "change what it does", tucked behind a disclosure so it stops competing with Start.
+    const btns = [`<button class="btn go" data-dstart="${id}">Start this work</button>`,
+      `<button class="btn sm" data-drecompile="${id}">Ask Director to prepare again</button>`];
+    return `<div class="cvcompose ready">${btns.join("")}</div>
+      <details class="cvreframe"><summary>Change what this mission does</summary>${reframe}</details>`;
   }
   // Execution / review / accepted states: the action buttons.
   const btns = [];

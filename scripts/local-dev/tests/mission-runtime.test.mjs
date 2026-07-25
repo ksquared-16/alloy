@@ -567,12 +567,14 @@ test("SU: a superseded decision is NOT active — it is demoted to history", () 
   assert.ok(u.set_aside.some((s) => s.text === "Old direction"), "superseded claim is retained in history");
 });
 
-test("SU: a Director recommendation stays distinguishable from a decision", () => {
+test("SU: a Director recommendation is present, OPTIONAL, and distinct from a decision", () => {
   const u = U({ pkg: pkgU({ suggested: [{ statement: "cover roadmap item" }, { statement: "address ki1" }] }) });
   assert.ok(u.advises, "recommendation is present");
-  assert.match(JSON.stringify(u.advises), /criteria|criterion/i);
+  assert.equal(u.advises.optional, true, "surfaced as optional, not a pending decision");
+  assert.equal(u.advises.count, 2);
+  assert.doesNotMatch(u.advises.headline, /to confirm|not yet decided/i); // no false 'you must decide' pressure
   // it is NOT in the relied-upon (decided) set
-  assert.ok(!u.relied_upon.some((r) => /criteria|criterion/i.test(r.text)));
+  assert.ok(!u.relied_upon.some((r) => /criteria|criterion|check/i.test(r.text)));
 });
 
 test("SU: an assumption/constraint does not present as a fact", () => {
