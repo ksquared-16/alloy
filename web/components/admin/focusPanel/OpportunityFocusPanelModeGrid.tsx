@@ -69,6 +69,11 @@ const FOCUS_PANEL_CARD_TITLES: Partial<Record<FocusPanelCardKey, string>> = {
  */
 function ReservedFocusPanelCell({ typeKey }: { typeKey: FocusPanelCardKey }) {
     const title = FOCUS_PANEL_CARD_TITLES[typeKey];
+    // CALM NEUTRAL HOLD (Kelly). Not a loading placeholder and not a "Preparing…" spinner: the cell
+    // shows the card's IDENTITY plus a quiet, STATIC content hint (no pulse — Settlement fills it in
+    // place). It reads as a settled part of the surface whose detail is arriving, so the two-phase
+    // reveal is barely perceptible and never chatters. The panel already owns the aria-busy state, so
+    // the hold is aria-hidden rather than announcing per cell.
     return (
         <div
             className="alloy-os-ucard"
@@ -77,15 +82,14 @@ function ReservedFocusPanelCell({ typeKey }: { typeKey: FocusPanelCardKey }) {
             style={{ minHeight: "7.5rem", padding: "0.875rem" }}
         >
             {title ? (
-                <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-alloy-muted">
-                        {title}
-                    </span>
-                    <span className="text-[11px] text-alloy-midnight/35" role="status" aria-live="polite">
-                        Preparing…
-                    </span>
-                </div>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-alloy-muted">
+                    {title}
+                </span>
             ) : null}
+            <div className="mt-3 space-y-2" aria-hidden="true">
+                <span className="block h-2 w-1/2 rounded-full bg-alloy-stone/12" />
+                <span className="block h-2 w-1/3 rounded-full bg-alloy-stone/[0.08]" />
+            </div>
         </div>
     );
 }
