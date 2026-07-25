@@ -27,6 +27,17 @@ export const DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS = 15000;
 /** Monotonic generation — a newer soft nav supersedes older watchdogs so they never fire late. */
 let softNavGeneration = 0;
 
+/** The single armed watchdog timer, so a newer nav CANCELS the prior one outright (no stale timers
+ * accumulate). Generation still guards a fire; this just means a superseded timer never even runs. */
+let activeTimerHandle: ReturnType<typeof setTimeout> | null = null;
+let activeTimerClear: ((handle: ReturnType<typeof setTimeout>) => void) | null = null;
+
+function cancelActiveReloadFloorTimer(): void {
+    if (activeTimerHandle != null && activeTimerClear) activeTimerClear(activeTimerHandle);
+    activeTimerHandle = null;
+    activeTimerClear = null;
+}
+
 /** Canonicalize workspace OR configuration paths for stall comparison. */
 export function normalizeSoftNavReloadPathname(pathname: string): string {
     if (isConfigurationSoftNavEligibleHref(pathname)) {
@@ -74,7 +85,12 @@ export function armSoftNavReloadFloor(
     const setT = deps.setTimeoutFn ?? ((cb, ms) => setTimeout(cb, ms));
     const clearT = deps.clearTimeoutFn ?? ((h) => clearTimeout(h));
     const timeoutMs = deps.timeoutMs ?? DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS;
+    // A newer navigation OWNS the floor — cancel the prior watchdog's timer outright so stale timers
+    // never accumulate (defense-in-depth alongside the generation guard below).
+    cancelActiveReloadFloorTimer();
     const handle = setT(() => {
+        activeTimerHandle = null;
+        activeTimerClear = null;
         if (
             shouldFireReloadFloor({
                 currentPathname: deps.getPathname(),
@@ -95,10 +111,20 @@ export function armSoftNavReloadFloor(
             deps.reload();
         }
     }, timeoutMs);
-    return () => clearT(handle);
+    activeTimerHandle = handle;
+    activeTimerClear = clearT;
+    return () => {
+        clearT(handle);
+        if (activeTimerHandle === handle) {
+            activeTimerHandle = null;
+            activeTimerClear = null;
+        }
+    };
 }
 
 /** Test-only reset. */
 export function resetSoftNavGenerationForTests(): void {
     softNavGeneration = 0;
+    activeTimerHandle = null;
+    activeTimerClear = null;
 }
