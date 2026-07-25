@@ -14,7 +14,15 @@ import { normalizeToCanonicalAdminPath } from "@/lib/admin/canonicalAdminRoutes"
 import { normalizeOperatorPathname } from "@/lib/admin/canonicalOperatorRoutes";
 import { isConfigurationSoftNavEligibleHref } from "@/lib/configRuntime/configurationContinuity";
 
-export const DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS = 3000;
+/**
+ * The floor is a GENUINELY-HUNG detector, not a slow-nav detector. A soft nav that is merely slow
+ * (a heavy server render — dynamic layout, cold data) is still progressing and MUST NOT be reloaded:
+ * reloading it just restarts the same slow work AND throws away the retained shell — the operator
+ * experiences it as an "unexpected reload". So the threshold sits well beyond any legitimate nav:
+ * fast navigations (the common case) never approach it, and it fires only when a nav has plainly
+ * died and will never reach its target. (Was 3s, which guillotined normal-but-slow navigations.)
+ */
+export const DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS = 15000;
 
 /** Monotonic generation — a newer soft nav supersedes older watchdogs so they never fire late. */
 let softNavGeneration = 0;
@@ -65,6 +73,7 @@ export function armSoftNavReloadFloor(
     const myGeneration = ++softNavGeneration;
     const setT = deps.setTimeoutFn ?? ((cb, ms) => setTimeout(cb, ms));
     const clearT = deps.clearTimeoutFn ?? ((h) => clearTimeout(h));
+    const timeoutMs = deps.timeoutMs ?? DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS;
     const handle = setT(() => {
         if (
             shouldFireReloadFloor({
@@ -73,9 +82,19 @@ export function armSoftNavReloadFloor(
                 superseded: myGeneration !== softNavGeneration,
             })
         ) {
+            // Attribution: a floor fire IS the "unexpected reload". It was silent, so an operator
+            // reload could never be traced. Surface it (dev/staging) with the stalled target + budget
+            // so a genuine hang is distinguishable from a threshold that needs tuning.
+            if (typeof console !== "undefined" && process.env.NODE_ENV !== "production") {
+                console.warn("[soft-nav-reload-floor] fired — soft nav never reached target", {
+                    target: targetPathname,
+                    current: deps.getPathname(),
+                    timeout_ms: timeoutMs,
+                });
+            }
             deps.reload();
         }
-    }, deps.timeoutMs ?? DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS);
+    }, timeoutMs);
     return () => clearT(handle);
 }
 
