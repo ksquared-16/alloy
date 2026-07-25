@@ -17,6 +17,7 @@ import type { PosPacketSummary, PosPacketStatus, PosPacketShareRow } from "@/lib
 import type { RecordPickerOption } from "@/lib/pos/packet/recordPickerOptions";
 import RecordLaunchPicker from "./RecordLaunchPicker";
 import WorkspaceSectionHeader from "@/components/workspace/WorkspaceSectionHeader";
+import PosPacketResponsibilityEditor, { type ResponsibilityRulePayload } from "./PosPacketResponsibilityEditor";
 
 const STATUS_STYLE: Record<PosPacketStatus, { label: string; cls: string }> = {
     ready: { label: "Ready", cls: "bg-stone-100 text-stone-600" },
@@ -93,6 +94,12 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
     const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
     const [composing, setComposing] = useState(false);
+    const [responsibilityRules, setResponsibilityRules] = useState<ResponsibilityRulePayload[]>([]);
+    const [launchBlocked, setLaunchBlocked] = useState(false);
+    const onResponsibilityChange = useCallback((rules: ResponsibilityRulePayload[], blocked: boolean) => {
+        setResponsibilityRules(rules);
+        setLaunchBlocked(blocked);
+    }, []);
     const [composeErr, setComposeErr] = useState<string | null>(null);
     const [composeResult, setComposeResult] = useState<{ name: string; form_count: number; warnings: string[]; shares: ComposeShare[] } | null>(null);
 
@@ -191,6 +198,7 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
                     ...(target ? { anchor: { entity_type: target.entity_type, entity_id: target.entity_id } } : {}),
                     child_ids: selectedChildIds,
                     recipient_ids: selectedRecipientIds,
+                    requirement_responsibilities: responsibilityRules,
                 }),
             });
             const b = (await res.json().catch(() => ({}))) as { data?: { name: string; form_count: number; warnings: string[]; shares: ComposeShare[] }; error?: string };
@@ -210,7 +218,7 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
         } finally {
             setComposing(false);
         }
-    }, [name, selectedFormIds, target, selectedChildIds, selectedRecipientIds, load]);
+    }, [name, description, selectedFormIds, target, selectedChildIds, selectedRecipientIds, responsibilityRules, load]);
 
     const copy = useCallback((id: string, url: string) => {
         void navigator.clipboard?.writeText(url).then(
@@ -233,7 +241,7 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
                         {packets ? `${packets.length} packet${packets.length === 1 ? "" : "s"}` : "Packets"}
                     </span>
                     <div className="flex items-center gap-1.5">
-                        <button type="button" onClick={() => (showCreate ? setShowCreate(false) : void openCreate())} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-alloy-juniper/90">
+                        <button type="button" data-testid="packet-new-button" onClick={() => (showCreate ? setShowCreate(false) : void openCreate())} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-alloy-juniper/90">
                             <Plus className="h-3 w-3" aria-hidden /> {showCreate ? "Close" : "New packet"}
                         </button>
                         <button type="button" onClick={() => void load()} className="inline-flex items-center gap-1 rounded border border-stone-200 px-1.5 py-0.5 text-[10px] font-medium text-stone-500 hover:bg-stone-50">
@@ -243,7 +251,7 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
                 </div>
 
                 {showCreate ? (
-                    <div className="mb-3 space-y-3 rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.05] p-3">
+                    <div className="mb-3 space-y-3 rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.05] p-3" data-testid="packet-composer">
                         <div className="text-[11px] font-semibold text-alloy-midnight">Build a packet</div>
 
                         {/* 1. Forms */}
@@ -323,16 +331,29 @@ export default function PosPacketsPanel({ embedded = false }: { embedded?: boole
                             </div>
                         ) : null}
 
+                        {/* 5. Responsibility configuration + live household preview */}
+                        {selectedFormIds.length > 0 ? (
+                            <div className="rounded-lg border border-stone-200 bg-white/70 p-2">
+                                <div className="mb-1.5 text-[10.5px] font-medium text-stone-500">5. Who is responsible for each requirement</div>
+                                <PosPacketResponsibilityEditor
+                                    formIds={selectedFormIds}
+                                    anchor={target ? { entity_type: target.entity_type, entity_id: target.entity_id } : null}
+                                    onChange={onResponsibilityChange}
+                                />
+                            </div>
+                        ) : null}
+
                         <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description / help text (optional)" className="w-full rounded border border-stone-200 bg-white px-2 py-1 text-[11.5px] text-stone-700" />
                         <div className="flex items-center gap-2">
                             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Packet name (optional)" className="min-w-0 flex-1 rounded border border-stone-200 bg-white px-2 py-1 text-[11.5px] text-stone-700" />
                             <span className="shrink-0 text-[10px] text-stone-500">
                                 {Math.max(1, selectedChildIds.length || 1) * Math.max(1, selectedRecipientIds.length || 1)} link{(Math.max(1, selectedChildIds.length || 1) * Math.max(1, selectedRecipientIds.length || 1)) === 1 ? "" : "s"}
                             </span>
-                            <button type="button" disabled={composing || selectedFormIds.length === 0} onClick={() => void compose()} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-alloy-juniper/90 disabled:opacity-50">
+                            <button type="button" data-testid="packet-compose-submit" disabled={composing || selectedFormIds.length === 0 || launchBlocked} onClick={() => void compose()} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-alloy-juniper/90 disabled:opacity-50">
                                 <Plus className="h-3.5 w-3.5" aria-hidden /> {composing ? "Creating…" : "Create packet + links"}
                             </button>
                         </div>
+                        {launchBlocked ? <p className="text-[11px] font-medium text-rose-600" data-testid="compose-launch-blocked">Resolve the blocking responsibility issues above before launching.</p> : null}
 
                         {composeErr ? <p className="text-[11px] text-amber-700">{composeErr}</p> : null}
                         {composeResult ? (
