@@ -101,6 +101,21 @@ Do not push/merge until explicitly instructed.
 - **Honest boundaries (non-goals held):** printed-text OCR only — no handwriting, no complex-table reconstruction, no perfect layout, no auto-publish. Inline OCR is correct for the governed single-document flow; a multi-page scan approaches serverless duration limits (bounded to 8 pages) — production should move OCR to an async worker/queue (documented).
 - **Commit:** `afb5a99aa` · **Next:** Slice 2 — Packet Composition.
 
+### 2026-07-25 — Slice 2 SERVER-COMPLETE (model + seam + endpoints, unit-certified) — UI + E2E cert REMAIN
+
+Full requirement-responsibility **server architecture** built, tested, committed (branch 19 ahead of origin/staging). NOT yet end-to-end certified: the operator composer UI and the authenticated 12-step Playwright cert are the remaining work — deliberately NOT claimed as done (no faked cert).
+
+**Delivered + unit-certified (25 new tests green, source+test typecheck clean):**
+- Durable requirement identity `{form_definition_id, section_id?, field_id?}` (field > section > form), verified against real FormSchemaV1 (stable section/field ids, not labels/positions); `enumerateRequirementsFromForm` walks a published form into typed, stably-identified requirements with sensible editable defaults. `17ec8ad9a`.
+- Projection seam `projectPacketResponsibilities` + `evaluatePacketCompletion`/`isPacketComplete` + `projectForParticipant` (the Conversation Runtime seam) — the single source; UI/API/runtime never re-resolve. Blocking validation prevents launch. `e5a8cd58a`.
+- Compose route persists operator rules on packet metadata; `pos_connected: true` set (on-ramp repair). `GET /api/admin/pos/packets/[id]/projection` (operator preview + read-model projection). `2467bd67a`.
+- `GET /api/admin/pos/packets/sessions/[sessionId]/participant-projection?person_id=` — per-guardian runtime seam + packet completion from REAL session submissions. `a1878d15b`.
+- Design doc `docs/platform/planning/phase7-requirement-responsibility-model.md` (`456b992c7`); `pos_connected` repair (`456b992c7`).
+
+**Files:** `lib/pos/packet/{requirementResponsibility,packetResponsibilityProjection,loadPacketProjection,loadParticipantProjection}.ts`; routes `pos/packets/compose`, `pos/packets/[packetDefinitionId]/projection`, `pos/packets/sessions/[sessionId]/participant-projection`; tests `tests/pos/{requirementResponsibility,packetResponsibilityProjection}.test.ts`. No DB migration (rules ride packet metadata).
+
+**REMAINING for "walkable + certified" (next focused build):** (1) `GET requirements` enumeration endpoint for a set of form ids (so the composer can show per-requirement controls pre-compose); (2) operator composer UI — author applies-to / responsible-party / satisfaction per requirement in real-world language, with type-based defaults; (3) household projection **preview** UI + block-launch on blocking issues; (4) authoritative completion wiring into the packet session (currently form-submitted drives session status; requirement-completion is computed/exposed via the seam); (5) the 12-step authenticated Playwright cert (compose→configure→preview→persist→launch→per-guardian projection→completion→one Processing Case) + evidence; (6) regression suite. Commits: `456b992c7`, `17ec8ad9a`, `e5a8cd58a`, `2467bd67a`, `a1878d15b`.
+
 ### 2026-07-25 — Slice 2 FOUNDATION — requirement-responsibility model + pos_connected repair (commit `456b992c7`)
 
 Product reframe accepted (Kelly): **stop thinking packet/item assignment; think requirement responsibility.** Hierarchy `Packet → Forms → Requirements → Responsibility Rules → Conversation Runtime`. Packets keep composing forms; obligation-bearing elements (upload/ack/signature/static/generated) live inside forms as section dispositions (Slice 1); packet views + participant journeys + conversation runtime + completion are all derived projections of responsibility rules. No second assignment architecture to migrate away from.
