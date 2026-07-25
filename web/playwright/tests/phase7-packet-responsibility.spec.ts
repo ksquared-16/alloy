@@ -14,8 +14,16 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import { test, expect, type Page } from "@playwright/test";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { test, expect, type Page, type APIRequestContext } from "@playwright/test";
 import { ensureAdminPlaywrightSession } from "../helpers/adminSessionAuth";
+
+/** Service-role client — used ONLY to READ rows for verification (never to write certified state). */
+function verifyDb(): SupabaseClient {
+    return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!.trim(), process.env.SUPABASE_SERVICE_ROLE_KEY!.trim(), {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
+}
 
 const SHOTS = path.join(process.cwd(), "docs/sprints/active/phase-7-evidence/slice-2-responsibility");
 async function snap(page: Page, name: string) {
@@ -159,5 +167,128 @@ test.describe("Phase 7 Slice 2 — packet responsibility (operator + projection 
 
         // eslint-disable-next-line no-console
         console.log(`SLICE2_OPERATOR_PASS packetId=${packetId} requirementTypes=${JSON.stringify(Array.from(new Set(types)))}`);
+    });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// Live completion → Processing handoff, through REAL public submission + on-ramp paths.
+// ---------------------------------------------------------------------------------------------------
+
+/** Create + publish a minimal packet-able form (two easily-satisfiable fields). */
+async function createMinimalForm(req: APIRequestContext): Promise<{ formId: string; formName: string }> {
+    const stamp = Date.now();
+    const formName = `Cert Consent ${stamp}`;
+    const createRes = await req.post("/api/admin/forms", { data: { name: formName, kind: "center", metadata: { source: "slice2-cert" } } });
+    if (!createRes.ok()) throw new Error(`create form failed (${createRes.status()}): ${await createRes.text()}`);
+    const formId = ((await createRes.json()) as { data?: { id?: string } }).data?.id ?? "";
+    const schema = {
+        schema_version: 1,
+        title: formName,
+        sections: [{ id: "sec_main", title: "Consent", field_ids: ["f_note", "f_agree"] }],
+        fields: [
+            { id: "f_note", label: "Parent note", required: false, type: "text" },
+            { id: "f_agree", label: "I agree", required: false, type: "boolean" },
+        ],
+    };
+    const verRes = await req.post(`/api/admin/forms/${formId}/versions`, { data: { schema_json: schema } });
+    if (!verRes.ok()) throw new Error(`create version failed (${verRes.status()}): ${await verRes.text()}`);
+    const versionId = ((await verRes.json()) as { data?: { id?: string } }).data?.id ?? "";
+    const pubRes = await req.post(`/api/admin/forms/${formId}/versions/${versionId}/publish`, { data: {} });
+    if (!pubRes.ok()) throw new Error(`publish failed (${pubRes.status()}): ${await pubRes.text()}`);
+    return { formId, formName };
+}
+
+/** Extract the plaintext public token from a composed share URL (…/forms/embed/<token>). */
+function tokenFromShareUrl(url: string): string | null {
+    const m = url.match(/\/forms\/embed\/([^/?#]+)/) || url.match(/[?&]token=([^&]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+}
+
+test.describe("Phase 7 Slice 2 — live completion → Processing handoff", () => {
+    test.setTimeout(600_000);
+
+    test("real public submission completes the packet → exactly one Processing Case (idempotent)", async ({ page, request }) => {
+        await ensureAdminPlaywrightSession(page);
+        const { formId } = await createMinimalForm(page.request);
+
+        // Fixture: a minimal customer household in the SAME org as the form, to anchor the packet link.
+        const db = verifyDb();
+        const { data: formRow } = await db.from("form_definitions").select("org_id").eq("id", formId).maybeSingle();
+        const orgId = (formRow as { org_id?: string } | null)?.org_id;
+        expect(orgId, "resolved org from the created form").toBeTruthy();
+        const { data: custRow, error: custErr } = await db
+            .from("customers")
+            .insert({ org_id: orgId, name: `Cert Household ${Date.now()}`, status_key: "active", metadata: { source: "slice2-cert" } })
+            .select("id")
+            .single();
+        if (custErr) throw new Error(`create customer failed: ${custErr.message}`);
+        const customerId = (custRow as { id: string }).id;
+
+        // Compose a packet anchored to that household through the real compose path.
+        const composeRes = await page.request.post("/api/admin/pos/packets/compose", {
+            data: { name: `Cert Handoff ${Date.now()}`, form_definition_ids: [formId], anchor: { entity_type: "customer", entity_id: customerId } },
+        });
+        expect(composeRes.ok(), `compose ok: ${await composeRes.text().catch(() => "")}`).toBeTruthy();
+        const composed = (await composeRes.json()) as { data?: { shares?: Array<{ url: string | null }> } };
+        const shareUrl = composed.data?.shares?.find((s) => s.url)?.url ?? null;
+        expect(shareUrl, "compose returned a share link").toBeTruthy();
+        const token = tokenFromShareUrl(shareUrl!);
+        expect(token, `extracted token from ${shareUrl}`).toBeTruthy();
+
+        // A fresh unauthenticated context for the PUBLIC participant paths (no admin cookies).
+        const pub = request;
+
+        // 1. Launch the session (resolve the link) — real runtime path.
+        const resolveRes = await pub.get(`/api/public/forms/${token}/resolve`);
+        expect(resolveRes.ok(), `resolve ok: ${await resolveRes.text().catch(() => "")}`).toBeTruthy();
+        const resolved = (await resolveRes.json()) as { data?: { packet?: { packet_session_id?: string; total_steps?: number } } };
+        const sessionId = resolved.data?.packet?.packet_session_id ?? "";
+        expect(sessionId, "session launched").toBeTruthy();
+
+        // 2. Complete every step via the real create→submit public API until the packet completes.
+        let complete = false;
+        for (let guard = 0; guard < 10 && !complete; guard++) {
+            const createSub = await pub.post(`/api/public/forms/${token}/submissions`, { data: { payload: { values: { f_note: "ok", f_agree: true } } } });
+            expect(createSub.ok(), `create submission ok: ${await createSub.text().catch(() => "")}`).toBeTruthy();
+            const subId = ((await createSub.json()) as { data?: { id?: string } }).data?.id ?? "";
+            expect(subId, "draft submission created").toBeTruthy();
+            const submit = await pub.post(`/api/public/forms/${token}/submissions/${subId}/submit`, { data: { payload: { values: { f_note: "ok", f_agree: true } } } });
+            expect(submit.ok(), `submit ok: ${await submit.text().catch(() => "")}`).toBeTruthy();
+            const sr = (await submit.json()) as { data?: { packet_complete?: boolean; next_form_available?: boolean } };
+            complete = sr.data?.packet_complete === true;
+            if (!complete && !sr.data?.next_form_available) break;
+        }
+        expect(complete, "packet session completed via real submissions").toBe(true);
+
+        // 3. Verify session is completed (real state).
+        const { data: sessRow } = await db.from("form_packet_sessions").select("id, status, packet_definition_id").eq("id", sessionId).maybeSingle();
+        expect((sessRow as { status?: string } | null)?.status).toBe("completed");
+
+        // 4. Exactly one Processing Case created via the pos_connected on-ramp, linked to the session.
+        const { data: sources } = await db
+            .from("processing_case_sources")
+            .select("processing_case_id, role, source_kind, source_id")
+            .eq("source_kind", "form_packet_session")
+            .eq("source_id", sessionId);
+        const caseIds = Array.from(new Set(((sources ?? []) as Array<{ processing_case_id: string }>).map((s) => s.processing_case_id)));
+        expect(caseIds.length, "exactly one Processing Case for the packet session").toBe(1);
+        const caseId = caseIds[0];
+
+        // 5. Idempotency: re-resolving the completed session must NOT create a second case.
+        await pub.get(`/api/public/forms/${token}/resolve`).catch(() => {});
+        const { data: sources2 } = await db
+            .from("processing_case_sources")
+            .select("processing_case_id")
+            .eq("source_kind", "form_packet_session")
+            .eq("source_id", sessionId);
+        const caseIds2 = Array.from(new Set(((sources2 ?? []) as Array<{ processing_case_id: string }>).map((s) => s.processing_case_id)));
+        expect(caseIds2.length, "no duplicate Processing Case on re-evaluation").toBe(1);
+
+        // 6. Open the Processing Case through the canonical admin API — one coherent packet source.
+        const caseRes = await page.request.get(`/api/admin/processing/cases/${caseId}`);
+        expect(caseRes.ok(), `open case ok: ${await caseRes.text().catch(() => "")}`).toBeTruthy();
+
+        // eslint-disable-next-line no-console
+        console.log(`SLICE2_HANDOFF_PASS sessionId=${sessionId} caseId=${caseId} caseCount=${caseIds.length}/${caseIds2.length}`);
     });
 });
