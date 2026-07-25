@@ -389,15 +389,71 @@ EOF
 
   cp "$out_wt" "$out_rt"
 
-  # Ignore instructions file in git (same pattern as .env.local.agent).
-  local git_dir common_dir exclude_file
+  # Auto-DELIVER the instructions (incl. Worker Operating Policy) to a freshly opened
+  # worker, and GUARD against a passive-wait turn-end. A directly-opened Claude loads
+  # CLAUDE.md but NOT .alloy-agent-instructions.md — so without this it never receives
+  # the policy (a file on disk is not consumption). A SessionStart hook injects the
+  # instructions as context; a Stop hook refuses a turn that ends on "still running".
+  # Both are thin wrappers over the tested command-budget.mjs; idempotent; any hooks the
+  # operator authored themselves in .claude/settings.local.json are preserved.
+  local cb_path settings_dir settings_file
+  cb_path="${path}/scripts/local-dev/lib/vacilando/command-budget.mjs"
+  settings_dir="${path}/.claude"
+  settings_file="${settings_dir}/settings.local.json"
+  if [[ -f "$cb_path" ]] && alloy_have_cmd node; then
+    mkdir -p "$settings_dir"
+    ALLOY_HOOK_CB="$cb_path" ALLOY_HOOK_INSTR="$out_wt" ALLOY_HOOK_SETTINGS="$settings_file" node - <<'NODE'
+const fs = require('fs');
+const cb = process.env.ALLOY_HOOK_CB, instr = process.env.ALLOY_HOOK_INSTR, file = process.env.ALLOY_HOOK_SETTINGS;
+let s = {};
+try { s = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+if (!s || typeof s !== 'object' || Array.isArray(s)) s = {};
+s.hooks = (s.hooks && typeof s.hooks === 'object' && !Array.isArray(s.hooks)) ? s.hooks : {};
+const sessionCmd = `node ${JSON.stringify(cb)} session-start ${JSON.stringify(instr)}`;
+const stopCmd = `node ${JSON.stringify(cb)} stop-guard`;
+const isAlloyGroup = (g) => g && Array.isArray(g.hooks) && g.hooks.some(h => h && typeof h.command === 'string' && h.command.includes('command-budget.mjs'));
+const ensure = (event, command) => {
+  const arr = Array.isArray(s.hooks[event]) ? s.hooks[event] : [];
+  const kept = arr.filter(g => !isAlloyGroup(g)); // idempotent: replace our hook, keep the operator's
+  kept.push({ hooks: [{ type: 'command', command }] });
+  s.hooks[event] = kept;
+};
+ensure('SessionStart', sessionCmd);
+ensure('Stop', stopCmd);
+fs.writeFileSync(file, JSON.stringify(s, null, 2) + '\n');
+NODE
+  fi
+
+  # Cursor delivery: a directly-opened Cursor worker loads .cursor/rules/*.mdc — not
+  # .alloy-agent-instructions.md — so without this it never receives the policy either.
+  # Render the SAME canonical policy into an always-applied Cursor rule (generated, not a
+  # committed duplicate: ONE source of truth in worker-operating-policy.md). Cursor has no
+  # governed-runner/Stop-hook equivalent, so this is DELIVERY parity, not runtime enforcement.
+  if [[ -f "$policy_file" ]]; then
+    local cursor_rules_dir cursor_rule
+    cursor_rules_dir="${path}/.cursor/rules"
+    cursor_rule="${cursor_rules_dir}/worker-operating-policy.mdc"
+    mkdir -p "$cursor_rules_dir"
+    {
+      printf -- '---\n'
+      printf 'description: Worker Operating Policy — forward progress + command budgets (auto-generated from scripts/local-dev/lib/vacilando/worker-operating-policy.md; do not edit here)\n'
+      printf 'alwaysApply: true\n'
+      printf -- '---\n\n'
+      cat "$policy_file"
+    } >"$cursor_rule"
+  fi
+
+  # Ignore instructions file + generated local settings/rules in git (same pattern as .env.local.agent).
+  local git_dir common_dir exclude_file ignore_entry
   git_dir="$(alloy_git "$path" rev-parse --git-dir)"
   common_dir="$(alloy_git "$path" rev-parse --git-common-dir)"
   mkdir -p "${git_dir}/info" "${common_dir}/info"
   for exclude_file in "${git_dir}/info/exclude" "${common_dir}/info/exclude"; do
-    if ! grep -Fq '.alloy-agent-instructions.md' "$exclude_file" 2>/dev/null; then
-      printf '%s\n' '.alloy-agent-instructions.md' >>"$exclude_file"
-    fi
+    for ignore_entry in '.alloy-agent-instructions.md' '.claude/settings.local.json' '.cursor/rules/worker-operating-policy.mdc'; do
+      if ! grep -Fq "$ignore_entry" "$exclude_file" 2>/dev/null; then
+        printf '%s\n' "$ignore_entry" >>"$exclude_file"
+      fi
+    done
   done
 
   printf '%s\n' "$out_wt"

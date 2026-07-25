@@ -43,7 +43,15 @@ export const COMMAND_CLASSES = {
   default:            { expected_ms: 30 * S, soft_ms: 2 * M, hard_ms: 6 * M, progress: "new output", fallback: "a narrower command", escalation: "diagnose the stall" },
 };
 
-export function budgetFor(cls) { return COMMAND_CLASSES[cls] || COMMAND_CLASSES.default; }
+// Class-name aliases. The policy prose writes classes hyphenated ("targeted-test",
+// "full-suite"); the keys are underscored. A worker types the name it read, so resolve
+// tolerantly — otherwise the advertised per-class budget silently degrades to default.
+const CLASS_ALIASES = { full_suite: "full_test_suite", test: "targeted_test", tests: "targeted_test", dev_server: "dev_server_start", devserver: "dev_server_start", browser: "browser_validation", install: "dep_install" };
+export function budgetFor(cls) {
+  if (COMMAND_CLASSES[cls]) return COMMAND_CLASSES[cls];
+  const norm = String(cls || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return COMMAND_CLASSES[norm] || COMMAND_CLASSES[CLASS_ALIASES[norm]] || COMMAND_CLASSES.default;
+}
 
 /**
  * Classify a command's live state from evidence — never from a PID or elapsed time
@@ -96,6 +104,103 @@ export function turnEndViolation(endState) {
   if (isValidTurnEnd(s)) return null;
   const known = FORBIDDEN_TURN_ENDS.has(s);
   return { ok: false, endState: s, known, message: `"${endState}" is not a valid turn end. A worker owns forward progress: end only on complete / needs_operator / blocked / failed / paused — never because a command is still running.` };
+}
+
+// ---- Natural-language turn-end guard (the direct-worker seam) ----------------
+// The turn-end *validator* above takes an explicit state; a directly-opened Claude
+// never emits one — it just writes a final message. These recognize the FORBIDDEN
+// turn-ends in prose so a Stop-hook guard can refuse the false terminal state. Same
+// vocabulary as FORBIDDEN_TURN_ENDS, applied to natural language.
+
+/** Prose that means "I'm handing background monitoring back to you." */
+const PASSIVE_WAIT_PATTERNS = [
+  /\bstill\s+running\b/i,
+  /\b(currently|still)\s+(monitoring|watching|waiting)\b/i,
+  /\bi'?ll\s+(let\s+you\s+know|notify\s+you|update\s+you|report\s+back|check\s+(back|again|on\s+it))\b/i,
+  /\bkeep(ing)?\s+(you\s+)?(posted|updated)\b/i,
+  /\bno\s+errors\s+so\s+far\b/i,
+  /\bwaiting\s+(for|on)\s+(the\s+)?(typecheck|tests?|build|server|command|it|migration)\b/i,
+  /\b(once|when|after)\s+it\s+(finishes|completes|is\s+done)\b[^.!?]*\bi'?ll\b/i,
+  /\b(it'?s|its|command\s+is|test[s]?\s+(are|is)|build\s+is)\s+(still\s+)?(grinding|chugging|churning|going)\b/i,
+  /\blet\s+it\s+(run|finish|cook|keep\s+going)\b/i,
+  /\brunning\s+in\s+the\s+background\b[^.!?]*\b(finish|complete|done|notify|let\s+you|when)\b/i,
+  /\bstatus\s+unchanged\b/i,
+];
+/** Evidence the worker actually resolved (took action / diagnosed / hit a real terminal). Suppresses a false positive. */
+const RESOLUTION_SIGNALS = [
+  /\b(terminated|killed|sigterm|sigkill|aborted)\b/i,
+  /\bdiagnos(ed|is|ing)\b/i,
+  /\b(isolat(ed|ing)|narrowed|bisect(ed|ing))\b/i,
+  /\bblocked\s+on\b/i,
+  /\bneeds?\s+(your|operator|an?\s)/i,
+  /\b(the\s+\w+\s+)?failed\b/i,
+  /\b(it|the\s+\w+|suite|run|typecheck|build|tests?)\s+(completed|passed|finished\s+(in|with)|is\s+green)\b/i,
+  /\bi\s+(ran|reran|replaced|switched|verified|terminated|isolated|narrowed)\b/i,
+  /\bcorrective\s+action\b/i,
+];
+
+/**
+ * Does a worker's END-OF-TURN message hand passive monitoring back to the operator?
+ * Conservative: a message that also shows resolution (diagnosis / corrective action /
+ * a concrete blocker / actual completion) is NOT flagged, to avoid false positives.
+ */
+/** Strip quoted spans so a worker *quoting/discussing* the policy ("still running") isn't
+ *  mistaken for a live status report. Detection runs on the de-quoted prose. */
+function stripQuotedSpans(s) {
+  return String(s)
+    .replace(/`[^`]*`/g, " ")       // inline code / backticks
+    .replace(/"[^"]*"/g, " ")       // straight double quotes
+    .replace(/[“][^”]*[”]/g, " ") // curly double quotes
+    .replace(/'[^']*'/g, " ");      // straight single quotes
+}
+
+export function classifyPassiveWaitEnding(text) {
+  const s = String(text || "");
+  if (!s.trim()) return { passive: false, matched: null, softened_by_resolution: false };
+  const prose = stripQuotedSpans(s);           // ignore quoted mentions of the forbidden phrasing
+  const hit = PASSIVE_WAIT_PATTERNS.find((re) => re.test(prose));
+  if (!hit) return { passive: false, matched: null, softened_by_resolution: false };
+  const resolved = RESOLUTION_SIGNALS.some((re) => re.test(s));
+  return { passive: !resolved, matched: resolved ? null : (prose.match(hit)?.[0]?.trim() || null), softened_by_resolution: resolved };
+}
+
+/**
+ * The Stop-hook decision. Given the worker's last message and whether a Stop guard is
+ * already active (Claude Code's `stop_hook_active` — the infinite-loop backstop), decide
+ * whether to BLOCK the turn-end and force forward progress. Fires at most once per stuck
+ * turn: if the guard is already active we allow the stop, so it corrects rather than loops.
+ */
+export function buildStopDecision({ lastAssistantText = "", stopHookActive = false } = {}) {
+  if (stopHookActive) return { block: false, reason: null, note: "guard already active — allowing stop to avoid a loop" };
+  const c = classifyPassiveWaitEnding(lastAssistantText);
+  if (!c.passive) return { block: false, reason: null };
+  return {
+    block: true,
+    matched: c.matched,
+    reason:
+      `Worker Operating Policy: "still running" is not a valid state to end a turn on` +
+      (c.matched ? ` (detected: "${c.matched}")` : "") +
+      `. You own forward progress. Do not hand background monitoring back to the operator. ` +
+      `Establish whether the command is actually progressing (new output) or stalled; at the soft budget diagnose, at the hard budget take bounded corrective action ` +
+      `(terminate/narrow/replace, or run it through \`node scripts/local-dev/lib/vacilando/command-budget.mjs run <class> -- <command>\`, which never returns "still running"). ` +
+      `End this turn only in a valid terminal state: complete, needs_operator, blocked, or failed.`,
+  };
+}
+
+/**
+ * Build the SessionStart `additionalContext` that auto-delivers a managed slot's
+ * instructions (which include the Worker Operating Policy) to a freshly-opened worker.
+ * Returns null when there is nothing to deliver (so the hook stays silent).
+ */
+export function buildSessionStartContext(instructionsText) {
+  const c = String(instructionsText || "").trim();
+  if (!c) return null;
+  return (
+    "# Managed-slot operating instructions (auto-delivered at session start)\n\n" +
+    "These are YOUR operating instructions for this Vacilando-managed slot — they govern how you work, " +
+    "including the Worker Operating Policy on long-running commands. Read and follow them.\n\n" +
+    c
+  );
 }
 
 /**
@@ -157,14 +262,58 @@ export function runGoverned({ command, args = [], cls = "default", cwd = null, b
   });
 }
 
-// ---- CLI: `node command-budget.mjs run <class> -- <command...>` --------------
-// A worker runs long commands through this instead of polling by hand.
+/** Last assistant text message in a Claude Code transcript JSONL (for the Stop guard). */
+function lastAssistantTextFromTranscript(transcriptPath) {
+  let raw;
+  try { raw = readFileSync(transcriptPath, "utf8"); } catch { return ""; }
+  const lines = raw.split("\n").filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let ev; try { ev = JSON.parse(lines[i]); } catch { continue; }
+    const msg = ev && (ev.message || ev);
+    if (!msg || msg.role !== "assistant") continue;
+    const content = msg.content;
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      const text = content.filter((p) => p && p.type === "text").map((p) => p.text).join("\n").trim();
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
+// ---- CLI ---------------------------------------------------------------------
+// `run <class> -- <cmd...>`  — governed runner (hard seam; never returns "still running")
+// `policy`                   — print the canonical Worker Operating Policy
+// `session-start <file>`     — SessionStart hook: auto-deliver slot instructions (incl. policy)
+// `stop-guard`               — Stop hook: refuse a passive-wait turn-end (reads hook JSON on stdin)
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
   const [sub, cls, sep, ...rest] = process.argv.slice(2);
   if (sub === "policy") { process.stdout.write(WORKER_POLICY + "\n"); process.exit(0); }
+
+  if (sub === "session-start") {
+    // Emit the slot instructions as SessionStart additionalContext. Silent (exit 0) if absent.
+    const file = cls || process.env.ALLOY_AGENT_INSTRUCTIONS_FILE || "";
+    let text = ""; try { text = readFileSync(file, "utf8"); } catch { process.exit(0); }
+    const ctx = buildSessionStartContext(text);
+    if (!ctx) process.exit(0);
+    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: ctx } }));
+    process.exit(0);
+  }
+
+  if (sub === "stop-guard") {
+    // Read Claude Code's Stop hook payload on stdin; block a passive-wait turn-end.
+    let input = ""; try { input = readFileSync(0, "utf8"); } catch {}
+    let payload = {}; try { payload = JSON.parse(input || "{}"); } catch {}
+    const text = payload.transcript_path ? lastAssistantTextFromTranscript(payload.transcript_path) : "";
+    const decision = buildStopDecision({ lastAssistantText: text, stopHookActive: !!payload.stop_hook_active });
+    if (decision.block) process.stdout.write(JSON.stringify({ decision: "block", reason: decision.reason }));
+    // else: emit nothing → allow the stop.
+    process.exit(0);
+  }
+
   if (sub !== "run" || sep !== "--" || rest.length === 0) {
-    process.stderr.write("usage: command-budget.mjs run <class> -- <command...>   |   command-budget.mjs policy\n");
+    process.stderr.write("usage: command-budget.mjs run <class> -- <command...>   |   policy   |   session-start <file>   |   stop-guard\n");
     process.stderr.write("classes: " + Object.keys(COMMAND_CLASSES).join(", ") + "\n");
     process.exit(2);
   }

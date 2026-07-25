@@ -25,7 +25,7 @@ const { checkStartPreconditions, serializePackagePrompt, parseOutcome } = await 
 const { composeCounsel, selectFrontier, attemptCounsel, readinessCounsel, frontierPhrase } = await import("../lib/vacilando/counsel.mjs");
 const { assembleConversation } = await import("../lib/vacilando/conversation.mjs");
 const { composeUnderstanding } = await import("../lib/vacilando/shared-understanding.mjs");
-const { classifyCommandState, assessCommand, budgetFor, isValidTurnEnd, turnEndViolation, runGoverned, VALID_TURN_ENDS, WORKER_POLICY, COMMAND_CLASSES } = await import("../lib/vacilando/command-budget.mjs");
+const { classifyCommandState, assessCommand, budgetFor, isValidTurnEnd, turnEndViolation, runGoverned, VALID_TURN_ENDS, WORKER_POLICY, COMMAND_CLASSES, classifyPassiveWaitEnding, buildStopDecision, buildSessionStartContext } = await import("../lib/vacilando/command-budget.mjs");
 const { composeOperations, stateKeyFor, assembleReview, STATES, conversationStage, understandingQuestions } = await import("../lib/vacilando/operations.mjs");
 const { close: directorCloseFn } = await import("../lib/vacilando/mission-director.mjs");
 
@@ -1057,4 +1057,114 @@ test("policy is one canonical text carrying the load-bearing rules", () => {
   assert.match(WORKER_POLICY, /soft/i);
   assert.match(WORKER_POLICY, /hard/i);
   assert.ok(Object.keys(COMMAND_CLASSES).includes("typecheck") && Object.keys(COMMAND_CLASSES).includes("full_test_suite"));
+});
+
+// ============================================================================
+// Direct-worker DELIVERY + turn-end GUARD. A directly-opened Claude loads CLAUDE.md
+// but NOT .alloy-agent-instructions.md, so the policy was never delivered to it (a
+// file on disk is not consumption). SessionStart delivers it; a Stop-hook guard
+// refuses a turn that ends on "still running". Both are thin wrappers over these
+// tested pure functions. Semantic rules — not brittle provider-prose snapshots.
+// ============================================================================
+
+test("passive-wait ending: forbidden phrasing is flagged; resolution + quoting are not", () => {
+  // The exact failure mode: a worker hands background monitoring back to the operator.
+  assert.ok(classifyPassiveWaitEnding("The build is still running; I'll check back later.").passive);
+  assert.ok(classifyPassiveWaitEnding("No errors so far — I'll keep you posted.").passive);
+  assert.ok(classifyPassiveWaitEnding("Waiting for the typecheck to finish.").passive);
+  // Resolution (diagnosis / corrective action / a concrete blocker) suppresses a false positive.
+  assert.equal(classifyPassiveWaitEnding("The suite ran long so I terminated it, isolated the slow suite, and the targeted run completed green.").passive, false);
+  assert.equal(classifyPassiveWaitEnding("It's still running but blocked on a missing DB credential — needs your input.").passive, false);
+  // A quoted / meta mention of the phrase is discussion, not a live report.
+  assert.equal(classifyPassiveWaitEnding('The rule is: "Still running" is not a valid state to end a turn on. Nothing is running here.').passive, false);
+  // Clean terminal / a real question / empty → not flagged.
+  assert.equal(classifyPassiveWaitEnding("Typecheck completed with no errors. Complete.").passive, false);
+  assert.equal(classifyPassiveWaitEnding("Which environment should I target for the migration?").passive, false);
+  assert.equal(classifyPassiveWaitEnding("").passive, false);
+});
+
+test("stop-guard decision: blocks a passive turn-end, points at the governed runner, never loops", () => {
+  const blocked = buildStopDecision({ lastAssistantText: "The typecheck is still running; I'll notify you when it finishes.", stopHookActive: false });
+  assert.equal(blocked.block, true);
+  assert.match(blocked.reason, /forward progress|still running/i);
+  assert.match(blocked.reason, /command-budget\.mjs run/);                 // steers to the governed runner
+  assert.match(blocked.reason, /complete|needs_operator|blocked|failed/);  // names the valid terminal states
+  // A resolved ending is allowed through.
+  assert.equal(buildStopDecision({ lastAssistantText: "Terminated the stalled build and isolated the failure; blocked on X — needs your input.", stopHookActive: false }).block, false);
+  // Loop backstop: once the guard is already active, allow the stop regardless (fires at most once per stuck turn).
+  assert.equal(buildStopDecision({ lastAssistantText: "still running", stopHookActive: true }).block, false);
+});
+
+test("session-start delivery: slot instructions become SessionStart additionalContext", () => {
+  assert.equal(buildSessionStartContext("   "), null);                     // nothing to deliver → the hook stays silent
+  const ctx = buildSessionStartContext("# Alloy agent instructions\nWorker Operating Policy: own forward progress.");
+  assert.match(ctx, /Managed-slot operating instructions/);               // framed as the worker's own operating rules
+  assert.match(ctx, /Worker Operating Policy/);                            // carries the delivered content
+});
+
+test("CLI seams: session-start emits additionalContext; stop-guard blocks a passive transcript, allows a resolved one", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const cbPath = new URL("../lib/vacilando/command-budget.mjs", import.meta.url).pathname;
+  const dir = mkdtempSync(join(os.tmpdir(), "cb-cli-"));
+
+  // session-start over a temp instructions file → valid SessionStart hook JSON.
+  const instr = join(dir, "instr.md");
+  writeFileSync(instr, "# Slot\n\nWorker Operating Policy: \"still running\" is not a valid turn end.");
+  const ss = JSON.parse(execFileSync("node", [cbPath, "session-start", instr], { encoding: "utf8" }));
+  assert.equal(ss.hookSpecificOutput.hookEventName, "SessionStart");
+  assert.match(ss.hookSpecificOutput.additionalContext, /Worker Operating Policy/);
+  // missing file → silent (empty stdout), exit 0.
+  assert.equal(execFileSync("node", [cbPath, "session-start", join(dir, "nope.md")], { encoding: "utf8" }).trim(), "");
+
+  // stop-guard over a PASSIVE transcript → block decision.
+  const tr = join(dir, "t.jsonl");
+  const asst = (text) => JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text }] } }) + "\n";
+  writeFileSync(tr, asst("The tests are still running; I'll report back when they finish."));
+  const sg = execFileSync("node", [cbPath, "stop-guard"], { input: JSON.stringify({ transcript_path: tr, stop_hook_active: false }), encoding: "utf8" });
+  assert.match(sg, /"decision":"block"/);
+  // RESOLVED transcript → allow (empty stdout).
+  writeFileSync(tr, asst("Terminated the stall at the hard budget, isolated it; blocked on a credential — needs your input."));
+  const sg2 = execFileSync("node", [cbPath, "stop-guard"], { input: JSON.stringify({ transcript_path: tr, stop_hook_active: false }), encoding: "utf8" });
+  assert.equal(sg2.trim(), "");
+});
+
+test("budget class names resolve tolerantly (policy prose is hyphenated; keys are underscored)", () => {
+  // The exact gotcha a real worker hit: it typed the class as the policy writes it.
+  assert.equal(budgetFor("targeted-test"), budgetFor("targeted_test"));   // hyphen → underscore
+  assert.equal(budgetFor("full-suite"), budgetFor("full_test_suite"));    // prose alias → real class
+  assert.equal(budgetFor("dev-server-start"), budgetFor("dev_server_start"));
+  assert.equal(budgetFor("browser-validation"), budgetFor("browser_validation"));
+  // A resolved class must NOT be the default fallback (which is the silent-degradation bug).
+  assert.notEqual(budgetFor("targeted-test").soft_ms, budgetFor("default").soft_ms);
+  // A genuinely unknown class still falls back to default.
+  assert.equal(budgetFor("nonsense-class"), budgetFor("default"));
+});
+
+test("governed runner (Case A — long but progressing): past the soft budget, still completes — not killed", async () => {
+  // Emits output steadily so lastProgressAt keeps advancing; soft is tiny, hard generous.
+  // "Slow but progressing" must NOT be killed just for being slow.
+  const r = await runGoverned({
+    command: "node",
+    args: ["-e", "let n=0;const t=setInterval(()=>{process.stdout.write('tick'+(++n)+'\\n');if(n>=6){clearInterval(t)}},40)"],
+    budget: { soft_ms: 60, hard_ms: 5000, fallback: "run the targeted suite", escalation: "isolate" },
+  });
+  assert.equal(r.state, "complete");
+  assert.ok(!r.killed_at_hard, "a progressing command must not be terminated");
+  assert.ok(r.soft_exceeded, "it ran past its soft budget — proving slow-but-progressing is allowed to finish");
+  assert.match(r.output, /tick6/);
+});
+
+test("governed runner (Case B — stalled): terminated with a corrective directive, state never 'running'", async () => {
+  // Alive but producing no output past its budget → hard-killed, returned as a diagnosed
+  // stall with a corrective directive. The turn can never end on "running".
+  const r = await runGoverned({
+    command: "node",
+    args: ["-e", "setInterval(()=>{},1000)"],
+    budget: { soft_ms: 40, hard_ms: 150, fallback: "run the targeted suite", escalation: "isolate" },
+  });
+  assert.equal(r.killed_at_hard, true);
+  assert.equal(r.state, "stalled");
+  assert.equal(r.directive, "corrective_action");
+  assert.match(r.summary, /terminated|hard budget/i);
+  assert.equal(isValidTurnEnd(r.state), false, "'stalled' is not a valid turn end — it demands corrective action");
 });
