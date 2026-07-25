@@ -78,7 +78,7 @@ function mapAssignment(input: AssignmentInput): Assignment {
     const openEnded = !row.end_date;
     return {
         id: row.id,
-        childId: row.customer_member_id,
+        childId: row.customer_member_id!,
         room,
         weekdays,
         arriveTime: null,
@@ -497,6 +497,8 @@ export async function loadSchedulingProjectionForChild(
     const assignments: AssignmentInput[] = [];
     for (const row of assignmentRows) {
         const pattern = patterns.get(row.schedule_pattern_id) ?? null;
+        // Agreement-scoped rows are child assignments; the migration makes the
+        // column nullable only for staff rows, which never enter this loader.
         const placement = placementForAssignment(placements, row);
         const room: AssignmentRoom = {
             id: placement?.room_location_id ?? null,

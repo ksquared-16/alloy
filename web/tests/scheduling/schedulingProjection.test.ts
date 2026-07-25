@@ -32,9 +32,16 @@ function assignmentRow(
 ): ScheduleAssignmentRow {
     return {
         org_id: "org-1",
+        subject_type: "child",
         enrollment_agreement_id: "agr-1",
         schedule_pattern_id: "pat-1",
         customer_member_id: CHILD_ID,
+        subject_person_id: null,
+        site_location_id: "site-1",
+        room_location_id: null,
+        program_category_id: null,
+        operational_assignment_type_id: null,
+        is_primary: true,
         end_date: null,
         assignment_kind: "base",
         source_key: "operator",

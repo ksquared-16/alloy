@@ -68,9 +68,20 @@ export type SchedulePatternRow = {
 export type ScheduleAssignmentRow = {
     id: string;
     org_id: string;
-    enrollment_agreement_id: string;
+    /**
+     * Compatibility table name; a row is now a typed operational assignment.
+     * Child rows retain their enrollment agreement, while staff rows do not.
+     */
+    subject_type: "child" | "staff";
+    enrollment_agreement_id: string | null;
     schedule_pattern_id: string;
-    customer_member_id: string;
+    customer_member_id: string | null;
+    subject_person_id: string | null;
+    site_location_id: string | null;
+    room_location_id: string | null;
+    program_category_id: string | null;
+    operational_assignment_type_id: string | null;
+    is_primary: boolean;
     start_date: string;
     end_date: string | null;
     status: ScheduleAssignmentStatus;

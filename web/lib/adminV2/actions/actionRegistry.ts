@@ -18,6 +18,7 @@ import { updateStatusAction } from "@/lib/adminV2/actions/definitions/updateStat
 import { createLeadAction } from "@/lib/adminV2/actions/definitions/createLeadAction";
 import { confirmTourAction } from "@/lib/adminV2/actions/definitions/confirmTourAction";
 import { scheduleCreateAction } from "@/lib/adminV2/actions/definitions/scheduleCreateAction";
+import { assignmentSetPrimaryAction } from "@/lib/adminV2/actions/definitions/assignmentSetPrimaryAction";
 
 /** Actions with fully code-owned, executable handlers. */
 const REGISTERED_ACTION_LIST: RegisteredAction[] = [
@@ -25,6 +26,7 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     createLeadAction,
     confirmTourAction,
     scheduleCreateAction,
+    assignmentSetPrimaryAction,
 ];
 
 const REGISTERED_ACTIONS: Map<string, RegisteredAction> = new Map(
