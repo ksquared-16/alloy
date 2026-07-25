@@ -14,6 +14,7 @@ import { mintPacketPublicLinkForAdmin } from "@/lib/forms/packets/mintPacketPubl
 import { buildPacketComposerItems, type ComposerAnchor } from "@/lib/pos/packet/packetComposerPlan";
 import { buildFamilyPacketInstancePlan } from "@/lib/pos/packet/familyPacketPlan";
 import { resolveAnchorContext } from "@/lib/pos/packet/posPacketRoster";
+import { parseRequirementResponsibilityRules, REQUIREMENT_RESPONSIBILITIES_KEY } from "@/lib/pos/packet/requirementResponsibility";
 import { isLaunchEntityType, type LaunchEntityType } from "@/lib/pos/packet/launchFromEntity";
 import { randomUUID } from "crypto";
 
@@ -90,6 +91,13 @@ export async function POST(request: NextRequest) {
         if (!UUID_RE.test(it.form_definition_id)) return jsonError(`Invalid form_definition_id: ${it.form_definition_id}`, 400);
     }
 
+    // Requirement-responsibility rules (operator-configured), validated + kept only for the selected
+    // forms. Stored on the packet definition metadata; the projection seam reads them back.
+    const selectedFormIdSet = new Set(itemsPlan.items.map((i) => i.form_definition_id));
+    const responsibilityRules = parseRequirementResponsibilityRules({
+        [REQUIREMENT_RESPONSIBILITIES_KEY]: Array.isArray(body.requirement_responsibilities) ? body.requirement_responsibilities : [],
+    }).filter((r) => selectedFormIdSet.has(r.ref.form_definition_id));
+
     const childIds = Array.isArray(body.child_ids) ? body.child_ids.filter((x): x is string => typeof x === "string" && UUID_RE.test(x)) : [];
     const recipientIds = Array.isArray(body.recipient_ids) ? body.recipient_ids.filter((x): x is string => typeof x === "string" && UUID_RE.test(x)) : [];
 
@@ -136,7 +144,12 @@ export async function POST(request: NextRequest) {
                 // pos_connected marks this packet so completing it opens a Processing Case (the
                 // packet→Processing on-ramp gates on isPosConnectedSurface). Composer packets must
                 // reach Processing; without this marker the journey dead-ends at completion.
-                metadata: { created_via: "pos_packet_compose", form_count: itemsPlan.items.length, pos_connected: true },
+                metadata: {
+                    created_via: "pos_packet_compose",
+                    form_count: itemsPlan.items.length,
+                    pos_connected: true,
+                    [REQUIREMENT_RESPONSIBILITIES_KEY]: responsibilityRules,
+                },
             })
             .select("id")
             .single();
