@@ -190,7 +190,10 @@ export default function PosTemplateSetupColumn({
     const primary = detail?.sources.find((s) => s.role === "primary") ?? detail?.sources[0] ?? null;
     const docId = draft?.source_document_id ?? (primary?.kind === "document" ? (primary?.id ?? null) : null);
     const processingIntent = detail?.processingIntent ?? null;
-    const sourceFilenameEarly = primary?.display.label ?? draft?.title ?? "Untitled document";
+    // Format/capability detection MUST use the raw filename (with extension) — the display `label`
+    // (e.g. "Upload 1784… — 07/24/2026") drops the extension and would misresolve to an unsupported
+    // format, wrongly gating out "generate form" for a perfectly valid PDF.
+    const sourceFilenameEarly = primary?.display.originalFilename ?? primary?.display.label ?? draft?.title ?? "Untitled document";
     const sourceFormat = detectProcessingSourceFormat(sourceFilenameEarly, "");
     const sourceCapabilities = capabilitiesForFormat(sourceFormat);
     const shouldAutoDetect = processingIntent === "generate_form" && sourceCapabilities.questionDetection;

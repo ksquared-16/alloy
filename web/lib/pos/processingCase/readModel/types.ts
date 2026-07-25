@@ -34,6 +34,12 @@ export interface SourceDisplayDescriptor {
     kind: ProcessingCaseSourceKind;
     id: string;
     label: string;
+    /**
+     * Raw source filename when known (documents) — carries the file extension the human display `label`
+     * drops. Format/capability detection must use this, NOT `label` (a display name like
+     * "Upload 1784… — 07/24/2026" has no extension and misresolves the source format).
+     */
+    originalFilename?: string | null;
     receivedAt: string | null;
     channel: string | null;
     resolved: boolean;
@@ -156,6 +162,8 @@ export interface ProcessingCaseReadDeps {
 /** A batched resolver for one source kind: given ids, returns id -> label (one call per kind = no N+1). */
 export interface ResolvedSourceLabel {
     label: string;
+    /** Raw filename with extension (documents) — for format detection; display `label` drops it. */
+    originalFilename?: string | null;
     receivedAt: string | null;
     channel: string | null;
 }

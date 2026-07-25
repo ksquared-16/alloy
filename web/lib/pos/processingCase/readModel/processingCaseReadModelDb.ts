@@ -252,6 +252,7 @@ function makeDocumentResolver(supabase: SupabaseClient, orgId: string): BatchedS
         }[]) {
             out.set(d.id, {
                 label: deriveDocumentDisplayName(d.title, d.original_filename),
+                originalFilename: d.original_filename,
                 receivedAt: d.created_at,
                 channel: "document",
             });

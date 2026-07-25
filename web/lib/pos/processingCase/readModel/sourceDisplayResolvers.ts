@@ -64,7 +64,7 @@ export async function resolveSourceDescriptors(
             out.set(
                 descriptorKey(kind, ref.id),
                 label
-                    ? { kind, id: ref.id, label: label.label, receivedAt: label.receivedAt, channel: label.channel, resolved: true }
+                    ? { kind, id: ref.id, label: label.label, originalFilename: label.originalFilename ?? null, receivedAt: label.receivedAt, channel: label.channel, resolved: true }
                     : genericFallbackDescriptor(ref)
             );
         }
