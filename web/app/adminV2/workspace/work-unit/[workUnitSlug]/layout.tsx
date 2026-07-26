@@ -2,7 +2,6 @@ import WorkUnitSlugRouteHost from "@/components/admin/workspace/WorkUnitSlugRout
 import ProvisioningAnswerSeed from "@/components/admin/workspace/ProvisioningAnswerSeed";
 import { loadWorkUnitSlugRouteMetaServer } from "@/lib/admin/loadWorkUnitSlugRouteServer";
 import { composeProvisioningAnswerForRoute } from "@/lib/runtime/provisioning/composeProvisioningAnswerForRoute";
-import { provisioningAnswerUrl } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
 
 type LayoutProps = {
     children: React.ReactNode;
@@ -35,11 +34,10 @@ type LayoutProps = {
 export default async function OperatorWorkUnitSlugLayout({ params }: LayoutProps) {
     const { workUnitSlug } = await params;
 
-    // Seed key MUST equal what K2 builds — `provisioningAnswerUrl(RAW slug, lens, subject)` — for the bare
-    // direct-load AttentionRef (no lens/subject). See the seed-contract unit tests for the parity guarantee.
-    const seedUrl = provisioningAnswerUrl(workUnitSlug, null, null);
     // Compose concurrently with route-meta; hand the seed only an operational/empty terminal (an `error`
-    // or gate-failure resolves to null → K2 falls back to its live fetch).
+    // or gate-failure resolves to null → K2 falls back to its live fetch). The seed takes the ROUTE
+    // IDENTITY (bare direct-load: no lens/subject) — the KERNEL derives K2's cache key (RA-1), so this
+    // layer never touches the key scheme.
     const answerP = composeProvisioningAnswerForRoute({
         rawSlug: workUnitSlug,
         requestedWorkViewId: null,
@@ -56,7 +54,7 @@ export default async function OperatorWorkUnitSlugLayout({ params }: LayoutProps
     return (
         <>
             <WorkUnitSlugRouteHost workUnitSlug={workUnitSlug} initialRouteMeta={initialRouteMeta} />
-            <ProvisioningAnswerSeed seedUrl={seedUrl} answer={answer} />
+            <ProvisioningAnswerSeed target={workUnitSlug} answer={answer} />
         </>
     );
 }

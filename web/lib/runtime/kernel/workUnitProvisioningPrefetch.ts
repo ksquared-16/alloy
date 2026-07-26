@@ -109,6 +109,26 @@ export function seedProvisioning(
     logCurrentWorkInit("provisioning.seed", { cacheKey: url, cache: "seed", preloadSource: "seed", note: "server-composed answer seeded" });
 }
 
+/** A route's attention identity — the coordinates the kernel keys its cache on. */
+export type ProvisioningRouteIdentity = { target: string; lens?: string | null; subject?: string | null };
+
+/**
+ * THE CANONICAL SERVER→KERNEL PRELOAD SEAM for the provisioning cache (RA-1).
+ *
+ * Callers (the RSC route layout / `ProvisioningAnswerSeed`) hand the kernel a ROUTE IDENTITY + the
+ * server-composed answer; the kernel derives K2's cache key itself (`provisioningAnswerUrl`). No other
+ * layer needs to know — or can drift from — the key scheme. Key parity with K2's consume is therefore an
+ * in-kernel invariant (both go through `provisioningAnswerUrl`), guarded by the seed-contract unit test.
+ */
+export function seedProvisioningForRoute(
+    route: ProvisioningRouteIdentity,
+    answer: ProvisioningAnswer | null,
+    now: number = Date.now(),
+): void {
+    if (!route.target) return;
+    seedProvisioning(provisioningAnswerUrl(route.target, route.lens ?? null, route.subject ?? null), answer, now);
+}
+
 export type ProvisioningFetchResult =
     | { ok: true; answer: ProvisioningAnswer }
     | { ok: false; status: number };

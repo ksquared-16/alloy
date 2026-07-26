@@ -5,6 +5,7 @@ import {
     prefetchWorkUnitProvisioningFromHref,
     consumeFreshProvisioning,
     seedProvisioning,
+    seedProvisioningForRoute,
     clearProvisioningPrefetchForTests,
     PREFETCH_TTL_MS,
 } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
@@ -124,6 +125,18 @@ describe("seedProvisioning (Runtime V1 Realization seed contract)", () => {
         const warm = consumeFreshProvisioning(k2Key, 1100);
         expect(warm).not.toBeNull();
         expect((await warm!) as any).toMatchObject({ terminal: "operational", __tag: "seeded" });
+    });
+
+    it("ROUTE SEAM (RA-1): seedProvisioningForRoute derives K2's exact key from the route identity", async () => {
+        (globalThis as any).window = { location: { origin: "https://alloy.local" } };
+        // The layer passes ONLY the route identity; the kernel derives the key. K2 (bare ref) consumes it.
+        seedProvisioningForRoute({ target: "new-leads" }, answer("operational", "route-seeded"), 1000);
+        const warm = consumeFreshProvisioning(provisioningAnswerUrl("new-leads"), 1100);
+        expect(warm).not.toBeNull();
+        expect((await warm!) as any).toMatchObject({ __tag: "route-seeded" });
+        // lens/subject flow through to the same key K2 would build for a scoped ref.
+        seedProvisioningForRoute({ target: "new-leads", lens: "v1", subject: "s1" }, answer("operational", "scoped"), 1000);
+        expect(consumeFreshProvisioning(provisioningAnswerUrl("new-leads", "v1", "s1"), 1100)).not.toBeNull();
     });
 
     it("KEY MISMATCH: a bare seed is NOT consumed by a subject-scoped fetch (falls open, no wrong record)", () => {
