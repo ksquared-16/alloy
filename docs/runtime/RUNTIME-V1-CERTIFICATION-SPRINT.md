@@ -97,7 +97,19 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | CP-3 Gate prewarm storm | Critical Path | Low | — | ✓ | READY (low value — see note) |
 | TE-6 Perf regression assertions | Testing | Medium | PE-2 | ✗ | blocked |
 
-**→ Next task selected by the queue: `RA-1` (High, READY)** — the canonical kernel preload contract; it unblocks both `CP-1` (the biggest perceived-perf lever) and `RA-2` (legacy-drawer duality), and pays down the seed-coupling debt. Co-highest-priority READY siblings: `CP-4`, `DG-1`, `TE-2`. **NOTE:** RA-1/CP-4/DG-1 each require the build+browser-cert loop, which is currently throttled by host memory (§6a) — batch when the host has headroom. Light READY tasks available now under throttle: `TE-4` (schema contract test, unit-only), `TS-1` (TS wins), `CQ-3` (rename). _(CP-3 stays Low: a prior storm-gating attempt was reverted for touching the reveal lifecycle without moving wall-clock; revisit after CP-1.)_
+**→ RESUME HERE — Next task selected by the queue: `RA-2` (High, READY — scoped & de-risked).** Execute the
+recorded RA-2 plan: (a) delete the DEAD `useWorkUnitSurfaceController` + `resolveDeepLinkRecordAction` +
+path deep-link/url-sync machinery (0 callers — verified); (b) make `operatorWorkUnitHrefFromKey` /
+`resolveCreatedLeadFocusPanelHref` emit `?subject_id=` (not `/recordId`) so create-lead selects the created
+record; (c) retire the `[recordId]` route + update `operatorWorkUnitLegacyGuards.test.ts` to the query form.
+Cert: create-lead selects the record via `?subject_id`; `zz-realization-urlcontract` asserts query-canonical.
+Once RA-2 + `CP-4` land, `CP-1` (server-seed the enriched VM — the biggest perceived-perf lever) unblocks.
+
+Co-highest-priority READY siblings if RA-2 is deferred: `DG-1`, `CP-4`, `TE-2`. **NOTE:** RA-2/CP-4/DG-1
+each require the build+browser-cert loop, throttled by host memory (§6a) — batch when the host has headroom.
+Light READY tasks available under throttle: `TE-4` (schema contract, unit-only), `TS-1` (TS wins), `CQ-3`
+(rename). _(CP-3 stays Low: a prior storm-gating attempt was reverted for touching the reveal lifecycle
+without moving wall-clock; revisit after CP-1.)_
 
 ## 1d. Milestones
 
