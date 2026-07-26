@@ -17,7 +17,7 @@
 
 | Category | Current | Target | Trend | Completion % | Confidence % | Tasks Done / Total | Milestone |
 |---|:--:|:--:|:--:|--:|--:|:--:|:--:|
-| Runtime Architecture | C+ | A- | → | 15% | 70% | 0 / 3 | M1 |
+| Runtime Architecture | B (was C+) | A- | ↑ | 40% | 80% | 1 / 3 | M1 |
 | Critical Path | B (was B-) | A- | ↑ | 40% | 80% | 2 / 5 | M2 |
 | TypeScript Architecture | C+ (was C) | B+ (A later) | ↑ | 50% | 75% | 2 / 3 | M3 |
 | Dependency Graph | B | A- | ↑ | 40% | 70% | 2 / 5 | M1 |
@@ -31,7 +31,7 @@
 **Confidence %** = how confident a fresh architecture review would re-assign this grade, given the committed
 evidence (tests / cert / measurements / review). It rises only with evidence and drops when new findings surface.
 
-**Overall initiative completion (weighted, coarse): ~41%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade.
+**Overall initiative completion (weighted, coarse): ~44%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade.
 
 Task status legend: **NS** Not Started · **IP** In Progress · **BL** Blocked · **NV** Needs Validation · **DONE** Completed.
 
@@ -64,6 +64,7 @@ A task is **COMPLETE only when every box is checked** (doc/test/arch boxes are N
 | D-008 | **TypeScript stays single-project for now**; project references are a *designed later* initiative (TS-2), not a premature restructure. | cold typecheck 156 s acceptable short-term |
 | D-009 | **Env-gated shadow / legacy-emergency-fallback modules are RETAINED** — legitimate kill-switches (default false), not dead code. | flag defaults verified |
 | D-010 | **No Runtime V2.** The A/B/C analysis proved no bucket-C ceiling; certify within V1. | classification 2026-07-26 |
+| D-011 | **The server preloads the kernel's cache through ONE kernel-owned seam** (`seedProvisioningForRoute`); no other layer references K2's key scheme (`provisioningAnswerUrl`). | RA-1; commit `3c0a9d6c1` |
 
 _Future sessions append decisions here with the next `D-0xx` id; never silently reverse a decision — supersede it with a new entry citing evidence._
 
@@ -75,7 +76,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 |---|---|:--:|---|:--:|:--:|
 | ~~CP-2 Remove duplicate stage-work fetch~~ | Critical Path | Critical | — | ✓ | **DONE** |
 | CP-4 Enriched-VM field reuse of provisioning data | Critical Path | High | — | ✓ | READY |
-| RA-1 Canonical kernel preload contract | Runtime Arch | High | — | ✓ | READY |
+| ~~RA-1 Canonical kernel preload seam~~ | Runtime Arch | High | — | ✓ | **DONE** |
 | DG-1 Conditional-mount+dynamic the 7 registry modals | Dependency Graph | High | — | ✓ | READY |
 | ~~MA-1 / DOC-1 `ARCHITECTURE.md`~~ | Maint / Docs | High | — | ✓ | **DONE** |
 | TE-2 Portable Playwright fixtures | Testing | High | — | ✓ | READY |
@@ -85,7 +86,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | SC-1 Generalize subject contract | Scalability | Medium | — | ✓ | READY |
 | CQ-3 Rename `resolveWorkUnitRouteIdentityCached` | Code Quality | Low | — | ✓ | READY |
 | CP-1 Server-seed enriched VM | Critical Path | **Critical** | RA-1, CP-4 | ✗ | blocked |
-| RA-2 Remove legacy-drawer duality | Runtime Arch | High | RA-1 | ✗ | blocked |
+| RA-2 Remove legacy-drawer duality | Runtime Arch | High | RA-1✓ | ✓ | **READY** |
 | CQ-2 Decompose `InlineOpportunityFocusPanel` | Code Quality | High | DG-1, DG-2 | ✗ | blocked |
 | TE-3 CI wiring | Testing | High | TE-2 | ✗ | blocked |
 | TE-5 Routing-permutation unit tests | Testing | Medium | RA-2 | ✗ | blocked |
@@ -105,13 +106,13 @@ higher-priority cross-milestone blocker exists (e.g. an M1 task that unblocks th
 
 | Milestone | Theme | Tasks | Done / Total | Status |
 |---|---|---|:--:|---|
-| **M1** | **Runtime Ownership** | RA-1, RA-2, RA-3, DG-1, DG-2, DG-3, DG-4✓, DG-5✓, CQ-1✓, CQ-2, CQ-3 | 4 / 11 | **ACTIVE** |
+| **M1** | **Runtime Ownership** | RA-1✓, RA-2, RA-3, DG-1, DG-2, DG-3, DG-4✓, DG-5✓, CQ-1✓, CQ-2, CQ-3 | 5 / 11 | **ACTIVE** |
 | M2 | Critical Path & Performance | CP-1, CP-2✓, CP-3, CP-4, CP-5✓, PE-1, PE-2, PE-3, PE-4✓, SC-1, SC-2 | 4 / 11 | in progress |
 | M3 | Developer Experience | TS-1, TS-2✓, TS-3✓, MA-1✓, MA-2, DOC-1✓, DOC-2, DOC-3 | 5 / 8 | in progress |
 | M4 | Certification & Regression | TE-1✓, TE-2, TE-3, TE-4, TE-5, TE-6, TE-7✓ | 2 / 7 | in progress |
 
 - **Current milestone:** **M1 Runtime Ownership** (fix ownership before optimizing the path; RA-1 also unblocks the M2 perf core).
-- **Milestone progress:** M1 4/11 · M2 4/11 · M3 5/8 · M4 2/7.
+- **Milestone progress:** M1 5/11 · M2 4/11 · M3 5/8 · M4 2/7.
 - **Milestones remaining to target:** all four still have open tasks; M3 is closest.
 - **Active-milestone next READY:** `RA-1` (see Priority Queue).
 
@@ -145,7 +146,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 
 | ID | Task | Status | Completion criteria | Evidence | Deps |
 |---|---|:--:|---|---|---|
-| RA-1 | Introduce canonical kernel preload contract `kernel.provisioning.seed(ref, answer)` | NS | Layout passes `(routeIdentity, answer)`, not a raw URL; key derivation lives in the kernel; `provisioningAnswerUrl` not imported outside the kernel | grep: 0 non-kernel imports of `provisioningAnswerUrl`; key-parity unit test routes through the new API | — |
+| RA-1 | Introduce canonical kernel preload seam `seedProvisioningForRoute(routeIdentity, answer)` | **DONE** | Layout passes `(routeIdentity, answer)`, not a raw URL; key derivation lives in the kernel; `provisioningAnswerUrl` not imported outside the kernel | **0 non-kernel imports of `provisioningAnswerUrl`; route-seam unit test (14/14); C1/C3 cert (seed consumed, latest-wins, no flash); all-cards ~10.9 s; tsc exit 0; commit `3c0a9d6c1`** | — |
 | RA-2 | Remove legacy-drawer ↔ Focus-Panel record-open duality | NS | Path `/work-unit/:slug/:recordId` selects the correct Focus-Panel subject **or** 301s to `?subject_id`; legacy `openDrawer("workspace_slug_record_url")` branch deleted | `zz-realization-urlcontract` asserts path → correct subject; grep: no legacy record-open branch | RA-1 |
 | RA-3 | Cache single-producer invariant (prefetch/seed/cold = one owned seam) | IP | One key builder; producer-parity + idempotency tests | seed-contract unit tests (partial — key-parity DONE) | RA-1 |
 
@@ -278,6 +279,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 | 2026-07-26 | Certification exec #1 | **CP-2 → DONE** (dup `/stage-work` eliminated; all-cards 12.7→11.2 s; +4 units; tsc gate exit 0). Critical Path B-→B, 40%. | `437ad9d11` |
 | 2026-07-26 | Certification exec #2 | **MA-1 / DOC-1 → DONE** (`ARCHITECTURE.md`; comprehension check PASSED + 3 polish fixes). Maintainability C-→B (70%), Documentation C→B (60%). | `c52e50c52` + this |
 | 2026-07-26 | Certification exec #3 | **TS-2 → DONE** (`typescript-roadmap.md`). TypeScript C→C+ (50%). | this |
+| 2026-07-26 | Certification exec #4 | **RA-1 → DONE** (kernel preload seam; `provisioningAnswerUrl` now kernel-only; behavior-identical, cert green; D-011). Runtime Architecture C+→B (40%). Unblocks RA-2. | `3c0a9d6c1` |
 
 ## 6a. Environmental throttle (active)
 
