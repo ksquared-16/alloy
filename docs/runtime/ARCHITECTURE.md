@@ -97,7 +97,8 @@ one consumer (K2):
 1. intent prefetch (`prefetchWorkUnitProvisioning`) — operator hover/focus.
 2. **server seed** (`seedProvisioning`) — the route layout hands K2 a resolved answer so cold load resolves
    warm. *The seed key MUST equal K2's consume key — this is guarded by a committed key-parity unit test
-   (`workUnitProvisioningPrefetch.test.ts`); a drift is a silent slowdown, so the test is the alarm.*
+   (`web/tests/runtime/workUnitProvisioningPrefetch.test.ts`, exercising the `lib/runtime/kernel/` seam); a
+   drift is a silent slowdown, so the test is the alarm.*
 3. K2 cold fetch (`fetchProvisioningEntryDeduped`) — the fallback when nothing warmed it.
 
 **Stage-work cache** — `lib/adminV2/viewModel/drawer/opportunity/stageWork/opportunityStageWorkResource.ts`.
@@ -117,6 +118,12 @@ above-fold answer deliberately omits. This is the dominant remaining cost (~5–
 current perceived-performance frontier (tasks CP-1/CP-4). It **enriches**; it never creates the operational
 Current Work (that is the answer's, §4). Latest-click-wins here is the per-subject `fetchGenRef`.
 
+The stage-work sub-route (`/api/admin/view-models/drawer/opportunity/{id}/stage-work`) still exists as the
+**fallback** the CP-2 seed avoids — on the cold default path the seed (§7) satisfies the warm check so that
+fetch never fires; it is the path used when there is no seed (a row switch, a stale cache, a mutation
+invalidation). A parallel `/api/admin/v2/view-models/drawer/opportunity/{id}` endpoint also exists; the
+runtime path above is the canonical one.
+
 ## 9. Timing model
 
 | Metric | Source | Warm (local prod) |
@@ -131,8 +138,12 @@ Cold adds the answer compose to TTFB (~+2 s), repaid by removing the post-hydrat
 
 - **A new work-view / queue** — configuration (department metadata `work_views_v1` + stages). No runtime
   code: the answer resolves the active lens, rows, subject, and Current Work from config.
-- **A new Focus Panel card** — add a card to the composition + a renderer branch in
-  `FocusPanelCardRenderer`. Noncritical cards should be `dynamic` (off the first-paint graph).
+- **A new Focus Panel card** — declare the card in the composition
+  (`lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards.ts`) and add a render branch in
+  `components/admin/focusPanel/FocusPanelCardRenderer.tsx`. Load a noncritical card via `next/dynamic` so
+  it stays off the first-paint graph, and **feed its data from the enriched drawer VM (§8), NOT from the
+  Provisioning Answer** — adding data to the answer inflates TTFB/first-card (§9). Critical above-fold
+  cards (Household/Children/Current Work) are the exception: they are answer-sourced by design.
 - **A new action surface** — render it behind its `surface ===` branch and load it via `next/dynamic`
   (see `CurrentWorkActionPanel`, `CreateLeadEventHost`) so it stays off the initial graph.
 - **A new subject type (e.g. Parent/Teacher runtime)** — the answer contract is currently opportunity-shaped

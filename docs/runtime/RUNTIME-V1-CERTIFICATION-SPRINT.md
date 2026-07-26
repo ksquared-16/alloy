@@ -19,9 +19,9 @@
 |---|:--:|:--:|:--:|--:|:--:|
 | Runtime Architecture | C+ | A- | → | 15% | 0 / 3 |
 | Critical Path | B (was B-) | A- | ↑ | 40% | 2 / 5 |
-| TypeScript Architecture | C | B+ (A later) | ↑ | 15% | 1 / 3 |
+| TypeScript Architecture | C+ (was C) | B+ (A later) | ↑ | 50% | 2 / 3 |
 | Dependency Graph | B | A- | ↑ | 40% | 2 / 5 |
-| Maintainability | B (was C-) | A- | ↑ | 65% | 1 / 2 |
+| Maintainability | B (was C-) | A- | ↑ | 70% | 1 / 2 |
 | Scalability | C | A- | → | 10% | 0 / 2 |
 | Testing | C- | A | ↑ | 35% | 2 / 7 |
 | Documentation | B (was C) | A- | ↑ | 60% | 1 / 3 |
@@ -131,7 +131,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | ID | Task | Status | Completion criteria | Evidence | Deps |
 |---|---|:--:|---|---|---|
 | TS-1 | Immediate wins (kill pathological inferred types on hot runtime modules; tighten over-broad public surfaces) | NS | Cold typecheck time or file-count measurably reduced; no new errors | before/after `time -l npm run typecheck` | — |
-| TS-2 | Design the TypeScript project-reference roadmap (`docs/runtime/typescript-roadmap.md`) | NS | First bounded projects named (kernel, provisioning), migration order + guardrails, effort/risk | committed roadmap doc | — |
+| TS-2 | Design the TypeScript project-reference roadmap (`docs/runtime/typescript-roadmap.md`) | **DONE** | First bounded projects named (kernel, provisioning), migration order + guardrails, effort/risk | `docs/runtime/typescript-roadmap.md` — immediate wins (→B+) vs project-refs (→A), extraction order, DAG guardrails, exit criteria | — |
 | TS-3 | Baseline captured (cold/warm time, RSS, process count) | DONE | Measured: cold 156 s/3.27 GB, incremental 15 s/1.15 GB, 1 proc; storm is only `next build`'s checker | ledger Phase 5 table | — |
 
 ### 2.4 Dependency Graph — B → A- (bucket A/B) · 40%
@@ -153,7 +153,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 
 | ID | Task | Status | Completion criteria | Evidence | Deps |
 |---|---|:--:|---|---|---|
-| MA-1 | `docs/runtime/ARCHITECTURE.md` (shared w/ DOC-1) | **NV** | Covers kernel triad, Surface Host, Provisioning Answer contract, seed seam, cache ownership, critical-path waterfall, extension points, timing | **`docs/runtime/ARCHITECTURE.md` written (all sections); fresh-agent comprehension check running → DONE on pass** | — |
+| MA-1 | `docs/runtime/ARCHITECTURE.md` (shared w/ DOC-1) | **DONE** | Covers kernel triad, Surface Host, Provisioning Answer contract, seed seam, cache ownership, critical-path waterfall, extension points, timing | **`ARCHITECTURE.md` written; fresh-agent comprehension check PASSED the 1-day gate (4/5 fully answerable, all claims grep-accurate); 3 polish fixes applied** | — |
 | MA-2 | Stale-comment audit across runtime dirs | IP | grep-audit of STREAMED/OVERLAP/legacy/TODO comments; each reconciled with code | audit list resolved (layout comment DONE) | — |
 
 ### 2.6 Scalability — C → A- (bucket B) · 10%
@@ -187,7 +187,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 
 | ID | Task | Status | Completion criteria | Evidence | Deps |
 |---|---|:--:|---|---|---|
-| DOC-1 | `docs/runtime/ARCHITECTURE.md` (ownership, critical path, data flow, cache ownership, timing, extension points) | **NV** | Self-sufficient; comprehension check passes | written; fresh-agent comprehension check running → DONE on pass | — |
+| DOC-1 | `docs/runtime/ARCHITECTURE.md` (ownership, critical path, data flow, cache ownership, timing, extension points) | **DONE** | Self-sufficient; comprehension check passes | comprehension check PASSED; polish fixes applied | — |
 | DOC-2 | Fold durable facts out of the ledger into `ARCHITECTURE.md`; keep ledger as history | NS | ARCHITECTURE.md needs no ledger to understand V1 | comprehension check | DOC-1 |
 | DOC-3 | Truthful code comments | IP | No comment contradicts code in runtime dirs | layout comment DONE (`63dafa004`); MA-2 audit | MA-2 |
 
@@ -237,7 +237,8 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | 2026-07-26 | Certification kickoff | Tracker created; grades/tasks/evidence seeded from the realization + adversarial-review + A/B/C analysis | — |
 | 2026-07-26 | Realization + Phase 3/4/5 | CP-5, DG-4, DG-5, PE-4, TE-1, TE-7, CQ-1 completed; punch-list truth/simplification | `d1314bb57` `5dac324fa` `97a740a31` `5148c9708` `63dafa004` `435c13c94` |
 | 2026-07-26 | Certification exec #1 | **CP-2 → DONE** (dup `/stage-work` eliminated; all-cards 12.7→11.2 s; +4 units; tsc gate exit 0). Critical Path B-→B, 40%. | `437ad9d11` |
-| 2026-07-26 | Certification exec #2 | **MA-1 / DOC-1 → NV** (`docs/runtime/ARCHITECTURE.md` written — self-sufficient onboarding; comprehension check running). Maintainability C-→B (65%), Documentation C→B (60%). | (pending doc commit) |
+| 2026-07-26 | Certification exec #2 | **MA-1 / DOC-1 → DONE** (`ARCHITECTURE.md`; comprehension check PASSED + 3 polish fixes). Maintainability C-→B (70%), Documentation C→B (60%). | `c52e50c52` + this |
+| 2026-07-26 | Certification exec #3 | **TS-2 → DONE** (`typescript-roadmap.md`). TypeScript C→C+ (50%). | this |
 
 ## 6a. Environmental throttle (active)
 
