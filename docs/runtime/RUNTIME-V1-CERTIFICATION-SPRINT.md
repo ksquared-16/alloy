@@ -23,7 +23,7 @@
 | Dependency Graph | B | A- | ↑ | 40% | 70% | 2 / 5 | M1 |
 | Maintainability | B (was C-) | A- | ↑ | 70% | 80% | 1 / 2 | M3 |
 | Scalability | C | A- | → | 10% | 55% | 0 / 2 | M2 |
-| Testing | C- | A | ↑ | 35% | 80% | 2 / 7 | M4 |
+| Testing | C- | A | ↑ | 42% | 80% | 3 / 7 | M4 |
 | Documentation | B (was C) | A- | ↑ | 60% | 80% | 1 / 3 | M3 |
 | Performance | B | A- | ↑ | 40% | 80% | 1 / 4 | M2 |
 | Code Quality | B- | A- | ↑ | 55% | 70% | 1 / 3 | M1 |
@@ -31,7 +31,7 @@
 **Confidence %** = how confident a fresh architecture review would re-assign this grade, given the committed
 evidence (tests / cert / measurements / review). It rises only with evidence and drops when new findings surface.
 
-**Overall initiative completion (weighted, coarse): ~44%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade.
+**Overall initiative completion (weighted, coarse): ~48%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade.
 
 Task status legend: **NS** Not Started · **IP** In Progress · **BL** Blocked · **NV** Needs Validation · **DONE** Completed.
 
@@ -89,7 +89,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | ~~RA-2 Remove legacy-drawer duality~~ | Runtime Arch | High | RA-1✓ | ✓ | **DONE** |
 | CQ-2 Decompose `InlineOpportunityFocusPanel` | Code Quality | High | DG-1, DG-2 | ✗ | blocked |
 | TE-3 CI wiring | Testing | High | TE-2 | ✗ | blocked |
-| TE-5 Routing-permutation unit tests | Testing | Medium | RA-2✓ | ✓ | **READY** (newly unblocked) |
+| ~~TE-5 Routing-permutation unit tests~~ | Testing | Medium | RA-2✓ | ✓ | **DONE** |
 | DG-2 Lazy-load `workflowRun.ts` | Dependency Graph | Medium | — | ✓ | READY |
 | DG-3 Isolate SchedulingCard | Dependency Graph | Medium | — | ✓ | READY |
 | PE-2 Warm fully-settled < 6 s | Performance | High | CP-1, CP-2, CP-4 | ✗ | blocked |
@@ -104,12 +104,12 @@ enriched VM — the biggest perceived-perf lever). Execute: remove the named dup
 (`inquiry_children`, primary contact) from the enriched-VM `phases_ms`, contract unchanged; evidence = server
 `phases_ms` before/after. `CP-4` needs the build+measurement loop (host-throttled, §6a).
 
-Co-highest-priority READY siblings: `DG-1`, `TE-2` (High). **Newly unblocked by RA-2:** `TE-5`
-(routing-permutation unit tests — `attentionFromUrl`↔`urlFromAttention` parity + path-vs-query locked;
-unit-only, throttle-friendly). Light READY tasks available under throttle: `TE-5`, `TE-4` (schema contract),
-`TS-1` (TS wins), `CQ-3` (rename). **NOTE:** CP-4/DG-1/CP-1 each require the build+browser-cert loop,
-throttled by host memory (§6a) — batch when the host has headroom. _(CP-3 stays Low: a prior storm-gating
-attempt was reverted for touching the reveal lifecycle without moving wall-clock; revisit after CP-1.)_
+Co-highest-priority READY siblings: `DG-1`, `TE-2` (High). Light READY tasks available under throttle:
+`TE-4` (schema contract, unit-only), `TS-1` (TS wins), `CQ-3` (rename). **NOTE:** CP-4/DG-1/CP-1 each
+require the build+browser-cert loop, throttled by host memory (§6a) — batch when the host has headroom.
+_(RA-2✓ + TE-5✓ landed this session — the query-canonical routing contract is now both shipped and
+unit-locked. CP-3 stays Low: a prior storm-gating attempt was reverted for touching the reveal lifecycle
+without moving wall-clock; revisit after CP-1.)_
 
 ## 1d. Milestones
 
@@ -121,7 +121,7 @@ higher-priority cross-milestone blocker exists (e.g. an M1 task that unblocks th
 | **M1** | **Runtime Ownership** | RA-1✓, RA-2✓, RA-3, DG-1, DG-2, DG-3, DG-4✓, DG-5✓, CQ-1✓, CQ-2, CQ-3 | 6 / 11 | **ACTIVE** |
 | M2 | Critical Path & Performance | CP-1, CP-2✓, CP-3, CP-4, CP-5✓, PE-1, PE-2, PE-3, PE-4✓, SC-1, SC-2 | 4 / 11 | in progress |
 | M3 | Developer Experience | TS-1, TS-2✓, TS-3✓, MA-1✓, MA-2, DOC-1✓, DOC-2, DOC-3 | 5 / 8 | in progress |
-| M4 | Certification & Regression | TE-1✓, TE-2, TE-3, TE-4, TE-5, TE-6, TE-7✓ | 2 / 7 | in progress |
+| M4 | Certification & Regression | TE-1✓, TE-2, TE-3, TE-4, TE-5✓, TE-6, TE-7✓ | 3 / 7 | in progress |
 
 - **Current milestone:** **M1 Runtime Ownership** (fix ownership before optimizing the path; RA-1 also unblocks the M2 perf core).
 - **Milestone progress:** M1 6/11 · M2 4/11 · M3 5/8 · M4 2/7.
@@ -229,7 +229,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 | TE-2 | Portable Playwright fixtures (replace hardcoded Wenc/Kurzman IDs with a seeded fixture) | NS | Cert specs pass against a freshly-seeded DB, no hardcoded IDs | green run in a clean env | — |
 | TE-3 | CI wiring (unit + contract + integration on PR; Playwright in a seeded ephemeral env) | NS | CI runs the suites on PR; green | CI config + green run | TE-2 |
 | TE-4 | `ProvisioningAnswer` schema contract test (snapshot) | NS | A schema change breaks the test | committed contract test | — |
-| TE-5 | Routing-permutation unit tests (`attentionFromUrl`↔`urlFromAttention` parity; path-vs-query documented) | IP | Unit-level parity; the path/query inconsistency locked | urlcontract E2E DONE; unit tests pending | RA-2 |
+| TE-5 | Routing-permutation unit tests (`attentionFromUrl`↔`urlFromAttention` parity; path-vs-query documented) | **DONE** | Unit-level parity; the path/query inconsistency locked | **`attentionUrlParity.test.ts` (4/4): round-trips 6 coordinate permutations; locks subject = `?subject_id` ONLY (path `/:recordId` → subject null, D-004/RA-2); `urlFromAttention` never emits a path record segment. d2/d4 kernel suites still green (36/36).** | RA-2✓ |
 | TE-6 | Performance regression assertions (waterfall budgets: first-card, all-cards) | NS | Committed spec asserts budgets; fails on regression | committed perf spec | PE-* |
 | TE-7 | Commit behavioral cert specs (non-ephemeral) | DONE | Cert specs in-repo (local, honest limitation noted) | commit `435c13c94` | — |
 
@@ -294,6 +294,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 | 2026-07-26 | Certification exec #4 | **RA-1 → DONE** (kernel preload seam; `provisioningAnswerUrl` now kernel-only; behavior-identical, cert green; D-011). Runtime Architecture C+→B (40%). Unblocks RA-2. | `3c0a9d6c1` |
 | 2026-07-26 | Certification exec #5 | **RA-2 → IP (scoped + de-risked).** Found `useWorkUnitSurfaceController` DEAD → legacy duality is unreachable; RA-2 reduced to delete-dead + query-ify the create-lead href. R-03 downgraded Sev2→Sev3. Held (multi-file behavior change; host-memory throttle degrading trustworthy heavy cert). | — |
 | 2026-07-26 | Certification exec #6 | **RA-2 → DONE.** Deleted dead surface controller (`workUnitSurfaceController.ts` + test + `WorkUnitSurfaceView` + `syncOperatorWorkUnitUrlInBrowser`); `operatorWorkUnitHrefFromKey(key,recordId)` emits `?subject_id=`; `[recordId]` route + `next.config` rewrite retired; guards/tests → query form; removed a misrooted orphan dup test. **tsc EXIT 0 / 0 errors; prod build EXIT 0; RA-2-owned unit set green (32), +0 new failures / −2 pre-existing fixed (baseline-diff proven).** Runtime Architecture B→B+ (65%); R-03 RESOLVED; M1 6/11. Pre-existing seed-only-host/route-shell test rot flagged (R-04). | `08855fe59` |
+| 2026-07-26 | Certification exec #7 | **TE-5 → DONE.** `attentionUrlParity.test.ts` (4/4) locks `urlFromAttention`⇄`attentionFromUrl`: round-trips 6 coordinate permutations; subject = `?subject_id` ONLY (path `/:recordId` → null; D-004/RA-2); `urlFromAttention` never emits a path record segment. Kernel suites still green (d2/d4 = 36/36). Testing 35→42% (3/7); M4 3/7. Unit-only (throttle-appropriate; no source change). | `cd155a26b` |
 
 ## 6a. Environmental throttle (active)
 
