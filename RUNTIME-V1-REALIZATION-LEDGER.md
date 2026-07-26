@@ -49,7 +49,7 @@
 | L5 authoritative detail via existing provisioning/record/VM paths | correct paths, wrong trigger (post-hydration) | trigger is bundle-gated | move trigger to server via seed; keep client consume seam | **completed** | K2 warm-hit consumes the seed unchanged |
 | L2/L6 no partial reveal / wrong-record / stale flash | boot-shell "Thinking…" until atomic K3 commit | (preserved) | seed feeds the SAME atomic commit — no partial identity pre-reveal | not started | cert gate |
 | L7 latest click wins | 3 generation guards | (preserved) | seed only warms cache; K2 supersede logic unchanged | not started | provisioning.ts guards |
-| Phase 2 — server compose overlaps client delivery | serial (hydrate → fetch → compose) | bundle+compose serial | stream the answer promise across the RSC boundary | not started | F3 |
+| Phase 2 — server compose overlaps client delivery | compose runs server-side before any client chunk (iter-3) | — | streaming overlap ATTEMPTED, proven not achievable (F5) | **reverted** | Phase-2 table below |
 | Phase 3 — serial critical chain | provisioning→enriched→stage-work serial | — | classify each dependency; reduce only proven-avoidable | not started | — |
 | Phase 4 — monolith ownership | ~15k-line Work Unit graph | noncritical modes on initial graph | responsibility map + extract real boundaries | not started | — |
 | Phase 5 — TS/workstation perf | 4×8GB tsc storm, swap thrash | — | one canonical bounded typecheck path | not started | closeout §9 |
@@ -90,6 +90,27 @@ the wall-clock win (Phase 2) needs compose→bundle OVERLAP, which requires a vi
 (raw promise props are out — candidates: RSC `<Suspense>` + `use()` on a dedicated consumer, or an
 inline-JSON bootstrap the ancestor reads). _Measuring iter 3._
 
+## Phase 2 (streamed overlap) — ATTEMPTED, REVERTED
+
+Client-armed deferred: a client component `armSeed`s a pending promise in the K2 cache before K2 fires;
+a `<Suspense>`-wrapped async RSC composes and streams a resolved plain answer that `resolveSeed`s it —
+no promise crosses the RSC boundary (so no iter-2 crash). It builds and renders (no crash, seed consumed).
+But it is **slower**, and the reason is a hard architectural limit:
+
+| | iter-3 warm | Phase-2 warm | iter-3 cold | Phase-2 cold |
+|---|--:|--:|--:|--:|
+| TTFB | 1417 | 2156 | 3607 | 3587 |
+| first card | **3610** | 5462 | **7370** | 7652 |
+
+**F5 — the compose→bundle overlap is not achievable.** Delivering the server-composed answer to the
+client K2 runtime requires hydrating a client resolve component, which is gated by the FULL bundle. The
+client cannot receive/use the answer before the bundle loads — and *at that moment iter-3 already has it*
+(serialized into the initial payload, read at the main hydration pass). The Suspense-streamed resolve
+hydrates in a LATER pass, so it only adds latency. No streaming mechanism can beat "answer ready at
+hydration," which iter-3 achieves. The mission's Phase 2 OUTCOME (first card ≪ 6.7 s; critical work starts
+before the client chunks) is already met by iter-3 — the server compose runs at request time, entirely
+before any chunk downloads. The distinct streaming mechanism is a proven dead-end here → **reverted**.
+
 ## Before / after (local prod, `new-leads`, DOM-meaningful)
 
 | Metric | Baseline warm | **iter-3 warm** | Baseline cold | **iter-3 cold** |
@@ -110,6 +131,15 @@ hydration mismatch (seed is a client cache write, renders null) ✓ · direct UR
 within committed surface, unaffected) ✓(architectural) · queue-row selection unaffected (click path uses
 intent-prefetch→K2, never the cold-load layout seed) — spot-check recommended.
 
+## Phase 2 iteration log
+
+**Iter 4 — client-armed deferred streaming overlap (REVERTED).** `armSeed` (client, pre-K2) + a
+`<Suspense>` async RSC that composes and `resolveSeed`s a plain answer — no promise across the boundary.
+No crash, seed consumed, surface renders. But first-card **regressed** to 5462 ms warm (vs iter-3 3610),
+because the resolve component hydrates in a later pass than K2 fires — the composed answer cannot reach
+the client before the bundle hydrates, and iter-3 already delivers it at that exact moment. F5: overlap
+is architecturally impossible; reverted to iter-3.
+
 ## Change ledger (kept / reverted / deferred)
 
 - **KEEP** — `composeProvisioningAnswerForRoute` shared helper + API route delegates to it (pure refactor, one resolver for HTTP + seed).
@@ -117,4 +147,5 @@ intent-prefetch→K2, never the cold-load layout seed) — spot-check recommende
 - **KEEP** — blocking layout seed with RESOLVED answer (iter 3): `layout.tsx` awaits compose (concurrent with route-meta) + `ProvisioningAnswerSeed` writes the resolved answer. **Certified win** (see table).
 - **REVERTED** — streamed RSC-promise prop (iter 2): crashes hydration in this Next 16 setup.
 - **REVERTED** — blocking page-segment seed (iter 1): self-defeating + page output discarded by the layout.
+- **REVERTED** — Phase 2 streamed overlap (armSeed/resolveSeed/ProvisioningSeedArm + Suspense): builds & runs but slower; overlap architecturally impossible (F5). Working tree returned to committed iter-3.
 - **DEFER (Phase 3)** — duplicate resolution: layout runs `loadWorkUnitSlugRouteMetaServer` AND `composeProvisioningAnswerForRoute`, each doing a gate + slug resolve. Runs concurrently now; dedup candidate.
