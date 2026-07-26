@@ -28,7 +28,7 @@
 | Performance | B | A- | ↑ | 40% | 1 / 4 |
 | Code Quality | B- | A- | ↑ | 55% | 1 / 3 |
 
-**Overall initiative completion (weighted, coarse): ~29%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade.
+**Overall initiative completion (weighted, coarse): ~41%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade.
 
 Task status legend: **NS** Not Started · **IP** In Progress · **BL** Blocked · **NV** Needs Validation · **DONE** Completed.
 
@@ -70,15 +70,15 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 
 | Task | Cat | Priority | Deps | Deps met? | READY? |
 |---|---|:--:|---|:--:|:--:|
-| **CP-2** Remove duplicate stage-work fetch | Critical Path | **Critical** | — | ✓ | **READY** |
+| ~~CP-2 Remove duplicate stage-work fetch~~ | Critical Path | Critical | — | ✓ | **DONE** |
 | CP-4 Enriched-VM field reuse of provisioning data | Critical Path | High | — | ✓ | READY |
 | RA-1 Canonical kernel preload contract | Runtime Arch | High | — | ✓ | READY |
 | DG-1 Conditional-mount+dynamic the 7 registry modals | Dependency Graph | High | — | ✓ | READY |
-| MA-1 / DOC-1 `ARCHITECTURE.md` | Maint / Docs | High | — | ✓ | READY |
+| ~~MA-1 / DOC-1 `ARCHITECTURE.md`~~ | Maint / Docs | High | — | ✓ | **DONE** |
 | TE-2 Portable Playwright fixtures | Testing | High | — | ✓ | READY |
 | TE-4 `ProvisioningAnswer` schema contract test | Testing | Medium | — | ✓ | READY |
 | TS-1 Immediate TS graph wins | TypeScript | Medium | — | ✓ | READY |
-| TS-2 Project-reference roadmap | TypeScript | Medium | — | ✓ | READY |
+| ~~TS-2 Project-reference roadmap~~ | TypeScript | Medium | — | ✓ | **DONE** |
 | SC-1 Generalize subject contract | Scalability | Medium | — | ✓ | READY |
 | CQ-3 Rename `resolveWorkUnitRouteIdentityCached` | Code Quality | Low | — | ✓ | READY |
 | CP-1 Server-seed enriched VM | Critical Path | **Critical** | RA-1, CP-4 | ✗ | blocked |
@@ -93,7 +93,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | CP-3 Gate prewarm storm | Critical Path | Low | — | ✓ | READY (low value — see note) |
 | TE-6 Perf regression assertions | Testing | Medium | PE-2 | ✗ | blocked |
 
-**→ Next task selected by the queue: `CP-2` (Critical, READY).** _(CP-3 is deprioritized to Low: a prior attempt to gate the storm was reverted for touching the reveal lifecycle without moving wall-clock — see ledger; revisit only after CP-1.)_
+**→ Next task selected by the queue: `RA-1` (High, READY)** — the canonical kernel preload contract; it unblocks both `CP-1` (the biggest perceived-perf lever) and `RA-2` (legacy-drawer duality), and pays down the seed-coupling debt. Co-highest-priority READY siblings: `CP-4`, `DG-1`, `TE-2`. **NOTE:** RA-1/CP-4/DG-1 each require the build+browser-cert loop, which is currently throttled by host memory (§6a) — batch when the host has headroom. Light READY tasks available now under throttle: `TE-4` (schema contract test, unit-only), `TS-1` (TS wins), `CQ-3` (rename). _(CP-3 stays Low: a prior storm-gating attempt was reverted for touching the reveal lifecycle without moving wall-clock; revisit after CP-1.)_
 
 ---
 
