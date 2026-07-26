@@ -79,6 +79,8 @@ export type ChildrenEvidenceChild = {
     flags: ChildEvidenceFlag[];
     /** OCM participation notes when present. */
     notes?: string | null;
+    /** Primary assignment owns Program/Room when true — inquiry Program is read-only. */
+    hasCommittedPrimaryAssignment?: boolean;
 };
 
 export type ChildrenCardEvidence = {
@@ -148,7 +150,21 @@ export function buildChildrenCardEvidence(
             ?? trimOrNull(row.person_id);
         const schedulingProjection = memberId ? schedulingByMember[memberId] ?? null : null;
         const scheduleCompact = projectCompactScheduleForIdentity(schedulingProjection);
-        const program = trimOrNull(row.desired_program_label);
+        const primaryFromAssignment =
+            schedulingProjection?.current?.assignments?.find((a) => a.isPrimary)
+            ?? schedulingProjection?.proposed?.assignments?.find((a) => a.isPrimary)
+            ?? schedulingProjection?.current?.assignments?.[0]
+            ?? schedulingProjection?.proposed?.assignments?.[0]
+            ?? null;
+        const hasCommittedPrimaryAssignment =
+            schedulingProjection != null
+            && (schedulingProjection.status === "scheduled"
+                || schedulingProjection.status === "proposed"
+                || schedulingProjection.status === "upcoming-only")
+            && primaryFromAssignment != null;
+        const program =
+            (hasCommittedPrimaryAssignment ? primaryFromAssignment.room.program?.trim() : null)
+            ?? trimOrNull(row.desired_program_label);
         const room =
             scheduleCompact.roomLabel
             ?? trimOrNull(row.program_room_cohort_label)
@@ -242,6 +258,7 @@ export function buildChildrenCardEvidence(
             missingLine,
             flags: [],
             notes: trimOrNull((row as { notes?: unknown }).notes),
+            hasCommittedPrimaryAssignment,
         };
     });
 

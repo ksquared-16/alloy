@@ -1,15 +1,9 @@
 "use client";
 
 /**
- * Scheduling Workspace — a first-class Alloy Operational Workspace on the shared
- * WorkspaceShell (the same chrome Processing / Communications / Work Items use).
- *
- * This container owns state, data, and navigation only. The invariant chrome (Work |
- * Studio modes, section tabs, control-band operational health) comes from
- * `SchedulingWorkspaceShell` → the canonical `WorkspaceShell`; the section bodies are
- * doctrine surfaces. Occupancy / ratio / placement signals are consumed from the
- * scheduling read API (which composes the operational calculation engine) — the
- * workspace never owns that logic.
+ * Assignments Workspace — operational command center for Assignments on the shared
+ * WorkspaceShell. Consumes Assignment Platform read models; scheduling (room board,
+ * ratios) is a property of assignments, not a parallel model.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -26,6 +20,7 @@ import {
     type SchedulingWorkView,
 } from "@/app/adminV2/scheduling/schedulingSections";
 import SchedulingOverview, {
+    type AssignmentAttentionSummary,
     type OverviewChild,
     type OverviewStart,
     type RosterSummary,
@@ -35,8 +30,19 @@ import SchedulingRoster, {
     type RosterData,
     type RosterFilterKind,
     type RosterFilterContext,
+    type RosterViewMode,
 } from "@/components/adminV2/scheduling/screens/SchedulingRoster";
+import type { AssignmentRosterSubject } from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
 import SchedulingStudio, { type StudioCalculation } from "@/components/adminV2/scheduling/screens/SchedulingStudio";
+import type { AssignmentTypeAdminRecord } from "@/lib/operationalAssignments/assignmentTypeService";
+import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
+import WorkspaceCreateAssignmentModal, {
+    type WorkspaceCreateChildCandidate,
+} from "@/components/adminV2/scheduling/WorkspaceCreateAssignmentModal";
+import {
+    ASSIGNMENTS_WORKSPACE_DEEPLINK_KEY,
+    type OpenSchedulingModalDetail,
+} from "@/lib/adminV2/workspaceModalEvents";
 import {
     type StudioPattern,
     type PatternEditorConfig,
@@ -49,6 +55,7 @@ type OverviewResp = {
     unplaced?: OverviewChild[];
     startsThisWeek?: OverviewStart[];
     activity?: TodayActivity;
+    assignmentAttention?: AssignmentAttentionSummary;
 };
 
 const EMPTY_STUDIO_CONFIG: PatternEditorConfig = { operatingDays: [], scheduleTypes: [], programs: [] };
@@ -155,18 +162,59 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
 
     const [mode, setMode] = useState<SchedulingMode>("work");
     const [workView, setWorkView] = useState<SchedulingWorkView>("overview");
-    const [studioView, setStudioView] = useState<SchedulingStudioView>("patterns");
+    const [studioView, setStudioView] = useState<SchedulingStudioView>("types");
+    const [rosterView, setRosterView] = useState<RosterViewMode>("assignments");
     const [focusRoomId, setFocusRoomId] = useState<string | undefined>(undefined);
     const [rosterFilter, setRosterFilter] = useState<RosterFilterKind | null>(null);
 
+    // Deep-link from Focus Panel (Configure Assignment Types) or header Actions.
+    useEffect(() => {
+        const apply = (detail: OpenSchedulingModalDetail | null) => {
+            if (!detail) return;
+            if (detail.mode === "studio" || detail.studioView) {
+                setMode("studio");
+                if (detail.studioView && detail.studioView !== "templates") {
+                    setStudioView(detail.studioView);
+                } else {
+                    setStudioView("types");
+                }
+            }
+            if (detail.mode === "work" || detail.workView) {
+                setMode("work");
+                if (detail.workView) setWorkView(detail.workView);
+            }
+        };
+        try {
+            const raw = sessionStorage.getItem(ASSIGNMENTS_WORKSPACE_DEEPLINK_KEY);
+            if (raw) {
+                sessionStorage.removeItem(ASSIGNMENTS_WORKSPACE_DEEPLINK_KEY);
+                apply(JSON.parse(raw) as OpenSchedulingModalDetail);
+            }
+        } catch {
+            /* ignore */
+        }
+        const onOpen = (event: Event) => {
+            const detail = (event as CustomEvent<OpenSchedulingModalDetail>).detail ?? null;
+            apply(detail);
+        };
+        window.addEventListener("adminv2:open-scheduling-modal", onOpen);
+        return () => window.removeEventListener("adminv2:open-scheduling-modal", onOpen);
+    }, []);
+
     const [overview, setOverview] = useState<OverviewResp | null>(null);
     const [roster, setRoster] = useState<RosterData | null>(null);
+    const [assignmentRoster, setAssignmentRoster] = useState<AssignmentRosterSubject[] | null>(null);
     const [calculations, setCalculations] = useState<StudioCalculation[] | null>(null);
+    const [assignmentTypes, setAssignmentTypes] = useState<AssignmentTypeAdminRecord[] | null>(null);
+    const [pickerAssignmentTypes, setPickerAssignmentTypes] = useState<OrgAssignmentTypeOption[] | null>(null);
+    const [createOpen, setCreateOpen] = useState(false);
+    const [createPrefillChildId, setCreatePrefillChildId] = useState<string | null>(null);
     const [studioPatterns, setStudioPatterns] = useState<StudioPattern[] | null>(null);
     const [studioConfig, setStudioConfig] = useState<PatternEditorConfig | null>(null);
 
     const [loadingOverview, setLoadingOverview] = useState(false);
     const [loadingRoster, setLoadingRoster] = useState(false);
+    const [loadingAssignmentRoster, setLoadingAssignmentRoster] = useState(false);
     const [loadingCalc, setLoadingCalc] = useState(false);
     const [loadingStudio, setLoadingStudio] = useState(false);
 
@@ -213,24 +261,49 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
         setLoadingRoster(false);
     }, []);
 
+    const loadAssignmentRoster = useCallback(async (id: string) => {
+        setLoadingAssignmentRoster(true);
+        const r = await schedApi(`?view=assignment_roster&site_location_id=${encodeURIComponent(id)}`);
+        setAssignmentRoster((r?.subjects as AssignmentRosterSubject[]) ?? []);
+        setLoadingAssignmentRoster(false);
+    }, []);
+
     // Site change → (re)load overview + roster; reset to current week.
     useEffect(() => {
         if (!siteId) return;
         setWeekOf("");
         void loadOverview(siteId);
         void loadRoster(siteId, "");
-    }, [siteId, loadOverview, loadRoster]);
+        void loadAssignmentRoster(siteId);
+    }, [siteId, loadOverview, loadRoster, loadAssignmentRoster]);
 
-    // Entering Studio → lazily load the calculations catalogue (registry — read-only).
+    const loadAssignmentTypesAdmin = useCallback(async () => {
+        const r = await fetch("/api/admin/assignment-types").then((res) => res.json()).catch(() => ({}));
+        setAssignmentTypes((r?.types as AssignmentTypeAdminRecord[]) ?? []);
+    }, []);
+
+    const loadPickerAssignmentTypes = useCallback(async () => {
+        const r = await schedApi(`?view=assignment_types`);
+        setPickerAssignmentTypes((r?.assignmentTypes as OrgAssignmentTypeOption[]) ?? []);
+    }, []);
+
+    // Entering Studio → lazily load calculations catalogue + assignment types.
     useEffect(() => {
-        if (mode !== "studio" || calculations != null) return;
-        (async () => {
-            setLoadingCalc(true);
-            const r = await schedApi(`?view=calculations`);
-            setCalculations((r?.calculations as StudioCalculation[]) ?? []);
-            setLoadingCalc(false);
-        })();
-    }, [mode, calculations]);
+        if (mode !== "studio") return;
+        if (calculations == null) {
+            (async () => {
+                setLoadingCalc(true);
+                const r = await schedApi(`?view=calculations`);
+                setCalculations((r?.calculations as StudioCalculation[]) ?? []);
+                setLoadingCalc(false);
+            })();
+        }
+        if (assignmentTypes == null) void loadAssignmentTypesAdmin();
+    }, [mode, calculations, assignmentTypes, loadAssignmentTypesAdmin]);
+
+    useEffect(() => {
+        if (pickerAssignmentTypes == null) void loadPickerAssignmentTypes();
+    }, [pickerAssignmentTypes, loadPickerAssignmentTypes]);
 
     // Studio administration data (patterns + editor config) — loaded for the active site
     // whenever Studio is open (reloads on site change).
@@ -323,6 +396,47 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     const starts = overview?.startsThisWeek ?? [];
     const activity = overview?.activity ?? null;
 
+    const createCandidates = useMemo((): WorkspaceCreateChildCandidate[] => {
+        const byId = new Map<string, WorkspaceCreateChildCandidate>();
+        for (const s of assignmentRoster ?? []) {
+            byId.set(s.customerMemberId, {
+                customerMemberId: s.customerMemberId,
+                agreementId: s.agreementId,
+                personId: null,
+                name: s.childName,
+                startDate: null,
+            });
+        }
+        for (const u of unplaced) {
+            if (!byId.has(u.customerMemberId ?? u.agreementId)) {
+                byId.set(u.customerMemberId, {
+                    customerMemberId: u.customerMemberId,
+                    agreementId: u.agreementId,
+                    personId: null,
+                    name: u.name,
+                    startDate: u.startDate ?? null,
+                });
+            }
+        }
+        return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+    }, [assignmentRoster, unplaced]);
+
+    const openCreateAssignment = useCallback(
+        (prefillChildId?: string | null) => {
+            setCreatePrefillChildId(prefillChildId ?? null);
+            setCreateOpen(true);
+        },
+        [],
+    );
+
+    const refreshAfterMutation = useCallback(() => {
+        if (!siteId) return;
+        void loadAssignmentRoster(siteId);
+        void loadOverview(siteId);
+        void loadPickerAssignmentTypes();
+        if (mode === "studio") void loadAssignmentTypesAdmin();
+    }, [siteId, loadAssignmentRoster, loadOverview, loadPickerAssignmentTypes, loadAssignmentTypesAdmin, mode]);
+
     // Navigation — cards route into the correct operational context (no dead cards).
     // A filter kind carries the operator's intent (unplaced / starts / near-capacity /
     // ratio-risk) into the roster so it opens focused on exactly what the card was about.
@@ -339,15 +453,15 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
         if (rosterFilter === "unplaced") {
             return {
                 kind: "unplaced",
-                label: "Needs placement",
+                label: "Missing assignments",
                 count: unplaced.length,
-                children: unplaced.map((c) => ({ name: c.name, sub: c.startDate ? `starts ${c.startDate}` : "ready to place" })),
+                children: unplaced.map((c) => ({ name: c.name, sub: c.startDate ? `starts ${c.startDate}` : "ready to assign" })),
             };
         }
         if (rosterFilter === "starts") {
             return {
                 kind: "starts",
-                label: "Starting this week",
+                label: "Upcoming assignments",
                 count: starts.length,
                 children: starts.map((s) => ({ name: s.name, sub: `starts ${s.startDate}` })),
             };
@@ -388,19 +502,22 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     // Operational health lives in the control band — hidden on the Work→Overview landing
     // (its launch surfaces carry the metrics), shown on Roster / Attendance / all Studio.
     const showMetrics = !(mode === "work" && workView === "overview");
+    const assignmentAttention = overview?.assignmentAttention ?? null;
     const metricsColumn = showMetrics ? (
         <SchedulingKpiStrip
             mode={mode}
-            loading={mode === "work" ? loadingRoster || loadingOverview : loadingCalc}
+            loading={mode === "work" ? loadingRoster || loadingOverview || loadingAssignmentRoster : loadingCalc || loadingStudio}
             work={{
-                toDecide: unplaced.length,
-                roomsInRatio: summary.roomsInRatio,
-                fill: summary.fill,
-                startsThisWeek: starts.length,
+                childrenMissingAssignments: assignmentAttention?.childrenMissingAssignments ?? unplaced.length,
+                multipleAssignments: assignmentAttention?.multipleAssignments ?? 0,
+                upcomingAssignments: assignmentAttention?.upcomingAssignments ?? starts.length,
+                futurePrimaryChanges: assignmentAttention?.futurePrimaryChanges ?? 0,
+                assignmentConflicts: assignmentAttention?.assignmentConflicts ?? 0,
+                expiringSoon: assignmentAttention?.expiringSoon ?? 0,
             }}
             studio={{
+                assignmentTypes: assignmentTypes?.length ?? null,
                 patterns: studioPatterns?.filter((p) => p.isActive).length ?? null,
-                calculations: calculations?.length ?? null,
             }}
         />
     ) : undefined;
@@ -425,7 +542,18 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
             siteName={siteName}
             metricsColumn={metricsColumn}
             onClose={onClose}
+            onAddAssignment={() => openCreateAssignment(null)}
         >
+            <WorkspaceCreateAssignmentModal
+                open={createOpen}
+                siteId={siteId}
+                siteName={siteName}
+                candidates={createCandidates}
+                assignmentTypes={pickerAssignmentTypes ?? []}
+                preselectedChildId={createPrefillChildId}
+                onClose={() => setCreateOpen(false)}
+                onSaved={refreshAfterMutation}
+            />
             <WorkspaceSurface
                 tone={mode === "work" && workView === "roster" ? "canvas" : "stone"}
                 scroll
@@ -440,6 +568,7 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                         starts={starts}
                         summary={summary}
                         activity={activity}
+                        assignmentAttention={overview?.assignmentAttention ?? null}
                         onNavigateRoster={navigateToRoster}
                     />
                 ) : null}
@@ -447,7 +576,11 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                 {mode === "work" && workView === "roster" ? (
                     <SchedulingRoster
                         data={roster}
+                        assignmentSubjects={assignmentRoster ?? []}
+                        rosterView={rosterView}
+                        onRosterViewChange={setRosterView}
                         loading={loadingRoster}
+                        loadingAssignments={loadingAssignmentRoster}
                         siteName={siteName}
                         focusRoomId={focusRoomId}
                         filter={filterContext}
@@ -455,6 +588,76 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                         onSelectRoom={(roomId) => setFocusRoomId(roomId)}
                         onSelectCell={(roomId) => setFocusRoomId(roomId)}
                         onWeekChange={onWeekChange}
+                        rosterBulk={{
+                            onCreateForChild: (customerMemberId) => openCreateAssignment(customerMemberId),
+                            onBulkArchive: async (assignmentIds) => {
+                                for (const assignment_id of assignmentIds) {
+                                    await fetch("/api/admin/actions/execute", {
+                                        method: "POST",
+                                        headers: { "content-type": "application/json" },
+                                        body: JSON.stringify({
+                                            action_key: "assignment.archive",
+                                            entity_type: "assignment",
+                                            entity_id: assignment_id,
+                                            payload: { assignment_id },
+                                        }),
+                                    });
+                                }
+                                refreshAfterMutation();
+                            },
+                            onBulkMakePrimary: async (rows) => {
+                                for (const row of rows) {
+                                    await fetch("/api/admin/actions/execute", {
+                                        method: "POST",
+                                        headers: { "content-type": "application/json" },
+                                        body: JSON.stringify({
+                                            action_key: "assignment.set_primary",
+                                            entity_type: "child",
+                                            entity_id: row.agreementId,
+                                            payload: {
+                                                subject_type: "child",
+                                                enrollment_agreement_id: row.agreementId,
+                                                effective_date: row.effectiveFrom,
+                                                promote_assignment_id: row.assignmentId,
+                                            },
+                                        }),
+                                    });
+                                }
+                                refreshAfterMutation();
+                            },
+                            onBulkAssignment: async (_subjects, preview) => {
+                                for (const row of preview.filter((p) => p.status === "ready")) {
+                                    await fetch("/api/admin/actions/execute", {
+                                        method: "POST",
+                                        headers: { "content-type": "application/json" },
+                                        body: JSON.stringify({
+                                            action_key: "assignment.create",
+                                            entity_type: "child",
+                                            entity_id: row.customerMemberId,
+                                            payload: row.payload,
+                                        }),
+                                    });
+                                }
+                                refreshAfterMutation();
+                            },
+                            onBulkRoomChange: async (rows) => {
+                                for (const row of rows) {
+                                    await fetch("/api/admin/actions/execute", {
+                                        method: "POST",
+                                        headers: { "content-type": "application/json" },
+                                        body: JSON.stringify({
+                                            action_key: "assignment.create",
+                                            entity_type: "child",
+                                            entity_id: row.customerMemberId,
+                                            payload: row.payload,
+                                        }),
+                                    });
+                                }
+                                refreshAfterMutation();
+                            },
+                            assignmentTypes: pickerAssignmentTypes ?? [],
+                            siteId,
+                        }}
                     />
                 ) : null}
 
@@ -464,11 +667,14 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                     <SchedulingStudio
                         view={studioView}
                         patterns={studioPatterns ?? []}
+                        assignmentTypes={assignmentTypes ?? []}
                         calculations={calculations ?? []}
                         editorConfig={studioConfig ?? EMPTY_STUDIO_CONFIG}
-                        loading={studioView === "calculations" ? loadingCalc : loadingStudio}
+                        loading={studioView === "validation" ? loadingCalc : loadingStudio}
                         siteName={siteName}
+                        sites={sites ?? []}
                         onMutatePattern={onMutatePattern}
+                        onAssignmentTypesChanged={loadAssignmentTypesAdmin}
                     />
                 ) : null}
             </WorkspaceSurface>

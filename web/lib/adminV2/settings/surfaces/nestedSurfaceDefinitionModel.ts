@@ -37,8 +37,13 @@ export type NestedSurfaceGroupDisplayOptions = {
     showEmail?: boolean;
     showDob?: boolean;
     showAge?: boolean;
-    /** Child identity header — profile image when URL is available. Default true. */
+    /** Identity header avatar (photo or initials). Default true. */
     showAvatar?: boolean;
+    /**
+     * When true (default), load profile photo URLs into the avatar when evidence
+     * carries them. When false, always render initials even if a photo URL exists.
+     */
+    useProfilePhotos?: boolean;
 };
 
 export type NestedSurfaceDefinition = {

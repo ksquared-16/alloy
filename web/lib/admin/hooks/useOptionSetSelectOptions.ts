@@ -30,20 +30,31 @@ export function useOptionSetSelectOptions(setKeys: readonly (string | null | und
         setLoading(true);
 
         void (async () => {
-            const init = { credentials: "include" as const };
-            const entries = await Promise.all(
-                normalizedKeys.map(async (setKey) => {
-                    const items = await fetchOptionSetItemsBySetKey(setKey, init);
-                    return [setKey, mapOptionItemsToSelectOptions(items)] as const;
-                }),
-            );
-            if (cancelled) return;
-            setOptionsBySetKey(Object.fromEntries(entries));
-            setLoading(false);
+            try {
+                const init = { credentials: "include" as const };
+                const entries = await Promise.all(
+                    normalizedKeys.map(async (setKey) => {
+                        const items = await fetchOptionSetItemsBySetKey(setKey, init);
+                        return [setKey, mapOptionItemsToSelectOptions(items)] as const;
+                    }),
+                );
+                if (cancelled) return;
+                setOptionsBySetKey(Object.fromEntries(entries));
+            } catch {
+                if (cancelled) return;
+                setOptionsBySetKey({});
+            } finally {
+                // Always clear loading for this generation — a cancelled in-flight
+                // request must not leave the select permanently disabled.
+                if (!cancelled) setLoading(false);
+            }
         })();
 
         return () => {
             cancelled = true;
+            // Unmount / key change: drop the busy flag so a remounted editor is not
+            // stuck disabled if the prior fetch never lands on this instance.
+            setLoading(false);
         };
     }, [keysSignature, normalizedKeys]);
 

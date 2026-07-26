@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Scheduling — a workspace modal (like Processing / Inbox), opened from the left nav.
- * The full Scheduling Workspace surface (Overview · Roster · Attendance) renders inside
+ * Assignments — workspace modal (like Processing / Inbox), opened from the left nav.
+ * The full Assignments Workspace surface (Overview · Roster · Actions · Studio) renders inside
  * the shared workspace-modal shell rather than a standalone route.
  */
 import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";

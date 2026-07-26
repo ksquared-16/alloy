@@ -18,11 +18,13 @@ import {
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { allowedPatternWeekdays } from "@/lib/locations/locationSchedulingConfig";
 import { resolveVisibleDayPills } from "@/lib/scheduling/dayPills";
+import { projectCompactScheduleForIdentity } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
+import type { Assignment as ProjectionAssignment, ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 import {
-    formatCompactScheduleEffective,
-    projectCompactScheduleForIdentity,
-} from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
-import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
+    AssignmentDetailView,
+    AssignmentSummaryList,
+    type AssignmentListActions,
+} from "@/components/adminV2/scheduling/AssignmentSummaryDetail";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -71,15 +73,7 @@ function money(m: Money | null | undefined, freq?: string): string {
 
 // ── Projection shapes (from ?view=projection) ────────────────────────────────
 type ProjRoom = { id: string | null; name: string | null; program: string | null };
-type ProjAssignment = {
-    room: ProjRoom;
-    weekdays: number[];
-    arriveTime: string | null;
-    departTime: string | null;
-    effectiveFrom: string;
-    effectiveTo: string | null;
-    openEnded: boolean;
-};
+type ProjAssignment = ProjectionAssignment;
 type ProjView = {
     effectiveFrom: string;
     effectiveTo: string | null;
@@ -92,13 +86,26 @@ type ChildStatus = "scheduled" | "proposed" | "needs-placement" | "upcoming-only
 type ChildProj = {
     child: { id: string; name: string; program: string | null; siteId: string | null; siteName: string | null };
     status: ChildStatus;
+    enrollmentAgreementId?: string | null;
     current: ProjView | null;
     proposed: ProjView | null;
+    history?: { effectiveFrom: string; effectiveTo: string | null; summary: string }[];
 };
 
 type SchedTypeOpt = { key: string; label: string; behavior: "continuous" | "rotating" };
+type AssignmentTypeOpt = {
+    id: string;
+    key: string | null;
+    label: string;
+    visualTone?: string | null;
+};
 /** The site's configured scheduling constraints + preloaded patterns, from first-paint. */
-type SchedConfig = { operatingDays: number[]; scheduleTypes: SchedTypeOpt[]; patterns: Pattern[] };
+type SchedConfig = {
+    operatingDays: number[];
+    scheduleTypes: SchedTypeOpt[];
+    patterns: Pattern[];
+    assignmentTypes: AssignmentTypeOpt[];
+};
 type PlacementOption = { roomId: string; roomName: string | null; classification: "recommended" | "eligible" | "blocked"; reason: string };
 type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string; defaultHours: DailyHours | null; defaultOpenEnded: boolean };
 type SchedChild = { id: string; personId: string | null; name: string; imageUrl: string | null; dobAge: string | null };
@@ -121,20 +128,30 @@ function formatDate(iso: string | null): string {
     if (!y || !m || !d) return iso;
     return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
-function fmtTime(t: string | null): string {
-    if (!t) return "";
-    const [hh, mm] = t.split(":").map(Number);
-    if (Number.isNaN(hh)) return t;
-    const ap = hh < 12 ? "AM" : "PM";
-    const h12 = hh % 12 === 0 ? 12 : hh % 12;
-    return `${h12}:${String(mm).padStart(2, "0")} ${ap}`;
-}
-
 async function schedApi(path: string, init?: RequestInit): Promise<any> {
     const res = await fetch(`/api/admin/scheduling${path}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
     return body;
+}
+
+async function executeAssignmentAction(body: Record<string, unknown>): Promise<void> {
+    const res = await fetch("/api/admin/actions/execute", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json?.ok === false) {
+        const err = json?.error;
+        const message =
+            typeof err === "string"
+                ? err
+                : err && typeof err === "object" && typeof err.message === "string"
+                  ? err.message
+                  : `Action failed (${res.status})`;
+        throw new Error(message);
+    }
 }
 
 // ── Derived schedule state (business meaning leads) ──────────────────────────
@@ -214,14 +231,22 @@ export default function SchedulingCard({ model, context, receded = false, coordi
     // offers schedule types with no per-open fetch.
     const schedConfig: SchedConfig = useMemo(() => {
         const bag = (context.truth as Record<string, unknown>)?._scheduling_projection as
-            | { operatingDays?: unknown; scheduleTypes?: unknown; patterns?: unknown }
+            | {
+                  operatingDays?: unknown;
+                  scheduleTypes?: unknown;
+                  patterns?: unknown;
+                  assignmentTypes?: unknown;
+              }
             | undefined;
         const operatingDays = Array.isArray(bag?.operatingDays)
             ? (bag!.operatingDays as unknown[]).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
             : [];
         const scheduleTypes = Array.isArray(bag?.scheduleTypes) ? (bag!.scheduleTypes as SchedTypeOpt[]) : [];
         const patterns = Array.isArray(bag?.patterns) ? (bag!.patterns as Pattern[]) : [];
-        return { operatingDays, scheduleTypes, patterns };
+        const assignmentTypes = Array.isArray(bag?.assignmentTypes)
+            ? (bag!.assignmentTypes as AssignmentTypeOpt[]).filter((t) => t?.id && t?.label)
+            : [];
+        return { operatingDays, scheduleTypes, patterns, assignmentTypes };
     }, [context.truth]);
 
     // Local overrides after a save (the prebuilt context does not re-compose on its own).
@@ -274,7 +299,12 @@ export default function SchedulingCard({ model, context, receded = false, coordi
     );
     useDismissSignal(coordination, "scheduling", () => setActiveChildId(null));
 
-    const insight = children.length === 0 ? "No children to schedule" : children.length === 1 ? "1 child" : `${children.length} children`;
+    const insight =
+        children.length === 0
+            ? "No children to assign"
+            : children.length === 1
+              ? "1 child"
+              : `${children.length} children`;
 
     return (
         <UniversalCard
@@ -282,7 +312,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
             // When a child is active the work surface leads with its own avatar identity
             // header, so the redundant "Schedule · <name>" heading is suppressed.
             insight={activeChild ? "" : insight}
-            supportingInsight={activeChild ? null : children.length > 0 ? "Room · weekly pattern · effective dates" : null}
+            supportingInsight={activeChild ? null : children.length > 0 ? "Room · Days · Effective · Time" : null}
             iconName={model.iconName}
             tier={model.tier}
             archetype={model.archetype}
@@ -309,7 +339,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                         }}
                     />
                 ) : children.length === 0 ? (
-                    <p style={{ fontSize: 12.5, color: T.muted }}>Link children to schedule them.</p>
+                    <p style={{ fontSize: 12.5, color: T.muted }}>Link children to add assignments.</p>
                 ) : (
                     <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
                         {children.map((child) => {
@@ -350,7 +380,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
 // ── The work surface: Detail (read-only) ⇄ Editor (edit | create) ────────────
 // Both render the SAME ScheduleRegions composition. Detail passes value nodes;
 // Editor passes control nodes into the same regions.
-type SurfaceMode = "detail" | "edit" | "create";
+type SurfaceMode = "detail" | "edit" | "create" | "assignment" | "pick-type";
 
 function ScheduleWorkSurface({
     child,
@@ -373,27 +403,20 @@ function ScheduleWorkSurface({
 }) {
     const [proj, setProj] = useState<ChildProj | null>(projection);
     const existing = existingView(proj);
-    // Existing schedule → open Detail INSTANTLY from the prebuilt projection (no fetch).
-    // No schedule → the create editor (which also renders instantly; deps load lazily).
     const [mode, setMode] = useState<SurfaceMode>(existing ? "detail" : "create");
-    const [detailBilling, setDetailBilling] = useState<BillingProjection | null>(null);
+    const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
+    const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
+    const [pendingTypeId, setPendingTypeId] = useState<string | null>(null);
+    const [actionBusy, setActionBusy] = useState(false);
+    const [actionError, setActionError] = useState<string | null>(null);
 
-    // Detail billing — enriches the tuition line in the background; never gates Detail.
-    useEffect(() => {
-        if (mode !== "detail" || !existing?.scheduleType) return;
-        let cancelled = false;
-        (async () => {
-            const siteId = proj?.child.siteId || "";
-            if (!siteId) return;
-            const bill = await schedApi(
-                `?view=billing&site_location_id=${encodeURIComponent(siteId)}&customer_member_id=${encodeURIComponent(child.id)}&schedule_type=${encodeURIComponent(existing.scheduleType!)}${existing.effectiveFrom ? `&start_date=${existing.effectiveFrom}` : ""}`
-            ).catch(() => null);
-            if (!cancelled) setDetailBilling(bill?.projection ?? null);
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [mode, existing?.scheduleType, existing?.effectiveFrom, proj?.child.siteId, child.id]);
+    const currentAssignments: ProjAssignment[] = useMemo(() => {
+        const view = existingView(proj);
+        return (view?.assignments ?? []).filter((a) => a.subjectType !== "staff");
+    }, [proj]);
+
+    const activeAssignment =
+        currentAssignments.find((a) => a.id === activeAssignmentId) ?? null;
 
     const previousFocus = coordination?.previousFocus ?? null;
     const backLabel = previousFocus
@@ -447,32 +470,413 @@ function ScheduleWorkSurface({
     const onSaved = async () => {
         const fresh = await reloadChild();
         setProj(fresh);
-        setDetailBilling(null);
         setMode("detail");
+        setActiveAssignmentId(null);
+        setEditingAssignmentId(null);
+        setPendingTypeId(null);
     };
 
-    if (mode === "detail") {
+    const beginCreateAssignment = () => {
+        setActionError(null);
+        setEditingAssignmentId(null);
+        if (currentAssignments.length === 0) {
+            // First commitment uses the schedule create path (primary home).
+            setPendingTypeId(null);
+            setMode("create");
+            return;
+        }
+        // Always open the type picker — empty state deep-links to Studio Types (no seed/migrate dead end).
+        setPendingTypeId(null);
+        setMode("pick-type");
+    };
+
+    const runAction = async (body: {
+        action_key: string;
+        entity_type: string;
+        entity_id: string;
+        payload: Record<string, unknown>;
+    }) => {
+        setActionBusy(true);
+        setActionError(null);
+        try {
+            await executeAssignmentAction(body);
+            await onSaved();
+        } catch (e) {
+            setActionError(e instanceof Error ? e.message : "Action failed");
+        } finally {
+            setActionBusy(false);
+        }
+    };
+
+    if (mode === "assignment" && activeAssignment) {
         return (
-            <div data-schedule-surface="true" data-schedule-ready="true">
+            <div data-schedule-surface="true" data-schedule-ready="true" data-assignment-surface="detail">
                 {header}
-                <ScheduleDetail child={child} proj={proj} billing={detailBilling} operatingDays={config.operatingDays} onEdit={() => setMode("edit")} onCreate={() => setMode("create")} />
+                {actionError ? (
+                    <p style={{ color: T.ember, fontSize: 12, margin: "0 0 8px" }}>{actionError}</p>
+                ) : null}
+                <AssignmentDetailView
+                    assignment={activeAssignment}
+                    siblings={currentAssignments}
+                    history={proj?.history ?? []}
+                    busy={actionBusy}
+                    onBack={() => {
+                        setMode("detail");
+                        setActiveAssignmentId(null);
+                    }}
+                    onEdit={() => {
+                        if (activeAssignment.isPrimary) {
+                            setActiveAssignmentId(null);
+                            setEditingAssignmentId(null);
+                            setMode("edit");
+                            return;
+                        }
+                        setEditingAssignmentId(activeAssignment.id);
+                        setActiveAssignmentId(null);
+                        if (activeAssignment.assignmentType.id) {
+                            setPendingTypeId(activeAssignment.assignmentType.id);
+                            setMode("create");
+                            return;
+                        }
+                        if (config.assignmentTypes.length === 0) {
+                            setActionError("No Assignment Types are configured for this organization.");
+                            setMode("detail");
+                            return;
+                        }
+                        setPendingTypeId(null);
+                        setMode("pick-type");
+                    }}
+                    onSetPrimary={
+                        activeAssignment.isPrimary
+                            ? undefined
+                            : () =>
+                                  runAction({
+                                      action_key: "assignment.set_primary",
+                                      entity_type: "child",
+                                      entity_id: child.id,
+                                      payload: {
+                                          subject_type: "child",
+                                          enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                          effective_date: activeAssignment.effectiveFrom,
+                                          promote_assignment_id: activeAssignment.id,
+                                          subject_label: child.name,
+                                      },
+                                  })
+                    }
+                    onDuplicate={
+                        activeAssignment.assignmentType.id
+                            ? () =>
+                                  runAction({
+                                      action_key: "assignment.create",
+                                      entity_type: "child",
+                                      entity_id: child.id,
+                                      payload: {
+                                          subject_type: "child",
+                                          enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                          schedule_pattern_id: activeAssignment.patternId,
+                                          start_date: activeAssignment.effectiveFrom,
+                                          room_location_id: activeAssignment.room.id,
+                                          assignment_type_id: activeAssignment.assignmentType.id,
+                                          duplicate_of: activeAssignment.id,
+                                          assignment_type_label: activeAssignment.assignmentType.label,
+                                          is_primary: false,
+                                      },
+                                  })
+                            : undefined
+                    }
+                    onArchive={
+                        activeAssignment.isPrimary
+                            ? undefined
+                            : () =>
+                                  runAction({
+                                      action_key: "assignment.archive",
+                                      entity_type: "child",
+                                      entity_id: child.id,
+                                      payload: { assignment_id: activeAssignment.id },
+                                  })
+                    }
+                    archiveBlockedReason={
+                        activeAssignment.isPrimary
+                            ? "Make another assignment primary before archiving this one."
+                            : null
+                    }
+                />
             </div>
         );
     }
 
+    if (mode === "detail" || mode === "assignment") {
+        return (
+            <div data-schedule-surface="true" data-schedule-ready="true" data-assignment-list-surface="true">
+                {header}
+                <AssignmentListSurface
+                    child={child}
+                    proj={proj}
+                    assignments={currentAssignments}
+                    onCreate={beginCreateAssignment}
+                    onOpenAssignment={(id) => {
+                        setActiveAssignmentId(id);
+                        setMode("assignment");
+                    }}
+                    listActions={{
+                        busy: actionBusy,
+                        onEdit: (id) => {
+                            const a = currentAssignments.find((row) => row.id === id);
+                            if (!a) return;
+                            setActiveAssignmentId(id);
+                            setMode("assignment");
+                            // Detail owns the edit entry; open detail then operator hits Edit,
+                            // or jump straight into editor for primary.
+                            if (a.isPrimary) {
+                                setActiveAssignmentId(null);
+                                setEditingAssignmentId(null);
+                                setMode("edit");
+                                return;
+                            }
+                            setEditingAssignmentId(a.id);
+                            setActiveAssignmentId(null);
+                            if (a.assignmentType.id) {
+                                setPendingTypeId(a.assignmentType.id);
+                                setMode("create");
+                                return;
+                            }
+                            setPendingTypeId(null);
+                            setMode("pick-type");
+                        },
+                        onSetPrimary: (id) => {
+                            const a = currentAssignments.find((row) => row.id === id);
+                            if (!a || a.isPrimary) return;
+                            void runAction({
+                                action_key: "assignment.set_primary",
+                                entity_type: "child",
+                                entity_id: child.id,
+                                payload: {
+                                    subject_type: "child",
+                                    enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                    effective_date: a.effectiveFrom,
+                                    promote_assignment_id: a.id,
+                                    subject_label: child.name,
+                                },
+                            });
+                        },
+                        onDuplicate: (id) => {
+                            const a = currentAssignments.find((row) => row.id === id);
+                            if (!a?.assignmentType.id) return;
+                            void runAction({
+                                action_key: "assignment.create",
+                                entity_type: "child",
+                                entity_id: child.id,
+                                payload: {
+                                    subject_type: "child",
+                                    enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                    schedule_pattern_id: a.patternId,
+                                    start_date: a.effectiveFrom,
+                                    room_location_id: a.room.id,
+                                    assignment_type_id: a.assignmentType.id,
+                                    duplicate_of: a.id,
+                                    assignment_type_label: a.assignmentType.label,
+                                    is_primary: false,
+                                },
+                            });
+                        },
+                        onArchive: (id) => {
+                            const a = currentAssignments.find((row) => row.id === id);
+                            if (!a || a.isPrimary) return;
+                            void runAction({
+                                action_key: "assignment.archive",
+                                entity_type: "child",
+                                entity_id: child.id,
+                                payload: { assignment_id: a.id },
+                            });
+                        },
+                        archiveBlockedReasonFor: (a) =>
+                            a.isPrimary ? "Make another assignment primary before archiving this one." : null,
+                    }}
+                />
+            </div>
+        );
+    }
+
+    if (mode === "pick-type") {
+        return (
+            <div data-schedule-surface="true" data-schedule-ready="true" data-assignment-type-picker="true">
+                {header}
+                {actionError ? (
+                    <p style={{ color: T.ember, fontSize: 12, margin: "0 0 8px" }}>{actionError}</p>
+                ) : null}
+                <AssignmentTypePicker
+                    types={config.assignmentTypes}
+                    onCancel={() => setMode("detail")}
+                    onPick={(typeId) => {
+                        setPendingTypeId(typeId);
+                        setMode("create");
+                    }}
+                    onConfigureTypes={() => {
+                        void import("@/lib/adminV2/workspaceModalEvents").then(({ dispatchAdminV2OpenSchedulingModal }) => {
+                            dispatchAdminV2OpenSchedulingModal({ mode: "studio", studioView: "types" });
+                        });
+                    }}
+                />
+            </div>
+        );
+    }
+
+    const editingAssignment =
+        editingAssignmentId != null
+            ? currentAssignments.find((a) => a.id === editingAssignmentId) ?? null
+            : null;
+    const createAsSecondary = Boolean(pendingTypeId) || Boolean(editingAssignment);
+    const selectedType =
+        config.assignmentTypes.find((t) => t.id === pendingTypeId) ??
+        (editingAssignment?.assignmentType.id
+            ? {
+                  id: editingAssignment.assignmentType.id,
+                  key: editingAssignment.assignmentType.key,
+                  label: editingAssignment.assignmentType.label ?? "Assignment",
+              }
+            : null);
+
     return (
         <div data-schedule-surface="true" data-schedule-ready="true">
             {header}
+            {actionError ? (
+                <p style={{ color: T.ember, fontSize: 12, margin: "0 0 8px" }}>{actionError}</p>
+            ) : null}
             <ScheduleEditor
                 child={child}
                 opportunityId={opportunityId}
                 proj={proj}
                 config={config}
-                existing={mode === "edit" ? existing : null}
-                mode={mode}
-                onCancel={() => setMode(existing ? "detail" : "detail")}
+                existing={mode === "edit" ? existing : editingAssignment ? {
+                    effectiveFrom: editingAssignment.effectiveFrom,
+                    effectiveTo: editingAssignment.effectiveTo,
+                    openEnded: editingAssignment.openEnded,
+                    scheduleType: existing?.scheduleType,
+                    scheduleTypeLabel: existing?.scheduleTypeLabel,
+                    assignments: [editingAssignment],
+                } : null}
+                mode={mode === "edit" ? "edit" : "create"}
+                createAsSecondary={createAsSecondary}
+                assignmentTypeLabel={selectedType?.label ?? null}
+                onCancel={() => {
+                    setPendingTypeId(null);
+                    setEditingAssignmentId(null);
+                    setMode("detail");
+                }}
                 onSaved={onSaved}
+                onCreateSecondary={async (payload) => {
+                    if (!selectedType?.id) {
+                        throw new Error("Choose an Assignment Type before creating.");
+                    }
+                    await executeAssignmentAction({
+                        action_key: "assignment.create",
+                        entity_type: "child",
+                        entity_id: child.id,
+                        payload: {
+                            subject_type: "child",
+                            enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                            schedule_pattern_id: payload.schedule_pattern_id,
+                            start_date: payload.start_date,
+                            room_location_id: payload.room_location_id,
+                            assignment_type_id: selectedType.id,
+                            assignment_type_label: selectedType.label,
+                            is_primary: false,
+                            supersedes_assignment_id: editingAssignmentId,
+                        },
+                    });
+                    await onSaved();
+                }}
             />
+        </div>
+    );
+}
+
+function AssignmentTypePicker({
+    types,
+    onPick,
+    onCancel,
+    onConfigureTypes,
+}: {
+    types: AssignmentTypeOpt[];
+    onPick: (typeId: string) => void;
+    onCancel: () => void;
+    onConfigureTypes?: () => void;
+}) {
+    if (types.length === 0) {
+        return (
+            <div style={{ display: "grid", gap: 12, paddingTop: 4 }} data-assignment-type-picker-empty="true">
+                <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.forge }}>Assignment Types needed</div>
+                    <p style={{ margin: "4px 0 0", fontSize: 12, color: T.muted, lineHeight: 1.4 }}>
+                        Configure Assignment Types (Primary Classroom, Before Care, Enrichment, and similar) before
+                        creating additional assignments. You can return here afterward.
+                    </p>
+                </div>
+                {onConfigureTypes ? (
+                    <button
+                        type="button"
+                        data-configure-assignment-types="true"
+                        onClick={onConfigureTypes}
+                        style={{
+                            all: "unset",
+                            cursor: "pointer",
+                            background: T.pine,
+                            color: "#fff",
+                            fontSize: 12.5,
+                            fontWeight: 700,
+                            padding: "8px 14px",
+                            borderRadius: 10,
+                            width: "fit-content",
+                        }}
+                    >
+                        Configure Assignment Types
+                    </button>
+                ) : null}
+                <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
+                    Cancel
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ display: "grid", gap: 12, paddingTop: 4 }}>
+            <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.forge }}>Choose Assignment Type</div>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: T.muted, lineHeight: 1.4 }}>
+                    Every additional assignment needs an explicit type — Primary Classroom, Before Care, Enrichment, and similar.
+                </p>
+            </div>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+                {types.map((t) => (
+                    <li key={t.id}>
+                        <button
+                            type="button"
+                            data-assignment-type-option={t.key ?? t.id}
+                            onClick={() => onPick(t.id)}
+                            style={{
+                                all: "unset",
+                                display: "block",
+                                width: "100%",
+                                boxSizing: "border-box",
+                                padding: "10px 12px",
+                                borderRadius: 10,
+                                border: `1px solid ${T.border}`,
+                                background: "#fff",
+                                cursor: "pointer",
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: T.forge,
+                            }}
+                        >
+                            {t.label}
+                        </button>
+                    </li>
+                ))}
+            </ul>
+            <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
+                Cancel
+            </button>
         </div>
     );
 }
@@ -615,69 +1019,37 @@ function ScheduleRegions({
     );
 }
 
-// ── Read-only Schedule Detail (the completed state) ──────────────────────────
-function ScheduleDetail({
+// ── Assignment list surface — the list IS the summary (no schedule regions) ─
+function AssignmentListSurface({
     child,
     proj,
-    billing,
-    operatingDays,
-    onEdit,
+    assignments,
     onCreate,
+    onOpenAssignment,
+    listActions,
 }: {
     child: SchedChild;
     proj: ChildProj | null;
-    billing: BillingProjection | null;
-    /** The site's operating days — non-operating weekdays are hidden in the Days region. */
-    operatingDays: number[];
-    onEdit: () => void;
+    assignments: ProjAssignment[];
     onCreate: () => void;
+    onOpenAssignment: (id: string) => void;
+    listActions?: AssignmentListActions;
 }) {
-    const view = existingView(proj);
-    const a = view?.assignments[0] ?? null;
     const state = deriveScheduleState(proj);
-    const hours = a?.arriveTime && a?.departTime ? `${fmtTime(a.arriveTime)} – ${fmtTime(a.departTime)}` : null;
-    const roomText = a?.room.name ? (a.room.program ? `${a.room.name} · ${a.room.program}` : a.room.name) : null;
-    // Detail Days mirror the editor: show only the site's operating days (closed days
-    // hidden), with unselected operating days grayed. A selected day outside operating
-    // days still shows (so the schedule reads truthfully).
-    const allowedDays = allowedPatternWeekdays(operatingDays);
 
     return (
-        <ScheduleRegions
-            surface="detail"
-            child={child}
-            state={state}
-            billing={billing}
-            days={a?.weekdays.length ? <DayPills days={a.weekdays} interactive={false} allowed={allowedDays} /> : <Empty>No days set</Empty>}
-            hours={hours ? <Value>{hours}</Value> : <Empty>Not set</Empty>}
-            siteRoom={
-                <div style={{ display: "grid", gap: 2 }}>
-                    <Value>{proj?.child.siteName ?? "—"}</Value>
-                    {roomText ? <span style={{ fontSize: 12.5, color: T.slate }}>{roomText}</span> : <Empty>Room pending</Empty>}
-                </div>
-            }
-            effective={
-                <span data-schedule-effective="true">
-                    <Value>
-                        {formatCompactScheduleEffective({
-                            effectiveFrom: view?.effectiveFrom ?? null,
-                            effectiveTo: view?.effectiveTo ?? null,
-                            openEnded: view?.openEnded,
-                        }) ?? "—"}
-                    </Value>
-                </span>
-            }
-            footer={
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <button type="button" onClick={onEdit} data-schedule-edit="true" style={primaryBtn(false)}>
-                        Edit schedule
-                    </button>
-                    <button type="button" onClick={onCreate} data-schedule-create-new="true" style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.pine }}>
-                        Create new schedule →
-                    </button>
-                </div>
-            }
-        />
+        <div data-assignment-list="true" style={{ display: "grid", gap: 12, paddingTop: 2 }}>
+            <IdentityHeader child={child} state={state} />
+            {state.sub ? (
+                <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div>
+            ) : null}
+            <AssignmentSummaryList
+                assignments={assignments}
+                onOpenAssignment={onOpenAssignment}
+                onCreate={onCreate}
+                listActions={listActions}
+            />
+        </div>
     );
 }
 
@@ -689,17 +1061,29 @@ function ScheduleEditor({
     config,
     existing,
     mode,
+    createAsSecondary = false,
+    assignmentTypeLabel = null,
     onCancel,
     onSaved,
+    onCreateSecondary,
 }: {
     child: SchedChild;
     opportunityId: string | null;
     proj: ChildProj | null;
     config: SchedConfig;
     existing: ProjView | null;
-    mode: SurfaceMode;
+    mode: "edit" | "create";
+    /** When true, create an independent secondary assignment (not a schedule successor). */
+    createAsSecondary?: boolean;
+    assignmentTypeLabel?: string | null;
     onCancel: () => void;
     onSaved: () => Promise<void>;
+    onCreateSecondary?: (payload: {
+        schedule_pattern_id: string | null;
+        start_date: string;
+        room_location_id: string | null;
+        assignment_type_label: string;
+    }) => Promise<void>;
 }) {
     const ex = existing?.assignments[0] ?? null;
     // Site is known from the projection — NO sites fetch, NO editor gate.
@@ -790,8 +1174,22 @@ function ScheduleEditor({
     }
     const patternId = resolvePatternId();
     const state = deriveScheduleState(proj) ;
-    const editState: ScheduleState = mode === "create" && !existing ? { label: "New schedule", tone: "blue", sub: null } : { ...state, sub: null };
-    const canSave = days.length > 0 && !!start && !!roomId && (!arrive || !depart || depart > arrive);
+    const editState: ScheduleState =
+        mode === "create" && createAsSecondary
+            ? {
+                  label: assignmentTypeLabel ? `New · ${assignmentTypeLabel}` : "New assignment",
+                  tone: "blue",
+                  sub: "Independent commitment",
+              }
+            : mode === "create" && !existing
+              ? { label: "New schedule", tone: "blue", sub: null }
+              : { ...state, sub: null };
+    const canSave =
+        days.length > 0 &&
+        !!start &&
+        !!roomId &&
+        (!arrive || !depart || depart > arrive) &&
+        (!createAsSecondary || Boolean(assignmentTypeLabel));
 
     async function save() {
         setBusy(true);
@@ -802,6 +1200,20 @@ function ScheduleEditor({
                 // Patterns weren't opened — resolve the id lazily now (single shared load).
                 const ps = await ensurePatterns();
                 pid = ps.find((p) => p.scheduleTypeKey === scheduleType)?.id ?? ps[0]?.id ?? null;
+            }
+            if (createAsSecondary && onCreateSecondary) {
+                if (!pid) {
+                    setError("Choose a schedule pattern before saving this assignment.");
+                    setBusy(false);
+                    return;
+                }
+                await onCreateSecondary({
+                    schedule_pattern_id: pid,
+                    start_date: start,
+                    room_location_id: roomId || null,
+                    assignment_type_label: assignmentTypeLabel || "Assignment",
+                });
+                return;
             }
             const times = {
                 default: arrive && depart && depart > arrive ? { arrive, depart } : null,
@@ -829,6 +1241,7 @@ function ScheduleEditor({
             await onSaved();
         } catch (e) {
             setError((e as Error).message);
+        } finally {
             setBusy(false);
         }
     }
@@ -959,13 +1372,27 @@ function ScheduleEditor({
                 }
                 footer={
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 10.5, color: T.muted }}>{mode === "create" ? "New schedule — configure the minimum." : "Editing the current schedule."}</span>
+                        <span style={{ fontSize: 10.5, color: T.muted }}>
+                            {createAsSecondary
+                                ? assignmentTypeLabel
+                                    ? `${assignmentTypeLabel} — independent of the primary.`
+                                    : "New assignment — independent of the primary."
+                                : mode === "create"
+                                  ? "Create Assignment — configure the minimum."
+                                  : "Editing this Assignment."}
+                        </span>
                         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
                             <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
                                 Cancel
                             </button>
                             <button type="button" disabled={busy || !canSave} onClick={save} data-schedule-commit="true" style={primaryBtn(busy || !canSave)}>
-                                {busy ? "Saving…" : mode === "create" ? "Save schedule" : "Save changes"}
+                                {busy
+                                    ? "Saving…"
+                                    : createAsSecondary
+                                      ? "Save assignment"
+                                      : mode === "create"
+                                        ? "Create Assignment"
+                                        : "Save Assignment"}
                             </button>
                         </div>
                     </div>
@@ -1053,12 +1480,6 @@ function RoomPicker({
 }
 
 // ── Small presentational pieces ──────────────────────────────────────────────
-function Value({ children }: { children: ReactNode }) {
-    return <span style={{ fontSize: 13, fontWeight: 600, color: T.forge }}>{children}</span>;
-}
-function Empty({ children }: { children: ReactNode }) {
-    return <span style={{ fontSize: 12.5, color: T.muted, fontStyle: "italic" }}>{children}</span>;
-}
 function RecTag() {
     return <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: T.pine }}>Recommended</span>;
 }

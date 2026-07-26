@@ -7,10 +7,17 @@ import { ImagePlus, ImageOff, Trash2 } from "lucide-react";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import {
     groupShowAvatarForNestedGroup,
+    groupUseProfilePhotosForNestedGroup,
     setGroupShowAvatarInNestedGroup,
+    setGroupUseProfilePhotosInNestedGroup,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
+
+type BuilderBinding = {
+    config: NestedSurfaceConfig;
+    onConfigChange: (next: NestedSurfaceConfig) => void;
+};
 
 type Props = {
     surfaceId: string;
@@ -20,6 +27,11 @@ type Props = {
     imageUrl: string | null;
     personId: string | null;
     size?: number;
+    /**
+     * Surface Builder (/surfaces) drill-in — always show Show/Hide + Upload.
+     * Used when FocusPanelComposerProvider is not wrapping this tree.
+     */
+    builder?: BuilderBinding;
 };
 
 /**
@@ -36,24 +48,42 @@ export default function ChildProfileAvatarComposer({
     imageUrl,
     personId,
     size = 40,
+    builder,
 }: Props) {
     const composer = useFocusPanelComposer();
-    const composing = composer?.isComposingSurface(surfaceId) ?? false;
-    const config = composer?.configFor(surfaceId);
+    const composingFromContext = composer?.isComposingSurface(surfaceId) ?? false;
+    const composing = Boolean(builder) || composingFromContext;
+    const config = builder?.config ?? composer?.configFor(surfaceId);
     const inputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
-    const [hovered, setHovered] = useState(false);
+    const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
 
-    const previewUrl = composer?.childAvatarPreviewUrl(childId) ?? imageUrl;
+    const previewUrl =
+        localPreviewUrl
+        ?? composer?.childAvatarPreviewUrl(childId)
+        ?? imageUrl;
     const showAvatar = config ? groupShowAvatarForNestedGroup(config, groupKey) : true;
-    const displayUrl = showAvatar ? previewUrl : null;
+    const useProfilePhotos = config ? groupUseProfilePhotosForNestedGroup(config, groupKey) : true;
+    const displayUrl = showAvatar && useProfilePhotos ? previewUrl : null;
 
-    const mutate = (next: NestedSurfaceConfig) => composer?.updateConfig(surfaceId, next);
+    const mutate = (next: NestedSurfaceConfig) => {
+        if (builder) {
+            builder.onConfigChange(next);
+            return;
+        }
+        composer?.updateConfig(surfaceId, next);
+    };
+
+    const setPreview = (url: string | null) => {
+        setLocalPreviewUrl(url);
+        composer?.setChildAvatarPreviewUrl(childId, url);
+    };
 
     const onFileChange = async (file: File | undefined) => {
-        if (!file || !composer || !personId) {
-            setUploadError(personId ? null : "Link a person record before uploading a profile photo.");
+        if (!file) return;
+        if (!personId) {
+            setUploadError("Link a person record before uploading a profile photo.");
             return;
         }
         setUploading(true);
@@ -75,7 +105,13 @@ export default function ChildProfileAvatarComposer({
             if (!signedRes.ok) throw new Error("Could not resolve uploaded image URL");
             const signed = (await signedRes.json()) as { url?: string };
             if (!signed.url) throw new Error("Signed URL missing");
-            composer.setChildAvatarPreviewUrl(childId, signed.url);
+            setPreview(signed.url);
+            if (config && !useProfilePhotos) {
+                mutate(setGroupUseProfilePhotosInNestedGroup(config, groupKey, true));
+            }
+            if (config && !showAvatar) {
+                mutate(setGroupShowAvatarInNestedGroup(config, groupKey, true));
+            }
         } catch {
             setUploadError("Upload stored in documents; preview-only until person photo field persists.");
         } finally {
@@ -84,7 +120,7 @@ export default function ChildProfileAvatarComposer({
     };
 
     const removeImage = () => {
-        composer?.setChildAvatarPreviewUrl(childId, null);
+        setPreview(null);
         setUploadError(null);
     };
 
@@ -92,22 +128,29 @@ export default function ChildProfileAvatarComposer({
         <div
             className={clsx("fp-child-avatar", composing && "fp-child-avatar--composing")}
             data-child-avatar-composer={childId}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
             onClick={(e) => {
                 if (!composing) return;
                 e.stopPropagation();
                 composer?.select({ kind: "region", surfaceId, groupKey });
             }}
         >
-            <CardAvatar name={childName} imageUrl={displayUrl} size={size} />
-            {composing && config && (hovered || !showAvatar) ? (
+            {showAvatar ? (
+                <CardAvatar name={childName} imageUrl={displayUrl} size={size} />
+            ) : (
+                <span className="fp-child-avatar__hidden" aria-hidden>
+                    <ImageOff className="h-4 w-4" />
+                </span>
+            )}
+            {composing && config ? (
                 <div className="fp-child-avatar__controls">
                     <button
                         type="button"
                         className={clsx("fp-layout-field__toggle", showAvatar && "is-on")}
                         aria-pressed={showAvatar}
-                        onClick={() => mutate(setGroupShowAvatarInNestedGroup(config, groupKey, !showAvatar))}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            mutate(setGroupShowAvatarInNestedGroup(config, groupKey, !showAvatar));
+                        }}
                     >
                         {showAvatar ? "Hide" : "Show"}
                     </button>
@@ -115,9 +158,30 @@ export default function ChildProfileAvatarComposer({
                         <>
                             <button
                                 type="button"
+                                className={clsx("fp-layout-field__toggle", useProfilePhotos && "is-on")}
+                                aria-pressed={useProfilePhotos}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    mutate(
+                                        setGroupUseProfilePhotosInNestedGroup(
+                                            config,
+                                            groupKey,
+                                            !useProfilePhotos,
+                                        ),
+                                    );
+                                }}
+                            >
+                                {useProfilePhotos ? "Photos on" : "Photos off"}
+                            </button>
+                            <button
+                                type="button"
                                 className="fp-child-avatar__upload"
                                 disabled={uploading}
-                                onClick={() => inputRef.current?.click()}
+                                data-child-avatar-upload
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    inputRef.current?.click();
+                                }}
                             >
                                 <ImagePlus className="h-3 w-3" aria-hidden />
                                 {uploading ? "Uploading…" : previewUrl ? "Change" : "Upload"}
@@ -127,7 +191,10 @@ export default function ChildProfileAvatarComposer({
                                     type="button"
                                     className="fp-child-avatar__upload"
                                     aria-label="Remove profile image"
-                                    onClick={removeImage}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        removeImage();
+                                    }}
                                 >
                                     <Trash2 className="h-3 w-3" aria-hidden />
                                     Remove
@@ -138,7 +205,10 @@ export default function ChildProfileAvatarComposer({
                         <button
                             type="button"
                             className="fp-child-avatar__upload"
-                            onClick={() => mutate(setGroupShowAvatarInNestedGroup(config, groupKey, true))}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                mutate(setGroupShowAvatarInNestedGroup(config, groupKey, true));
+                            }}
                         >
                             <ImageOff className="h-3 w-3" aria-hidden />
                             Show avatar
@@ -149,6 +219,7 @@ export default function ChildProfileAvatarComposer({
                         type="file"
                         accept="image/*"
                         className="sr-only"
+                        data-child-avatar-file-input
                         onChange={(e) => {
                             void onFileChange(e.target.files?.[0]);
                             e.target.value = "";

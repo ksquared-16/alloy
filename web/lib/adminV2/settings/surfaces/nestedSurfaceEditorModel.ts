@@ -306,10 +306,10 @@ function defaultGroupDisplayOptionsForSurface(
         return defaultHouseholdGroupDisplayOptions(groupKey);
     }
     if (surfaceId === "child_surface" && groupKey === "identity") {
-        return { showDob: false, showAge: true };
+        return { showDob: false, showAge: true, showAvatar: true, useProfilePhotos: true };
     }
-    if (surfaceId === CHILDREN_SURFACE_ID && groupKey === "identity") {
-        return { showAvatar: true };
+    if (surfaceId === CHILDREN_SURFACE_ID && (groupKey === "identity" || groupKey === "roster")) {
+        return { showAvatar: true, useProfilePhotos: true };
     }
     return undefined;
 }
@@ -984,6 +984,29 @@ export function setGroupShowAvatarInNestedGroup(
     };
 }
 
+/** When false, identity avatars stay initials-only even if a photo URL is present. Default true. */
+export function groupUseProfilePhotosForNestedGroup(config: NestedSurfaceConfig, groupKey: string): boolean {
+    return config.groups.find((g) => g.key === groupKey)?.displayOptions?.useProfilePhotos !== false;
+}
+
+export function setGroupUseProfilePhotosInNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    useProfilePhotos: boolean,
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((g) =>
+            g.key === groupKey
+                ? {
+                      ...g,
+                      displayOptions: { ...(g.displayOptions ?? {}), useProfilePhotos },
+                  }
+                : g,
+        ),
+    };
+}
+
 export function isNestedGroupEnabled(config: NestedSurfaceConfig, groupKey: string): boolean {
     const group = config.groups.find((g) => g.key === groupKey);
     if (!group) return false;
@@ -1098,6 +1121,42 @@ function filterPlacementsToConfiguredKeys(group: NestedSurfaceGroupConfig): Iden
     );
 }
 
+/**
+ * Published children identity configs historically seeded `child.gender` into Summary.
+ * Focus Panel child focus renders Details depth (Summary is excluded), so promote
+ * summary-only gender onto Detail Fields so the row remains visible without republish.
+ */
+function promoteChildGenderOntoDetailsIfSummaryOnly(
+    surfaceId: string,
+    group: NestedSurfaceGroupConfig,
+): NestedSurfaceGroupConfig {
+    if (
+        (surfaceId !== CHILDREN_SURFACE_ID && surfaceId !== "child_surface")
+        || group.key !== "identity"
+    ) {
+        return group;
+    }
+    const genderRef = "child.gender";
+    const inSummary = group.selectedFieldKeys.includes(genderRef);
+    const inContext = (group.contextFieldKeys ?? []).includes(genderRef);
+    const inDetails = (group.expandedFieldKeys ?? []).includes(genderRef);
+    if (!inSummary || inContext || inDetails) return group;
+
+    const selectedFieldKeys = group.selectedFieldKeys.filter((key) => key !== genderRef);
+    const expandedFieldKeys = [...(group.expandedFieldKeys ?? []), genderRef];
+    const fieldPlacements = (group.fieldPlacements ?? []).map((placement) =>
+        placement.fieldRef === genderRef
+            ? { ...placement, tier: "details" as const }
+            : placement,
+    );
+    return {
+        ...group,
+        selectedFieldKeys,
+        expandedFieldKeys,
+        fieldPlacements: fieldPlacements.length > 0 ? fieldPlacements : group.fieldPlacements,
+    };
+}
+
 /** Merge a loaded config with the current registry (adds new groups, drops stale). */
 export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSurfaceConfig | null): NestedSurfaceConfig {
     const base = defaultNestedSurfaceConfig(surfaceId);
@@ -1110,7 +1169,7 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
                   Object.entries(found.fieldPolicies).map(([k, v]) => [k, normalizeFieldVisibility(v)]),
               )
             : undefined;
-        const merged: NestedSurfaceGroupConfig = {
+        const mergedBase: NestedSurfaceGroupConfig = {
             key: g.key,
             selectedFieldKeys: [...found.selectedFieldKeys],
             contextFieldKeys:
@@ -1136,6 +1195,7 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
             sectionVisibility: found.sectionVisibility,
             sectionOrder: found.sectionOrder,
         };
+        const merged = promoteChildGenderOntoDetailsIfSummaryOnly(surfaceId, mergedBase);
         const filteredPlacements = filterPlacementsToConfiguredKeys(merged);
         const placements =
             filteredPlacements.length > 0 || merged.fieldPlacements !== undefined

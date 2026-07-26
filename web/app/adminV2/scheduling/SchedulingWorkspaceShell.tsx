@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Scheduling operational workspace shell — composes the canonical WorkspaceShell
+ * Assignments operational workspace shell — composes the canonical WorkspaceShell
  * (the same chrome Processing / Communications / Work Items use). Module code supplies
  * only the site picker, the section body, and the section-scoped operational health band.
  *
@@ -10,10 +10,10 @@
  */
 
 import type { ReactNode } from "react";
-import { CalendarRange } from "lucide-react";
+import { CalendarRange, ChevronDown, Plus } from "lucide-react";
 
 import WorkspaceShell from "@/components/workspace/WorkspaceShell";
-import { WS_FIELD_SELECT_CHROME } from "@/components/workspace/workspaceTokens";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import {
     SCHEDULING_MODES,
     SCHEDULING_STUDIO_TABS,
@@ -39,6 +39,7 @@ export default function SchedulingWorkspaceShell({
     siteName,
     metricsColumn,
     onClose,
+    onAddAssignment,
     children,
 }: {
     mode: SchedulingMode;
@@ -54,6 +55,8 @@ export default function SchedulingWorkspaceShell({
     /** Section-scoped operational health band (control band, right column). */
     metricsColumn?: ReactNode;
     onClose?: () => void;
+    /** Primary Overview / header Add Assignment — opens subject selection on Roster when needed. */
+    onAddAssignment?: () => void;
     children: ReactNode;
 }) {
     const isWork = mode === "work";
@@ -64,35 +67,73 @@ export default function SchedulingWorkspaceShell({
             shellDataAttrs={{ "data-adminv2-scheduling-workspace": true, "data-scheduling-mode": mode }}
             header={{
                 icon: <CalendarRange className="h-4 w-4" aria-hidden strokeWidth={1.9} />,
-                title: "Scheduling",
-                subtitle: `${siteName} · this week`,
+                title: "Assignments",
+                subtitle: `${siteName} · operational`,
                 titleId: "scheduling-workspace-title",
                 onClose: onClose ?? (() => {}),
-                closeLabel: "Close scheduling",
+                closeLabel: "Close assignments",
+                actions: isWork ? (
+                    <div className="flex items-center gap-2" data-assignment-workspace-header-actions="true">
+                        {onAddAssignment ? (
+                            <button
+                                type="button"
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-alloy-bend-pine px-2.5 py-1.5 text-[12px] font-semibold text-white"
+                                onClick={onAddAssignment}
+                                data-assignment-add-primary="true"
+                            >
+                                <Plus className="h-3.5 w-3.5" aria-hidden strokeWidth={2.25} />
+                                Add Assignment
+                            </button>
+                        ) : null}
+                        <details className="relative" data-assignment-actions-dropdown="true">
+                            <summary className="flex cursor-pointer list-none items-center gap-1 rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-alloy-midnight">
+                                Actions
+                                <ChevronDown className="h-3.5 w-3.5 text-alloy-slate" aria-hidden />
+                            </summary>
+                            <div className="absolute right-0 z-20 mt-1 min-w-[220px] rounded-xl border border-alloy-stone/20 bg-white p-1.5 shadow-lg">
+                                <button
+                                    type="button"
+                                    className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-alloy-midnight hover:bg-alloy-stone/30"
+                                    onClick={onAddAssignment}
+                                >
+                                    Add Assignment
+                                    <span className="text-[9px] font-semibold uppercase tracking-wide text-alloy-bend-pine">
+                                        Available
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/30"
+                                    onClick={() => {
+                                        onWorkViewChange("roster");
+                                    }}
+                                >
+                                    Bulk commands
+                                    <span className="text-[9px] font-semibold uppercase tracking-wide text-alloy-bend-pine">
+                                        Roster toolbar
+                                    </span>
+                                </button>
+                            </div>
+                        </details>
+                    </div>
+                ) : undefined,
                 secondaryActions:
                     sites && sites.length > 1 ? (
                         <label className="flex items-center gap-1.5">
                             <span className="sr-only">Site</span>
-                            <select
-                                className={WS_FIELD_SELECT_CHROME}
+                            <AlloySelect
                                 value={siteId}
-                                onChange={(e) => onSiteChange(e.target.value)}
+                                onChange={onSiteChange}
+                                options={(sites ?? []).map((s) => ({ value: s.id, label: s.name }))}
                                 aria-label="Site"
-                                data-scheduling-site-select="true"
-                            >
-                                {sites.map((s) => (
-                                    <option key={s.id} value={s.id}>
-                                        {s.name}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </label>
                     ) : null,
             }}
             modes={SCHEDULING_MODES}
             activeMode={mode}
             onModeChange={onModeChange}
-            modeAriaLabel="Scheduling mode"
+            modeAriaLabel="Assignments mode"
             sectionTabs={isWork ? SCHEDULING_WORK_TABS : SCHEDULING_STUDIO_TABS}
             activeSection={(isWork ? workView : studioView) as SchedulingSection}
             onSectionChange={(key) => {

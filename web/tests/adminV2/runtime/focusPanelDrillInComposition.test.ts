@@ -669,7 +669,26 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(avatarComposer).toContain("setChildAvatarPreviewUrl");
         expect(avatarComposer).toContain("Remove");
         expect(avatarComposer).toContain("groupShowAvatarForNestedGroup");
+        expect(avatarComposer).toContain("data-child-avatar-upload");
+        expect(avatarComposer).toContain("builder?");
         expect(childrenCard).toContain("imageUrl={previewImageUrl}");
+        const childrenDrillIn = readSrc(
+            "components/admin/focusPanel/drillIn/FocusPanelChildrenDrillInComposer.tsx",
+        );
+        expect(childrenDrillIn).toContain("ChildProfileAvatarComposer");
+        expect(childrenDrillIn).toContain("builder={{ config, onConfigChange }}");
+    });
+
+    it("exposes child profile avatar composer on roster context facts", () => {
+        expect(childrenCard).toContain('groupKey="roster"');
+        expect(childrenCard).toContain("childRosterAvatarComposer");
+        expect(childrenCard).toContain('purpose="context_facts"');
+        expect(childrenCard).toContain("renderRecordAvatar");
+        const childrenDrillIn = readSrc(
+            "components/admin/focusPanel/drillIn/FocusPanelChildrenDrillInComposer.tsx",
+        );
+        expect(childrenDrillIn).toContain('groupKey="roster"');
+        expect(childrenDrillIn).toContain("ChildProfileAvatarComposer");
     });
 
     it("polish sprint — field instances own controls; evidence sections are cards", () => {

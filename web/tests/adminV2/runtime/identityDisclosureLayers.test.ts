@@ -7,6 +7,7 @@ import {
     composeContextCollectionRows,
     composeContextFactsIntoDetails,
     composeSummaryAndContextFacts,
+    mergeChildrenRosterIntoFocusedIdentityRecord,
     sanitizeContextFactKeys,
 } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import {
@@ -31,6 +32,7 @@ import {
     HOUSEHOLD_SURFACE_ID,
     CHILDREN_SURFACE_ID,
     identityConfigurationFieldKeys,
+    setFieldLayoutWidthInNestedGroup,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     fieldKeysForConfigurationPurpose,
@@ -298,6 +300,60 @@ describe("children", () => {
             groupKey: "roster",
         });
         expect(vm.contextRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).not.toContain("child.notes_summary");
+    });
+
+    it("merges roster Context Facts onto focused identity for Details depth", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "roster", "inquiry_child.program", { tier: "context" });
+        config = setFieldLayoutWidthInNestedGroup(config, "roster", "inquiry_child.program", "half");
+        config = addFieldToNestedGroup(config, "roster", "child.gender", { tier: "context" });
+        config = setFieldLayoutWidthInNestedGroup(config, "roster", "child.gender", "half");
+        config = addFieldToNestedGroup(config, "identity", "child.date_of_birth", { tier: "expanded" });
+        const child = {
+            id: "c1",
+            name: "Lennon",
+            initial: "L",
+            imageUrl: null,
+            dobAge: "Age 4",
+            gender: "Female",
+            program: "Preschool",
+            room: null,
+            schedule: null,
+            teacher: null,
+            startDate: null,
+            status: null,
+            statusTone: "neutral" as const,
+            needsAttention: false,
+            detailLine: null,
+            missingLine: null,
+            flags: [],
+        };
+        const identity = buildChildIdentityRecordVM({
+            config,
+            child,
+            groupKey: "identity",
+            canMutate: true,
+            isFieldSaveSupported: () => true,
+        });
+        const roster = buildChildIdentityRecordVM({
+            config,
+            child,
+            groupKey: "roster",
+            canMutate: true,
+            isFieldSaveSupported: () => true,
+        });
+        const merged = mergeChildrenRosterIntoFocusedIdentityRecord(identity, roster);
+        const contextRefs = merged.contextFactRows.flatMap((r) => r.cells).map((c) => c.fieldRef);
+        expect(contextRefs).toEqual(["inquiry_child.program", "child.gender"]);
+        expect(merged.contextFactRows.some((r) => r.cells.length === 2)).toBe(true);
+        const detailsView = identityRowsForDisclosureDepth(merged, "details");
+        expect(detailsView.visibleRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).toEqual([
+            "inquiry_child.program",
+            "child.gender",
+        ]);
+        expect(detailsView.detailRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).toContain(
+            "child.date_of_birth",
+        );
     });
 });
 

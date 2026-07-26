@@ -11,6 +11,10 @@ import { loadSchedulingProjectionForChild } from "@/lib/scheduling/projection/bu
 import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 import { readLocationSchedulingConfig } from "@/lib/locations/locationSchedulingConfig";
 import { loadEditorPatternsForSite, type EditorPattern } from "@/lib/scheduling/editorPatterns";
+import {
+    loadOrgAssignmentTypes,
+    type OrgAssignmentTypeOption,
+} from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 
 /** Slim schedule-type option (recurrence behaviour) surfaced to the editor. */
 export type SchedulingConfigScheduleType = { key: string; label: string; behavior: "continuous" | "rotating" };
@@ -28,6 +32,8 @@ export type SchedulingProjectionFirstPaint = {
     scheduleTypes: SchedulingConfigScheduleType[];
     /** The site's schedule patterns, PRELOADED so the pattern shortcut opens instantly. */
     patterns: EditorPattern[];
+    /** Org Assignment Types for create / duplicate pickers. */
+    assignmentTypes: OrgAssignmentTypeOption[];
 };
 
 /**
@@ -84,16 +90,20 @@ export async function loadSchedulingProjectionsForFirstPaint(
     const byMemberId: Record<string, ChildScheduling> = {};
     if (children.length === 0 || !siteLocationId) {
         const asOf = await resolveOperationalEnrollmentTodayYmd(supabase, orgId).catch(() => "");
-        return { byMemberId, asOf, operatingDays: [], scheduleTypes: [], patterns: [] };
+        const assignmentTypes = await loadOrgAssignmentTypes(supabase, orgId, { subjectType: "child" }).catch(
+            () => []
+        );
+        return { byMemberId, asOf, operatingDays: [], scheduleTypes: [], patterns: [], assignmentTypes };
     }
     const todayYmd = await resolveOperationalEnrollmentTodayYmd(supabase, orgId);
     const computedAt = `${todayYmd}T00:00:00.000Z`;
     const identities = children.map(childIdentity).filter((x): x is { id: string; name: string } => x != null);
     // The site is opportunity-level — resolve its label + scheduling config + patterns
     // ONCE and reuse across children, rather than each re-querying for the same id.
-    const [{ siteName, operatingDays, scheduleTypes }, patterns] = await Promise.all([
+    const [{ siteName, operatingDays, scheduleTypes }, patterns, assignmentTypes] = await Promise.all([
         resolveSiteConfig(supabase, orgId, siteLocationId),
         loadEditorPatternsForSite(supabase, orgId, siteLocationId),
+        loadOrgAssignmentTypes(supabase, orgId, { subjectType: "child" }).catch(() => []),
     ]);
     const results = await Promise.all(
         identities.map((c) =>
@@ -112,5 +122,5 @@ export async function loadSchedulingProjectionsForFirstPaint(
     results.forEach((child, i) => {
         if (child) byMemberId[identities[i].id] = child;
     });
-    return { byMemberId, asOf: todayYmd, operatingDays, scheduleTypes, patterns };
+    return { byMemberId, asOf: todayYmd, operatingDays, scheduleTypes, patterns, assignmentTypes };
 }

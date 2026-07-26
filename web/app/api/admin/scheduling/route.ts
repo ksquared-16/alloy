@@ -21,6 +21,9 @@ import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { buildRosterReadModel, type RosterReadModel } from "@/lib/scheduling/roster/buildRosterReadModel";
 import { detectStartsInWindow } from "@/lib/scheduling/problems/detectStartsThisWeek";
 import { computeTodayActivity } from "@/lib/scheduling/activity/todayActivity";
+import { computeAssignmentAttention } from "@/lib/scheduling/assignmentAttention";
+import { buildAssignmentRosterReadModel } from "@/lib/scheduling/roster/buildAssignmentRosterReadModel";
+import { loadOrgAssignmentTypes } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 import { listOperationalCalculationDefinitions } from "@/lib/operationalCalculations";
 import { readLocationSchedulingConfig } from "@/lib/locations/locationSchedulingConfig";
 
@@ -262,7 +265,21 @@ export async function GET(request: NextRequest) {
                 addDaysYmd(mondayYmd(todayYmd), 6)
             );
             const activity = await computeTodayActivity(supabase, ctx.orgId, siteLocationId, todayYmd);
-            return NextResponse.json({ view, siteLocationId, unplaced, startsThisWeek, activity });
+            const assignmentAttention = await computeAssignmentAttention(
+                supabase,
+                ctx.orgId,
+                siteLocationId,
+                todayYmd,
+                unplaced.length
+            );
+            return NextResponse.json({
+                view,
+                siteLocationId,
+                unplaced,
+                startsThisWeek,
+                activity,
+                assignmentAttention,
+            });
         }
 
         if (view === "roster") {
@@ -281,6 +298,26 @@ export async function GET(request: NextRequest) {
                 todayYmd,
             });
             return NextResponse.json({ view, roster: presentRoster(model) });
+        }
+
+        if (view === "assignment_roster") {
+            const siteLocationId = param(request, "site_location_id");
+            if (!siteLocationId) {
+                return NextResponse.json({ error: "site_location_id is required", code: "invalid_input" }, { status: 400 });
+            }
+            const model = await buildAssignmentRosterReadModel(supabase, ctx.orgId, siteLocationId);
+            return NextResponse.json({
+                view,
+                siteLocationId,
+                subjects: model.subjects,
+                totalAssignments: model.totalAssignments,
+                staffReady: model.staffReady,
+            });
+        }
+
+        if (view === "assignment_types") {
+            const assignmentTypes = await loadOrgAssignmentTypes(supabase, ctx.orgId);
+            return NextResponse.json({ view, assignmentTypes });
         }
 
         if (view === "studio_config") {

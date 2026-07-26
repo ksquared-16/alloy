@@ -74,6 +74,8 @@ export type OpportunityFamilyContactRowExtended = OpportunityFamilyContactRow & 
     id: string;
     phone?: string | null;
     email?: string | null;
+    /** Profile image URL when hydrated from person metadata / custom fields. */
+    photo_url?: string | null;
 };
 
 /** Merge opportunity_persons with household customer_persons guardians (deduped, primary excluded later). */
@@ -97,6 +99,7 @@ export function buildOpportunityFamilyContactRows(
                 name: row.name != null ? String(row.name) : null,
                 phone: row.phone != null ? String(row.phone) : null,
                 email: row.email != null ? String(row.email) : null,
+                photo_url: trimOrNull(row.photo_url),
             });
         }
     }
@@ -110,6 +113,7 @@ export function buildOpportunityFamilyContactRows(
             name?: string | null;
             phone?: string | null;
             email?: string | null;
+            photo_url?: string | null;
         }[]) ?? [];
 
     for (const row of cpRows) {
@@ -123,6 +127,7 @@ export function buildOpportunityFamilyContactRows(
             name: trimOrNull(row.name),
             phone: trimOrNull(row.phone),
             email: trimOrNull(row.email),
+            photo_url: trimOrNull(row.photo_url),
         });
     }
 

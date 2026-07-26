@@ -151,12 +151,18 @@ export function householdDetailFieldKeysFromNestedConfig(config: NestedSurfaceCo
 /** Default display options seed for a household evidence group. */
 export function defaultHouseholdGroupDisplayOptions(groupKey: string): NestedSurfaceGroupDisplayOptions {
     if (groupKey === "children") {
-        return { visible: true, showDob: false, showAge: false };
+        return { visible: true, showDob: false, showAge: false, showAvatar: true, useProfilePhotos: true };
     }
     if (groupKey === "address") {
         return { visible: true };
     }
-    return { visible: true, showPhone: true, showEmail: true };
+    return {
+        visible: true,
+        showPhone: true,
+        showEmail: true,
+        showAvatar: true,
+        useProfilePhotos: true,
+    };
 }
 
 /** Default contact field modes for the contact drill-in surface. */

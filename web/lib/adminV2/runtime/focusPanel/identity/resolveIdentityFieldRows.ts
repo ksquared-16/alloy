@@ -21,6 +21,7 @@ export type IdentityFieldRowInput = {
     linkLabel?: string | null;
     linkDestination?: IdentityFieldCellVM["linkDestination"];
     linkTarget?: IdentityFieldCellVM["linkTarget"];
+    editControl?: IdentityFieldCellVM["editControl"];
 };
 
 /** Build row VMs from ordered placements (summary or expanded tier). */
@@ -64,6 +65,7 @@ export function resolveIdentityFieldRows(
                 linkTarget: input.linkTarget ?? null,
                 hideWhenEmpty: input.placement.hideWhenEmpty ?? false,
                 width,
+                editControl: input.editControl,
                 column: (columnIndex + 1) as 1 | 2 | 3,
             } satisfies IdentityFieldCellVM & { column?: 1 | 2 | 3 };
         }),

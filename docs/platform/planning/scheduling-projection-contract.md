@@ -92,6 +92,26 @@ The `Scheduling` name remains correct for the recurrence/pattern and child
 schedule lifecycle views. `Assignments` is the cross-subject operational
 product noun. No global label rename is implied by this storage transition.
 
+### 1.1.1 Operator surfaces (Phase 2A)
+
+Phase 2A does not redesign the Scheduling Focus Panel or Workspace shell. It
+makes concurrent assignments legible on the accepted Schedule Detail spine:
+
+- **Assignment Summary** — list of concurrent commitments (type, primary,
+  room, pattern, days, hours, effective dates, status, billing relationship)
+- **Assignment Detail** — canonical detail surface (identity, schedule, room,
+  timeline, billing, operational effects) with create / duplicate / archive /
+  set-primary through registered actions
+- **Assignment Timeline V1** — reusable weekday chronology
+  (`web/lib/operationalAssignments/assignmentTimeline.ts` +
+  `AssignmentTimeline` component) for Detail now; Household / Workspace /
+  Staff later without a second implementation
+- Compact identity lines prefer primary type label and append `+N more` when
+  multiple concurrent assignments exist
+
+Staff scheduling UI is out of scope; view models remain subject-typed
+(`child` | `staff`) so surfaces do not bake in child-only assumptions.
+
 ## 2. Schedule = a lifecycle grouping of assignments (operator-facing)
 
 Operators think in *schedules*, not rows. A **Schedule** is the operator-facing grouping of a child's assignments by lifecycle status — a **projection view**, resolved from the atoms:

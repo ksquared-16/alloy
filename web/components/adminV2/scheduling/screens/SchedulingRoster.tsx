@@ -1,18 +1,19 @@
 "use client";
 
 /**
- * Scheduling Roster — the room × weekday occupancy + ratio planning board.
- *
- * An operational planning surface: full width, sticky room column + sticky header row,
- * per-room health, occupancy fill, ratio indicators, hover + selection. Clicking a room,
- * a day cell, an occupancy figure, or a ratio warning opens the room-detail inspector
- * focused on that context. Launch cards from Overview arrive with a filter (unplaced /
- * starts / near-capacity / ratio-risk) that focuses the board. Occupancy / ratio signals
- * are consumed from the read-model — this screen owns presentation, never the calculation.
+ * Assignments Roster — assignment index (Primary / Secondary / room / type / status)
+ * plus the room × weekday occupancy board (scheduling property of assignments).
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+
+import AssignmentRosterPanel, {
+    type AssignmentRosterBulkHandlers,
+    type AssignmentRosterSubject,
+} from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
+
+export type RosterViewMode = "assignments" | "rooms";
 
 export type RosterTone = "pine" | "gold" | "ember";
 
@@ -63,7 +64,11 @@ const TONE_BAR: Record<RosterTone, string> = { pine: "bg-alloy-bend-pine", gold:
 
 export default function SchedulingRoster({
     data,
+    assignmentSubjects,
+    rosterView,
+    onRosterViewChange,
     loading,
+    loadingAssignments,
     siteName,
     focusRoomId,
     filter,
@@ -71,9 +76,14 @@ export default function SchedulingRoster({
     onSelectCell,
     onSelectRoom,
     onWeekChange,
+    rosterBulk,
 }: {
     data: RosterData | null;
+    assignmentSubjects: AssignmentRosterSubject[];
+    rosterView: RosterViewMode;
+    onRosterViewChange: (mode: RosterViewMode) => void;
     loading: boolean;
+    loadingAssignments: boolean;
     siteName: string;
     focusRoomId?: string;
     filter?: RosterFilterContext | null;
@@ -81,6 +91,7 @@ export default function SchedulingRoster({
     onSelectCell?: (roomId: string, dayKey: string) => void;
     onSelectRoom?: (roomId: string) => void;
     onWeekChange?: (dir: -1 | 1 | 0) => void;
+    rosterBulk?: AssignmentRosterBulkHandlers;
 }) {
     const [selectedCell, setSelectedCell] = useState<{ roomId: string; dayKey: string } | null>(null);
     const [detail, setDetail] = useState<{ roomId: string; dayKey: string | null } | null>(null);
@@ -128,6 +139,35 @@ export default function SchedulingRoster({
 
     return (
         <div className="flex min-h-0 flex-1 flex-col gap-3" data-scheduling-roster="true">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/25">
+                    <button
+                        type="button"
+                        className={`px-3 py-1.5 text-[11.5px] font-semibold ${rosterView === "assignments" ? "bg-alloy-bend-pine/10 text-alloy-bend-pine" : "text-alloy-slate hover:bg-alloy-stone/[0.06]"}`}
+                        onClick={() => onRosterViewChange("assignments")}
+                        data-assignment-roster-view="assignments"
+                    >
+                        Assignments
+                    </button>
+                    <button
+                        type="button"
+                        className={`border-l border-alloy-stone/25 px-3 py-1.5 text-[11.5px] font-semibold ${rosterView === "rooms" ? "bg-alloy-bend-pine/10 text-alloy-bend-pine" : "text-alloy-slate hover:bg-alloy-stone/[0.06]"}`}
+                        onClick={() => onRosterViewChange("rooms")}
+                        data-assignment-roster-view="rooms"
+                    >
+                        Room board
+                    </button>
+                </div>
+            </div>
+
+            {rosterView === "assignments" ?
+                <AssignmentRosterPanel
+                    subjects={assignmentSubjects}
+                    loading={loadingAssignments}
+                    siteName={siteName}
+                    bulk={rosterBulk}
+                />
+            :   <>
             {/* Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/25">
@@ -224,6 +264,7 @@ export default function SchedulingRoster({
             )}
 
             {loading && rooms.length === 0 ? <p className="px-1 text-[12px] text-alloy-slate">Loading roster…</p> : null}
+            </>}
         </div>
     );
 }

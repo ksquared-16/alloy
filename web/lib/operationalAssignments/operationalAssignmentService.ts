@@ -12,7 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { derivePlacementStatusFromStartDate } from "@/lib/childcareOperational/enrollmentOperationalStatus";
 import type { ScheduleAssignmentRow } from "@/lib/childcareOperational/enrollmentOperationalTypes";
 import { OperationalEnrollmentServiceError, trimOrNull } from "@/lib/childcareOperational/operationalEnrollmentErrors";
-import { assertValidIsoDate } from "@/lib/childcareOperational/effectiveDating";
+import { assertValidIsoDate, computePriorRowCloseDate } from "@/lib/childcareOperational/effectiveDating";
 import { getAgreementById } from "@/lib/childcareOperational/enrollmentAgreementService";
 import { validateSchedulePatternForSite } from "@/lib/childcareOperational/validateChildcareLocationRefs";
 
@@ -41,6 +41,12 @@ export type CreateOperationalAssignmentInput = {
      * cannot silently replace an operational home.
      */
     isPrimary?: boolean;
+    /**
+     * When set, close this prior operational assignment (effective-dated supersede)
+     * and insert the new row. Used for Edit Assignment on a secondary commitment.
+     * Primary home changes still use `assignment.set_primary`.
+     */
+    supersedesAssignmentId?: string | null;
     sourceKey?: string;
     metadata?: Record<string, unknown>;
     actorUserId?: string | null;
@@ -131,10 +137,11 @@ export async function createOperationalAssignment(
     }
 
     const isPrimary = input.isPrimary === true;
+    const supersedesAssignmentId = trimOrNull(input.supersedesAssignmentId);
     if (isPrimary && input.subject.type !== "child") {
         throw new OperationalEnrollmentServiceError("invalid_input", "Only a child assignment may be primary");
     }
-    if (isPrimary) {
+    if (isPrimary && !supersedesAssignmentId) {
         const { data, error } = await supabase
             .from("schedule_assignments")
             .select("id")
@@ -154,6 +161,39 @@ export async function createOperationalAssignment(
         }
     }
 
+    let priorIsPrimary = isPrimary;
+    if (supersedesAssignmentId) {
+        const { data: priorRaw, error: priorErr } = await supabase
+            .from("schedule_assignments")
+            .select("*")
+            .eq("org_id", input.orgId)
+            .eq("id", supersedesAssignmentId)
+            .maybeSingle();
+        if (priorErr) throw new OperationalEnrollmentServiceError("db_error", priorErr.message);
+        const prior = priorRaw as ScheduleAssignmentRow | null;
+        if (!prior || !["planned", "active", "ending"].includes(prior.status)) {
+            throw new OperationalEnrollmentServiceError("not_found", "Assignment to supersede was not found");
+        }
+        if (prior.is_primary === true) {
+            throw new OperationalEnrollmentServiceError(
+                "invalid_state",
+                "Primary assignment edits must use the primary schedule path or assignment.set_primary"
+            );
+        }
+        priorIsPrimary = false;
+        const closeDate = computePriorRowCloseDate(startDate);
+        const { error: closeError } = await supabase
+            .from("schedule_assignments")
+            .update({
+                status: "superseded",
+                end_date: closeDate,
+                updated_by: trimOrNull(input.actorUserId),
+            })
+            .eq("org_id", input.orgId)
+            .eq("id", prior.id);
+        if (closeError) throw new OperationalEnrollmentServiceError("db_error", closeError.message);
+    }
+
     const row = {
         org_id: input.orgId,
         subject_type: input.subject.type,
@@ -164,14 +204,14 @@ export async function createOperationalAssignment(
         room_location_id: trimOrNull(input.roomLocationId),
         program_category_id: trimOrNull(input.programCategoryId),
         operational_assignment_type_id: trimOrNull(input.assignmentTypeId),
-        is_primary: isPrimary,
+        is_primary: supersedesAssignmentId ? priorIsPrimary : isPrimary,
         schedule_pattern_id: schedulePatternId,
         start_date: startDate,
         end_date: null,
         status: derivePlacementStatusFromStartDate(startDate, input.todayYmd),
         assignment_kind: "base",
         source_key: trimOrNull(input.sourceKey) ?? "operator",
-        supersedes_assignment_id: null,
+        supersedes_assignment_id: supersedesAssignmentId,
         metadata: input.metadata ?? {},
         created_by: trimOrNull(input.actorUserId),
         updated_by: trimOrNull(input.actorUserId),

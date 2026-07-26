@@ -36,14 +36,39 @@ export type AssignmentRoom = {
     program: string | null;
 };
 
+/** Presentation vocabulary from `operational_assignment_types` (config-owned). */
+export type AssignmentTypePresentation = {
+    id: string | null;
+    key: string | null;
+    label: string | null;
+    iconKey: string | null;
+    visualTone: "neutral" | "info" | "success" | "warning" | "accent" | null;
+    billingParticipation: "none" | "eligible" | null;
+    attendanceParticipation: "none" | "expected" | null;
+    staffingParticipation: "none" | "supply" | "demand" | null;
+};
+
+/**
+ * Optional billing consequence display — relationships only. Billing owns
+ * amounts; Assignments never generate charges from this field.
+ */
+export type AssignmentBillingRelationship = {
+    participation: "none" | "eligible";
+    /** Operator-facing consequence label (e.g. "Tuition", "Recurring billing eligible"). */
+    label: string | null;
+};
+
 /**
  * The atomic, effective-dated unit of scheduled reality — maps to a
- * `schedule_assignment` row over the committed `child_placements` foundation.
- * `arriveTime` / `departTime` are null in V1 (the slice-1 schema carries no
- * per-assignment times; per-day time overrides are the Phase-2 pattern editor).
+ * `schedule_assignment` row. Scheduling (pattern / hours / days) is one
+ * attribute of the assignment; primary / type / billing participation are peers.
  */
 export type Assignment = {
     id: string;
+    /** Subject identity: child customer_member_id or staff person id. */
+    subjectId: string;
+    subjectType: "child" | "staff";
+    /** @deprecated Prefer subjectId; retained for child compact consumers. */
     childId: string;
     room: AssignmentRoom;
     weekdays: number[]; // 0=Sun .. 6=Sat
@@ -53,6 +78,12 @@ export type Assignment = {
     effectiveTo: string | null; // null => open-ended
     openEnded: boolean;
     kind: "base" | "temporary";
+    status: string;
+    isPrimary: boolean;
+    assignmentType: AssignmentTypePresentation;
+    patternId: string | null;
+    patternLabel: string | null;
+    billing: AssignmentBillingRelationship;
     supersedes?: string;
 };
 
@@ -123,6 +154,8 @@ export type SchedulingCalculationMeta = {
 export type ChildScheduling = {
     child: ChildSchedulingSubject;
     status: ChildSchedulingStatus;
+    /** Present when an operational enrollment agreement exists for this child+site. */
+    enrollmentAgreementId?: string | null;
     current: ScheduleView | null;
     /**
      * A pre-enrollment PROPOSED schedule drafted on the child's enrollment
