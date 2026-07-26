@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRuntime";
+import { seedOpportunityStageWork } from "@/lib/adminV2/viewModel/drawer/opportunity/stageWork/opportunityStageWorkResource";
 import { prepareOperationalDestination } from "@/lib/runtime/prep/prepareOperationalDestination";
 import { prefetchWorkUnitProvisioning } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
 import {
@@ -81,6 +82,28 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         () => (focus.current ? workUnitSurfaceModelFromSnapshot(focus.current.snapshot) : null),
         [focus.current],
     );
+
+    // CP-2 — reuse, don't re-fetch. The committed answer already carries the selected subject's stage-work
+    // (`focusPanelStageWork`); seed it into the stage-work cache under the SAME (opp/dept/stage) key the
+    // drawer VM builds, so the VM's completion consumes it warm and the duplicate `/stage-work` request
+    // never fires on the cold reveal. Render-phase (like the provisioning seed) so it lands before the
+    // descendant Focus Panel's VM-completion effect. Idempotent + key-parity-safe (a miss just falls back
+    // to the fetch — no wrong data). Only the default/committed subject matches; a later row switch keys
+    // differently and fetches normally.
+    useMemo(() => {
+        const snap = focus.current?.snapshot;
+        if (snap?.terminal === "operational" && snap.focusPanelStageWork && snap.recordOfAttention) {
+            seedOpportunityStageWork(
+                {
+                    opportunityId: snap.recordOfAttention.id,
+                    departmentId: snap.workUnit.departmentId,
+                    stageKey: snap.currentBusinessState.stageKey,
+                    stageLabel: snap.currentBusinessState.stageLabel,
+                },
+                snap.focusPanelStageWork,
+            );
+        }
+    }, [focus.current]);
 
     // D5 SETTLEMENT — the operator is already working; this fills the reserved KPI values AFTER commit.
     // It cannot gate or reconstruct: `operationalModel` above is composed and renderable without it,

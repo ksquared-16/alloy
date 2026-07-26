@@ -7,6 +7,7 @@ import {
     opportunityStageWorkCacheKey,
     prefetchOpportunityStageWork,
     resetOpportunityStageWorkCacheForTests,
+    seedOpportunityStageWork,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/stageWork/opportunityStageWorkResource";
 
 const SLICE = { stage_work_runtime: { stage_key: "s" }, published_stage_inputs: null, work_intent_runtime: null };
@@ -105,5 +106,41 @@ describe("opportunityStageWorkResource — canonical ownership", () => {
         invalidateOpportunityStageWorkCache({ opportunityId: "opp-A" });
         expect(getOpportunityStageWorkWarm(A)).toBeNull();
         expect(getOpportunityStageWorkWarm(B)).toEqual(SLICE);
+    });
+});
+
+/**
+ * CP-2 seed contract (Runtime V1 Certification). The provisioning answer's `focusPanelStageWork` is
+ * seeded here under the SAME (opp/dept/stage) key the drawer VM's `resolveStageWorkSliceForVm` builds,
+ * so the client's `getOpportunityStageWorkWarm` check consumes it and the `/stage-work` fetch never fires.
+ * These tests are the silent-miss guard: the seed key MUST equal the client's fetch key.
+ */
+describe("seedOpportunityStageWork (CP-2 — reuse the answer's stage-work)", () => {
+    // The exact params the client (resolveStageWorkSliceForVm) builds from the VM: no orgScope (→ "_"),
+    // dept from vm.workspace.department_id, stage from vm.workspace.lifecycle_rail.current_stage_key.
+    const clientParams = { opportunityId: "opp-A", departmentId: "dept-1", stageKey: "lead" };
+
+    it("KEY PARITY: a seed is consumed by the exact warm-check the client uses → no fetch", () => {
+        // Seed uses the same (opp/dept/stage) the answer carries; the client keys identically.
+        expect(seedOpportunityStageWork(clientParams, SLICE)).toBe(true);
+        expect(getOpportunityStageWorkWarm(clientParams)).toEqual(SLICE);
+    });
+
+    it("KEY MISMATCH (different dept/stage) misses → client would fetch (no wrong data)", () => {
+        seedOpportunityStageWork(clientParams, SLICE);
+        expect(getOpportunityStageWorkWarm({ ...clientParams, departmentId: "dept-OTHER" })).toBeNull();
+        expect(getOpportunityStageWorkWarm({ ...clientParams, stageKey: "enrolled" })).toBeNull();
+    });
+
+    it("IDEMPOTENT: does not clobber a still-fresh entry (a real fetch / prior seed wins)", async () => {
+        mockFetch();
+        await prefetchOpportunityStageWork({ orgScope: "_", ...clientParams }); // a real fetch warms it
+        const other = { stage_work_runtime: { stage_key: "STALE" }, published_stage_inputs: null, work_intent_runtime: null };
+        expect(seedOpportunityStageWork(clientParams, other)).toBe(false); // refused
+        expect(getOpportunityStageWorkWarm({ orgScope: "_", ...clientParams })).toEqual(SLICE); // fetch value stays
+    });
+
+    it("returns false when there is no resolvable key (no stage)", () => {
+        expect(seedOpportunityStageWork({ ...clientParams, stageKey: null }, SLICE)).toBe(false);
     });
 });

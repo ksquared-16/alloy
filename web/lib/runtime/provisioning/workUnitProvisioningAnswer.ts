@@ -197,7 +197,7 @@ export type ProvisioningAnswer =
           terminal: "operational";
           /** U-P1 authorization + canonical identifiers. */
           orgId: string;
-          workUnit: { id: string; key: string; name: string };
+          workUnit: { id: string; key: string; name: string; departmentId: string | null };
           /** U-O1 Business Process identity required for orientation. */
           businessProcess: { key: string; name: string };
           /** U-P2 active lens + its set. */
@@ -413,7 +413,14 @@ export async function composeWorkUnitProvisioningAnswer(
     if (wuLookup.error) return fail("records_unavailable", `work unit lookup failed: ${wuLookup.error}`);
     const wuRow = wuLookup.row;
     if (!wuRow) return fail("work_unit_not_found", `no work unit "${req.workUnitSlug}" in this tenant`);
-    const workUnit = { id: String(wuRow.id), key: String(wuRow.key), name: String(wuRow.name) };
+    const workUnit = {
+        id: String(wuRow.id),
+        key: String(wuRow.key),
+        name: String(wuRow.name),
+        // Carried so the client can seed the stage-work cache with a key that matches the drawer VM's
+        // (org/opp/dept/stage) — reusing the answer's `focusPanelStageWork` instead of re-fetching it.
+        departmentId: wuRow.department_id ? String(wuRow.department_id) : null,
+    };
 
     // ── COLD-PATH PARALLELISM: the operational records depend ONLY on work_unit.id (available now), not on
     //    configuration, queue-layout, or presentation. Kick the fetch off here so it overlaps that whole
