@@ -85,9 +85,11 @@ the **shared** `composeProvisioningAnswerForRoute` so the fetched answer and the
   `ProvisioningAnswerSeed`. **It renders the Host, not `children`** — so a seed placed in `page.tsx` is
   never mounted; seeds live in the layout. The seed is **awaited** (resolved answer), not streamed
   (Decision D-002/D-003).
-- `page.tsx` / `[recordId]/page.tsx` — route anchors returning `null`. **Subject is a query param
-  `?subject_id`** (Decision D-004); the `[recordId]` path segment is legacy (drives the legacy drawer) and
-  is being retired (task RA-2). The Surface Host renders the surface; the pages render nothing.
+- `page.tsx` — the route anchor returning `null`. **The selected record is the query param `?subject_id`**
+  (Decision D-004), projected/consumed via `urlFromAttention`/`attentionFromUrl`. The legacy `[recordId]`
+  path segment (which drove the legacy drawer and selected the *default* subject, not the requested record)
+  has been **retired** (task RA-2, commit see tracker); its dead controller machinery is deleted. The
+  Surface Host renders the surface from committed focus; the page renders nothing.
 
 ## 7. Cache ownership (two caches, explicit producers)
 
@@ -152,7 +154,9 @@ Cold adds the answer compose to TTFB (~+2 s), repaid by removing the post-hydrat
 
 ## 11. Invariants (do not break)
 
-1. One record-open owner (the Focus Panel subject). *(RA-2 retires the legacy path-drawer duality.)*
+1. One record-open owner (the Focus Panel subject, selected by `?subject_id`). *(RA-2 retired the legacy
+   `/:recordId` path-drawer duality: the dead surface controller + path deep-link/url-sync machinery are
+   deleted, and record-bearing hrefs emit `?subject_id`.)*
 2. The Surface Host renders only committed focus — no partial/false-empty/wrong-record/stale reveal.
 3. The URL is projected from focus, hydrated from URL exactly once.
 4. One Provisioning Answer per preparation; seeds match K2's key (unit-tested) or fall open to a fetch.

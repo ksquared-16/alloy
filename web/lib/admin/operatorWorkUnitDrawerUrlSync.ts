@@ -16,21 +16,15 @@ export function operatorWorkUnitRouteBase(pathname: string): string | null {
     return operatorWorkUnitHrefFromKey(workUnitRouteSlugToKey(workUnitSlug));
 }
 
-/** True when navigation only adds/removes `:recordId` on the same work-unit slug route. */
+/**
+ * True when navigation stays on the same work-unit slug base (so an open drawer must NOT auto-close).
+ *
+ * Guards the legacy `AdminDrawerContext` auto-close: a same-base pathname change (historically a
+ * `:recordId`-only change; now any non-slug-changing move) is not a real surface exit. RA-2 retired the
+ * `/:recordId` path form, but this same-base check remains the correct auto-close guard for the drawer.
+ */
 export function isOperatorWorkUnitRecordIdOnlyPathChange(prevPathname: string, nextPathname: string): boolean {
     const prevBase = operatorWorkUnitRouteBase(prevPathname);
     const nextBase = operatorWorkUnitRouteBase(nextPathname);
     return prevBase != null && prevBase === nextBase;
-}
-
-/**
- * Shallow drawer URL sync — updates the browser bar without a Next.js route transition.
- * Keeps the work-unit page, sidebar, and queue shell mounted.
- */
-export function syncOperatorWorkUnitUrlInBrowser(slugKey: string, recordId: string | null): void {
-    if (typeof window === "undefined") return;
-    const href = operatorWorkUnitHrefFromKey(slugKey, recordId);
-    const current = normalizeOperatorPathname(window.location.pathname);
-    if (current === href) return;
-    window.history.replaceState(window.history.state, "", href);
 }

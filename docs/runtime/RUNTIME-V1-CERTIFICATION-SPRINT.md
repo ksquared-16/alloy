@@ -17,7 +17,7 @@
 
 | Category | Current | Target | Trend | Completion % | Confidence % | Tasks Done / Total | Milestone |
 |---|:--:|:--:|:--:|--:|--:|:--:|:--:|
-| Runtime Architecture | B (was C+) | A- | ↑ | 40% | 80% | 1 / 3 | M1 |
+| Runtime Architecture | B+ (was B) | A- | ↑ | 65% | 82% | 2 / 3 | M1 |
 | Critical Path | B (was B-) | A- | ↑ | 40% | 80% | 2 / 5 | M2 |
 | TypeScript Architecture | C+ (was C) | B+ (A later) | ↑ | 50% | 75% | 2 / 3 | M3 |
 | Dependency Graph | B | A- | ↑ | 40% | 70% | 2 / 5 | M1 |
@@ -86,10 +86,10 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | SC-1 Generalize subject contract | Scalability | Medium | — | ✓ | READY |
 | CQ-3 Rename `resolveWorkUnitRouteIdentityCached` | Code Quality | Low | — | ✓ | READY |
 | CP-1 Server-seed enriched VM | Critical Path | **Critical** | RA-1, CP-4 | ✗ | blocked |
-| RA-2 Remove legacy-drawer duality | Runtime Arch | High | RA-1✓ | ✓ | **READY** |
+| ~~RA-2 Remove legacy-drawer duality~~ | Runtime Arch | High | RA-1✓ | ✓ | **DONE** |
 | CQ-2 Decompose `InlineOpportunityFocusPanel` | Code Quality | High | DG-1, DG-2 | ✗ | blocked |
 | TE-3 CI wiring | Testing | High | TE-2 | ✗ | blocked |
-| TE-5 Routing-permutation unit tests | Testing | Medium | RA-2 | ✗ | blocked |
+| TE-5 Routing-permutation unit tests | Testing | Medium | RA-2✓ | ✓ | **READY** (newly unblocked) |
 | DG-2 Lazy-load `workflowRun.ts` | Dependency Graph | Medium | — | ✓ | READY |
 | DG-3 Isolate SchedulingCard | Dependency Graph | Medium | — | ✓ | READY |
 | PE-2 Warm fully-settled < 6 s | Performance | High | CP-1, CP-2, CP-4 | ✗ | blocked |
@@ -97,19 +97,19 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | CP-3 Gate prewarm storm | Critical Path | Low | — | ✓ | READY (low value — see note) |
 | TE-6 Perf regression assertions | Testing | Medium | PE-2 | ✗ | blocked |
 
-**→ RESUME HERE — Next task selected by the queue: `RA-2` (High, READY — scoped & de-risked).** Execute the
-recorded RA-2 plan: (a) delete the DEAD `useWorkUnitSurfaceController` + `resolveDeepLinkRecordAction` +
-path deep-link/url-sync machinery (0 callers — verified); (b) make `operatorWorkUnitHrefFromKey` /
-`resolveCreatedLeadFocusPanelHref` emit `?subject_id=` (not `/recordId`) so create-lead selects the created
-record; (c) retire the `[recordId]` route + update `operatorWorkUnitLegacyGuards.test.ts` to the query form.
-Cert: create-lead selects the record via `?subject_id`; `zz-realization-urlcontract` asserts query-canonical.
-Once RA-2 + `CP-4` land, `CP-1` (server-seed the enriched VM — the biggest perceived-perf lever) unblocks.
+**→ RESUME HERE — Next task selected by the queue: `CP-4` (High, READY — highest leverage).** RA-2 is DONE
+(Runtime Architecture B→B+, one record-open owner). `CP-4` (enriched-VM field-by-field reuse of provisioning
+data) is the next highest-leverage READY task: landing it unblocks the **Critical** `CP-1` (server-seed the
+enriched VM — the biggest perceived-perf lever). Execute: remove the named duplicate DB reads
+(`inquiry_children`, primary contact) from the enriched-VM `phases_ms`, contract unchanged; evidence = server
+`phases_ms` before/after. `CP-4` needs the build+measurement loop (host-throttled, §6a).
 
-Co-highest-priority READY siblings if RA-2 is deferred: `DG-1`, `CP-4`, `TE-2`. **NOTE:** RA-2/CP-4/DG-1
-each require the build+browser-cert loop, throttled by host memory (§6a) — batch when the host has headroom.
-Light READY tasks available under throttle: `TE-4` (schema contract, unit-only), `TS-1` (TS wins), `CQ-3`
-(rename). _(CP-3 stays Low: a prior storm-gating attempt was reverted for touching the reveal lifecycle
-without moving wall-clock; revisit after CP-1.)_
+Co-highest-priority READY siblings: `DG-1`, `TE-2` (High). **Newly unblocked by RA-2:** `TE-5`
+(routing-permutation unit tests — `attentionFromUrl`↔`urlFromAttention` parity + path-vs-query locked;
+unit-only, throttle-friendly). Light READY tasks available under throttle: `TE-5`, `TE-4` (schema contract),
+`TS-1` (TS wins), `CQ-3` (rename). **NOTE:** CP-4/DG-1/CP-1 each require the build+browser-cert loop,
+throttled by host memory (§6a) — batch when the host has headroom. _(CP-3 stays Low: a prior storm-gating
+attempt was reverted for touching the reveal lifecycle without moving wall-clock; revisit after CP-1.)_
 
 ## 1d. Milestones
 
@@ -118,15 +118,15 @@ higher-priority cross-milestone blocker exists (e.g. an M1 task that unblocks th
 
 | Milestone | Theme | Tasks | Done / Total | Status |
 |---|---|---|:--:|---|
-| **M1** | **Runtime Ownership** | RA-1✓, RA-2, RA-3, DG-1, DG-2, DG-3, DG-4✓, DG-5✓, CQ-1✓, CQ-2, CQ-3 | 5 / 11 | **ACTIVE** |
+| **M1** | **Runtime Ownership** | RA-1✓, RA-2✓, RA-3, DG-1, DG-2, DG-3, DG-4✓, DG-5✓, CQ-1✓, CQ-2, CQ-3 | 6 / 11 | **ACTIVE** |
 | M2 | Critical Path & Performance | CP-1, CP-2✓, CP-3, CP-4, CP-5✓, PE-1, PE-2, PE-3, PE-4✓, SC-1, SC-2 | 4 / 11 | in progress |
 | M3 | Developer Experience | TS-1, TS-2✓, TS-3✓, MA-1✓, MA-2, DOC-1✓, DOC-2, DOC-3 | 5 / 8 | in progress |
 | M4 | Certification & Regression | TE-1✓, TE-2, TE-3, TE-4, TE-5, TE-6, TE-7✓ | 2 / 7 | in progress |
 
 - **Current milestone:** **M1 Runtime Ownership** (fix ownership before optimizing the path; RA-1 also unblocks the M2 perf core).
-- **Milestone progress:** M1 5/11 · M2 4/11 · M3 5/8 · M4 2/7.
+- **Milestone progress:** M1 6/11 · M2 4/11 · M3 5/8 · M4 2/7.
 - **Milestones remaining to target:** all four still have open tasks; M3 is closest.
-- **Active-milestone next READY:** `RA-1` (see Priority Queue).
+- **Active-milestone next READY:** `CP-4` (cross-milestone M2 — highest leverage: unblocks Critical `CP-1`; see Priority Queue). M1's own next READY is `DG-1` / `RA-3`.
 
 ## 1e. Risks
 
@@ -137,8 +137,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 |---|---|:--:|---|---|---|---|
 | R-01 | Runtime Arch / Critical Path | Sev2 | Medium | A reveal-path change (RA-1/CP-1/CP-4/RA-2/CQ-2) regresses first-card/latest-click/no-flash | Full loop per task: measure → build → browser-cert matrix → keep/revert; seed-contract + cert specs guard | OPEN |
 | R-02 | All (execution) | Sev2 | High | Host memory saturation (swap ~20 GB) makes prod builds slow/OOM → throttles the heavy build+cert loop | Reap stray tsc/Chromium; `SKIP_BUILD_TYPECHECK=1`; out-of-band tsc gate; route to light tasks under throttle | OPEN |
-| R-03 | Runtime Arch | Sev3 (was Sev2) | Low-med | The legacy path→drawer controller is DEAD (unreachable), so no live duality — BUT the create-lead href is path-based, so **create-lead does not select the created record** (lands on the default subject) | RA-2(b) query-ifies the href (real fix); RA-2(a) deletes the dead controller; `zz-realization-urlcontract` locks it | OPEN (downgraded — dead not live) |
-| R-04 | Testing | Sev3 | High (until TE-2/3) | E2E cert specs bind hardcoded dev entity IDs → not CI-portable; regression protection is local-only for behavior paths | Unit suites are portable + committed; TE-2 seeded fixtures + TE-3 CI wiring | OPEN |
+| R-04 | Testing | Sev3 | High (until TE-2/3) | E2E cert specs bind hardcoded dev entity IDs → not CI-portable; regression protection is local-only for behavior paths (incl. RA-2's create-lead→`?subject_id` end-to-end) | Unit suites are portable + committed; TE-2 seeded fixtures + TE-3 CI wiring | OPEN |
 | R-05 | Scalability | Sev3 | Medium | `ProvisioningAnswer` is opportunity-shaped (`inquiry_children`/subject snapshot) → strains a Parent/Teacher subject type | SC-1 generalizes the subject contract before reuse; kernel/Surface Host are subject-agnostic | OPEN |
 
 ### Resolved risks
@@ -146,20 +145,21 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 |---|---|---|---|---|
 | R-00 | Critical Path | Duplicate `/stage-work` fetch inflated all-cards | CP-2 seeds the answer's stage-work; fetch eliminated | `437ad9d11`; all-cards 12.7→11.2 s |
 | R-06 | Maintainability | Onboarding required ledger archaeology; a core comment was false | `ARCHITECTURE.md` + comprehension check; comment fixed | `c52e50c52`; check PASSED |
+| R-03 | Runtime Arch | Create-lead used a path-based href → landed on the DEFAULT subject, not the created record; dead legacy path→drawer controller lingered | RA-2: href now emits `?subject_id` (create-lead `router.push`es it; D-004 runtime honors it); dead controller + `[recordId]` route + rewrite deleted | RA-2 `08855fe59`; tsc 0 / build 0; unit set green |
 
 ---
 
 ## 2. Categories
 
-### 2.1 Runtime Architecture — C+ → A- (bucket B) · 15%
-**Why C+:** the provisioning cache has three producers (intent-prefetch, server-seed, K2 cold-fetch); the seed is a cross-layer coupling (an RSC layout hard-codes the kernel's URL-key scheme + a hydration-timing assumption); and the **legacy-drawer ↔ Focus-Panel record-open duality** exists (path `/work-unit/:slug/:recordId` drives the legacy `openDrawer`, `?subject_id` drives the Focus Panel subject).
-**Blocking risks:** RA-2 touches the legacy drawer flow (regression risk); RA-1/RA-2 sequencing.
-**Evidence for A-:** one record-open owner; seed key derivation owned by the kernel (no other layer references `provisioningAnswerUrl`); cache-producer invariant test green.
+### 2.1 Runtime Architecture — B → A- (bucket B) · 65%
+**Why B (was C+):** RA-1 moved the seed key derivation into the kernel (no layer references `provisioningAnswerUrl`); RA-2 deleted the **legacy-drawer ↔ Focus-Panel record-open duality** — the dead `useWorkUnitSurfaceController` + path deep-link/url-sync machinery are gone, record-bearing hrefs emit `?subject_id`, and the `[recordId]` route + its rewrite are retired. Remaining gap to A-: RA-3 (the cache single-producer invariant — three producers still exist; only key-parity is unit-locked, full producer-parity/idempotency pending).
+**Blocking risks:** RA-3 producer-parity test authoring.
+**Evidence for A-:** one record-open owner ✓ (RA-2); seed key derivation kernel-owned ✓ (RA-1); cache-producer invariant test green (RA-3, pending).
 
 | ID | Task | Status | Completion criteria | Evidence | Deps |
 |---|---|:--:|---|---|---|
 | RA-1 | Introduce canonical kernel preload seam `seedProvisioningForRoute(routeIdentity, answer)` | **DONE** | Layout passes `(routeIdentity, answer)`, not a raw URL; key derivation lives in the kernel; `provisioningAnswerUrl` not imported outside the kernel | **0 non-kernel imports of `provisioningAnswerUrl`; route-seam unit test (14/14); C1/C3 cert (seed consumed, latest-wins, no flash); all-cards ~10.9 s; tsc exit 0; commit `3c0a9d6c1`** | — |
-| RA-2 | Remove legacy-drawer ↔ Focus-Panel record-open duality | **IP (scoped)** | (a) delete the DEAD `useWorkUnitSurfaceController` + `resolveDeepLinkRecordAction` + path deep-link/url-sync machinery; (b) make `operatorWorkUnitHrefFromKey`/`resolveCreatedLeadFocusPanelHref` emit `?subject_id=` (not `/recordId`) so create-lead selects the created record; (c) retire the `[recordId]` route + update `operatorWorkUnitLegacyGuards.test.ts` to the query form | **FINDING: `useWorkUnitSurfaceController` is DEAD (0 callers) → the legacy openDrawer path is unreachable; RA-2 is delete-dead + query-ify-href, not a live migration.** Cert: create-lead selects the record via `?subject_id`; urlcontract asserts query-canonical | RA-1✓ |
+| RA-2 | Remove legacy-drawer ↔ Focus-Panel record-open duality | **DONE** | (a) delete the DEAD `useWorkUnitSurfaceController` + `resolveDeepLinkRecordAction` + path deep-link/url-sync machinery; (b) make `operatorWorkUnitHrefFromKey`/`resolveCreatedLeadFocusPanelHref` emit `?subject_id=` (not `/recordId`) so create-lead selects the created record; (c) retire the `[recordId]` route + rewrite + update guards to the query form | **DONE `08855fe59`.** Deleted `workUnitSurfaceController.ts` (0 callers, verified) + its test + dead `WorkUnitSurfaceView` + dead `syncOperatorWorkUnitUrlInBrowser`; `operatorWorkUnitHrefFromKey(key,recordId)` now emits `?subject_id=`; `[recordId]/page.tsx` route + `next.config.ts` `:recordId` rewrite retired (build manifest omits it). **tsc EXIT 0 / 0 errors; prod build EXIT 0; RA-2-owned unit set GREEN (32 pass), +0 new failures vs baseline, −2 pre-existing failures fixed (baseline-diff proven); create-lead does `router.push` of the `?subject_id` href → D-004 runtime honors it.** Also removed a misrooted orphan dup test (`tests/routeShellPipeline/…`). Live-browser E2E = local-only (R-04). | RA-1✓ |
 | RA-3 | Cache single-producer invariant (prefetch/seed/cold = one owned seam) | IP | One key builder; producer-parity + idempotency tests | seed-contract unit tests (partial — key-parity DONE) | RA-1 |
 
 ### 2.2 Critical Path — B- → A- (bucket A/B) · 20%
@@ -293,6 +293,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 | 2026-07-26 | Certification exec #3 | **TS-2 → DONE** (`typescript-roadmap.md`). TypeScript C→C+ (50%). | this |
 | 2026-07-26 | Certification exec #4 | **RA-1 → DONE** (kernel preload seam; `provisioningAnswerUrl` now kernel-only; behavior-identical, cert green; D-011). Runtime Architecture C+→B (40%). Unblocks RA-2. | `3c0a9d6c1` |
 | 2026-07-26 | Certification exec #5 | **RA-2 → IP (scoped + de-risked).** Found `useWorkUnitSurfaceController` DEAD → legacy duality is unreachable; RA-2 reduced to delete-dead + query-ify the create-lead href. R-03 downgraded Sev2→Sev3. Held (multi-file behavior change; host-memory throttle degrading trustworthy heavy cert). | — |
+| 2026-07-26 | Certification exec #6 | **RA-2 → DONE.** Deleted dead surface controller (`workUnitSurfaceController.ts` + test + `WorkUnitSurfaceView` + `syncOperatorWorkUnitUrlInBrowser`); `operatorWorkUnitHrefFromKey(key,recordId)` emits `?subject_id=`; `[recordId]` route + `next.config` rewrite retired; guards/tests → query form; removed a misrooted orphan dup test. **tsc EXIT 0 / 0 errors; prod build EXIT 0; RA-2-owned unit set green (32), +0 new failures / −2 pre-existing fixed (baseline-diff proven).** Runtime Architecture B→B+ (65%); R-03 RESOLVED; M1 6/11. Pre-existing seed-only-host/route-shell test rot flagged (R-04). | `08855fe59` |
 
 ## 6a. Environmental throttle (active)
 
