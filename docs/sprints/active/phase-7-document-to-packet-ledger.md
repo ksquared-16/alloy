@@ -20,8 +20,8 @@ Do not push/merge until explicitly instructed.
 |---|---|---|
 | 0 — Fidelity generation + native signing proof | **done** | Real PDF filled + signed + flattened, immutable artifact + audit, automated + artifact verification (6/6 tests) |
 | 1 — Source doc → reviewed published form (+OCR) | **DONE — CERTIFIED (Stage A + Stage B image + Stage B scanned-PDF, all green in-server)** | Upload real PDF, correct ≥1 field, preserve a consent section, publish; repeat with a scanned image AND a scanned PDF |
-| 2 — Complete packet composition | not started | Compose + preview packet: form + handbook + upload + acknowledgement + signature, assigned across 2 guardians |
-| 3 — Participant launch + conversational completion | not started | Parent pastes info, confirms interpretation, uploads, resumes cross-session, reaches document review |
+| 2 — Packet composition + requirement responsibility | **DONE — CERTIFIED** (operator product green; live completion + Processing handoff green, one case + idempotent; distinct multi-guardian execution → Slice 3) | Compose + configure responsibility per requirement in operator language; household preview; blocking validation; persist; launch; complete via real submission → one Processing Case |
+| 3 — Participant Conversation Runtime + distinct multi-guardian completion | not started (next) | Per-recipient attribution/steps unblock independent completion by two guardians of the same requirement; parent pastes info, confirms interpretation, uploads, resumes cross-session, reaches document review |
 | 4 — Generation + review + signing in journey | not started | Guardian reviews + signs a faithful completed doc; flattened PDF + evidence retrievable |
 | 5 — Submission + unified Mailroom review | not started | Completed packet reviewed as one coherent case |
 | 6 — Targeted correction round-trip | not started | Request correction of one requirement, resubmit, receive back in same review |
