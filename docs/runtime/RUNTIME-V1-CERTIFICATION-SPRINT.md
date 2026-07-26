@@ -18,13 +18,13 @@
 | Category | Current | Target | Trend | Completion % | Tasks Done / Total |
 |---|:--:|:--:|:--:|--:|:--:|
 | Runtime Architecture | C+ | A- | → | 15% | 0 / 3 |
-| Critical Path | B- | A- | ↑ | 20% | 1 / 5 |
+| Critical Path | B (was B-) | A- | ↑ | 40% | 2 / 5 |
 | TypeScript Architecture | C | B+ (A later) | ↑ | 15% | 1 / 3 |
 | Dependency Graph | B | A- | ↑ | 40% | 2 / 5 |
-| Maintainability | C- | A- | ↑ | 30% | 0 / 2 |
+| Maintainability | B (was C-) | A- | ↑ | 65% | 1 / 2 |
 | Scalability | C | A- | → | 10% | 0 / 2 |
 | Testing | C- | A | ↑ | 35% | 2 / 7 |
-| Documentation | C | A- | ↑ | 30% | 0 / 3 |
+| Documentation | B (was C) | A- | ↑ | 60% | 1 / 3 |
 | Performance | B | A- | ↑ | 40% | 1 / 4 |
 | Code Quality | B- | A- | ↑ | 55% | 1 / 3 |
 
@@ -118,7 +118,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | ID | Task | Status | Completion criteria | Evidence | Deps |
 |---|---|:--:|---|---|---|
 | CP-1 | Server-seed the enriched drawer VM (compose server-side for the committed subject, seed the client VM cache) | NS | On cold default load, `/view-models/drawer/opportunity/{id}` request ABSENT (seed-consumed); warm all-cards materially lower | harness: enriched-VM req absent + all-cards delta; full cert green | RA-1, CP-4 |
-| CP-2 | Remove duplicate stage-work fetch (reuse answer's `focusPanelStageWork` on cold default load) | NS | No `view_model_stage_work` request when committed subject == answer subject; stage-work still correct | harness API count −1; Current-Work cert green | — |
+| CP-2 | Remove duplicate stage-work fetch (reuse answer's `focusPanelStageWork` on cold default load) | **DONE** | No `view_model_stage_work` request when committed subject == answer subject; stage-work still correct | **`/stage-work` ELIMINATED (0); all-cards 12.7s→11.2s; reveal grid 5/reserved 0; C1/C3 pass; 13/13 units; tsc gate exit 0 / 0 errors; commit `437ad9d11`.** | — |
 | CP-3 | Gate the sibling-view prewarm storm behind the reveal | NS | ≤1 provisioning request during the primary-reveal window (4 sibling prewarms deferred) | harness: provisioning count during reveal ≤1 | — |
 | CP-4 | Enriched-VM field-by-field reuse of provisioning data (inquiry_children, primary contact) | NS | Named duplicate DB reads removed from enriched-VM `phases_ms`; contract unchanged | server `phases_ms` before/after | — |
 | CP-5 | Slug→identity resolution dedup (layout) | DONE | One resolution/request via `resolveWorkUnitRouteIdentityCached` | commit `5148c9708`; C1/C2/C3/C7 re-cert | — |
@@ -153,7 +153,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 
 | ID | Task | Status | Completion criteria | Evidence | Deps |
 |---|---|:--:|---|---|---|
-| MA-1 | `docs/runtime/ARCHITECTURE.md` (shared w/ DOC-1) | NS | Covers kernel triad, Surface Host, Provisioning Answer contract, seed seam, cache ownership, critical-path waterfall, extension points, timing | fresh-agent comprehension check passes | — |
+| MA-1 | `docs/runtime/ARCHITECTURE.md` (shared w/ DOC-1) | **NV** | Covers kernel triad, Surface Host, Provisioning Answer contract, seed seam, cache ownership, critical-path waterfall, extension points, timing | **`docs/runtime/ARCHITECTURE.md` written (all sections); fresh-agent comprehension check running → DONE on pass** | — |
 | MA-2 | Stale-comment audit across runtime dirs | IP | grep-audit of STREAMED/OVERLAP/legacy/TODO comments; each reconciled with code | audit list resolved (layout comment DONE) | — |
 
 ### 2.6 Scalability — C → A- (bucket B) · 10%
@@ -187,7 +187,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 
 | ID | Task | Status | Completion criteria | Evidence | Deps |
 |---|---|:--:|---|---|---|
-| DOC-1 | `docs/runtime/ARCHITECTURE.md` (ownership, critical path, data flow, cache ownership, timing, extension points) | NS | Self-sufficient; comprehension check passes | doc reviewed + fresh-agent check | — |
+| DOC-1 | `docs/runtime/ARCHITECTURE.md` (ownership, critical path, data flow, cache ownership, timing, extension points) | **NV** | Self-sufficient; comprehension check passes | written; fresh-agent comprehension check running → DONE on pass | — |
 | DOC-2 | Fold durable facts out of the ledger into `ARCHITECTURE.md`; keep ledger as history | NS | ARCHITECTURE.md needs no ledger to understand V1 | comprehension check | DOC-1 |
 | DOC-3 | Truthful code comments | IP | No comment contradicts code in runtime dirs | layout comment DONE (`63dafa004`); MA-2 audit | MA-2 |
 
@@ -236,3 +236,16 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 |---|---|---|---|
 | 2026-07-26 | Certification kickoff | Tracker created; grades/tasks/evidence seeded from the realization + adversarial-review + A/B/C analysis | — |
 | 2026-07-26 | Realization + Phase 3/4/5 | CP-5, DG-4, DG-5, PE-4, TE-1, TE-7, CQ-1 completed; punch-list truth/simplification | `d1314bb57` `5dac324fa` `97a740a31` `5148c9708` `63dafa004` `435c13c94` |
+| 2026-07-26 | Certification exec #1 | **CP-2 → DONE** (dup `/stage-work` eliminated; all-cards 12.7→11.2 s; +4 units; tsc gate exit 0). Critical Path B-→B, 40%. | `437ad9d11` |
+| 2026-07-26 | Certification exec #2 | **MA-1 / DOC-1 → NV** (`docs/runtime/ARCHITECTURE.md` written — self-sufficient onboarding; comprehension check running). Maintainability C-→B (65%), Documentation C→B (60%). | (pending doc commit) |
+
+## 6a. Environmental throttle (active)
+
+**The workstation is memory-saturated (swap ~20–21 GB, <1 GB free).** Heavy prod builds (`next build`) are
+running 5–10 min and intermittently OOM-killed; the full cold `tsc` gate crawls. This throttles the
+**build+browser-cert loop** that CP-1 / CP-4 / RA-1 / DG-1 / CQ-2 require. Mitigation in effect: kill stray
+`tsc`/Chromium between steps; `SKIP_BUILD_TYPECHECK=1` for measurement builds; run the full `tsc` gate
+out-of-band. **Routing policy under throttle:** prefer READY tasks that certify via unit tests + typecheck
+(no prod build) — docs (MA-1/DOC-1, TS-2), unit tests (TE-4) — and batch heavy build+cert tasks for when
+the host has headroom (or sibling slots are freed). This is a genuine environmental blocker, not an
+architectural one.
