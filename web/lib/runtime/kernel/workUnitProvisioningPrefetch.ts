@@ -87,36 +87,25 @@ export function prefetchWorkUnitProvisioning(
  * SEED a server-composed provisioning answer into the SAME cache K2 consumes, under the SAME URL key
  * K2 builds (`provisioningAnswerUrl`). This is the Runtime V1 Realization seam: a route bootstrap (RSC)
  * resolves the bounded answer server-side — reusing `composeWorkUnitProvisioningAnswer`, the one
- * resolver — and hands it to the client so K2's single Preparation round-trip resolves WARM, with no
- * client network hop and without waiting for the full client feature graph to hydrate.
+ * resolver — and hands the RESOLVED answer to the client so K2's single Preparation round-trip resolves
+ * WARM, with no client network hop.
  *
  * It is NOT a new cache, endpoint, or contract: identical key + identical `Promise<ProvisioningAnswer>`
- * shape as an intent prefetch — only a different WARM SOURCE (server, not hover). Accepts either a
- * resolved answer (blocking RSC compose) or a pending promise (RSC-streamed compose that overlaps the
- * client bundle download). Idempotent: it will not clobber a still-fresh entry for the same URL (so a
- * Strict-Mode double-invoke, or an intent prefetch that already warmed this URL, wins/stays), and it is
- * a no-op on the server (the cache is browser-side).
+ * entry shape as an intent prefetch — only a different WARM SOURCE (server, not hover). The caller passes
+ * an already-committable answer (`operational` | `empty`); a gate failure / `error` terminal is filtered
+ * to `null` at the compose boundary and never reaches here. Idempotent: it will not clobber a still-fresh
+ * entry for the same URL (so a Strict-Mode double-invoke, or an intent prefetch that already warmed this
+ * URL, wins/stays), and it is a no-op on the server (the cache is browser-side).
  */
 export function seedProvisioning(
     url: string,
-    answer: ProvisioningAnswer | Promise<ProvisioningAnswer | null> | null,
+    answer: ProvisioningAnswer | null,
     now: number = Date.now(),
 ): void {
-    if (typeof window === "undefined" || answer == null) return;
+    if (typeof window === "undefined" || answer == null || answer.terminal === "error") return;
     const existing = cache.get(url);
     if (existing && isFresh(existing, now)) return; // never clobber a fresher warm entry
-    const raw = answer instanceof Promise ? answer : Promise.resolve(answer);
-    // A streamed compose that resolves to null (gate failure) or a non-committable `error` terminal
-    // becomes a REJECTED warm entry — K2's warm path catches and falls open to a live fetch, so the
-    // seed can only ever help, never trap the surface in a bad answer.
-    const promise = raw.then((a) => {
-        if (!a || a.terminal === "error") throw new Error("seed: non-committable terminal");
-        return a;
-    });
-    // Keep the stored promise "handled" — a seed that is never consumed (or one that rejects) must not
-    // surface as an unhandled rejection. K2 attaches its own try/catch on consume.
-    void promise.catch(() => {});
-    cache.set(url, { promise, startedAt: now });
+    cache.set(url, { promise: Promise.resolve(answer), startedAt: now });
     logCurrentWorkInit("provisioning.seed", { cacheKey: url, cache: "seed", preloadSource: "seed", note: "server-composed answer seeded" });
 }
 

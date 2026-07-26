@@ -18,27 +18,34 @@ type LayoutProps = {
  * client resolution, so behavior and the runtime-flag rollback path are unchanged.
  *
  * Runtime V1 Realization — it ALSO seeds the bounded Provisioning Answer (subject identity + the whole
- * above-fold VM) so K2's Preparation round-trip resolves WARM, off the full-hydration critical path
- * (Laws 2/5). The compose is STREAMED (not awaited): its pending promise crosses the RSC boundary while
- * the client bundle downloads, so the server compose OVERLAPS delivery instead of running serially after
- * hydration. The seed is co-located with `WorkUnitSlugRouteHost` — the same early-hydrating boundary
- * whose render-phase write is proven to precede the Surface Host's cold-load consume (a page-segment
- * seed is dropped: this layout renders the Host, not `children`).
+ * above-fold VM) so K2's Preparation round-trip resolves WARM, without the post-hydration network hop
+ * (Laws 2/5). The compose is AWAITED here (a resolved plain object is handed to the seed, NOT a streamed
+ * promise — a pending RSC-promise prop crashes hydration in Next 16, and a client-hydration-gated stream
+ * cannot deliver the answer before the seed already can; both were measured and reverted). It runs
+ * CONCURRENTLY with the route-meta resolve (one `Promise.all`), so on a WARM config cache TTFB is barely
+ * affected; on a COLD cache it adds the compose to TTFB (~2-4s), paid back by removing the ~3-4s
+ * post-hydration provisioning round-trip. The seed is co-located with `WorkUnitSlugRouteHost` — the same
+ * early-hydrating boundary whose render-phase write precedes the Surface Host's cold-load consume (a
+ * page-segment seed is dropped: this layout renders the Host, not `children`).
+ *
+ * Only the DEFAULT subject is seeded (this layout has no `searchParams`); a `?subject_id` / `?work_view_id`
+ * deep link keys differently and falls back to K2's live fetch. Any gate failure / non-operational terminal
+ * seeds nothing → K2's existing fetch. The seed can only help, never trap the surface.
  */
 export default async function OperatorWorkUnitSlugLayout({ params }: LayoutProps) {
     const { workUnitSlug } = await params;
 
-    // Kick the answer compose off FIRST (not awaited yet) so it runs CONCURRENTLY with the route-meta
-    // resolve, then await both. Default subject (no lens/subject) — the bare direct-load path K2 keys as
-    // `provisioningAnswerUrl(slug, null, null)`. Fail-safe: null on any gate failure / throw, which the
-    // seed treats as "no seed" (K2 falls back to its existing live fetch).
+    // Seed key MUST equal what K2 builds — `provisioningAnswerUrl(RAW slug, lens, subject)` — for the bare
+    // direct-load AttentionRef (no lens/subject). See the seed-contract unit tests for the parity guarantee.
     const seedUrl = provisioningAnswerUrl(workUnitSlug, null, null);
+    // Compose concurrently with route-meta; hand the seed only an operational/empty terminal (an `error`
+    // or gate-failure resolves to null → K2 falls back to its live fetch).
     const answerP = composeProvisioningAnswerForRoute({
         rawSlug: workUnitSlug,
         requestedWorkViewId: null,
         requestedSubjectId: null,
     })
-        .then((r) => (r.ok ? r.answer : null))
+        .then((r) => (r.ok && r.answer.terminal !== "error" ? r.answer : null))
         .catch(() => null);
 
     const [initialRouteMeta, answer] = await Promise.all([

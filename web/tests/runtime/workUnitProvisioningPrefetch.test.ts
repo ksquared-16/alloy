@@ -4,9 +4,11 @@ import {
     prefetchWorkUnitProvisioning,
     prefetchWorkUnitProvisioningFromHref,
     consumeFreshProvisioning,
+    seedProvisioning,
     clearProvisioningPrefetchForTests,
     PREFETCH_TTL_MS,
 } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
+import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 
 /** Minimal window + fetch stubs so the module's `typeof window` guard passes. */
 function stubEnv(fetchImpl: typeof fetch) {
@@ -92,5 +94,75 @@ describe("workUnitProvisioningPrefetch", () => {
             "/api/admin/work-units/new-leads/provisioning-answer",
             expect.anything(),
         );
+    });
+});
+
+/**
+ * SEED CONTRACT (Runtime V1 Realization). The server-composed answer is written into the SAME cache K2
+ * consumes, under the SAME URL key K2 builds. These tests are the permanent regression protection for the
+ * otherwise-SILENT failure mode: if the seed key ever diverges from K2's consume key, the seed misses and
+ * the surface only gets slower — no crash, no error. Locking key parity here makes that drift a red test.
+ */
+describe("seedProvisioning (Runtime V1 Realization seed contract)", () => {
+    beforeEach(() => clearProvisioningPrefetchForTests());
+    afterEach(() => {
+        delete (globalThis as any).window;
+        vi.restoreAllMocks();
+    });
+
+    const answer = (terminal = "operational", tag = "x") =>
+        ({ terminal, __tag: tag }) as unknown as ProvisioningAnswer;
+
+    it("KEY PARITY: a seed at the bare-route key is consumed by the exact key K2 builds", async () => {
+        (globalThis as any).window = { location: { origin: "https://alloy.local" } };
+        // The layout seeds with provisioningAnswerUrl(RAW slug, null, null); K2 (bare AttentionRef) builds
+        // the identical key. Same function, same args → same string → HIT.
+        const seedKey = provisioningAnswerUrl("new-leads", null, null);
+        const k2Key = provisioningAnswerUrl("new-leads"); // K2 for a bare ref: no lens, no subject
+        expect(seedKey).toBe(k2Key);
+        seedProvisioning(seedKey, answer("operational", "seeded"), 1000);
+        const warm = consumeFreshProvisioning(k2Key, 1100);
+        expect(warm).not.toBeNull();
+        expect((await warm!) as any).toMatchObject({ terminal: "operational", __tag: "seeded" });
+    });
+
+    it("KEY MISMATCH: a bare seed is NOT consumed by a subject-scoped fetch (falls open, no wrong record)", () => {
+        (globalThis as any).window = { location: { origin: "https://alloy.local" } };
+        seedProvisioning(provisioningAnswerUrl("new-leads", null, null), answer(), 1000);
+        // A ?subject_id deep link keys differently → the bare seed must NOT serve it.
+        expect(consumeFreshProvisioning(provisioningAnswerUrl("new-leads", null, "subjX"), 1100)).toBeNull();
+    });
+
+    it("consume is one-shot: a seeded answer serves exactly once", async () => {
+        (globalThis as any).window = { location: { origin: "https://alloy.local" } };
+        const key = provisioningAnswerUrl("new-leads");
+        seedProvisioning(key, answer(), 1000);
+        expect(consumeFreshProvisioning(key, 1100)).not.toBeNull();
+        expect(consumeFreshProvisioning(key, 1100)).toBeNull();
+    });
+
+    it("FALL-OPEN: a null answer or an `error` terminal seeds nothing (K2 does its live fetch)", () => {
+        (globalThis as any).window = { location: { origin: "https://alloy.local" } };
+        const key = provisioningAnswerUrl("new-leads");
+        seedProvisioning(key, null, 1000);
+        expect(consumeFreshProvisioning(key, 1100)).toBeNull();
+        seedProvisioning(key, answer("error"), 1000);
+        expect(consumeFreshProvisioning(key, 1100)).toBeNull();
+    });
+
+    it("IDEMPOTENT: a seed does not clobber a still-fresh intent-prefetch entry for the same URL", async () => {
+        const fetchMock = vi.fn(async () => ({ ok: true, json: async () => answer("operational", "prefetched") }) as unknown as Response);
+        (globalThis as any).window = { location: { origin: "https://alloy.local" } };
+        (globalThis as any).fetch = fetchMock as unknown as typeof fetch;
+        prefetchWorkUnitProvisioning("new-leads", { now: 1000 }); // warm via hover
+        seedProvisioning(provisioningAnswerUrl("new-leads"), answer("operational", "seeded"), 1000 + 1);
+        const warm = consumeFreshProvisioning(provisioningAnswerUrl("new-leads"), 1100);
+        expect((await warm!) as any).toMatchObject({ __tag: "prefetched" }); // the fresher prefetch wins
+        delete (globalThis as any).fetch;
+    });
+
+    it("is a no-op on the server (no window) — the cache is browser-only", () => {
+        delete (globalThis as any).window;
+        expect(() => seedProvisioning(provisioningAnswerUrl("new-leads"), answer(), 1000)).not.toThrow();
     });
 });
