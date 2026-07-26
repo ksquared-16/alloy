@@ -10,8 +10,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CreateLeadCommandSurface } from "@/components/platform/commands/createLead/CreateLeadCommandSurface";
+import dynamic from "next/dynamic";
 import { resolveCreatedLeadFocusPanelHref } from "@/lib/admin/canonicalOperatorRoutes";
+
+// Create Lead is an event-triggered command surface (opens only on `adminv2:open-create-lead`), never
+// part of the first operator paint. Load it dynamically so its ~19k-line subtree (processing-identity
+// engine, intake extraction, its own modals) leaves the Work Unit initial-path graph. The host renders
+// null until the event fires, so there is no first-paint behavior change — only a one-time chunk load on
+// the operator's first "create lead" gesture. (Phase 4 ownership: noncritical modes are not initial-path
+// dependencies.)
+const CreateLeadCommandSurface = dynamic(
+    () =>
+        import("@/components/platform/commands/createLead/CreateLeadCommandSurface").then(
+            (m) => m.CreateLeadCommandSurface,
+        ),
+    { ssr: false },
+);
 
 type OpenScope = { departmentId: string; workUnitId: string | null };
 
