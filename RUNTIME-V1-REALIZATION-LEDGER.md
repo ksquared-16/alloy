@@ -49,7 +49,7 @@
 | L5 authoritative detail via existing provisioning/record/VM paths | correct paths, wrong trigger (post-hydration) | trigger is bundle-gated | move trigger to server via seed; keep client consume seam | **completed** | K2 warm-hit consumes the seed unchanged |
 | L2/L6 no partial reveal / wrong-record / stale flash | boot-shell "Thinking…" until atomic K3 commit | (preserved) | seed feeds the SAME atomic commit — no partial identity pre-reveal | not started | cert gate |
 | L7 latest click wins | 3 generation guards | (preserved) | seed only warms cache; K2 supersede logic unchanged | not started | provisioning.ts guards |
-| Phase 2 — server compose overlaps client delivery | compose runs server-side before any client chunk (iter-3) | — | streaming overlap ATTEMPTED, proven not achievable (F5) | **reverted** | Phase-2 table below |
+| Phase 2 — server compose overlaps client delivery | compose runs server-side before any client chunk (iter-3) | — | the client-armed-deferred + Suspense-resolved-client-component design was slower → reverted (F5); Phase 1 seed is best certified | **reverted** | Phase-2 table below |
 | Phase 3 — serial critical chain | provisioning→enriched→stage-work serial | — | classify each dependency; reduce only proven-avoidable | not started | — |
 | Phase 4 — monolith ownership | initial static path = 1,279 files / 206,506 lines (Agent A) | noncritical modes eagerly on the initial graph | dynamic-split evidenced noncritical modes; delete proven-dead code | **safe wins done; 3/3b/4 documented residual** | commits `5dac324fa`, `97a740a31` |
 
@@ -77,6 +77,31 @@ Initial static import path from `ProvisionedWorkUnitSurface`/`InlineOpportunityF
 Config is sound: single `tsconfig.build.json`, no project references (no `tsc -b` fan-out), `incremental: true` + `skipLibCheck: true`, tsbuildinfo present. **No config restructure needed.** The lever is graph size.
 
 **Phase 5 after (post 26-file deletion):** incremental typecheck 14.1 s, single process, clean — healthy, maintained; 26 files off the tsc graph. Cold-typecheck re-measure skipped (2,793 lines ≈ 1.4% of the graph — below measurement noise; not worth the memory-tight cold run).
+
+## Behavioral certification matrix (local prod, authed slot3) — PASS, no regressions
+
+Specs (UNTRACKED): `zz-realization-cert-matrix.spec.ts`, `zz-realization-cert-gaps.spec.ts`. Every case: 0 console errors, 0 hydration warnings.
+
+| Case | Result |
+|---|---|
+| bare Work Unit cold load | ✓ seed consumed (0 primary provisioning reqs), "Wenc Family" visible, reveal completes |
+| explicit selected-subject deep link `?subject_id=` | ✓ committed subject + URL + active row all = Kurzman |
+| queue-row click | ✓ single click switches subject (Wenc→Kurzman) |
+| rapid switching ×5 + latest-click-wins | ✓ final click (Wenc) wins |
+| wrong-record / stale flash | ✓ NONE — only one distinct subject `h2` sampled through the whole rapid switch |
+| warm revisit | ✓ faster first-card than cold (2491 vs 3701) |
+| back / forward | ✓ subject switches are `replaceState` by design (URL is a projection); forward restores, no error |
+| Activity mode | ✓ renders + comms fetch fires |
+| Communications composer (dynamic split) | ✓ loads + opens |
+| Create Lead launch (dynamic split, 19k lines) | ✓ loads + modal opens on event |
+| Form Delivery (dynamic split) | ✓ `form_delivery` surface renders |
+| tour action surface (dynamic split) | ✓ `inline_form` surface renders |
+| no-data / failed-compose (bad slug) | ✓ honest error surface, no blank crash |
+| Workspace→Work Unit entry (click) | ~ not exercised (tiles expose no `<a href>` locator); TARGET (bare load) certified by C1; intent-prefetch click path untouched by these changes |
+| Previous / Next | ~ not exercised (control not located); same `attention.move(SUBJECT)` mechanism as the certified queue-row switch |
+| save → refresh → retained subject | ~ not exercised (save control not located); save/refresh path untouched by these changes |
+
+Inspected per case: subject identity, wrong/stale flash, dup provisioning/VM requests, hydration warnings, console errors, reveal state, URL/subject sync, cache consumption, latest-click-wins. **No regression found.**
 
 ## Phase 4/5 residual set (documented — NOT done, evidence attached)
 
@@ -143,14 +168,21 @@ But it is **slower**, and the reason is a hard architectural limit:
 | TTFB | 1417 | 2156 | 3607 | 3587 |
 | first card | **3610** | 5462 | **7370** | 7652 |
 
-**F5 — the compose→bundle overlap is not achievable.** Delivering the server-composed answer to the
-client K2 runtime requires hydrating a client resolve component, which is gated by the FULL bundle. The
-client cannot receive/use the answer before the bundle loads — and *at that moment iter-3 already has it*
-(serialized into the initial payload, read at the main hydration pass). The Suspense-streamed resolve
-hydrates in a LATER pass, so it only adds latency. No streaming mechanism can beat "answer ready at
-hydration," which iter-3 achieves. The mission's Phase 2 OUTCOME (first card ≪ 6.7 s; critical work starts
-before the client chunks) is already met by iter-3 — the server compose runs at request time, entirely
-before any chunk downloads. The distinct streaming mechanism is a proven dead-end here → **reverted**.
+**F5 — the specific streaming design tested was slower and was reverted (scope-limited finding).** The
+design tried: a client-armed deferred (`armSeed` a pending promise in the K2 cache before hydration) +
+a `<Suspense>`-wrapped async RSC that composes and streams a **resolved client component**
+(`ProvisioningAnswerSeed`) to fulfil it. Measured result: first card 5,462 ms vs iter-3's 3,610 ms —
+**slower**. Mechanism: that resolve is a client component, so it can only run after the client bundle
+hydrates; it **cannot deliver the K2 answer before client hydration**, and it hydrates in a *later* pass
+than the main shell, adding latency. iter-3's resolved server seed already delivers the answer at the main
+hydration pass, so this design cannot improve on it. **Reverted.** Phase 1's resolved server seed is the
+current best certified implementation.
+
+Scope note (do not over-generalize): this refutes THIS design (client-armed deferred + Suspense-resolved
+client component) under Next 16 / Turbopack here. It is NOT a proof that no server→client streaming
+scheme could ever help — only that any scheme whose delivery depends on hydrating a client component is
+bounded below by "answer ready at hydration," which Phase 1 already reaches. A scheme that delivered the
+answer to K2 without a client-component hydration step was not found and is not attempted here.
 
 ## Before / after (local prod, `new-leads`, DOM-meaningful)
 
@@ -177,9 +209,10 @@ intent-prefetch→K2, never the cold-load layout seed) — spot-check recommende
 **Iter 4 — client-armed deferred streaming overlap (REVERTED).** `armSeed` (client, pre-K2) + a
 `<Suspense>` async RSC that composes and `resolveSeed`s a plain answer — no promise across the boundary.
 No crash, seed consumed, surface renders. But first-card **regressed** to 5462 ms warm (vs iter-3 3610),
-because the resolve component hydrates in a later pass than K2 fires — the composed answer cannot reach
-the client before the bundle hydrates, and iter-3 already delivers it at that exact moment. F5: overlap
-is architecturally impossible; reverted to iter-3.
+because the resolve component hydrates in a later pass than K2 fires — this design's composed answer
+cannot reach the client before the bundle hydrates, and iter-3 already delivers it at that moment. F5:
+this specific streaming design cannot beat the resolved server seed; reverted to iter-3. (Not a universal
+impossibility claim — see F5.)
 
 ## Change ledger (kept / reverted / deferred)
 
@@ -188,7 +221,7 @@ is architecturally impossible; reverted to iter-3.
 - **KEEP** — blocking layout seed with RESOLVED answer (iter 3): `layout.tsx` awaits compose (concurrent with route-meta) + `ProvisioningAnswerSeed` writes the resolved answer. **Certified win** (see table).
 - **REVERTED** — streamed RSC-promise prop (iter 2): crashes hydration in this Next 16 setup.
 - **REVERTED** — blocking page-segment seed (iter 1): self-defeating + page output discarded by the layout.
-- **REVERTED** — Phase 2 streamed overlap (armSeed/resolveSeed/ProvisioningSeedArm + Suspense): builds & runs but slower; overlap architecturally impossible (F5). Working tree returned to committed iter-3.
+- **REVERTED** — Phase 2 streamed overlap (armSeed/resolveSeed/ProvisioningSeedArm + Suspense): builds & runs but slower (5,462 vs 3,610); this design can't deliver the K2 answer before client hydration (F5). Phase 1 resolved server seed remains best certified. Working tree returned to committed iter-3.
 - **KEEP** — Phase 4 code-splits (Findings 1+2): Create Lead + Communications-composer surfaces → `next/dynamic`. Bundle 1,817,485 → 1,767,948 bytes (−49.5 KB); ~25k lines off the initial static graph. Committed `5dac324fa`. tsc+build green, surface renders.
 - **KEEP (pending final cert)** — dead-code deletion: 26 verified-0-importer files, 2,793 lines (orphaned singular Person/Child VM drawer cluster + superseded hard-cutover shims + unused focus-panel/drawer components + 2 dead barrels). Validated by tsc+build+browser cert.
 - **DEFER (Phase 3)** — duplicate resolution: layout runs `loadWorkUnitSlugRouteMetaServer` AND `composeProvisioningAnswerForRoute`, each doing a gate + slug resolve. Runs concurrently now; dedup candidate.
