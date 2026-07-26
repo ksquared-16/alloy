@@ -125,7 +125,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 |---|---|:--:|---|---|---|---|
 | R-01 | Runtime Arch / Critical Path | Sev2 | Medium | A reveal-path change (RA-1/CP-1/CP-4/RA-2/CQ-2) regresses first-card/latest-click/no-flash | Full loop per task: measure → build → browser-cert matrix → keep/revert; seed-contract + cert specs guard | OPEN |
 | R-02 | All (execution) | Sev2 | High | Host memory saturation (swap ~20 GB) makes prod builds slow/OOM → throttles the heavy build+cert loop | Reap stray tsc/Chromium; `SKIP_BUILD_TYPECHECK=1`; out-of-band tsc gate; route to light tasks under throttle | OPEN |
-| R-03 | Runtime Arch | Sev2 | High (until RA-2) | Legacy-drawer ↔ Focus-Panel record-open duality: runtime builds path URLs it can't consume → wrong-subject on path deep links | RA-2 migrates path→`?subject_id`/deletes the legacy branch; `zz-realization-urlcontract` locks current behavior | OPEN |
+| R-03 | Runtime Arch | Sev3 (was Sev2) | Low-med | The legacy path→drawer controller is DEAD (unreachable), so no live duality — BUT the create-lead href is path-based, so **create-lead does not select the created record** (lands on the default subject) | RA-2(b) query-ifies the href (real fix); RA-2(a) deletes the dead controller; `zz-realization-urlcontract` locks it | OPEN (downgraded — dead not live) |
 | R-04 | Testing | Sev3 | High (until TE-2/3) | E2E cert specs bind hardcoded dev entity IDs → not CI-portable; regression protection is local-only for behavior paths | Unit suites are portable + committed; TE-2 seeded fixtures + TE-3 CI wiring | OPEN |
 | R-05 | Scalability | Sev3 | Medium | `ProvisioningAnswer` is opportunity-shaped (`inquiry_children`/subject snapshot) → strains a Parent/Teacher subject type | SC-1 generalizes the subject contract before reuse; kernel/Surface Host are subject-agnostic | OPEN |
 
@@ -147,7 +147,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 | ID | Task | Status | Completion criteria | Evidence | Deps |
 |---|---|:--:|---|---|---|
 | RA-1 | Introduce canonical kernel preload seam `seedProvisioningForRoute(routeIdentity, answer)` | **DONE** | Layout passes `(routeIdentity, answer)`, not a raw URL; key derivation lives in the kernel; `provisioningAnswerUrl` not imported outside the kernel | **0 non-kernel imports of `provisioningAnswerUrl`; route-seam unit test (14/14); C1/C3 cert (seed consumed, latest-wins, no flash); all-cards ~10.9 s; tsc exit 0; commit `3c0a9d6c1`** | — |
-| RA-2 | Remove legacy-drawer ↔ Focus-Panel record-open duality | NS | Path `/work-unit/:slug/:recordId` selects the correct Focus-Panel subject **or** 301s to `?subject_id`; legacy `openDrawer("workspace_slug_record_url")` branch deleted | `zz-realization-urlcontract` asserts path → correct subject; grep: no legacy record-open branch | RA-1 |
+| RA-2 | Remove legacy-drawer ↔ Focus-Panel record-open duality | **IP (scoped)** | (a) delete the DEAD `useWorkUnitSurfaceController` + `resolveDeepLinkRecordAction` + path deep-link/url-sync machinery; (b) make `operatorWorkUnitHrefFromKey`/`resolveCreatedLeadFocusPanelHref` emit `?subject_id=` (not `/recordId`) so create-lead selects the created record; (c) retire the `[recordId]` route + update `operatorWorkUnitLegacyGuards.test.ts` to the query form | **FINDING: `useWorkUnitSurfaceController` is DEAD (0 callers) → the legacy openDrawer path is unreachable; RA-2 is delete-dead + query-ify-href, not a live migration.** Cert: create-lead selects the record via `?subject_id`; urlcontract asserts query-canonical | RA-1✓ |
 | RA-3 | Cache single-producer invariant (prefetch/seed/cold = one owned seam) | IP | One key builder; producer-parity + idempotency tests | seed-contract unit tests (partial — key-parity DONE) | RA-1 |
 
 ### 2.2 Critical Path — B- → A- (bucket A/B) · 20%
@@ -280,6 +280,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 | 2026-07-26 | Certification exec #2 | **MA-1 / DOC-1 → DONE** (`ARCHITECTURE.md`; comprehension check PASSED + 3 polish fixes). Maintainability C-→B (70%), Documentation C→B (60%). | `c52e50c52` + this |
 | 2026-07-26 | Certification exec #3 | **TS-2 → DONE** (`typescript-roadmap.md`). TypeScript C→C+ (50%). | this |
 | 2026-07-26 | Certification exec #4 | **RA-1 → DONE** (kernel preload seam; `provisioningAnswerUrl` now kernel-only; behavior-identical, cert green; D-011). Runtime Architecture C+→B (40%). Unblocks RA-2. | `3c0a9d6c1` |
+| 2026-07-26 | Certification exec #5 | **RA-2 → IP (scoped + de-risked).** Found `useWorkUnitSurfaceController` DEAD → legacy duality is unreachable; RA-2 reduced to delete-dead + query-ify the create-lead href. R-03 downgraded Sev2→Sev3. Held (multi-file behavior change; host-memory throttle degrading trustworthy heavy cert). | — |
 
 ## 6a. Environmental throttle (active)
 
