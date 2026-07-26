@@ -13,24 +13,87 @@
 
 ---
 
-## 1. Grade dashboard
+## 1. Engineering Scoreboard
 
-| Category | Current | Target | Bucket to target | Status | % |
-|---|:--:|:--:|:--:|---|--:|
-| Runtime Architecture | C+ | A- | B | In Progress | 15% |
-| Critical Path | B- | A- | A/B | In Progress | 20% |
-| TypeScript Architecture | C | B+ (A later) | B | In Progress | 15% |
-| Dependency Graph | B | A- | A/B | In Progress | 40% |
-| Maintainability | C- | A- | A | In Progress | 30% |
-| Scalability | C | A- | B | Not Started | 10% |
-| Testing | C- | A | A | In Progress | 35% |
-| Documentation | C | A- | A | In Progress | 30% |
-| Performance | B | A- | A/B | In Progress | 40% |
-| Code Quality | B- | A- | A | In Progress | 55% |
+| Category | Current | Target | Trend | Completion % | Tasks Done / Total |
+|---|:--:|:--:|:--:|--:|:--:|
+| Runtime Architecture | C+ | A- | → | 15% | 0 / 3 |
+| Critical Path | B- | A- | ↑ | 20% | 1 / 5 |
+| TypeScript Architecture | C | B+ (A later) | ↑ | 15% | 1 / 3 |
+| Dependency Graph | B | A- | ↑ | 40% | 2 / 5 |
+| Maintainability | C- | A- | ↑ | 30% | 0 / 2 |
+| Scalability | C | A- | → | 10% | 0 / 2 |
+| Testing | C- | A | ↑ | 35% | 2 / 7 |
+| Documentation | C | A- | ↑ | 30% | 0 / 3 |
+| Performance | B | A- | ↑ | 40% | 1 / 4 |
+| Code Quality | B- | A- | ↑ | 55% | 1 / 3 |
 
-**Overall initiative completion (weighted, coarse): ~29%.** Certification target: every row at target grade.
+**Overall initiative completion (weighted, coarse): ~29%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade.
 
 Task status legend: **NS** Not Started · **IP** In Progress · **BL** Blocked · **NV** Needs Validation · **DONE** Completed.
+
+## 1a. Definition of Done (every task)
+
+A task is **COMPLETE only when every box is checked** (doc/test/arch boxes are N/A-able only with a stated reason in the task's Evidence cell):
+
+- [ ] Implementation complete (smallest correction that satisfies the criteria)
+- [ ] Typecheck clean (`npm run typecheck`)
+- [ ] Production build clean (`next build`)
+- [ ] Browser certification complete (behavioral matrix re-run for the affected paths)
+- [ ] Regression tests committed (unit/contract where the behavior is unit-testable)
+- [ ] Measurements captured (before/after, where the task claims a perf/graph effect)
+- [ ] Tracker updated (status, evidence = commit hash + numbers, grade, %)
+- [ ] Documentation updated (comments truthful; `ARCHITECTURE.md` if ownership/flow changed)
+- [ ] Architecture reviewed (capital-investment test: what complexity removed? what deletable? right at 10×?)
+- [ ] No duplicated ownership introduced (one owner, one responsibility, one extension point)
+
+## 1b. Decision Log (consult before proposing any architectural alternative)
+
+| ID | Decision | Basis / evidence |
+|---|---|---|
+| D-001 | The canonical first-card mechanism is a **resolved server seed**: the route layout server-composes the Provisioning Answer and seeds the K2 cache with a RESOLVED answer. | first card 6.7→3.6 s warm; commit `d1314bb57` |
+| D-002 | **Streaming overlap REJECTED** (client-armed deferred + Suspense-resolved client component). A client-component resolve can't deliver before bundle hydration; the resolved seed already delivers at hydration. | measured 5,462 vs 3,610 ms; F5; reverted |
+| D-003 | **Passing an unawaited RSC promise as a client prop is FORBIDDEN** — crashes hydration in Next 16. | `TypeError: undefined 'catch'`; iter-2 crash |
+| D-004 | **Canonical selected-subject routing = query `?subject_id`** (the runtime projects it via `urlFromAttention`). The path form `/:recordId` is legacy (drives `openDrawer`) and its consumption disagrees with construction. | `zz-realization-urlcontract`: path→default subject, query→correct. RA-2 resolves. |
+| D-005 | **The seed lives in the LAYOUT, not the page** — the layout renders the Host and discards `children`; a page-segment seed is never mounted and loses the race to K2. | iter-1/iter-2 measurements |
+| D-006 | **Slug→identity resolution is deduped** via a React `cache()` shared resolver (`resolveWorkUnitRouteIdentityCached`). | commit `5148c9708`; C1/C2/C3/C7 re-cert |
+| D-007 | **Gate/auth dedup NOT needed** — already request-memoized (`loadAdminAccessBundleCached`). | code inspection |
+| D-008 | **TypeScript stays single-project for now**; project references are a *designed later* initiative (TS-2), not a premature restructure. | cold typecheck 156 s acceptable short-term |
+| D-009 | **Env-gated shadow / legacy-emergency-fallback modules are RETAINED** — legitimate kill-switches (default false), not dead code. | flag defaults verified |
+| D-010 | **No Runtime V2.** The A/B/C analysis proved no bucket-C ceiling; certify within V1. | classification 2026-07-26 |
+
+_Future sessions append decisions here with the next `D-0xx` id; never silently reverse a decision — supersede it with a new entry citing evidence._
+
+## 1c. Priority Queue (auto-selects the next READY task)
+
+**Priority:** Critical · High · Medium · Low. **READY** = status NS/IP and all `Deps` are DONE. The next task to execute is the **highest-priority READY** task (ties broken by fewest downstream unblocks first, then lowest risk).
+
+| Task | Cat | Priority | Deps | Deps met? | READY? |
+|---|---|:--:|---|:--:|:--:|
+| **CP-2** Remove duplicate stage-work fetch | Critical Path | **Critical** | — | ✓ | **READY** |
+| CP-4 Enriched-VM field reuse of provisioning data | Critical Path | High | — | ✓ | READY |
+| RA-1 Canonical kernel preload contract | Runtime Arch | High | — | ✓ | READY |
+| DG-1 Conditional-mount+dynamic the 7 registry modals | Dependency Graph | High | — | ✓ | READY |
+| MA-1 / DOC-1 `ARCHITECTURE.md` | Maint / Docs | High | — | ✓ | READY |
+| TE-2 Portable Playwright fixtures | Testing | High | — | ✓ | READY |
+| TE-4 `ProvisioningAnswer` schema contract test | Testing | Medium | — | ✓ | READY |
+| TS-1 Immediate TS graph wins | TypeScript | Medium | — | ✓ | READY |
+| TS-2 Project-reference roadmap | TypeScript | Medium | — | ✓ | READY |
+| SC-1 Generalize subject contract | Scalability | Medium | — | ✓ | READY |
+| CQ-3 Rename `resolveWorkUnitRouteIdentityCached` | Code Quality | Low | — | ✓ | READY |
+| CP-1 Server-seed enriched VM | Critical Path | **Critical** | RA-1, CP-4 | ✗ | blocked |
+| RA-2 Remove legacy-drawer duality | Runtime Arch | High | RA-1 | ✗ | blocked |
+| CQ-2 Decompose `InlineOpportunityFocusPanel` | Code Quality | High | DG-1, DG-2 | ✗ | blocked |
+| TE-3 CI wiring | Testing | High | TE-2 | ✗ | blocked |
+| TE-5 Routing-permutation unit tests | Testing | Medium | RA-2 | ✗ | blocked |
+| DG-2 Lazy-load `workflowRun.ts` | Dependency Graph | Medium | — | ✓ | READY |
+| DG-3 Isolate SchedulingCard | Dependency Graph | Medium | — | ✓ | READY |
+| PE-2 Warm fully-settled < 6 s | Performance | High | CP-1, CP-2, CP-4 | ✗ | blocked |
+| PE-3 Cold TTFB mitigation | Performance | Low | CP-4 | ✗ | blocked |
+| CP-3 Gate prewarm storm | Critical Path | Low | — | ✓ | READY (low value — see note) |
+| TE-6 Perf regression assertions | Testing | Medium | PE-2 | ✗ | blocked |
+
+**→ Next task selected by the queue: `CP-2` (Critical, READY).** _(CP-3 is deprioritized to Low: a prior attempt to gate the storm was reverted for touching the reveal lifecycle without moving wall-clock — see ledger; revisit only after CP-1.)_
 
 ---
 
