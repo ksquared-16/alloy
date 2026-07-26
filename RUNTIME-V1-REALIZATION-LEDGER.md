@@ -51,8 +51,49 @@
 | L7 latest click wins | 3 generation guards | (preserved) | seed only warms cache; K2 supersede logic unchanged | not started | provisioning.ts guards |
 | Phase 2 — server compose overlaps client delivery | compose runs server-side before any client chunk (iter-3) | — | streaming overlap ATTEMPTED, proven not achievable (F5) | **reverted** | Phase-2 table below |
 | Phase 3 — serial critical chain | provisioning→enriched→stage-work serial | — | classify each dependency; reduce only proven-avoidable | not started | — |
-| Phase 4 — monolith ownership | ~15k-line Work Unit graph | noncritical modes on initial graph | responsibility map + extract real boundaries | not started | — |
-| Phase 5 — TS/workstation perf | 4×8GB tsc storm, swap thrash | — | one canonical bounded typecheck path | not started | closeout §9 |
+| Phase 4 — monolith ownership | initial static path = 1,279 files / 206,506 lines (Agent A) | noncritical modes eagerly on the initial graph | dynamic-split evidenced noncritical modes; delete proven-dead code | **safe wins done; 3/3b/4 documented residual** | commits `5dac324fa`, `97a740a31` |
+
+### Phase 4 — initial-path ownership (Agent A evidence map)
+
+Initial static import path from `ProvisionedWorkUnitSurface`/`InlineOpportunityFocusPanel`: **1,279 files / 206,506 lines**. No barrel drags noncritical modules (ruled out). Ranked eager-noncritical (lines removable from the initial graph):
+
+| # | Noncritical mode | ~lines/files off initial graph | Site | Safe | Status |
+|---|---|--:|---|---|---|
+| 1 | Create Lead command surface (proc-identity engine + intake extract + its modals) | 19,214 / 129 | `CreateLeadEventHost.tsx:13` (renders null until event) | yes | **split** |
+| 2 | Communications composer + FormDelivery + tour modal | 6,314 / 36 | `CurrentWorkActionPanel.tsx:5-8` (behind `surface===` branches) — re-drag of a prior split | yes | **split** |
+| 3 | Registry action modals static deps | 4,677 / 25 | `useOpportunityDrawerVmRegistryModals.tsx` | uncertain (hook wires callbacks) | pending |
+| 3b | `workflowRun.ts` (2,645) + lifecycle automation engine | — | 2 static entry paths | uncertain | pending |
+| 4 | Non-core Focus Panel cards (SchedulingCard 1,033 standout) | 2,674 / 13 | `FocusPanelCardRenderer.tsx` per-key switch | uncertain (sync inline) | pending |
+| Phase 5 — TS/workstation perf | incremental typecheck already single-process 15.1s/1.15GB (healthy); storm is `next build`'s in-build checker only | not a config defect — graph SIZE is the cost | shrink the tsc graph via dead-code + eager-dep cleanup (converges w/ Phase 4); keep SKIP_BUILD_TYPECHECK loop convention | in progress | `time -l npm run typecheck` |
+
+### Phase 5 — TS execution path (measured)
+
+| Path | time | peak RSS | procs | note |
+|---|--:|--:|--:|---|
+| incremental typecheck (`npm run typecheck`, warm tsbuildinfo) | 15.1 s | 1.15 GB | 1 | HEALTHY — no storm |
+| cold full typecheck (no tsbuildinfo) | **156 s** | **3.27 GB** | 1 (single `tsc -p`) | not 7 min; single process; incremental-cached so rarely paid |
+| `next build` in-build typecheck | — | ~4×8 GB (closeout) | N | the actual storm — avoided by `SKIP_BUILD_TYPECHECK=1` in the loop; expected in CI (more RAM) |
+
+Config is sound: single `tsconfig.build.json`, no project references (no `tsc -b` fan-out), `incremental: true` + `skipLibCheck: true`, tsbuildinfo present. **No config restructure needed.** The lever is graph size.
+
+**Phase 5 after (post 26-file deletion):** incremental typecheck 14.1 s, single process, clean — healthy, maintained; 26 files off the tsc graph. Cold-typecheck re-measure skipped (2,793 lines ≈ 1.4% of the graph — below measurement noise; not worth the memory-tight cold run).
+
+## Phase 4/5 residual set (documented — NOT done, evidence attached)
+
+- **Finding 3 — registry action modals (~4.6k lines).** The 7 still-static modals in
+  `useOpportunityDrawerVmRegistryModals.tsx` are ALWAYS-mounted with an `open` prop (unlike the 3 already-
+  dynamic siblings, which are conditionally mounted `{open ? … : null}`). `dynamic` alone won't defer an
+  always-mounted component — each would need converting to conditional-mount too, a modal-lifecycle change
+  (exit animation / internal state reset) requiring per-modal interaction cert. Deferred (needs care).
+- **Finding 3b — `workflowRun.ts` (2,645) + lifecycle automation engine.** Reached via TWO static entry
+  paths (tour-booking refresh + `emitStatusChangedEvent`); action-time code eagerly on first paint. A real
+  win but a multi-edge refactor, not a single dynamic wrap. Deferred.
+- **Finding 4 — non-core Focus Panel cards (SchedulingCard 1,033 + config subtree).** Cards render
+  synchronously inline in `FocusPanelCardRenderer`'s per-key switch; not on the lead first-paint (scheduling
+  is outside the lead composition), so the win is graph-only, and making it dynamic adds a visible pop-in
+  for scheduling contexts I cannot cert against `new-leads` this session. Deferred.
+- **Deeper ownership** (narrow effects/state/providers/refresh; small explicit module contracts;
+  `InlineOpportunityFocusPanel`'s ~40-import hub) — structural refactors beyond the evidence-safe pass.
 
 States: not started · in progress · blocked · completed · reverted · deferred(reason)
 
@@ -148,4 +189,7 @@ is architecturally impossible; reverted to iter-3.
 - **REVERTED** — streamed RSC-promise prop (iter 2): crashes hydration in this Next 16 setup.
 - **REVERTED** — blocking page-segment seed (iter 1): self-defeating + page output discarded by the layout.
 - **REVERTED** — Phase 2 streamed overlap (armSeed/resolveSeed/ProvisioningSeedArm + Suspense): builds & runs but slower; overlap architecturally impossible (F5). Working tree returned to committed iter-3.
+- **KEEP** — Phase 4 code-splits (Findings 1+2): Create Lead + Communications-composer surfaces → `next/dynamic`. Bundle 1,817,485 → 1,767,948 bytes (−49.5 KB); ~25k lines off the initial static graph. Committed `5dac324fa`. tsc+build green, surface renders.
+- **KEEP (pending final cert)** — dead-code deletion: 26 verified-0-importer files, 2,793 lines (orphaned singular Person/Child VM drawer cluster + superseded hard-cutover shims + unused focus-panel/drawer components + 2 dead barrels). Validated by tsc+build+browser cert.
 - **DEFER (Phase 3)** — duplicate resolution: layout runs `loadWorkUnitSlugRouteMetaServer` AND `composeProvisioningAnswerForRoute`, each doing a gate + slug resolve. Runs concurrently now; dedup candidate.
+- **DEFER (uncertain, needs care)** — Phase 4 Findings 3/3b/4: registry-modal static deps, `workflowRun.ts` automation engine (2 entry paths), non-core Focus Panel cards (SchedulingCard 1,033). Higher risk (hook callbacks / sync inline render); assess after the safe wins land.
