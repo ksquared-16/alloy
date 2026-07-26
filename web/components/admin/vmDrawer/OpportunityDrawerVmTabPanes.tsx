@@ -1,8 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
-import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
+import dynamic from "next/dynamic";
+// Both are tab-gated (rendered only for their active drawer tab), so they never need to be in the
+// first chunk that loads with this component. Keep them out of the initial graph.
+const EntityDocumentsSection = dynamic(() => import("@/components/admin/EntityDocumentsSection"), {
+    ssr: false,
+});
+const CommunicationsDrawerSection = dynamic(
+    () => import("@/components/admin/communications/CommunicationsDrawerSection"),
+    { ssr: false },
+);
 import { oppInqEyebrow } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";

@@ -1,10 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
-import OpportunityFocusPanelEmbeddedWorkspace from "@/components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace";
+// Activity cockpit is rendered ONLY when `mode === "activity"` (an operator interaction, never the
+// first-paint mode). Statically importing it pulled the whole Communications stack (~1.4k-line
+// CommunicationsDrawerSection + messaging composer/threads + tab panes) into the initial Work Unit
+// chunk, where it must download+hydrate before the first provisioning request can fire. Load it on
+// demand so it leaves the first-paint critical path; the Activity data cache is prewarmed separately
+// (focusPanelActivityPrewarm), so the switch stays fast.
+const OpportunityFocusPanelEmbeddedWorkspace = dynamic(
+    () => import("@/components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace"),
+    { ssr: false },
+);
 import { resolveFocusPanelModeGrid } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import {
     deriveFocusPanelGridFromLayoutDoc,

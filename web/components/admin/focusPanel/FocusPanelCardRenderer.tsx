@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import dynamic from "next/dynamic";
 
 import ArchetypeCardBody from "@/components/admin/focusPanel/ArchetypeCardBody";
 import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
@@ -14,7 +15,14 @@ import BillingPreviewCard from "@/components/admin/focusPanel/cards/BillingPrevi
 import TimelineCard from "@/components/admin/focusPanel/cards/TimelineCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
-import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
+// Drill-only content: renders ONLY inside the `documents` / `notes` cards on drill-down (an operator
+// interaction), never at first paint — yet statically importing it forced the whole tab-panes graph
+// (CommunicationsDrawerSection ~1.4k lines + EntityDocumentsSection) into FocusPanelCardRenderer's
+// first-paint chunk. Load on drill so it leaves the critical path.
+const OpportunityDrawerVmTabPanes = dynamic(
+    () => import("@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes"),
+    { ssr: false },
+);
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
