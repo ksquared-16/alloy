@@ -15,18 +15,21 @@
 
 ## 1. Engineering Scoreboard
 
-| Category | Current | Target | Trend | Completion % | Tasks Done / Total |
-|---|:--:|:--:|:--:|--:|:--:|
-| Runtime Architecture | C+ | A- | → | 15% | 0 / 3 |
-| Critical Path | B (was B-) | A- | ↑ | 40% | 2 / 5 |
-| TypeScript Architecture | C+ (was C) | B+ (A later) | ↑ | 50% | 2 / 3 |
-| Dependency Graph | B | A- | ↑ | 40% | 2 / 5 |
-| Maintainability | B (was C-) | A- | ↑ | 70% | 1 / 2 |
-| Scalability | C | A- | → | 10% | 0 / 2 |
-| Testing | C- | A | ↑ | 35% | 2 / 7 |
-| Documentation | B (was C) | A- | ↑ | 60% | 1 / 3 |
-| Performance | B | A- | ↑ | 40% | 1 / 4 |
-| Code Quality | B- | A- | ↑ | 55% | 1 / 3 |
+| Category | Current | Target | Trend | Completion % | Confidence % | Tasks Done / Total | Milestone |
+|---|:--:|:--:|:--:|--:|--:|:--:|:--:|
+| Runtime Architecture | C+ | A- | → | 15% | 70% | 0 / 3 | M1 |
+| Critical Path | B (was B-) | A- | ↑ | 40% | 80% | 2 / 5 | M2 |
+| TypeScript Architecture | C+ (was C) | B+ (A later) | ↑ | 50% | 75% | 2 / 3 | M3 |
+| Dependency Graph | B | A- | ↑ | 40% | 70% | 2 / 5 | M1 |
+| Maintainability | B (was C-) | A- | ↑ | 70% | 80% | 1 / 2 | M3 |
+| Scalability | C | A- | → | 10% | 55% | 0 / 2 | M2 |
+| Testing | C- | A | ↑ | 35% | 80% | 2 / 7 | M4 |
+| Documentation | B (was C) | A- | ↑ | 60% | 80% | 1 / 3 | M3 |
+| Performance | B | A- | ↑ | 40% | 80% | 1 / 4 | M2 |
+| Code Quality | B- | A- | ↑ | 55% | 70% | 1 / 3 | M1 |
+
+**Confidence %** = how confident a fresh architecture review would re-assign this grade, given the committed
+evidence (tests / cert / measurements / review). It rises only with evidence and drops when new findings surface.
 
 **Overall initiative completion (weighted, coarse): ~41%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade.
 
@@ -94,6 +97,42 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | TE-6 Perf regression assertions | Testing | Medium | PE-2 | ✗ | blocked |
 
 **→ Next task selected by the queue: `RA-1` (High, READY)** — the canonical kernel preload contract; it unblocks both `CP-1` (the biggest perceived-perf lever) and `RA-2` (legacy-drawer duality), and pays down the seed-coupling debt. Co-highest-priority READY siblings: `CP-4`, `DG-1`, `TE-2`. **NOTE:** RA-1/CP-4/DG-1 each require the build+browser-cert loop, which is currently throttled by host memory (§6a) — batch when the host has headroom. Light READY tasks available now under throttle: `TE-4` (schema contract test, unit-only), `TS-1` (TS wins), `CQ-3` (rename). _(CP-3 stays Low: a prior storm-gating attempt was reverted for touching the reveal lifecycle without moving wall-clock; revisit after CP-1.)_
+
+## 1d. Milestones
+
+Every task belongs to exactly one milestone. The Priority Queue draws from the **active** milestone unless a
+higher-priority cross-milestone blocker exists (e.g. an M1 task that unblocks the biggest M2 lever).
+
+| Milestone | Theme | Tasks | Done / Total | Status |
+|---|---|---|:--:|---|
+| **M1** | **Runtime Ownership** | RA-1, RA-2, RA-3, DG-1, DG-2, DG-3, DG-4✓, DG-5✓, CQ-1✓, CQ-2, CQ-3 | 4 / 11 | **ACTIVE** |
+| M2 | Critical Path & Performance | CP-1, CP-2✓, CP-3, CP-4, CP-5✓, PE-1, PE-2, PE-3, PE-4✓, SC-1, SC-2 | 4 / 11 | in progress |
+| M3 | Developer Experience | TS-1, TS-2✓, TS-3✓, MA-1✓, MA-2, DOC-1✓, DOC-2, DOC-3 | 5 / 8 | in progress |
+| M4 | Certification & Regression | TE-1✓, TE-2, TE-3, TE-4, TE-5, TE-6, TE-7✓ | 2 / 7 | in progress |
+
+- **Current milestone:** **M1 Runtime Ownership** (fix ownership before optimizing the path; RA-1 also unblocks the M2 perf core).
+- **Milestone progress:** M1 4/11 · M2 4/11 · M3 5/8 · M4 2/7.
+- **Milestones remaining to target:** all four still have open tasks; M3 is closest.
+- **Active-milestone next READY:** `RA-1` (see Priority Queue).
+
+## 1e. Risks
+
+Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact** · Owner · Mitigation · Status.
+
+### Open risks
+| ID | Cat | Sev | Likelihood | Impact | Mitigation | Status |
+|---|---|:--:|---|---|---|---|
+| R-01 | Runtime Arch / Critical Path | Sev2 | Medium | A reveal-path change (RA-1/CP-1/CP-4/RA-2/CQ-2) regresses first-card/latest-click/no-flash | Full loop per task: measure → build → browser-cert matrix → keep/revert; seed-contract + cert specs guard | OPEN |
+| R-02 | All (execution) | Sev2 | High | Host memory saturation (swap ~20 GB) makes prod builds slow/OOM → throttles the heavy build+cert loop | Reap stray tsc/Chromium; `SKIP_BUILD_TYPECHECK=1`; out-of-band tsc gate; route to light tasks under throttle | OPEN |
+| R-03 | Runtime Arch | Sev2 | High (until RA-2) | Legacy-drawer ↔ Focus-Panel record-open duality: runtime builds path URLs it can't consume → wrong-subject on path deep links | RA-2 migrates path→`?subject_id`/deletes the legacy branch; `zz-realization-urlcontract` locks current behavior | OPEN |
+| R-04 | Testing | Sev3 | High (until TE-2/3) | E2E cert specs bind hardcoded dev entity IDs → not CI-portable; regression protection is local-only for behavior paths | Unit suites are portable + committed; TE-2 seeded fixtures + TE-3 CI wiring | OPEN |
+| R-05 | Scalability | Sev3 | Medium | `ProvisioningAnswer` is opportunity-shaped (`inquiry_children`/subject snapshot) → strains a Parent/Teacher subject type | SC-1 generalizes the subject contract before reuse; kernel/Surface Host are subject-agnostic | OPEN |
+
+### Resolved risks
+| ID | Cat | Was | Resolution | Evidence |
+|---|---|---|---|---|
+| R-00 | Critical Path | Duplicate `/stage-work` fetch inflated all-cards | CP-2 seeds the answer's stage-work; fetch eliminated | `437ad9d11`; all-cards 12.7→11.2 s |
+| R-06 | Maintainability | Onboarding required ledger archaeology; a core comment was false | `ARCHITECTURE.md` + comprehension check; comment fixed | `c52e50c52`; check PASSED |
 
 ---
 
