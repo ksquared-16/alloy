@@ -103,6 +103,24 @@ Specs (UNTRACKED): `zz-realization-cert-matrix.spec.ts`, `zz-realization-cert-ga
 
 Inspected per case: subject identity, wrong/stale flash, dup provisioning/VM requests, hydration warnings, console errors, reveal state, URL/subject sync, cache consumption, latest-click-wins. **No regression found.**
 
+## Phase 3 — serial-path reduction (map + targeted fixes)
+
+Warm full-panel path (after Phase 1), classified per step:
+
+| Step | Owner | Server timing (warm) | Classification |
+|---|---|---|---|
+| route gate / auth / context | `loadAdminRouteGate` → `loadAdminAccessBundleCached` | request-memoized | genuine, already deduped |
+| slug / work-view resolution | `resolveWorkUnitByRouteSlug` via layout | ~2 DB reads | **was duplicated** (route-meta + provisioning) → fixed (A) |
+| server provisioning seed | `composeProvisioningAnswerForRoute` (blocking, cold) | TTFB ~1.8 s warm | genuine; carries commit-critical Focus Panel |
+| enriched VM composition | `/api/admin/view-models/drawer/opportunity/{id}` | ~6 s | genuine Settlement; some re-reads (C) |
+| stage-work | `completeVmWithStageWork` → `/stage-work` | ~2 s serial | re-fetch of data the provisioning answer already carries (D) |
+| reveal commit | K3 `onPreparationTerminal` | — | genuine |
+
+- **A — dedup slug→identity resolution. DONE (`5148c9708`).** `resolveWorkUnitRouteIdentityCached` (React `cache()`) shared by the route-meta seed and the provisioning seed → one resolution per request instead of two. Neutral wall-clock (the two ran in parallel — this halves DB load, not the serial path); no regression (C1/C2/C3/C7 re-certified).
+- **B — repeated `getAdminAuth`/context. NO CHANGE NEEDED.** Already request-memoized via `loadAdminAccessBundleCached` under `loadAdminRouteGate`; the double call only repeats cheap in-memory transforms.
+- **C — enriched VM vs Provisioning Answer (MAPPED, residual).** The enriched VM (`resolveOpportunityDrawerFirstPaintDependencies`) re-reads `inquiry_children` from the record metadata — the SAME source the provisioning answer's `focusPanelSubjectSnapshot` already used — plus the subject's primary contact. Reusing it would require handing the provisioning-composed data to the SEPARATE post-commit enriched-VM request (a contract change / cross-request plumbing). The mandate forbids merging VM contracts; deferred as documented residual (the enriched VM's deeper reads — full family, emergency contacts, addresses, per-child detail — are genuinely new and must stay).
+- **D — stage-work sequencing (MAPPED, residual).** The provisioning answer already carries `focusPanelStageWork` for the committed (default) subject, yet `completeVmWithStageWork` re-fetches `/stage-work` client-side (~2 s serial on the all-cards path). On a cold load (committed == default subject) the client could reuse the answer's `focusPanelStageWork` instead of re-fetching, removing one serial request. Genuine reuse, but it touches the enriched-VM/Settlement client path (`useRecordWorkRuntime`) — moderate risk; deferred as documented residual (the all-cards ~12.7 s lever).
+
 ## Phase 4/5 residual set (documented — NOT done, evidence attached)
 
 - **Finding 3 — registry action modals (~4.6k lines).** The 7 still-static modals in
@@ -121,6 +139,54 @@ Inspected per case: subject identity, wrong/stale flash, dup provisioning/VM req
   `InlineOpportunityFocusPanel`'s ~40-import hub) — structural refactors beyond the evidence-safe pass.
 
 States: not started · in progress · blocked · completed · reverted · deferred(reason)
+
+---
+
+## FINAL SUMMARY (session close)
+
+### Commits (this session, atop polish closeout `07ae34dad`)
+| # | Commit | What |
+|---|---|---|
+| 1 | `d1314bb57` | Phase 1 — server-compose + seed the Provisioning Answer (first card 6.7→3.6 s warm, −46%) |
+| 2 | `7e7ea0cb6` | Phase 2 finding (streamed overlap slower → reverted; F5) |
+| 3 | `5dac324fa` | Phase 4 — split Create Lead + Communications composer off the initial graph (−49.5 KB) |
+| 4 | `97a740a31` | Phase 4 — delete 26 dead files / 2,793 lines |
+| 5 | `5148c9708` | Phase 3-A — dedup slug→identity resolution (`cache()` shared resolver) |
+| + | ledger docs | cert matrix, Phase 2 wording, Phase 3 map |
+
+### Kept / reverted / deleted file ledger
+**Kept (new/changed):** `[workUnitSlug]/layout.tsx` (seed), `[workUnitSlug]/page.tsx` (anchor), `[id]/provisioning-answer/route.ts` (delegates), `composeProvisioningAnswerForRoute.ts` (new, shared), `workUnitProvisioningPrefetch.ts` (`seedProvisioning`), `ProvisioningAnswerSeed.tsx` (new), `resolveWorkUnitRouteIdentityCached.ts` (new), `loadWorkUnitSlugRouteServer.ts` (shared resolver), `CreateLeadEventHost.tsx` + `CurrentWorkActionPanel.tsx` (dynamic splits).
+**Reverted:** Phase 2 streamed overlap (armSeed/resolveSeed/ProvisioningSeedArm + Suspense) — slower (F5). Iter-1 blocking page-seed, iter-2 crashing RSC-promise prop.
+**Deleted:** 26 files / 2,793 lines (orphaned singular Person/Child VM drawer cluster + hard-cutover shims + unused focus-panel/drawer components + 2 dead barrels).
+
+### Before / after
+| Metric | Baseline (staging polish) | After (this session) |
+|---|--:|--:|
+| first card (warm) | 6,655 ms | **3,610–4,800 ms** (seed; run-variance) |
+| first card (cold) | 11,469 ms | 7,370 ms |
+| all cards (warm) | 15,453 ms | ~12,700 ms |
+| bundle transfer | 1,817,485 B | **1,767,948 B** (−49.5 KB) |
+| initial-path graph | +25k noncritical lines eager | Create Lead + Comms composer split out |
+| dead code | — | −2,793 lines (26 files) |
+| slug resolution / layout render | 2× (duplicate) | **1×** (`cache()` shared) |
+| incremental typecheck | 15 s / 1.15 GB / 1 proc | 15–22 s / 1.15–2.0 GB / 1 proc (healthy) |
+| cold typecheck | 156 s / 3.27 GB / 1 proc | ~same (26 files lighter) |
+| net vs staging | — | **−1,764 lines** (deletions > additions) |
+
+### Residual ownership map (documented, NOT done)
+- Phase 3-C: enriched VM re-reads `inquiry_children`/primary contact the provisioning snapshot has — cross-request contract change, deferred.
+- Phase 3-D: stage-work re-fetched despite the answer carrying `focusPanelStageWork` — reuse on cold load would trim ~2 s off all-cards; touches Settlement client path, deferred.
+- Phase 4 Findings 3/3b/4: registry action modals (always-mounted → need conditional-mount+dynamic), `workflowRun.ts` automation engine (2 entry paths), SchedulingCard (sync inline). Behavior-nuanced, deferred.
+- The 4 sibling-view `provisioning-answer` prewarms (the reveal-window "storm") — a known reveal-lifecycle residual, out of this scope.
+- Cold-load TTFB +~2 s (blocking compose on cold config cache) — offset by faster cold first-card; Phase 2 streaming can't remove it (F5).
+
+### Branch cleanliness & staging base
+- Branch `agent/claude/3-runtime-v1-polish`, base `origin/staging`. **Committed, NOT pushed.**
+- Working tree clean except untracked `zz-*` investigation/cert specs (per prior-session convention).
+- Net vs staging: 60-odd files, deletions > additions (**−1,764 lines**).
+
+### Promotion recommendation
+Promotable to **staging** as a coherent unit: Phase 1 (certified first-card win) + Phase 4 (bundle/ownership + dead-code) + Phase 3-A (dedup), all behind a passing behavioral cert matrix (0 console errors, 0 hydration warnings, latest-click-wins, no wrong-record flash). PR should target **staging** (not main). Suggested pre-promotion: a human spot-check of Workspace→tile entry + a save→refresh (the two cert cases not automatable here — both architecturally untouched). Awaiting operator approval to push/PR.
 
 ---
 
