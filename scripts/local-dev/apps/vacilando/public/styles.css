@@ -92,6 +92,7 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 .apill.ok{background:var(--green-soft);color:var(--green-ink);}
 .apill.idle{background:var(--idle-bg);color:var(--idle);}
 .apill.paused{background:var(--paused-bg);color:var(--paused);}
+.apill.dir{background:var(--terra-soft);color:var(--terra);}
 @keyframes apulse{0%,100%{opacity:1;}50%{opacity:.25;}}
 .hpill{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:var(--pill);white-space:nowrap;}
 .hpill.healthy{background:var(--green-soft);color:var(--green-ink);} .hpill.attention{background:var(--blocked-bg);color:var(--blocked);}

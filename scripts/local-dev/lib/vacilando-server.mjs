@@ -20,7 +20,7 @@
  *   POST /api/commands        → confirm+execute a command through the registry
  *   GET  /                    → the SPA shell (static, path-traversal safe)
  */
-import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { createConnection } from "node:net";
@@ -357,6 +357,7 @@ function worktreeActivityMs(path) {
  */
 async function applyLiveTruth(board) {
   const now = Date.now();
+  const dslot = directorSlot();
   const sprints = board.sprints || [];
   const listen = await Promise.all(sprints.map((s) => probePortListening(s.port)));
   board.sprints = sprints.map((s, i) => {
@@ -368,24 +369,44 @@ async function applyLiveTruth(board) {
         out.activity = now - last < ACTIVITY_WORKING_MS ? "working" : "idle";
       }
     }
+    // The Director's own checkout is infrastructure, not a work slot.
+    if (dslot != null && out.slot === dslot) out.is_director = true;
     return out;
   });
+  board.director_slot = dslot;
+  board.work_slots = board.sprints.filter((s) => !s.is_director).length;
   return board;
 }
 
 /** The snapshot every UI surface consumes: never fewer workers than are registered. */
 async function boardSnapshot() { return applyLiveTruth(resilientBoard(await snapshotSafe())); }
 
+// The Director is INFRASTRUCTURE, not a worker. It runs from a checkout; if that
+// checkout happens to be one of the six managed slot worktrees, that slot is the
+// Director's HOME and must be excluded from work dispatch (never run a work mission
+// in the control plane's own checkout). Run the server from an off-slot location
+// (VACILANDO_CHECKOUT) and directorSlot() is null → all six slots are work slots.
+const DIRECTOR_HOME = resolve(HERE, "..", "..", "..");
+function realOrSelf(p) { try { return realpathSync(p); } catch { return p; } }
+function directorSlot() {
+  const home = realOrSelf(DIRECTOR_HOME);
+  for (const i of listSlotIdentities()) {
+    if (i.worktree_path && realOrSelf(i.worktree_path) === home) return i.slot;
+  }
+  return null; // running off-slot → the Director consumes no work slot
+}
+
 const MISSION_BUSY = new Set(["starting", "running", "stopping"]);
 /**
  * Resolve which WORKER a Director mission runs in. The Director dispatches to one
- * of the six work slots — it is not itself a slot. An explicit run-target is
- * honored (the operator's choice); "auto" picks the lowest-numbered occupied
- * worker that is NOT already running a mission, so work never silently piles onto
- * one slot. Returns { slot } or { error, detail, available }.
+ * of the work slots — it is not itself a slot, and never dispatches to its OWN
+ * home slot. An explicit run-target is honored (the operator's choice); "auto"
+ * picks the lowest-numbered occupied worker that is NOT already running a mission,
+ * so work never silently piles onto one slot. Returns { slot } or { error }.
  */
 function resolveRunSlot(requested) {
-  const ids = listSlotIdentities().filter((i) => i.ok && i.worktree_name);
+  const dslot = directorSlot();
+  const ids = listSlotIdentities().filter((i) => i.ok && i.worktree_name && i.slot !== dslot);
   const liveIds = new Set(liveMissionIds());
   const busy = new Set(
     readMissions(null, 500)
@@ -395,6 +416,7 @@ function resolveRunSlot(requested) {
   const available = ids.filter((i) => !busy.has(i.slot)).map((i) => i.slot).sort((a, b) => a - b);
   if (Number.isInteger(requested)) {
     if (requested < 1 || requested > 6) return { error: "bad_slot", detail: `slot ${requested} out of range`, available };
+    if (requested === dslot) return { error: "director_slot", detail: `slot ${requested} is the Director's own checkout (infrastructure) — pick a worker`, available };
     if (!ids.some((i) => i.slot === requested)) return { error: "slot_not_occupied", detail: `slot ${requested} has no worker`, available };
     return { slot: requested }; // explicit target — the operator owns the choice, even if busy
   }
