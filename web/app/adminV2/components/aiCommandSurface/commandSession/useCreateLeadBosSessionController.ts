@@ -122,7 +122,6 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
     }, [ctx, resolution]);
 
     const gatherFields = effectiveSpec?.gatherFields ?? [];
-    const gatherFields = effectiveSpec?.gatherFields ?? [];
     const sections = useMemo(
         () =>
             projectCreateLeadFormSections(gatherFields, {
