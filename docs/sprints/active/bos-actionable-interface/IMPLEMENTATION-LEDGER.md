@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: paused
+status: active
 last_reviewed: 2026-07-27
 ---
 
@@ -41,7 +41,15 @@ last_reviewed: 2026-07-27
 | R4-02–R4-08 | done | `c3ca6c3ae` | Progressive Form, quiet inputs, help, sizing, Lead copy |
 | R4-09 | partial | `c3ca6c3ae` | Unit/contract tests pass; authenticated screenshots deferred (3012 unhealthy) |
 | R4-10 | done | `ac5df8e1a` | Closeout + BOS pause |
-
 | R4 punch | done | `1885bf9c1` | Multi-person/child Form repeaters + relationship label presentation |
 
-**BOS PAUSED** after this punch list. Next owner: Commands + Processing Conversation Runtime.
+## Round 5 — Final convergence, submission, legacy retirement
+
+| ID | Status | Commit | Notes |
+|---|---|---|---|
+| F5-01 | **done (docs)** | _(pending)_ | Path trace + retirement inventory — **no code** |
+| F5-02–F5-10 | pending | — | See `round-5/README.md` |
+
+**BOS REOPENED** for Round 5 final convergence. Pause again only after F5-10 closeout.
+
+Canonical inventory: [`round-5/F5-01-path-trace-and-retirement-inventory.md`](./round-5/F5-01-path-trace-and-retirement-inventory.md).
