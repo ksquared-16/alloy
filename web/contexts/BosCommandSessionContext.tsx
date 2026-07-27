@@ -47,7 +47,13 @@ export function BosCommandSessionProvider({ children }: { children: ReactNode })
     }, []);
 
     useEffect(() => {
-        if (session) syncPersistedBosCommandSession(session);
+        if (!session) return;
+        // Debounce persistence so Create Lead Form keystrokes don't sync sessionStorage on
+        // every draft reduce (main-thread contention with Work Unit settlement).
+        const handle = window.setTimeout(() => {
+            syncPersistedBosCommandSession(session);
+        }, 250);
+        return () => window.clearTimeout(handle);
     }, [session]);
 
     const ensureBosOpen = useCallback(() => {

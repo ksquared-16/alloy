@@ -29,6 +29,7 @@ import {
     householdFromCommitSelection,
     householdFromFlatCreateLeadMerged,
 } from "@/lib/pos/processingIdentity/sources/householdFromCommitSelection";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 
 function isIntakeHouseholdCandidate(value: unknown): value is IntakeHouseholdCandidate {
     if (!value || typeof value !== "object") return false;
@@ -324,6 +325,12 @@ export function summarizeCommitParents(selection: CreateLeadCommitSelection): st
     });
 }
 
+function formatCreateLeadSummaryDate(isoOrDisplay: string): string {
+    const trimmed = isoOrDisplay.trim();
+    if (!trimmed) return "";
+    return formatDisplayDate(trimmed) || trimmed;
+}
+
 export function summarizeCommitChildren(selection: CreateLeadCommitSelection): string[] {
     return selection.children.map((c, index) => {
         const emptyLabel = index === 0 ? "Child" : "Additional";
@@ -331,8 +338,8 @@ export function summarizeCommitChildren(selection: CreateLeadCommitSelection): s
         const bits = [
             name,
             c.program_interest ? c.program_interest : null,
-            c.start_date ? `Start ${c.start_date}` : null,
-            c.dob ? `Born ${c.dob}` : null,
+            c.start_date ? `Start ${formatCreateLeadSummaryDate(c.start_date)}` : null,
+            c.dob ? `Born ${formatCreateLeadSummaryDate(c.dob)}` : null,
         ].filter(Boolean);
         return bits.join(" · ");
     });
