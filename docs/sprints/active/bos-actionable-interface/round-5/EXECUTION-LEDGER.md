@@ -8,11 +8,13 @@ last_reviewed: 2026-07-27
 
 | Package | Status | Commit | Notes |
 |---|---|---|---|
-| F5-01 | **done (docs)** | _(pending commit)_ | Path trace + retirement inventory; **no code** |
-| F5-01b | **done (docs)** | _(pending commit)_ | Parallel branch comparison — **no ports** |
-| F5-02 | **in progress** | _(pending commit)_ | Multi-adult merge + shared-draft; coordinated with F5-04 |
-| F5-03 | pending | — | Conversation/Form value parity (partial via F5-02/04) |
-| F5-04 | **in progress** | _(pending commit)_ | Placement/Location effective-section parity |
+| F5-01 | **done (docs)** | `80e38698b` | Path trace + retirement inventory; **no code** |
+| F5-01b | **done (docs)** | `80e38698b` | Parallel branch comparison — **no ports** |
+| F5-02 | **code done** | `81a638241` | Multi-adult merge + shared-draft; browser QA pending |
+| F5-03 | partial | via F5-02/04 | Conversation/Form Location + adults parity in code |
+| F5-04 | **code done** | `8771c7c7a` | Placement/Location effective-section parity |
+| F5-04b | **code done** | `67f0b52f1` | Optional Children empty until Add child |
+| F5-04c | **tests** | `bc40bee85` | Placement + multi-adult + children regressions |
 | F5-05 | pending | — | Required-state + eligibility — **blocked on browser QA** |
 | F5-06 | pending | — | Review + Processing handoff |
 | F5-07 | pending | — | Confirm / execute / success / refresh |
