@@ -497,5 +497,12 @@ function unavailableSnapshot(
     };
 }
 
-/** Explicit non-execute export surface — P1.S1 has no executeCommandInvocation. */
-export const COMMAND_RUNTIME_EXECUTION_ENABLED = false as const;
+/**
+ * P1.S1 preparation remains side-effect free.
+ * Execution enablement is owner-gated in commandRuntimeExecutionGate.ts (P1.S2).
+ */
+export {
+    COMMAND_RUNTIME_EXECUTION_ENABLED,
+    COMMAND_RUNTIME_EXECUTION_BY_OWNER,
+    isCommandRuntimeFacadeExecutionSupported,
+} from "@/lib/platform/commands/runtime/commandRuntimeExecutionGate";

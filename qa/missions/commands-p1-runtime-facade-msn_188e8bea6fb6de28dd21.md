@@ -44,4 +44,43 @@ No production cutover; no `/api/admin/commands/*`; no execute migration; no elig
 
 ## Deferred
 
-P1.S2+ live eligibility injection; Mutation/Relationship/Tour execute adapters; API facade wiring; `/configuration/commands`.
+~~P1.S2 RegisteredAction execute cutover~~ → **shipped** (see P1.S2 section below).
+Mutation/Relationship/Tour execute adapters; `/configuration/commands`.
+
+---
+
+# P1.S2 — RegisteredAction execution through Command Runtime
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Entry | `web/lib/platform/commands/runtime/executeCommandInvocation.ts` |
+| Gate | `web/lib/platform/commands/runtime/commandRuntimeExecutionGate.ts` |
+| Adapter | `web/lib/platform/commands/runtime/adapters/registeredActionExecutionAdapter.ts` |
+| Route | `web/app/api/admin/actions/execute/route.ts` |
+| Tests | `executeCommandInvocation.test.ts`, `executeRouteCommandRuntime.test.ts` |
+
+## Cutover
+
+| Capability | Route before | Route after | Final executor |
+|------------|--------------|-------------|----------------|
+| `create_lead` | `runRegisteredAction` direct | Command Runtime → adapter | `runRegisteredAction` |
+| `update_status` | same | same | `runRegisteredAction` |
+| `confirm_tour` | same | same | `runRegisteredAction` |
+| `schedule.create` | same | same | `runRegisteredAction` |
+
+## Intentionally not cut over
+
+`close_lead` and other Mutation-adapted keys, Relationship keys, Tour-domain keys (e.g. `cancel_tour`), Processing, navigation, placeholders — remain on `executeAdminAction` / domain paths.
+
+## Exactly-once
+
+Request-scoped `InvocationDelegationGuard`; after `runRegisteredAction` begins, route must not call `executeAdminAction`. Proven in route tests (success + post-delegation failure).
+
+## Confirmation limitation
+
+Execute API historically does not require body confirmation evidence (UI confirms first). Facade rejects only when `confirmation.confirmed === false` is explicitly supplied. Does not invent typed confirmation. Origin cannot bypass that reject.
+
+## Actor boundary
+
+Server `getAdminContextCached` org/user only; client `context.actor` / `org_id` / `execution_owner` ignored.

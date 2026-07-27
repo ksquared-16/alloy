@@ -122,7 +122,39 @@ See P1 evidence doc. Includes: alias→canonical, destination matches registry o
 
 ## Deferred adapter work
 
-- Live eligibility / required-input evaluation (P1.S2+)
-- Mutation / Relationship / Tour / Processing execute adapters (later P1–P5)
+- ~~RegisteredAction execute through facade~~ → **P1.S2 shipped**
+- Mutation / Relationship / Tour / Processing execute adapters (later phases)
 - Destructive Command family completion (P4)
 - `/configuration/commands` (later phase)
+
+---
+
+# P1.S2 — RegisteredAction execute cutover
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p1-runtime-facade-msn_188e8bea6fb6de28dd21.md` (P1.S2 section) |
+| Execute entry | `web/lib/platform/commands/runtime/executeCommandInvocation.ts` |
+| Owner gate | `COMMAND_RUNTIME_EXECUTION_BY_OWNER.registered_action = true` only |
+| Route | `POST /api/admin/actions/execute` → facade for four RegisteredAction keys |
+
+## Cut over (behavior-preserving)
+
+| Capability | Final executor | Validation | Eligibility | Audit/events |
+|------------|----------------|------------|-------------|--------------|
+| `create_lead` | `runRegisteredAction` | RegisteredAction | RegisteredAction | Unchanged (single delegate) |
+| `update_status` | `runRegisteredAction` | same | same | same |
+| `confirm_tour` | `runRegisteredAction` | same | same | same |
+| `schedule.create` | `runRegisteredAction` | same | same | same |
+
+## Compatibility paths retained
+
+All adapted / legacy / unavailable / navigation / processing keys → `executeAdminAction` (and existing domain services). Facade execution unsupported ≠ command disabled.
+
+## Guards
+
+- Exactly-once delegation per invocation (`InvocationDelegationGuard`)
+- No `executeAdminAction` after facade delegation
+- Client cannot set actor / org / execution_owner
+- Preparation (`prepareCommandInvocation`) remains side-effect free when used alone

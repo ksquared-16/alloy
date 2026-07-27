@@ -8,9 +8,12 @@ import { executeAdminAction } from "@/lib/admin/actions/executeAdminAction";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { CREATE_LEAD_ACTION_ENTITY_ID } from "@/lib/admin/actions/createLeadActionConstants";
-import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
-import { runRegisteredAction } from "@/lib/adminV2/actions/actionExecutor";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
+import { logCommandExecutePathDiagnostic } from "@/lib/platform/commands/runtime/commandExecuteCompatDiagnostics";
+import { isCommandRuntimeFacadeExecutionSupported } from "@/lib/platform/commands/runtime/commandRuntimeExecutionGate";
+import { executeCommandInvocation } from "@/lib/platform/commands/runtime/executeCommandInvocation";
+import type { CommandInvocationOrigin } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
+import type { CommandOperationalContext } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 
 /**
  * Phase 2B contract (fully migrated): this route emits the standard envelope.
@@ -22,6 +25,9 @@ import { apiOk, apiError } from "@/lib/api/apiResponse";
  * `ACTION_BLOCKED` code and carry `completion_requirements` / `effective_requirements`
  * / `action_preflight` / `blockers` under `error.details`. Auth-gate responses
  * (401/403) remain owned by `requireAdminOrOps` / `adminContextFailureResponse`.
+ *
+ * P1.S2: RegisteredAction capabilities execute through the Command Runtime facade,
+ * which delegates once to `runRegisteredAction`. Other keys keep `executeAdminAction`.
  * @see docs/api/api-response-contract.md
  * @see docs/api/actions-execute-envelope-audit.md
  */
@@ -50,9 +56,47 @@ type ExecuteBody = {
     action_key?: string;
     entity_type?: string;
     entity_id?: string;
-    context?: { surface?: string; department_id?: string | null; work_unit_id?: string | null; section_key?: string | null };
+    context?: {
+        surface?: string;
+        department_id?: string | null;
+        work_unit_id?: string | null;
+        section_key?: string | null;
+        process_key?: string | null;
+        origin?: string | null;
+        /** Ignored if present — never authoritative. */
+        actor?: unknown;
+        org_id?: unknown;
+        execution_owner?: unknown;
+    };
     payload?: Record<string, unknown>;
+    /** Optional preview mode — defaults to execute (preserves historical route). */
+    mode?: "preview" | "execute";
+    confirmation?: { confirmed?: boolean; confirmationValue?: string };
 };
+
+function mapOrigin(raw: string | null | undefined): CommandInvocationOrigin {
+    const v = (raw ?? "").trim().toLowerCase();
+    if (v === "bos") return "bos";
+    if (v === "automation" || v === "workflow") return "automation";
+    if (v === "api") return "api";
+    if (v === "system") return "system";
+    return "operator";
+}
+
+function mapOperationalContext(input: {
+    surface?: string | null;
+    workUnitId?: string | null;
+}): CommandOperationalContext {
+    const surface = (input.surface ?? "").trim();
+    if (surface === "record_header" || surface === "focus_panel" || surface === "drawer") {
+        return "focus_panel";
+    }
+    if (surface === "bos" || surface === "bos_recommendations") return "bos";
+    if (surface === "queue" || surface === "queue_row") return "queue";
+    if (input.workUnitId) return "work_unit";
+    if (surface === "work_unit") return "work_unit";
+    return "open";
+}
 
 /** POST /api/admin/actions/execute — run a resolved action definition (v1). */
 export async function POST(request: NextRequest) {
@@ -87,53 +131,138 @@ export async function POST(request: NextRequest) {
     const t0 = Date.now();
     const supabase = createAdminClient();
     const runtimeCtx = { orgId: ctx.orgId, userId: ctx.userId, accessScope: scopeDimensionsFromAccess(access) };
+    const mode = body.mode === "preview" ? "preview" : "execute";
+    const facadeSupported = isCommandRuntimeFacadeExecutionSupported(actionKey);
 
-    // Registered actions (e.g. update_status, create_lead) run through the canonical
-    // Action Runtime so manual UI and BOS execute through the same validated path.
-    // All other keys keep their existing executeAdminAction path unchanged.
-    if (getRegisteredAction(actionKey)) {
-        const runtimeResult = await runRegisteredAction(supabase, runtimeCtx, {
-            actionKey,
-            entityType,
-            entityId,
-            context: body.context,
-            payload: body.payload,
-        });
-        const elapsed = Date.now() - t0;
-        if (elapsed > 200) {
-            console.warn("[admin-timing] POST /api/admin/actions/execute (runtime)", { ms: elapsed, action_key: actionKey, entity_type: entityType });
-        }
-        if (!runtimeResult.ok) {
-            const details = {
-                ...(runtimeResult.blockers ? { blockers: runtimeResult.blockers } : {}),
-                ...(runtimeResult.completionRequirements ?
-                    { completion_requirements: runtimeResult.completionRequirements }
-                :   {}),
-                ...(runtimeResult.actionPreflight ? { action_preflight: runtimeResult.actionPreflight } : {}),
-            };
-            const blocked = Object.keys(details).length > 0;
-            return apiError(
-                blocked ? "ACTION_BLOCKED" : codeForStatus(runtimeResult.status),
-                runtimeResult.error || "Action failed",
-                runtimeResult.status,
-                blocked ? details : undefined,
-                { request, correlationId: runtimeResult.correlationId }
-            );
-        }
+    // P1.S2: RegisteredAction capabilities → Command Runtime → runRegisteredAction (exactly once).
+    // Client cannot select execution_owner / actor / org_id.
+    if (facadeSupported) {
+        let delegated = false;
         try {
-            revalidateTag(adminActionsOrgTag(ctx.orgId), "max");
+            const result = await executeCommandInvocation({
+                request: {
+                    invocation: {
+                        commandKey: actionKey,
+                        origin: mapOrigin(body.context?.origin),
+                        operationalContext: mapOperationalContext({
+                            surface: body.context?.surface,
+                            workUnitId: body.context?.work_unit_id,
+                        }),
+                        surface: body.context?.surface ?? null,
+                        workUnitId: body.context?.work_unit_id ?? null,
+                        processKey: body.context?.process_key ?? null,
+                        providedSubject: { entityType, entityId },
+                        inputValues: body.payload,
+                        // Intentionally omit client actor — server context wins inside execute.
+                    },
+                    mode,
+                    confirmation:
+                        body.confirmation && typeof body.confirmation.confirmed === "boolean"
+                            ? {
+                                  confirmed: body.confirmation.confirmed,
+                                  confirmationValue: body.confirmation.confirmationValue,
+                              }
+                            : undefined,
+                    executionSubject: { entityType, entityId },
+                },
+                server: {
+                    orgId: runtimeCtx.orgId,
+                    userId: runtimeCtx.userId,
+                    accessScope: runtimeCtx.accessScope,
+                    supabase,
+                },
+            });
+            delegated = result.ok || result.delegated === true;
+
+            const elapsed = Date.now() - t0;
+            if (elapsed > 200) {
+                console.warn("[admin-timing] POST /api/admin/actions/execute (command-runtime)", {
+                    ms: elapsed,
+                    action_key: actionKey,
+                    entity_type: entityType,
+                });
+            }
+
+            logCommandExecutePathDiagnostic({
+                requestedKey: actionKey,
+                path: "command_runtime_registered_action",
+                facadeSupported: true,
+                origin: body.context?.origin,
+                operationalContext: body.context?.surface,
+                resultCategory: result.ok
+                    ? "success"
+                    : result.status === "blocked"
+                      ? "blocked"
+                      : "failure",
+            });
+
+            if (!result.ok) {
+                // After delegation, never fall through to executeAdminAction.
+                if (result.actionResult && result.actionResult.ok === false) {
+                    const runtimeResult = result.actionResult;
+                    const details = {
+                        ...(runtimeResult.blockers ? { blockers: runtimeResult.blockers } : {}),
+                        ...(runtimeResult.completionRequirements ?
+                            { completion_requirements: runtimeResult.completionRequirements }
+                        :   {}),
+                        ...(runtimeResult.actionPreflight ?
+                            { action_preflight: runtimeResult.actionPreflight }
+                        :   {}),
+                    };
+                    const blocked = Object.keys(details).length > 0;
+                    return apiError(
+                        blocked ? "ACTION_BLOCKED" : codeForStatus(runtimeResult.status),
+                        runtimeResult.error || result.error.operatorMessage,
+                        runtimeResult.status,
+                        blocked ? details : undefined,
+                        { request, correlationId: runtimeResult.correlationId }
+                    );
+                }
+                const status =
+                    result.status === "confirmation_required"
+                        ? 400
+                        : result.status === "unavailable"
+                          ? 404
+                          : result.status === "unauthorized"
+                            ? 403
+                            : 400;
+                return apiError(
+                    result.error.code === "confirmation_required"
+                        ? "BAD_REQUEST"
+                        : codeForStatus(status),
+                    result.error.operatorMessage,
+                    status,
+                    undefined,
+                    { request, correlationId: result.invocationId }
+                );
+            }
+
+            try {
+                revalidateTag(adminActionsOrgTag(ctx.orgId), "max");
+            } catch (e) {
+                console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
+            }
+            return apiOk(
+                {
+                    execution_result: result.actionResult.result.detail,
+                    affected_id: result.actionResult.result.affectedId,
+                },
+                { request, correlationId: result.actionResult.correlationId }
+            );
         } catch (e) {
-            console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
+            // If we already delegated, do not fall back — surface failure.
+            if (delegated) {
+                console.error(
+                    "[POST /api/admin/actions/execute] command-runtime post-delegation failure",
+                    e
+                );
+                return apiError("INTERNAL", "Action failed", 500, undefined, { request });
+            }
+            throw e;
         }
-        return apiOk(
-            {
-                execution_result: runtimeResult.result.detail,
-                affected_id: runtimeResult.result.affectedId,
-            },
-            { request, correlationId: runtimeResult.correlationId }
-        );
     }
 
+    // Compatibility path: adapted / legacy / unregistered keys — executeAdminAction.
     const result = await executeAdminAction(supabase, runtimeCtx, {
         actionKey,
         entityType,
@@ -145,6 +274,15 @@ export async function POST(request: NextRequest) {
     if (ms > 200) {
         console.warn("[admin-timing] POST /api/admin/actions/execute", { ms, action_key: actionKey, entity_type: entityType });
     }
+
+    logCommandExecutePathDiagnostic({
+        requestedKey: actionKey,
+        path: "execute_admin_action_fallback",
+        facadeSupported: false,
+        origin: body.context?.origin,
+        operationalContext: body.context?.surface,
+        resultCategory: result.ok ? "success" : "failure",
+    });
 
     if (!result.ok) {
         const details = {
