@@ -50,5 +50,8 @@ describe("editable lifecycle settings", () => {
         expect(route).toContain("reset_stage");
         expect(route).toContain("buildLifecycleFieldRulesOverridePatch");
         expect(route).toContain("mergeLifecycleFieldPaletteForBuilderStage");
+        expect(route).toContain("explicit_rule_meta_v1");
+        expect(route).toContain("parseRuleMetaV1");
+        expect(route).toContain("replacePatchedStageFieldRules");
     });
 });

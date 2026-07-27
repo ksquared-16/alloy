@@ -31,6 +31,8 @@ import { validateFieldRuleIdsAgainstPalette, filterFieldRuleIdsToPalette } from 
 import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
 import { lifecycleActivationFromMetadata } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { parseRuleLevelsV1 } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
+import { parseRuleMetaV1 } from "@/lib/lifecycle/requirementTimingMeta";
+import { replacePatchedStageFieldRules } from "@/lib/lifecycle/replacePatchedStageFieldRules";
 
 function isOperatorStageKey(s: string): s is LifecycleOperatorStage {
     return (LIFECYCLE_STAGE_ORDER as readonly string[]).includes(s);
@@ -225,6 +227,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
             const explicit_rule_levels_v1 = parseRuleLevelsV1(
                 (fieldRulesRaw as { rule_levels_v1?: unknown }).rule_levels_v1
             );
+            const explicit_rule_meta_v1 = parseRuleMetaV1(
+                (fieldRulesRaw as { rule_meta_v1?: unknown }).rule_meta_v1
+            );
             if (operator) {
                 metadataPatch = buildLifecycleFieldRulesOverridePatch({
                     stage: operator,
@@ -233,6 +238,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     existingMetadata: prevMeta,
                     mergedPalette,
                     explicit_rule_levels_v1,
+                    explicit_rule_meta_v1,
                 });
             } else {
                 metadataPatch = buildBuilderStageFieldRulesPatch({
@@ -242,6 +248,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     existingMetadata: prevMeta,
                     mergedPalette,
                     explicit_rule_levels_v1,
+                    explicit_rule_meta_v1,
                 });
             }
         } catch (e) {
@@ -250,7 +257,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 { status: 400 }
             );
         }
-        const metadata = deepMergeJsonObjects(prevMeta, metadataPatch);
+        const metadata = replacePatchedStageFieldRules(
+            deepMergeJsonObjects(prevMeta, metadataPatch),
+            metadataPatch,
+        );
         const supabase = createAdminClient();
         const { data: updated, error } = await supabase
             .from("departments")

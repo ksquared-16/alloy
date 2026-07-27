@@ -20,6 +20,8 @@ import {
     parseRuleLevelsV1,
     type LifecycleStageFieldRulesStored,
 } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
+import { parseRuleMetaV1 } from "@/lib/lifecycle/requirementTimingMeta";
+import { replacePatchedStageFieldRules } from "@/lib/lifecycle/replacePatchedStageFieldRules";
 
 export async function persistLifecycleStageFieldRules(
     supabase: SupabaseClient,
@@ -40,6 +42,9 @@ export async function persistLifecycleStageFieldRules(
     const explicit_rule_levels_v1 = parseRuleLevelsV1(
         "rule_levels_v1" in params.fieldRules ? params.fieldRules.rule_levels_v1 : undefined
     );
+    const explicit_rule_meta_v1 = parseRuleMetaV1(
+        "rule_meta_v1" in params.fieldRules ? params.fieldRules.rule_meta_v1 : undefined
+    );
 
     const operator = asOperatorStageKey(stage);
     let metadataPatch: Record<string, unknown>;
@@ -51,6 +56,7 @@ export async function persistLifecycleStageFieldRules(
             existingMetadata: params.existingMetadata,
             mergedPalette,
             explicit_rule_levels_v1,
+            explicit_rule_meta_v1,
         });
     } else {
         metadataPatch = buildBuilderStageFieldRulesPatch({
@@ -60,6 +66,7 @@ export async function persistLifecycleStageFieldRules(
             existingMetadata: params.existingMetadata,
             mergedPalette,
             explicit_rule_levels_v1,
+            explicit_rule_meta_v1,
         });
     }
 
@@ -73,7 +80,10 @@ export async function persistLifecycleStageFieldRules(
             : null;
 
     let metadata = params.existingMetadata;
-    metadata = deepMergeJsonObjects(metadata, metadataPatch);
+    metadata = replacePatchedStageFieldRules(
+        deepMergeJsonObjects(metadata, metadataPatch),
+        metadataPatch,
+    );
     if (builderReset) metadata = deepMergeJsonObjects(metadata, builderReset);
 
     const { data: updated, error } = await supabase

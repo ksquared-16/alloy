@@ -13,6 +13,8 @@ import {
     writeBosStartersExpanded,
 } from "@/lib/bos/bosFloatingGeometry";
 import type { CommandSurfaceRailStarterSuggestion } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
+import type { BosSlashCommandDescriptor } from "@/lib/bos/commandSession/types";
+import { BosSlashCommandMenu } from "@/app/adminV2/components/aiCommandSurface/bosRail/BosSlashCommandMenu";
 import { derived, neutral, palette } from "@/styles/tokens/colors";
 
 const CMD = {
@@ -22,7 +24,7 @@ const CMD = {
 } as const;
 
 const chromeBtnClass =
-    "rounded-md border border-alloy-stone/30 bg-white px-2.5 py-1 text-[11px] font-semibold text-alloy-midnight/80 shadow-sm hover:bg-alloy-stone/5";
+    "rounded-md border border-white/35 bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white";
 
 export function BosRailHeader(props: {
     contextDisplayLine: string | null;
@@ -86,7 +88,9 @@ export function BosRailHeader(props: {
             className={`bos-rail-header px-2 pb-2.5 pt-2${
                 effective === "floating" ? " cursor-grab active:cursor-grabbing" : ""
             }`}
+            style={{ backgroundColor: palette.bendPine }}
             data-command-surface-rail-header="true"
+            data-bos-rail-header-bend-pine="true"
             data-bos-float-drag-surface={effective === "floating" ? "true" : undefined}
             onPointerDown={onFloatDragStart}
             onPointerMove={onFloatDragMove}
@@ -94,12 +98,11 @@ export function BosRailHeader(props: {
             onPointerCancel={onFloatDragEnd}
         >
             <div className="flex items-center justify-between gap-2">
-                <BosHeader size="sm" className="min-w-0 flex-1" />
+                <BosHeader size="sm" onBendPine className="min-w-0 flex-1" />
                 <div className="flex shrink-0 items-center gap-1">
                     {props.statusLabel ?
                         <span
-                            className="mr-1 text-[10px] font-medium tabular-nums"
-                            style={{ color: CMD.textSupporting }}
+                            className="mr-1 text-[10px] font-medium tabular-nums text-white/80"
                             data-command-surface-thread-status="true"
                             aria-live="polite"
                         >
@@ -146,7 +149,7 @@ export function BosRailHeader(props: {
             </div>
             {chips.length > 0 ?
                 <div className="mt-2.5" data-command-surface-rail-context="true">
-                    <p className="text-[11px] font-medium" style={{ color: CMD.textSupporting }}>
+                    <p className="text-[11px] font-medium text-white/75">
                         Helping with
                     </p>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -157,11 +160,9 @@ export function BosRailHeader(props: {
                                     key={`${chip.label}-${index}`}
                                     className="rounded-full border px-2.5 py-0.5 text-[11px] font-medium leading-snug"
                                     style={{
-                                        borderColor:
-                                            accent ? "rgba(0, 162, 131, 0.35)" : derived.border,
-                                        backgroundColor:
-                                            accent ? "rgba(0, 162, 131, 0.08)" : neutral.surface,
-                                        color: accent ? palette.bendPine : CMD.textBody,
+                                        borderColor: accent ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.35)",
+                                        backgroundColor: accent ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.12)",
+                                        color: neutral.surface,
                                     }}
                                     data-command-surface-context-chip="true"
                                 >
@@ -480,9 +481,23 @@ export function BosRailComposer(props: {
     onChange: (value: string) => void;
     onSubmit: () => void;
     inputRef: RefObject<HTMLTextAreaElement | null>;
+    slashItems?: BosSlashCommandDescriptor[];
+    slashActiveIndex?: number;
+    onSlashHighlight?: (index: number) => void;
+    onSlashSelect?: (item: BosSlashCommandDescriptor) => void;
+    onSlashKeyNavigate?: (direction: "up" | "down" | "enter" | "escape") => boolean;
 }) {
+    const showSlash = Boolean(props.slashItems && props.value.trimStart().startsWith("/"));
     return (
         <div className="bos-rail-composer shrink-0 px-2 pb-2 pt-1" data-command-surface-rail-composer="true">
+            {showSlash && props.slashItems ? (
+                <BosSlashCommandMenu
+                    items={props.slashItems}
+                    activeIndex={props.slashActiveIndex ?? 0}
+                    onHighlight={props.onSlashHighlight ?? (() => undefined)}
+                    onSelect={props.onSlashSelect ?? (() => undefined)}
+                />
+            ) : null}
             <div
                 className="rounded-xl border px-2.5 py-2.5"
                 style={{
@@ -494,13 +509,34 @@ export function BosRailComposer(props: {
                     ref={props.inputRef}
                     value={props.value}
                     onChange={(e) => props.onChange(e.target.value)}
-                    placeholder="Ask BOS anything..."
+                    placeholder="Ask BOS or type / for commands…"
                     className="w-full resize-none bg-transparent outline-none text-[13px] leading-relaxed min-h-[68px] max-h-[120px] py-0.5"
                     rows={3}
                     style={{ color: neutral.textPrimary }}
                     aria-label="AI assistant input"
                     data-command-surface-input="true"
                     onKeyDown={(e) => {
+                        if (showSlash && props.onSlashKeyNavigate) {
+                            if (e.key === "ArrowDown") {
+                                e.preventDefault();
+                                props.onSlashKeyNavigate("down");
+                                return;
+                            }
+                            if (e.key === "ArrowUp") {
+                                e.preventDefault();
+                                props.onSlashKeyNavigate("up");
+                                return;
+                            }
+                            if (e.key === "Escape") {
+                                e.preventDefault();
+                                props.onSlashKeyNavigate("escape");
+                                return;
+                            }
+                            if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                if (props.onSlashKeyNavigate("enter")) return;
+                            }
+                        }
                         if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
                             if (!props.busy && props.value.trim()) props.onSubmit();
@@ -509,12 +545,12 @@ export function BosRailComposer(props: {
                 />
                 <div className="mt-1 flex items-center justify-between gap-2">
                     <span className="text-[10px]" style={{ color: CMD.textLabel }}>
-                        ↵ to send · ⇧↵ new line
+                        / commands · ↵ to send · ⇧↵ new line
                     </span>
                     <button
                         type="button"
                         data-command-surface-submit="true"
-                        disabled={props.busy || !props.value.trim()}
+                        disabled={props.busy || !props.value.trim() || showSlash}
                         onClick={props.onSubmit}
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full disabled:opacity-40 disabled:cursor-not-allowed"
                         style={{

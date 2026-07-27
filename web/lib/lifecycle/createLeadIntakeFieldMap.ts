@@ -20,6 +20,15 @@ export const CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS = [
 
 export const CREATE_LEAD_CONTACT_RULE_IDS = ["person:email", "person:phone"] as const;
 
+/**
+ * Code-owned Create Lead floor fields that must appear in the effective intake
+ * even when not listed in stage required/recommended (email|phone via constraint).
+ */
+export const CREATE_LEAD_CODE_OWNED_FLOOR_RULE_IDS = [
+    ...CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS,
+    ...CREATE_LEAD_CONTACT_RULE_IDS,
+] as const;
+
 /** rule_id → execute payload key for create_lead. */
 export const CREATE_LEAD_PAYLOAD_KEY_BY_RULE: Readonly<Record<string, string>> = {
     "person:first_name": "first_name",
