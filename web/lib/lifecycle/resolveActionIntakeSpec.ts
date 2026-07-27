@@ -30,7 +30,10 @@ import {
     lifecycleEntityLabel,
     lifecycleFieldRequirementById,
 } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
-import { lifecycleFieldRuleBinding } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
+import {
+    lifecycleFieldRuleBinding,
+    parseCustomFieldRuleId,
+} from "@/lib/lifecycle/lifecycleFieldRuleBindings";
 import {
     mergeLifecycleFieldPaletteForStage,
     type LifecycleFieldPaletteEntry,
@@ -102,11 +105,12 @@ function buildFieldSpec(
 
     const catalog = lifecycleFieldRequirementById(ruleId);
     const binding = lifecycleFieldRuleBinding(ruleId);
-    const entity = paletteEntry?.entity ?? catalog?.entity ?? binding?.entity;
+    const custom = parseCustomFieldRuleId(ruleId);
+    const entity = paletteEntry?.entity ?? catalog?.entity ?? binding?.entity ?? custom?.entity;
     if (!entity || !CREATE_LEAD_INTAKE_ENTITIES.includes(entity)) return null;
 
-    const fieldKey = paletteEntry?.field_key ?? binding?.field_key ?? null;
-    const fieldLabel = paletteEntry?.field_label ?? catalog?.field_label ?? ruleId;
+    const fieldKey = paletteEntry?.field_key ?? binding?.field_key ?? custom?.field_key ?? null;
+    const fieldLabel = paletteEntry?.field_label ?? catalog?.field_label ?? fieldKey ?? ruleId;
     const orgDef = orgFieldDefForKey(org_field_definitions, entity, fieldKey);
     const fallbackOptionSetKey =
         entity === "child" && fieldKey ? fallbackOptionSetKeyForInquiryChildField(fieldKey) : null;

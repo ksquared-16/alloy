@@ -28,6 +28,7 @@ import {
     storedFieldRulesToMetadataFieldRules,
     type LifecycleStageFieldRulesStored,
     type RuleLevelsV1,
+    type RuleMetaV1,
 } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 
 export const LIFECYCLE_PROGRESSION_REQUIREMENTS_METADATA_KEY = "lifecycle_progression_requirements_v1";
@@ -44,6 +45,7 @@ export type LifecycleProgressionRequirementsOverrideV1 = {
                     required_rule_ids?: string[];
                     recommended_rule_ids?: string[];
                     rule_levels_v1?: RuleLevelsV1;
+                    rule_meta_v1?: RuleMetaV1;
                 };
             }
         >
@@ -167,7 +169,7 @@ export function effectiveFieldRulesForStage(
     };
 }
 
-/** Effective field rules with optional persisted rule_levels_v1 for level-aware evaluation. */
+/** Effective field rules with optional persisted rule_levels_v1 / rule_meta_v1. */
 export function effectiveFieldRulesStoredForStage(
     stage: LifecycleOperatorStage,
     departmentMetadata?: Record<string, unknown> | null
@@ -180,6 +182,7 @@ export function effectiveFieldRulesStoredForStage(
         required_rule_ids: rules.required_rule_ids,
         recommended_rule_ids: rules.recommended_rule_ids,
         ...(storedOverride?.rule_levels_v1 ? { rule_levels_v1: storedOverride.rule_levels_v1 } : {}),
+        ...(storedOverride?.rule_meta_v1 ? { rule_meta_v1: storedOverride.rule_meta_v1 } : {}),
     };
 }
 
@@ -190,6 +193,7 @@ export function buildLifecycleFieldRulesOverridePatch(input: {
     existingMetadata: Record<string, unknown> | null;
     mergedPalette?: readonly LifecycleFieldPaletteEntry[];
     explicit_rule_levels_v1?: RuleLevelsV1 | null;
+    explicit_rule_meta_v1?: RuleMetaV1 | null;
 }): Record<string, unknown> {
     const validate = (ids: string[]) =>
         input.mergedPalette
@@ -212,6 +216,7 @@ export function buildLifecycleFieldRulesOverridePatch(input: {
         required_rule_ids: required,
         recommended_rule_ids: recommendedDeduped,
         explicit_rule_levels_v1: input.explicit_rule_levels_v1,
+        explicit_rule_meta_v1: input.explicit_rule_meta_v1,
         isEnforceable,
     });
 
@@ -270,6 +275,7 @@ export function parseLifecycleProgressionRequirementsOverride(
                   required_rule_ids: field_rulesStored.required_rule_ids,
                   recommended_rule_ids: field_rulesStored.recommended_rule_ids,
                   ...(field_rulesStored.rule_levels_v1 ? { rule_levels_v1: field_rulesStored.rule_levels_v1 } : {}),
+                  ...(field_rulesStored.rule_meta_v1 ? { rule_meta_v1: field_rulesStored.rule_meta_v1 } : {}),
               }
             : null;
         if (required_labels === null && recommended_labels === null && !field_rules) continue;

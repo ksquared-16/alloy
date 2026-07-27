@@ -116,7 +116,10 @@ export function buildRuleMetaV1(
     for (const [ruleId, meta] of Object.entries(by_rule_id)) {
         const trimmed = ruleId.trim();
         if (!trimmed || !meta) continue;
-        cleaned[trimmed] = meta;
+        // Drop empty entries so legacy/default timing is absence of metadata, not `{}`.
+        const entry = parseRuleMetaEntry(meta);
+        if (!entry) continue;
+        cleaned[trimmed] = entry;
     }
     if (!Object.keys(cleaned).length) return null;
     return { version: 1, by_rule_id: cleaned };

@@ -20,6 +20,7 @@ import {
     storedFieldRulesToMetadataFieldRules,
     type LifecycleStageFieldRulesStored,
     type RuleLevelsV1,
+    type RuleMetaV1,
 } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import type { LifecycleFieldPaletteEntry } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
 
@@ -34,6 +35,7 @@ export type LifecycleBuilderStageFieldRulesV1 = {
             required_rule_ids?: string[];
             recommended_rule_ids?: string[];
             rule_levels_v1?: RuleLevelsV1;
+            rule_meta_v1?: RuleMetaV1;
         }
     >;
 };
@@ -143,6 +145,7 @@ export function buildBuilderStageFieldRulesPatch(input: {
     recommended_rule_ids: string[];
     existingMetadata: Record<string, unknown> | null;
     explicit_rule_levels_v1?: RuleLevelsV1 | null;
+    explicit_rule_meta_v1?: RuleMetaV1 | null;
     mergedPalette?: readonly LifecycleFieldPaletteEntry[];
 }): Record<string, unknown> {
     const stageKey = input.builderStageKey.trim();
@@ -165,6 +168,7 @@ export function buildBuilderStageFieldRulesPatch(input: {
         required_rule_ids: sanitizedRequired,
         recommended_rule_ids: sanitizedRecommended,
         explicit_rule_levels_v1: input.explicit_rule_levels_v1,
+        explicit_rule_meta_v1: input.explicit_rule_meta_v1,
         isEnforceable,
     });
 
