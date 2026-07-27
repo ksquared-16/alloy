@@ -36,7 +36,7 @@ Round 2 does **not** build a universal LLM orchestration layer.
 | R2-04 Turn-based transcript | done | `d6307ce2f` |
 | R2-05 Slash discovery (Create Lead) | done | `2c3d8813f` |
 | R2-06 Responsive layouts + chrome | done | `4fffa1313` |
-| R2-07 Focused product QA + docs | in progress | |
+| R2-07 Focused product QA + docs | done | `869b21b61` |
 
 ## Product QA bar (focused — not Round 1’s 22 scenarios)
 
