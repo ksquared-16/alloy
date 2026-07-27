@@ -32,6 +32,7 @@ import { prepareOperationalDestination } from "@/lib/runtime/prep/prepareOperati
 import { prefetchWorkUnitProvisioning } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
 import {
     beginWorkUnitPrimaryReveal,
+    endWorkUnitPrimaryReveal,
     isWorkUnitPrimaryRevealActive,
 } from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
@@ -126,6 +127,19 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     useEffect(() => {
         if (committedRevealKey) beginWorkUnitPrimaryReveal();
     }, [committedRevealKey]);
+
+    // Arm the reveal window at Work Unit surface MOUNT — before the sibling-view answer prewarm's idle
+    // callback can fire — so the EXISTING reveal gate defers it instead of losing the race to it (the
+    // commit-time arm above lands after the prewarm). Controlled same-process A/B (dev, slot3, 6 interleaved
+    // warm runs, mount-arm ON vs OFF): median warm first-meaningful 7445 ms → 6599 ms (−11%), and — the
+    // clearer signal — the OFF condition's pathological slow-tail (10.3 s / 11.4 s reveals when the prewarm
+    // won the race) disappears (ON caps at 7.1 s; range 5669–11350 → 5621–7125). The window still ENDS on the
+    // selected VM apply (useRecordWorkRuntime, every path); the unmount release covers a navigate-away before
+    // commit so speculative prewarm is never pinned.
+    useEffect(() => {
+        beginWorkUnitPrimaryReveal();
+        return () => endWorkUnitPrimaryReveal();
+    }, []);
 
     // SUBJECT OWNERSHIP — settled, and worth recording because the wrong shape was tried twice.
     // The Focus Panel once read its subject from AdminDrawerContext, making the drawer a SECOND
