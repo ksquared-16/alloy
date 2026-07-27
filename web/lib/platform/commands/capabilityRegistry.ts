@@ -270,17 +270,19 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
          * Not Relationship Framework (`executeRelationshipAction` rejects externalExecutor).
          * Canonical write: PATCH /api/admin/customers/:id/household-primary-contact
          * → setHouseholdPrimaryContactForCustomer (displaces prior is_primary + syncs opportunities).
-         * Deferred to P4 — Destructive/replacement foundation (Disposition B, P3.S4).
+         * P4.S1: classified as replacement (destructive policy); facade commit still disabled.
+         * Deferred production cutover: P4 replacement/destructive foundation follow-on.
          */
         executionOwner: "admin_action",
         catalogVisibility: "organization_command_catalog",
         supportedSubjects: ["person", "opportunity"],
-        supportsPreview: false,
-        confirmationPolicy: "confirm",
+        supportsPreview: true,
+        confirmationPolicy: "strong_confirm",
+        destructiveKind: "replace",
         implementationStatus: "production",
         reason:
             "Household primary designation with displacement; dedicated customer API + confirm modal. " +
-            "Not facade-adapted. P4 prerequisite: replacement/destructive Command safeguards.",
+            "P4.S1 policy: replace. Facade commit disabled until a later P4 cutover slice.",
     }),
 
     // ── Family overlap (explicit; no execution consolidation in P0) ────────
@@ -351,11 +353,13 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         executionOwner: "tour_domain",
         catalogVisibility: "organization_command_catalog",
         supportedSubjects: ["opportunity"],
-        supportsPreview: false,
-        confirmationPolicy: "domain_owned",
+        supportsPreview: true,
+        confirmationPolicy: "strong_confirm",
         destructiveKind: "cancel",
         implementationStatus: "production",
-        reason: "Tour REST cancel; P5 adds Runtime confirm/preview — not claimed here.",
+        reason:
+            "Tour REST cancel remains production owner. P4.S1: cancel policy classified; " +
+            "facade commit disabled. Preview/confirm cutover deferred.",
     }),
     def({
         capabilityKey: "complete_tour",
@@ -413,7 +417,7 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         confirmationPolicy: "typed_confirm",
         destructiveKind: "delete",
         implementationStatus: "partial",
-        reason: "Hard-delete service + preview API exist; Manage UI wiring incomplete — keep internal until P4.",
+        reason: "Hard-delete service + preview API exist; Manage UI wiring incomplete — keep internal until later P4 cutover. P4.S1: delete policy classified; facade commit disabled.",
     }),
     def({
         capabilityKey: "archive_lead",
@@ -424,11 +428,11 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         executionOwner: "none",
         catalogVisibility: "hidden",
         supportedSubjects: ["opportunity"],
-        supportsPreview: false,
+        supportsPreview: true,
         confirmationPolicy: "strong_confirm",
         destructiveKind: "archive",
         implementationStatus: "missing",
-        reason: "Manage stub only; no executor.",
+        reason: "Manage stub only; no executor. P4.S1: archive policy classified; facade commit disabled.",
     }),
     def({
         capabilityKey: "reopen_lead",
@@ -452,11 +456,11 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         executionOwner: "none",
         catalogVisibility: "hidden",
         supportedSubjects: ["opportunity_customer_member"],
-        supportsPreview: false,
+        supportsPreview: true,
         confirmationPolicy: "strong_confirm",
         destructiveKind: "withdraw",
         implementationStatus: "missing",
-        reason: "Planned intent / catalog stub only.",
+        reason: "Planned intent / catalog stub only. P4.S1: withdraw policy classified; facade commit disabled.",
     }),
 
     // ── Navigation / assist ────────────────────────────────────────────────

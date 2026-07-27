@@ -5,10 +5,15 @@
  * P1.S2: RegisteredAction
  * P2.S1 / P2.S2: Mutation Runtime — exact keys (owner globally false)
  * P3.S1–P3.S3: Relationship Runtime — exact keys (owner globally false)
+ * P4.S1: Destructive/replacement — commit globally disabled (policy registry)
  */
 
 import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 import type { CapabilityExecutionOwner } from "@/lib/platform/commands/capabilityTypes";
+import {
+    DESTRUCTIVE_COMMAND_RUNTIME_COMMIT_ENABLED,
+    isDestructiveOrReplacementCapability,
+} from "@/lib/platform/commands/runtime/destructive";
 
 export const COMMAND_RUNTIME_EXECUTION_BY_OWNER: Readonly<
     Record<CapabilityExecutionOwner, boolean>
@@ -101,6 +106,14 @@ export function isCommandRuntimeFacadeExecutionSupported(commandKey: string): bo
     const resolved = tryResolvePlatformCapability(key);
     if (resolved.status !== "known") return false;
     const cap = resolved.capability;
+
+    // P4.S1: destructive/replacement never commits through normal adapters.
+    if (
+        isDestructiveOrReplacementCapability(cap.canonicalCommandKey) &&
+        !DESTRUCTIVE_COMMAND_RUNTIME_COMMIT_ENABLED
+    ) {
+        return false;
+    }
 
     if (cap.maturity === "executable" && cap.executionOwner === "registered_action") {
         return isExecutionOwnerEnabledForFacade("registered_action");

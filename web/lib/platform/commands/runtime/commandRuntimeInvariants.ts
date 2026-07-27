@@ -5,6 +5,7 @@
 
 import type { PlatformCapabilityDefinition } from "@/lib/platform/commands/capabilityTypes";
 import type { CommandSnapshot } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
+import { getDestructiveCommandPolicy } from "@/lib/platform/commands/runtime/destructive/destructivePolicyRegistry";
 
 function isStrictEnv(): boolean {
     return process.env.NODE_ENV !== "production";
@@ -37,7 +38,22 @@ export function assertCommandSnapshotInvariants(
             errors.push("catalogVisibility mismatch");
         }
         if (snapshot.confirmationPolicy !== capability.confirmationPolicy) {
-            errors.push("confirmationPolicy mismatch");
+            // P4.S1: destructive policy may strengthen confirmation (never weaken).
+            const destructive = getDestructiveCommandPolicy(capability.canonicalCommandKey);
+            if (!destructive || snapshot.confirmationPolicy !== destructive.confirmation) {
+                errors.push("confirmationPolicy mismatch");
+            }
+        }
+        if (snapshot.destructivePreparation) {
+            if (snapshot.destructivePreparation.facadeCommitEnabled !== false) {
+                errors.push("destructivePreparation.facadeCommitEnabled must be false in P4.S1");
+            }
+            if (snapshot.destructivePreparation.requiresPreview !== true) {
+                errors.push("destructivePreparation.requiresPreview must be true");
+            }
+            if (!snapshot.supportsPreview) {
+                errors.push("destructive preparation requires supportsPreview");
+            }
         }
     }
 

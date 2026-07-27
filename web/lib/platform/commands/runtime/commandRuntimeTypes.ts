@@ -14,6 +14,7 @@ import type {
 } from "@/lib/platform/commands/capabilityTypes";
 import type { CommandFlowStage } from "@/lib/platform/commands/commandFlow";
 import type { RequiredSubject } from "@/lib/platform/commands/invocationContext";
+import type { DestructivePreparationState } from "@/lib/platform/commands/runtime/destructive/destructivePolicyTypes";
 
 /** Who initiated the Command — distinct from operational surface/context. */
 export type CommandInvocationOrigin = "operator" | "bos" | "automation" | "api" | "system";
@@ -147,6 +148,11 @@ export type CommandSnapshot = {
     blockers: readonly { code: string; message: string }[];
     confirmationPolicy: CapabilityConfirmationPolicy;
     supportsPreview: boolean;
+    /**
+     * Present when a destructive/replacement policy is registered (P4.S1).
+     * Facade commit remains disabled (`facadeCommitEnabled: false`).
+     */
+    destructivePreparation?: DestructivePreparationState | null;
     currentLifecycleStage: CommandRuntimeLifecycleStage;
     nextLifecycleStage: CommandRuntimeLifecycleStage | null;
     executionDestination: CommandExecutionDestination;

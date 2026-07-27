@@ -21,6 +21,7 @@ import type {
 } from "@/lib/platform/commands/runtime/commandExecutionTypes";
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 import type { CommandSnapshot } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
+import { isDestructiveOrReplacementCapability } from "@/lib/platform/commands/runtime/destructive";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type RegisteredActionExecutionDeps = {
@@ -84,6 +85,11 @@ export async function executeRegisteredActionViaAdapter(
     if (input.capability.executionOwner !== "registered_action") {
         throw new Error(
             "[commandRuntime] RegisteredAction adapter refused capability owner mismatch"
+        );
+    }
+    if (isDestructiveOrReplacementCapability(input.capability.canonicalCommandKey)) {
+        throw new Error(
+            "[commandRuntime] RegisteredAction adapter refused destructive/replacement capability"
         );
     }
 

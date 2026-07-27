@@ -25,6 +25,7 @@ import type {
     InvocationDelegationGuard,
 } from "@/lib/platform/commands/runtime/commandExecutionTypes";
 import { isChildEnrollmentMutationFacadeSupported } from "@/lib/platform/commands/runtime/commandRuntimeExecutionGate";
+import { isDestructiveOrReplacementCapability } from "@/lib/platform/commands/runtime/destructive";
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 import type { CommandSnapshot } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -188,6 +189,11 @@ export async function executeChildEnrollmentMutationViaAdapter(
     if (!isChildEnrollmentMutationFacadeSupported(input.commandKey)) {
         throw new Error(
             `[commandRuntime] Child Enrollment adapter refused unsupported key "${input.commandKey}"`
+        );
+    }
+    if (isDestructiveOrReplacementCapability(input.capability.canonicalCommandKey)) {
+        throw new Error(
+            "[commandRuntime] Child Enrollment adapter refused destructive/replacement capability"
         );
     }
 

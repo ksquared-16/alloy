@@ -27,19 +27,19 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 | `add_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S3 facade** → `executeRelationshipAction` |
 | `link_existing_person` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S1 facade** → `executeRelationshipAction` |
 | `link_existing_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S3 facade** → `executeRelationshipAction` |
-| `make_primary_contact` | same | adapted | admin_action | organization_command_catalog | yes | **P4** | External household designation; **Disposition B** — not Relationship Framework |
+| `make_primary_contact` | same | adapted | admin_action | organization_command_catalog | yes | **P4** | **replace** policy (P4.S1); facade commit **disabled**; household designation |
 | `add_family_member` | same | adapted | admin_action | organization_command_catalog | yes | Product hub | Hub; aliases `add_related_person`, `add_person` |
 | `add_sibling` | same | adapted | admin_action | organization_command_catalog | yes | Product hub | Overlaps add_child |
 | `schedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Not RegisteredAction |
 | `reschedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | |
-| `cancel_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Confirm/preview later |
+| `cancel_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 / P4.S1 | **cancel** policy classified; facade commit disabled; tour REST owner |
 | `complete_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | |
 | `no_show_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Alias `mark_tour_no_show` |
 | `reopen_tour` | same | unavailable | none | hidden | n/a | P5 contract | Execute deferred |
-| `delete_lead` | same | adapted | admin_action | internal_only | yes | P4 | Preview API exists |
-| `archive_lead` | same | unavailable | none | hidden | n/a | P4 | Stub only |
+| `delete_lead` | same | adapted | admin_action | internal_only | yes | P4 | **delete** policy (P4.S1); facade commit disabled; preview API exists |
+| `archive_lead` | same | unavailable | none | hidden | n/a | P4 | **archive** policy classified; stub only |
 | `reopen_lead` | same | unavailable | none | hidden | n/a | P4+ | Missing |
-| `withdraw_child` | same | unavailable | none | hidden | n/a | P4+ | Planned/stub |
+| `withdraw_child` | same | unavailable | none | hidden | n/a | P4+ | **withdraw** policy classified; planned/stub |
 | `open_record` | same | navigation_only | navigation | organization_command_catalog | yes | — | Non-mutation |
 | `ask_bos` | same | navigation_only | navigation | organization_command_catalog | yes | — | Assist open |
 | `quick_message` | same | adapted | admin_action | organization_command_catalog | yes | P9 | Drift vs `send_message` |
@@ -299,3 +299,29 @@ Capability owner corrected to `admin_action` (not Relationship Framework).
 Layout contact-row → confirm modal → client PATCH → `setHouseholdPrimaryContactForCustomer` →
 `ensureCustomerPersonsPrimaryLink` (demote peers) + sync `opportunities.primary_person_id` →
 `household.primary_contact_changed` event. `executeRelationshipAction` **rejects** this key.
+
+---
+
+# P4.S1 — Destructive and Replacement Command Foundation
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p4-destructive-foundation-msn_188e8bea6fb6de28dd21.md` |
+| Module | `web/lib/platform/commands/runtime/destructive/` |
+| Facade commit | **Disabled** (`DESTRUCTIVE_COMMAND_RUNTIME_COMMIT_ENABLED = false`) |
+| Production cutovers | **None** |
+
+## Classified (policy only)
+
+| Key | Impact | Confirm | Permission | Recovery |
+|-----|--------|---------|------------|----------|
+| `delete_lead` | delete | typed_confirm | sensitive_destructive | none |
+| `archive_lead` | archive | strong_confirm | standard_destructive | restore |
+| `make_primary_contact` | replace | strong_confirm | replacement | restore |
+| `cancel_tour` | cancel | strong_confirm | standard_destructive | schedule_new |
+| `withdraw_child` | withdraw | strong_confirm | sensitive_destructive | manual_support |
+
+## Preview correlation
+
+HMAC-SHA256 compact claims; TTL + version; no DB store; not an idempotency key.

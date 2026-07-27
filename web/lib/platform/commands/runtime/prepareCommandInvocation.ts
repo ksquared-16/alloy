@@ -23,6 +23,10 @@ import {
 } from "@/lib/platform/commands/invocationContext";
 import { prepareRegisteredActionMeta } from "@/lib/platform/commands/runtime/adapters/registeredActionPreparationAdapter";
 import { assertCommandSnapshotInvariants } from "@/lib/platform/commands/runtime/commandRuntimeInvariants";
+import {
+    getDestructiveCommandPolicy,
+    toDestructivePreparationState,
+} from "@/lib/platform/commands/runtime/destructive/destructivePolicyRegistry";
 import type {
     CommandExecutionDestination,
     CommandInvocationOrigin,
@@ -372,6 +376,21 @@ function buildSnapshot(input: {
     }
 
     const label = registeredMeta?.defaultLabel ?? capability.operatorLabel;
+    const destructivePolicy = getDestructiveCommandPolicy(capability.canonicalCommandKey);
+    const destructivePreparation = destructivePolicy
+        ? toDestructivePreparationState(destructivePolicy)
+        : null;
+
+    // Destructive policy confirmation cannot be weaker than capability — use the stronger of the two.
+    const confirmationPolicy: CapabilityConfirmationPolicy = destructivePolicy
+        ? destructivePolicy.confirmation
+        : capability.confirmationPolicy;
+
+    const supportsPreview =
+        Boolean(destructivePolicy?.requiresPreview) ||
+        capability.supportsPreview ||
+        Boolean(registeredMeta?.supportsPreview);
+
     const op = operatorMessage({
         label,
         runnable,
@@ -382,13 +401,47 @@ function buildSnapshot(input: {
     const diagnostics = [
         {
             code: "preparation_only",
-            message: "P1.S1 prepareCommandInvocation is side-effect free; no execute path.",
+            message: "prepareCommandInvocation is side-effect free; no execute path.",
         },
         {
             code: "execution_destination",
             message: `owner=${capability.executionOwner}`,
         },
+        ...(destructivePreparation
+            ? [
+                  {
+                      code: "destructive_preparation",
+                      message: `impact=${destructivePreparation.impactClass} commit_enabled=false`,
+                  },
+              ]
+            : []),
     ];
+
+    // Recompute next when destructive requires preview (cannot skip to execute).
+    if (
+        runnable &&
+        destructivePreparation &&
+        (nextLifecycleStage === "execute" || nextLifecycleStage === "confirm")
+    ) {
+        if (supportsPreview && nextLifecycleStage === "execute") {
+            nextLifecycleStage = "preview";
+        } else if (
+            confirmationBlocksAdvance(confirmationPolicy, request.origin) &&
+            nextLifecycleStage === "execute"
+        ) {
+            nextLifecycleStage = "confirm";
+        }
+    }
+
+    // BOS / automation / api / system cannot weaken destructive confirmation.
+    if (
+        runnable &&
+        destructivePreparation &&
+        request.origin !== "operator" &&
+        nextLifecycleStage === "execute"
+    ) {
+        nextLifecycleStage = supportsPreview ? "preview" : "confirm";
+    }
 
     const snapshot: CommandSnapshot = {
         requestedKey,
@@ -404,8 +457,9 @@ function buildSnapshot(input: {
         eligibilityState,
         warnings: [],
         blockers,
-        confirmationPolicy: capability.confirmationPolicy,
-        supportsPreview: capability.supportsPreview || Boolean(registeredMeta?.supportsPreview),
+        confirmationPolicy,
+        supportsPreview,
+        destructivePreparation,
         currentLifecycleStage: current,
         nextLifecycleStage,
         executionDestination: destinationFor(capability.executionOwner),
@@ -414,7 +468,9 @@ function buildSnapshot(input: {
         authorizationGranted: null,
         operatorSafe: {
             label,
-            statusMessage: op.statusMessage,
+            statusMessage: destructivePreparation
+                ? destructivePreparation.operatorSummary
+                : op.statusMessage,
             canContinue: op.canContinue,
         },
         diagnostics,
@@ -482,6 +538,7 @@ function unavailableSnapshot(
         blockers: [{ code: "unknown_capability", message: reason }],
         confirmationPolicy: "confirm",
         supportsPreview: false,
+        destructivePreparation: null,
         currentLifecycleStage: "unavailable",
         nextLifecycleStage: null,
         executionDestination: destinationFor("none"),

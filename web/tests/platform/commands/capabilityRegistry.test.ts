@@ -72,11 +72,13 @@ describe("capabilityRegistry spine (P0.S1)", () => {
         }
     });
 
-    it("classifies make_primary_contact as admin_action (external designation; deferred P4)", () => {
+    it("classifies make_primary_contact as admin_action replacement (P4.S1; facade commit disabled)", () => {
         const cap = assertKnownPlatformCapability("make_primary_contact");
         expect(cap.maturity).toBe("adapted");
         expect(cap.executionOwner).toBe("admin_action");
-        expect(cap.confirmationPolicy).toBe("confirm");
+        expect(cap.confirmationPolicy).toBe("strong_confirm");
+        expect(cap.destructiveKind).toBe("replace");
+        expect(cap.supportsPreview).toBe(true);
         expect(cap.reason).toMatch(/P4/i);
         expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(false);
     });

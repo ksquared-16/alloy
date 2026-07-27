@@ -45,7 +45,7 @@ Tokenized public actions: `/api/action/[token]/consume` → event → workflows.
 | **Config validation** | `web/lib/adminV2/actions/configValidation.ts` |
 | **Eligibility API** | `POST /api/admin/actions/eligibility` |
 | **Capability Registry (P0.S1)** | `web/lib/platform/commands/capabilityRegistry.ts` — classification honesty |
-| **Command Runtime Facade (P1–P3)** | `web/lib/platform/commands/runtime/*` — prepare + RegisteredAction + Lead/Enrollment Mutation + Relationship (2 keys) execute |
+| **Command Runtime Facade (P1–P4.S1)** | `web/lib/platform/commands/runtime/*` — prepare + RegisteredAction + Lead/Enrollment Mutation + Relationship (exact keys) execute; **P4.S1** destructive/replacement safety foundation (commit disabled) |
 
 ---
 
@@ -73,6 +73,9 @@ services).
 **Status:** Preparation (P1.S1). RegisteredAction execute (P1.S2). Lead Status Mutation execute
 (P2.S1). Child Enrollment Mutation execute (P2.S2). Relationship Runtime adapter (P3.S1 parent/link;
 P3.S2 contact-role; P3.S3 child relationship commands, July 2026) — exact keys only.
+**Destructive/replacement safety foundation (P4.S1):** policy registry, impact preview contract,
+permission-class seam, HMAC preview correlation, stale-preview guards — **facade commit globally
+disabled**. No Delete Lead / Make Primary / Cancel Tour production cutover in P4.S1.
 
 `prepareCommandInvocation` remains **side-effect free**.
 
@@ -93,8 +96,22 @@ P3.S2 contact-role; P3.S3 child relationship commands, July 2026) — exact keys
   explicit exact keys
 - `mark_lost` remains on legacy compatibility (`executeAdminAction`); not consolidated
 - Enrollment aliases (`move_to_waitlist`, `approve_enrollment`) remain outside exact-key facade cutover
-- Remaining Relationship keys (`make_primary_contact` — **deferred to P4**, admin_action designation
-  with displacement; Add Family Member hub) remain outside facade cutover
+- Remaining Relationship keys (`make_primary_contact` — **P4.S1 classified as `replace`**;
+  facade commit still disabled; Add Family Member hub) remain outside facade cutover
+
+### Destructive / replacement Command policy (P4.S1)
+
+Shared server contract under `web/lib/platform/commands/runtime/destructive/`:
+
+- **Impact classes:** delete, archive, deactivate, remove, revoke, cancel, withdraw, end, void, **replace**
+- **Replacement ≠ delete** — e.g. `make_primary_contact` displaces prior primary while keeping the link
+- Every classified capability requires **preview**, explicit confirmation (`confirm` |
+  `strong_confirm` | `typed_confirm`), and a **permission class** (server-owned; client cannot weaken)
+- Preview correlation: HMAC-SHA256 token (compact claims; no full payload; TTL + version match)
+- Domain adapters own real impact discovery; shared runtime does not scan domain tables
+- **P4.S1 state:** destructive preview framework enabled; **commit through Command Runtime disabled**
+- Representative policies: `delete_lead`, `archive_lead`, `make_primary_contact`, `cancel_tour`,
+  `withdraw_child` — classified only; existing routes/UI unchanged
 
 `POST /api/admin/actions/execute` remains the operator/API route name. Dedicated
 `/api/admin/relationship-actions/execute` remains available. `/api/admin/mutations/execute`
@@ -322,7 +339,9 @@ Contact-role and child Commands share infrastructure but remain distinct identit
 designation via `PATCH /api/admin/customers/:id/household-primary-contact` →
 `setHouseholdPrimaryContactForCustomer` (displaces prior `is_primary`, syncs opportunity
 `primary_person_id`, emits `household.primary_contact_changed`). Confirm modal required.
-**Deferred to P4** (replacement/destructive Command foundation). Capability owner: `admin_action`.
+**Deferred to later P4 cutover** (after P4.S1 safety foundation). Capability owner: `admin_action`.
+P4.S1 classifies impact as **`replace`** (strong_confirm, displaced impact required); facade commit
+disabled.
 
 ### Make Primary Contact
 
@@ -333,8 +352,8 @@ designation via `PATCH /api/admin/customers/:id/household-primary-contact` →
 - Primary row: read-only **badge**; non-primary row: **Make Primary Contact** button → confirm →
   `PATCH /api/admin/customers/:id/household-primary-contact` → `setHouseholdPrimaryContactForCustomer`.
 - Displaces prior household primary (`is_primary`); previous contact remains linked.
-- **Command Runtime:** not facade-adapted (P3.S4 Disposition B → **P4**). Capability owner
-  `admin_action` — not `executeRelationshipAction`.
+- **Command Runtime:** not facade-adapted for commit (P3.S4 Disposition B → **P4.S1** policy
+  `replace`; later P4 cutover). Capability owner `admin_action` — not `executeRelationshipAction`.
 
 ---
 

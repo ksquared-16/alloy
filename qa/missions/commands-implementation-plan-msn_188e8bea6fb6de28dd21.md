@@ -10,7 +10,7 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → P1.S1 → P1.S2 → P2.S1 → P2.S2 → P3.S1 → P3.S2 → P3.S3 → **P3.S4 certified** (`make_primary_contact` Disposition B → P4; Relationship phase closeout). Next: **P4 Destructive Command foundation**.
+**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → P1.S1 → P1.S2 → P2.S1 → P2.S2 → P3.S1 → P3.S2 → P3.S3 → P3.S4 certified → **P4.S1 Destructive/replacement safety foundation** (commit disabled; no production cutover). Next: later P4 cutover slices (Delete Lead / replacement adapter / etc.) per evidence gate.
 
 ---
 
@@ -184,7 +184,7 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 | **Objective** | Destructive Capability contracts + permission class + preview/confirm/audit envelope; wire Delete Lead / Archive Lead (as support allows) / Remove·Revoke relationship Commands. |
 | **Product-visible** | Manage destructive flows gain preview/typed confirm where missing |
 | **In scope** | Capability metadata for destructive verbs; Delete Lead Runtime wrap; relationship Remove/Revoke; permission keys for destructive class; **not** every settings DELETE |
-| **Out of scope** | Config-maintenance catalog entries; tour cancel (P5) |
+| **Out of scope** | Config-maintenance catalog entries; tour cancel execute cutover (P5; policy classified in P4.S1) |
 | **Code areas** | `deleteOpportunityLead`, manage menus, relationship remove, auth helpers |
 | **Storage** | Optional permission seed rows (if using permission_definitions) — **only when implementing**, not this planning mission |
 | **Tests** | Preview/commit correlation; typed confirm; auth denial; dependency blockers |
@@ -194,6 +194,7 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 | **Exit** | Destructive operational Commands single-path with safeguards |
 | **Deps** | P1; P3 for relationship remove |
 | **Parallel** | Not with P5 cancel work on same hosts |
+| **P4.S1 shipped** | Policy + preview contract + HMAC correlation + permission-class seam + execution-disabled guard — see `commands-p4-destructive-foundation-msn_188e8bea6fb6de28dd21.md`. No production cutover. |
 
 ### P5 — Tour Command convergence
 
@@ -320,11 +321,11 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 
 | ID | Title |
 |----|-------|
-| **P4.S1** | Destructive Capability metadata + confirmationClass |
-| **P4.S2** | Permission class helpers |
+| **P4.S1** | Destructive/replacement policy + preview + correlation + commit-disabled guard (**shipped**) |
+| **P4.S2** | Permission class helpers / org-permission mapping (beyond seam) |
 | **P4.S3** | Delete Lead via Runtime + Manage wiring |
 | **P4.S4** | Archive Lead Capability (implement or explicit unsupported) |
-| **P4.S5** | Remove / Revoke relationship Capabilities |
+| **P4.S5** | Remove / Revoke relationship Capabilities; Make Primary replacement cutover |
 
 ### P5 — Tours (5)
 

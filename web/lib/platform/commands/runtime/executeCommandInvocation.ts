@@ -47,6 +47,10 @@ import {
     isRelationshipRuntimeFacadeSupported,
 } from "@/lib/platform/commands/runtime/commandRuntimeExecutionGate";
 import { assertCommandSnapshotInvariants } from "@/lib/platform/commands/runtime/commandRuntimeInvariants";
+import {
+    assertDestructiveCommitAllowed,
+    isDestructiveOrReplacementCapability,
+} from "@/lib/platform/commands/runtime/destructive";
 import { prepareCommandInvocation } from "@/lib/platform/commands/runtime/prepareCommandInvocation";
 
 export type ExecuteCommandInvocationOptions = {
@@ -151,6 +155,42 @@ export async function executeCommandInvocation(
             code: "invalid_mode",
             operatorMessage: "Invalid execution mode.",
         });
+    }
+
+    // P4.S1: destructive/replacement commit is globally disabled (even before facade gate).
+    {
+        const earlyResolved = tryResolvePlatformCapability(invocation.commandKey);
+        const earlyCanonical =
+            earlyResolved.status === "known"
+                ? earlyResolved.capability.canonicalCommandKey
+                : invocation.commandKey;
+        if (
+            request.mode === "execute" &&
+            isDestructiveOrReplacementCapability(earlyCanonical)
+        ) {
+            const guardResult = assertDestructiveCommitAllowed({
+                capabilityKey: earlyCanonical,
+            });
+            return fail({
+                status: "unsupported_owner",
+                invocationId,
+                canonicalCapabilityKey:
+                    earlyResolved.status === "known" ? earlyCanonical : undefined,
+                executionOwner:
+                    earlyResolved.status === "known"
+                        ? earlyResolved.capability.executionOwner
+                        : undefined,
+                code: guardResult.code,
+                operatorMessage:
+                    "This destructive or replacement command cannot be committed through the Command Runtime yet.",
+                diagnostics: [
+                    {
+                        code: guardResult.code,
+                        message: guardResult.message,
+                    },
+                ],
+            });
+        }
     }
 
     if (!isCommandRuntimeFacadeExecutionSupported(invocation.commandKey)) {

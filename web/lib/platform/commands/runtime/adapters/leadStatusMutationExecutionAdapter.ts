@@ -18,6 +18,7 @@ import type {
     InvocationDelegationGuard,
 } from "@/lib/platform/commands/runtime/commandExecutionTypes";
 import { isLeadStatusMutationFacadeSupported } from "@/lib/platform/commands/runtime/commandRuntimeExecutionGate";
+import { isDestructiveOrReplacementCapability } from "@/lib/platform/commands/runtime/destructive";
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 import type { CommandSnapshot } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -131,6 +132,11 @@ export async function executeLeadStatusMutationViaAdapter(
     if (!isLeadStatusMutationFacadeSupported(input.commandKey)) {
         throw new Error(
             `[commandRuntime] Lead Status adapter refused unsupported key "${input.commandKey}"`
+        );
+    }
+    if (isDestructiveOrReplacementCapability(input.capability.canonicalCommandKey)) {
+        throw new Error(
+            "[commandRuntime] Lead Status adapter refused destructive/replacement capability"
         );
     }
     if (

@@ -59,7 +59,8 @@ export type CapabilityDestructiveKind =
     | "cancel"
     | "withdraw"
     | "end"
-    | "void";
+    | "void"
+    | "replace";
 
 export type CapabilityImplementationStatus = "production" | "partial" | "legacy" | "missing";
 

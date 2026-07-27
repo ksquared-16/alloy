@@ -34,6 +34,7 @@ import type {
     InvocationDelegationGuard,
 } from "@/lib/platform/commands/runtime/commandExecutionTypes";
 import { isRelationshipRuntimeFacadeSupported } from "@/lib/platform/commands/runtime/commandRuntimeExecutionGate";
+import { isDestructiveOrReplacementCapability } from "@/lib/platform/commands/runtime/destructive";
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 import type { CommandSnapshot } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -345,6 +346,14 @@ export async function executeRelationshipViaAdapter(
     if (!isRelationshipRuntimeFacadeSupported(input.commandKey)) {
         throw new Error(
             `[commandRuntime] Relationship adapter refused unsupported key "${input.commandKey}"`
+        );
+    }
+    if (
+        isDestructiveOrReplacementCapability(input.capability.canonicalCommandKey) ||
+        isDestructiveOrReplacementCapability(input.commandKey)
+    ) {
+        throw new Error(
+            "[commandRuntime] Relationship adapter refused destructive/replacement capability"
         );
     }
     if (input.mode === "preview") {
