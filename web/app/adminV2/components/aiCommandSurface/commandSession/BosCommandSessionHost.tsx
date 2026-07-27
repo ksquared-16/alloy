@@ -1,9 +1,21 @@
 "use client";
 
+import dynamic from "next/dynamic";
+
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
 import type { BosCommandMode, BosCommandSession } from "@/lib/bos/commandSession";
 import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
 import { useCreateLeadBosSessionController } from "@/app/adminV2/components/aiCommandSurface/commandSession/useCreateLeadBosSessionController";
+import { opportunityIdFromAttempt } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
+import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
+import { bosDraftToEligiblePayload } from "@/lib/bos/commandSession";
+import { createLeadDisplayName } from "@/lib/platform/commands/createLead/createLeadRequiredInputs";
+import { resolveCreatedRecordProcessContextHref } from "@/lib/platform/commands/createLead/resolveCreatedRecordProcessContextHref";
+
+const IdentityReviewPanel = dynamic(
+    () => import("@/app/adminV2/processing/IdentityReviewPanel"),
+    { ssr: false }
+);
 
 /**
  * BOS command-session host — ack, Conversation|Form toggle, Create Lead gather.
@@ -71,7 +83,9 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                 </button>
             </div>
 
-            {controller.resolution.blockers.length > 0 ? (
+            {controller.resolution.blockers.length > 0 &&
+            session.phase !== "processing_review" &&
+            session.phase !== "completed" ? (
                 <div
                     className="shrink-0 border-b border-amber-200/80 bg-amber-50 px-3 py-2 text-[12px] text-amber-950"
                     data-bos-command-session-resolution="true"
@@ -81,6 +95,104 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
             ) : null}
 
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3" data-bos-command-session-body="true">
+                {session.phase === "processing_review" && session.processingCaseId ? (
+                    <div data-bos-command-session-processing="true">
+                        <p className="mb-3 text-sm text-alloy-midnight/70">
+                            Review identity matches, approve the commit plan, then explicitly commit to create
+                            records.
+                        </p>
+                        <IdentityReviewPanel
+                            caseId={session.processingCaseId}
+                            onCommitted={({ operations }) => {
+                                const opportunityId = opportunityIdFromAttempt(
+                                    operations.map((o) => ({
+                                        commandKey: o.commandKey ?? "",
+                                        recordId: o.recordId,
+                                        status: o.status,
+                                    }))
+                                );
+                                if (!opportunityId) {
+                                    ctx?.dispatch({
+                                        type: "FAIL",
+                                        recovery: {
+                                            reason: "server",
+                                            preserveDraft: true,
+                                            operatorMessage:
+                                                "Commit completed but no lead record id was returned.",
+                                        },
+                                    });
+                                    return;
+                                }
+                                dispatchOpportunityQueueUpdated(opportunityId, "create_lead");
+                                const payload = bosDraftToEligiblePayload(session.draft);
+                                const name = createLeadDisplayName(payload);
+                                const successCopy = name ? `Created lead for ${name}.` : "Lead created.";
+                                const focusPanelHref = resolveCreatedRecordProcessContextHref({
+                                    recordId: opportunityId,
+                                    workUnitKey: null,
+                                    workViewId: null,
+                                });
+                                ctx?.dispatch({
+                                    type: "EXECUTE_SUCCESS",
+                                    execution: {
+                                        ok: true,
+                                        executionKind: "processing_intake",
+                                        opportunityId,
+                                        processingCaseId: session.processingCaseId ?? undefined,
+                                        success: {
+                                            createdRecordId: opportunityId,
+                                            focusPanelHref,
+                                            successCopy,
+                                        },
+                                    },
+                                    phase: "completed",
+                                });
+                                ctx?.dispatch({
+                                    type: "COMPLETE",
+                                    successMessage: `${successCopy} Open Lead when you want to continue.`,
+                                });
+                            }}
+                        />
+                    </div>
+                ) : session.phase === "completed" ? (
+                    <div data-bos-command-session-success="true" className="space-y-3">
+                        <p className="text-sm font-medium text-alloy-midnight">
+                            {session.messages.filter((m) => m.kind === "success").at(-1)?.body ??
+                                "Lead created."}
+                        </p>
+                        {(() => {
+                            const success = session.execution && session.execution.ok ? session.execution.success : null;
+                            const href =
+                                success &&
+                                typeof success === "object" &&
+                                success !== null &&
+                                "focusPanelHref" in success
+                                    ? String((success as { focusPanelHref?: string }).focusPanelHref ?? "")
+                                    : "";
+                            const id =
+                                session.execution && session.execution.ok
+                                    ? session.execution.opportunityId
+                                    : null;
+                            if (!href && !id) return null;
+                            return (
+                                <a
+                                    href={href || undefined}
+                                    className="inline-flex rounded-md bg-alloy-bend-pine px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-bend-pine/90"
+                                    data-bos-command-session-open-lead
+                                    onClick={(event) => {
+                                        // Explicit Open Lead only — never auto-navigate on success.
+                                        if (!href) {
+                                            event.preventDefault();
+                                        }
+                                    }}
+                                >
+                                    Open Lead
+                                </a>
+                            );
+                        })()}
+                    </div>
+                ) : (
+                    <>
                 <ul className="mb-4 space-y-2" data-bos-command-session-messages="true">
                     {session.messages.map((message) => (
                         <li
@@ -172,8 +284,11 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                         />
                     </div>
                 )}
+                    </>
+                )}
             </div>
 
+            {session.phase !== "processing_review" && session.phase !== "completed" ? (
             <div
                 className="shrink-0 border-t border-alloy-stone/25 bg-alloy-stone/[0.04] px-3 py-2.5"
                 data-bos-command-session-footer="true"
@@ -233,6 +348,7 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                     )}
                 </div>
             </div>
+            ) : null}
         </div>
     );
 }
