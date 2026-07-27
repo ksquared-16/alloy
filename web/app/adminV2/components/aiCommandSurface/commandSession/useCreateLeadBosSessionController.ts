@@ -20,6 +20,11 @@ import {
     type BosCommandSession,
     type EffectiveCreateLeadIntakeSpec,
 } from "@/lib/bos/commandSession";
+import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import {
+    applyCreateLeadCommitSelectionToDraft,
+    resolveCreateLeadCommitSelectionFromDraft,
+} from "@/lib/bos/commandSession/createLeadRepeaterDraft";
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
 import { useInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
 import type { IntakeSelectOption } from "@/lib/intake/types";
@@ -221,6 +226,22 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
         [ctx, session.draft]
     );
 
+    const commitSelection = useMemo(
+        () => resolveCreateLeadCommitSelectionFromDraft(session.draft),
+        [session.draft]
+    );
+
+    const onCommitSelectionChange = useCallback(
+        (next: CreateLeadCommitSelection) => {
+            if (!ctx) return;
+            ctx.dispatch({
+                type: "SET_DRAFT",
+                draft: applyCreateLeadCommitSelectionToDraft(session.draft, next),
+            });
+        },
+        [ctx, session.draft]
+    );
+
     const onConfirmField = useCallback(
         (payloadKey: string) => {
             if (!ctx) return;
@@ -344,5 +365,7 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
         onConfirmPreview,
         onExecute,
         draftValues: bosDraftToFormValues(session.draft),
+        commitSelection,
+        onCommitSelectionChange,
     };
 }

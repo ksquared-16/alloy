@@ -5,6 +5,11 @@
 
 import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
 import type { BosCommandDraft, BosCommandPreview } from "@/lib/bos/commandSession/types";
+import {
+    resolveCreateLeadCommitSelectionFromDraft,
+    summarizeCommitChildren,
+    summarizeCommitParents,
+} from "@/lib/bos/commandSession/createLeadRepeaterDraft";
 
 export type UnderstandingGroup = {
     key: string;
@@ -26,14 +31,47 @@ export function buildUnderstandingGroups(input: {
     draft: BosCommandDraft;
     gatherFields: readonly ActionWorkspaceGatherField[];
 }): UnderstandingGroup[] {
-    const bySection = new Map<string, UnderstandingGroup>();
+    const selection = resolveCreateLeadCommitSelectionFromDraft(input.draft);
+    const parents = summarizeCommitParents(selection).filter(
+        (line) => line && line !== "Parent / guardian"
+    );
+    const children = summarizeCommitChildren(selection).filter((line) => line && line !== "Child");
+    const groups: UnderstandingGroup[] = [];
+
+    if (parents.length) {
+        groups.push({
+            key: "person",
+            title: "Family",
+            rows: parents.map((value, i) => ({
+                label: parents.length > 1 ? `Parent ${i + 1}` : "Parent / guardian",
+                value,
+            })),
+        });
+    }
+
+    if (children.length) {
+        groups.push({
+            key: "child",
+            title: "Children",
+            rows: children.map((value, i) => ({
+                label: children.length > 1 ? `Child ${i + 1}` : "Child",
+                value,
+            })),
+        });
+    }
+
     const fieldMeta = new Map(input.gatherFields.map((f) => [f.payload_key, f]));
+    const bySection = new Map<string, UnderstandingGroup>();
 
     for (const entry of input.draft.values) {
         const display = String(entry.value ?? "").trim();
         if (!display) continue;
         const meta = fieldMeta.get(entry.fieldKey);
         const sectionKey = meta?.section ?? "context";
+        // Prefer repeater summaries for person/child when present.
+        if ((sectionKey === "person" && parents.length) || (sectionKey === "child" && children.length)) {
+            continue;
+        }
         const title = operationalSectionTitle(sectionKey, meta?.section_label ?? "Details");
         let group = bySection.get(sectionKey);
         if (!group) {
@@ -57,15 +95,18 @@ export function buildUnderstandingGroups(input: {
     }
 
     const order = ["person", "child", "context"];
-    const ordered: UnderstandingGroup[] = [];
     for (const key of order) {
+        if (groups.some((g) => g.key === key)) continue;
         const g = bySection.get(key);
-        if (g?.rows.length) ordered.push(g);
+        if (g?.rows.length) groups.push(g);
     }
     for (const [key, g] of bySection) {
-        if (!order.includes(key) && g.rows.length) ordered.push(g);
+        if (!order.includes(key) && g.rows.length && !groups.some((x) => x.key === key)) {
+            groups.push(g);
+        }
     }
-    return ordered;
+
+    return groups;
 }
 
 export function buildReviewGroups(input: {

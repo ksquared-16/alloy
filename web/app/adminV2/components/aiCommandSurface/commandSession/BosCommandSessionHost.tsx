@@ -296,6 +296,9 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                         fieldConfidence={controller.fieldConfidence}
                         optionLabels={optionLabels}
                         unsupportedHints={controller.unsupportedHints}
+                        commitSelection={controller.commitSelection}
+                        onCommitSelectionChange={controller.onCommitSelectionChange}
+                        intakeSpec={controller.intakeSpec}
                     />
                 )}
             </div>

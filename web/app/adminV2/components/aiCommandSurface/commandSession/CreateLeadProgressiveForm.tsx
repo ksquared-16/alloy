@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
 import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
+import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import type { BosCommandDraft } from "@/lib/bos/commandSession/types";
 import {
     CREATE_LEAD_FIELD_PAIRS,
@@ -12,6 +13,12 @@ import {
     sectionAffordanceLabel,
     type CreateLeadSectionModel,
 } from "@/lib/bos/commandSession/createLeadSectionPresentation";
+import {
+    summarizeCommitChildren,
+    summarizeCommitParents,
+} from "@/lib/bos/commandSession/createLeadRepeaterDraft";
+import { CreateLeadBosRepeaterCards } from "@/app/adminV2/components/aiCommandSurface/commandSession/CreateLeadBosRepeaterCards";
+import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
 import { WS_ACTION_SECONDARY, WS_EYEBROW } from "@/components/workspace/workspaceTokens";
 
@@ -25,6 +32,9 @@ type Props = {
     fieldConfidence: Record<string, "high" | "medium" | "low" | "manual">;
     optionLabels?: ReadonlyMap<string, string>;
     unsupportedHints: ReadonlyArray<{ label: string }>;
+    commitSelection: CreateLeadCommitSelection;
+    onCommitSelectionChange: (next: CreateLeadCommitSelection) => void;
+    intakeSpec: ActionIntakeSpec | null;
 };
 
 const PAIR_KEYS = new Set(CREATE_LEAD_FIELD_PAIRS.flatMap(([a, b]) => [a, b]));
@@ -40,8 +50,10 @@ export function CreateLeadProgressiveForm(props: Props) {
                 draft: props.draft,
                 requiredPayloadKeys: props.platformRequiredKeys,
                 optionLabels: props.optionLabels,
+                parentSummaries: summarizeCommitParents(props.commitSelection),
+                childSummaries: summarizeCommitChildren(props.commitSelection),
             }),
-        [props.draft, props.optionLabels, props.platformRequiredKeys, props.sections]
+        [props.commitSelection, props.draft, props.optionLabels, props.platformRequiredKeys, props.sections]
     );
 
     const [openKeys, setOpenKeys] = useState<string[]>(() => defaultOpenSectionKeys(models));
@@ -105,6 +117,9 @@ export function CreateLeadProgressiveForm(props: Props) {
                         onFieldChange={props.onFieldChange}
                         platformRequiredKeys={props.platformRequiredKeys}
                         fieldConfidence={props.fieldConfidence}
+                        commitSelection={props.commitSelection}
+                        onCommitSelectionChange={props.onCommitSelectionChange}
+                        intakeSpec={props.intakeSpec}
                     />
                 );
             })}
@@ -122,6 +137,9 @@ function SectionCard(props: {
     onFieldChange: (key: string, value: string) => void;
     platformRequiredKeys: readonly string[];
     fieldConfidence: Record<string, "high" | "medium" | "low" | "manual">;
+    commitSelection: CreateLeadCommitSelection;
+    onCommitSelectionChange: (next: CreateLeadCommitSelection) => void;
+    intakeSpec: ActionIntakeSpec | null;
 }) {
     const { model } = props;
     return (
@@ -181,20 +199,31 @@ function SectionCard(props: {
                     {model.missingRequiredKeys.length > 0 || model.statusLabel.includes("phone") ? (
                         <p className={`${WS_EYEBROW} mb-2`}>{model.statusLabel}</p>
                     ) : null}
-                    <ActionWorkspaceGatherFields
-                        sections={[{ key: model.key, label: model.title, fields: model.fields }]}
-                        values={props.formValues}
-                        onChange={props.onFieldChange}
-                        platformRequiredKeys={props.platformRequiredKeys}
-                        fieldConfidence={props.fieldConfidence}
-                        layout="sections"
-                        fieldColumns={props.compact ? 1 : 2}
-                        chrome="quiet"
-                        hideSectionHeaders
-                        pairAwareColumns={!props.compact}
-                        pairFieldKeys={PAIR_KEYS}
-                        dataTestIdPrefix={`bos-create-lead-form-${model.key}`}
-                    />
+                    {model.key === "person" || model.key === "child" ? (
+                        <CreateLeadBosRepeaterCards
+                            kind={model.key === "person" ? "parent" : "child"}
+                            selection={props.commitSelection}
+                            onSelectionChange={props.onCommitSelectionChange}
+                            intakeSpec={props.intakeSpec}
+                            contextValues={props.formValues}
+                            compact={props.compact}
+                        />
+                    ) : (
+                        <ActionWorkspaceGatherFields
+                            sections={[{ key: model.key, label: model.title, fields: model.fields }]}
+                            values={props.formValues}
+                            onChange={props.onFieldChange}
+                            platformRequiredKeys={props.platformRequiredKeys}
+                            fieldConfidence={props.fieldConfidence}
+                            layout="sections"
+                            fieldColumns={props.compact ? 1 : 2}
+                            chrome="quiet"
+                            hideSectionHeaders
+                            pairAwareColumns={!props.compact}
+                            pairFieldKeys={PAIR_KEYS}
+                            dataTestIdPrefix={`bos-create-lead-form-${model.key}`}
+                        />
+                    )}
                 </div>
             ) : null}
         </WorkspaceCard>

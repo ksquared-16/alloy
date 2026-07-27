@@ -3,6 +3,12 @@ import type {
     BosCommandInputValue,
     BosInputValueState,
 } from "@/lib/bos/commandSession/types";
+import {
+    buildCreateLeadCommitSelection,
+    parseCreateLeadCommitSelection,
+} from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { mapCreateLeadCommitSelectionToExecutePayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
+import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 /** States that count toward eligibility / execute payload (V1). */
 const ELIGIBLE_STATES: ReadonlySet<BosInputValueState> = new Set([
@@ -23,9 +29,21 @@ export function bosDraftValueMap(draft: BosCommandDraft): Record<string, BosComm
     return out;
 }
 
+function isIntakeHousehold(value: unknown): value is IntakeHouseholdCandidate {
+    if (!value || typeof value !== "object") return false;
+    if (parseCreateLeadCommitSelection(value)) return false;
+    const obj = value as Record<string, unknown>;
+    return (
+        Array.isArray(obj.children) ||
+        Array.isArray(obj.parents_guardians) ||
+        Array.isArray(obj.parents)
+    );
+}
+
 /**
  * Flat string payload for eligibility, preview, and execute.
  * Omits inferred/unresolved values until the operator confirms or types them.
+ * When household/selection is present, emits household_commit_v1 for multi-member commit.
  */
 export function bosDraftToEligiblePayload(draft: BosCommandDraft): Record<string, unknown> {
     const payload: Record<string, unknown> = {};
@@ -37,7 +55,25 @@ export function bosDraftToEligiblePayload(draft: BosCommandDraft): Record<string
         payload[entry.fieldKey] = asString;
     }
     if (draft.household != null) {
-        payload.household_commit = draft.household;
+        const selection =
+            parseCreateLeadCommitSelection(draft.household) ??
+            (isIntakeHousehold(draft.household)
+                ? buildCreateLeadCommitSelection(draft.household)
+                : null);
+        if (selection) {
+            const flat: Record<string, string> = {};
+            for (const [k, v] of Object.entries(payload)) {
+                if (typeof v === "string") flat[k] = v;
+            }
+            const mapped = mapCreateLeadCommitSelectionToExecutePayload({
+                values: flat,
+                selection,
+            });
+            Object.assign(payload, mapped);
+            payload.household_commit = selection;
+        } else {
+            payload.household_commit = draft.household;
+        }
     }
     if (draft.unmappedText?.trim()) {
         const existingNotes = String(payload.intake_notes ?? "").trim();

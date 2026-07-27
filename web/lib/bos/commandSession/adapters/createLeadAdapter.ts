@@ -15,6 +15,11 @@ import type { ActionResultOk } from "@/lib/adminV2/actions/actionTypes";
 import { nextBosSourceTextId } from "@/lib/bos/commandSession/createSession";
 import { fingerprintBosCommandDraft } from "@/lib/bos/commandSession/fingerprint";
 import { bosDraftToEligiblePayload, upsertBosDraftValue } from "@/lib/bos/commandSession/draftValues";
+import {
+    resolveCreateLeadCommitSelectionFromDraft,
+    summarizeCommitChildren,
+    summarizeCommitParents,
+} from "@/lib/bos/commandSession/createLeadRepeaterDraft";
 import type {
     BosCommandAdapter,
     BosCommandDraft,
@@ -177,7 +182,15 @@ export function buildCreateLeadBosPreview(
     return {
         title: snapshot.preview.summary || "Create Lead",
         summaryLines,
-        householdSummary: draft.household ? "Household details included" : null,
+        householdSummary: (() => {
+            if (!draft.household) return null;
+            const sel = resolveCreateLeadCommitSelectionFromDraft(draft);
+            const parts = [...summarizeCommitParents(sel), ...summarizeCommitChildren(sel)].filter(
+                (line) => line && !/^Parent \/ guardian$|^Child$/.test(line)
+            );
+            return parts.length ? parts.join("; ") : "Household details included";
+        })(),
+
         warnings,
         sideEffects: [
             "Continues to Processing review — records are created only after you approve and commit.",

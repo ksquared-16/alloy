@@ -402,3 +402,121 @@ export function parseCreateLeadCommitSelection(raw: unknown): CreateLeadCommitSe
     if (obj.version !== 1 || !Array.isArray(obj.parents) || !Array.isArray(obj.children)) return null;
     return obj;
 }
+
+function newCandidateId(prefix: string): string {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return `${prefix}:${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    }
+    return `${prefix}:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function blankParentRecord(primary: boolean): CreateLeadCommitRecord {
+    const record: CreateLeadCommitRecord = {
+        candidate_id: newCandidateId("parent"),
+        entity_type: "parent",
+        role: "parent",
+        first_name: "",
+        last_name: "",
+        email: "",
+        phone: "",
+        dob: null,
+        age_display: null,
+        program_interest: null,
+        start_date: null,
+        program_room_cohort_key: null,
+        schedule_type: null,
+        extra_payload_values: {},
+        include_in_commit: true,
+        primary,
+        validation_state: "invalid",
+        commit_blockers: parentBlockers({ first_name: "", last_name: "", email: "", phone: "" }),
+        source_fact_ids: [],
+    };
+    return recomputeRecord(record);
+}
+
+function blankChildRecord(primary: boolean): CreateLeadCommitRecord {
+    const record: CreateLeadCommitRecord = {
+        candidate_id: newCandidateId("child"),
+        entity_type: "child",
+        role: "child",
+        first_name: "",
+        last_name: "",
+        email: "",
+        phone: "",
+        dob: null,
+        age_display: null,
+        program_interest: null,
+        start_date: null,
+        program_room_cohort_key: null,
+        schedule_type: null,
+        extra_payload_values: {},
+        include_in_commit: true,
+        primary,
+        validation_state: "invalid",
+        commit_blockers: childBlockers({ first_name: "", last_name: "", dob: null }),
+        source_fact_ids: [],
+    };
+    return recomputeRecord(record);
+}
+
+/** Empty Form selection — one required adult, no children. */
+export function createEmptyCreateLeadCommitSelection(): CreateLeadCommitSelection {
+    return {
+        version: 1,
+        parents: [blankParentRecord(true)],
+        children: [],
+        household_contacts: { email: null, phone: null, invalid_phone: false },
+        address_review_only: false,
+    };
+}
+
+export function addCreateLeadCommitParent(selection: CreateLeadCommitSelection): CreateLeadCommitSelection {
+    return {
+        ...selection,
+        parents: [...selection.parents, blankParentRecord(selection.parents.length === 0)],
+    };
+}
+
+export function addCreateLeadCommitChild(selection: CreateLeadCommitSelection): CreateLeadCommitSelection {
+    return {
+        ...selection,
+        children: [...selection.children, blankChildRecord(selection.children.length === 0)],
+    };
+}
+
+/**
+ * Remove an adult or child. Refuses to remove the last remaining adult entry.
+ * If the removed row was primary, promotes the first remaining sibling.
+ */
+export function removeCreateLeadCommitRecord(
+    selection: CreateLeadCommitSelection,
+    candidateId: string,
+): { selection: CreateLeadCommitSelection; removed: boolean; reason?: string } {
+    const parent = selection.parents.find((p) => p.candidate_id === candidateId);
+    if (parent) {
+        if (selection.parents.length <= 1) {
+            return {
+                selection,
+                removed: false,
+                reason: "At least one parent or guardian is required.",
+            };
+        }
+        let parents = selection.parents.filter((p) => p.candidate_id !== candidateId);
+        if (parent.primary && parents[0]) {
+            parents = parents.map((p, i) => ({ ...p, primary: i === 0 }));
+        }
+        return { selection: { ...selection, parents }, removed: true };
+    }
+    const child = selection.children.find((c) => c.candidate_id === candidateId);
+    if (!child) return { selection, removed: false, reason: "Person not found." };
+    let children = selection.children.filter((c) => c.candidate_id !== candidateId);
+    if (child.primary && children[0]) {
+        children = children.map((c, i) => ({ ...c, primary: i === 0 }));
+    }
+    return { selection: { ...selection, children }, removed: true };
+}
+
+export function isCreateLeadCommitSelection(value: unknown): value is CreateLeadCommitSelection {
+    return parseCreateLeadCommitSelection(value) != null;
+}

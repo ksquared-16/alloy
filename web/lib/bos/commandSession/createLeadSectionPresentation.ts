@@ -77,6 +77,9 @@ export function buildCreateLeadSectionModels(input: {
     draft: BosCommandDraft;
     requiredPayloadKeys: readonly string[];
     optionLabels?: ReadonlyMap<string, string>;
+    /** Multi-person summary lines from commit selection (overrides flat summary). */
+    parentSummaries?: string[];
+    childSummaries?: string[];
 }): CreateLeadSectionModel[] {
     const values = draftValueMap(input.draft);
     const required = new Set(input.requiredPayloadKeys);
@@ -132,6 +135,12 @@ export function buildCreateLeadSectionModels(input: {
                 values,
                 required,
                 optionLabels: input.optionLabels,
+                summaryOverride:
+                    key === "person"
+                        ? input.parentSummaries
+                        : key === "child"
+                          ? input.childSummaries
+                          : undefined,
             })
         );
     }
@@ -147,12 +156,15 @@ function buildOneSection(input: {
     values: Map<string, string>;
     required: Set<string>;
     optionLabels?: ReadonlyMap<string, string>;
+    summaryOverride?: string[];
 }): CreateLeadSectionModel {
     const requiredPayloadKeys = input.fields
         .map((f) => f.payload_key)
         .filter((k) => input.required.has(k));
     const missingRequiredKeys = requiredPayloadKeys.filter((k) => !input.values.has(k));
-    const populatedCount = input.fields.filter((f) => input.values.has(f.payload_key)).length;
+    const populatedCount =
+        input.summaryOverride?.filter((line) => line.trim()).length ??
+        input.fields.filter((f) => input.values.has(f.payload_key)).length;
     const isRequiredSection = input.key === "person";
     const contactGap = input.key === "person" && needsContact(input.values);
 
@@ -162,7 +174,13 @@ function buildOneSection(input: {
             missingRequiredKeys.length === 0 && !contactGap ? "ready" : "partial";
     }
 
-    const summaryLines = buildSummaryLines(input.key, input.values, input.optionLabels);
+    const summaryLines =
+        input.summaryOverride && input.summaryOverride.length > 0
+            ? input.summaryOverride.filter((line) => {
+                  // Drop blank placeholder adults with only default label
+                  return !/^Parent \/ guardian$/.test(line) && !/^Child$/.test(line);
+              })
+            : buildSummaryLines(input.key, input.values, input.optionLabels);
 
     let statusLabel: string;
     if (completion === "ready") {

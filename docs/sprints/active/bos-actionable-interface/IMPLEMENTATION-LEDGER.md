@@ -42,4 +42,6 @@ last_reviewed: 2026-07-27
 | R4-09 | partial | `c3ca6c3ae` | Unit/contract tests pass; authenticated screenshots deferred (3012 unhealthy) |
 | R4-10 | pending | | Final pause closeout after evidence or explicit deferral |
 
-**Target after R4-10:** BOS PAUSED — next owner is Commands and Processing Conversation Runtime.
+| R4 punch | done | _(pending)_ | Multi-person/child Form repeaters + relationship label presentation |
+
+**BOS PAUSED** after this punch list. Next owner: Commands + Processing Conversation Runtime.
