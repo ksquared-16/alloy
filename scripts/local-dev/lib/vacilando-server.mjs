@@ -23,6 +23,7 @@
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
+import { createConnection } from "node:net";
 import { extname, join, normalize, resolve } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -302,8 +303,38 @@ function resilientBoard(snap) {
   };
 }
 
+/**
+ * Authoritative, memory-pressure-proof server state: is anything LISTENING on
+ * the slot's port? A pure-TCP probe (no alloy-ro, no lsof) resolved on EVERY
+ * read — so "App: running / Open App" flips the instant Next binds the port,
+ * even when the compose projection is cached-stale or alloy-ro is thrashing
+ * under swap (the exact case where "App: stopped" used to stick after a real
+ * start). A non-listening localhost port refuses immediately (ECONNREFUSED), so
+ * this is ~1ms per slot; unreachable ports fall back to the projection value.
+ */
+function probePortListening(port, timeoutMs = 500) {
+  return new Promise((resolve) => {
+    if (!port) return resolve(null);
+    let done = false;
+    const finish = (v) => { if (done) return; done = true; try { sock.destroy(); } catch { /* noop */ } resolve(v); };
+    const sock = createConnection({ host: LOOPBACK_HOST, port: Number(port) });
+    sock.setTimeout(timeoutMs);
+    sock.once("connect", () => finish(true));
+    sock.once("timeout", () => finish(false));
+    sock.once("error", () => finish(false));
+  });
+}
+
+/** Overlay live port truth onto the board's server field for every slot with a port. */
+async function applyServerTruth(board) {
+  const sprints = board.sprints || [];
+  const listen = await Promise.all(sprints.map((s) => probePortListening(s.port)));
+  board.sprints = sprints.map((s, i) => (listen[i] == null ? s : { ...s, server: listen[i] ? "running" : "stopped" }));
+  return board;
+}
+
 /** The snapshot every UI surface consumes: never fewer workers than are registered. */
-async function boardSnapshot() { return resilientBoard(await snapshotSafe()); }
+async function boardSnapshot() { return applyServerTruth(resilientBoard(await snapshotSafe())); }
 
 /** Warm the expensive keys in the background so the first operator read is instant. */
 function warmExpensive() {
