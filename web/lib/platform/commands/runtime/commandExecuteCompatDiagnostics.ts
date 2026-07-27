@@ -7,7 +7,9 @@ import { tryResolvePlatformCapability } from "@/lib/platform/commands/capability
 
 export type CompatibilityExecutePath =
     | "command_runtime_registered_action"
+    | "command_runtime_lead_status_mutation"
     | "execute_admin_action_fallback"
+    | "mutations_execute_compat"
     | "registered_action_direct_legacy";
 
 export function logCommandExecutePathDiagnostic(input: {
@@ -17,6 +19,11 @@ export function logCommandExecutePathDiagnostic(input: {
     origin?: string | null;
     operationalContext?: string | null;
     resultCategory: "success" | "failure" | "blocked" | "rejected";
+    invocationId?: string | null;
+    mode?: "preview" | "execute" | null;
+    adapter?: string | null;
+    mutationDomain?: string | null;
+    delegated?: boolean | null;
 }): void {
     // Avoid production spam: only emit when explicitly enabled or in non-production.
     const enabled =
@@ -36,6 +43,11 @@ export function logCommandExecutePathDiagnostic(input: {
         execution_owner: owner,
         facade_execution_supported: input.facadeSupported,
         compatibility_path: input.path,
+        adapter: input.adapter ?? null,
+        mutation_domain: input.mutationDomain ?? null,
+        invocation_id: input.invocationId ?? null,
+        mode: input.mode ?? null,
+        delegated: input.delegated ?? null,
         origin: input.origin ?? null,
         operational_context: input.operationalContext ?? null,
         result_category: input.resultCategory,

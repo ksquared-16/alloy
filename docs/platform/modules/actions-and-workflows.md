@@ -45,7 +45,7 @@ Tokenized public actions: `/api/action/[token]/consume` → event → workflows.
 | **Config validation** | `web/lib/adminV2/actions/configValidation.ts` |
 | **Eligibility API** | `POST /api/admin/actions/eligibility` |
 | **Capability Registry (P0.S1)** | `web/lib/platform/commands/capabilityRegistry.ts` — classification honesty |
-| **Command Runtime Facade (P1.S1/P1.S2)** | `web/lib/platform/commands/runtime/*` — prepare + RegisteredAction execute |
+| **Command Runtime Facade (P1.S1/P1.S2/P2.S1)** | `web/lib/platform/commands/runtime/*` — prepare + RegisteredAction execute + Lead Status Mutation execute |
 
 ---
 
@@ -64,26 +64,30 @@ A row in `action_definitions` never implies executable behavior by itself. Place
 unavailable identities are excluded from Settings “add Command” catalog flows and are treated
 as non-runnable in configured-key partitioning / process option support checks.
 
-**Execution remains distributed** behind existing owners for adapted/legacy capabilities
-(`executeAdminAction`, Mutation Runtime, Relationship Framework, tour booking services).
+**Execution remains distributed** behind existing owners for capabilities not yet adapted to the
+Command Runtime facade (`executeAdminAction`, Mutation Runtime for child enrollment, Relationship
+Framework, tour booking services).
 
-## Command Runtime Facade (P1.S1 preparation + P1.S2 RegisteredAction execute)
+## Command Runtime Facade (preparation + gated execute)
 
-**Status:** Preparation shipped (P1.S1). RegisteredAction execute cutover shipped (P1.S2, July 2026).
+**Status:** Preparation (P1.S1). RegisteredAction execute (P1.S2). Lead Status Mutation execute
+(P2.S1, July 2026).
 
-`prepareCommandInvocation` remains **side-effect free** and returns one normalized
-`CommandSnapshot`.
+`prepareCommandInvocation` remains **side-effect free**.
 
-`executeCommandInvocation` is server-authoritative and **owner-gated**. P1.S2 enables only
-`registered_action`. For `create_lead`, `update_status`, `confirm_tour`, and `schedule.create`,
-`POST /api/admin/actions/execute` invokes the facade, which delegates **exactly once** to
-`runRegisteredAction` (existing invariant-owning executor). No domain executor rewrite.
+`executeCommandInvocation` is server-authoritative and **fail-closed**:
 
-- Adapted Mutation / Relationship / Tour-domain / Processing / destructive capabilities still use
-  compatibility paths (`executeAdminAction` and domain services) — **not** facade execution.
-- Existing APIs (`/api/admin/actions/*`) remain authoritative; API names are unchanged.
-- `/configuration/commands` is **not** shipped.
-- Exactly-once applies **per route invocation** (delegation guard), not distributed idempotency.
+- **RegisteredAction** (`create_lead`, `update_status`, `confirm_tour`, `schedule.create`) →
+  `runRegisteredAction`
+- **Lead Status Mutation** (`update_lead_status`, `close_lead` exact keys only) → `executeMutation`
+  → existing Lead Status domain handler
+- Child enrollment Mutation keys (`waitlist_child`, `enroll_child`, …) remain on compatibility paths
+- `mutation_runtime` is **not** enabled as a global owner gate — only explicit Lead Status keys
+- `mark_lost` remains on legacy compatibility (`executeAdminAction`); not consolidated in P2.S1
+
+`POST /api/admin/actions/execute` remains the operator/API route name. `/api/admin/mutations/execute`
+remains available and unchanged. `/configuration/commands` is **not** shipped.
+Exactly-once applies **per route invocation**, not distributed idempotency.
 
 ---
 

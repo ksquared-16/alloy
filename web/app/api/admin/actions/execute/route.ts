@@ -27,7 +27,9 @@ import type { CommandOperationalContext } from "@/lib/platform/commands/runtime/
  * (401/403) remain owned by `requireAdminOrOps` / `adminContextFailureResponse`.
  *
  * P1.S2: RegisteredAction capabilities execute through the Command Runtime facade,
- * which delegates once to `runRegisteredAction`. Other keys keep `executeAdminAction`.
+ * which delegates once to `runRegisteredAction`.
+ * P2.S1: `update_lead_status` / `close_lead` execute through the facade → Mutation Runtime.
+ * Other keys keep `executeAdminAction`. `/api/admin/mutations/execute` remains unchanged.
  * @see docs/api/api-response-contract.md
  * @see docs/api/actions-execute-envelope-audit.md
  */
@@ -134,8 +136,8 @@ export async function POST(request: NextRequest) {
     const mode = body.mode === "preview" ? "preview" : "execute";
     const facadeSupported = isCommandRuntimeFacadeExecutionSupported(actionKey);
 
-    // P1.S2: RegisteredAction capabilities → Command Runtime → runRegisteredAction (exactly once).
-    // Client cannot select execution_owner / actor / org_id.
+    // P1.S2 RegisteredAction / P2.S1 Lead Status Mutation → Command Runtime (exactly once).
+    // Client cannot select execution_owner / actor / org_id / domain.
     if (facadeSupported) {
         let delegated = false;
         try {
@@ -164,6 +166,8 @@ export async function POST(request: NextRequest) {
                               }
                             : undefined,
                     executionSubject: { entityType, entityId },
+                    departmentId: body.context?.department_id ?? null,
+                    workUnitId: body.context?.work_unit_id ?? null,
                 },
                 server: {
                     orgId: runtimeCtx.orgId,
@@ -172,7 +176,7 @@ export async function POST(request: NextRequest) {
                     supabase,
                 },
             });
-            delegated = result.ok || result.delegated === true;
+            delegated = result.ok || ("delegated" in result && result.delegated === true);
 
             const elapsed = Date.now() - t0;
             if (elapsed > 200) {
@@ -183,9 +187,14 @@ export async function POST(request: NextRequest) {
                 });
             }
 
+            const compatPath =
+                result.executionOwner === "mutation_runtime"
+                    ? "command_runtime_lead_status_mutation"
+                    : "command_runtime_registered_action";
+
             logCommandExecutePathDiagnostic({
                 requestedKey: actionKey,
-                path: "command_runtime_registered_action",
+                path: compatPath,
                 facadeSupported: true,
                 origin: body.context?.origin,
                 operationalContext: body.context?.surface,
@@ -194,10 +203,36 @@ export async function POST(request: NextRequest) {
                     : result.status === "blocked"
                       ? "blocked"
                       : "failure",
+                invocationId: result.invocationId,
+                mode,
+                adapter:
+                    result.executionOwner === "mutation_runtime"
+                        ? "lead_status_mutation"
+                        : "registered_action",
+                mutationDomain:
+                    result.executionOwner === "mutation_runtime" ? "lead_status" : null,
+                delegated,
             });
 
             if (!result.ok) {
                 // After delegation, never fall through to executeAdminAction.
+                if (result.mutationResult && result.mutationResult.status === "blocked") {
+                    return apiError(
+                        "ACTION_BLOCKED",
+                        result.mutationResult.blockedReason || result.error.operatorMessage,
+                        400,
+                        {
+                            blockers: [
+                                {
+                                    code: result.mutationResult.blockedCode,
+                                    message: result.mutationResult.blockedReason,
+                                },
+                            ],
+                            mutation_result: result.mutationResult,
+                        },
+                        { request, correlationId: result.invocationId }
+                    );
+                }
                 if (result.actionResult && result.actionResult.ok === false) {
                     const runtimeResult = result.actionResult;
                     const details = {
@@ -235,6 +270,38 @@ export async function POST(request: NextRequest) {
                     undefined,
                     { request, correlationId: result.invocationId }
                 );
+            }
+
+            // Success — RegisteredAction or Mutation Runtime
+            if (result.executionOwner === "mutation_runtime" && result.mutationResult) {
+                if (result.mutationResult.status === "committed") {
+                    try {
+                        revalidateTag(adminActionsOrgTag(ctx.orgId), "max");
+                    } catch (e) {
+                        console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
+                    }
+                }
+                const mutationId =
+                    result.mutationResult.status === "committed"
+                        ? result.mutationResult.mutationId
+                        : result.invocationId;
+                return apiOk(
+                    {
+                        execution_result: {
+                            kind: "mutation",
+                            mutation_result: result.mutationResult,
+                        },
+                        affected_id: entityId,
+                    },
+                    { request, correlationId: mutationId }
+                );
+            }
+
+            if (!result.actionResult) {
+                return apiError("INTERNAL", "Action failed", 500, undefined, {
+                    request,
+                    correlationId: result.invocationId,
+                });
             }
 
             try {

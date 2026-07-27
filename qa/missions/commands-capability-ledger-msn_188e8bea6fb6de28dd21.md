@@ -158,3 +158,34 @@ All adapted / legacy / unavailable / navigation / processing keys → `executeAd
 - No `executeAdminAction` after facade delegation
 - Client cannot set actor / org / execution_owner
 - Preparation (`prepareCommandInvocation`) remains side-effect free when used alone
+
+---
+
+# P2.S1 — Lead Status Mutation cutover
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p2-mutation-adapter-msn_188e8bea6fb6de28dd21.md` |
+| Adapter | `web/lib/platform/commands/runtime/adapters/leadStatusMutationExecutionAdapter.ts` |
+| Exact keys | `update_lead_status`, `close_lead` |
+| Final authority | `executeMutation` → `leadStatusHandler` |
+
+## Cut over
+
+| Capability | Route | Final domain handler | Notes |
+|------------|-------|----------------------|-------|
+| `update_lead_status` | actions/execute → facade | Lead Status | target_state required |
+| `close_lead` | actions/execute → facade | Lead Status | full picker; no auto-lost |
+
+## Not cut over
+
+`waitlist_child`, `enroll_child`, `update_child_enrollment_status`, `mark_lost` (alias debt / legacy path), Relationship, Tour-domain, Processing.
+
+## Alias debt
+
+`mark_lost` capability-aliases to `close_lead` but **exact-key gate** keeps it on `executeAdminAction` (legacy force-lost). Do not consolidate without a dedicated slice.
+
+## Compatibility
+
+`/api/admin/mutations/execute` unchanged (Option A). Child enrollment Mutation facade support remains false.

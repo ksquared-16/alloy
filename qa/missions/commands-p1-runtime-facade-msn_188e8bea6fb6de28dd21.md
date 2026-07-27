@@ -84,3 +84,12 @@ Execute API historically does not require body confirmation evidence (UI confirm
 ## Actor boundary
 
 Server `getAdminContextCached` org/user only; client `context.actor` / `org_id` / `execution_owner` ignored.
+
+---
+
+# P2.S1 follow-on
+
+Lead Status Mutation adaptation is recorded in
+`qa/missions/commands-p2-mutation-adapter-msn_188e8bea6fb6de28dd21.md`.
+`update_lead_status` / `close_lead` now execute through the facade → Mutation Runtime.
+Child enrollment and `mark_lost` remain outside this cutover.

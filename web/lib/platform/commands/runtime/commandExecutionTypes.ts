@@ -1,9 +1,10 @@
 /**
- * Command Runtime execution contract types (P1.S2).
+ * Command Runtime execution contract types (P1.S2 / P2.S1).
  * Server-only consumers; preparation types remain in commandRuntimeTypes.ts.
  */
 
 import type { ActionResult } from "@/lib/adminV2/actions/actionTypes";
+import type { MutationResult } from "@/lib/mutations/types";
 import type { CapabilityExecutionOwner } from "@/lib/platform/commands/capabilityTypes";
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 
@@ -15,7 +16,7 @@ export type CommandExecutionConfirmation = {
 };
 
 /**
- * Server-owned subject for RegisteredAction mapping (from authenticated route body).
+ * Server-owned subject for domain mapping (from authenticated route body).
  * Distinct from prepare-time suggested subjects — this is the API contract entity.
  */
 export type CommandExecutionSubject = {
@@ -35,8 +36,11 @@ export type ExecuteCommandInvocationRequest = {
     /** Optional client/server correlation hint; server generates when absent. */
     idempotencyKey?: string;
     invocationId?: string;
-    /** Authoritative entity for RegisteredAction (route body). */
+    /** Authoritative entity for domain mapping (route body). */
     executionSubject: CommandExecutionSubject;
+    /** Optional department/work-unit for Mutation Runtime context. */
+    departmentId?: string | null;
+    workUnitId?: string | null;
 };
 
 export type ExecuteCommandInvocationServerContext = {
@@ -60,10 +64,12 @@ export type CommandExecutionResult =
           ok: true;
           status: "previewed" | "committed";
           canonicalCapabilityKey: string;
-          executionOwner: "registered_action";
+          executionOwner: "registered_action" | "mutation_runtime";
           invocationId: string;
           /** Preserved RegisteredAction result for route compatibility. */
-          actionResult: ActionResult & { ok: true };
+          actionResult?: ActionResult & { ok: true };
+          /** Preserved Mutation Runtime result for route compatibility. */
+          mutationResult?: MutationResult;
           diagnostics: readonly { code: string; message: string }[];
       }
     | {
@@ -78,8 +84,10 @@ export type CommandExecutionResult =
           };
           /** When adapter delegated and RegisteredAction returned structured failure. */
           actionResult?: ActionResult & { ok: false };
+          /** When adapter delegated and Mutation Runtime returned blocked. */
+          mutationResult?: Extract<MutationResult, { status: "blocked" }>;
           diagnostics: readonly { code: string; message: string }[];
-          /** True once runRegisteredAction was invoked — forbids route fallback. */
+          /** True once a domain executor was invoked — forbids route fallback. */
           delegated: boolean;
       };
 
