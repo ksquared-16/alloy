@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: paused-after-round-3
+status: active-round-4
 last_reviewed: 2026-07-27
 ---
 
@@ -33,10 +33,27 @@ last_reviewed: 2026-07-27
 | R2-06 | done | `4fffa1313` | Responsive layouts |
 | R2-07 | done | `869b21b61` | Focused QA + docs |
 
-## Round 3 — UI convergence (final before BOS pause)
+## Round 3 — UI convergence
 
 | ID | Status | Commit | Notes |
 |---|---|---|---|
-| R3 | done | _(pending commit)_ | Workspace cards, sections Form, understanding-first Conversation, Review cards, sticky footer, success completion |
+| R3 | done | `b06dc9e84` | Workspace cards, sections Form, understanding-first Conversation/Review, sticky footer |
 
-**Pause:** BOS Create Lead product work stops after Round 3. Processing Conversation Runtime is a separate sprint.
+## Round 4 — Command surface product finish (final before BOS pause)
+
+Canonical package docs: `round-4/README.md` · `round-4/EXECUTION-LEDGER.md`
+
+| ID | Status | Commit | Notes |
+|---|---|---|---|
+| R4-01 | done | _(this commit)_ | Code trace + primitive selection; contracts; no product code |
+| R4-02 | pending | | Stone-field / white-card layering |
+| R4-03 | pending | | Progressive sections + summaries |
+| R4-04 | pending | | Quiet gather chrome |
+| R4-05 | pending | | Help + Lead vocabulary |
+| R4-06 | pending | | Command-workspace sizing preset |
+| R4-07 | pending | | Responsive / pinned |
+| R4-08 | pending | | Review / success parity |
+| R4-09 | pending | | Tests + authenticated evidence |
+| R4-10 | pending | | Closeout + BOS pause |
+
+**After R4-10:** BOS PAUSED — next owner is Commands and Processing Conversation Runtime.
