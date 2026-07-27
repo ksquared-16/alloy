@@ -245,7 +245,7 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
             message: {
                 role: "assistant",
                 kind: "preview",
-                body: [preview.title, ...preview.summaryLines.slice(0, 6), ...preview.sideEffects].join("\n"),
+                body: "Ready for review — check family, children, and placement understanding before continuing.",
             },
         });
     }, [ctx, effectiveSpec, session.draft, workspace]);

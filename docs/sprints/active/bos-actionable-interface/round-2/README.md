@@ -57,4 +57,6 @@ Round 2 does **not** build a universal LLM orchestration layer.
 
 ## Pause
 
-After R2-07: **BOS work pauses**. Next sprint owns Processing Conversation Runtime.
+Round 2 closed the conversational product boundary. **Round 3** completed UI convergence onto Alloy primitives.  
+After Round 3: **BOS work pauses**. Next sprint owns Processing Conversation Runtime.
+

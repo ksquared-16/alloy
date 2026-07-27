@@ -57,7 +57,7 @@ export function createBosCommandSession(input: CreateBosCommandSessionInput): Bo
         kind: "ack",
         body:
             input.ackBody ??
-            `${label} is ready. Paste or type the inquiry — I’ll summarize what I understand and ask only for what’s still needed. You can switch to Form anytime; your details stay with this command.`,
+            `${label} is ready. Paste call notes, an email, or a website inquiry — I’ll summarize what I understand, then we’ll fill what’s still needed. Conversation and Form stay on the same command.`,
         createdAt: now,
     };
 

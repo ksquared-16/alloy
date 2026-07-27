@@ -42,7 +42,9 @@ type Props = {
     /** BOS extraction confidence — shown after Analyze in draft edit mode. */
     fieldConfidence?: Record<string, BosFieldConfidenceDisplayLevel>;
     /** Unified draft lead layout — no entity tabs (Create Lead review step). */
-    layout?: "tabs" | "unified" | "context";
+    layout?: "tabs" | "unified" | "context" | "sections";
+    /** Column count for `sections` layout (pinned → 1). */
+    fieldColumns?: 1 | 2;
 };
 
 function FieldConfidenceBadge({ level }: { level: BosFieldConfidenceDisplayLevel }) {
@@ -67,13 +69,13 @@ function inputType(field: ActionWorkspaceGatherField): string {
 }
 
 function sectionHint(key: string, inheritedLocationLabel: string | null): string {
-    if (key === "person") return "Parent or guardian contact details";
+    if (key === "person") return "Family contact for this lead";
     if (key === "child") {
         return inheritedLocationLabel
             ? `Enrollment inherits location: ${inheritedLocationLabel}. Program and room options are filtered to this site.`
-            : "Child enrollment fields inherit the lead location when set.";
+            : "Child and enrollment preferences for placement.";
     }
-    return "Set lead location once — child enrollment inherits it.";
+    return "Placement location, source, and additional notes.";
 }
 
 function inheritedLeadLocationLabel(
@@ -96,6 +98,7 @@ export function ActionWorkspaceGatherFields({
     platformRequiredKeys = [],
     fieldConfidence,
     layout = "tabs",
+    fieldColumns = 2,
 }: Props) {
     const [activeTab, setActiveTab] = useState(sections[0]?.key ?? "person");
     const activeSection = sections.find((s) => s.key === activeTab) ?? sections[0];
@@ -301,6 +304,39 @@ export function ActionWorkspaceGatherFields({
                         {optionalFields.map((field) => renderField(field!))}
                     </div>
                 </div>
+            </div>
+        );
+    }
+
+    /** Stacked operational groups — BOS command Form (no tab chrome). */
+    if (layout === "sections") {
+        const cols = fieldColumns === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
+        return (
+            <div className="flex flex-col gap-5" data-testid={`${dataTestIdPrefix}-fields`}>
+                {sections.map((section) => (
+                    <div
+                        key={section.key}
+                        data-testid={`${dataTestIdPrefix}-section-${section.key}`}
+                        className="space-y-3"
+                    >
+                        <div>
+                            <h3 className="text-[13px] font-semibold tracking-tight text-alloy-midnight">
+                                {section.label}
+                            </h3>
+                            <p className="mt-0.5 text-[12px] text-alloy-midnight/50">
+                                {sectionHint(section.key, inheritedLocationLabel)}
+                            </p>
+                        </div>
+                        <div className={`grid ${cols} gap-x-5 gap-y-4 content-start`}>
+                            {section.fields
+                                .filter((field) => {
+                                    if (field.payload_key !== "child_location_id") return true;
+                                    return !(values.location_id ?? "").trim();
+                                })
+                                .map((field) => renderField(field))}
+                        </div>
+                    </div>
+                ))}
             </div>
         );
     }
