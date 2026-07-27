@@ -178,9 +178,10 @@ All adapted / legacy / unavailable / navigation / processing keys → `executeAd
 | `update_lead_status` | actions/execute → facade | Lead Status | target_state required |
 | `close_lead` | actions/execute → facade | Lead Status | full picker; no auto-lost |
 
-## Not cut over
+## Not cut over (P2.S1)
 
-`waitlist_child`, `enroll_child`, `update_child_enrollment_status`, `mark_lost` (alias debt / legacy path), Relationship, Tour-domain, Processing.
+`mark_lost` (alias debt / legacy path), Relationship, Tour-domain, Processing.  
+~~Child enrollment keys~~ → see P2.S2.
 
 ## Alias debt
 
@@ -188,4 +189,34 @@ All adapted / legacy / unavailable / navigation / processing keys → `executeAd
 
 ## Compatibility
 
-`/api/admin/mutations/execute` unchanged (Option A). Child enrollment Mutation facade support remains false.
+`/api/admin/mutations/execute` unchanged (Option A).
+
+---
+
+# P2.S2 — Child Enrollment Mutation cutover
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p2-mutation-adapter-msn_188e8bea6fb6de28dd21.md` (P2.S2) |
+| Adapter | `web/lib/platform/commands/runtime/adapters/childEnrollmentMutationExecutionAdapter.ts` |
+| Exact keys | `update_child_enrollment_status`, `waitlist_child`, `enroll_child` |
+| Final authority | `executeMutation` → `enrollmentStatusHandler` |
+| Subject | `opportunity_customer_member` |
+
+## Cut over
+
+| Capability | Target strategy | Notes |
+|------------|-----------------|-------|
+| `update_child_enrollment_status` | supplied | `target_state` / `status_key` |
+| `waitlist_child` | fixed `waitlisted` | conflicting client target ignored |
+| `enroll_child` | fixed `enrolled` | conflicting client target ignored |
+
+## Stale assertions corrected
+
+- `tests/mutations/updateLeadStatusCommand.test.ts` — enrollment domain now asserted as `enrollment_status`
+- `tests/mutations/mutationRuntime.test.ts` — lead vs enrollment domain isolation (not “unmapped”)
+
+## Still unsupported through facade
+
+`mark_lost`, `move_to_waitlist`, `approve_enrollment`, Relationship, Tour-domain (non-RA), Processing, destructive.

@@ -152,12 +152,12 @@ describe("POST /api/admin/actions/execute Command Runtime cutover (P1.S2)", () =
         expect(executeAdminAction).not.toHaveBeenCalled();
     });
 
-    it("keeps child enrollment and relationship keys on executeAdminAction compatibility path", async () => {
+    it("keeps relationship keys on executeAdminAction compatibility path", async () => {
         const res = await POST(
             jsonReq({
-                action_key: "waitlist_child",
-                entity_type: "opportunity_customer_member",
-                entity_id: "ocm-1",
+                action_key: "add_parent_guardian",
+                entity_type: "child",
+                entity_id: "child-1",
                 payload: {},
             })
         );
@@ -166,20 +166,7 @@ describe("POST /api/admin/actions/execute Command Runtime cutover (P1.S2)", () =
         expect(runRegisteredAction).not.toHaveBeenCalled();
     });
 
-    it("keeps relationship keys on compatibility path", async () => {
-        await POST(
-            jsonReq({
-                action_key: "add_parent_guardian",
-                entity_type: "child",
-                entity_id: "child-1",
-                payload: {},
-            })
-        );
-        expect(executeAdminAction).toHaveBeenCalledTimes(1);
-        expect(runRegisteredAction).not.toHaveBeenCalled();
-    });
-
-    it("keeps mark_lost on compatibility path (alias debt — not P2.S1 cutover)", async () => {
+    it("keeps mark_lost on compatibility path (alias debt — not P2 cutover)", async () => {
         await POST(
             jsonReq({
                 action_key: "mark_lost",

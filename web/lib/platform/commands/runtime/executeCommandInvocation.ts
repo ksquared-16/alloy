@@ -16,6 +16,10 @@ import {
 import type { PlatformCapabilityDefinition } from "@/lib/platform/commands/capabilityTypes";
 import type { CapabilityExecutionOwner } from "@/lib/platform/commands/capabilityTypes";
 import {
+    executeChildEnrollmentMutationViaAdapter,
+    type ChildEnrollmentMutationExecutionDeps,
+} from "@/lib/platform/commands/runtime/adapters/childEnrollmentMutationExecutionAdapter";
+import {
     executeLeadStatusMutationViaAdapter,
     resolveLeadStatusTargetState,
     type LeadStatusMutationExecutionDeps,
@@ -32,6 +36,7 @@ import type {
     InvocationDelegationGuard,
 } from "@/lib/platform/commands/runtime/commandExecutionTypes";
 import {
+    isChildEnrollmentMutationFacadeSupported,
     isCommandRuntimeFacadeExecutionSupported,
     isExecutionOwnerEnabledForFacade,
     isLeadStatusMutationFacadeSupported,
@@ -42,7 +47,9 @@ import { prepareCommandInvocation } from "@/lib/platform/commands/runtime/prepar
 export type ExecuteCommandInvocationOptions = {
     request: ExecuteCommandInvocationRequest;
     server: ExecuteCommandInvocationServerContext;
-    deps?: RegisteredActionExecutionDeps & LeadStatusMutationExecutionDeps;
+    deps?: RegisteredActionExecutionDeps &
+        LeadStatusMutationExecutionDeps &
+        ChildEnrollmentMutationExecutionDeps;
 };
 
 function createDelegationGuard(invocationId: string): InvocationDelegationGuard {
@@ -327,31 +334,8 @@ export async function executeCommandInvocation(
         };
     }
 
-    // ── Lead Status Mutation Runtime (P2.S1) ────────────────────────────────
+    // ── Mutation Runtime (P2.S1 Lead Status / P2.S2 Child Enrollment) ────────
     if (snapshot.executionDestination.owner === "mutation_runtime") {
-        if (!isLeadStatusMutationFacadeSupported(invocation.commandKey)) {
-            return fail({
-                status: "unsupported_owner",
-                invocationId,
-                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
-                executionOwner: snapshot.executionOwner,
-                code: "mutation_capability_not_adapted",
-                operatorMessage: "This command cannot be executed through the Command Runtime yet.",
-            });
-        }
-
-        const targetState = resolveLeadStatusTargetState(invocation.inputValues);
-        if (!targetState) {
-            return fail({
-                status: "invalid",
-                invocationId,
-                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
-                executionOwner: snapshot.executionOwner,
-                code: "missing_target_state",
-                operatorMessage: "target_state is required.",
-            });
-        }
-
         const overrideReason =
             typeof invocation.inputValues?.override_reason === "string"
                 ? invocation.inputValues.override_reason
@@ -359,93 +343,110 @@ export async function executeCommandInvocation(
                   ? invocation.inputValues.overrideReason
                   : undefined;
 
-        let adapted;
-        try {
-            adapted = await executeLeadStatusMutationViaAdapter({
+        const sharedMutationInput = {
+            snapshot,
+            capability,
+            commandKey: invocation.commandKey,
+            invocation,
+            executionSubject: { entityType, entityId },
+            mode: request.mode,
+            overrideReason,
+            supabase: server.supabase,
+            orgId: server.orgId,
+            userId: server.userId,
+            departmentId: request.departmentId ?? null,
+            workUnitId: request.workUnitId ?? invocation.workUnitId ?? null,
+            guard,
+            deps,
+        } as const;
+
+        if (isLeadStatusMutationFacadeSupported(invocation.commandKey)) {
+            const targetState = resolveLeadStatusTargetState(invocation.inputValues);
+            if (!targetState) {
+                return fail({
+                    status: "invalid",
+                    invocationId,
+                    canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                    executionOwner: snapshot.executionOwner,
+                    code: "missing_target_state",
+                    operatorMessage: "target_state is required.",
+                });
+            }
+
+            let adapted;
+            try {
+                adapted = await executeLeadStatusMutationViaAdapter({
+                    ...sharedMutationInput,
+                    targetState,
+                });
+            } catch (e) {
+                const message = e instanceof Error ? e.message : "Mutation adapter failed";
+                return fail({
+                    status: "failed",
+                    invocationId,
+                    canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                    executionOwner: "mutation_runtime",
+                    code: "mutation_adapter_error",
+                    operatorMessage: "Something went wrong. Please try again.",
+                    delegated: guard.hasDelegated(),
+                    diagnostics: [{ code: "mutation_adapter_error", message }],
+                });
+            }
+
+            return mapMutationAdapterResult({
+                adapted,
                 snapshot,
-                capability,
-                commandKey: invocation.commandKey,
-                invocation,
-                executionSubject: { entityType, entityId },
+                invocationId,
                 mode: request.mode,
-                targetState,
-                overrideReason,
-                supabase: server.supabase,
-                orgId: server.orgId,
-                userId: server.userId,
-                departmentId: request.departmentId ?? null,
-                workUnitId: request.workUnitId ?? invocation.workUnitId ?? null,
-                guard,
-                deps,
-            });
-        } catch (e) {
-            const message = e instanceof Error ? e.message : "Mutation adapter failed";
-            // If guard already marked, still report delegated so route never falls back.
-            return fail({
-                status: "failed",
-                invocationId,
-                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
-                executionOwner: "mutation_runtime",
-                code: "mutation_adapter_error",
-                operatorMessage: "Something went wrong. Please try again.",
-                delegated: guard.hasDelegated(),
-                diagnostics: [{ code: "mutation_adapter_error", message }],
+                commandKey: invocation.commandKey,
+                diagnosticCode: "delegated_lead_status_mutation",
             });
         }
 
-        if (adapted.mutationResult.status === "blocked") {
-            return {
-                ok: false,
-                status: "blocked",
-                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
-                executionOwner: "mutation_runtime",
+        if (isChildEnrollmentMutationFacadeSupported(invocation.commandKey)) {
+            let adapted;
+            try {
+                adapted = await executeChildEnrollmentMutationViaAdapter(sharedMutationInput);
+            } catch (e) {
+                const message = e instanceof Error ? e.message : "Mutation adapter failed";
+                // Pre-delegation validation errors (subject/target) are invalid, not failed.
+                const preDelegation =
+                    !guard.hasDelegated() &&
+                    (message.includes("target_state") ||
+                        message.includes("requires") ||
+                        message.includes("Unsupported"));
+                return fail({
+                    status: preDelegation ? "invalid" : "failed",
+                    invocationId,
+                    canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                    executionOwner: "mutation_runtime",
+                    code: preDelegation ? "invalid_enrollment_intent" : "mutation_adapter_error",
+                    operatorMessage: preDelegation
+                        ? message.replace(/^\[commandRuntime\]\s*/, "")
+                        : "Something went wrong. Please try again.",
+                    delegated: guard.hasDelegated(),
+                    diagnostics: [{ code: "mutation_adapter_error", message }],
+                });
+            }
+
+            return mapMutationAdapterResult({
+                adapted,
+                snapshot,
                 invocationId,
-                error: {
-                    code: adapted.mutationResult.blockedCode,
-                    operatorMessage: adapted.mutationResult.blockedReason,
-                },
-                mutationResult: adapted.mutationResult,
-                diagnostics: [
-                    {
-                        code: "mutation_blocked",
-                        message: `domain=${adapted.domainKey} code=${adapted.mutationResult.blockedCode}`,
-                    },
-                ],
-                delegated: true,
-            };
+                mode: request.mode,
+                commandKey: invocation.commandKey,
+                diagnosticCode: "delegated_child_enrollment_mutation",
+            });
         }
 
-        if (adapted.mutationResult.status === "previewed") {
-            return {
-                ok: true,
-                status: "previewed",
-                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
-                executionOwner: "mutation_runtime",
-                invocationId,
-                mutationResult: adapted.mutationResult,
-                diagnostics: [
-                    {
-                        code: "delegated_lead_status_mutation",
-                        message: `mode=preview key=${invocation.commandKey}`,
-                    },
-                ],
-            };
-        }
-
-        return {
-            ok: true,
-            status: "committed",
-            canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
-            executionOwner: "mutation_runtime",
+        return fail({
+            status: "unsupported_owner",
             invocationId,
-            mutationResult: adapted.mutationResult,
-            diagnostics: [
-                {
-                    code: "delegated_lead_status_mutation",
-                    message: `mode=execute key=${invocation.commandKey} mutationId=${adapted.mutationResult.mutationId}`,
-                },
-            ],
-        };
+            canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+            executionOwner: snapshot.executionOwner,
+            code: "mutation_capability_not_adapted",
+            operatorMessage: "This command cannot be executed through the Command Runtime yet.",
+        });
     }
 
     return fail({
@@ -456,6 +457,74 @@ export async function executeCommandInvocation(
         code: "owner_not_enabled",
         operatorMessage: "This command cannot be executed through the Command Runtime yet.",
     });
+}
+
+function mapMutationAdapterResult(input: {
+    adapted: {
+        mutationResult: import("@/lib/mutations/types").MutationResult;
+        domainKey: string;
+    };
+    snapshot: { canonicalCapabilityKey: string };
+    invocationId: string;
+    mode: "preview" | "execute";
+    commandKey: string;
+    diagnosticCode: string;
+}): CommandExecutionResult {
+    const { adapted, snapshot, invocationId, commandKey, diagnosticCode } = input;
+
+    if (adapted.mutationResult.status === "blocked") {
+        return {
+            ok: false,
+            status: "blocked",
+            canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+            executionOwner: "mutation_runtime",
+            invocationId,
+            error: {
+                code: adapted.mutationResult.blockedCode,
+                operatorMessage: adapted.mutationResult.blockedReason,
+            },
+            mutationResult: adapted.mutationResult,
+            diagnostics: [
+                {
+                    code: "mutation_blocked",
+                    message: `domain=${adapted.domainKey} code=${adapted.mutationResult.blockedCode}`,
+                },
+            ],
+            delegated: true,
+        };
+    }
+
+    if (adapted.mutationResult.status === "previewed") {
+        return {
+            ok: true,
+            status: "previewed",
+            canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+            executionOwner: "mutation_runtime",
+            invocationId,
+            mutationResult: adapted.mutationResult,
+            diagnostics: [
+                {
+                    code: diagnosticCode,
+                    message: `mode=preview key=${commandKey}`,
+                },
+            ],
+        };
+    }
+
+    return {
+        ok: true,
+        status: "committed",
+        canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+        executionOwner: "mutation_runtime",
+        invocationId,
+        mutationResult: adapted.mutationResult,
+        diagnostics: [
+            {
+                code: diagnosticCode,
+                message: `mode=execute key=${commandKey} mutationId=${adapted.mutationResult.mutationId}`,
+            },
+        ],
+    };
 }
 
 export type { CommandExecutionResult, ExecuteCommandInvocationRequest };

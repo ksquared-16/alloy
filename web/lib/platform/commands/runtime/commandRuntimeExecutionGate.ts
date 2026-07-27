@@ -3,16 +3,14 @@
  *
  * Fail closed: owners/capabilities must be explicitly enabled.
  * P1.S2: RegisteredAction (maturity executable).
- * P2.S1: Lead Status Mutation Runtime — exact keys only (not owner-global).
+ * P2.S1: Lead Status Mutation — exact keys.
+ * P2.S2: Child Enrollment Mutation — exact keys.
+ * `mutation_runtime` owner remains globally false.
  */
 
 import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 import type { CapabilityExecutionOwner } from "@/lib/platform/commands/capabilityTypes";
 
-/**
- * Per-owner facade execution gate.
- * `mutation_runtime` stays false globally — P2.S1 uses capability-specific support.
- */
 export const COMMAND_RUNTIME_EXECUTION_BY_OWNER: Readonly<
     Record<CapabilityExecutionOwner, boolean>
 > = {
@@ -29,10 +27,7 @@ export const COMMAND_RUNTIME_EXECUTION_BY_OWNER: Readonly<
     none: false,
 };
 
-/**
- * P2.S1 Lead Status Mutation facade keys (exact match only).
- * Do not enable via `mark_lost` alias — that remains legacy update_status behavior.
- */
+/** P2.S1 Lead Status — exact keys only (`mark_lost` excluded). */
 export const LEAD_STATUS_MUTATION_FACADE_COMMAND_KEYS = [
     "update_lead_status",
     "close_lead",
@@ -40,6 +35,16 @@ export const LEAD_STATUS_MUTATION_FACADE_COMMAND_KEYS = [
 
 export type LeadStatusMutationFacadeCommandKey =
     (typeof LEAD_STATUS_MUTATION_FACADE_COMMAND_KEYS)[number];
+
+/** P2.S2 Child Enrollment — exact keys only (aliases like move_to_waitlist excluded). */
+export const CHILD_ENROLLMENT_MUTATION_FACADE_COMMAND_KEYS = [
+    "update_child_enrollment_status",
+    "waitlist_child",
+    "enroll_child",
+] as const;
+
+export type ChildEnrollmentMutationFacadeCommandKey =
+    (typeof CHILD_ENROLLMENT_MUTATION_FACADE_COMMAND_KEYS)[number];
 
 /**
  * @deprecated Prefer {@link isCommandRuntimeFacadeExecutionSupported}.
@@ -56,6 +61,11 @@ export function isExecutionOwnerEnabledForFacade(
 export function isLeadStatusMutationFacadeSupported(commandKey: string): boolean {
     const key = (commandKey ?? "").trim();
     return (LEAD_STATUS_MUTATION_FACADE_COMMAND_KEYS as readonly string[]).includes(key);
+}
+
+export function isChildEnrollmentMutationFacadeSupported(commandKey: string): boolean {
+    const key = (commandKey ?? "").trim();
+    return (CHILD_ENROLLMENT_MUTATION_FACADE_COMMAND_KEYS as readonly string[]).includes(key);
 }
 
 /**
@@ -75,12 +85,23 @@ export function isCommandRuntimeFacadeExecutionSupported(commandKey: string): bo
         return isExecutionOwnerEnabledForFacade("registered_action");
     }
 
-    // P2.S1 Lead Status Mutation — exact requested key + registry owner truth
+    if (cap.executionOwner !== "mutation_runtime") return false;
+
+    // P2.S1 Lead Status — exact requested key
     if (
-        cap.executionOwner === "mutation_runtime" &&
         isLeadStatusMutationFacadeSupported(key) &&
         (cap.canonicalCommandKey === "update_lead_status" ||
             cap.canonicalCommandKey === "close_lead")
+    ) {
+        return true;
+    }
+
+    // P2.S2 Child Enrollment — exact requested key
+    if (
+        isChildEnrollmentMutationFacadeSupported(key) &&
+        (cap.canonicalCommandKey === "update_child_enrollment_status" ||
+            cap.canonicalCommandKey === "waitlist_child" ||
+            cap.canonicalCommandKey === "enroll_child")
     ) {
         return true;
     }

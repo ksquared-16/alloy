@@ -96,17 +96,17 @@ describe("executeCommandInvocation (P1.S2)", () => {
         expect(runSpy.mock.calls[0][3]).toBe("preview");
     });
 
-    it("rejects unknown, placeholder, child-enrollment mutation, relationship, tour, navigation, processing", async () => {
+    it("rejects unknown, placeholder, relationship, tour, navigation, processing, mark_lost, and enrollment aliases", async () => {
         const cases = [
             "totally_unknown_xyz",
             "send_message_placeholder",
-            "waitlist_child",
-            "enroll_child",
             "add_parent_guardian",
             "cancel_tour",
             "open_record",
             "processing.create_lead",
-            "mark_lost", // alias debt — exact-key gate keeps legacy path
+            "mark_lost",
+            "move_to_waitlist",
+            "approve_enrollment",
         ] as const;
         for (const key of cases) {
             const result = await executeCommandInvocation({
@@ -144,12 +144,12 @@ describe("executeCommandInvocation (P1.S2)", () => {
     });
 
     it("does not let client select execution owner via body fields on invocation", async () => {
-        // Spoof attempt: waitlist_child is mutation-owned but not P2.S1-adapted.
-        expect(isCommandRuntimeFacadeExecutionSupported("waitlist_child")).toBe(false);
+        // Spoof attempt: cancel_tour is tour-owned and not facade-adapted.
+        expect(isCommandRuntimeFacadeExecutionSupported("cancel_tour")).toBe(false);
         const result = await executeCommandInvocation({
             request: {
                 invocation: invocation({
-                    commandKey: "waitlist_child",
+                    commandKey: "cancel_tour",
                     inputValues: { execution_owner: "registered_action" },
                 }),
                 mode: "execute",
@@ -220,7 +220,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
         }
     });
 
-    it("keeps preparation safety switch false and only enables registered_action owner globally", () => {
+    it("keeps preparation safety switch false and enables RegisteredAction + Lead + Enrollment exact keys", () => {
         expect(COMMAND_RUNTIME_EXECUTION_ENABLED).toBe(false);
         expect(COMMAND_RUNTIME_EXECUTION_BY_OWNER.registered_action).toBe(true);
         expect(COMMAND_RUNTIME_EXECUTION_BY_OWNER.mutation_runtime).toBe(false);
@@ -231,8 +231,13 @@ describe("executeCommandInvocation (P1.S2)", () => {
         }
         expect(isCommandRuntimeFacadeExecutionSupported("close_lead")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("update_lead_status")).toBe(true);
-        expect(isCommandRuntimeFacadeExecutionSupported("waitlist_child")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("waitlist_child")).toBe(true);
+        expect(isCommandRuntimeFacadeExecutionSupported("enroll_child")).toBe(true);
+        expect(isCommandRuntimeFacadeExecutionSupported("update_child_enrollment_status")).toBe(
+            true
+        );
         expect(isCommandRuntimeFacadeExecutionSupported("mark_lost")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("move_to_waitlist")).toBe(false);
     });
 
     it("forbids facade execute modules from importing domain mutation / raw handler execute paths", () => {

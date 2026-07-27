@@ -77,6 +77,52 @@ Per-invocation `InvocationDelegationGuard`; route never calls `executeAdminActio
 | `update_lead_status` | mutations/execute → executeMutation (actions/execute was unsupported mutation_command) | actions/execute → facade → executeMutation | `leadStatusHandler` | Unchanged via Mutation Runtime |
 | `close_lead` | same | same | `leadStatusHandler` | Unchanged |
 
-## Intentionally not cut over
+## Intentionally not cut over (as of P2.S1)
 
-`waitlist_child`, `enroll_child`, `update_child_enrollment_status`, Relationship, Tour-domain, Processing, destructive, `mark_lost`.
+~~`waitlist_child`, `enroll_child`, `update_child_enrollment_status`~~ → **P2.S2**  
+Relationship, Tour-domain, Processing, destructive, `mark_lost` remain out.
+
+---
+
+# P2.S2 — Child Enrollment Mutation Adapter
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Adapter | `adapters/childEnrollmentMutationExecutionAdapter.ts` |
+| Exact keys | `update_child_enrollment_status`, `waitlist_child`, `enroll_child` |
+| Final authority | `executeMutation` → `enrollmentStatusHandler` |
+| Subject grain | `opportunity_customer_member` (OCM id) |
+| Downstream | RPC `execute_enrollment_status_mutation` only — no scheduling assignment creation in this path |
+
+## Target-state strategy
+
+| Capability | Strategy | Canonical state |
+|------------|----------|-----------------|
+| `update_child_enrollment_status` | supplied (`target_state` / `status_key`) | caller-provided |
+| `waitlist_child` | fixed (client conflict ignored) | `waitlisted` |
+| `enroll_child` | fixed (client conflict ignored) | `enrolled` |
+
+## Behavior-parity matrix
+
+| Capability | Before | After | Handler | Subject | Target | Readiness / write / events |
+|------------|--------|-------|---------|---------|--------|----------------------------|
+| `update_child_enrollment_status` | mutations/execute → executeMutation | actions/execute → facade → executeMutation | `enrollmentStatusHandler` | OCM | supplied | Unchanged |
+| `waitlist_child` | same | same | same | OCM | fixed `waitlisted` | Unchanged |
+| `enroll_child` | same | same | same | OCM | fixed `enrolled` | Unchanged |
+
+## Stale tests updated
+
+| Test | Before | After | Why |
+|------|--------|-------|-----|
+| `updateLeadStatusCommand.test.ts` “does NOT map update_child_enrollment_status” | expected `null` | asserts `enrollment_status` ≠ `lead_status` | Domain registry already mapped enrollment; P2.S2 makes facade truth explicit |
+| `mutationRuntime.test.ts` “distinct from update_child_enrollment_status” | expected child `null` | asserts distinct domains | Same — V1 “lead only” comment was stale |
+
+## Alias debt retained
+
+`move_to_waitlist` / `approve_enrollment` — exact-key gate keeps them off facade (like `mark_lost`).
+`mark_lost` still outside.
+
+## Compatibility retained
+
+`/api/admin/mutations/execute` unchanged. Relationship / Tour / Processing / RegisteredAction / Lead Status paths unchanged.

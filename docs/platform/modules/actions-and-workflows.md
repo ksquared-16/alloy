@@ -45,7 +45,7 @@ Tokenized public actions: `/api/action/[token]/consume` → event → workflows.
 | **Config validation** | `web/lib/adminV2/actions/configValidation.ts` |
 | **Eligibility API** | `POST /api/admin/actions/eligibility` |
 | **Capability Registry (P0.S1)** | `web/lib/platform/commands/capabilityRegistry.ts` — classification honesty |
-| **Command Runtime Facade (P1.S1/P1.S2/P2.S1)** | `web/lib/platform/commands/runtime/*` — prepare + RegisteredAction execute + Lead Status Mutation execute |
+| **Command Runtime Facade (P1–P2)** | `web/lib/platform/commands/runtime/*` — prepare + RegisteredAction + Lead/Enrollment Mutation execute |
 
 ---
 
@@ -71,7 +71,7 @@ Framework, tour booking services).
 ## Command Runtime Facade (preparation + gated execute)
 
 **Status:** Preparation (P1.S1). RegisteredAction execute (P1.S2). Lead Status Mutation execute
-(P2.S1, July 2026).
+(P2.S1). Child Enrollment Mutation execute (P2.S2, July 2026).
 
 `prepareCommandInvocation` remains **side-effect free**.
 
@@ -81,9 +81,11 @@ Framework, tour booking services).
   `runRegisteredAction`
 - **Lead Status Mutation** (`update_lead_status`, `close_lead` exact keys only) → `executeMutation`
   → existing Lead Status domain handler
-- Child enrollment Mutation keys (`waitlist_child`, `enroll_child`, …) remain on compatibility paths
-- `mutation_runtime` is **not** enabled as a global owner gate — only explicit Lead Status keys
-- `mark_lost` remains on legacy compatibility (`executeAdminAction`); not consolidated in P2.S1
+- **Child Enrollment Mutation** (`update_child_enrollment_status`, `waitlist_child`, `enroll_child`
+  exact keys only) → `executeMutation` → existing Enrollment Status domain handler
+- `mutation_runtime` is **not** enabled as a global owner gate — only explicit Lead/Enrollment keys
+- `mark_lost` remains on legacy compatibility (`executeAdminAction`); not consolidated
+- Enrollment aliases (`move_to_waitlist`, `approve_enrollment`) remain outside exact-key facade cutover
 
 `POST /api/admin/actions/execute` remains the operator/API route name. `/api/admin/mutations/execute`
 remains available and unchanged. `/configuration/commands` is **not** shipped.

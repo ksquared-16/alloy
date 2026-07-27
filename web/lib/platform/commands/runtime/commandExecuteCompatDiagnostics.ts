@@ -8,6 +8,7 @@ import { tryResolvePlatformCapability } from "@/lib/platform/commands/capability
 export type CompatibilityExecutePath =
     | "command_runtime_registered_action"
     | "command_runtime_lead_status_mutation"
+    | "command_runtime_child_enrollment_mutation"
     | "execute_admin_action_fallback"
     | "mutations_execute_compat"
     | "registered_action_direct_legacy";

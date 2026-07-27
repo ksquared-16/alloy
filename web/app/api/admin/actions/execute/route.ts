@@ -189,8 +189,26 @@ export async function POST(request: NextRequest) {
 
             const compatPath =
                 result.executionOwner === "mutation_runtime"
-                    ? "command_runtime_lead_status_mutation"
+                    ? result.diagnostics.some((d) =>
+                          d.code.includes("child_enrollment")
+                      )
+                        ? "command_runtime_child_enrollment_mutation"
+                        : "command_runtime_lead_status_mutation"
                     : "command_runtime_registered_action";
+
+            const mutationDomain =
+                result.executionOwner !== "mutation_runtime"
+                    ? null
+                    : result.diagnostics.some((d) => d.code.includes("child_enrollment"))
+                      ? "enrollment_status"
+                      : "lead_status";
+
+            const adapterName =
+                result.executionOwner === "mutation_runtime"
+                    ? mutationDomain === "enrollment_status"
+                        ? "child_enrollment_mutation"
+                        : "lead_status_mutation"
+                    : "registered_action";
 
             logCommandExecutePathDiagnostic({
                 requestedKey: actionKey,
@@ -205,12 +223,8 @@ export async function POST(request: NextRequest) {
                       : "failure",
                 invocationId: result.invocationId,
                 mode,
-                adapter:
-                    result.executionOwner === "mutation_runtime"
-                        ? "lead_status_mutation"
-                        : "registered_action",
-                mutationDomain:
-                    result.executionOwner === "mutation_runtime" ? "lead_status" : null,
+                adapter: adapterName,
+                mutationDomain,
                 delegated,
             });
 

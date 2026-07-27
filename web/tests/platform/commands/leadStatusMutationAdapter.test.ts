@@ -219,28 +219,12 @@ describe("Lead Status Mutation adapter (P2.S1)", () => {
         expect(mutationSpy).not.toHaveBeenCalled();
     });
 
-    it("rejects child enrollment and unsupported mutation keys", async () => {
+    it("rejects child enrollment commands on the Lead Status adapter", async () => {
         for (const key of ["waitlist_child", "enroll_child", "update_child_enrollment_status"]) {
             expect(isLeadStatusMutationFacadeSupported(key)).toBe(false);
-            expect(isCommandRuntimeFacadeExecutionSupported(key)).toBe(false);
-            const result = await executeCommandInvocation({
-                request: {
-                    invocation: invocation({
-                        commandKey: key,
-                        inputValues: { target_state: "waitlist" },
-                    }),
-                    mode: "execute",
-                    executionSubject: {
-                        entityType: "opportunity_customer_member",
-                        entityId: "ocm-1",
-                    },
-                },
-                server: { orgId: "org-1", userId: "user-1", supabase },
-                deps: { executeMutation: mutationSpy },
-            });
-            expect(result.ok).toBe(false);
-            expect(mutationSpy).not.toHaveBeenCalled();
         }
+        // Lead Status path must not claim these keys; gate routes them to enrollment adapter.
+        expect(isCommandRuntimeFacadeExecutionSupported("waitlist_child")).toBe(true);
     });
 
     it("keeps update_status on RegisteredAction and mutation_runtime owner gate closed globally", () => {
