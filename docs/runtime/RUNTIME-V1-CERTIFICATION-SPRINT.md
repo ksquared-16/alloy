@@ -173,7 +173,9 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | CP-3 Gate prewarm storm | Critical Path | Low | — | ✓ | READY (low value — see note) |
 | TE-6 Perf regression assertions | Testing | Medium | PE-2 | ✗ | blocked |
 
-**→ RESUME HERE — mission-aligned execution priority (§0): `CP-4` is #1.** Runtime Architecture is CERTIFIED
+**→ RESUME HERE (2026-07-26, next pass): implement CP-1 / S4 directly from `docs/runtime/cp1-s4-decomposition-plan.md`** (line-ranged, implementation-ready). S4 = the behavior-preserving 3-module decomposition (Initial-Panel Tier-2 / Deferred-Detail Tier-3 / Shared-Canonical) + thin orchestrator; A imports no Tier-3. The S4 implementation pass was interrupted by a **weekly usage cap** (external limit, resets ~1pm PT — not an architecture/engineering blocker; tree left clean at `6bf51c3a5`). DoD: typecheck + serialized build + boundary contract test + the 6 regression suites (shadow/cutover/firstViewport/familyContacts/progressiveStatus/focusPanelFirstPaintGuards) + before/after graph; reveal browser-cert = EEC-deferred. Then S1 → S2 → S3 (see the CP-1 row §2.2 + D-013). _Below: the prior mission-priority note._
+
+**→ mission-aligned execution priority (§0): `CP-4` is #1.** Runtime Architecture is CERTIFIED
 (A-) but the mission (Grade-A operator experience + architecture + engineering — §0) is far from done: the
 panel still settles in ~10–11 s. The plan is **CP-4 → CP-1 (after the architecture challenge) → CP-3 → DG/CQ
 → TS slices**. Under the active **Execution Environment Constraint** (§6a), split each task into its
