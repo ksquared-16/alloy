@@ -820,7 +820,47 @@ function tabMission(sp) {
     </div>` : ""}
   </div>`;
 
-  return `<div class="mission">${compileBox}${reviewPanel}${pkgPanel}${statusPanel}</div>`;
+  return `<div class="mission">${compileBox}${reviewPanel}${pkgPanel}${progressPanel(m, pkg)}${statusPanel}</div>`;
+}
+
+// Completion tracking — the mission's tasks (deliverables + acceptance criteria)
+// with LIVE status pulled from the durable per-turn report, plus current blocks.
+// This is how the operator watches a worker's work close out, criterion by
+// criterion, without reading raw output.
+const TK_MARK = { produced: "✓", met: "✓", partial: "◐", unmet: "✗", not_evidenced: "○", pending: "○" };
+const TK_K = { produced: "ok", met: "ok", partial: "warn", unmet: "err", not_evidenced: "muted", pending: "muted" };
+function progressPanel(m, pkg) {
+  const exp = pkg.expected_deliverables || [];
+  const crit = pkg.acceptance_criteria || [];
+  if (!exp.length && !crit.length && m.status === "ready") return "";
+  const rep = m.completion_report || {};
+  const repDel = rep.deliverables || [];
+  const gateCrit = m.acceptance_gate?.criteria || rep.criterion_evidence || [];
+  const row = (mark, k, text, tail) => `<li class="tk ${k}"><span class="tkm">${mark}</span><span class="tkt">${esc(text)}</span>${tail || ""}</li>`;
+  const delRows = exp.map((d) => {
+    const r = repDel.find((x) => x.id === d.id);
+    const st = r ? (r.produced ? "produced" : "pending") : "pending";
+    const path = r?.path || d.path;
+    return row(TK_MARK[st], TK_K[st], d.description || d.id, path ? `<span class="tkp mono">${esc(path)}</span>` : "");
+  }).join("");
+  const critRows = crit.map((c) => {
+    const r = gateCrit.find((x) => (x.criterion_id || x.id) === c.id);
+    const st = r?.status || "not_evidenced";
+    return row(TK_MARK[st] || "○", TK_K[st] || "muted", c.statement || c.id, `<span class="tks ${TK_K[st] || "muted"}">${esc(st.replace(/_/g, " "))}</span>`);
+  }).join("");
+  const blocks = [];
+  if (m.status === "blocked" && m.error_message) blocks.push(m.error_message);
+  (rep.unresolved_items || []).forEach((u) => blocks.push(typeof u === "string" ? u : u.item || u.description || JSON.stringify(u)));
+  const t = rep.tests;
+  const doneDel = exp.filter((d) => repDel.find((x) => x.id === d.id)?.produced).length;
+  const doneCrit = crit.filter((c) => gateCrit.find((x) => (x.criterion_id || x.id) === c.id)?.status === "met").length;
+  return `<div class="sec">
+    <div class="m-head"><h5>Progress</h5><span class="mbadge muted">${doneDel}/${exp.length} deliverables · ${doneCrit}/${crit.length} criteria met</span></div>
+    ${exp.length ? `<div class="tkg-h">Deliverables</div><ul class="tkg">${delRows}</ul>` : ""}
+    ${crit.length ? `<div class="tkg-h">Acceptance criteria</div><ul class="tkg">${critRows}</ul>` : ""}
+    ${t && (t.ran || t.results) ? `<div class="tkg-h">Tests</div><div class="tkn">${t.ran ? "ran" : "not run"}${t.results ? ` — ${esc(String(t.results).slice(0, 200))}` : ""}</div>` : ""}
+    ${blocks.length ? `<div class="tkg-h err">Blocks</div><ul class="tkg">${blocks.map((b) => row("⛔", "err", b)).join("")}</ul>` : ""}
+  </div>`;
 }
 
 // Read-only mission overlay (package review / outputs / evidence).
