@@ -85,6 +85,14 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 .chip.running{background:var(--run-bg);color:var(--run);} .chip.review{background:var(--review-bg);color:var(--review);}
 .chip.blocked{background:var(--blocked-bg);color:var(--blocked);} .chip.complete{background:var(--green-soft);color:var(--green-ink);}
 .chip.planning{background:var(--plan-bg);color:var(--plan);} .chip.paused{background:var(--paused-bg);color:var(--paused);} .chip.idle{background:var(--idle-bg);color:var(--idle);}
+/* Per-worker activity pill: is claude/cursor working, idle, done, or paused? */
+.apill{display:inline-flex;align-items:center;gap:5px;margin-left:8px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:var(--pill);white-space:nowrap;vertical-align:middle;letter-spacing:.1px;}
+.apill .adot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none;}
+.apill.run{background:var(--run-bg);color:var(--run);} .apill.run .adot{animation:apulse 1.3s ease-in-out infinite;}
+.apill.ok{background:var(--green-soft);color:var(--green-ink);}
+.apill.idle{background:var(--idle-bg);color:var(--idle);}
+.apill.paused{background:var(--paused-bg);color:var(--paused);}
+@keyframes apulse{0%,100%{opacity:1;}50%{opacity:.25;}}
 .hpill{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:var(--pill);white-space:nowrap;}
 .hpill.healthy{background:var(--green-soft);color:var(--green-ink);} .hpill.attention{background:var(--blocked-bg);color:var(--blocked);}
 .hpill.paused{background:var(--paused-bg);color:var(--paused);} .hpill.finished{background:var(--idle-bg);color:var(--idle);}

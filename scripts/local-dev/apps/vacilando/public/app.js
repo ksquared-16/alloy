@@ -12,6 +12,16 @@ const el = (t, c, h) => { const n = document.createElement(t); if (c) n.classNam
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const glyph = (g) => `<svg class="i"><use href="#g-${g || "compass"}"></use></svg>`;
 const STATUS_ACC = { running: "var(--run)", review: "var(--review)", blocked: "var(--blocked)", complete: "var(--green-ink)", planning: "var(--plan)", paused: "var(--paused)", idle: "var(--idle)" };
+// Per-worker activity — is claude/cursor working, idle, done, or paused? Server
+// derives it from local git-recency + metadata (see sprint.mjs deriveActivity),
+// so it stays meaningful even when the projection is degraded under load.
+const ACTIVITY = { working: { label: "Working", k: "run" }, idle: { label: "Idle", k: "idle" }, done: { label: "Done", k: "ok" }, paused: { label: "Paused", k: "paused" } };
+function activityPill(sp) {
+  const a = ACTIVITY[sp.activity];
+  if (!a) return ""; // unknown / not yet enriched — show nothing rather than guess
+  const when = sp.activity === "working" && sp.last_activity_ms ? ` · ${ago(sp.last_activity_ms)}` : "";
+  return `<span class="apill ${a.k}" title="${esc(sp.provider || "worker")} — ${a.label.toLowerCase()}${when ? ` (last activity ${ago(sp.last_activity_ms)} ago)` : ""}"><span class="adot"></span>${a.label}${when}</span>`;
+}
 function ago(ms) { if (!ms) return "—"; const s = Math.max(0, (Date.now() - ms) / 1000); if (s < 60) return `${s | 0}s`; if (s < 3600) return `${(s / 60) | 0}m`; if (s < 86400) return `${(s / 3600) | 0}h`; return `${(s / 86400) | 0}d`; }
 const shortBranch = (b, wt) => (b ? b.replace(/^agent\/[^/]+\//, "") : wt || "—");
 
@@ -344,7 +354,7 @@ function workerCard(sp) {
   const pend = sp.question_count || 0;
   return `<div class="wcard ${sp.slot === state.sel ? "sel" : ""}" data-sel="${sp.slot}" style="--acc:${STATUS_ACC[sp.status] || "var(--green)"}">
     <div class="wc-top"><span class="gl">${glyph(sp.glyph)}</span>
-      <div class="wc-id"><b>slot ${sp.slot}</b> · ${esc(sp.provider)}</div>
+      <div class="wc-id"><b>slot ${sp.slot}</b> · ${esc(sp.provider)}${activityPill(sp)}</div>
       <span class="chip ${sp.enriched === false ? "idle" : sp.status}">${esc(sp.enriched === false ? "detail refreshing" : sp.status)}</span>${pend ? `<span class="pend">${pend}</span>` : ""}</div>
     <div class="wc-obj trunc">${esc(sp.title)}</div>
     <div class="wc-meta trunc mono">${esc(shortBranch(sp.branch, sp.worktree))}${sp.git ? ` · ↑${sp.git.ahead}↓${sp.git.behind}${sp.git.state === "dirty" ? "·dirty" : ""}` : ` · <span class="muted">git detail pending</span>`}</div>

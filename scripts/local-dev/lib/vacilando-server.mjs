@@ -264,6 +264,7 @@ function registrySprints() {
     return {
       slot: i.slot, title: titleFromBranch(i.branch, i.worktree_name),
       provider: i.provider || "claude", worktree: i.worktree_name, branch: i.branch,
+      path: i.worktree_path || null,
       port: i.port || null,
       status: missing ? "worktree-missing" : i.ok ? "unknown" : "identity-conflict",
       server: "unknown", glyph: "spark",
@@ -325,16 +326,55 @@ function probePortListening(port, timeoutMs = 500) {
   });
 }
 
-/** Overlay live port truth onto the board's server field for every slot with a port. */
-async function applyServerTruth(board) {
+const ACTIVITY_WORKING_MS = 15 * 60 * 1000;
+/**
+ * Cheap, local, pressure-proof "last git activity" for a worktree: the mtime of
+ * its ref log. Resolves the linked-worktree gitdir from the .git file. This lets
+ * the per-worker activity pill stay meaningful (working vs idle) even when the
+ * enriched projection is degraded under load — the same reason the port probe
+ * above exists. Returns ms since epoch, or null.
+ */
+function worktreeActivityMs(path) {
+  if (!path) return null;
+  try {
+    const dotgit = join(path, ".git");
+    let gitdir = dotgit;
+    if (statSync(dotgit).isFile()) {
+      const m = /^gitdir:\s*(.+)\s*$/m.exec(readFileSync(dotgit, "utf8"));
+      if (!m) return null;
+      gitdir = m[1].trim();
+    }
+    return Math.round(statSync(join(gitdir, "logs", "HEAD")).mtimeMs);
+  } catch { return null; }
+}
+
+/**
+ * Overlay LIVE truth onto the board on every read: port-authoritative server
+ * state (so "Open App" flips the instant Next listens) and a git-activity
+ * fallback for the per-worker activity pill when the enriched projection didn't
+ * supply it (degraded board). Enriched activity — which knows done/paused —
+ * always wins; the fallback only fills the working/idle gap.
+ */
+async function applyLiveTruth(board) {
+  const now = Date.now();
   const sprints = board.sprints || [];
   const listen = await Promise.all(sprints.map((s) => probePortListening(s.port)));
-  board.sprints = sprints.map((s, i) => (listen[i] == null ? s : { ...s, server: listen[i] ? "running" : "stopped" }));
+  board.sprints = sprints.map((s, i) => {
+    const out = listen[i] == null ? { ...s } : { ...s, server: listen[i] ? "running" : "stopped" };
+    if (!out.activity || out.activity === "unknown") {
+      const last = worktreeActivityMs(s.path);
+      if (last != null) {
+        out.last_activity_ms = out.last_activity_ms ?? last;
+        out.activity = now - last < ACTIVITY_WORKING_MS ? "working" : "idle";
+      }
+    }
+    return out;
+  });
   return board;
 }
 
 /** The snapshot every UI surface consumes: never fewer workers than are registered. */
-async function boardSnapshot() { return applyServerTruth(resilientBoard(await snapshotSafe())); }
+async function boardSnapshot() { return applyLiveTruth(resilientBoard(await snapshotSafe())); }
 
 /** Warm the expensive keys in the background so the first operator read is instant. */
 function warmExpensive() {
