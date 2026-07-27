@@ -40,10 +40,12 @@ export type WorkUnitRouteIdentity = {
 };
 
 /**
- * Resolve (and request-memoize) the route identity for a slug. Never throws — resolution I/O failure
- * degrades to `resolution: null` so callers apply their own honest fallback, exactly as before.
+ * Resolve the route identity for a slug. Never throws — resolution I/O failure degrades to
+ * `resolution: null` so callers apply their own honest fallback, exactly as before. Resolution is
+ * request-memoized via React `cache()` (a transparent dedup, see the module header) — an implementation
+ * detail the name deliberately does not leak: callers ask for the identity, not for "the cached identity".
  */
-export const resolveWorkUnitRouteIdentityCached = cache(
+export const resolveWorkUnitRouteIdentity = cache(
     async (slug: string): Promise<WorkUnitRouteIdentity> => {
         const gate = await loadAdminRouteGate();
         const platformKey = workUnitRouteSlugToKey((slug ?? "").trim());

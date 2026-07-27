@@ -26,12 +26,12 @@
 | Testing | C- | A | ↑ | 42% | 80% | 3 / 7 | M4 |
 | Documentation | B (was C) | A- | ↑ | 60% | 80% | 1 / 3 | M3 |
 | Performance | B | A- | ↑ | 40% | 80% | 1 / 4 | M2 |
-| Code Quality | B- | A- | ↑ | 55% | 70% | 1 / 3 | M1 |
+| Code Quality | B- | A- | ↑ | 62% | 72% | 2 / 3 | M1 |
 
 **Confidence %** = how confident a fresh architecture review would re-assign this grade, given the committed
 evidence (tests / cert / measurements / review). It rises only with evidence and drops when new findings surface.
 
-**Overall initiative completion (weighted, coarse): ~52%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade. **Runtime Architecture is the first category CERTIFIED (A- = target).**
+**Overall initiative completion (weighted, coarse): ~54%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade. **Runtime Architecture is the first category CERTIFIED (A- = target).**
 
 Task status legend: **NS** Not Started · **IP** In Progress · **BL** Blocked · **NV** Needs Validation · **DONE** Completed.
 
@@ -59,7 +59,7 @@ A task is **COMPLETE only when every box is checked** (doc/test/arch boxes are N
 | D-003 | **Passing an unawaited RSC promise as a client prop is FORBIDDEN** — crashes hydration in Next 16. | `TypeError: undefined 'catch'`; iter-2 crash |
 | D-004 | **Canonical selected-subject routing = query `?subject_id`** (the runtime projects it via `urlFromAttention`). The path form `/:recordId` is legacy (drives `openDrawer`) and its consumption disagrees with construction. | `zz-realization-urlcontract`: path→default subject, query→correct. RA-2 resolves. |
 | D-005 | **The seed lives in the LAYOUT, not the page** — the layout renders the Host and discards `children`; a page-segment seed is never mounted and loses the race to K2. | iter-1/iter-2 measurements |
-| D-006 | **Slug→identity resolution is deduped** via a React `cache()` shared resolver (`resolveWorkUnitRouteIdentityCached`). | commit `5148c9708`; C1/C2/C3/C7 re-cert |
+| D-006 | **Slug→identity resolution is deduped** via a React `cache()` shared resolver (`resolveWorkUnitRouteIdentity`, renamed from `…Cached` in CQ-3 — the dedup is a transparent impl detail, not part of the name). | commit `5148c9708`; C1/C2/C3/C7 re-cert |
 | D-007 | **Gate/auth dedup NOT needed** — already request-memoized (`loadAdminAccessBundleCached`). | code inspection |
 | D-008 | **TypeScript stays single-project for now**; project references are a *designed later* initiative (TS-2), not a premature restructure. | cold typecheck 156 s acceptable short-term |
 | D-009 | **Env-gated shadow / legacy-emergency-fallback modules are RETAINED** — legitimate kill-switches (default false), not dead code. | flag defaults verified |
@@ -84,7 +84,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | TS-1 Immediate TS graph wins | TypeScript | Medium | — | ✓ | READY |
 | ~~TS-2 Project-reference roadmap~~ | TypeScript | Medium | — | ✓ | **DONE** |
 | SC-1 Generalize subject contract | Scalability | Medium | — | ✓ | READY |
-| CQ-3 Rename `resolveWorkUnitRouteIdentityCached` | Code Quality | Low | — | ✓ | READY |
+| ~~CQ-3 Rename `resolveWorkUnitRouteIdentityCached`~~ | Code Quality | Low | — | ✓ | **DONE** |
 | CP-1 Server-seed enriched VM | Critical Path | **Critical** | RA-1, CP-4 | ✗ | blocked |
 | ~~RA-2 Remove legacy-drawer duality~~ | Runtime Arch | High | RA-1✓ | ✓ | **DONE** |
 | ~~RA-3 Cache single-producer invariant~~ | Runtime Arch | High | RA-1✓ | ✓ | **DONE** (Runtime Arch → A- ✓target) |
@@ -104,8 +104,10 @@ Runtime Architecture is now **CERTIFIED (A-)** — RA-1/RA-2/RA-3 all DONE, the 
 **Critical** `CP-1` (server-seed the enriched VM, the biggest perceived-perf lever) — but its certification
 requires trustworthy server `phases_ms` before/after, which the **saturated host cannot produce** right now
 (§6a; swap ~19 GB). Until the host has headroom, route to throttle-light READY tasks that certify by
-unit+typecheck: `CQ-3` (rename `resolveWorkUnitRouteIdentityCached`), `TE-4` (`ProvisioningAnswer` schema
-contract), `TS-1` (TS graph wins). Batch `CP-4`/`DG-1`/`CP-1` for host headroom.
+unit+typecheck: `TE-4` (`ProvisioningAnswer` schema contract), `TS-1` (TS graph wins), `SC-1` (subject
+contract design + PoC type). Batch `CP-4`/`DG-1`/`DG-2`/`DG-3`/`CP-1` for host headroom. _(M1's remaining
+core is the Dependency-Graph line — all build+browser-cert-bound. RA line + CQ-3 = the throttle-executable
+M1 work, now DONE.)_
 
 Co-highest-priority READY siblings: `DG-1`, `TE-2` (High). Light READY tasks available under throttle:
 `TE-4` (schema contract, unit-only), `TS-1` (TS wins), `CQ-3` (rename). **NOTE:** CP-4/DG-1/CP-1 each
@@ -121,13 +123,13 @@ higher-priority cross-milestone blocker exists (e.g. an M1 task that unblocks th
 
 | Milestone | Theme | Tasks | Done / Total | Status |
 |---|---|---|:--:|---|
-| **M1** | **Runtime Ownership** | RA-1✓, RA-2✓, RA-3✓, DG-1, DG-2, DG-3, DG-4✓, DG-5✓, CQ-1✓, CQ-2, CQ-3 | 7 / 11 | **ACTIVE** |
+| **M1** | **Runtime Ownership** | RA-1✓, RA-2✓, RA-3✓, DG-1, DG-2, DG-3, DG-4✓, DG-5✓, CQ-1✓, CQ-2, CQ-3✓ | 8 / 11 | **ACTIVE** |
 | M2 | Critical Path & Performance | CP-1, CP-2✓, CP-3, CP-4, CP-5✓, PE-1, PE-2, PE-3, PE-4✓, SC-1, SC-2 | 4 / 11 | in progress |
 | M3 | Developer Experience | TS-1, TS-2✓, TS-3✓, MA-1✓, MA-2, DOC-1✓, DOC-2, DOC-3 | 5 / 8 | in progress |
 | M4 | Certification & Regression | TE-1✓, TE-2, TE-3, TE-4, TE-5✓, TE-6, TE-7✓ | 3 / 7 | in progress |
 
 - **Current milestone:** **M1 Runtime Ownership** (fix ownership before optimizing the path; RA-1 also unblocks the M2 perf core).
-- **Milestone progress:** M1 7/11 · M2 4/11 · M3 5/8 · M4 3/7.
+- **Milestone progress:** M1 8/11 · M2 4/11 · M3 5/8 · M4 3/7.
 - **Milestones remaining to target:** all four still have open tasks; M3 is closest. **Runtime Architecture is the first category to reach its target grade (A-).**
 - **Active-milestone next READY:** M1's remaining core is the **Dependency Graph** line (`DG-1` High, `DG-2`/`DG-3`) — each needs the build+browser-cert loop (host-throttled, §6a). `CQ-3` (rename) is the throttle-light M1 option; `CQ-2` stays blocked on `DG-1`/`DG-2`.
 
@@ -176,7 +178,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 | CP-2 | Remove duplicate stage-work fetch (reuse answer's `focusPanelStageWork` on cold default load) | **DONE** | No `view_model_stage_work` request when committed subject == answer subject; stage-work still correct | **`/stage-work` ELIMINATED (0); all-cards 12.7s→11.2s; reveal grid 5/reserved 0; C1/C3 pass; 13/13 units; tsc gate exit 0 / 0 errors; commit `437ad9d11`.** | — |
 | CP-3 | Gate the sibling-view prewarm storm behind the reveal | NS | ≤1 provisioning request during the primary-reveal window (4 sibling prewarms deferred) | harness: provisioning count during reveal ≤1 | — |
 | CP-4 | Enriched-VM field-by-field reuse of provisioning data (inquiry_children, primary contact) | NS | Named duplicate DB reads removed from enriched-VM `phases_ms`; contract unchanged | server `phases_ms` before/after | — |
-| CP-5 | Slug→identity resolution dedup (layout) | DONE | One resolution/request via `resolveWorkUnitRouteIdentityCached` | commit `5148c9708`; C1/C2/C3/C7 re-cert | — |
+| CP-5 | Slug→identity resolution dedup (layout) | DONE | One resolution/request via `resolveWorkUnitRouteIdentity` (renamed in CQ-3) | commit `5148c9708`; C1/C2/C3/C7 re-cert | — |
 
 ### 2.3 TypeScript Architecture — C → B+ now (A later) (bucket B) · 15%
 **Why C:** one monolithic `tsconfig.build.json`, no project references; cold typecheck 156 s / 3.27 GB (single process). Incremental is healthy (15 s / 1.15 GB). The graph only grows.
@@ -266,7 +268,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 |---|---|:--:|---|---|---|
 | CQ-1 | Simplify `seedProvisioning` + truthful comments | DONE | Resolved-answer-only cache write; polymorphism deleted | commit `63dafa004` | — |
 | CQ-2 | Decompose `InlineOpportunityFocusPanel` into bounded modules (presentation / cards / modes / actions / comms / scheduling / current-work / refresh / selection / prewarm / state / effects) | NS | Hub is a composition root importing bounded modules, each a small contract; no behavior change (cert green) | import-count before/after + module contracts + full cert | DG-1, DG-2 |
-| CQ-3 | Rename `resolveWorkUnitRouteIdentityCached` (drop impl-leak suffix) | NS | Renamed; callers updated; tsc clean | diff | — |
+| CQ-3 | Rename `resolveWorkUnitRouteIdentityCached` (drop impl-leak suffix) | **DONE** | `resolveWorkUnitRouteIdentityCached` → `resolveWorkUnitRouteIdentity` (export + file); 2 call sites updated; the `cache()` dedup is documented at the definition, not leaked into the name. **tsc EXIT 0 / 0 errors; 0 code refs to the old name.** `447a5cd77` | — |
 
 ---
 
@@ -297,6 +299,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 | 2026-07-26 | Certification exec #4 | **RA-1 → DONE** (kernel preload seam; `provisioningAnswerUrl` now kernel-only; behavior-identical, cert green; D-011). Runtime Architecture C+→B (40%). Unblocks RA-2. | `3c0a9d6c1` |
 | 2026-07-26 | Certification exec #5 | **RA-2 → IP (scoped + de-risked).** Found `useWorkUnitSurfaceController` DEAD → legacy duality is unreachable; RA-2 reduced to delete-dead + query-ify the create-lead href. R-03 downgraded Sev2→Sev3. Held (multi-file behavior change; host-memory throttle degrading trustworthy heavy cert). | — |
 | 2026-07-26 | Certification exec #6 | **RA-2 → DONE.** Deleted dead surface controller (`workUnitSurfaceController.ts` + test + `WorkUnitSurfaceView` + `syncOperatorWorkUnitUrlInBrowser`); `operatorWorkUnitHrefFromKey(key,recordId)` emits `?subject_id=`; `[recordId]` route + `next.config` rewrite retired; guards/tests → query form; removed a misrooted orphan dup test. **tsc EXIT 0 / 0 errors; prod build EXIT 0; RA-2-owned unit set green (32), +0 new failures / −2 pre-existing fixed (baseline-diff proven).** Runtime Architecture B→B+ (65%); R-03 RESOLVED; M1 6/11. Pre-existing seed-only-host/route-shell test rot flagged (R-04). | `08855fe59` |
+| 2026-07-26 | Certification exec #9 | **CQ-3 → DONE.** Renamed `resolveWorkUnitRouteIdentityCached` → `resolveWorkUnitRouteIdentity` (export + file); 2 call sites updated; ARCHITECTURE §5 + D-006/CP-5 refs updated. The `cache()` dedup stays documented at the definition, not leaked into the public name. tsc EXIT 0 / 0 errors; 0 code refs to the old name; build/browser N/A (import-graph-neutral rename). Code Quality 55→62% (2/3); M1 8/11. | `447a5cd77` |
 | 2026-07-26 | Certification exec #8 | **RA-3 → DONE — Runtime Architecture CERTIFIED (B+ → A- = target, the first category to reach target).** Un-exported the raw-`url` `seedProvisioning` (0 external callers) → `seedProvisioningForRoute(identity)` is the SOLE public seed seam; the kernel owns key derivation structurally. `workUnitProvisioningPrefetch.test.ts` 17/17: single-producer key-agreement invariant + re-seed idempotency + cold-fetch coalescing (prev. untested). tsc EXIT 0 / 0 errors; +0 new failures vs baseline (6→6, proven); build/browser N/A (import-graph-neutral visibility change). ARCHITECTURE.md §7 updated. M1 7/11; overall ~52%. | `afccb1a6c` |
 | 2026-07-26 | Certification exec #7 | **TE-5 → DONE.** `attentionUrlParity.test.ts` (4/4) locks `urlFromAttention`⇄`attentionFromUrl`: round-trips 6 coordinate permutations; subject = `?subject_id` ONLY (path `/:recordId` → null; D-004/RA-2); `urlFromAttention` never emits a path record segment. Kernel suites still green (d2/d4 = 36/36). Testing 35→42% (3/7); M4 3/7. Unit-only (throttle-appropriate; no source change). | `cd155a26b` |
 

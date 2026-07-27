@@ -18,7 +18,7 @@ import {
     composeWorkUnitProvisioningAnswer,
     type ProvisioningAnswer,
 } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
-import { resolveWorkUnitRouteIdentityCached } from "@/lib/admin/resolveWorkUnitRouteIdentityCached";
+import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteIdentity";
 
 export type RouteProvisioningResult =
     | { ok: true; answer: ProvisioningAnswer }
@@ -36,7 +36,7 @@ export async function composeProvisioningAnswerForRoute(input: {
     // U-P1 — one authorization + one scope resolve for the entire answer. The slug→identity resolution
     // is request-memoized (Phase 3 dedup): the work-unit layout's route-meta seed and this provisioning
     // seed share ONE resolution instead of each running the same DB reads.
-    const { gate, resolution } = await resolveWorkUnitRouteIdentityCached(input.rawSlug);
+    const { gate, resolution } = await resolveWorkUnitRouteIdentity(input.rawSlug);
     if (!gate.ok) return { ok: false, gate };
 
     const supabase = createAdminClient();

@@ -67,7 +67,7 @@ the **shared** `composeProvisioningAnswerForRoute` so the fetched answer and the
 ## 5. Data flow — cold selected-subject critical path
 
 ```
-1. Route gate + slug→identity resolution   resolveWorkUnitRouteIdentityCached (React cache(), deduped)
+1. Route gate + slug→identity resolution   resolveWorkUnitRouteIdentity (React cache(), request-deduped)
 2. Server-compose the Provisioning Answer   composeProvisioningAnswerForRoute  (in [workUnitSlug]/layout.tsx)
 3. Seed the K2 cache (resolved answer)       ProvisioningAnswerSeed  (render-phase useMemo, see §6/§7)
 4. Client hydrates → K1 hydrate → K2 consume WARM (no network hop)  → K3 commit  → Surface Host renders

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { resolveWorkUnitRouteIdentityCached } from "@/lib/admin/resolveWorkUnitRouteIdentityCached";
+import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteIdentity";
 import type { WorkUnitSlugRouteCacheEntry } from "@/lib/admin/workUnitSlugRouteCache";
 
 /**
@@ -21,7 +21,7 @@ export async function loadWorkUnitSlugRouteMetaServer(
         const slug = typeof workUnitSlug === "string" ? workUnitSlug.trim() : "";
         // Request-memoized (Phase 3 dedup): shares ONE slug→identity resolution with the layout's
         // provisioning seed (`composeProvisioningAnswerForRoute`) instead of repeating the DB reads.
-        const { gate, resolution, departments } = await resolveWorkUnitRouteIdentityCached(slug);
+        const { gate, resolution, departments } = await resolveWorkUnitRouteIdentity(slug);
         if (!gate.ok) return null;
         if (
             gate.dim.departmentScope === "restricted" &&
