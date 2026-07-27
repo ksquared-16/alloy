@@ -72,3 +72,12 @@ export {
     revalidateCreateLeadDraft,
     type CreateLeadAdapterContext,
 } from "@/lib/bos/commandSession/adapters/createLeadAdapter";
+
+export {
+    applyFormValuesToDraft,
+    applyOperatorFieldEdit,
+    applyParseResult,
+    confirmBosDraftField,
+    formValuesFromDraft,
+    removeInferredBosDraftField,
+} from "@/lib/bos/commandSession/draftEdits";
