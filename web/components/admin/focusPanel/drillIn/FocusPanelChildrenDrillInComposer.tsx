@@ -70,6 +70,7 @@ export default function FocusPanelChildrenDrillInComposer({
                             childName={focused.name}
                             imageUrl={focused.imageUrl ?? null}
                             personId={focused.personId ?? null}
+                            customerMemberId={focused.customerMemberId ?? null}
                             size={40}
                             builder={{ config, onConfigChange }}
                         />
@@ -129,6 +130,7 @@ export default function FocusPanelChildrenDrillInComposer({
                                     childName={focused.name}
                                     imageUrl={focused.imageUrl ?? null}
                                     personId={focused.personId ?? null}
+                                    customerMemberId={focused.customerMemberId ?? null}
                                     size={40}
                                     builder={{ config, onConfigChange }}
                                 />

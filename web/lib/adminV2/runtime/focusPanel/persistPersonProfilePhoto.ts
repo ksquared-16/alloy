@@ -78,7 +78,11 @@ export async function uploadPersonProfilePhotoDocument(args: {
     body.append("doc_type", "profile_photo");
     body.append("title", args.title);
 
-    const uploadRes = await fetch("/api/admin/documents/upload", { method: "POST", body });
+    const uploadRes = await fetch("/api/admin/documents/upload", {
+        method: "POST",
+        credentials: "include",
+        body,
+    });
     if (!uploadRes.ok) return { ok: false, error: "Upload failed" };
     const payload = (await uploadRes.json()) as { document?: { id?: string } };
     const documentId = payload.document?.id?.trim();

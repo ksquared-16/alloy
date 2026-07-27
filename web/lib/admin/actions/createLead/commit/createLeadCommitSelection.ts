@@ -302,7 +302,14 @@ export function patchCreateLeadCommitRecord(
                 ...scalarPatch,
                 extra_payload_values: mergedExtra,
             });
-            if (next.validation_state !== "valid" && next.include_in_commit) {
+            // Mid-edit invalidation clears include; becoming valid again must restore it.
+            // Without this, Form rows stay excluded after the first incomplete keystroke and
+            // flat draft sync (Review readiness) never sees primary first/last/email/phone.
+            if (next.validation_state === "valid") {
+                if (record.validation_state !== "valid") {
+                    next.include_in_commit = true;
+                }
+            } else if (next.include_in_commit) {
                 next.include_in_commit = false;
             }
             return next;
@@ -349,14 +356,26 @@ export function toggleCreateLeadCommitInclusion(
     };
 }
 
+/** Primary adult row for Form flat sync — not gated on include_in_commit (mid-edit may exclude). */
+function primaryParentForFlatSync(selection: CreateLeadCommitSelection): CreateLeadCommitRecord | null {
+    return selection.parents.find((p) => p.primary) ?? selection.parents[0] ?? null;
+}
+
+/** Primary child row for Form flat sync — not gated on include_in_commit. */
+function primaryChildForFlatSync(selection: CreateLeadCommitSelection): CreateLeadCommitRecord | null {
+    return selection.children.find((c) => c.primary) ?? selection.children[0] ?? null;
+}
+
 /** Sync flat Create Lead gather values from commit selection (primary members). */
 export function syncCreateLeadValuesFromCommitSelection(
     values: Record<string, string>,
     selection: CreateLeadCommitSelection,
 ): Record<string, string> {
     const next = { ...values };
-    const parent = primaryIncludedParent(selection);
-    const child = primaryIncludedChild(selection);
+    // Always mirror the primary Form rows — include_in_commit flips false while a row is
+    // incomplete mid-edit; gating flats on include clears first/last/email and blocks Review.
+    const parent = primaryParentForFlatSync(selection);
+    const child = primaryChildForFlatSync(selection);
 
     next.first_name = parent?.first_name ?? "";
     next.last_name = parent?.last_name ?? "";

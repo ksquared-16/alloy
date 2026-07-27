@@ -731,6 +731,8 @@ export default function ChildrenCard({
                 opportunityStartDate={opportunityStartDate}
                 save={mutation!.saveInquiryChild}
                 imageUrl={focused.imageUrl ?? null}
+                savePhoto={mutation?.savePersonChildPhoto}
+                clearPhoto={mutation?.clearPersonChildPhoto}
                 onClose={() => setEditing(false)}
                 onSaved={() => setEditing(false)}
             />
@@ -755,12 +757,8 @@ export default function ChildrenCard({
                     onEditField={canEditChild ? () => setEditing(true) : undefined}
                     personId={focused.personId ?? null}
                     customerMemberId={focused.customerMemberId ?? null}
-                    onSavePhoto={
-                        composingChildrenSurface ? mutation?.savePersonChildPhoto : undefined
-                    }
-                    onClearPhoto={
-                        composingChildrenSurface ? mutation?.clearPersonChildPhoto : undefined
-                    }
+                    onSavePhoto={mutation?.savePersonChildPhoto}
+                    onClearPhoto={mutation?.clearPersonChildPhoto}
                 />
                 {disclosure.depth === "details" && emergencyContactsSection && childrenSurfaceConfig ? (
                     <EmergencyContactsSection
@@ -1407,7 +1405,7 @@ function FocusedChild({
                     depth={disclosureDepth}
                     onEditField={onRequestEdit ? () => onRequestEdit() : undefined}
                     avatarSlot={
-                        showHeaderAvatar && composingChildrenSurface ? (
+                        showHeaderAvatar ? (
                             <IdentityAvatarEditable
                                 name={child.name}
                                 imageUrl={
@@ -1448,6 +1446,8 @@ function FocusedChild({
                     previewOnly={Boolean(composerPreview)}
                     save={mutation!.saveInquiryChild}
                     imageUrl={child.imageUrl ?? null}
+                    savePhoto={composerPreview ? undefined : mutation?.savePersonChildPhoto}
+                    clearPhoto={composerPreview ? undefined : mutation?.clearPersonChildPhoto}
                     onClose={onEditClose}
                     onSaved={onEditClose}
                 />

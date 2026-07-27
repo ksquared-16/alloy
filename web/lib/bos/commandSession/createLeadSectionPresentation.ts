@@ -6,6 +6,7 @@
 import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
 import type { BosCommandDraft } from "@/lib/bos/commandSession/types";
 import { operationalSectionTitle } from "@/lib/bos/commandSession/createLeadUnderstandingPresentation";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 
 export type CreateLeadSectionModel = {
     key: string;
@@ -282,12 +283,18 @@ function buildSummaryLines(
             .trim();
         const dob = values.get("child_date_of_birth");
         const age = values.get("child_age");
-        const head = [name, dob ? `Born ${dob}` : age ? `Age ${age}` : null].filter(Boolean).join(" · ");
+        const dobLabel = dob ? formatDisplayDate(dob) || dob : null;
+        const head = [name, dobLabel ? `Born ${dobLabel}` : age ? `Age ${age}` : null]
+            .filter(Boolean)
+            .join(" · ");
         if (head) lines.push(head);
         const program = values.get("child_program");
         if (program) lines.push(resolveDisplay("child_program", program, optionLabels));
         const start = values.get("child_start_date");
-        if (start) lines.push(`Desired start ${start}`);
+        if (start) {
+            const startLabel = formatDisplayDate(start) || start;
+            lines.push(`Desired start ${startLabel}`);
+        }
         return lines;
     }
     if (key === "additional") {
@@ -309,7 +316,10 @@ function buildSummaryLines(
         .join(" · ");
     if (placement) lines.push(placement);
     const start = values.get("child_start_date");
-    if (start) lines.push(`Desired start ${start}`);
+    if (start) {
+        const startLabel = formatDisplayDate(start) || start;
+        lines.push(`Desired start ${startLabel}`);
+    }
     return lines;
 }
 
