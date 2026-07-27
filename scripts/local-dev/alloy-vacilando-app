@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+#
+# alloy-vacilando-app — open Vacilando as a native macOS window.
+#
+# Wraps the loopback control-plane server + SPA in an Electron shell that owns
+# the server lifecycle (starts on open, stops on quit). No browser required.
+#
+#   alloy-vacilando-app            run the app (installs deps on first run)
+#   alloy-vacilando-app --package  build a double-clickable Vacilando.app in dist/
+#   alloy-vacilando-app --port N   run on a specific port (default 3021)
+#
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="$HERE/apps/vacilando-desktop"
+
+cd "$APP_DIR"
+
+# First-run dependency install (Electron is a prebuilt binary — no compiler).
+if [ ! -d node_modules/electron ]; then
+  echo "→ installing desktop dependencies (first run only)…"
+  npm install
+fi
+
+# Pass a --port through to the app as VACILANDO_PORT.
+if [ "${1:-}" = "--port" ] && [ -n "${2:-}" ]; then
+  export VACILANDO_PORT="$2"
+  shift 2
+fi
+
+if [ "${1:-}" = "--package" ]; then
+  # Bake the live checkout path so the packaged .app runs the server from the
+  # real scripts/local-dev on disk (it projects live git/worktree state, so it
+  # must NOT run a frozen copy). Override at runtime with VACILANDO_CHECKOUT.
+  CHECKOUT="$(cd "$HERE" && pwd)"
+  echo "$CHECKOUT" > "$APP_DIR/checkout-path.txt"
+  echo "→ packaged app will run the server from: $CHECKOUT"
+  echo "→ building Vacilando.app → $APP_DIR/dist/Vacilando-darwin-*/Vacilando.app"
+  npm run package
+  echo "✓ done. Open with: open dist/Vacilando-darwin-*/Vacilando.app"
+  exit 0
+fi
+
+exec npx electron .

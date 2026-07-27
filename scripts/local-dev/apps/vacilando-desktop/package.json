@@ -1,0 +1,16 @@
+{
+  "name": "vacilando-desktop",
+  "productName": "Vacilando",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Native macOS shell for the Vacilando engineering control plane. Owns the loopback server lifecycle and renders the SPA in a real app window — no browser required.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-packager . Vacilando --platform=darwin --arch=arm64 --out=dist --overwrite --app-bundle-id=com.alloy.vacilando --app-version=0.1.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.4.0",
+    "electron": "^43.2.0"
+  }
+}
