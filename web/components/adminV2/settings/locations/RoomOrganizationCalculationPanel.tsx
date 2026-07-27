@@ -10,9 +10,20 @@ type RuntimeEval = {
     effectiveAt: string;
 };
 
+function humanStatus(status: string): string {
+    if (status === "resolved") return "Ready";
+    if (status === "not_configured") return "Capacity not configured";
+    if (status === "incomplete" || status === "partial") return "Incomplete inputs";
+    return status;
+}
+
+function cleanLine(line: string): string {
+    return line.replace(/capacity\.room_binding\./g, "");
+}
+
 /**
- * Room capacity consumer for exact-version Organization Calculations bound with
- * runtime_surface. Additive — does not replace platform capacity.
+ * Room capacity consumer for published Organization Calculations connected to Room capacity.
+ * Additive — does not replace platform capacity.
  */
 export default function RoomOrganizationCalculationPanel({
     roomId,
@@ -77,7 +88,7 @@ export default function RoomOrganizationCalculationPanel({
             data-testid="room-org-calc-panel"
         >
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="config-typo-field-label">Organization-calculated capacity</p>
+                <p className="config-typo-field-label">Organization calculation</p>
                 <label className="flex items-center gap-1 text-[11px] text-alloy-midnight/55">
                     As of
                     <input
@@ -90,22 +101,25 @@ export default function RoomOrganizationCalculationPanel({
                 </label>
             </div>
             <p className="text-[11px] text-alloy-midnight/50">
-                Separate from platform room capacity · exact published version binding
+                Separate from platform room capacity · uses the published version connected here
             </p>
             {results.map((row) => (
                 <div key={row.calculation.id} className="space-y-1" data-testid={`room-org-calc-${row.calculation.id}`}>
                     <p className="text-sm text-alloy-midnight">
                         <span className="font-medium">{row.calculation.name}</span>
                         {": "}
-                        {row.evaluation.value ?? "∅"} seats
+                        {row.evaluation.value == null ? "Not available" : `${row.evaluation.value} seats`}
                         <span className="ml-1 text-xs text-alloy-midnight/50">
-                            (org calc v{row.version.version_number} · {row.evaluation.status})
+                            (version {row.version.version_number} · {humanStatus(row.evaluation.status)})
                         </span>
                     </p>
                     {row.explanationLines.length > 0 ?
-                        <ul className="list-disc pl-4 text-xs text-alloy-midnight/65" data-testid="room-org-calc-explanation">
+                        <ul
+                            className="list-disc pl-4 text-xs text-alloy-midnight/65"
+                            data-testid="room-org-calc-explanation"
+                        >
                             {row.explanationLines.slice(-4).map((line) => (
-                                <li key={line}>{line}</li>
+                                <li key={line}>{cleanLine(line)}</li>
                             ))}
                         </ul>
                     :   null}

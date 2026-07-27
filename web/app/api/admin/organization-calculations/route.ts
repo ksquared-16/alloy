@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { provingMinPhysicalLicensedAst } from "@/lib/organizationCalculations/ast";
 import {
     createOrganizationCalculationDraft,
-    listOrganizationCalculations,
+    listOrganizationCalculationsForProduct,
 } from "@/lib/organizationCalculations/persist";
+import { ORG_CALC_PRODUCT_TYPES, productTypeById } from "@/lib/organizationCalculations/productCatalog";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
     return v != null && typeof v === "object" && !Array.isArray(v);
 }
 
-/** GET /api/admin/organization-calculations — list org calculations. */
+/** GET /api/admin/organization-calculations — list with product presentation fields. */
 export async function GET() {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
@@ -23,8 +23,19 @@ export async function GET() {
 
     try {
         const supabase = createAdminClient();
-        const calculations = await listOrganizationCalculations(supabase, ctx.orgId);
-        return NextResponse.json({ calculations });
+        const calculations = await listOrganizationCalculationsForProduct(supabase, ctx.orgId);
+        return NextResponse.json({
+            calculations,
+            product_types: ORG_CALC_PRODUCT_TYPES.map((t) => ({
+                id: t.id,
+                type_label: t.typeLabel,
+                title: t.title,
+                summary: t.summary,
+                output_label: t.outputLabel,
+                units: t.units,
+                input_labels: t.inputLabels,
+            })),
+        });
     } catch (e) {
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "Failed to list organization calculations" },
@@ -34,8 +45,8 @@ export async function GET() {
 }
 
 /**
- * POST /api/admin/organization-calculations — create draft.
- * Body may omit expression_ast to seed the proving min(physical, licensed) AST.
+ * POST /api/admin/organization-calculations — create draft from a product type.
+ * Prefer `product_type_id`; `expression_ast` remains allowed for tests.
  */
 export async function POST(req: NextRequest) {
     const ctx = await getAdminContextCached();
@@ -57,9 +68,9 @@ export async function POST(req: NextRequest) {
     const name = typeof body.name === "string" ? body.name.trim() : "";
     if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
 
-    const expressionAst = body.expression_ast ?? provingMinPhysicalLicensedAst();
-    const consumerBindings =
-        isRecord(body.consumer_bindings) ? (body.consumer_bindings as { runtime_surface?: boolean }) : { runtime_surface: true };
+    const productType =
+        typeof body.product_type_id === "string" ? productTypeById(body.product_type_id) : null;
+    const expressionAst = body.expression_ast ?? productType?.buildAst() ?? ORG_CALC_PRODUCT_TYPES[0]!.buildAst();
 
     try {
         const supabase = createAdminClient();
@@ -67,9 +78,12 @@ export async function POST(req: NextRequest) {
             orgId: ctx.orgId,
             userId: ctx.userId,
             name,
-            description: typeof body.description === "string" ? body.description : null,
+            description:
+                typeof body.description === "string" ? body.description
+                : productType ? productType.summary
+                : null,
             expressionAst,
-            consumerBindings,
+            consumerBindings: {},
             key: typeof body.key === "string" ? body.key : undefined,
         });
         return NextResponse.json(created, { status: 201 });

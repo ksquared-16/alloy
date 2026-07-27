@@ -451,3 +451,98 @@ export async function archiveOrganizationCalculation(
     if (error) throw new Error(error.message);
     return data as OrganizationCalculationRow;
 }
+
+/** Restore archived → published if a published version exists, else draft. */
+export async function restoreOrganizationCalculation(
+    supabase: SupabaseClient,
+    args: { orgId: string; userId: string | null; id: string },
+): Promise<OrganizationCalculationRow> {
+    const loaded = await getOrganizationCalculation(supabase, args.orgId, args.id);
+    if (!loaded) throw new Error("Organization calculation not found");
+    if (loaded.calculation.lifecycle !== "archived") {
+        throw new Error("Only archived calculations can be restored");
+    }
+    const nextLifecycle = loaded.publishedVersion ? "published" : "draft";
+    const { data, error } = await supabase
+        .from("organization_calculations")
+        .update({
+            lifecycle: nextLifecycle,
+            updated_by: args.userId,
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", args.id)
+        .eq("org_id", args.orgId)
+        .select("*")
+        .single();
+    if (error) throw new Error(error.message);
+    return data as OrganizationCalculationRow;
+}
+
+export type OrganizationCalculationListItem = OrganizationCalculationRow & {
+    type_label: string;
+    type_id: string;
+    status_label: string;
+    version_label: string;
+    published_version_number: number | null;
+    has_draft: boolean;
+    consumer_count: number;
+};
+
+/** List with presentation fields for the collection rail. */
+export async function listOrganizationCalculationsForProduct(
+    supabase: SupabaseClient,
+    orgId: string,
+): Promise<OrganizationCalculationListItem[]> {
+    const { inferProductTypeFromAst, statusLabel } = await import(
+        "@/lib/organizationCalculations/productCatalog"
+    );
+    const calcs = await listOrganizationCalculations(supabase, orgId);
+    if (calcs.length === 0) return [];
+
+    const { data: versions, error } = await supabase
+        .from("organization_calculation_versions")
+        .select("id, organization_calculation_id, version_number, immutable, expression_ast, consumer_bindings")
+        .eq("org_id", orgId)
+        .in(
+            "organization_calculation_id",
+            calcs.map((c) => c.id),
+        );
+    if (error) throw new Error(error.message);
+    const byCalc = new Map<string, typeof versions>();
+    for (const v of versions ?? []) {
+        const list = byCalc.get(v.organization_calculation_id) ?? [];
+        list.push(v);
+        byCalc.set(v.organization_calculation_id, list);
+    }
+
+    return calcs.map((calc) => {
+        const vers = byCalc.get(calc.id) ?? [];
+        const published =
+            calc.published_version_id ?
+                vers.find((v) => v.id === calc.published_version_id)
+            :   vers.filter((v) => v.immutable).sort((a, b) => b.version_number - a.version_number)[0];
+        const draft = vers.find((v) => !v.immutable);
+        const astSource = draft?.expression_ast ?? published?.expression_ast;
+        const productType = inferProductTypeFromAst(astSource);
+        const consumerCount = vers.filter((v) => {
+            const b = (v.consumer_bindings ?? {}) as ConsumerBindings;
+            return b.runtime_surface === true;
+        }).length;
+        const publishedNum = published?.version_number ?? null;
+        return {
+            ...calc,
+            type_label: productType.typeLabel,
+            type_id: productType.id,
+            status_label: statusLabel(calc.lifecycle),
+            version_label:
+                publishedNum != null ?
+                    calc.lifecycle === "draft" && !published ?
+                        "Draft"
+                    :   `v${publishedNum}`
+                :   "Draft",
+            published_version_number: publishedNum,
+            has_draft: Boolean(draft) && calc.lifecycle === "published",
+            consumer_count: consumerCount,
+        };
+    });
+}
