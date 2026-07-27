@@ -1,68 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
-import { sanitizeDrawerOperTrustPreviewFromHints } from "@/lib/admin/sanitizeDrawerOperTrustPreview";
-import { createReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
-import { tryEvaluateDrawerRecordReadiness } from "@/lib/completion/readinessDrawerBootstrap";
-import type { DrawerTabKey } from "@/lib/entityPresentation";
-import {
-    buildOpportunityDrawerViewModelAboveFold,
-    compileOpportunityDrawerViewModelShell,
-} from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelAboveFold";
-import {
-    buildOpportunityDrawerHeaderSubtitle,
-    buildOpportunityDrawerHeaderTitle,
-    buildOpportunityStatusControlVm,
-} from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelHeader";
 import { filterResidualOperationalTasks } from "@/lib/lifecycle/filterResidualOperationalTasks";
-import { buildOpportunityDrawerHeaderMenuActions } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions";
-import { resolveOpportunityDrawerStatusCanMutateFromGate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
 import {
-    buildOpportunityDrawerAttentionSummary,
-    buildOpportunityDrawerBosSummary,
-    parseInquirySummaryTasksFromRecord,
-} from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelSummaries";
-import {
-    buildOpportunityFirstViewportPlan,
-    resolveTourSlotDisplaySource,
-} from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerFirstViewportContract";
-import {
-    aboveFoldSectionsStructureSettled,
     OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
     stripOpportunityDrawerRecordStaging,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelContract";
 import { computeOpportunityDrawerViewModelGeneration } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelGeneration";
-import {
-    buildOpportunityDrawerFirstPaintContract,
-    opportunityDrawerFirstPaintContractValid,
-} from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelFirstPaint";
-import {
-    headerActionsFromFirstPaintData,
-    remindersFromFirstPaintData,
-    resolveOpportunityDrawerFirstPaintDependencies,
-    tourBookingsFromFirstPaintData,
-} from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityDrawerFirstPaintDependencies";
-import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import { logOpportunityDrawerViewModelComposeShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import type {
     OpportunityDrawerViewModel,
     OpportunityDrawerViewModelResult,
-    RemindersSummaryVm,
 } from "@/lib/adminV2/viewModel/drawer/types";
 import { resolveSharedCanonicalDeps } from "@/lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps";
+import { buildInitialPanelResource } from "@/lib/adminV2/viewModel/drawer/opportunity/initialPanelResource";
 import { buildDeferredDetailResource } from "@/lib/adminV2/viewModel/drawer/opportunity/deferredDetailResource";
-
-function taskAssistEnabledOnServer(): boolean {
-    const v = process.env.NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED?.trim().toLowerCase();
-    return v === "true" || v === "1";
-}
-
-const EMPTY_REMINDERS: RemindersSummaryVm = {
-    state: "empty",
-    next_follow_up_iso: null,
-    scheduled_send_count: 0,
-    scheduled_sends: [],
-};
 
 export type ComposeOpportunityDrawerViewModelParams = {
     supabase: SupabaseClient;
@@ -141,43 +93,11 @@ export async function composeOpportunityDrawerViewModel(
     } = shared;
     Object.assign(phases, shared.phases_ms);
 
-    const readinessMemo = createReadinessMemoScope();
-    const readiness = tryEvaluateDrawerRecordReadiness({
-        orgId,
-        opportunityId,
-        entity: record,
-        departmentId,
-        workUnitId: workUnitId || null,
-        departmentMetadata: deptMetadata as Record<string, unknown> | null,
-        memoScope: readinessMemo,
-    });
-
-    record._record_surface = "full";
-
-    const shell = compileOpportunityDrawerViewModelShell({
-        layoutConfig: layoutConfigJson,
-        record,
-    });
-    if (!shell) {
-        return finishCompose({
-            ok: false,
-            skipped: {
-                structureSettled: false,
-                reason: "layout_unavailable",
-                compose_version: OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
-            },
-        });
-    }
-
-    const task_assist_enabled = taskAssistEnabledOnServer();
-    const firstViewportPlan = buildOpportunityFirstViewportPlan({
-        shell,
-        task_assist_enabled,
-        queue_definition_present: queueDefinition != null,
-    });
-
-    const tDeps0 = Date.now();
-    const resolved = await resolveOpportunityDrawerFirstPaintDependencies({
+    // S4.4 — the Tier-2 Initial Panel composition (Module A): readiness, first-paint deps, above-fold
+    // render model, first-paint contract, header, registry actions, and Tier-2 summaries. Mutates the
+    // shared record in place (first-paint patches) BEFORE B; the orchestrator snapshots above_fold.record
+    // ONCE, after B's patches. Imports no Tier-3.
+    const initial = await buildInitialPanelResource({
         supabase,
         gate,
         opportunityId,
@@ -185,76 +105,26 @@ export async function composeOpportunityDrawerViewModel(
         workUnitId: workUnitId || null,
         statusKey,
         record,
-        dependencies: firstViewportPlan.dependencies,
+        deptMetadata,
+        layoutConfigJson,
         queueDefinition,
-        statusDefs,
         wuMetadata,
-        departmentMetadata: deptMetadata as Record<string, unknown> | null,
-        readiness: readiness ?? null,
+        statusDefs,
+        lifecycleRail: lifecycle_rail,
+        hintOperTrustHeadline: params.hintOperTrustHeadline,
+        hintOperTrustUrgency: params.hintOperTrustUrgency,
     });
-    Object.assign(record, resolved.record_patches);
-    Object.assign(phases, resolved.phases_ms);
-    phases.first_paint_resolve_ms = Date.now() - tDeps0;
-    // Everything after first-paint deps resolve is render-model assembly + serialization (no I/O).
-    const tSerialize0 = Date.now();
-
-    const reminders = remindersFromFirstPaintData(resolved.data) ?? EMPTY_REMINDERS;
-    const resolvedActions = headerActionsFromFirstPaintData(resolved.data);
-    const tourDisplaySource = resolveTourSlotDisplaySource(
-        record,
-        tourBookingsFromFirstPaintData(resolved.data)
-    );
-
-    const aboveFoldRenderModel = buildOpportunityDrawerViewModelAboveFold({
-        shell,
-        record,
-        reminders,
-        task_assist_enabled,
-        tour_display_source: tourDisplaySource,
-    });
-
-    if (!aboveFoldSectionsStructureSettled(aboveFoldRenderModel.sections)) {
-        throw new Error("drawer_vm_above_fold_not_structure_settled");
+    if (!initial.ok) {
+        return finishCompose({
+            ok: false,
+            skipped: {
+                structureSettled: false,
+                reason: initial.reason,
+                compose_version: OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
+            },
+        });
     }
-
-    const first_paint = buildOpportunityDrawerFirstPaintContract({
-        viewport_slots: firstViewportPlan.viewport_slots,
-        dependencies: resolved.dependencies,
-        data: resolved.data,
-        deferred: [],
-        background: [],
-    });
-
-    if (!first_paint.settled) {
-        throw new Error("drawer_vm_first_paint_not_settled");
-    }
-
-    const headerActions = resolvedActions?.header ?? [];
-    const activeTourBookings = tourBookingsFromFirstPaintData(resolved.data);
-    const headerMenuActions = buildOpportunityDrawerHeaderMenuActions(
-        resolvedActions,
-        activeTourBookings.length > 0
-    );
-    const tabs = shell.tabs;
-    const default_tab: DrawerTabKey = tabs.includes("overview") ? "overview" : (tabs[0] ?? "overview");
-
-    const oper_trust_preview = sanitizeDrawerOperTrustPreviewFromHints({
-        hintHeadline: params.hintOperTrustHeadline,
-        hintUrgency: params.hintOperTrustUrgency,
-    });
-
-    const layout = {
-        mode: "workflow_v1" as const,
-        tabs,
-        default_tab,
-        shell,
-    };
-
-    if (!opportunityDrawerFirstPaintContractValid({ layout, first_paint })) {
-        throw new Error("drawer_vm_first_paint_contract_invalid");
-    }
-
-    const attentionRaw = record._operational_attention as OpportunityAttentionResult | null | undefined;
+    Object.assign(phases, initial.phases_ms);
 
     // S4.3 — the deep/deferred (Tier-3) composition (Module B): stage context, family comms preview, and
     // the heavy stage-work slice. Resolved independently of the visible primary panel; the workspace VM
@@ -280,22 +150,16 @@ export async function composeOpportunityDrawerViewModel(
         published_stage_inputs,
         stage_work: stage_work_state,
     } = deferred.workspace_detail;
-    const communicationsPreviewVm = deferred.activity.communicationsPreviewVm;
-
     // Orchestrator-owned cross-tier join: the residual-tasks filter needs B's stage-work runtime; B's
     // record patches are applied here, before the single `above_fold.record` snapshot below.
-    const rawTasksSummary = parseInquirySummaryTasksFromRecord(record);
-    // Null runtime leaves tasks unfiltered (Tier 1); the client re-filters when stage work lands.
-    const filteredTasksSummary = filterResidualOperationalTasks(rawTasksSummary, stage_work_runtime);
+    const filteredTasksSummary = filterResidualOperationalTasks(initial.summaries.tasks_raw, stage_work_runtime);
     record._inquiry_summary_tasks = filteredTasksSummary;
     if (record._overview_data && typeof record._overview_data === "object" && !Array.isArray(record._overview_data)) {
         (record._overview_data as Record<string, unknown>)._inquiry_summary_tasks = filteredTasksSummary;
     }
     Object.assign(record, deferred.record_patches);
-    const status_can_mutate = resolveOpportunityDrawerStatusCanMutateFromGate({
-        role: gate.role,
-        roleKeys: gate.roleKeys,
-    });
+
+    const tSerialize0 = Date.now();
 
     const viewModel: OpportunityDrawerViewModel = {
         generation: computeOpportunityDrawerViewModelGeneration({
@@ -305,8 +169,8 @@ export async function composeOpportunityDrawerViewModel(
             workUnitId: workUnitId || null,
             statusKey,
             layoutVersion,
-            headerActionKeys: headerActions.map((a) => a.key),
-            aboveFoldSectionKeys: aboveFoldRenderModel.sections.map((s) => s.section_key),
+            headerActionKeys: initial.actions.header.map((a) => a.key),
+            aboveFoldSectionKeys: initial.aboveFoldRenderModel.sections.map((s) => s.section_key),
         }),
         structureSettled: true,
         compose_version: OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
@@ -323,46 +187,21 @@ export async function composeOpportunityDrawerViewModel(
             published_stage_inputs,
             stage_work: stage_work_state,
         },
-        first_paint,
-        header: {
-            title: buildOpportunityDrawerHeaderTitle(record),
-            subtitle: buildOpportunityDrawerHeaderSubtitle(record),
-            status: buildOpportunityStatusControlVm({
-                record,
-                statusDefs,
-                layoutMode: "workflow_v1",
-                configuredStages:
-                    lifecycle_rail?.stages.map((s, index) => ({
-                        id: s.key,
-                        key: s.key,
-                        label: s.label,
-                        sort_order: index,
-                        is_active: true,
-                    })) ?? null,
-            }),
-            status_can_mutate,
-            oper_trust_preview,
-        },
-        actions: {
-            header: headerActions,
-            header_menu: headerMenuActions,
-            manage_menu: headerMenuActions,
-            record_header: resolvedActions,
-        },
-        layout,
-        activity: {
-            communicationsPreviewVm,
-        },
+        first_paint: initial.first_paint,
+        header: initial.header,
+        actions: initial.actions,
+        layout: initial.layout,
+        activity: deferred.activity,
         above_fold: {
-            render_model: aboveFoldRenderModel,
+            render_model: initial.aboveFoldRenderModel,
             record: stripOpportunityDrawerRecordStaging(record),
         },
         summaries: {
             tasks: filteredTasksSummary,
-            active_tour_bookings: activeTourBookings,
-            reminders,
-            bos: buildOpportunityDrawerBosSummary(record),
-            attention: buildOpportunityDrawerAttentionSummary(attentionRaw),
+            active_tour_bookings: initial.summaries.active_tour_bookings,
+            reminders: initial.summaries.reminders,
+            bos: initial.summaries.bos,
+            attention: initial.summaries.attention,
         },
         background_refresh: {
             allowed: deferStageWork

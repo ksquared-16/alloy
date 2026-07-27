@@ -64,11 +64,14 @@ export type SharedCanonicalDeps = {
 export type InitialPanelResource = {
     header: Vm["header"];
     actions: Vm["actions"];
+    layout: Vm["layout"];
     first_paint: Vm["first_paint"];
-    above_fold: Vm["above_fold"];
+    /**
+     * A produces the above-fold RENDER MODEL only. The orchestrator snapshots + strips `above_fold.record`
+     * ONCE, AFTER Tier-3 (B) record patches land — so the paint record is complete regardless of tier order.
+     */
+    aboveFoldRenderModel: Vm["above_fold"]["render_model"];
     summaries: Omit<Vm["summaries"], "tasks"> & { tasks_raw: Vm["summaries"]["tasks"] };
-    /** Attention-bundle patches to the shared record (e.g. `_operational_attention`). NOT scheduling. */
-    record_patches: Record<string, unknown>;
     phases_ms: ComposePhaseTimings;
 };
 
