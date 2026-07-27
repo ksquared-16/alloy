@@ -38,8 +38,8 @@ last_reviewed: 2026-07-27
 | ID | Status | Commit | Notes |
 |---|---|---|---|
 | R4-01 | done | `919f65f91` | Code trace + contracts |
-| R4-02–R4-08 | done | _(pending)_ | Progressive Form, quiet inputs, help, sizing, Lead copy |
-| R4-09 | partial | _(pending)_ | Unit/contract tests pass; authenticated screenshots deferred (3012 unhealthy) |
+| R4-02–R4-08 | done | `c3ca6c3ae` | Progressive Form, quiet inputs, help, sizing, Lead copy |
+| R4-09 | partial | `c3ca6c3ae` | Unit/contract tests pass; authenticated screenshots deferred (3012 unhealthy) |
 | R4-10 | pending | | Final pause closeout after evidence or explicit deferral |
 
 **Target after R4-10:** BOS PAUSED — next owner is Commands and Processing Conversation Runtime.

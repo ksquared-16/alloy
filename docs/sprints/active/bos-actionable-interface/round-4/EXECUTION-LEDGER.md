@@ -12,15 +12,15 @@ Local only — **do not push**.
 | Package | Objective | Status | Commit |
 |---|---|---|---|
 | R4-01 | Code trace, primitive matrix, contracts, ledger | **done (docs)** | `919f65f91` |
-| R4-02 | Stone field / white card layering in host | pending | |
-| R4-03 | Progressive sections + summaries | pending | |
-| R4-04 | Quiet gather chrome; pair-only columns | pending | |
-| R4-05 | Help `[?]` + Lead vocabulary | pending | |
-| R4-06 | Command-workspace width preset + restore | pending | |
-| R4-07 | Responsive / pinned certification | pending | |
-| R4-08 | Review / success card parity | pending | |
-| R4-09 | Tests + authenticated screenshots | pending | |
-| R4-10 | Closeout + **BOS PAUSED** | pending | |
+| R4-02 | Stone field / white card layering in host | **done** | `c3ca6c3ae` |
+| R4-03 | Progressive sections + summaries | **done** | `c3ca6c3ae` |
+| R4-04 | Quiet gather chrome; pair-only columns | **done** | `c3ca6c3ae` |
+| R4-05 | Help `[?]` + Lead vocabulary | **done** | `c3ca6c3ae` |
+| R4-06 | Command-workspace width preset + restore | **done** | `c3ca6c3ae` |
+| R4-07 | Responsive / pinned certification | **done** | `c3ca6c3ae` |
+| R4-08 | Review / success card parity | **done** | `c3ca6c3ae` |
+| R4-09 | Tests + authenticated screenshots | **partial** | `c3ca6c3ae` (screenshots deferred) |
+| R4-10 | Closeout + **BOS PAUSED** | **done** | `ac5df8e1a` |
 
 ## Package file targets (product)
 
