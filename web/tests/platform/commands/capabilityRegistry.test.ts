@@ -19,6 +19,7 @@ import {
     resolvePlatformCapability,
     tryResolvePlatformCapability,
 } from "@/lib/platform/commands/capabilityRegistry";
+import { isCommandRuntimeFacadeExecutionSupported } from "@/lib/platform/commands/runtime/commandRuntimeExecutionGate";
 
 describe("capabilityRegistry spine (P0.S1)", () => {
     it("keeps REGISTERED_ACTION_CAPABILITY_KEYS in sync with RegisteredAction handlers", () => {
@@ -64,12 +65,20 @@ describe("capabilityRegistry spine (P0.S1)", () => {
             "add_child",
             "link_existing_person",
             "link_existing_child",
-            "make_primary_contact",
         ]) {
             const cap = assertKnownPlatformCapability(key);
             expect(cap.maturity).toBe("adapted");
             expect(cap.executionOwner).toBe("relationship_runtime");
         }
+    });
+
+    it("classifies make_primary_contact as admin_action (external designation; deferred P4)", () => {
+        const cap = assertKnownPlatformCapability("make_primary_contact");
+        expect(cap.maturity).toBe("adapted");
+        expect(cap.executionOwner).toBe("admin_action");
+        expect(cap.confirmationPolicy).toBe("confirm");
+        expect(cap.reason).toMatch(/P4/i);
+        expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(false);
     });
 
     it("classifies Tour keys with tour_domain ownership (except confirm_tour registered dual-path)", () => {

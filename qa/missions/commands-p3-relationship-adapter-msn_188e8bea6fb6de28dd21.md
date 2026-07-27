@@ -301,11 +301,160 @@ Mutation, prior Relationship facade keys unchanged. Dedicated relationship-actio
 
 ## make_primary_contact classification recommendation
 
-**Defer P3.S4 until classified.** Registry `externalExecutor: true` / `make_primary_external` —
-dedicated confirmation path, not the standard `executeRelationshipAction` write stack. Treat as
-household primary **designation** (not a create/link child command). Do not fold into child slice.
+→ Certified in **P3.S4** as Disposition B (defer to P4). See section below.
 
 ## Remaining after P3.S3
 
-- Optional P3.S4: `make_primary_contact` after classification
+- ~~P3.S4 classification~~ → **done (defer)**
 - Later product: Add Family Member hub composition
+- Next implementation phase: **P4 — Destructive Command foundation**
+
+---
+
+# P3.S4 — Primary Contact Classification and Relationship Phase Closeout
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Slice | P3.S4 |
+| Selected disposition | **B — Defer to P4 — Destructive/replacement Command foundation** |
+| Commit message target | `docs(commands): certify relationship command convergence` |
+
+## Authority trace
+
+```text
+Operator surface (layout contact_block / related_list / repeater row only)
+  → LayoutRuntimeMakePrimaryContactActionButton / applyRegistryResolvedActionClient
+  → openMakePrimaryContact({ opportunityId, targetPersonId })
+  → LeadHouseholdPrimaryContactConfirmModal (confirm; shows current vs new primary)
+  → patchHouseholdPrimaryContact(customerId, personId)
+  → PATCH /api/admin/customers/:id/household-primary-contact
+       (requireAdminOrOps + getAdminContextCached)
+  → setHouseholdPrimaryContactForCustomer
+       → ensureCustomerPersonsPrimaryLink  (demotes other primary_contact is_primary rows)
+       → UPDATE opportunities.primary_person_id for all opportunities on customer
+  → emitHouseholdPrimaryContactChangedEvent (household.primary_contact_changed)
+  → client dispatchHouseholdPrimaryContactChanged (projection refresh hooks)
+```
+
+**Not** on path: `executeRelationshipAction` (throws “dedicated executor”), Command Runtime facade,
+RegisteredAction, Mutation Runtime.
+
+## Final executor
+
+| Layer | Symbol |
+|-------|--------|
+| HTTP | `web/app/api/admin/customers/[id]/household-primary-contact/route.ts` |
+| Domain | `setHouseholdPrimaryContactForCustomer` |
+| Displacement helper | `ensureCustomerPersonsPrimaryLink` |
+| Event | `emitHouseholdPrimaryContactChangedEvent` |
+
+## Subject / designation grain
+
+| Question | Answer |
+|----------|--------|
+| What becomes primary? | A **person** linked on the **customer/household** (`customer_persons`) |
+| Primary relative to? | **Household/customer** (`role_type = primary_contact`, `is_primary = true`) |
+| Also synced? | All **opportunities** on that customer → `primary_person_id` (queue/lead display) |
+| Not | Org-wide person truth; child-scoped; billing account FK; pickup/guardian grant |
+
+## Displacement
+
+- Prior household primary: `is_primary` cleared on other `customer_persons` rows with same role.
+- Previous person **remains** household-linked (modal copy: “remain linked as an additional household contact”).
+- Multi-record: customer_persons + N opportunities.
+- Confirmation required (dedicated modal; current vs new; affected scope labels).
+- Previous primary id returned/audited via event payload (`previous_primary_person_id`).
+
+## Side effects
+
+| Area | Effect? |
+|------|---------|
+| Queue / lead primary display | Yes — `opportunities.primary_person_id` |
+| Communications default recipient | Projection/display-adjacent; not a separate comms executor in this path |
+| Billing / payer / funder | No financial mutation in this path |
+| Authorized pickup / guardian / emergency | No role grants |
+| Portal / legal responsibility | Not mutated here |
+| Relationship Framework links | Not via `executeRelationshipAction` |
+
+## Authorization & confirmation
+
+- Route: `requireAdminOrOps` + server org/actor.
+- Confirm: `LeadHouseholdPrimaryContactConfirmModal` before PATCH.
+- Stripped from generic header/rail/workspace resolve (layout contact-row only).
+- Capability `confirmationPolicy: confirm` (P4 may elevate to strong_confirm).
+
+## Classification
+
+| Field | Value |
+|-------|-------|
+| Maturity | `adapted` |
+| Execution owner | `admin_action` (corrected from mistaken `relationship_runtime`) |
+| Catalog | `organization_command_catalog` (layout-gated at resolve time) |
+| Architecture label | Household primary **designation with displacement** (legacy_external / replacement-adjacent) |
+| Disposition | **B — Defer to P4** |
+
+### Why not Disposition A
+
+- Demotes existing primary (replacement semantics).
+- Multi-table write (customer_persons + opportunities).
+- Explicit confirm UX already separate from Relationship wizard.
+- Intentionally `externalExecutor` outside Relationship Framework.
+- Stronger destructive/replacement Command safeguards belong in P4.
+
+### Why not Disposition C
+
+- Production operator Command with real mutations and events — not a cosmetic preference or unsupported stub.
+
+## Compatibility retained
+
+- Existing modal + PATCH path unchanged.
+- Facade gate remains closed (`isCommandRuntimeFacadeExecutionSupported` = false).
+- `/api/admin/actions/execute` continues `executeAdminAction` compatibility for this key.
+- No adapter added.
+
+## Add Family Member boundary (certified)
+
+```text
+Add Family Member
+→ operator-facing hub (product/composition)
+→ presents explicit relationship Commands, e.g.:
+   - add_parent_guardian
+   - add_child
+   - link_existing_person
+   - link_existing_child
+   - add_emergency_contact
+   - add_authorized_pickup
+   - add_billing_contact
+```
+
+Hub is **not** a Relationship Runtime executor and was **not** implemented in P3.
+
+## P3 Relationship Phase Certification
+
+| Capability | Capability owner | Facade execution | Final executor | Status | Future work |
+|------------|------------------|------------------|----------------|--------|-------------|
+| `add_parent_guardian` | relationship_runtime | Yes (P3.S1) | `executeRelationshipAction` | Migrated | — |
+| `link_existing_person` | relationship_runtime | Yes (P3.S1) | `executeRelationshipAction` | Migrated | — |
+| `add_emergency_contact` | relationship_runtime | Yes (P3.S2) | `executeRelationshipAction` | Migrated | — |
+| `add_authorized_pickup` | relationship_runtime | Yes (P3.S2) | `executeRelationshipAction` | Migrated | — |
+| `add_billing_contact` | relationship_runtime | Yes (P3.S2) | `executeRelationshipAction` | Migrated | — |
+| `add_child` | relationship_runtime | Yes (P3.S3) | `executeRelationshipAction` | Migrated | Dual UI overlap note |
+| `link_existing_child` | relationship_runtime | Yes (P3.S3) | `executeRelationshipAction` | Migrated | — |
+| `make_primary_contact` | admin_action | No | `setHouseholdPrimaryContactForCustomer` | Deferred with phase | **P4** replacement/destructive |
+| `add_family_member` | admin_action | No | capture-first admin path | Hub/product composition | Commands product / surface |
+| `add_related_person` | → `add_family_member` | No | alias | Legacy alias | Hub |
+| `add_sibling` | admin_action | No | overlaps add_child | Hub/product / overlap | Product resolve |
+
+## P3 exit criteria
+
+1. Seven Relationship Framework commands migrated through facade → `executeRelationshipAction`.
+2. `make_primary_contact` classified with proven authority and named P4 deferral.
+3. Add Family Member certified as hub, not executor.
+4. No silent “migrated” claim for external/deferred identities.
+5. Next implementation phase: **P4 — Destructive Command foundation**.
+
+## Intentionally not claimed
+
+Facade adaptation of primary contact · Add Family Member UI · full Relationship retirement ·
+API rename · `/configuration/commands` · schema/migrations.

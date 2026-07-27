@@ -48,7 +48,7 @@ export type ChildEnrollmentMutationFacadeCommandKey =
  * P3.S1: parent/guardian + link existing person
  * P3.S2: contact-role commands (distinct capabilities; shared executor)
  * P3.S3: child relationship commands (create/link child identity)
- * Not included: make_primary_contact, Add Family Member hub
+ * Not included: make_primary_contact (external household designation → P4), Add Family Member hub
  */
 export const RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS = [
     "add_parent_guardian",

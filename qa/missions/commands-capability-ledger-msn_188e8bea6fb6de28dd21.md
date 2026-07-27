@@ -27,9 +27,9 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 | `add_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S3 facade** → `executeRelationshipAction` |
 | `link_existing_person` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S1 facade** → `executeRelationshipAction` |
 | `link_existing_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S3 facade** → `executeRelationshipAction` |
-| `make_primary_contact` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
-| `add_family_member` | same | adapted | admin_action | organization_command_catalog | yes | P3 | Hub; aliases `add_related_person`, `add_person` |
-| `add_sibling` | same | adapted | admin_action | organization_command_catalog | yes | P3 | Overlaps add_child |
+| `make_primary_contact` | same | adapted | admin_action | organization_command_catalog | yes | **P4** | External household designation; **Disposition B** — not Relationship Framework |
+| `add_family_member` | same | adapted | admin_action | organization_command_catalog | yes | Product hub | Hub; aliases `add_related_person`, `add_person` |
+| `add_sibling` | same | adapted | admin_action | organization_command_catalog | yes | Product hub | Overlaps add_child |
 | `schedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Not RegisteredAction |
 | `reschedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | |
 | `cancel_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Confirm/preview later |
@@ -245,7 +245,8 @@ the two cut-over keys), Tour-domain (non-RA), Processing, destructive.
 
 ~~`add_emergency_contact`, `add_authorized_pickup`, `add_billing_contact`~~ → **P3.S2**  
 ~~`add_child`, `link_existing_child`~~ → **P3.S3**  
-`make_primary_contact` (external executor — classify before cutover), `add_family_member` / hub, sibling aliases.
+~~`make_primary_contact`~~ → **P3.S4 Disposition B → P4**  
+`add_family_member` / hub, sibling aliases.
 
 ---
 
@@ -277,6 +278,24 @@ Emergency ≠ pickup ≠ billing ≠ guardian. Shared adapter does not collapse 
 
 ## make_primary_contact recommendation
 
-Remains **deferred**. Registry marks `externalExecutor: true` (`make_primary_external`) — not the same
-atomic path as `executeRelationshipAction`. Classify before any P3.S4 cutover (preference /
-designation vs composite confirmation).
+→ **P3.S4 Disposition B:** deferred to **P4 — Destructive/replacement Command foundation**.
+Capability owner corrected to `admin_action` (not Relationship Framework).
+
+---
+
+# P3.S4 — Primary Contact Classification & Relationship Phase Closeout
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p3-relationship-adapter-msn_188e8bea6fb6de28dd21.md` (P3.S4) |
+| Disposition | **B — Defer to P4** |
+| Classification | `adapted` / `admin_action` / household primary designation (displacement) |
+| Final write | `setHouseholdPrimaryContactForCustomer` via `PATCH .../household-primary-contact` |
+| Facade | **Not** enabled |
+
+## Authority (one line)
+
+Layout contact-row → confirm modal → client PATCH → `setHouseholdPrimaryContactForCustomer` →
+`ensureCustomerPersonsPrimaryLink` (demote peers) + sync `opportunities.primary_person_id` →
+`household.primary_contact_changed` event. `executeRelationshipAction` **rejects** this key.

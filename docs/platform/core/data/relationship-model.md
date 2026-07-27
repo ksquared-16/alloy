@@ -198,6 +198,10 @@ exact operator capabilities through `POST /api/admin/actions/execute`:
 `make_primary_contact` (external executor) and the Add Family Member hub remain outside facade
 execution. Dedicated `/api/admin/relationship-actions/*` routes remain.
 
+**Primary contact designation (P3.S4):** Owned by `setHouseholdPrimaryContactForCustomer` (customer
+API), not `executeRelationshipAction`. Displaces prior household primary; deferred to P4 for
+Command Runtime adaptation under replacement/destructive safeguards.
+
 ---
 
 ## Reusable widget potential

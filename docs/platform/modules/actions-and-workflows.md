@@ -93,8 +93,8 @@ P3.S2 contact-role; P3.S3 child relationship commands, July 2026) — exact keys
   explicit exact keys
 - `mark_lost` remains on legacy compatibility (`executeAdminAction`); not consolidated
 - Enrollment aliases (`move_to_waitlist`, `approve_enrollment`) remain outside exact-key facade cutover
-- Remaining Relationship keys (`make_primary_contact`, …) and Add Family Member hub remain outside
-  this cutover
+- Remaining Relationship keys (`make_primary_contact` — **deferred to P4**, admin_action designation
+  with displacement; Add Family Member hub) remain outside facade cutover
 
 `POST /api/admin/actions/execute` remains the operator/API route name. Dedicated
 `/api/admin/relationship-actions/execute` remains available. `/api/admin/mutations/execute`
@@ -318,13 +318,23 @@ Relationship kind/role/cardinality/identity resolution remain Relationship Frame
 Contact-role and child Commands share infrastructure but remain distinct identities.
 `make_primary_contact` and the Add Family Member hub are not cut over.
 
+**`make_primary_contact` (P3.S4 classification):** Not Relationship Framework. Household primary
+designation via `PATCH /api/admin/customers/:id/household-primary-contact` →
+`setHouseholdPrimaryContactForCustomer` (displaces prior `is_primary`, syncs opportunity
+`primary_person_id`, emits `household.primary_contact_changed`). Confirm modal required.
+**Deferred to P4** (replacement/destructive Command foundation). Capability owner: `admin_action`.
+
 ### Make Primary Contact
 
 - Relationship/designation action — **not** inline scalar edit on `person.is_primary`.
 - **Layout contexts only:** contact block, household contacts widget, contact related-list row.
 - **Hidden** from generic header/rail/workspace resolve (`stripMakePrimaryContactFromResolvedActionsBySlot`).
 - Requires **target person** at runtime; registry path disabled without target.
-- Primary row: read-only **badge**; non-primary row: **Make Primary Contact** button → confirm → PATCH household primary.
+- Primary row: read-only **badge**; non-primary row: **Make Primary Contact** button → confirm →
+  `PATCH /api/admin/customers/:id/household-primary-contact` → `setHouseholdPrimaryContactForCustomer`.
+- Displaces prior household primary (`is_primary`); previous contact remains linked.
+- **Command Runtime:** not facade-adapted (P3.S4 Disposition B → **P4**). Capability owner
+  `admin_action` — not `executeRelationshipAction`.
 
 ---
 

@@ -266,12 +266,21 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         operatorLabel: "Make Primary Contact",
         family: "relationships",
         maturity: "adapted",
-        executionOwner: "relationship_runtime",
+        /**
+         * Not Relationship Framework (`executeRelationshipAction` rejects externalExecutor).
+         * Canonical write: PATCH /api/admin/customers/:id/household-primary-contact
+         * → setHouseholdPrimaryContactForCustomer (displaces prior is_primary + syncs opportunities).
+         * Deferred to P4 — Destructive/replacement foundation (Disposition B, P3.S4).
+         */
+        executionOwner: "admin_action",
         catalogVisibility: "organization_command_catalog",
         supportedSubjects: ["person", "opportunity"],
         supportsPreview: false,
         confirmationPolicy: "confirm",
         implementationStatus: "production",
+        reason:
+            "Household primary designation with displacement; dedicated customer API + confirm modal. " +
+            "Not facade-adapted. P4 prerequisite: replacement/destructive Command safeguards.",
     }),
 
     // ── Family overlap (explicit; no execution consolidation in P0) ────────
