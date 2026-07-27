@@ -84,11 +84,11 @@ export function prefetchWorkUnitProvisioning(
 }
 
 /**
- * SEED a server-composed provisioning answer into the SAME cache K2 consumes, under the SAME URL key
- * K2 builds (`provisioningAnswerUrl`). This is the Runtime V1 Realization seam: a route bootstrap (RSC)
- * resolves the bounded answer server-side — reusing `composeWorkUnitProvisioningAnswer`, the one
- * resolver — and hands the RESOLVED answer to the client so K2's single Preparation round-trip resolves
- * WARM, with no client network hop.
+ * INTERNAL seed primitive (RA-3). Writes a server-composed answer into the SAME cache K2 consumes.
+ * It takes a raw URL key deliberately — but it is **module-private** so no layer outside the kernel can
+ * hand-build (and thus drift) that key: `seedProvisioningForRoute` is the SOLE public seed seam, and it
+ * derives the key here via `provisioningAnswerUrl` (the one key builder). Key parity with K2's consume
+ * is therefore a structural in-kernel invariant, not a convention callers must honor.
  *
  * It is NOT a new cache, endpoint, or contract: identical key + identical `Promise<ProvisioningAnswer>`
  * entry shape as an intent prefetch — only a different WARM SOURCE (server, not hover). The caller passes
@@ -97,7 +97,7 @@ export function prefetchWorkUnitProvisioning(
  * entry for the same URL (so a Strict-Mode double-invoke, or an intent prefetch that already warmed this
  * URL, wins/stays), and it is a no-op on the server (the cache is browser-side).
  */
-export function seedProvisioning(
+function seedProvisioning(
     url: string,
     answer: ProvisioningAnswer | null,
     now: number = Date.now(),

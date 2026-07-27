@@ -17,7 +17,7 @@
 
 | Category | Current | Target | Trend | Completion % | Confidence % | Tasks Done / Total | Milestone |
 |---|:--:|:--:|:--:|--:|--:|:--:|:--:|
-| Runtime Architecture | B+ (was B) | A- | ↑ | 65% | 82% | 2 / 3 | M1 |
+| Runtime Architecture | **A- (was B+)** ✓target | A- | ↑ | 100% | 88% | 3 / 3 | M1 |
 | Critical Path | B (was B-) | A- | ↑ | 40% | 80% | 2 / 5 | M2 |
 | TypeScript Architecture | C+ (was C) | B+ (A later) | ↑ | 50% | 75% | 2 / 3 | M3 |
 | Dependency Graph | B | A- | ↑ | 40% | 70% | 2 / 5 | M1 |
@@ -31,7 +31,7 @@
 **Confidence %** = how confident a fresh architecture review would re-assign this grade, given the committed
 evidence (tests / cert / measurements / review). It rises only with evidence and drops when new findings surface.
 
-**Overall initiative completion (weighted, coarse): ~48%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade.
+**Overall initiative completion (weighted, coarse): ~52%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade. **Runtime Architecture is the first category CERTIFIED (A- = target).**
 
 Task status legend: **NS** Not Started · **IP** In Progress · **BL** Blocked · **NV** Needs Validation · **DONE** Completed.
 
@@ -87,6 +87,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | CQ-3 Rename `resolveWorkUnitRouteIdentityCached` | Code Quality | Low | — | ✓ | READY |
 | CP-1 Server-seed enriched VM | Critical Path | **Critical** | RA-1, CP-4 | ✗ | blocked |
 | ~~RA-2 Remove legacy-drawer duality~~ | Runtime Arch | High | RA-1✓ | ✓ | **DONE** |
+| ~~RA-3 Cache single-producer invariant~~ | Runtime Arch | High | RA-1✓ | ✓ | **DONE** (Runtime Arch → A- ✓target) |
 | CQ-2 Decompose `InlineOpportunityFocusPanel` | Code Quality | High | DG-1, DG-2 | ✗ | blocked |
 | TE-3 CI wiring | Testing | High | TE-2 | ✗ | blocked |
 | ~~TE-5 Routing-permutation unit tests~~ | Testing | Medium | RA-2✓ | ✓ | **DONE** |
@@ -97,12 +98,14 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | CP-3 Gate prewarm storm | Critical Path | Low | — | ✓ | READY (low value — see note) |
 | TE-6 Perf regression assertions | Testing | Medium | PE-2 | ✗ | blocked |
 
-**→ RESUME HERE — Next task selected by the queue: `CP-4` (High, READY — highest leverage).** RA-2 is DONE
-(Runtime Architecture B→B+, one record-open owner). `CP-4` (enriched-VM field-by-field reuse of provisioning
-data) is the next highest-leverage READY task: landing it unblocks the **Critical** `CP-1` (server-seed the
-enriched VM — the biggest perceived-perf lever). Execute: remove the named duplicate DB reads
-(`inquiry_children`, primary contact) from the enriched-VM `phases_ms`, contract unchanged; evidence = server
-`phases_ms` before/after. `CP-4` needs the build+measurement loop (host-throttled, §6a).
+**→ RESUME HERE — `CP-4` (High) is the highest-leverage READY task; under host throttle route to a light task first.**
+Runtime Architecture is now **CERTIFIED (A-)** — RA-1/RA-2/RA-3 all DONE, the RA line is complete. `CP-4`
+(enriched-VM field-by-field reuse of provisioning data) is the next highest-leverage task — it unblocks the
+**Critical** `CP-1` (server-seed the enriched VM, the biggest perceived-perf lever) — but its certification
+requires trustworthy server `phases_ms` before/after, which the **saturated host cannot produce** right now
+(§6a; swap ~19 GB). Until the host has headroom, route to throttle-light READY tasks that certify by
+unit+typecheck: `CQ-3` (rename `resolveWorkUnitRouteIdentityCached`), `TE-4` (`ProvisioningAnswer` schema
+contract), `TS-1` (TS graph wins). Batch `CP-4`/`DG-1`/`CP-1` for host headroom.
 
 Co-highest-priority READY siblings: `DG-1`, `TE-2` (High). Light READY tasks available under throttle:
 `TE-4` (schema contract, unit-only), `TS-1` (TS wins), `CQ-3` (rename). **NOTE:** CP-4/DG-1/CP-1 each
@@ -118,15 +121,15 @@ higher-priority cross-milestone blocker exists (e.g. an M1 task that unblocks th
 
 | Milestone | Theme | Tasks | Done / Total | Status |
 |---|---|---|:--:|---|
-| **M1** | **Runtime Ownership** | RA-1✓, RA-2✓, RA-3, DG-1, DG-2, DG-3, DG-4✓, DG-5✓, CQ-1✓, CQ-2, CQ-3 | 6 / 11 | **ACTIVE** |
+| **M1** | **Runtime Ownership** | RA-1✓, RA-2✓, RA-3✓, DG-1, DG-2, DG-3, DG-4✓, DG-5✓, CQ-1✓, CQ-2, CQ-3 | 7 / 11 | **ACTIVE** |
 | M2 | Critical Path & Performance | CP-1, CP-2✓, CP-3, CP-4, CP-5✓, PE-1, PE-2, PE-3, PE-4✓, SC-1, SC-2 | 4 / 11 | in progress |
 | M3 | Developer Experience | TS-1, TS-2✓, TS-3✓, MA-1✓, MA-2, DOC-1✓, DOC-2, DOC-3 | 5 / 8 | in progress |
 | M4 | Certification & Regression | TE-1✓, TE-2, TE-3, TE-4, TE-5✓, TE-6, TE-7✓ | 3 / 7 | in progress |
 
 - **Current milestone:** **M1 Runtime Ownership** (fix ownership before optimizing the path; RA-1 also unblocks the M2 perf core).
-- **Milestone progress:** M1 6/11 · M2 4/11 · M3 5/8 · M4 2/7.
-- **Milestones remaining to target:** all four still have open tasks; M3 is closest.
-- **Active-milestone next READY:** `CP-4` (cross-milestone M2 — highest leverage: unblocks Critical `CP-1`; see Priority Queue). M1's own next READY is `DG-1` / `RA-3`.
+- **Milestone progress:** M1 7/11 · M2 4/11 · M3 5/8 · M4 3/7.
+- **Milestones remaining to target:** all four still have open tasks; M3 is closest. **Runtime Architecture is the first category to reach its target grade (A-).**
+- **Active-milestone next READY:** M1's remaining core is the **Dependency Graph** line (`DG-1` High, `DG-2`/`DG-3`) — each needs the build+browser-cert loop (host-throttled, §6a). `CQ-3` (rename) is the throttle-light M1 option; `CQ-2` stays blocked on `DG-1`/`DG-2`.
 
 ## 1e. Risks
 
@@ -151,16 +154,16 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 
 ## 2. Categories
 
-### 2.1 Runtime Architecture — B → A- (bucket B) · 65%
-**Why B (was C+):** RA-1 moved the seed key derivation into the kernel (no layer references `provisioningAnswerUrl`); RA-2 deleted the **legacy-drawer ↔ Focus-Panel record-open duality** — the dead `useWorkUnitSurfaceController` + path deep-link/url-sync machinery are gone, record-bearing hrefs emit `?subject_id`, and the `[recordId]` route + its rewrite are retired. Remaining gap to A-: RA-3 (the cache single-producer invariant — three producers still exist; only key-parity is unit-locked, full producer-parity/idempotency pending).
-**Blocking risks:** RA-3 producer-parity test authoring.
-**Evidence for A-:** one record-open owner ✓ (RA-2); seed key derivation kernel-owned ✓ (RA-1); cache-producer invariant test green (RA-3, pending).
+### 2.1 Runtime Architecture — A- ✓ TARGET (bucket B) · 100%
+**Why A- (certified):** RA-1 moved the seed key derivation into the kernel (no layer references `provisioningAnswerUrl`); RA-2 deleted the **legacy-drawer ↔ Focus-Panel record-open duality** (dead controller + path machinery gone, hrefs emit `?subject_id`, `[recordId]` route + rewrite retired); RA-3 closed the cache **single-producer invariant** — the raw-`url` seed door is now module-private so `seedProvisioningForRoute(routeIdentity)` is the SOLE public seam (the kernel owns key derivation structurally, not by convention), with committed producer-parity + idempotency + cold-fetch-coalescing tests. One key builder, three producers, one consumer — all agreeing on the key, enforced by a red test on drift.
+**Blocking risks:** none open. (A later — beyond A- — is not a defined target for this category.)
+**Evidence for A-:** one record-open owner ✓ (RA-2); seed key derivation kernel-owned ✓ (RA-1); cache single-producer invariant test green ✓ (RA-3).
 
 | ID | Task | Status | Completion criteria | Evidence | Deps |
 |---|---|:--:|---|---|---|
 | RA-1 | Introduce canonical kernel preload seam `seedProvisioningForRoute(routeIdentity, answer)` | **DONE** | Layout passes `(routeIdentity, answer)`, not a raw URL; key derivation lives in the kernel; `provisioningAnswerUrl` not imported outside the kernel | **0 non-kernel imports of `provisioningAnswerUrl`; route-seam unit test (14/14); C1/C3 cert (seed consumed, latest-wins, no flash); all-cards ~10.9 s; tsc exit 0; commit `3c0a9d6c1`** | — |
 | RA-2 | Remove legacy-drawer ↔ Focus-Panel record-open duality | **DONE** | (a) delete the DEAD `useWorkUnitSurfaceController` + `resolveDeepLinkRecordAction` + path deep-link/url-sync machinery; (b) make `operatorWorkUnitHrefFromKey`/`resolveCreatedLeadFocusPanelHref` emit `?subject_id=` (not `/recordId`) so create-lead selects the created record; (c) retire the `[recordId]` route + rewrite + update guards to the query form | **DONE `08855fe59`.** Deleted `workUnitSurfaceController.ts` (0 callers, verified) + its test + dead `WorkUnitSurfaceView` + dead `syncOperatorWorkUnitUrlInBrowser`; `operatorWorkUnitHrefFromKey(key,recordId)` now emits `?subject_id=`; `[recordId]/page.tsx` route + `next.config.ts` `:recordId` rewrite retired (build manifest omits it). **tsc EXIT 0 / 0 errors; prod build EXIT 0; RA-2-owned unit set GREEN (32 pass), +0 new failures vs baseline, −2 pre-existing failures fixed (baseline-diff proven); create-lead does `router.push` of the `?subject_id` href → D-004 runtime honors it.** Also removed a misrooted orphan dup test (`tests/routeShellPipeline/…`). Live-browser E2E = local-only (R-04). | RA-1✓ |
-| RA-3 | Cache single-producer invariant (prefetch/seed/cold = one owned seam) | IP | One key builder; producer-parity + idempotency tests | seed-contract unit tests (partial — key-parity DONE) | RA-1 |
+| RA-3 | Cache single-producer invariant (prefetch/seed/cold = one owned seam) | **DONE** | One key builder; producer-parity + idempotency tests | **`seedProvisioning(url)` un-exported → `seedProvisioningForRoute(identity)` is the SOLE public seed seam (kernel owns key derivation; 0 external callers deleted). `workUnitProvisioningPrefetch.test.ts` 17/17: single-producer key-agreement invariant (prefetch/seed/cold all key off `provisioningAnswerUrl`), re-seed idempotency, cold-fetch coalescing (prev. untested). +0 new failures vs baseline (6→6, proven). `afccb1a6c`** | RA-1✓ |
 
 ### 2.2 Critical Path — B- → A- (bucket A/B) · 20%
 **Why B-:** first-card fixed, but the ~6 s post-commit enriched VM + ~2 s stage-work dominate all-cards (~12.7 s warm); a 4-request sibling-view prewarm storm fires during reveal; enriched VM re-reads data the provisioning answer already carries.
@@ -294,6 +297,7 @@ Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact*
 | 2026-07-26 | Certification exec #4 | **RA-1 → DONE** (kernel preload seam; `provisioningAnswerUrl` now kernel-only; behavior-identical, cert green; D-011). Runtime Architecture C+→B (40%). Unblocks RA-2. | `3c0a9d6c1` |
 | 2026-07-26 | Certification exec #5 | **RA-2 → IP (scoped + de-risked).** Found `useWorkUnitSurfaceController` DEAD → legacy duality is unreachable; RA-2 reduced to delete-dead + query-ify the create-lead href. R-03 downgraded Sev2→Sev3. Held (multi-file behavior change; host-memory throttle degrading trustworthy heavy cert). | — |
 | 2026-07-26 | Certification exec #6 | **RA-2 → DONE.** Deleted dead surface controller (`workUnitSurfaceController.ts` + test + `WorkUnitSurfaceView` + `syncOperatorWorkUnitUrlInBrowser`); `operatorWorkUnitHrefFromKey(key,recordId)` emits `?subject_id=`; `[recordId]` route + `next.config` rewrite retired; guards/tests → query form; removed a misrooted orphan dup test. **tsc EXIT 0 / 0 errors; prod build EXIT 0; RA-2-owned unit set green (32), +0 new failures / −2 pre-existing fixed (baseline-diff proven).** Runtime Architecture B→B+ (65%); R-03 RESOLVED; M1 6/11. Pre-existing seed-only-host/route-shell test rot flagged (R-04). | `08855fe59` |
+| 2026-07-26 | Certification exec #8 | **RA-3 → DONE — Runtime Architecture CERTIFIED (B+ → A- = target, the first category to reach target).** Un-exported the raw-`url` `seedProvisioning` (0 external callers) → `seedProvisioningForRoute(identity)` is the SOLE public seed seam; the kernel owns key derivation structurally. `workUnitProvisioningPrefetch.test.ts` 17/17: single-producer key-agreement invariant + re-seed idempotency + cold-fetch coalescing (prev. untested). tsc EXIT 0 / 0 errors; +0 new failures vs baseline (6→6, proven); build/browser N/A (import-graph-neutral visibility change). ARCHITECTURE.md §7 updated. M1 7/11; overall ~52%. | `afccb1a6c` |
 | 2026-07-26 | Certification exec #7 | **TE-5 → DONE.** `attentionUrlParity.test.ts` (4/4) locks `urlFromAttention`⇄`attentionFromUrl`: round-trips 6 coordinate permutations; subject = `?subject_id` ONLY (path `/:recordId` → null; D-004/RA-2); `urlFromAttention` never emits a path record segment. Kernel suites still green (d2/d4 = 36/36). Testing 35→42% (3/7); M4 3/7. Unit-only (throttle-appropriate; no source change). | `cd155a26b` |
 
 ## 6a. Environmental throttle (active)

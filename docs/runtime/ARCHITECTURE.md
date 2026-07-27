@@ -94,14 +94,17 @@ the **shared** `composeProvisioningAnswerForRoute` so the fetched answer and the
 ## 7. Cache ownership (two caches, explicit producers)
 
 **Provisioning cache** — `lib/runtime/kernel/workUnitProvisioningPrefetch.ts`. One `Map` keyed by the exact
-K2 URL (`provisioningAnswerUrl(target, lens, subject)`), 60 s TTL, one-shot consume. **Three producers**,
-one consumer (K2):
+K2 URL, derived by the ONE key builder `provisioningAnswerUrl(target, lens, subject)`, 60 s TTL, one-shot
+consume. **Three producers**, one consumer (K2) — all key off that single builder (RA-3):
 1. intent prefetch (`prefetchWorkUnitProvisioning`) — operator hover/focus.
-2. **server seed** (`seedProvisioning`) — the route layout hands K2 a resolved answer so cold load resolves
-   warm. *The seed key MUST equal K2's consume key — this is guarded by a committed key-parity unit test
-   (`web/tests/runtime/workUnitProvisioningPrefetch.test.ts`, exercising the `lib/runtime/kernel/` seam); a
-   drift is a silent slowdown, so the test is the alarm.*
-3. K2 cold fetch (`fetchProvisioningEntryDeduped`) — the fallback when nothing warmed it.
+2. **server seed** — the route layout hands K2 a resolved answer so cold load resolves warm, through the
+   SOLE public seam `seedProvisioningForRoute(routeIdentity, answer)`: the kernel derives the key itself
+   (the low-level `seedProvisioning(url, …)` primitive is **module-private**, so no layer can hand-build /
+   drift the key). *Seed key parity with K2's consume is thus a structural in-kernel invariant, guarded by
+   committed unit tests (`web/tests/runtime/workUnitProvisioningPrefetch.test.ts` — route-seam parity, the
+   single-producer key-agreement invariant, idempotency); a drift is a silent slowdown, so the test is the alarm.*
+3. K2 cold fetch (`fetchProvisioningEntryDeduped`) — the fallback when nothing warmed it; concurrent
+   identical fetches coalesce to one round-trip and drop on settle (unit-tested).
 
 **Stage-work cache** — `lib/adminV2/viewModel/drawer/opportunity/stageWork/opportunityStageWorkResource.ts`.
 Keyed by (org/opp/dept/stage), 90 s TTL, mutation-invalidated. Producers: the drawer VM's fetch, and
