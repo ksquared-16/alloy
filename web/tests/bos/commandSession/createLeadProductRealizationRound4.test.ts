@@ -117,7 +117,7 @@ describe("Round 4 progressive sections", () => {
         ]);
     });
 
-    it("opens Family by default when required creation info is missing", () => {
+    it("opens Person by default when required creation info is missing", () => {
         const models = buildCreateLeadSectionModels({
             sections: sectionsFromFields(),
             draft: emptyBosCommandDraft(),
@@ -125,6 +125,8 @@ describe("Round 4 progressive sections", () => {
         });
         expect(defaultOpenSectionKeys(models)).toEqual(["person"]);
         expect(sectionAffordanceLabel(models[0]!)).toBe("Open");
+        // Four visible controls (name + email|phone) → three operator details: first, last, contact.
+        expect(models[0]!.statusLabel).toBe("3 details still needed");
     });
 
     it("keeps optional sections empty/optional and summarizes populated Family", () => {

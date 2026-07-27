@@ -55,7 +55,7 @@ const base = {
     currentBusinessState: { stageKey: "lead", stageLabel: "New Lead", purpose: "p", workTemplateKey: "contact_family", workTemplateLabel: "Contact Family", required: true },
     primaryAction: { actionRef: "quick_message", label: "Contact Family", workTemplateKey: "contact_family" },
     presentation,
-    actionsProjection: { count: 0, actions: [] },
+    actionsProjection: { count: 0, actions: [], departmentId: null },
     timings: { authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0, presentation_ms: 0, records_ms: 0, projection_ms: 0, composition_ms: 0, total_ms: 1 },
 };
 
@@ -119,6 +119,7 @@ describe("D4 — snapshot renderer", () => {
             ...operational,
             actionsProjection: {
                 count: 2,
+                departmentId: "dept-firefly",
                 actions: [
                     { key: "send_form", label: "Send Form", description: null, action_type: "workflow", icon: null, style: null, display_style: "button", payload: {}, workflow_id: "wf-1" },
                     { key: "schedule_tour", label: "Schedule Tour", description: null, action_type: "workflow", icon: null, style: null, display_style: "button", payload: {}, workflow_id: "wf-2" },
@@ -129,6 +130,8 @@ describe("D4 — snapshot renderer", () => {
         // The count + identities are present in the FIRST frame — no Actions(0) flash, no late discovery.
         expect(m.rightRailActions).toHaveLength(2);
         expect(m.rightRailActions.map((a) => a.key)).toEqual(["send_form", "schedule_tour"]);
+        // Department scope bakes with Actions so Create Lead does not wait on Settlement.
+        expect(m.departmentId).toBe("dept-firefly");
     });
 
     it("authoritative empty: rows [] with NO error — distinct from error by construction", () => {
