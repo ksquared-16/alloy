@@ -47,27 +47,33 @@ export async function persistLifecycleStageFieldRules(
     );
 
     const operator = asOperatorStageKey(stage);
+    const builderPatch = buildBuilderStageFieldRulesPatch({
+        builderStageKey: stage,
+        required_rule_ids: required,
+        recommended_rule_ids: recommended,
+        existingMetadata: params.existingMetadata,
+        mergedPalette,
+        explicit_rule_levels_v1,
+        explicit_rule_meta_v1,
+    });
     let metadataPatch: Record<string, unknown>;
     if (operator) {
-        metadataPatch = buildLifecycleFieldRulesOverridePatch({
-            stage: operator,
-            required_rule_ids: required,
-            recommended_rule_ids: recommended,
-            existingMetadata: params.existingMetadata,
-            mergedPalette,
-            explicit_rule_levels_v1,
-            explicit_rule_meta_v1,
-        });
+        // Dual-write: progression is the operator source of truth; keep builder_stage
+        // in sync so Create Lead / readiness cannot read a stale shadow row.
+        metadataPatch = deepMergeJsonObjects(
+            buildLifecycleFieldRulesOverridePatch({
+                stage: operator,
+                required_rule_ids: required,
+                recommended_rule_ids: recommended,
+                existingMetadata: params.existingMetadata,
+                mergedPalette,
+                explicit_rule_levels_v1,
+                explicit_rule_meta_v1,
+            }),
+            builderPatch,
+        );
     } else {
-        metadataPatch = buildBuilderStageFieldRulesPatch({
-            builderStageKey: stage,
-            required_rule_ids: required,
-            recommended_rule_ids: recommended,
-            existingMetadata: params.existingMetadata,
-            mergedPalette,
-            explicit_rule_levels_v1,
-            explicit_rule_meta_v1,
-        });
+        metadataPatch = builderPatch;
     }
 
     const hasRules = required.length > 0 || recommended.length > 0;
