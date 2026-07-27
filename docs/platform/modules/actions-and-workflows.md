@@ -44,6 +44,28 @@ Tokenized public actions: `/api/action/[token]/consume` → event → workflows.
 | **Eligibility resolvers** | `web/lib/adminV2/actions/actionEligibility.ts` |
 | **Config validation** | `web/lib/adminV2/actions/configValidation.ts` |
 | **Eligibility API** | `POST /api/admin/actions/eligibility` |
+| **Capability Registry (P0.S1)** | `web/lib/platform/commands/capabilityRegistry.ts` — classification honesty |
+
+---
+
+## Platform Capability Registry (P0.S1 — classification spine)
+
+**Status:** Shipped as an honesty/classification layer (July 2026). Does **not** replace Domain
+Executors or ship the Command Runtime facade.
+
+`web/lib/platform/commands/capabilityRegistry.ts` owns **capability identity honesty**:
+
+- maturity (`executable` \| `adapted` \| `legacy` \| `navigation_only` \| … \| `placeholder` \| `unavailable`)
+- execution owner (RegisteredAction, Mutation Runtime, Relationship Runtime, tour domain, …)
+- organization Command catalog visibility
+
+A row in `action_definitions` never implies executable behavior by itself. Placeholder and
+unavailable identities are excluded from Settings “add Command” catalog flows and are treated
+as non-runnable in configured-key partitioning / process option support checks.
+
+**Execution remains distributed** behind existing owners during P0 (RegisteredAction handlers,
+`executeAdminAction`, Mutation Runtime, Relationship Framework, tour booking services). The
+shared Command Runtime facade and `/configuration/commands` product UI are later phases.
 
 ---
 

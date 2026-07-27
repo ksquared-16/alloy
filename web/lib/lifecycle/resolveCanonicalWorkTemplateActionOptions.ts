@@ -22,6 +22,10 @@ import {
     type WorkTemplateActionIntentCategory,
 } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 import { getPlatformAction, type PlatformActionGrain } from "@/lib/platform/actions/platformActionCatalog";
+import {
+    getPlatformCapability,
+    isNonRunnableCatalogCapability,
+} from "@/lib/platform/commands/capabilityRegistry";
 
 export type CanonicalWorkTemplateActionOption = {
     ref: string;
@@ -156,6 +160,11 @@ function isHiddenFromEditor(actionKey: string): boolean {
 function isUnsupportedActionKey(actionKey: string): string | null {
     const key = actionKey.trim();
     if (!key) return "Missing action key";
+    // P0.S1 honesty: seed stubs / placeholders are not usable process Commands.
+    if (isNonRunnableCatalogCapability(key)) {
+        const maturity = getPlatformCapability(key)?.maturity ?? "unavailable";
+        return `Capability is ${maturity} and is not a runnable Command`;
+    }
     const canonical = canonicalActionDefinition(key);
     if (canonical && !canonical.runtimeWired) return "Action is not runtime-wired";
     return null;
