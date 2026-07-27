@@ -37,7 +37,7 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 | `no_show_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Alias `mark_tour_no_show` |
 | `reopen_tour` | same | unavailable | none | hidden | n/a | P5 contract | Execute deferred |
 | `delete_lead` | same | adapted | admin_action | internal_only | yes | **P4.S3** | **delete** hard-delete cutover → `executeDeleteOpportunityLead`; direct POST delete remains |
-| `archive_lead` | same | unavailable | none | hidden | n/a | P4 | **archive** policy classified; stub only |
+| `archive_lead` | same | unavailable | none | hidden | n/a | **P4.S4 B** | Explicit unavailable — Manage stub only; no executor; not alias of close/delete |
 | `reopen_lead` | same | unavailable | none | hidden | n/a | P4+ | Missing |
 | `withdraw_child` | same | unavailable | none | hidden | n/a | P4+ | **withdraw** policy classified; planned/stub |
 | `open_record` | same | navigation_only | navigation | organization_command_catalog | yes | — | Non-mutation |
@@ -317,7 +317,7 @@ Layout contact-row → confirm modal → client PATCH → `setHouseholdPrimaryCo
 | Key | Impact | Confirm | Permission | Recovery | Facade commit |
 |-----|--------|---------|------------|----------|---------------|
 | `delete_lead` | delete | typed_confirm | sensitive_destructive | none | **enabled (P4.S3)** |
-| `archive_lead` | archive | strong_confirm | standard_destructive | restore | disabled |
+| `archive_lead` | archive | strong_confirm | standard_destructive | none | disabled |
 | `make_primary_contact` | replace | strong_confirm | replacement | restore | **enabled (P4.S2)** |
 | `cancel_tour` | cancel | strong_confirm | standard_destructive | schedule_new | disabled |
 | `withdraw_child` | withdraw | strong_confirm | sensitive_destructive | manual_support | disabled |
@@ -351,3 +351,18 @@ HMAC-SHA256 compact claims; TTL + version; no DB store; not an idempotency key.
 | Kind | Hard delete; work units retained; recovery none |
 | Typed confirm | `opportunity_name` ≤64 or `DELETE` |
 | Direct API | POST `.../opportunities/:id/delete` unchanged (Option A) |
+
+---
+
+# P4.S4 — Archive Lead Disposition B
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p4-destructive-foundation-msn_188e8bea6fb6de28dd21.md` (P4.S4 + certification) |
+| Disposition | **Remain unavailable** |
+| Facade | Commit disabled; not allowlisted |
+| Executor | None |
+| vs Delete | Distinct hard-delete path remains `delete_lead` only |
+| Restore | Not supported (`reopen_lead` also missing) |
+| P4 exit | Certified — see P4 Destructive Phase Certification table in evidence |

@@ -48,7 +48,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
         );
     });
 
-    it("executes all four RegisteredActions through the adapter once", async () => {
+    it("executes all RegisteredActions through the adapter once", async () => {
         for (const key of REGISTERED_ACTION_CAPABILITY_KEYS) {
             runSpy.mockClear();
             const result = await executeCommandInvocation({

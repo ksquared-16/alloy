@@ -22,14 +22,17 @@ const POLICIES: readonly DestructiveCommandPolicy[] = [
     {
         capabilityKey: "archive_lead",
         impactClass: "archive",
+        // Intended product semantics are soft-exit + restore — but no archive or reopen
+        // executor exists today (P4.S4 Disposition B). Do not advertise restore.
         reversibility: "reversible",
         confirmation: "strong_confirm",
         permissionClass: "standard_destructive",
         requiresPreview: true,
         previewFreshness: { mode: "ttl", seconds: 600 },
-        recovery: { kind: "restore" },
+        recovery: { kind: "none" },
         requiresDisplacedImpact: false,
-        operatorSummary: "Archives this lead while retaining history.",
+        operatorSummary:
+            "Archive Lead is not executable in production (stub only). Policy retained for future cutover.",
     },
     {
         capabilityKey: "make_primary_contact",

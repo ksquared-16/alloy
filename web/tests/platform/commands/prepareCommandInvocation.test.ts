@@ -72,7 +72,7 @@ describe("prepareCommandInvocation (P1.S1)", () => {
         expect(result.snapshot.executionDestination.executableViaFacadeLater).toBe(false);
     });
 
-    it("prepares all four RegisteredActions without calling execute", () => {
+    it("prepares all RegisteredActions without calling execute", () => {
         for (const key of listRegisteredActionKeys()) {
             const action = getRegisteredAction(key);
             expect(action).not.toBeNull();

@@ -375,8 +375,9 @@ describe("P4.S1 fixture adapters (read-only preview)", () => {
         expect(commit.code).toBe("commit_disabled");
     });
 
-    it("archive fixture retains history and is reversible", async () => {
+    it("archive fixture retains history; recovery none until executor exists (P4.S4)", async () => {
         const policy = requireDestructiveCommandPolicy("archive_lead");
+        expect(policy.recovery.kind).toBe("none");
         const adapter = createDestructiveFixtureAdapter("archive");
         const preview = await adapter.preview({
             policy,
@@ -388,7 +389,7 @@ describe("P4.S1 fixture adapters (read-only preview)", () => {
         });
         assertDestructivePreviewInvariants(preview, policy);
         expect(preview.affectedRecords.some((r) => r.effect === "archived")).toBe(true);
-        expect(preview.recovery.kind).toBe("restore");
+        expect(preview.recovery.kind).toBe("none");
     });
 
     it("replacement fixture promotes and demotes", async () => {

@@ -100,7 +100,8 @@ disabled**. No Delete Lead / Make Primary / Cancel Tour production cutover in P4
 - **P4.S2:** `make_primary_contact` — replacement adapter → `setHouseholdPrimaryContactForCustomer`
 - **P4.S3:** `delete_lead` — destructive adapter → `executeDeleteOpportunityLead` (hard delete; typed
   confirm + preview token). Direct `POST .../opportunities/:id/delete` remains compatibility (Option A).
-  Archive / cancel tour / withdraw remain commit-disabled.
+  Archive / cancel tour / withdraw remain commit-disabled. **P4.S4:** `archive_lead` certified
+  Disposition B (unavailable — no production executor; not adapted).
 
 ### Destructive / replacement Command policy (P4.S1)
 

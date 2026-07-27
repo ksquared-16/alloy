@@ -50,7 +50,7 @@ Recovery: `restore` | `recreate` | `schedule_new` | `manual_support` | `none` (e
 | Capability | Impact | Reversibility | Confirm | Permission | Recovery | Owner | Facade commit |
 |------------|--------|---------------|---------|------------|----------|-------|---------------|
 | `delete_lead` | delete | irreversible | typed_confirm | sensitive_destructive | none | admin_action | false |
-| `archive_lead` | archive | reversible | strong_confirm | standard_destructive | restore | none (stub) | false |
+| `archive_lead` | archive | reversible | strong_confirm | standard_destructive | none | none (stub) | false |
 | `make_primary_contact` | **replace** | conditionally_reversible | strong_confirm | replacement | restore | admin_action | false |
 | `cancel_tour` | cancel | conditionally_reversible | strong_confirm | standard_destructive | schedule_new | tour_domain | false |
 | `withdraw_child` | withdraw | conditionally_reversible | strong_confirm | sensitive_destructive | manual_support | none (stub) | false |
@@ -206,3 +206,63 @@ P0–P4.S3 focused + delete domain: **14 files / 173 passed**. Production `npm r
 ## Remaining destructive (commit disabled)
 
 `archive_lead`, `cancel_tour`, `withdraw_child`.
+
+---
+
+# P4.S4 — Archive Lead Disposition B (Unavailable)
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Capability | `archive_lead` |
+| Disposition | **B — Remain unavailable** |
+| Facade preview/commit | **Disabled** (not allowlisted) |
+| Final executor | **None** — no production service/API |
+
+## Authority trace
+
+| Entry | Finding |
+|-------|---------|
+| Capability registry | `maturity: unavailable`, `executionOwner: none`, `implementationStatus: missing` |
+| Manage menu | `buildRecordManageMenu` stub `archive_lead` with `enabled: false` |
+| AdminV2 policy | Listed as manage-only key; classification tests only — no execute wiring |
+| API routes | No `/opportunities/*/archive` (or equivalent) under admin opportunities |
+| Domain services | No `archiveOpportunityLead` / archive-lead graph |
+| Alias check | `close_lead` is Mutation Runtime lead-status close — **not** archive |
+| Restore | `reopen_lead` also unavailable; no unarchive-lead path |
+| vs Delete | `delete_lead` hard-deletes via `executeDeleteOpportunityLead` — distinct |
+
+## Policy honesty
+
+Impact class remains `archive` / `strong_confirm` / `standard_destructive` for future cutover.
+`recovery.kind` set to **`none`** — do not advertise restore without an executor.
+Reversibility field remains `reversible` as **intended product semantics**, not current runtime truth.
+
+## Why not A or C
+
+- **Not A:** no canonical archive executor to adapt.
+- **Not C:** archive is not an alias of `close_lead` or `delete_lead` in code or product matrix.
+
+## Staging reconciliation (pre-P4.S4)
+
+Merged `origin/staging` via `--no-ff` merge (commit `9bb37a473`). Incoming included assignment platform + BOS Create Lead + create-lead fixes (**58** commits at fetch time; prior note of 7 was stale). Mechanical merge clean. Overlap: create-lead eligibility under `platform/commands/createLead/*` only — no destructive runtime conflict. Registry honesty updated for new RegisteredAction `assignment.set_primary`.
+
+## Tests
+
+Focused Commands + Disposition B + delete domain + createLeadRequirednessParity + assignment registration: **17 files / 203 passed**. Production `npm run typecheck`: **pass**. `typecheck:tests`: deferred (machine pressure; doctrine optional for this slice).
+
+---
+
+# P4 Destructive Phase Certification
+
+| Capability | Impact class | Facade preview | Facade commit | Final executor | Status |
+| ---------- | ------------ | -------------: | ------------: | -------------- | ------ |
+| `make_primary_contact` | replace | yes | yes | `setHouseholdPrimaryContactForCustomer` | migrated |
+| `delete_lead` | delete | yes | yes | `executeDeleteOpportunityLead` | migrated |
+| `archive_lead` | archive | no | no | none (stub) | **explicit unavailable (B)** |
+| `cancel_tour` | cancel | policy only | no | Tour domain | P5 |
+| `withdraw_child` | withdraw | policy only | no | none / future | deferred |
+
+**P4 exit:** Replacement proven. Hard deletion proven. Archive explicit Disposition B. Tour cancellation → P5. Withdrawal deferred. No silent executable destructive identities.
+
+**P5 handoff:** `cancel_tour` (+ tour family convergence). Restore/Archive Lead product remains a future phase after domain design — not invented in Commands P4.

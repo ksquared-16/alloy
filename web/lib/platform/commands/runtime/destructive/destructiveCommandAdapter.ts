@@ -147,12 +147,16 @@ export function createDestructiveFixtureAdapter(
                     downstreamEffects: [
                         {
                             type: "history_retained",
-                            description: "Historical records remain available for restore.",
+                            description:
+                                "Intended soft-exit retains history — production archive executor not shipped.",
                         },
                     ],
                     recovery: {
-                        kind: "restore",
-                        description: "May be restored by an authorized operator.",
+                        ...policy.recovery,
+                        description:
+                            policy.recovery.kind === "none"
+                                ? "No supported archive or restore executor today."
+                                : "May be restored by an authorized operator.",
                     },
                 };
             }

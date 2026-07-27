@@ -10,7 +10,7 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → … → P4.S1 foundation → P4.S2 make_primary_contact → **P4.S3 delete_lead hard-delete cutover**. Next: archive_lead / cancel_tour / withdraw as separate slices.
+**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → … → P4.S1–P4.S3 cutovers → **P4.S4 Archive Lead Disposition B (unavailable)** — P4 destructive phase certified. Next: P5 Tour / cancel_tour.
 
 ---
 
@@ -324,7 +324,7 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 | **P4.S1** | Destructive/replacement policy + preview + correlation + commit-disabled guard (**shipped**) |
 | **P4.S2** | Make Primary Contact replacement preview + facade cutover (**shipped**) |
 | **P4.S3** | Delete Lead via Runtime + typed confirm (**shipped**) |
-| **P4.S4** | Archive Lead Capability (implement or explicit unsupported) |
+| **P4.S4** | Archive Lead Capability — **Disposition B unavailable (shipped)** |
 | **P4.S5** | Remove / Revoke relationship Capabilities |
 
 ### P5 — Tours (5)
@@ -455,7 +455,7 @@ Disposition codes: **Canon** · **Variant** · **Alias** · **Workflow** · **Pr
 | Current key | Future capability | Family | Current executor | Target | Phase | Compat | Disposition |
 |-------------|-------------------|--------|------------------|--------|-------|--------|-------------|
 | `delete_lead` | `delete_lead` | Destructive | delete service | facade | P4 | | Canon |
-| `archive_lead` | `archive_lead` | Destructive | stub | implement or unsupported | P4 | | Review→Canon/unsupported |
+| `archive_lead` | `archive_lead` | Destructive | stub | **unsupported (P4.S4 B)** | P4 | | Explicit unavailable |
 | `reopen_lead` | `reopen_lead` | Status | stub | Capability when executor exists | P4/P9 | | partial |
 | `withdraw_child` | `withdraw_child` | Enrollment/Destructive | planned/stub | Capability when executor exists | P4+ | | partial Hide until ready |
 | `cancel_tour` | `cancel_tour` | Tours/Destructive | REST | facade | P5 | | Canon |
