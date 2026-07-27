@@ -81,3 +81,5 @@ export {
     formValuesFromDraft,
     removeInferredBosDraftField,
 } from "@/lib/bos/commandSession/draftEdits";
+
+export { isBosCreateLeadSessionEnabled } from "@/lib/bos/commandSession/bosCreateLeadSessionFlag";
