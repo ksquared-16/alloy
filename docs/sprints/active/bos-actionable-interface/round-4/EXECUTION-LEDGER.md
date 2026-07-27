@@ -11,7 +11,7 @@ Local only — **do not push**.
 
 | Package | Objective | Status | Commit |
 |---|---|---|---|
-| R4-01 | Code trace, primitive matrix, contracts, ledger | **done (docs)** | _(this commit)_ |
+| R4-01 | Code trace, primitive matrix, contracts, ledger | **done (docs)** | `919f65f91` |
 | R4-02 | Stone field / white card layering in host | pending | |
 | R4-03 | Progressive sections + summaries | pending | |
 | R4-04 | Quiet gather chrome; pair-only columns | pending | |

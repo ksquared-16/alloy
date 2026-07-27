@@ -45,7 +45,7 @@ Canonical package docs: `round-4/README.md` · `round-4/EXECUTION-LEDGER.md`
 
 | ID | Status | Commit | Notes |
 |---|---|---|---|
-| R4-01 | done | _(this commit)_ | Code trace + primitive selection; contracts; no product code |
+| R4-01 | done | `919f65f91` | Code trace + primitive selection; contracts; no product code |
 | R4-02 | pending | | Stone-field / white-card layering |
 | R4-03 | pending | | Progressive sections + summaries |
 | R4-04 | pending | | Quiet gather chrome |
