@@ -30,6 +30,17 @@ open dist/Vacilando-darwin-*/Vacilando.app
 Drag `Vacilando.app` to `/Applications` to keep it. (Add a `Login Item` for
 always-running; that lifecycle work is the launcher-worker follow-on.)
 
+`--package` deep **ad-hoc code-signs** the bundle. Without that, Apple Silicon
+rejects an electron-packager bundle as *"damaged / can't be opened"* on
+double-click (the packager only signs the main binary, not the sealed
+resources). Ad-hoc signing runs locally but is **not notarized** — that needs a
+Developer ID and is out of scope for a local internal tool. If you ever hit a
+"damaged" error on a hand-built bundle, re-seal it:
+
+```bash
+codesign --force --deep --sign - dist/Vacilando-darwin-*/Vacilando.app
+```
+
 ## How it works
 
 - `main.js` — Electron main process. Resolves Node (prefers node22), builds a

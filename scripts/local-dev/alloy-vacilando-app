@@ -37,6 +37,17 @@ if [ "${1:-}" = "--package" ]; then
   echo "→ packaged app will run the server from: $CHECKOUT"
   echo "→ building Vacilando.app → $APP_DIR/dist/Vacilando-darwin-*/Vacilando.app"
   npm run package
+  # electron-packager only leaves the linker's ad-hoc sig on the main binary
+  # (Sealed Resources=none) — Apple Silicon then rejects the bundle as
+  # "damaged" on double-click. A deep ad-hoc re-sign seals the whole bundle so
+  # it launches locally. (Not notarized — that needs a Developer ID; fine for a
+  # local internal tool.)
+  BUNDLE="$(ls -d "$APP_DIR"/dist/Vacilando-darwin-*/Vacilando.app 2>/dev/null | head -1)"
+  if [ -n "$BUNDLE" ]; then
+    echo "→ deep ad-hoc signing $BUNDLE"
+    codesign --force --deep --sign - "$BUNDLE"
+    codesign --verify --deep --strict "$BUNDLE" && echo "✓ signature valid"
+  fi
   echo "✓ done. Open with: open dist/Vacilando-darwin-*/Vacilando.app"
   exit 0
 fi
