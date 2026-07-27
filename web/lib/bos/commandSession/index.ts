@@ -36,3 +36,21 @@ export {
     reduceBosCommandSession,
     type BosCommandSessionAction,
 } from "@/lib/bos/commandSession/reduceSession";
+
+export {
+    BOS_COMMAND_SESSION_MAX_JSON_CHARS,
+    BOS_COMMAND_SESSION_STORAGE_KEY,
+    BOS_COMMAND_SOURCE_TEXT_MAX_CHARS,
+    clearPersistedBosCommandSession,
+    isBosCommandSessionPersistable,
+    loadPersistedBosCommandSession,
+    persistBosCommandSession,
+    sanitizeBosCommandSessionForPersistence,
+    syncPersistedBosCommandSession,
+} from "@/lib/bos/commandSession/commandSessionPersistence";
+
+export {
+    applyIfBosRequestSeqCurrent,
+    isBosRequestSeqCurrent,
+    type BosRequestSeqGate,
+} from "@/lib/bos/commandSession/staleGuards";
