@@ -98,17 +98,15 @@ action and execute route as manual entry. See
 `docs/sprints/archive/06_2026/create_lead_command_flow_audit.md`.
 
 **BOS command session (V6 — actionable interface).** Create Lead from Actions (Work Unit or
-Workspace) opens a **scoped BOS command session** over the Operational Command Runtime — not a
-parallel mutation engine. Conversation and Form are projections of one shared `BosCommandDraft`
-(`web/lib/bos/commandSession/*`). The operator gathers, reviews, and confirms; confirmed
-execution calls `executeCreateLeadCommand` → `POST /api/admin/actions/execute` registered
-`create_lead`. Processing owns inbound identity resolution at the established approval boundary;
-no canonical identity rows are written before that commit. Success does **not** auto-open Focus
-Panel — Open Lead is explicit; queue/Work View refresh uses the canonical projection seam.
-Compatibility: `NEXT_PUBLIC_BOS_CREATE_LEAD_SESSION=0` restores the legacy
-`CreateLeadCommandSurface` modal host. Slash-command catalog and daily briefing remain deferred
-foundations, not V1 operator deliverables. Sprint package:
-`docs/sprints/active/bos-actionable-interface/`.
+Workspace) or `/` slash discovery opens a **scoped BOS command session** over the Operational
+Command Runtime — not a parallel mutation engine. Conversation and Form are projections of one
+shared `BosCommandDraft` (`web/lib/bos/commandSession/*`). Round 2 product realization adds a
+`ConversationIntakeAdapter` boundary, effective intake-spec Form/parse, turn-based transcript
+(no mode-switch noise), slash discovery for Create Lead, and expanded/pinned layout density.
+Confirmed execution still calls `executeCreateLeadCommand` → registered `create_lead`. Processing
+owns inbound identity resolution; Processing Conversation Runtime may later **implement** the
+same intake adapter. Sprint package:
+`docs/sprints/active/bos-actionable-interface/` (Round 2 under `round-2/`).
 
 **BOS uses the platform Command Surface concepts, not a separate mutation runtime (V5).**
 Command Surface shell/controller remain platform-owned patterns for command anatomy. The V6

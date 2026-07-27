@@ -30,13 +30,23 @@ Round 2 does **not** build a universal LLM orchestration layer.
 
 | ID | Status | Commit |
 |---|---|---|
-| R2-01 Conversation Intake Adapter | in progress | |
-| R2-02 Effective intake spec + Form | pending | |
-| R2-03 Spec-driven parse/clarify | pending | |
-| R2-04 Turn-based transcript | pending | |
-| R2-05 Slash discovery (Create Lead) | pending | |
-| R2-06 Responsive layouts + chrome | pending | |
-| R2-07 Focused product QA + docs | pending | |
+| R2-01 Conversation Intake Adapter | done | `e0c8be524` |
+| R2-02 Effective intake spec + Form | done | `4f3cc04cd` |
+| R2-03 Spec-driven parse/clarify | done | `2ad745ba2` |
+| R2-04 Turn-based transcript | done | `d6307ce2f` |
+| R2-05 Slash discovery (Create Lead) | done | `2c3d8813f` |
+| R2-06 Responsive layouts + chrome | done | `4fffa1313` |
+| R2-07 Focused product QA + docs | in progress | |
+
+## Product QA bar (focused — not Round 1’s 22 scenarios)
+
+1. Actions → invitation → paste turn → understanding → clarification → review → confirm → Processing → success
+2. Slash `/` → Create Lead → same session
+3. Conversation ↔ Form preserves draft; **no** transcript mode-switch noise
+4. Configured fields appear via effective intake Form
+5. Unsupported types honest in Form guidance
+6. Expanded vs pinned layout density
+7. Single Discard in session footer; rail Close remains for presentation
 
 ## Non-goals
 
@@ -44,3 +54,7 @@ Round 2 does **not** build a universal LLM orchestration layer.
 - Slash for every registered command
 - Parallel mutation / identity / form engines
 - Round 1’s 22-scenario certification as this bar
+
+## Pause
+
+After R2-07: **BOS work pauses**. Next sprint owns Processing Conversation Runtime.
