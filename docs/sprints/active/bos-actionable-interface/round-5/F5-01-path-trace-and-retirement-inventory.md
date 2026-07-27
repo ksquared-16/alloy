@@ -328,13 +328,15 @@ executeCreateLeadFromBosDraft  OR  CreateLeadCommandSurface.onSubmit
 
 1. **F5-02** — Stable repeater IDs; selection is sole multi-adult/child truth; Form edits never overwrite wrong adult; primary stable across turns
 2. **F5-03** — Parsed household → Form parity; mode switch / restore preserve rows
-3. **F5-04** — Effective spec drives Form including Location + all blocking `record_creation` fields
-4. **F5-05** — Missing/eligibility derived from current draft (selection + flat); stale transcript ≠ current Still needed
+3. **F5-04** — Effective intake entity groups (Required + Additional); **no Placement section**; full effective-spec coverage
+4. **F5-05** — Missing/eligibility from shared command contract (code minimum + `record_creation`); no BOS-only Location
 5. **F5-06** — Review real stage; Processing handoff preserves session + subject binding
 6. **F5-07** — Confirm / execute / success / refresh / Open Lead / Create Another
 7. **F5-08** — Delete old path after certification
 8. **F5-09** — Tests + Playwright + docs
 9. **F5-10** — Pause closeout: `BOS CREATE LEAD COMPLETE — OLD PATH RETIRED — BOS PAUSED`
+
+**Note:** F5-02 product work is gated on F5-01c. Premature Placement commits must be realigned before treating F5-02/F5-04 as done.
 
 ---
 
