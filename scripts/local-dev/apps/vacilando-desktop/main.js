@@ -16,7 +16,7 @@
  * lifecycle. Nothing about the server changes.
  */
 
-const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, shell, ipcMain } = require("electron");
 const { spawn } = require("node:child_process");
 const http = require("node:http");
 const path = require("node:path");
@@ -151,49 +151,88 @@ async function waitForReady(deadline) {
   }
 }
 
-/**
- * Ensure a Vacilando server is reachable on PORT. Attach if one is already
- * running; otherwise spawn one and take ownership of its lifecycle.
- */
-async function ensureServer() {
-  if (await probe()) {
-    managingServer = false;
-    log(`attached to existing server on ${HOST}:${PORT}`);
-    return true;
-  }
+/** Show a status/launch page (desert art + message) in the window. */
+function showStatus(message) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(loadingHTML(message));
+}
 
-  if (!fs.existsSync(SERVER_ENTRY)) {
-    throw new Error(
-      `server not found at ${SERVER_ENTRY}. ` +
-        `Set VACILANDO_CHECKOUT to your scripts/local-dev path, or re-package from the checkout.`
-    );
+/** Load the live app into the window; fall back to a status page on failure. */
+async function showApp() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    await mainWindow.loadURL(APP_URL);
+  } catch (e) {
+    log(`app load failed: ${e.message}`);
+    showStatus("Loading…");
   }
+}
 
+/** Spawn the control-plane server as a SUPERVISED child and take ownership. */
+function spawnServer() {
   const node = resolveNode();
   log(`starting server: ${node} lib/vacilando-server.mjs --port ${PORT}`);
-  serverChild = spawn(node, ["lib/vacilando-server.mjs", "--port", String(PORT)], {
+  const child = spawn(node, ["lib/vacilando-server.mjs", "--port", String(PORT)], {
     cwd: LOCAL_DEV_DIR,
     env: childEnv(),
     stdio: ["ignore", "pipe", "pipe"],
   });
+  child.stdout.on("data", (d) => process.stdout.write(`[server] ${d}`));
+  child.stderr.on("data", (d) => process.stderr.write(`[server] ${d}`));
+  child.on("exit", (code, signal) => onServerExit(code, signal));
+  serverChild = child;
   managingServer = true;
+}
 
-  serverChild.stdout.on("data", (d) => process.stdout.write(`[server] ${d}`));
-  serverChild.stderr.on("data", (d) => process.stderr.write(`[server] ${d}`));
-  serverChild.on("exit", (code, signal) => {
-    log(`server exited (code=${code} signal=${signal})`);
-    serverChild = null;
-    if (!shuttingDown && code !== 0) {
-      dialog.showErrorBox(
-        "Vacilando server stopped",
-        `The control-plane server exited unexpectedly (code ${code}${signal ? `, signal ${signal}` : ""}).`
-      );
+/** Our server died. Never dead-end — recover (attach or respawn) unless quitting. */
+function onServerExit(code, signal) {
+  log(`server exited (code=${code} signal=${signal})`);
+  const wasOurs = managingServer && serverChild;
+  serverChild = null;
+  managingServer = false;
+  if (shuttingDown || !wasOurs) return;
+  showStatus(code === 0 ? "Restarting the control plane…" : `Control plane stopped (code ${code}). Reconnecting…`);
+  recover();
+}
+
+let recovering = false;
+let restartAttempts = 0;
+/**
+ * Keep the app alive: attach to any healthy server on the port, else respawn —
+ * with backoff, indefinitely, updating the launch screen. This replaces the old
+ * dead-end "server stopped" dialog, and fixes the EADDRINUSE race (a server that
+ * won the port is ATTACHED to, not fought). The app can no longer get stuck.
+ */
+async function recover() {
+  if (recovering || shuttingDown) return;
+  recovering = true;
+  for (;;) {
+    if (shuttingDown) break;
+    if (await probe()) {
+      managingServer = false;
+      restartAttempts = 0;
+      log(`attached to server on ${HOST}:${PORT}`);
+      await showApp();
+      break;
     }
-  });
-
-  const ok = await waitForReady(Date.now() + READY_TIMEOUT_MS);
-  if (!ok) throw new Error(`server did not become ready on ${HOST}:${PORT} within ${READY_TIMEOUT_MS}ms`);
-  return true;
+    try {
+      if (!fs.existsSync(SERVER_ENTRY)) throw new Error(`server not found at ${SERVER_ENTRY}`);
+      spawnServer();
+      if (await waitForReady(Date.now() + READY_TIMEOUT_MS)) {
+        restartAttempts = 0;
+        log("server ready");
+        await showApp();
+        break;
+      }
+      if (serverChild) { try { serverChild.kill("SIGKILL"); } catch { /* gone */ } serverChild = null; managingServer = false; }
+    } catch (e) {
+      log(`recover attempt failed: ${e.message}`);
+    }
+    restartAttempts += 1;
+    const backoff = Math.min(1000 * 2 ** Math.min(restartAttempts, 4), 15000);
+    showStatus(`Reconnecting to the control plane… (attempt ${restartAttempts})`);
+    await new Promise((r) => setTimeout(r, backoff));
+  }
+  recovering = false;
 }
 
 /** Stop the server if we own it. Graceful SIGTERM, then SIGKILL. */
@@ -229,6 +268,34 @@ function stopServer() {
 // Window
 // ---------------------------------------------------------------------------
 
+// The desert scene from the app's own UI, reused as the launch art.
+const DESERT_ART = `
+<svg width="120" height="120" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <defs>
+    <linearGradient id="lsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#163b28"/><stop offset="0.52" stop-color="#8f5334"/><stop offset="1" stop-color="#cc7d4b"/></linearGradient>
+    <linearGradient id="ldune" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c46c40"/><stop offset="1" stop-color="#a4512d"/></linearGradient>
+    <radialGradient id="lsun" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ffd9a3"/><stop offset="0.6" stop-color="#f2bd83"/><stop offset="1" stop-color="#eab07a"/></radialGradient>
+    <radialGradient id="lhalo" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#f3c48c" stop-opacity="0.55"/><stop offset="1" stop-color="#f3c48c" stop-opacity="0"/></radialGradient>
+    <clipPath id="lsq"><rect x="0" y="0" width="1024" height="1024" rx="224" ry="224"/></clipPath>
+  </defs>
+  <g clip-path="url(#lsq)">
+    <rect width="1024" height="1024" fill="url(#lsky)"/>
+    <circle cx="670" cy="392" r="260" fill="url(#lhalo)"/>
+    <circle cx="670" cy="392" r="132" fill="url(#lsun)"/>
+    <path d="M0 690 Q280 590 540 668 T1024 636 V1024 H0 Z" fill="url(#ldune)"/>
+    <path d="M0 812 Q320 712 620 792 T1024 772 V1024 H0 Z" fill="#8a4527"/>
+    <g fill="#14311f" transform="translate(300 690)">
+      <path d="M0 150 L-14 12 L14 12 Z"/>
+      <path d="M0 150 C-30 70 -84 40 -120 44 C-78 22 -30 44 0 118 Z"/>
+      <path d="M0 150 C30 70 84 40 120 44 C78 22 30 44 0 118 Z"/>
+      <path d="M0 150 C-24 60 -60 -6 -70 -74 C-40 -24 -14 40 0 122 Z"/>
+      <path d="M0 150 C24 60 60 -6 70 -74 C40 -24 14 40 0 122 Z"/>
+      <path d="M0 150 C-8 60 -20 -30 -20 -104 C-4 -40 -2 44 0 126 Z"/>
+      <path d="M0 150 C8 60 20 -30 20 -104 C4 -40 2 44 0 126 Z"/>
+    </g>
+  </g>
+</svg>`;
+
 function loadingHTML(message) {
   return `data:text/html;charset=utf-8,${encodeURIComponent(`
 <!doctype html><html><head><meta charset="utf-8"><style>
@@ -236,14 +303,16 @@ function loadingHTML(message) {
     font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;
     display:flex;align-items:center;justify-content:center}
   .box{text-align:center}
+  .art{width:120px;height:120px;margin:0 auto 20px;filter:drop-shadow(0 12px 28px rgba(0,0,0,.45))}
   .brand{font-size:22px;font-weight:600;letter-spacing:.3px}
   .brand b{color:#e0a15e}
-  .msg{margin-top:10px;color:#9a8f80;font-size:13px}
+  .msg{margin-top:10px;color:#9a8f80;font-size:13px;max-width:320px}
   .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#e0a15e;
-    margin:14px 3px 0;animation:p 1s infinite ease-in-out}
+    margin:16px 3px 0;animation:p 1s infinite ease-in-out}
   .dot:nth-child(2){animation-delay:.15s}.dot:nth-child(3){animation-delay:.3s}
   @keyframes p{0%,80%,100%{opacity:.25}40%{opacity:1}}
 </style></head><body><div class="box">
+  <div class="art">${DESERT_ART}</div>
   <div class="brand">Vacilando<b>OS</b></div>
   <div class="msg">${message}</div>
   <div><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
@@ -283,18 +352,11 @@ function createWindow() {
 
 async function boot() {
   createWindow();
-  try {
-    await ensureServer();
-    if (!mainWindow) return; // closed during startup
-    await mainWindow.loadURL(APP_URL);
-  } catch (err) {
-    log(`boot failed: ${err.message}`);
-    if (mainWindow) {
-      mainWindow.loadURL(
-        loadingHTML(`Couldn’t reach the control plane.<br><small>${String(err.message)}</small>`)
-      );
-    }
-  }
+  if (!mainWindow) return;
+  showStatus("Starting the control plane…");
+  // recover() attaches to a healthy server or spawns+supervises one, retrying
+  // forever with backoff and loading the app the moment it's reachable.
+  await recover();
 }
 
 // ---------------------------------------------------------------------------
@@ -307,6 +369,18 @@ function buildMenu() {
       label: "Vacilando",
       submenu: [
         { role: "about" },
+        { type: "separator" },
+        {
+          label: "Open at Login",
+          type: "checkbox",
+          checked: app.getLoginItemSettings().openAtLogin,
+          // Always-running: auto-start Vacilando when you log in. The app owns
+          // and supervises the control-plane server, so this keeps it up.
+          click: (item) => {
+            app.setLoginItemSettings({ openAtLogin: item.checked });
+            log(`open-at-login = ${item.checked}`);
+          },
+        },
         { type: "separator" },
         { role: "hide" },
         { role: "hideOthers" },
@@ -367,6 +441,10 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    // Dock icon for the unpackaged (dev) run; the packaged .app uses the .icns.
+    if (process.platform === "darwin" && app.dock) {
+      try { app.dock.setIcon(path.join(__dirname, "assets", "icon.png")); } catch { /* ignore */ }
+    }
     buildMenu();
     boot();
     app.on("activate", () => {
