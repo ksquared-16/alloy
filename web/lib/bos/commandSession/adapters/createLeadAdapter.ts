@@ -17,6 +17,8 @@ import { fingerprintBosCommandDraft } from "@/lib/bos/commandSession/fingerprint
 import { bosDraftToEligiblePayload, upsertBosDraftValue } from "@/lib/bos/commandSession/draftValues";
 import {
     resolveCreateLeadCommitSelectionFromDraft,
+    applyParsedHouseholdToDraft,
+    syncEmptyPrimaryFlatFromSelection,
     summarizeCommitChildren,
     summarizeCommitParents,
 } from "@/lib/bos/commandSession/createLeadRepeaterDraft";
@@ -71,8 +73,11 @@ export function applyCreateLeadParseToDraft(
         unmappedText: extraction.unmapped_text?.trim()
             ? extraction.unmapped_text
             : draft.unmappedText,
-        household: extraction.household ?? draft.household,
     };
+
+    if (extraction.household != null) {
+        next = applyParsedHouseholdToDraft(next, extraction.household);
+    }
 
     for (const field of extraction.fields) {
         const state = confidenceToState(field.confidence);
@@ -103,6 +108,13 @@ export function applyCreateLeadParseToDraft(
                     at: now,
                 },
             ],
+        });
+    }
+
+    if (extraction.household != null) {
+        next = syncEmptyPrimaryFlatFromSelection(next, {
+            state: "parsed_from_source",
+            now,
         });
     }
 
@@ -186,7 +198,7 @@ export function buildCreateLeadBosPreview(
             if (!draft.household) return null;
             const sel = resolveCreateLeadCommitSelectionFromDraft(draft);
             const parts = [...summarizeCommitParents(sel), ...summarizeCommitChildren(sel)].filter(
-                (line) => line && !/^Parent \/ guardian$|^Child$/.test(line)
+                (line) => line && !/^(Primary|Additional|Child)$/.test(line)
             );
             return parts.length ? parts.join("; ") : "Household details included";
         })(),
