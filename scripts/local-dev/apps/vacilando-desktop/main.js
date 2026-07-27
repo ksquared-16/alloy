@@ -441,8 +441,10 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
-    // Dock icon for the unpackaged (dev) run; the packaged .app uses the .icns.
-    if (process.platform === "darwin" && app.dock) {
+    // Dock icon for the UNPACKAGED (dev) run only. The packaged .app must use its
+    // bundle .icns (transparent) — overriding it at runtime with a PNG re-introduced
+    // the white corners, since the runtime override wins over the .icns.
+    if (process.platform === "darwin" && app.dock && !app.isPackaged) {
       try { app.dock.setIcon(path.join(__dirname, "assets", "icon.png")); } catch { /* ignore */ }
     }
     buildMenu();
