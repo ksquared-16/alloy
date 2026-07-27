@@ -376,6 +376,33 @@ async function applyLiveTruth(board) {
 /** The snapshot every UI surface consumes: never fewer workers than are registered. */
 async function boardSnapshot() { return applyLiveTruth(resilientBoard(await snapshotSafe())); }
 
+const MISSION_BUSY = new Set(["starting", "running", "stopping"]);
+/**
+ * Resolve which WORKER a Director mission runs in. The Director dispatches to one
+ * of the six work slots — it is not itself a slot. An explicit run-target is
+ * honored (the operator's choice); "auto" picks the lowest-numbered occupied
+ * worker that is NOT already running a mission, so work never silently piles onto
+ * one slot. Returns { slot } or { error, detail, available }.
+ */
+function resolveRunSlot(requested) {
+  const ids = listSlotIdentities().filter((i) => i.ok && i.worktree_name);
+  const liveIds = new Set(liveMissionIds());
+  const busy = new Set(
+    readMissions(null, 500)
+      .filter((m) => liveIds.has(m.mission_id) || MISSION_BUSY.has(m.status))
+      .map((m) => m.worker_slot)
+  );
+  const available = ids.filter((i) => !busy.has(i.slot)).map((i) => i.slot).sort((a, b) => a - b);
+  if (Number.isInteger(requested)) {
+    if (requested < 1 || requested > 6) return { error: "bad_slot", detail: `slot ${requested} out of range`, available };
+    if (!ids.some((i) => i.slot === requested)) return { error: "slot_not_occupied", detail: `slot ${requested} has no worker`, available };
+    return { slot: requested }; // explicit target — the operator owns the choice, even if busy
+  }
+  if (available.length) return { slot: available[0] };
+  if (ids.length) return { error: "all_workers_busy", detail: "every worker is currently running a mission — pick one explicitly or wait", available: [] };
+  return { error: "no_workers", detail: "no occupied worker slots to dispatch to", available: [] };
+}
+
 /** Warm the expensive keys in the background so the first operator read is instant. */
 function warmExpensive() {
   swrRefresh("resources", () => collectResources());
@@ -602,12 +629,20 @@ export function createVacilandoServer() {
 
       // Compile: intent → capability → knowledge → package (Director stages 1–4).
       if (path === "/api/missions/compile") {
-        const slot = v.slot, intent = v.intent;
-        if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { ok: false, error: "bad_slot" });
+        const intent = v.intent;
         if (typeof intent !== "string" || !intent.trim()) return sendJson(res, 400, { ok: false, error: "empty_intent" });
+        // The Director is INFRASTRUCTURE — it does not own a slot. It DISPATCHES
+        // each mission to one of the six workers: an explicit run-target if the
+        // operator chose one, otherwise an auto-picked worker that isn't already
+        // running a mission. (Was hardcoded to slot 6, which pinned all work to
+        // the app's own checkout.)
+        const requested = v.slot === "auto" || v.slot == null ? "auto" : v.slot;
+        const pick = resolveRunSlot(requested);
+        if (pick.error) return sendJson(res, 409, { ok: false, error: pick.error, detail: pick.detail, available: pick.available });
         // Identity is resolved inside the Director (single source of truth) —
         // no snapshot dependency, so compile never waits on a starved projection.
-        const out = compileMissionForIntent({ slot, intent });
+        const out = compileMissionForIntent({ slot: pick.slot, intent });
+        if (out.ok) out.assigned_slot = pick.slot;
         return sendJson(res, out.ok ? 200 : 422, out);
       }
 

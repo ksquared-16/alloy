@@ -63,7 +63,8 @@ const READY_K = { ready: "ok", draft: "muted", blocked: "err", awaiting_operator
 // Director Review — six-state verdict badge colouring (operator language).
 const VERDICT_K = { "Ready": "ok", "Needs Product Decisions": "auth", "Needs Clarification": "auth", "Needs References": "warn", "Needs Acceptance Criteria": "warn", "Needs Review": "warn" };
 const verdictBadgeClass = (v) => VERDICT_K[v] || "muted";
-const DIRECTOR_SLOT = 6; // where a prepared mission will run (a detail, not the operator's concern)
+// The Director no longer pins a slot — it dispatches each mission to a worker
+// (operator's run-target, or "auto"). See prepareDirectorMission + resolveRunSlot.
 
 async function fetchMissions(slot) { try { const r = await fetch(`/api/missions?slot=${slot}`); state.missions[slot] = (await r.json()).missions || []; render(true); } catch { /* keep last */ } }
 // Loading is explicit: while a mission's detail is in flight we render a loading
@@ -205,6 +206,7 @@ document.addEventListener("input", (e) => {
   }
   // Director conversation: keep the intent box + reply composer intact across polls.
   if (t && t.id === "d-intent") state._dirIntent = t.value;
+  if (t && t.id === "d-runtarget") state._runTarget = t.value; // which worker runs the next mission
   if (t && t.id === "cv-reply") state._cvReply = t.value;
 });
 
@@ -1257,6 +1259,10 @@ function conversationInbox() {
       <h2>What are we working on?</h2>
       <p class="dsub">Tell Director about a piece of work — you'll talk it through together.</p>
       <div class="dintent"><input id="d-intent" class="d-intent" placeholder="e.g. Improve Scheduling   ·   Redesign Financials   ·   Access &amp; Roles V2" value="${intent}" />
+        <select id="d-runtarget" class="d-runtarget" title="Which worker runs this — Auto picks a free one">
+          <option value="auto"${!state._runTarget || state._runTarget === "auto" ? " selected" : ""}>Auto worker</option>
+          ${(state.snap?.sprints || []).map((s) => `<option value="${s.slot}"${state._runTarget === String(s.slot) ? " selected" : ""}>slot ${s.slot} · ${esc(shortBranch(s.branch, s.worktree))}${s.activity === "working" ? " (busy)" : ""}</option>`).join("")}
+        </select>
         <button class="btn go" data-dprepare>Start</button></div>
       ${def ? `<div class="ddefine"><span>Director hasn't worked on <b>${esc(def.name || def.intent)}</b> before.</span>
         <button class="btn go sm" data-ddefine="${esc(def.intent)}">Start it anyway</button>
@@ -1507,15 +1513,20 @@ async function replyToDirector(id, cap) {
 async function prepareDirectorMission() {
   const intent = (state._dirIntent || document.getElementById("d-intent")?.value || "").trim();
   if (!intent) { toast("err", "Tell Director what you want to build"); return; }
-  const { status, data } = await api("/api/missions/compile", { slot: DIRECTOR_SLOT, intent });
+  // Director dispatches to a worker: the operator's run-target, or "auto".
+  const target = state._runTarget && state._runTarget !== "auto" ? Number(state._runTarget) : "auto";
+  const { status, data } = await api("/api/missions/compile", { slot: target, intent });
   if (!data.ok) {
     if (data.reason === "no_capability") { state._dirDefine = { intent, name: dirCapName(intent) }; render(true); return; }
-    toast("err", "Couldn't prepare", data.error || status); return;
+    if (data.error === "all_workers_busy" || data.error === "no_workers") { toast("err", "No free worker", data.detail || "every worker is busy — pick one explicitly or wait"); return; }
+    if (data.error === "slot_not_occupied") { toast("err", "No worker there", data.detail); return; }
+    toast("err", "Couldn't prepare", data.detail || data.error || status); return;
   }
   state._dirIntent = ""; state._dirDefine = null;
   await fetchConversations();
   go("director/mission/" + data.mission.mission_id);
-  toast("ok", "Director is on it", data.verdict?.verdict || "");
+  const sp = (state.snap?.sprints || []).find((x) => x.slot === data.assigned_slot);
+  toast("ok", `Director is on it${data.assigned_slot ? ` — slot ${data.assigned_slot}` : ""}`, sp ? shortBranch(sp.branch, sp.worktree) : (data.verdict?.verdict || ""));
 }
 async function defineDirectorCapability(intent) {
   const { data } = await api("/api/director/define-capability", { intent });

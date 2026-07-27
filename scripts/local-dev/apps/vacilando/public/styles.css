@@ -455,6 +455,9 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .dintent{display:flex;gap:8px;max-width:640px;margin:0 auto;}
 .d-intent{flex:1;padding:12px 14px;border:1px solid var(--line-strong);border-radius:12px;font-size:14px;font-family:var(--sans);background:var(--card);color:var(--ink);}
 .d-intent:focus{outline:none;border-color:var(--terra);box-shadow:0 0 0 3px var(--terra-soft);}
+.d-runtarget{padding:0 10px;border:1px solid var(--line-strong);border-radius:12px;font-size:13px;font-family:var(--sans);background:var(--card);color:var(--ink-2);cursor:pointer;max-width:190px;}
+.d-runtarget:focus{outline:none;border-color:var(--terra);box-shadow:0 0 0 3px var(--terra-soft);}
+.dintent{max-width:760px;}
 .ddefine{margin:14px auto 0;max-width:640px;background:var(--review-bg);color:var(--review);border-radius:10px;padding:10px 12px;font-size:13px;display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap;}
 .dsec-h{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-4);margin:22px 4px 10px;}
 .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
