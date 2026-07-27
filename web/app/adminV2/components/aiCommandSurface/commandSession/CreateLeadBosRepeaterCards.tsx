@@ -16,7 +16,7 @@ import {
 import { resolveCreateLeadHouseholdCardEditFields } from "@/lib/admin/actions/createLead/household/resolveCreateLeadHouseholdCardEditFields";
 import { CreateLeadHouseholdCardEditFields } from "@/components/admin/intake/CreateLeadHouseholdCardEditFields";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
-import { WS_ACTION_SECONDARY, WS_EYEBROW } from "@/components/workspace/workspaceTokens";
+import { WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 
 type Props = {
     kind: "parent" | "child";
@@ -47,6 +47,11 @@ export function CreateLeadBosRepeaterCards({
 
     return (
         <div className="space-y-3" data-bos-command-repeater={kind}>
+            {records.length === 0 && kind === "child" ? (
+                <p className="text-[12px] text-alloy-midnight/50" data-bos-command-repeater-empty="child">
+                    No children yet. Add a child when you have details.
+                </p>
+            ) : null}
             {records.map((record, index) => (
                 <RepeaterRow
                     key={record.candidate_id}
@@ -79,10 +84,10 @@ export function CreateLeadBosRepeaterCards({
                 }
             >
                 {kind === "parent"
-                    ? "Add another parent or guardian"
+                    ? "Add another"
                     : records.length === 0
                       ? "Add child"
-                      : "Add another child"}
+                      : "Add another"}
             </button>
         </div>
     );
@@ -106,10 +111,15 @@ function RepeaterRow(props: {
         setDraft(commitRecordToPayloadDraft(record, props.kind));
     }, [record, props.kind]);
 
+    // Role lives on the section; rows are Primary then Additional — never "Parent 1".
     const title =
         props.kind === "parent"
-            ? `Parent / guardian ${props.index + 1}`
-            : `Child ${props.index + 1}`;
+            ? record.primary
+                ? "Primary"
+                : "Additional"
+            : props.index === 0
+              ? "Child"
+              : "Additional";
 
     return (
         <div
@@ -119,7 +129,6 @@ function RepeaterRow(props: {
             <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
                     <p className="text-[12px] font-semibold text-alloy-midnight">{title}</p>
-                    {record.primary ? <p className={WS_EYEBROW}>Primary</p> : null}
                 </div>
                 {props.canRemove ? (
                     <button
