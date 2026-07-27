@@ -19,6 +19,7 @@ import {
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import {
     clearPersonProfilePhoto,
+    resolvePersonIdForProfilePhoto,
     resolveSurfaceAvatarRuntime,
     uploadAndBindPersonProfilePhoto,
     uploadPersonProfilePhotoDocument,
@@ -36,6 +37,7 @@ type Props = {
     childName: string;
     imageUrl: string | null;
     personId: string | null;
+    customerMemberId?: string | null;
     size?: number;
     /**
      * Surface Builder (/surfaces) drill-in — always show Show/Hide + Upload.
@@ -61,6 +63,7 @@ export default function ChildProfileAvatarComposer({
     childName,
     imageUrl,
     personId,
+    customerMemberId = null,
     size = 40,
     builder,
     onSavePhoto,
@@ -102,31 +105,34 @@ export default function ChildProfileAvatarComposer({
 
     const onFileChange = async (file: File | undefined) => {
         if (!file) return;
-        if (!personId) {
-            setUploadError("Link a person record before uploading a profile photo.");
-            return;
-        }
         setUploading(true);
         setUploadError(null);
         try {
+            const resolved = await resolvePersonIdForProfilePhoto({
+                personId,
+                customerMemberId,
+            });
+            if (!resolved.ok) throw new Error(resolved.error);
+            const linkedPersonId = resolved.personId;
+
             let photoUrl: string | null = null;
             if (onSavePhoto) {
                 const uploaded = await uploadPersonProfilePhotoDocument({
-                    personId,
+                    personId: linkedPersonId,
                     file,
                     title: `${childName} profile photo`,
                 });
                 if (!uploaded.ok) throw new Error(uploaded.error);
                 const result = await onSavePhoto({
                     childId,
-                    personId,
+                    personId: linkedPersonId,
                     documentId: uploaded.documentId,
                 });
                 if (!result.ok) throw new Error(result.error || "Could not save profile photo");
                 photoUrl = result.photoUrl ?? null;
             } else {
                 const bound = await uploadAndBindPersonProfilePhoto({
-                    personId,
+                    personId: linkedPersonId,
                     file,
                     title: `${childName} profile photo`,
                 });
@@ -149,17 +155,21 @@ export default function ChildProfileAvatarComposer({
 
     const removeImage = async () => {
         setUploadError(null);
-        if (!personId) {
-            setPreview(null);
-            return;
-        }
         setUploading(true);
         try {
+            const resolved = await resolvePersonIdForProfilePhoto({
+                personId,
+                customerMemberId,
+            });
+            if (!resolved.ok) {
+                setPreview(null);
+                return;
+            }
             if (onClearPhoto) {
-                const result = await onClearPhoto({ childId, personId });
+                const result = await onClearPhoto({ childId, personId: resolved.personId });
                 if (!result.ok) throw new Error(result.error || "Could not remove photo");
             } else {
-                const result = await clearPersonProfilePhoto({ personId });
+                const result = await clearPersonProfilePhoto({ personId: resolved.personId });
                 if (!result.ok) throw new Error(result.error);
             }
             setPreview(null);

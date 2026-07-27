@@ -11,6 +11,7 @@ import type { IdentityAvatarSemanticRole } from "@/lib/adminV2/runtime/focusPane
 import type { FocusPanelPhotoSaveResult } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import {
     clearPersonProfilePhoto,
+    resolvePersonIdForProfilePhoto,
     uploadPersonProfilePhotoDocument,
 } from "@/lib/adminV2/runtime/focusPanel/persistPersonProfilePhoto";
 
@@ -34,6 +35,8 @@ type Props = {
     recordId?: string;
     /** Person id for documents upload entity binding. */
     personId?: string | null;
+    /** Fallback when inquiry evidence omitted person_id — resolve/ensure via member. */
+    customerMemberId?: string | null;
     /** When set, operators can upload/replace from the live card (Surfaces Avatar on). */
     onSavePhoto?: IdentityAvatarPhotoSave;
     onClearPhoto?: IdentityAvatarPhotoClear;
@@ -48,6 +51,7 @@ export default function IdentityAvatarEditable({
     role,
     recordId,
     personId,
+    customerMemberId,
     onSavePhoto,
     onClearPhoto,
     disabled = false,
@@ -56,27 +60,35 @@ export default function IdentityAvatarEditable({
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [resolvedUrl, setResolvedUrl] = useState<string | null>(imageUrl ?? null);
+    const [resolvedPersonId, setResolvedPersonId] = useState<string | null>(personId ?? null);
 
     useEffect(() => {
         setResolvedUrl(imageUrl ?? null);
     }, [imageUrl]);
 
+    useEffect(() => {
+        setResolvedPersonId(personId ?? null);
+    }, [personId]);
+
     if (!visible) return null;
 
     const showUploadControls = Boolean(onSavePhoto && recordId && !disabled);
-    const canPersist = Boolean(showUploadControls && personId);
+    const canAttemptUpload = Boolean(showUploadControls && (resolvedPersonId || customerMemberId));
 
     const onFileChange = async (file: File | undefined) => {
         if (!file || !onSavePhoto || !recordId) return;
-        if (!personId) {
-            setError("Link a person record before uploading a profile photo.");
-            return;
-        }
         setUploading(true);
         setError(null);
         try {
+            const resolved = await resolvePersonIdForProfilePhoto({
+                personId: resolvedPersonId,
+                customerMemberId,
+            });
+            if (!resolved.ok) throw new Error(resolved.error);
+            setResolvedPersonId(resolved.personId);
+
             const uploaded = await uploadPersonProfilePhotoDocument({
-                personId,
+                personId: resolved.personId,
                 file,
                 title: `${name} profile photo`,
             });
@@ -84,7 +96,7 @@ export default function IdentityAvatarEditable({
 
             const result = await onSavePhoto({
                 childId: recordId,
-                personId,
+                personId: resolved.personId,
                 documentId: uploaded.documentId,
             });
             if (!result.ok) throw new Error(result.error || "Could not save profile photo");
@@ -98,19 +110,22 @@ export default function IdentityAvatarEditable({
 
     const onRemove = async () => {
         if (!recordId) return;
-        if (!personId) {
-            setError("Link a person record before removing a profile photo.");
-            return;
-        }
         setUploading(true);
         setError(null);
         try {
+            const resolved = await resolvePersonIdForProfilePhoto({
+                personId: resolvedPersonId,
+                customerMemberId,
+            });
+            if (!resolved.ok) throw new Error(resolved.error);
+            setResolvedPersonId(resolved.personId);
+
             if (onClearPhoto) {
-                const result = await onClearPhoto({ childId: recordId, personId });
+                const result = await onClearPhoto({ childId: recordId, personId: resolved.personId });
                 if (!result.ok) throw new Error(result.error || "Could not remove photo");
                 setResolvedUrl(result.photoUrl || null);
             } else {
-                const result = await clearPersonProfilePhoto({ personId });
+                const result = await clearPersonProfilePhoto({ personId: resolved.personId });
                 if (!result.ok) throw new Error(result.error);
                 setResolvedUrl(null);
             }
@@ -126,7 +141,7 @@ export default function IdentityAvatarEditable({
             className="identity-avatar-editable"
             data-children-avatar="true"
             data-identity-avatar-editable={showUploadControls ? "true" : "false"}
-            data-identity-avatar-can-persist={canPersist ? "true" : "false"}
+            data-identity-avatar-can-persist={canAttemptUpload ? "true" : "false"}
         >
             <IdentityAvatar
                 name={name}
@@ -144,7 +159,7 @@ export default function IdentityAvatarEditable({
                         data-child-avatar-upload="true"
                         disabled={uploading}
                         onClick={() => {
-                            if (!personId) {
+                            if (!resolvedPersonId && !customerMemberId) {
                                 setError("Link a person record before uploading a profile photo.");
                                 return;
                             }
@@ -153,7 +168,7 @@ export default function IdentityAvatarEditable({
                     >
                         {uploading ? "…" : resolvedUrl ? "Change" : "Add photo"}
                     </button>
-                    {resolvedUrl && (onClearPhoto || personId) ? (
+                    {resolvedUrl && (onClearPhoto || resolvedPersonId || customerMemberId) ? (
                         <button
                             type="button"
                             className="identity-avatar-editable__btn identity-avatar-editable__btn--muted"

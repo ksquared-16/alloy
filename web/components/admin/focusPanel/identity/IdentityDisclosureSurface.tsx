@@ -25,6 +25,7 @@ type Props = {
     onEnterEvidence?: () => void;
     /** Live Work Unit avatar upload (canonical person profile photo). */
     personId?: string | null;
+    customerMemberId?: string | null;
     onSavePhoto?: IdentityAvatarPhotoSave;
     onClearPhoto?: IdentityAvatarPhotoClear;
     avatarSlot?: ReactNode;
@@ -43,6 +44,7 @@ export default function IdentityDisclosureSurface({
     onSelectEvidenceCollection,
     onEnterEvidence,
     personId,
+    customerMemberId,
     onSavePhoto,
     onClearPhoto,
     avatarSlot,
@@ -51,7 +53,7 @@ export default function IdentityDisclosureSurface({
         avatarSlot
         ?? (record.avatar?.visible === false
             ? undefined
-            : onSavePhoto || personId
+            : onSavePhoto || personId || customerMemberId
               ? (
                     <IdentityAvatarEditable
                         name={record.title}
@@ -60,6 +62,7 @@ export default function IdentityDisclosureSurface({
                         role={record.avatar?.role}
                         recordId={record.id}
                         personId={personId}
+                        customerMemberId={customerMemberId}
                         onSavePhoto={onSavePhoto}
                         onClearPhoto={onClearPhoto}
                         size={40}

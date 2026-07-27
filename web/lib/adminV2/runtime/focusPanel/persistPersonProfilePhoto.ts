@@ -12,6 +12,59 @@ export type ClearPersonProfilePhotoResult =
     | { ok: true; photoUrl: null }
     | { ok: false; error: string };
 
+export type ResolvePersonIdForProfilePhotoResult =
+    | { ok: true; personId: string }
+    | { ok: false; error: string };
+
+function trimId(value: unknown): string | null {
+    if (value == null) return null;
+    const text = String(value).trim();
+    return text.length > 0 ? text : null;
+}
+
+/**
+ * Resolve the person id required for canonical profile-photo storage.
+ * Prefer an explicit personId; otherwise resolve/ensure from customer_member.
+ */
+export async function resolvePersonIdForProfilePhoto(args: {
+    personId?: string | null;
+    customerMemberId?: string | null;
+}): Promise<ResolvePersonIdForProfilePhotoResult> {
+    const direct = trimId(args.personId);
+    if (direct) return { ok: true, personId: direct };
+
+    const memberId = trimId(args.customerMemberId);
+    if (!memberId) {
+        return { ok: false, error: "Link a person record before uploading a profile photo." };
+    }
+
+    const getRes = await fetch(`/api/admin/customer-members/${encodeURIComponent(memberId)}`, {
+        credentials: "include",
+    });
+    if (getRes.ok) {
+        const json = (await getRes.json().catch(() => ({}))) as { person_id?: unknown };
+        const fromMember = trimId(json.person_id);
+        if (fromMember) return { ok: true, personId: fromMember };
+    }
+
+    const ensureRes = await fetch(
+        `/api/admin/customer-members/${encodeURIComponent(memberId)}/ensure-person`,
+        { method: "POST", credentials: "include" },
+    );
+    const ensureJson = (await ensureRes.json().catch(() => ({}))) as {
+        person_id?: unknown;
+        error?: string;
+    };
+    const ensured = trimId(ensureJson.person_id);
+    if (!ensureRes.ok || !ensured) {
+        return {
+            ok: false,
+            error: ensureJson.error ?? "Could not link a person record for this child.",
+        };
+    }
+    return { ok: true, personId: ensured };
+}
+
 /** Upload image bytes into documents storage for a person. Does not bind canonical metadata. */
 export async function uploadPersonProfilePhotoDocument(args: {
     personId: string;

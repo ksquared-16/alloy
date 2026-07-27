@@ -160,6 +160,7 @@ export default function ChildFocusEdit({
     };
 
     const personId = seed.row.person_id?.trim() || null;
+    const customerMemberId = seed.row.customer_member_id?.trim() || null;
     // Surfaces Avatar on → render + allow upload when editable (Photos toggle only affects display URL).
     const avatarEnabled = !childSurfaceConfig || groupShowAvatarForNestedGroup(childSurfaceConfig, "identity");
 
@@ -183,6 +184,7 @@ export default function ChildFocusEdit({
                         visible={true}
                         recordId={seed.childId}
                         personId={personId}
+                        customerMemberId={customerMemberId}
                         onSavePhoto={savePhoto}
                         onClearPhoto={clearPhoto}
                         disabled={locked}

@@ -1,13 +1,13 @@
 ---
 owner: platform
 status: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-27
 supersedes: []
 ---
 
 # Assignment Platform Phase 2 — Sprint handoff
 
-**Verdict: not done.** Substantial code is in this branch; **operator browser acceptance is incomplete.** Do not treat this as ship-ready.
+**Verdict (2026-07-27):** Integration / contract slice **promoted** (avatar persist, summary display-only + zoom, Pattern Save, Workspace bootstrap, ensure-person). Broader Phase 2 operator checklist below is **not fully done** — continue in a new sprint after slot 5 close. Closeout: `docs/audits/active/assignment-integration-contract-qa/CLOSEOUT.md`.
 
 | Field | Value |
 |-------|--------|
@@ -15,8 +15,22 @@ supersedes: []
 | Branch | `agent/cursor/5-assignment-platform-phase-2` |
 | Slot / port | 5 / **3015** (`http://localhost:3015`) |
 | Provider | cursor |
-| Push / PR | **Not authorized** — local commit only until Kelly accepts in browser |
-| Handoff date | 2026-07-26 |
+| Push / PR | **Authorized 2026-07-27** — merge to `staging`, then `alloy-sprint-finish 5` |
+| Handoff date | 2026-07-26 · updated 2026-07-27 |
+
+---
+
+## Integration closeout (2026-07-27)
+
+Landed and documented for this promotion:
+
+1. **Canonical child profile photo** — Surfaces context facts upload/remove; `ensure-person` when `person_id` missing; Work Unit Children summary displays photo only (no upload).
+2. **Avatar zoom** — click photo on `IdentityAvatar` opens dialog.
+3. **Locations Pattern Save** — header Save; empty hours OK.
+4. **Workspace bootstrap** — shared site fetch + stale-seq guard.
+5. **Future sprint** — photo projection everywhere: `docs/sprints/archive/future/identity_profile_photo_projection_everywhere.md`.
+
+**Migrations in this branch (apply on staging DB):** foundation, type defaults, `commitment_kind`, proposed consistency trigger (see CLOSEOUT).
 
 ---
 
@@ -71,6 +85,7 @@ Background multitask subagents repeatedly **hung mid-turn** (zero tool growth fo
 - `supabase/migrations/20260725190000_operational_assignment_type_defaults_v1.sql`
 - Playwright/scripts under `web/playwright/tests/assignment-phase2*.ts` and `web/scripts/assignment-phase2*.mjs`
 - Prior cert folders: `docs/audits/active/assignment-phase2ca-browser-cert/`, `…/phase2cb-browser-cert/`
+- **Future (not this sprint):** profile photo projection everywhere — `docs/sprints/archive/future/identity_profile_photo_projection_everywhere.md`. Work Unit Children summary is display + zoom only; Surfaces → context facts owns upload/remove.
 
 ---
 
@@ -87,7 +102,7 @@ Background multitask subagents repeatedly **hung mid-turn** (zero tool growth fo
 8. **AlloySelect + BOS-over-Workspace** — remaining raw selects; modal stacking. *(Workspace BOS modal z-index raised above BOS rail.)*
 9. **Overview dedupe + Roster** — Overview attention/activity no longer duplicates launch KPIs; roster row opens assignment detail panel.
 10. **Full screenshot pack +** `cd web && npm run typecheck` (+ focused tests).
-11. Kelly browser acceptance → then push/PR only when authorized.
+11. ~~Kelly browser acceptance → then push/PR only when authorized.~~ **Promotion authorized 2026-07-27** (integration slice); remaining checklist continues in a new sprint after `alloy-sprint-finish 5`.
 
 ---
 

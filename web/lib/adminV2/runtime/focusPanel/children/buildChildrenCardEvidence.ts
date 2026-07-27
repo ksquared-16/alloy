@@ -244,8 +244,10 @@ export function buildChildrenCardEvidence(
         return {
             id: trimOrNull(row.id) ?? trimOrNull(row.person_id) ?? `child-${index}`,
             name,
-            customerMemberId: trimOrNull((row as { customer_member_id?: unknown }).customer_member_id),
-            personId: trimOrNull(row.person_id),
+            customerMemberId:
+                trimOrNull((row as { customer_member_id?: unknown }).customer_member_id)
+                ?? trimOrNull(raw.customer_member_id),
+            personId: trimOrNull(row.person_id) ?? trimOrNull(raw.person_id),
             firstName: trimOrNull(row.first_name),
             lastName: trimOrNull(row.last_name),
             preferredName: trimOrNull((row as { preferred_name?: unknown }).preferred_name),

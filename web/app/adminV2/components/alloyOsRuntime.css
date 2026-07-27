@@ -4919,6 +4919,19 @@ html[data-alloy-os-runtime-split="true"]
   width: 100%;
   min-width: 0;
 }
+/* Keep avatar column fixed so photo vs initials rows stay aligned. */
+.alloy-os-children__roster .identity-record-summary__header {
+  align-items: center;
+}
+.alloy-os-children__roster .identity-record-summary__header > .identity-avatar,
+.alloy-os-children__roster .identity-record-summary__header > .alloy-os-card-avatar,
+.alloy-os-children__roster .identity-record-summary__header > .identity-avatar-editable,
+.alloy-os-children__roster .identity-record-summary__header > .fp-child-avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  align-self: center;
+}
 .alloy-os-children__roster .identity-record-summary__title-block {
   gap: 2px;
   width: 100%;
@@ -7519,6 +7532,65 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   gap: 4px;
   flex: 0 0 auto;
   min-width: 0;
+}
+.identity-avatar-zoom-trigger {
+  all: unset;
+  display: inline-flex;
+  cursor: zoom-in;
+  border-radius: 999px;
+  line-height: 0;
+}
+.identity-avatar-zoom-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent);
+  outline-offset: 2px;
+}
+.identity-avatar-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, #0f172a 55%, transparent);
+  backdrop-filter: blur(2px);
+}
+.identity-avatar-zoom__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: min(92vw, 420px);
+  padding: 16px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
+}
+.identity-avatar-zoom__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--alloy-os-text, #0f172a);
+}
+.identity-avatar-zoom__image {
+  display: block;
+  width: min(72vw, 320px);
+  height: min(72vw, 320px);
+  object-fit: cover;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+.identity-avatar-zoom__close {
+  all: unset;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--alloy-os-bend-pine, #00a283);
+  padding: 4px 8px;
+}
+.identity-avatar-zoom__close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent);
+  outline-offset: 2px;
 }
 .identity-avatar-editable__actions {
   display: flex;

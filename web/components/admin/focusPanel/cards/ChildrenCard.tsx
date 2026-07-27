@@ -147,6 +147,7 @@ function childRosterAvatarComposer(args: {
             childName={args.child.name}
             imageUrl={args.previewImageUrl}
             personId={args.child.personId ?? null}
+            customerMemberId={args.child.customerMemberId ?? null}
             size={args.size ?? 40}
             onSavePhoto={args.onSavePhoto}
             onClearPhoto={args.onClearPhoto}
@@ -730,8 +731,6 @@ export default function ChildrenCard({
                 opportunityStartDate={opportunityStartDate}
                 save={mutation!.saveInquiryChild}
                 imageUrl={focused.imageUrl ?? null}
-                savePhoto={mutation?.savePersonChildPhoto}
-                clearPhoto={mutation?.clearPersonChildPhoto}
                 onClose={() => setEditing(false)}
                 onSaved={() => setEditing(false)}
             />
@@ -755,8 +754,13 @@ export default function ChildrenCard({
                     }
                     onEditField={canEditChild ? () => setEditing(true) : undefined}
                     personId={focused.personId ?? null}
-                    onSavePhoto={mutation?.savePersonChildPhoto}
-                    onClearPhoto={mutation?.clearPersonChildPhoto}
+                    customerMemberId={focused.customerMemberId ?? null}
+                    onSavePhoto={
+                        composingChildrenSurface ? mutation?.savePersonChildPhoto : undefined
+                    }
+                    onClearPhoto={
+                        composingChildrenSurface ? mutation?.clearPersonChildPhoto : undefined
+                    }
                 />
                 {disclosure.depth === "details" && emergencyContactsSection && childrenSurfaceConfig ? (
                     <EmergencyContactsSection
@@ -801,25 +805,7 @@ export default function ChildrenCard({
                                           onClearPhoto: mutation?.clearPersonChildPhoto,
                                       });
                                   }
-                                : mutation?.savePersonChildPhoto
-                                  ? (record) => {
-                                        const child = evidence.children.find((c) => c.id === record.id);
-                                        if (!child || record.avatar?.visible === false) return null;
-                                        return (
-                                            <IdentityAvatarEditable
-                                                name={record.title}
-                                                imageUrl={record.avatar?.imageUrl}
-                                                visible={true}
-                                                role={record.avatar?.role}
-                                                recordId={record.id}
-                                                personId={child.personId ?? null}
-                                                onSavePhoto={mutation.savePersonChildPhoto}
-                                                onClearPhoto={mutation?.clearPersonChildPhoto}
-                                                size={36}
-                                            />
-                                        );
-                                    }
-                                  : undefined
+                                : undefined
                         }
                     />
             </ComposableRegionShell>
@@ -843,7 +829,6 @@ export default function ChildrenCard({
                                 childrenSurfaceConfig={childrenSurfaceConfig}
                                 canMutate={canMutateIdentity}
                                 composingChildrenSurface={composingChildrenSurface}
-                                mutation={mutation}
                                 rosterAvatarComposer={
                                     composingChildrenSurface
                                         ? childRosterAvatarComposer({
@@ -954,7 +939,6 @@ function ChildSummaryRow({
     canMutate = false,
     composingChildrenSurface = false,
     rosterAvatarComposer,
-    mutation,
 }: {
     child: ChildrenEvidenceChild;
     childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
@@ -965,7 +949,6 @@ function ChildSummaryRow({
     canMutate?: boolean;
     composingChildrenSurface?: boolean;
     rosterAvatarComposer?: ReactNode;
-    mutation?: FocusPanelMutation;
 }) {
     const record = buildChildIdentityRecordVM({
         config: childrenSurfaceConfig,
@@ -975,28 +958,9 @@ function ChildSummaryRow({
         isFieldSaveSupported: (fieldRef) =>
             isChildIdentityFieldInlineSaveSupported(fieldRef) || isIdentityFieldSaveSupported(fieldRef),
     });
-    const showAvatar = childrenSurfaceConfig
-        ? groupShowAvatarForNestedGroup(childrenSurfaceConfig, "roster")
-            || groupShowAvatarForNestedGroup(childrenSurfaceConfig, "identity")
-        : true;
-    const liveAvatarSlot =
-        composingChildrenSurface
-            ? rosterAvatarComposer
-            : showAvatar && mutation?.savePersonChildPhoto && record.avatar?.visible !== false
-              ? (
-                    <IdentityAvatarEditable
-                        name={child.name}
-                        imageUrl={child.imageUrl ?? record.avatar?.imageUrl}
-                        visible={true}
-                        role={record.avatar?.role}
-                        recordId={child.id}
-                        personId={child.personId ?? null}
-                        onSavePhoto={mutation.savePersonChildPhoto}
-                        onClearPhoto={mutation.clearPersonChildPhoto}
-                        size={32}
-                    />
-                )
-              : undefined;
+    // Work Unit summary: display-only avatar (default IdentityAvatar).
+    // Surfaces → context facts composer owns upload/remove via rosterAvatarComposer.
+    const liveAvatarSlot = composingChildrenSurface ? rosterAvatarComposer : undefined;
     return (
         <div className="alloy-os-children__summary-row" data-children-child={child.id}>
             <IdentityRecordSummary
@@ -1407,6 +1371,7 @@ function FocusedChild({
                             childName={child.name}
                             imageUrl={previewImageUrl}
                             personId={child.personId ?? null}
+                            customerMemberId={child.customerMemberId ?? null}
                             size={40}
                             onSavePhoto={mutation?.savePersonChildPhoto}
                             onClearPhoto={mutation?.clearPersonChildPhoto}
@@ -1442,7 +1407,7 @@ function FocusedChild({
                     depth={disclosureDepth}
                     onEditField={onRequestEdit ? () => onRequestEdit() : undefined}
                     avatarSlot={
-                        showHeaderAvatar ? (
+                        showHeaderAvatar && composingChildrenSurface ? (
                             <IdentityAvatarEditable
                                 name={child.name}
                                 imageUrl={
@@ -1455,6 +1420,7 @@ function FocusedChild({
                                 role={identityRecord.avatar?.role}
                                 recordId={child.id}
                                 personId={child.personId ?? null}
+                                customerMemberId={child.customerMemberId ?? null}
                                 onSavePhoto={mutation?.savePersonChildPhoto}
                                 onClearPhoto={mutation?.clearPersonChildPhoto}
                                 size={40}
@@ -1482,8 +1448,6 @@ function FocusedChild({
                     previewOnly={Boolean(composerPreview)}
                     save={mutation!.saveInquiryChild}
                     imageUrl={child.imageUrl ?? null}
-                    savePhoto={mutation?.savePersonChildPhoto}
-                    clearPhoto={mutation?.clearPersonChildPhoto}
                     onClose={onEditClose}
                     onSaved={onEditClose}
                 />
