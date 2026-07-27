@@ -4,7 +4,7 @@
  * Fail closed: owners/capabilities must be explicitly enabled.
  * P1.S2: RegisteredAction
  * P2.S1 / P2.S2: Mutation Runtime — exact keys (owner globally false)
- * P3.S1 / P3.S2: Relationship Runtime — exact keys (owner globally false)
+ * P3.S1–P3.S3: Relationship Runtime — exact keys (owner globally false)
  */
 
 import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
@@ -47,7 +47,8 @@ export type ChildEnrollmentMutationFacadeCommandKey =
  * Relationship Runtime facade — exact keys only.
  * P3.S1: parent/guardian + link existing person
  * P3.S2: contact-role commands (distinct capabilities; shared executor)
- * Not included: add_child, link_existing_child, make_primary_contact, Add Family Member hub
+ * P3.S3: child relationship commands (create/link child identity)
+ * Not included: make_primary_contact, Add Family Member hub
  */
 export const RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS = [
     "add_parent_guardian",
@@ -55,6 +56,8 @@ export const RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS = [
     "add_emergency_contact",
     "add_authorized_pickup",
     "add_billing_contact",
+    "add_child",
+    "link_existing_child",
 ] as const;
 
 export type RelationshipRuntimeFacadeCommandKey =

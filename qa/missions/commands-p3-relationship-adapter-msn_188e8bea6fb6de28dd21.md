@@ -222,6 +222,90 @@ RegisteredAction, Mutation paths unchanged. Dedicated relationship-actions route
 
 ## Remaining after P3.S2
 
-- P3.S3: `add_child`, `link_existing_child`
-- P3.S4: `make_primary_contact`
+~~`add_child` / `link_existing_child`~~ → **P3.S3**  
+- P3.S4 candidate: `make_primary_contact` (external executor — classify first)
 - Later: Add Family Member hub
+
+---
+
+# P3.S3 — Child Relationship Commands
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Slice | P3.S3 Child Relationship Commands |
+| Commit message target | `feat(commands): adapt child relationship commands` |
+
+## Outcome
+
+```text
+add_child | link_existing_child
+→ POST /api/admin/actions/execute
+→ Command Runtime
+→ relationshipExecutionAdapter
+→ executeRelationshipAction (executorKind add_child | link_child)
+→ resolveChildPersonId
+   → existing: persons lookup (org-scoped)
+   → create (add_child only): findOrCreateChildPersonInOrg
+→ customer_members / opportunity_customer_members as owned by Relationship Framework
+```
+
+## Exact mappings
+
+| Capability | relationshipActionKey | executorKind | Target resolution |
+|------------|----------------------|--------------|-------------------|
+| `add_child` | same | `add_child` | `createChildDraft` **or** `selectedChildPersonId` |
+| `link_existing_child` | same | `link_child` | `selectedChildPersonId` only (create rejected) |
+
+Relationship kind on household member rows remains domain (`relationship: "child"`). Client kind/direction ignored.
+
+## Source / target grain
+
+| Capability | Source | Target |
+|------------|--------|--------|
+| Both | opportunity or person + `sourceCustomerId`; `sourceOpportunityId` derived when source is opportunity | Child **person** id (`selectedChildPersonId`) or create draft (add only) |
+
+Do not silently convert person ↔ customer_member ↔ OCM ids in the adapter.
+
+## Domain side effects (preserved, not invented)
+
+When scope is `this_opportunity` and an opportunity id is present, existing `executeRelationshipAction`
+may create/link `customer_members` and `opportunity_customer_members` (and may record process
+participation via `applyCreateLeadChildParticipationFromIdentity`). The Command Runtime does **not**:
+
+- Set enrollment status
+- Choose program/location/room
+- Trigger billing, capacity, or scheduling
+- Duplicate those writes outside the Relationship Framework
+
+## Enrollment / scheduling isolation
+
+Adapter imports no enrollment Mutation Runtime, scheduling, or financial modules. No status mutation
+commands are invoked.
+
+## Exactly-once / spoofing
+
+Same as prior P3 slices. `link_existing_child` rejects `createChildDraft` pre-delegation.
+
+## Compatibility retained
+
+`make_primary_contact` (external), Add Family Member hub, Tour, Processing, RegisteredAction,
+Mutation, prior Relationship facade keys unchanged. Dedicated relationship-actions routes remain.
+
+## Behavior-parity matrix (P3.S3)
+
+| Capability | Before write | After actions/execute | Final executor |
+|------------|--------------|----------------------|----------------|
+| `add_child` | relationship-actions → `executeRelationshipAction` | facade → same | same |
+| `link_existing_child` | same | facade → same | same |
+
+## make_primary_contact classification recommendation
+
+**Defer P3.S4 until classified.** Registry `externalExecutor: true` / `make_primary_external` —
+dedicated confirmation path, not the standard `executeRelationshipAction` write stack. Treat as
+household primary **designation** (not a create/link child command). Do not fold into child slice.
+
+## Remaining after P3.S3
+
+- Optional P3.S4: `make_primary_contact` after classification
+- Later product: Add Family Member hub composition

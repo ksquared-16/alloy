@@ -1,23 +1,25 @@
 /**
- * Relationship Runtime adapter (P3.S1 / P3.S2).
+ * Relationship Runtime adapter (P3.S1 / P3.S2 / P3.S3).
  *
  * Delegates exactly once to `executeRelationshipAction` — never writes relationship
- * rows, contacts, or PCR/CMC tables directly. Relationship kind/role/scope remain
- * Relationship Framework–owned.
+ * rows, contacts, persons, or PCR/CMC tables directly. Relationship kind/role/scope
+ * and identity creation remain Relationship Framework–owned.
  *
  * Exact facade keys:
  * - add_parent_guardian — fixed guardian; create or link person
- * - link_existing_person — existing identity only (role from payload)
- * - add_emergency_contact — fixed emergency_contact; create or link
- * - add_authorized_pickup — fixed authorized_pickup; create or link
- * - add_billing_contact — fixed billing_contact; create or link
+ * - link_existing_person — existing person only (role from payload)
+ * - add_emergency_contact / add_authorized_pickup / add_billing_contact — fixed roles
+ * - add_child — create or link child identity (createChildDraft | selectedChildPersonId)
+ * - link_existing_child — existing child person id only (no createChildDraft)
  *
- * Contact-role capabilities share this adapter and executor but remain distinct
- * Command identities (do not collapse into a generic “add contact” mutation).
+ * Capabilities share this adapter and executor but remain distinct Command identities.
+ * Adapter does not set enrollment status, schedule, program, or billing — any
+ * opportunity participation side effects are owned solely by executeRelationshipAction.
  */
 
 import { executeRelationshipAction } from "@/lib/admin/relationship/executeRelationshipAction";
 import type {
+    RelationshipActionCreateChildDraft,
     RelationshipActionCreatePersonDraft,
     RelationshipActionExecutionRequest,
     RelationshipActionExecutionResult,
@@ -68,6 +70,8 @@ const FIXED_ROLE_CREATE_OR_LINK_KEYS = new Set<string>([
     "add_billing_contact",
 ]);
 
+const CHILD_RELATIONSHIP_KEYS = new Set<string>(["add_child", "link_existing_child"]);
+
 const SOURCE_ENTITY_TYPES = new Set(["child", "person", "opportunity"]);
 const SURFACES = new Set([
     "child_drawer",
@@ -113,8 +117,9 @@ function normalizeScope(
     if (s && entry?.allowedScopes.includes(s as RelationshipActionScope)) {
         return s as RelationshipActionScope;
     }
-    // Domain-safe defaults from registry-allowed scopes
+    // Domain-safe defaults from registry-allowed scopes (preserve registry preference order).
     if (entry?.allowedScopes.includes("this_child")) return "this_child";
+    if (entry?.allowedScopes.includes("this_opportunity")) return "this_opportunity";
     if (entry?.allowedScopes.includes("household")) return "household";
     return entry?.allowedScopes[0] ?? "household";
 }
@@ -137,10 +142,29 @@ function readCreatePersonDraft(
     };
 }
 
+function readCreateChildDraft(
+    payload: Record<string, unknown>
+): RelationshipActionCreateChildDraft | undefined {
+    const draft =
+        (payload.create_child_draft as Record<string, unknown> | undefined) ??
+        (payload.createChildDraft as Record<string, unknown> | undefined);
+    if (!draft || typeof draft !== "object") return undefined;
+    const first = asString(draft.first_name ?? draft.firstName);
+    const last = asString(draft.last_name ?? draft.lastName);
+    if (!first || !last) return undefined;
+    return {
+        first_name: first,
+        last_name: last,
+        date_of_birth:
+            asString(draft.date_of_birth ?? draft.dateOfBirth ?? draft.dob) || undefined,
+    };
+}
+
 /**
  * Build RelationshipActionExecutionRequest from Command Runtime inputs.
  * Ignores client relationship_kind / execution_owner / org / actor spoof fields.
- * Fixed-role commands use registry defaultRoleKey — client role_key is ignored.
+ * Fixed-role person commands use registry defaultRoleKey — client role_key is ignored.
+ * Child commands use selectedChildPersonId / createChildDraft — never invent IDs.
  */
 export function buildRelationshipExecutionRequest(input: {
     commandKey: string;
@@ -166,6 +190,8 @@ export function buildRelationshipExecutionRequest(input: {
     void payload.domain;
     void payload.org_id;
     void payload.actor;
+    void payload.identity_strategy;
+    void payload.identityStrategy;
 
     const sourceEntityType =
         normalizeSourceEntityType(asString(payload.source_entity_type ?? payload.sourceEntityType)) ??
@@ -186,15 +212,47 @@ export function buildRelationshipExecutionRequest(input: {
     );
     if (!sourceCustomerId) return { error: "sourceCustomerId is required." };
 
-    const selectedPersonId = asString(
-        payload.selected_person_id ??
-            payload.selectedPersonId ??
-            payload.person_id ??
-            payload.target_entity_id ??
-            payload.targetEntityId
-    );
-    const createPersonDraft = readCreatePersonDraft(payload);
+    const isChildRelationship = CHILD_RELATIONSHIP_KEYS.has(actionKey);
     const isFixedRoleCreateOrLink = FIXED_ROLE_CREATE_OR_LINK_KEYS.has(actionKey);
+
+    const selectedChildPersonId = asString(
+        payload.selected_child_person_id ??
+            payload.selectedChildPersonId ??
+            payload.selected_child_id ??
+            payload.selectedChildId
+    );
+    const createChildDraft = readCreateChildDraft(payload);
+
+    // Person-target selection (not used for child relationship commands).
+    const selectedPersonId = isChildRelationship
+        ? ""
+        : asString(
+              payload.selected_person_id ??
+                  payload.selectedPersonId ??
+                  payload.person_id ??
+                  payload.target_entity_id ??
+                  payload.targetEntityId
+          );
+    const createPersonDraft = isChildRelationship ? undefined : readCreatePersonDraft(payload);
+
+    if (actionKey === "link_existing_child") {
+        if (createChildDraft) {
+            return {
+                error: "link_existing_child cannot create a new identity.",
+            };
+        }
+        if (!selectedChildPersonId) {
+            return {
+                error: "selectedChildPersonId is required to link an existing child.",
+            };
+        }
+    }
+
+    if (actionKey === "add_child" && !selectedChildPersonId && !createChildDraft) {
+        return {
+            error: "Provide selectedChildPersonId or createChildDraft for add_child.",
+        };
+    }
 
     if (actionKey === "link_existing_person") {
         if (createPersonDraft) {
@@ -213,11 +271,14 @@ export function buildRelationshipExecutionRequest(input: {
         };
     }
 
-    // Fixed-role commands: registry defaultRoleKey only (client role_key ignored).
+    // Fixed-role person commands: registry defaultRoleKey only.
     // link_existing_person: operator-selected role under domain rules.
-    const roleKey = isFixedRoleCreateOrLink
-        ? entry.defaultRoleKey ?? undefined
-        : asString(payload.role_key ?? payload.roleKey) || undefined;
+    // Child commands: no role key (registry defaultRoleKey is null).
+    const roleKey = isChildRelationship
+        ? undefined
+        : isFixedRoleCreateOrLink
+          ? entry.defaultRoleKey ?? undefined
+          : asString(payload.role_key ?? payload.roleKey) || undefined;
 
     if (actionKey === "link_existing_person" && !roleKey) {
         return { error: "roleKey is required for link_existing_person." };
@@ -240,21 +301,27 @@ export function buildRelationshipExecutionRequest(input: {
               .filter(Boolean)
         : undefined;
 
+    const sourceOpportunityId =
+        asString(payload.source_opportunity_id ?? payload.sourceOpportunityId) ||
+        (sourceEntityType === "opportunity" ? sourceRecordId : "") ||
+        null;
+
     return {
         actionKey,
         sourceSurface,
         sourceRecordId,
         sourceEntityType,
         sourceCustomerId,
-        sourceOpportunityId:
-            asString(payload.source_opportunity_id ?? payload.sourceOpportunityId) || null,
+        sourceOpportunityId,
         sourceChildPersonId:
             asString(payload.source_child_person_id ?? payload.sourceChildPersonId) || null,
         anchorCustomerMemberId:
             asString(payload.anchor_customer_member_id ?? payload.anchorCustomerMemberId) ||
             null,
         selectedPersonId: selectedPersonId || undefined,
+        selectedChildPersonId: selectedChildPersonId || undefined,
         createPersonDraft: isFixedRoleCreateOrLink ? createPersonDraft : undefined,
+        createChildDraft: actionKey === "add_child" ? createChildDraft : undefined,
         roleKey,
         scope,
         selectedChildCustomerMemberIds,

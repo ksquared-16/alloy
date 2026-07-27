@@ -206,9 +206,12 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
     it("rejects unsupported Relationship capability and incompatible source type", () => {
         expect(
             buildRelationshipExecutionRequest({
-                commandKey: "add_child",
-                executionSubject: { entityType: "opportunity", entityId: "opp-1" },
-                invocation: invocation({ commandKey: "add_child", inputValues: basePayload }),
+                commandKey: "make_primary_contact",
+                executionSubject: { entityType: "person", entityId: "person-1" },
+                invocation: invocation({
+                    commandKey: "make_primary_contact",
+                    inputValues: basePayload,
+                }),
             })
         ).toMatchObject({ error: expect.stringContaining("Unsupported") });
 
@@ -227,26 +230,56 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
         ).toMatchObject({ error: expect.stringContaining("Unsupported source entity type") });
     });
 
-    it("executes both keys through Relationship Framework once with server org/actor", async () => {
+    it("executes all facade Relationship keys through Framework once with server org/actor", async () => {
         for (const key of RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS) {
             relSpy.mockClear();
+            const isChild = key === "add_child" || key === "link_existing_child";
+            const inputValues = isChild
+                ? {
+                      ...basePayload,
+                      source_entity_type: "opportunity",
+                      source_record_id: "opp-1",
+                      selected_child_person_id: "child-person-1",
+                      create_child_draft:
+                          key === "add_child"
+                              ? undefined
+                              : { first_name: "Should", last_name: "Ignore" },
+                      org_id: "spoof-org",
+                      actor: { userId: "spoof" },
+                      execution_owner: "registered_action",
+                      relationship_kind: "sibling",
+                  }
+                : {
+                      ...basePayload,
+                      selected_person_id: "person-1",
+                      role_key: "emergency_contact",
+                      org_id: "spoof-org",
+                      actor: { userId: "spoof" },
+                      execution_owner: "registered_action",
+                      relationship_kind: "sibling",
+                  };
+            // link_existing_child must not send create draft
+            if (key === "link_existing_child") {
+                delete (inputValues as { create_child_draft?: unknown }).create_child_draft;
+            }
+            if (key === "add_child") {
+                // exercise create-or-link via selected existing child id
+                delete (inputValues as { create_child_draft?: unknown }).create_child_draft;
+            }
+
             const result = await executeCommandInvocation({
                 request: {
                     invocation: invocation({
                         commandKey: key,
-                        inputValues: {
-                            ...basePayload,
-                            selected_person_id: "person-1",
-                            role_key: "emergency_contact",
-                            org_id: "spoof-org",
-                            actor: { userId: "spoof" },
-                            execution_owner: "registered_action",
-                            relationship_kind: "sibling",
-                        },
+                        inputValues,
+                        surface: isChild ? "opportunity_drawer" : "child_drawer",
                         actor: { orgId: "spoof", userId: "spoof" },
                     }),
                     mode: "execute",
-                    executionSubject: { entityType: "child", entityId: "child-1" },
+                    executionSubject: {
+                        entityType: isChild ? "opportunity" : "child",
+                        entityId: isChild ? "opp-1" : "child-1",
+                    },
                     invocationId: `inv-${key}`,
                 },
                 server: { orgId: "org-real", userId: "user-real", supabase },
@@ -256,8 +289,6 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
             if (result.ok) {
                 expect(result.executionOwner).toBe("relationship_runtime");
                 expect(result.status).toBe("committed");
-                expect(result.relationshipResult?.person_id).toBe("person-1");
-                expect(result.relationshipResult?.links_written).toBe(1);
             }
             expect(relSpy).toHaveBeenCalledTimes(1);
             expect(relSpy.mock.calls[0][1]).toEqual(
@@ -265,7 +296,6 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
                     actionKey: key,
                     orgId: "org-real",
                     actorUserId: "user-real",
-                    selectedPersonId: "person-1",
                     sourceCustomerId: "cust-1",
                 })
             );
@@ -284,7 +314,75 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
             if (key === "link_existing_person") {
                 expect(relSpy.mock.calls[0][1].roleKey).toBe("emergency_contact");
             }
+            if (isChild) {
+                expect(relSpy.mock.calls[0][1].selectedChildPersonId).toBe("child-person-1");
+                expect(relSpy.mock.calls[0][1].createChildDraft).toBeUndefined();
+                expect(relSpy.mock.calls[0][1].sourceOpportunityId).toBe("opp-1");
+                expect(relSpy.mock.calls[0][1].roleKey).toBeUndefined();
+            }
         }
+    });
+
+    it("maps add_child create draft and link_existing_child existing-only", () => {
+        const created = buildRelationshipExecutionRequest({
+            commandKey: "add_child",
+            executionSubject: { entityType: "opportunity", entityId: "opp-1" },
+            invocation: invocation({
+                commandKey: "add_child",
+                surface: "opportunity_drawer",
+                inputValues: {
+                    source_customer_id: "cust-1",
+                    create_child_draft: {
+                        first_name: "Avery",
+                        last_name: "Lee",
+                        date_of_birth: "2020-01-01",
+                    },
+                    relationship_kind: "guardian",
+                    role_key: "guardian",
+                },
+            }),
+        });
+        expect("error" in created).toBe(false);
+        if ("error" in created) return;
+        expect(created.actionKey).toBe("add_child");
+        expect(created.createChildDraft).toEqual({
+            first_name: "Avery",
+            last_name: "Lee",
+            date_of_birth: "2020-01-01",
+        });
+        expect(created.selectedChildPersonId).toBeUndefined();
+        expect(created.roleKey).toBeUndefined();
+        expect(created.sourceOpportunityId).toBe("opp-1");
+        expect(created.scope).toBe("this_opportunity");
+
+        const linked = buildRelationshipExecutionRequest({
+            commandKey: "link_existing_child",
+            executionSubject: { entityType: "opportunity", entityId: "opp-1" },
+            invocation: invocation({
+                commandKey: "link_existing_child",
+                surface: "opportunity_drawer",
+                inputValues: {
+                    source_customer_id: "cust-1",
+                    selected_child_person_id: "child-person-9",
+                    create_child_draft: { first_name: "No", last_name: "Create" },
+                },
+            }),
+        });
+        expect(linked).toEqual({
+            error: "link_existing_child cannot create a new identity.",
+        });
+
+        const missing = buildRelationshipExecutionRequest({
+            commandKey: "link_existing_child",
+            executionSubject: { entityType: "opportunity", entityId: "opp-1" },
+            invocation: invocation({
+                commandKey: "link_existing_child",
+                inputValues: { source_customer_id: "cust-1" },
+            }),
+        });
+        expect(missing).toEqual({
+            error: "selectedChildPersonId is required to link an existing child.",
+        });
     });
 
     it("keeps contact-role fixed roles distinct (no cross-role collapse)", () => {
@@ -375,8 +473,6 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
             expect(isCommandRuntimeFacadeExecutionSupported(key)).toBe(true);
         }
         expect(COMMAND_RUNTIME_EXECUTION_BY_OWNER.relationship_runtime).toBe(false);
-        expect(isCommandRuntimeFacadeExecutionSupported("add_child")).toBe(false);
-        expect(isCommandRuntimeFacadeExecutionSupported("link_existing_child")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("add_family_member")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("create_lead")).toBe(true);

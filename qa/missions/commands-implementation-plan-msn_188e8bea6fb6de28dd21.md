@@ -10,7 +10,7 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → P1.S1 → P1.S2 → P2.S1 → P2.S2 → P3.S1 → **P3.S2 shipped** (contact-role: emergency / pickup / billing). See ledger + P3 evidence.
+**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → P1.S1 → P1.S2 → P2.S1 → P2.S2 → P3.S1 → P3.S2 → **P3.S3 shipped** (`add_child`, `link_existing_child`). See ledger + P3 evidence.
 
 ---
 

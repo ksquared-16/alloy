@@ -192,9 +192,11 @@ exact operator capabilities through `POST /api/admin/actions/execute`:
 | `add_emergency_contact` | Fixed emergency_contact; create or link; does not imply pickup/guardian |
 | `add_authorized_pickup` | Fixed authorized_pickup; create or link; does not imply guardian/billing |
 | `add_billing_contact` | Fixed billing_contact; create or link; does not imply financial-account ownership |
+| `add_child` | Create or link child person; may attach household member / opportunity participation **only** via existing Relationship Framework path |
+| `link_existing_child` | Existing child person id only; no createChildDraft |
 
-Other relationship actions (`add_child`, `link_existing_child`, `make_primary_contact`) and the
-Add Family Member hub are unchanged. Dedicated `/api/admin/relationship-actions/*` routes remain.
+`make_primary_contact` (external executor) and the Add Family Member hub remain outside facade
+execution. Dedicated `/api/admin/relationship-actions/*` routes remain.
 
 ---
 

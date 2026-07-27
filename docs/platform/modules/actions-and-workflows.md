@@ -72,7 +72,7 @@ services).
 
 **Status:** Preparation (P1.S1). RegisteredAction execute (P1.S2). Lead Status Mutation execute
 (P2.S1). Child Enrollment Mutation execute (P2.S2). Relationship Runtime adapter (P3.S1 parent/link;
-P3.S2 contact-role commands, July 2026) — exact keys only.
+P3.S2 contact-role; P3.S3 child relationship commands, July 2026) — exact keys only.
 
 `prepareCommandInvocation` remains **side-effect free**.
 
@@ -87,13 +87,14 @@ P3.S2 contact-role commands, July 2026) — exact keys only.
 - **Relationship Runtime** (exact keys only) → `executeRelationshipAction`:
   - P3.S1: `add_parent_guardian`, `link_existing_person`
   - P3.S2: `add_emergency_contact`, `add_authorized_pickup`, `add_billing_contact`
+  - P3.S3: `add_child`, `link_existing_child`
   (Relationship Framework remains mutation authority; each key retains distinct Command identity)
 - `mutation_runtime` / `relationship_runtime` are **not** enabled as global owner gates — only
   explicit exact keys
 - `mark_lost` remains on legacy compatibility (`executeAdminAction`); not consolidated
 - Enrollment aliases (`move_to_waitlist`, `approve_enrollment`) remain outside exact-key facade cutover
-- Remaining Relationship keys (`add_child`, `link_existing_child`, `make_primary_contact`, …) and
-  Add Family Member hub remain outside this cutover
+- Remaining Relationship keys (`make_primary_contact`, …) and Add Family Member hub remain outside
+  this cutover
 
 `POST /api/admin/actions/execute` remains the operator/API route name. Dedicated
 `/api/admin/relationship-actions/execute` remains available. `/api/admin/mutations/execute`
@@ -310,10 +311,12 @@ Code: `relationshipActionRegistry.ts`, `relationshipActionClient.ts`, `Relations
 | `add_emergency_contact` | `emergency_contact` |
 | `add_authorized_pickup` | `authorized_pickup` |
 | `add_billing_contact` | `billing_contact` |
+| `add_child` | child identity create/link (`createChildDraft` \| `selectedChildPersonId`) |
+| `link_existing_child` | existing child person only (`selectedChildPersonId`) |
 
 Relationship kind/role/cardinality/identity resolution remain Relationship Framework–owned.
-Contact-role Commands share infrastructure but remain distinct identities (no generic “add contact”
-mutation). Other relationship keys and the Add Family Member hub are not cut over.
+Contact-role and child Commands share infrastructure but remain distinct identities.
+`make_primary_contact` and the Add Family Member hub are not cut over.
 
 ### Make Primary Contact
 

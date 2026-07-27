@@ -100,8 +100,8 @@ describe("executeCommandInvocation (P1.S2)", () => {
         const cases = [
             "totally_unknown_xyz",
             "send_message_placeholder",
-            "add_child",
-            "link_existing_child",
+            "make_primary_contact",
+            "add_family_member",
             "cancel_tour",
             "open_record",
             "processing.create_lead",
@@ -242,9 +242,10 @@ describe("executeCommandInvocation (P1.S2)", () => {
         expect(isCommandRuntimeFacadeExecutionSupported("add_emergency_contact")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("add_authorized_pickup")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("add_billing_contact")).toBe(true);
-        expect(isCommandRuntimeFacadeExecutionSupported("add_child")).toBe(false);
-        expect(isCommandRuntimeFacadeExecutionSupported("link_existing_child")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("add_child")).toBe(true);
+        expect(isCommandRuntimeFacadeExecutionSupported("link_existing_child")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("add_family_member")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("mark_lost")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("move_to_waitlist")).toBe(false);
     });

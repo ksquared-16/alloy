@@ -24,9 +24,9 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 | `add_authorized_pickup` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S2 facade** → `executeRelationshipAction` |
 | `add_billing_contact` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S2 facade** → `executeRelationshipAction` |
 | `add_parent_guardian` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S1 facade** → `executeRelationshipAction` |
-| `add_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | Dual UI overlap |
+| `add_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S3 facade** → `executeRelationshipAction` |
 | `link_existing_person` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S1 facade** → `executeRelationshipAction` |
-| `link_existing_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
+| `link_existing_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S3 facade** → `executeRelationshipAction` |
 | `make_primary_contact` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
 | `add_family_member` | same | adapted | admin_action | organization_command_catalog | yes | P3 | Hub; aliases `add_related_person`, `add_person` |
 | `add_sibling` | same | adapted | admin_action | organization_command_catalog | yes | P3 | Overlaps add_child |
@@ -244,7 +244,8 @@ the two cut-over keys), Tour-domain (non-RA), Processing, destructive.
 ## Deferred (Add Family Member + remaining Relationship catalog)
 
 ~~`add_emergency_contact`, `add_authorized_pickup`, `add_billing_contact`~~ → **P3.S2**  
-`add_child`, `link_existing_child`, `make_primary_contact`, `add_family_member` / hub, sibling aliases.
+~~`add_child`, `link_existing_child`~~ → **P3.S3**  
+`make_primary_contact` (external executor — classify before cutover), `add_family_member` / hub, sibling aliases.
 
 ---
 
@@ -261,3 +262,21 @@ the two cut-over keys), Tour-domain (non-RA), Processing, destructive.
 ## Cross-role isolation
 
 Emergency ≠ pickup ≠ billing ≠ guardian. Shared adapter does not collapse Command identities.
+
+---
+
+# P3.S3 — Child Relationship Commands
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p3-relationship-adapter-msn_188e8bea6fb6de28dd21.md` (P3.S3) |
+| Exact keys | `add_child`, `link_existing_child` |
+| Final authority | `executeRelationshipAction` → `resolveChildPersonId` / `findOrCreateChildPersonInOrg` |
+| Target | `selectedChildPersonId` (link) or `createChildDraft` (add only) |
+
+## make_primary_contact recommendation
+
+Remains **deferred**. Registry marks `externalExecutor: true` (`make_primary_external`) — not the same
+atomic path as `executeRelationshipAction`. Classify before any P3.S4 cutover (preference /
+designation vs composite confirmation).

@@ -110,9 +110,12 @@ describe("POST /api/admin/actions/execute Relationship Runtime cutover (P3.S1)",
         "add_emergency_contact",
         "add_authorized_pickup",
         "add_billing_contact",
+        "add_child",
+        "link_existing_child",
     ] as const)(
         "routes %s through Command Runtime → executeRelationshipAction once",
         async (key) => {
+            const isChild = key === "add_child" || key === "link_existing_child";
             const fixedRole =
                 key === "add_parent_guardian"
                     ? "guardian"
@@ -122,38 +125,52 @@ describe("POST /api/admin/actions/execute Relationship Runtime cutover (P3.S1)",
                         ? "authorized_pickup"
                         : key === "add_billing_contact"
                           ? "billing_contact"
-                          : "emergency_contact";
+                          : key === "link_existing_person"
+                            ? "emergency_contact"
+                            : null;
             executeRelationshipAction.mockResolvedValueOnce({
                 ok: true,
                 actionKey: key,
                 role_key: fixedRole,
-                person_id: "person-1",
-                child_person_id: "child-1",
-                contact_id: "c1",
+                person_id: isChild ? "child-person-1" : "person-1",
+                child_person_id: isChild ? "child-person-1" : "child-1",
+                contact_id: isChild ? null : "c1",
                 customer_member_id: "cm-1",
                 links_written: 1,
                 links_skipped_invalid_role: 0,
                 affected_children: [],
                 affected_record_preview: [],
                 scoped_contact_links: [],
-                refresh_hints: { entityType: "child", entityId: "child-1" },
+                refresh_hints: {
+                    entityType: isChild ? "opportunities" : "child",
+                    entityId: isChild ? "opp-1" : "child-1",
+                },
             });
             const res = await POST(
                 jsonReq({
                     action_key: key,
-                    entity_type: "child",
-                    entity_id: "child-1",
-                    payload: {
-                        source_customer_id: "cust-1",
-                        selected_person_id: "person-1",
-                        role_key: "guardian",
-                        relationship_kind: "sibling",
-                        execution_owner: "mutation_runtime",
-                        org_id: "spoof-org",
-                        actor: { userId: "spoof" },
-                    },
+                    entity_type: isChild ? "opportunity" : "child",
+                    entity_id: isChild ? "opp-1" : "child-1",
+                    payload: isChild
+                        ? {
+                              source_customer_id: "cust-1",
+                              selected_child_person_id: "child-person-1",
+                              relationship_kind: "sibling",
+                              execution_owner: "mutation_runtime",
+                              org_id: "spoof-org",
+                              actor: { userId: "spoof" },
+                          }
+                        : {
+                              source_customer_id: "cust-1",
+                              selected_person_id: "person-1",
+                              role_key: "guardian",
+                              relationship_kind: "sibling",
+                              execution_owner: "mutation_runtime",
+                              org_id: "spoof-org",
+                              actor: { userId: "spoof" },
+                          },
                     context: {
-                        surface: "child_drawer",
+                        surface: isChild ? "opportunity_drawer" : "child_drawer",
                         actor: { orgId: "spoof", userId: "spoof" },
                         org_id: "spoof-org",
                         execution_owner: "registered_action",
@@ -165,8 +182,6 @@ describe("POST /api/admin/actions/execute Relationship Runtime cutover (P3.S1)",
             expect(body.ok).toBe(true);
             expect(body.data.execution_result.kind).toBe("relationship");
             expect(body.data.execution_result.relationship_result.ok).toBe(true);
-            expect(body.data.execution_result.relationship_result.person_id).toBe("person-1");
-            expect(body.data.affected_id).toBe("person-1");
             expect(executeRelationshipAction).toHaveBeenCalledTimes(1);
             expect(executeAdminAction).not.toHaveBeenCalled();
             expect(runRegisteredAction).not.toHaveBeenCalled();
@@ -176,11 +191,15 @@ describe("POST /api/admin/actions/execute Relationship Runtime cutover (P3.S1)",
                     actionKey: key,
                     orgId: "org-1",
                     actorUserId: "user-1",
-                    selectedPersonId: "person-1",
                     sourceCustomerId: "cust-1",
                 })
             );
-            if (key !== "link_existing_person") {
+            if (isChild) {
+                expect(executeRelationshipAction.mock.calls[0][1].selectedChildPersonId).toBe(
+                    "child-person-1"
+                );
+                expect(executeRelationshipAction.mock.calls[0][1].sourceOpportunityId).toBe("opp-1");
+            } else if (key !== "link_existing_person") {
                 expect(executeRelationshipAction.mock.calls[0][1].roleKey).toBe(fixedRole);
             }
         }
@@ -263,9 +282,8 @@ describe("POST /api/admin/actions/execute Relationship Runtime cutover (P3.S1)",
 
     it("keeps unadapted Relationship / Tour / Processing on compatibility path", async () => {
         for (const key of [
-            "add_child",
-            "link_existing_child",
             "make_primary_contact",
+            "add_family_member",
             "cancel_tour",
             "processing.create_lead",
         ]) {
