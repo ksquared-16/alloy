@@ -7,24 +7,38 @@
 
 const { ipcRenderer } = require("electron");
 
-window.addEventListener("DOMContentLoaded", () => {
+function wireTitleBar() {
   // titleBarStyle:"hiddenInset" hides the OS title bar behind the app's own
-  // `.topbar`. Make that header behave like a native title bar: drag to move,
-  // and double-click to zoom (fill the screen) — the macOS title-bar gesture.
-  const style = document.createElement("style");
-  style.textContent = `
-    .topbar { -webkit-app-region: drag; }
-    .topbar button, .topbar input, .topbar a, .topbar select,
-    .topbar textarea, .topbar .search, .topbar .livepill { -webkit-app-region: no-drag; }
-  `;
-  document.head.appendChild(style);
-
-  const bar = document.querySelector(".topbar");
-  if (bar) {
-    bar.addEventListener("dblclick", (e) => {
-      // Don't hijack double-clicks on interactive controls in the bar.
-      if (e.target.closest("button, input, a, select, textarea, .search")) return;
-      ipcRenderer.send("win:toggle-zoom");
-    });
+  // header. Make the header STRIPS behave like a native title bar: drag to move
+  // the window, and double-click to zoom (fill the screen). Both the main
+  // top bar and the sidebar brand block are draggable so the whole top edge
+  // works; interactive controls inside them stay clickable (no-drag).
+  if (!document.getElementById("vac-titlebar-style")) {
+    const style = document.createElement("style");
+    style.id = "vac-titlebar-style";
+    style.textContent = `
+      .topbar, .rail .brand { -webkit-app-region: drag; }
+      .topbar button, .topbar input, .topbar a, .topbar select, .topbar textarea,
+      .topbar .search, .topbar .livepill, .topbar .refreshbtn, .topbar .gen,
+      .rail .brand a, .rail .brand button { -webkit-app-region: no-drag; }
+    `;
+    document.head.appendChild(style);
   }
-});
+
+  const isInteractive = (e) => e.target.closest("button, input, a, select, textarea, .search");
+  for (const sel of [".topbar", ".rail .brand"]) {
+    const node = document.querySelector(sel);
+    if (node && !node.dataset.vacZoom) {
+      node.dataset.vacZoom = "1";
+      node.addEventListener("dblclick", (e) => {
+        if (isInteractive(e)) return;
+        ipcRenderer.send("win:toggle-zoom");
+      });
+    }
+  }
+}
+
+// The header lives in static index.html markup, so it exists at DOMContentLoaded.
+// Re-run once more after load in case anything re-mounts the shell.
+window.addEventListener("DOMContentLoaded", wireTitleBar);
+window.addEventListener("load", wireTitleBar);
