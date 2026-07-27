@@ -82,3 +82,47 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 - No changes to `executeAdminAction`, RegisteredAction execute handlers, Mutation/Relationship/Tour services.
 - Catalog filters only hide non-runnable / hidden / internal_only from **Settings add** list.
 - `partitionConfiguredActionKeys` disables non-runnable + unknown; adapted production keys remain renderable.
+
+---
+
+# P1.S1 — Command Runtime Facade (read-only preparation)
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p1-runtime-facade-msn_188e8bea6fb6de28dd21.md` |
+| Facade | `web/lib/platform/commands/runtime/prepareCommandInvocation.ts` |
+| Types | `web/lib/platform/commands/runtime/commandRuntimeTypes.ts` |
+| Invariants | `web/lib/platform/commands/runtime/commandRuntimeInvariants.ts` |
+| RegisteredAction adapter | `web/lib/platform/commands/runtime/adapters/registeredActionPreparationAdapter.ts` |
+| Tests | `web/tests/platform/commands/prepareCommandInvocation.test.ts` |
+
+## Capabilities exercised (preparation only)
+
+| Key | Destination represented | Notes |
+|-----|-------------------------|-------|
+| `create_lead` / `update_status` / `confirm_tour` / `schedule.create` | `registered_action` | Metadata adapter; execute/eligibility/preview **not** called |
+| `close_lead` (+ `mark_lost`) | `mutation_runtime` | Delegated eligibility/inputs |
+| `add_parent_guardian` | `relationship_runtime` | Delegated |
+| `cancel_tour` | `tour_domain` | Delegated |
+| `processing.create_lead` | `processing_identity` | Internal; not org catalog |
+| `open_record` | `navigation` | Non-mutation |
+| `reopen_tour` / `send_message_placeholder` / unknown | `none` | Stop at `unavailable`; no preview/confirm/execute |
+
+## Invariants certified
+
+See P1 evidence doc. Includes: alias→canonical, destination matches registry owner, suggested≠authoritative, availability≠authorization, BOS cannot weaken confirmation, no executor imports, operatorSafe omits diagnostic codes.
+
+## Behavior intentionally not changed
+
+- No production caller cutover
+- No `/api/admin/commands/*`
+- No RegisteredAction / Mutation / Relationship / Tour execute wrapping
+- Existing APIs, eligibility, auth, confirmation UI, payloads, events, audit unchanged
+
+## Deferred adapter work
+
+- Live eligibility / required-input evaluation (P1.S2+)
+- Mutation / Relationship / Tour / Processing execute adapters (later P1–P5)
+- Destructive Command family completion (P4)
+- `/configuration/commands` (later phase)

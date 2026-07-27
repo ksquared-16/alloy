@@ -45,13 +45,14 @@ Tokenized public actions: `/api/action/[token]/consume` → event → workflows.
 | **Config validation** | `web/lib/adminV2/actions/configValidation.ts` |
 | **Eligibility API** | `POST /api/admin/actions/eligibility` |
 | **Capability Registry (P0.S1)** | `web/lib/platform/commands/capabilityRegistry.ts` — classification honesty |
+| **Command Runtime Facade (P1.S1)** | `web/lib/platform/commands/runtime/prepareCommandInvocation.ts` — read-only preparation |
 
 ---
 
 ## Platform Capability Registry (P0.S1 — classification spine)
 
 **Status:** Shipped as an honesty/classification layer (July 2026). Does **not** replace Domain
-Executors or ship the Command Runtime facade.
+Executors. Does **not** execute Commands.
 
 `web/lib/platform/commands/capabilityRegistry.ts` owns **capability identity honesty**:
 
@@ -63,9 +64,21 @@ A row in `action_definitions` never implies executable behavior by itself. Place
 unavailable identities are excluded from Settings “add Command” catalog flows and are treated
 as non-runnable in configured-key partitioning / process option support checks.
 
-**Execution remains distributed** behind existing owners during P0 (RegisteredAction handlers,
-`executeAdminAction`, Mutation Runtime, Relationship Framework, tour booking services). The
-shared Command Runtime facade and `/configuration/commands` product UI are later phases.
+**Execution remains distributed** behind existing owners (RegisteredAction handlers,
+`executeAdminAction`, Mutation Runtime, Relationship Framework, tour booking services).
+
+## Command Runtime Facade (P1.S1 — preparation only)
+
+**Status:** Shipped as a **read-only** preparation contract (July 2026).
+
+`prepareCommandInvocation` consumes the Capability Registry and returns one normalized
+`CommandSnapshot` (subject state, lifecycle stage, confirmation policy, execution destination,
+delegated eligibility). It does **not** call Domain Executors, RegisteredAction `execute`,
+live eligibility resolvers, or preview builders.
+
+- No production caller executes through the facade yet.
+- Existing APIs (`/api/admin/actions/*`) remain authoritative; API names are unchanged.
+- `/configuration/commands` is **not** shipped.
 
 ---
 
