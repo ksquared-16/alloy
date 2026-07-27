@@ -196,37 +196,150 @@ function SectionCard(props: {
             </div>
 
             {props.open ? (
-                <div className="mt-3 border-t border-alloy-stone/15 pt-3">
+                <div className="mt-3 border-t border-alloy-stone/15 pt-3 space-y-4">
                     {model.missingRequiredKeys.length > 0 || model.statusLabel.includes("phone") ? (
-                        <p className={`${WS_EYEBROW} mb-2`}>{model.statusLabel}</p>
+                        <p className={`${WS_EYEBROW}`}>{model.statusLabel}</p>
                     ) : null}
                     {model.key === "person" || model.key === "child" ? (
-                        <CreateLeadBosRepeaterCards
-                            kind={model.key === "person" ? "parent" : "child"}
-                            selection={props.commitSelection}
-                            onSelectionChange={props.onCommitSelectionChange}
-                            intakeSpec={props.intakeSpec}
-                            contextValues={props.formValues}
-                            compact={props.compact}
-                        />
+                        <div className="space-y-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                Required to create this lead
+                            </p>
+                            <CreateLeadBosRepeaterCards
+                                kind={model.key === "person" ? "parent" : "child"}
+                                selection={props.commitSelection}
+                                onSelectionChange={props.onCommitSelectionChange}
+                                intakeSpec={props.intakeSpec}
+                                contextValues={props.formValues}
+                                compact={props.compact}
+                            />
+                            {model.fields.filter((f) => !props.platformRequiredKeys.includes(f.payload_key) && f.tier !== "required").length >
+                            0 ? (
+                                <AdditionalFieldsBlock
+                                    fields={model.fields.filter(
+                                        (f) =>
+                                            !props.platformRequiredKeys.includes(f.payload_key) &&
+                                            f.tier !== "required"
+                                    )}
+                                    formValues={props.formValues}
+                                    onFieldChange={props.onFieldChange}
+                                    platformRequiredKeys={props.platformRequiredKeys}
+                                    fieldConfidence={props.fieldConfidence}
+                                    compact={props.compact}
+                                    sectionKey={model.key}
+                                />
+                            ) : null}
+                        </div>
                     ) : (
-                        <ActionWorkspaceGatherFields
-                            sections={[{ key: model.key, label: model.title, fields: model.fields }]}
-                            values={props.formValues}
-                            onChange={props.onFieldChange}
-                            platformRequiredKeys={props.platformRequiredKeys}
-                            fieldConfidence={props.fieldConfidence}
-                            layout="sections"
-                            fieldColumns={props.compact ? 1 : 2}
-                            chrome="quiet"
-                            hideSectionHeaders
-                            pairAwareColumns={!props.compact}
-                            pairFieldKeys={PAIR_KEYS}
-                            dataTestIdPrefix={`bos-create-lead-form-${model.key}`}
-                        />
+                        <div className="space-y-3">
+                            {model.fields.filter(
+                                (f) =>
+                                    f.tier === "required" ||
+                                    props.platformRequiredKeys.includes(f.payload_key)
+                            ).length > 0 ? (
+                                <>
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                        Required to create this lead
+                                    </p>
+                                    <ActionWorkspaceGatherFields
+                                        sections={[
+                                            {
+                                                key: model.key,
+                                                label: model.title,
+                                                fields: model.fields.filter(
+                                                    (f) =>
+                                                        f.tier === "required" ||
+                                                        props.platformRequiredKeys.includes(
+                                                            f.payload_key
+                                                        )
+                                                ),
+                                            },
+                                        ]}
+                                        values={props.formValues}
+                                        onChange={props.onFieldChange}
+                                        platformRequiredKeys={props.platformRequiredKeys}
+                                        fieldConfidence={props.fieldConfidence}
+                                        layout="sections"
+                                        fieldColumns={props.compact ? 1 : 2}
+                                        chrome="quiet"
+                                        hideSectionHeaders
+                                        pairAwareColumns={!props.compact}
+                                        pairFieldKeys={PAIR_KEYS}
+                                        dataTestIdPrefix={`bos-create-lead-form-${model.key}-required`}
+                                    />
+                                </>
+                            ) : null}
+                            {model.fields.filter(
+                                (f) =>
+                                    f.tier !== "required" &&
+                                    !props.platformRequiredKeys.includes(f.payload_key)
+                            ).length > 0 ? (
+                                <AdditionalFieldsBlock
+                                    fields={model.fields.filter(
+                                        (f) =>
+                                            f.tier !== "required" &&
+                                            !props.platformRequiredKeys.includes(f.payload_key)
+                                    )}
+                                    formValues={props.formValues}
+                                    onFieldChange={props.onFieldChange}
+                                    platformRequiredKeys={props.platformRequiredKeys}
+                                    fieldConfidence={props.fieldConfidence}
+                                    compact={props.compact}
+                                    sectionKey={model.key}
+                                />
+                            ) : null}
+                        </div>
                     )}
                 </div>
             ) : null}
         </WorkspaceCard>
+    );
+}
+
+function AdditionalFieldsBlock(props: {
+    fields: ActionWorkspaceGatherField[];
+    formValues: Record<string, string>;
+    onFieldChange: (key: string, value: string) => void;
+    platformRequiredKeys: readonly string[];
+    fieldConfidence: Record<string, "high" | "medium" | "low" | "manual">;
+    compact: boolean;
+    sectionKey: string;
+}) {
+    const [open, setOpen] = useState(false);
+    if (props.fields.length === 0) return null;
+    return (
+        <div data-bos-command-section-additional={props.sectionKey}>
+            <button
+                type="button"
+                className={`${WS_ACTION_SECONDARY} w-full ${props.compact ? "min-h-[36px]" : ""}`}
+                onClick={() => setOpen((v) => !v)}
+            >
+                {open ? "Hide additional fields" : "Additional fields"}
+            </button>
+            {open ? (
+                <div className="mt-2">
+                    <ActionWorkspaceGatherFields
+                        sections={[
+                            {
+                                key: `${props.sectionKey}-additional`,
+                                label: "Additional fields",
+                                fields: props.fields,
+                            },
+                        ]}
+                        values={props.formValues}
+                        onChange={props.onFieldChange}
+                        platformRequiredKeys={props.platformRequiredKeys}
+                        fieldConfidence={props.fieldConfidence}
+                        layout="sections"
+                        fieldColumns={props.compact ? 1 : 2}
+                        chrome="quiet"
+                        hideSectionHeaders
+                        pairAwareColumns={!props.compact}
+                        pairFieldKeys={PAIR_KEYS}
+                        dataTestIdPrefix={`bos-create-lead-form-${props.sectionKey}-additional`}
+                    />
+                </div>
+            ) : null}
+        </div>
     );
 }

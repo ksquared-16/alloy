@@ -6,9 +6,6 @@
 import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
 import type { BosCommandDraft, BosCommandPreview } from "@/lib/bos/commandSession/types";
 import {
-    CREATE_LEAD_PLACEMENT_PAYLOAD_KEYS,
-} from "@/lib/bos/commandSession/createLeadFormSectionProjection";
-import {
     resolveCreateLeadCommitSelectionFromDraft,
     summarizeCommitChildren,
     summarizeCommitParents,
@@ -21,9 +18,11 @@ export type UnderstandingGroup = {
 };
 
 const SECTION_TITLE: Record<string, string> = {
-    person: "Family",
-    child: "Children",
-    context: "Placement & preferences",
+    person: "Parent / Guardian",
+    child: "Child",
+    context: "Lead",
+    opportunity: "Lead",
+    household: "Household",
 };
 
 const PERSON_IDENTITY_KEYS = new Set(["first_name", "last_name", "email", "phone"]);
@@ -48,12 +47,10 @@ function resolveDisplayValue(
 }
 
 function sectionKeyForField(fieldKey: string, metaSection?: string): string {
-    if (CREATE_LEAD_PLACEMENT_PAYLOAD_KEYS.has(fieldKey) || fieldKey === "source" || fieldKey === "intake_notes") {
-        return fieldKey === "source" || fieldKey === "intake_notes" ? "context" : "context";
-    }
     if (PERSON_IDENTITY_KEYS.has(fieldKey)) return "person";
     if (CHILD_IDENTITY_KEYS.has(fieldKey)) return "child";
-    return metaSection ?? "context";
+    if (metaSection === "context" || metaSection === "opportunity") return "opportunity";
+    return metaSection ?? "opportunity";
 }
 
 export function buildUnderstandingGroups(input: {
@@ -73,7 +70,7 @@ export function buildUnderstandingGroups(input: {
     if (parents.length) {
         groups.push({
             key: "person",
-            title: "Family",
+            title: "Parent / Guardian",
             rows: parents.map((value, i) => ({
                 label: i === 0 ? "Primary" : "Additional",
                 value,
@@ -84,7 +81,7 @@ export function buildUnderstandingGroups(input: {
     if (children.length) {
         groups.push({
             key: "child",
-            title: "Children",
+            title: "Child",
             rows: children.map((value, i) => ({
                 label: i === 0 ? "Child" : "Additional",
                 value,
@@ -100,7 +97,6 @@ export function buildUnderstandingGroups(input: {
         if (!displayRaw) continue;
         const meta = fieldMeta.get(entry.fieldKey);
         const sectionKey = sectionKeyForField(entry.fieldKey, meta?.section);
-        // Prefer repeater summaries for person/child identity when present.
         if (
             (PERSON_IDENTITY_KEYS.has(entry.fieldKey) && parents.length) ||
             (CHILD_IDENTITY_KEYS.has(entry.fieldKey) && children.length)
@@ -129,7 +125,7 @@ export function buildUnderstandingGroups(input: {
         });
     }
 
-    const order = ["person", "child", "context"];
+    const order = ["person", "child", "opportunity", "context", "household"];
     for (const key of order) {
         if (groups.some((g) => g.key === key)) continue;
         const g = bySection.get(key);

@@ -24,10 +24,12 @@ export type CreateLeadSectionModel = {
 const ADDITIONAL_INFO_KEYS = new Set(["source", "intake_notes"]);
 
 const SECTION_HELPER: Record<string, string> = {
-    person: "Required to create the lead",
+    person: "Required to create this lead",
     child: "Optional — add when you have child details",
-    context: "Location, program, and placement preferences",
+    context: "Lead details",
+    opportunity: "Lead details",
     additional: "Source and notes",
+    household: "Household details",
 };
 
 /** Pair keys that may sit side-by-side when expanded (never when pinned). */
@@ -183,7 +185,9 @@ function buildOneSection(input: {
               : input.fields.filter((f) => input.values.has(f.payload_key)).length;
     const isRequiredSection =
         input.key === "person" ||
-        (requiredPayloadKeys.length > 0 && input.key !== "additional" && input.key !== "child");
+        (requiredPayloadKeys.length > 0 &&
+            input.key !== "additional" &&
+            input.key !== "child");
     const contactGap = input.key === "person" && needsContact(input.values);
     const incompleteChildRows =
         input.key === "child" && (input.childRowCount ?? 0) > 0 && namedSummaries.length < (input.childRowCount ?? 0);
@@ -306,14 +310,14 @@ function buildSummaryLines(
     return lines;
 }
 
-/** Default open section: Family when incomplete, else Placement when Location still needed. */
+/** Default open section: Parent when incomplete, else first incomplete required entity. */
 export function defaultOpenSectionKeys(models: CreateLeadSectionModel[]): string[] {
     const family = models.find((m) => m.key === "person");
     if (family && family.completion !== "ready") return ["person"];
-    const placement = models.find((m) => m.key === "context");
-    if (placement && placement.completion !== "ready" && placement.isRequiredSection) {
-        return ["context"];
-    }
+    const requiredIncomplete = models.find(
+        (m) => m.isRequiredSection && m.completion !== "ready" && m.key !== "person"
+    );
+    if (requiredIncomplete) return [requiredIncomplete.key];
     return [];
 }
 

@@ -292,7 +292,7 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                         platformRequiredKeys={
                             controller.effectiveSpec?.requiredPayloadKeys?.length
                                 ? controller.effectiveSpec.requiredPayloadKeys
-                                : ["first_name", "last_name", "location_id"]
+                                : ["first_name", "last_name"]
                         }
                         fieldConfidence={controller.fieldConfidence}
                         optionLabels={optionLabels}
