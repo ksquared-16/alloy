@@ -8,8 +8,8 @@ last_reviewed: 2026-07-27
 
 | WP | Status | Commit | Notes |
 |---|---|---|---|
-| WP-01 | in progress | — | Align bosProposalSupport |
-| WP-02 | pending | | |
+| WP-01 | done | `5e335e4d9` | bosProposalSupport aligned |
+| WP-02 | done | pending commit | Session types + reducer |
 | WP-03 | pending | | |
 | WP-04 | pending | | |
 | WP-05 | pending | | |
