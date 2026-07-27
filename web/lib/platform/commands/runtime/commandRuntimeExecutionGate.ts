@@ -5,7 +5,8 @@
  * P1.S2: RegisteredAction
  * P2.S1 / P2.S2: Mutation Runtime — exact keys (owner globally false)
  * P3.S1–P3.S3: Relationship Runtime — exact keys (owner globally false)
- * P4.S2: Destructive/replacement — exact allowlist (make_primary_contact)
+ * P4.S2/S3: Destructive/replacement — exact allowlist
+ * P5.S1: Tour domain — exact key (reschedule_tour)
  */
 
 import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
@@ -121,6 +122,19 @@ export function isDestructiveReplacementFacadeSupported(commandKey: string): boo
 }
 
 /**
+ * Tour-domain facade — exact keys only (P5.S1: reschedule_tour).
+ * Owner `tour_domain` remains globally false.
+ */
+export const TOUR_DOMAIN_FACADE_COMMAND_KEYS = ["reschedule_tour"] as const;
+
+export type TourDomainFacadeCommandKey = (typeof TOUR_DOMAIN_FACADE_COMMAND_KEYS)[number];
+
+export function isTourDomainFacadeSupported(commandKey: string): boolean {
+    const key = (commandKey ?? "").trim();
+    return (TOUR_DOMAIN_FACADE_COMMAND_KEYS as readonly string[]).includes(key);
+}
+
+/**
  * Whether `/api/admin/actions/execute` should invoke the Command Runtime facade.
  * Capability Registry owns execution-owner truth; this gate owns migration readiness.
  */
@@ -172,6 +186,15 @@ export function isCommandRuntimeFacadeExecutionSupported(commandKey: string): bo
         return (
             isRelationshipRuntimeFacadeSupported(key) &&
             (RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS as readonly string[]).includes(
+                cap.canonicalCommandKey
+            )
+        );
+    }
+
+    if (cap.executionOwner === "tour_domain") {
+        return (
+            isTourDomainFacadeSupported(key) &&
+            (TOUR_DOMAIN_FACADE_COMMAND_KEYS as readonly string[]).includes(
                 cap.canonicalCommandKey
             )
         );

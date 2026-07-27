@@ -31,7 +31,7 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 | `add_family_member` | same | adapted | admin_action | organization_command_catalog | yes | Product hub | Hub; aliases `add_related_person`, `add_person` |
 | `add_sibling` | same | adapted | admin_action | organization_command_catalog | yes | Product hub | Overlaps add_child |
 | `schedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Not RegisteredAction |
-| `reschedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | |
+| `reschedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | **P5.S1** | Facade → `rescheduleTourBooking`; direct POST reschedule remains |
 | `cancel_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 / P4.S1 | **cancel** policy classified; facade commit disabled; tour REST owner |
 | `complete_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | |
 | `no_show_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Alias `mark_tour_no_show` |
@@ -366,3 +366,17 @@ HMAC-SHA256 compact claims; TTL + version; no DB store; not an idempotency key.
 | vs Delete | Distinct hard-delete path remains `delete_lead` only |
 | Restore | Not supported (`reopen_lead` also missing) |
 | P4 exit | Certified — see P4 Destructive Phase Certification table in evidence |
+
+---
+
+# P5.S1 — Tour Reschedule Cutover
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p5-tour-convergence-msn_188e8bea6fb6de28dd21.md` |
+| Facade | **Enabled** for `reschedule_tour` only (`TOUR_DOMAIN_FACADE_COMMAND_KEYS`) |
+| Domain | `rescheduleTourBooking` (unchanged) |
+| Direct API | Compatibility retained |
+| Cancel | Still destructive commit-disabled |
+| Automation | Documented consumer/invoker only — not implemented |

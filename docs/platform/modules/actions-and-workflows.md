@@ -102,6 +102,10 @@ disabled**. No Delete Lead / Make Primary / Cancel Tour production cutover in P4
   confirm + preview token). Direct `POST .../opportunities/:id/delete` remains compatibility (Option A).
   Archive / cancel tour / withdraw remain commit-disabled. **P4.S4:** `archive_lead` certified
   Disposition B (unavailable — no production executor; not adapted).
+- **P5.S1:** `reschedule_tour` — Tour adapter → `rescheduleTourBooking` (exact key; `tour_domain`
+  owner remains globally false). Direct booking reschedule route unchanged. `cancel_tour` still
+  commit-disabled. Automations may later invoke the same Command / react to Tour domain events;
+  Automations do not own Tour mutation execution.
 
 ### Destructive / replacement Command policy (P4.S1)
 

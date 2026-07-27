@@ -114,6 +114,11 @@ Create Lead reference hosts Conversation/Form inside the BOS rail command-sessio
 still executing through the registered action path — BOS must not own a private mutation
 lifecycle or bypass server authority.
 
+**Automations (dependency direction only).** Commands emit domain events that Automations may
+consume. Automations may invoke Commands through the shared Command Runtime under the same
+authorization and validation. Automations do not own domain mutation execution (including Tour
+booking writes). The Automation product is not implemented in Commands P5.
+
 **Prior wiring notes (V2–V3).** Earlier Command Surface / modal-host wiring documented that
 `adminv2:open-create-lead` mounted `CreateLeadCommandSurface`. That remains the **compatibility
 fallback**. Primary operator entry is now the V6 command session above. See

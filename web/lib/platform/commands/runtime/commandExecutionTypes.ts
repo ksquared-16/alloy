@@ -10,6 +10,7 @@ import type { CapabilityExecutionOwner } from "@/lib/platform/commands/capabilit
 import type { CommandImpactPreview } from "@/lib/platform/commands/runtime/destructive/commandImpactPreviewTypes";
 import type { MakePrimaryReplacementResult } from "@/lib/platform/commands/runtime/adapters/primaryContactReplacementAdapter";
 import type { DeleteLeadReplacementResult } from "@/lib/platform/commands/runtime/adapters/deleteLeadAdapter";
+import type { TourRescheduleResult } from "@/lib/platform/commands/runtime/adapters/tourExecutionAdapter";
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 
 export type CommandExecutionMode = "preview" | "execute";
@@ -76,7 +77,8 @@ export type CommandExecutionResult =
               | "registered_action"
               | "mutation_runtime"
               | "relationship_runtime"
-              | "admin_action";
+              | "admin_action"
+              | "tour_domain";
           invocationId: string;
           /** Preserved RegisteredAction result for route compatibility. */
           actionResult?: ActionResult & { ok: true };
@@ -88,6 +90,13 @@ export type CommandExecutionResult =
           replacementResult?: MakePrimaryReplacementResult;
           /** Destructive delete result (P4.S3 delete_lead). */
           deleteLeadResult?: DeleteLeadReplacementResult;
+          /** Tour-domain result (P5.S1 reschedule_tour). */
+          tourResult?: TourRescheduleResult;
+          /** Lightweight non-destructive preview summary (Tour P5.S1). */
+          tourPreview?: {
+              kind: "tour";
+              summary: Record<string, unknown>;
+          };
           /** Operator-safe impact preview (destructive/replacement). */
           impactPreview?: CommandImpactPreview;
           diagnostics: readonly { code: string; message: string }[];

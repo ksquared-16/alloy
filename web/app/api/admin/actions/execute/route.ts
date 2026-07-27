@@ -207,7 +207,9 @@ export async function POST(request: NextRequest) {
                           : "command_runtime_lead_status_mutation"
                       : result.executionOwner === "admin_action"
                         ? "command_runtime_destructive_replacement"
-                        : "command_runtime_registered_action";
+                        : result.executionOwner === "tour_domain"
+                          ? "command_runtime_tour"
+                          : "command_runtime_registered_action";
 
             const mutationDomain =
                 result.executionOwner !== "mutation_runtime"
@@ -227,7 +229,9 @@ export async function POST(request: NextRequest) {
                         ? result.ok && "deleteLeadResult" in result && result.deleteLeadResult
                           ? "delete_lead"
                           : "primary_contact_replacement"
-                        : "registered_action";
+                        : result.executionOwner === "tour_domain"
+                          ? "tour_reschedule"
+                          : "registered_action";
 
             logCommandExecutePathDiagnostic({
                 requestedKey: actionKey,
@@ -411,6 +415,48 @@ export async function POST(request: NextRequest) {
                         opportunities_updated: result.replacementResult.opportunities_updated,
                         opportunity_ids: result.replacementResult.opportunity_ids,
                         affected_id: result.replacementResult.new_primary_person_id,
+                    },
+                    { request, correlationId: result.invocationId }
+                );
+            }
+
+            if (result.executionOwner === "tour_domain" && result.status === "previewed") {
+                return apiOk(
+                    {
+                        execution_result: {
+                            kind: "tour",
+                            tour_preview: result.tourPreview,
+                        },
+                        affected_id: entityId,
+                    },
+                    { request, correlationId: result.invocationId }
+                );
+            }
+
+            if (result.executionOwner === "tour_domain" && result.tourResult) {
+                try {
+                    revalidateTag(adminActionsOrgTag(ctx.orgId), "max");
+                } catch (e) {
+                    console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
+                }
+                return apiOk(
+                    {
+                        execution_result: {
+                            kind: "tour",
+                            tour_result: result.tourResult.tour_result,
+                        },
+                        ok: true,
+                        booking: {
+                            id: result.tourResult.tour_result.booking_id,
+                            opportunity_id: result.tourResult.tour_result.opportunity_id,
+                            status_key: result.tourResult.tour_result.status_key,
+                            start_at: result.tourResult.tour_result.start_at,
+                            end_at: result.tourResult.tour_result.end_at,
+                            timezone: result.tourResult.tour_result.timezone,
+                            location_id: result.tourResult.tour_result.location_id,
+                        },
+                        message: result.tourResult.tour_result.message,
+                        affected_id: result.tourResult.tour_result.booking_id,
                     },
                     { request, correlationId: result.invocationId }
                 );

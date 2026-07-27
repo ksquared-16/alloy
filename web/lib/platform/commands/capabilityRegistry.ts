@@ -439,10 +439,12 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         maturity: "adapted",
         executionOwner: "tour_domain",
         catalogVisibility: "organization_command_catalog",
-        supportedSubjects: ["opportunity"],
-        supportsPreview: false,
+        supportedSubjects: ["opportunity", "tour_booking"],
+        supportsPreview: true,
         confirmationPolicy: "domain_owned",
         implementationStatus: "production",
+        reason:
+            "P5.S1: facade → rescheduleTourBooking (in-place booking update). Direct POST .../bookings/:id/reschedule remains compatibility (Option A).",
     }),
     def({
         capabilityKey: "cancel_tour",

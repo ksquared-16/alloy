@@ -11,6 +11,7 @@ export type CompatibilityExecutePath =
     | "command_runtime_child_enrollment_mutation"
     | "command_runtime_relationship"
     | "command_runtime_destructive_replacement"
+    | "command_runtime_tour"
     | "execute_admin_action_fallback"
     | "mutations_execute_compat"
     | "registered_action_direct_legacy";

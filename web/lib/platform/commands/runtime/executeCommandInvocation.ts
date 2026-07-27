@@ -42,6 +42,10 @@ import {
     executeRelationshipViaAdapter,
     type RelationshipExecutionDeps,
 } from "@/lib/platform/commands/runtime/adapters/relationshipExecutionAdapter";
+import {
+    executeRescheduleTourViaAdapter,
+    type TourExecutionDeps,
+} from "@/lib/platform/commands/runtime/adapters/tourExecutionAdapter";
 import type {
     CommandExecutionFailureStatus,
     CommandExecutionResult,
@@ -56,6 +60,7 @@ import {
     isExecutionOwnerEnabledForFacade,
     isLeadStatusMutationFacadeSupported,
     isRelationshipRuntimeFacadeSupported,
+    isTourDomainFacadeSupported,
 } from "@/lib/platform/commands/runtime/commandRuntimeExecutionGate";
 import { assertCommandSnapshotInvariants } from "@/lib/platform/commands/runtime/commandRuntimeInvariants";
 import {
@@ -72,7 +77,8 @@ export type ExecuteCommandInvocationOptions = {
         ChildEnrollmentMutationExecutionDeps &
         RelationshipExecutionDeps &
         PrimaryContactReplacementDeps &
-        DeleteLeadAdapterDeps;
+        DeleteLeadAdapterDeps &
+        TourExecutionDeps;
 };
 
 function createDelegationGuard(invocationId: string): InvocationDelegationGuard {
@@ -837,6 +843,93 @@ export async function executeCommandInvocation(
                 {
                     code: "delegated_delete_lead",
                     message: `opportunity=${committed.result.opportunity_id} audit=${committed.result.audit_logged}`,
+                },
+            ],
+        };
+    }
+
+    // ── Tour domain (P5.S1 reschedule_tour) ───────────────────────────────────
+    if (
+        isTourDomainFacadeSupported(capability.canonicalCommandKey) &&
+        capability.canonicalCommandKey === "reschedule_tour" &&
+        capability.executionOwner === "tour_domain"
+    ) {
+        const adapted = await executeRescheduleTourViaAdapter({
+            capability,
+            commandKey: invocation.commandKey,
+            invocation,
+            executionSubject: { entityType, entityId },
+            mode: request.mode,
+            supabase: server.supabase,
+            orgId: server.orgId,
+            userId: server.userId,
+            invocationId,
+            guard,
+            deps,
+        });
+
+        if (!adapted.ok) {
+            return fail({
+                status:
+                    adapted.code === "invalid_inputs" ||
+                    adapted.code === "location_mismatch" ||
+                    adapted.code === "location_not_found"
+                        ? "invalid"
+                        : adapted.code === "booking_not_found" ||
+                            adapted.code === "opportunity_not_found"
+                          ? "unavailable"
+                          : adapted.delegated
+                            ? "failed"
+                            : "blocked",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "tour_domain",
+                code: adapted.code,
+                operatorMessage: adapted.operatorMessage,
+                delegated: adapted.delegated,
+            });
+        }
+
+        if ("preview" in adapted && adapted.preview) {
+            return {
+                ok: true,
+                status: "previewed",
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "tour_domain",
+                invocationId,
+                tourPreview: adapted.preview,
+                diagnostics: [
+                    {
+                        code: "tour_reschedule_preview",
+                        message: `booking=${adapted.preview.summary.booking_id}`,
+                    },
+                ],
+            };
+        }
+
+        if (!("result" in adapted) || !adapted.result) {
+            return fail({
+                status: "failed",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "tour_domain",
+                code: "tour_adapter_incomplete",
+                operatorMessage: "Tour adapter returned an incomplete result.",
+                delegated: adapted.delegated,
+            });
+        }
+
+        return {
+            ok: true,
+            status: "committed",
+            canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+            executionOwner: "tour_domain",
+            invocationId,
+            tourResult: adapted.result,
+            diagnostics: [
+                {
+                    code: "delegated_tour_reschedule",
+                    message: `booking=${adapted.result.tour_result.booking_id}`,
                 },
             ],
         };
