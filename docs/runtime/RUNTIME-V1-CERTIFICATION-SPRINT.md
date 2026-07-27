@@ -138,6 +138,7 @@ A task is **COMPLETE only when every box is checked** (doc/test/arch boxes are N
 | D-009 | **Env-gated shadow / legacy-emergency-fallback modules are RETAINED** — legitimate kill-switches (default false), not dead code. | flag defaults verified |
 | D-010 | **No Runtime V2.** The A/B/C analysis proved no bucket-C ceiling; certify within V1. | classification 2026-07-26 |
 | D-011 | **The server preloads the kernel's cache through ONE kernel-owned seam** (`seedProvisioningForRoute`); no other layer references K2's key scheme (`provisioningAnswerUrl`). | RA-1; commit `3c0a9d6c1` |
+| D-012 | **CP-4's premise is largely FALSE — the named field-duplicates are not duplicate DB reads.** The Answer's `focusPanelSubjectSnapshot` builds `primaryContact`/`inquiryChildren` from already-resolved row data ("No extra DB read", `workUnitProvisioningAnswer.ts:731`); the enriched VM reads `inquiry_children` as a field access (`params.record._inquiry_children`). The genuine duplication is **cross-request record composition**: the Answer and the enriched VM are two independent server requests that each fetch the opportunity (`opportunities` — enriched uses the richer `OPPORTUNITY_CANONICAL_ADMIN_SELECT`) + `work_units`, and the enriched VM's dominant ~5–6 s cost is its OWN deeper composition (visible-payload FK batch + first-paint deps + comms + layout + status defs). Field-by-field reuse cannot remove a *second full composition in a separate HTTP request*. **→ The perceived-perf lever is CP-1 (compose-once / seed / fold / parallelize / drop), not CP-4.** | code inspection `composeOpportunityDrawerViewModel.ts:150/174/202`, `workUnitProvisioningAnswer.ts:731–745` |
 
 _Future sessions append decisions here with the next `D-0xx` id; never silently reverse a decision — supersede it with a new entry citing evidence._
 
@@ -148,7 +149,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | Task | Cat | Priority | Deps | Deps met? | READY? |
 |---|---|:--:|---|:--:|:--:|
 | ~~CP-2 Remove duplicate stage-work fetch~~ | Critical Path | Critical | — | ✓ | **DONE** |
-| CP-4 Enriched-VM field reuse of provisioning data | Critical Path | High | — | ✓ | READY |
+| CP-4 Enriched-VM field reuse of provisioning data | Critical Path | High | — | ✓ | **MAP DONE → folds into CP-1 (D-012)** |
 | ~~RA-1 Canonical kernel preload seam~~ | Runtime Arch | High | — | ✓ | **DONE** |
 | DG-1 Conditional-mount+dynamic the 7 registry modals | Dependency Graph | High | — | ✓ | READY |
 | ~~MA-1 / DOC-1 `ARCHITECTURE.md`~~ | Maint / Docs | High | — | ✓ | **DONE** |
@@ -158,7 +159,7 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | ~~TS-2 Project-reference roadmap~~ | TypeScript | Medium | — | ✓ | **DONE** |
 | SC-1 Generalize subject contract | Scalability | Medium | — | ✓ | READY |
 | ~~CQ-3 Rename `resolveWorkUnitRouteIdentityCached`~~ | Code Quality | Low | — | ✓ | **DONE** |
-| CP-1 Server-seed enriched VM | Critical Path | **Critical** | RA-1, CP-4 | ✗ | blocked |
+| CP-1 Eliminate enriched-VM post-hydration waterfall | Critical Path | **Critical** | RA-1✓, CP-4✓(map) | ✓ | **READY — architecture challenge (≥5 options, §0) required before impl; impl is EEC** |
 | ~~RA-2 Remove legacy-drawer duality~~ | Runtime Arch | High | RA-1✓ | ✓ | **DONE** |
 | ~~RA-3 Cache single-producer invariant~~ | Runtime Arch | High | RA-1✓ | ✓ | **DONE** (Runtime Arch → A- ✓target) |
 | CQ-2 Decompose `InlineOpportunityFocusPanel` | Code Quality | High | DG-1, DG-2 | ✗ | blocked |
@@ -314,7 +315,7 @@ outside the kernel** and additionally unit-locked by the single-producer key-agr
 | CP-1 | Server-seed the enriched drawer VM (compose server-side for the committed subject, seed the client VM cache) | NS | On cold default load, `/view-models/drawer/opportunity/{id}` request ABSENT (seed-consumed); warm all-cards materially lower | harness: enriched-VM req absent + all-cards delta; full cert green | RA-1, CP-4 |
 | CP-2 | Remove duplicate stage-work fetch (reuse answer's `focusPanelStageWork` on cold default load) | **DONE** | No `view_model_stage_work` request when committed subject == answer subject; stage-work still correct | **`/stage-work` ELIMINATED (0); all-cards 12.7s→11.2s; reveal grid 5/reserved 0; C1/C3 pass; 13/13 units; tsc gate exit 0 / 0 errors; commit `437ad9d11`.** | — |
 | CP-3 | Gate the sibling-view prewarm storm behind the reveal | NS | ≤1 provisioning request during the primary-reveal window (4 sibling prewarms deferred) | harness: provisioning count during reveal ≤1 | — |
-| CP-4 | Enriched-VM field-by-field reuse of provisioning data (inquiry_children, primary contact) | NS | Named duplicate DB reads removed from enriched-VM `phases_ms`; contract unchanged | server `phases_ms` before/after | — |
+| CP-4 | Enriched-VM field-by-field reuse of provisioning data (inquiry_children, primary contact) | **REFRAMED → folds into CP-1 (D-012)** | ~~Named duplicate DB reads removed~~ — **premise disproved:** the named fields are already no-extra-DB-read on both sides; the real duplication is cross-request record composition, removable only by CP-1's architecture, not field-reuse | **Static map done (EEC-free): D-012.** No standalone field-reuse change worth making; the enriched VM's cost is a *second full composition in a separate request*. The `phases_ms` measurement + any CP-1 change are EEC (batch). | — |
 | CP-5 | Slug→identity resolution dedup (layout) | DONE | One resolution/request via `resolveWorkUnitRouteIdentity` (renamed in CQ-3) | commit `5148c9708`; C1/C2/C3/C7 re-cert | — |
 
 ### 2.3 TypeScript Architecture — C → B+ now (A later) (bucket B) · 15%
