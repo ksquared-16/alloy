@@ -44,6 +44,13 @@ if [ "${1:-}" = "--package" ]; then
   # local internal tool.)
   BUNDLE="$(ls -d "$APP_DIR"/dist/Vacilando-darwin-*/Vacilando.app 2>/dev/null | head -1)"
   if [ -n "$BUNDLE" ]; then
+    # electron-packager's --icon is unreliable, so overwrite the bundle icon
+    # directly (whatever CFBundleIconFile names it) BEFORE signing so the
+    # signature covers our desert icon.
+    if [ -f "$APP_DIR/assets/icon.icns" ]; then
+      ICONNAME="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIconFile' "$BUNDLE/Contents/Info.plist" 2>/dev/null)"
+      [ -n "$ICONNAME" ] && cp "$APP_DIR/assets/icon.icns" "$BUNDLE/Contents/Resources/${ICONNAME%.icns}.icns" && echo "→ applied desert icon"
+    fi
     echo "→ deep ad-hoc signing $BUNDLE"
     codesign --force --deep --sign - "$BUNDLE"
     codesign --verify --deep --strict "$BUNDLE" && echo "✓ signature valid"
