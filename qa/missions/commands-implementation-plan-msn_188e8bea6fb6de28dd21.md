@@ -10,6 +10,8 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
+**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → P1.S1 → P1.S2 → P2.S1 → P2.S2 → **P3.S1 shipped** (`add_parent_guardian`, `link_existing_person` via Relationship adapter). See ledger + P3 evidence.
+
 ---
 
 # Part I — Architecture Decision Closure
@@ -309,7 +311,7 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 
 | ID | Title |
 |----|-------|
-| **P3.S1** | Adapters for 8 relationship keys |
+| **P3.S1** | Relationship Runtime adapter spine (exact keys: `add_parent_guardian`, `link_existing_person`) — remaining catalog later |
 | **P3.S2** | Add Family Member hub Capability |
 | **P3.S3** | Redirect legacy add_person execute path |
 | **P3.S4** | Wizard + BOS parity QA |

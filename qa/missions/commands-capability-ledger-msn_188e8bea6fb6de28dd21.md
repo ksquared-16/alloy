@@ -23,9 +23,9 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 | `add_emergency_contact` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
 | `add_authorized_pickup` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
 | `add_billing_contact` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
-| `add_parent_guardian` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
+| `add_parent_guardian` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S1 facade** → `executeRelationshipAction` |
 | `add_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | Dual UI overlap |
-| `link_existing_person` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
+| `link_existing_person` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S1 facade** → `executeRelationshipAction` |
 | `link_existing_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
 | `make_primary_contact` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
 | `add_family_member` | same | adapted | admin_action | organization_command_catalog | yes | P3 | Hub; aliases `add_related_person`, `add_person` |
@@ -219,4 +219,29 @@ All adapted / legacy / unavailable / navigation / processing keys → `executeAd
 
 ## Still unsupported through facade
 
-`mark_lost`, `move_to_waitlist`, `approve_enrollment`, Relationship, Tour-domain (non-RA), Processing, destructive.
+`mark_lost`, `move_to_waitlist`, `approve_enrollment`, remaining Relationship keys (see P3.S1 for
+the two cut-over keys), Tour-domain (non-RA), Processing, destructive.
+
+---
+
+# P3.S1 — Relationship Runtime adapter spine
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p3-relationship-adapter-msn_188e8bea6fb6de28dd21.md` |
+| Adapter | `web/lib/platform/commands/runtime/adapters/relationshipExecutionAdapter.ts` |
+| Exact keys | `add_parent_guardian`, `link_existing_person` |
+| Final authority | `executeRelationshipAction` (Relationship Framework) |
+
+## Cut over
+
+| Capability | Grain / strategy | Notes |
+|------------|------------------|-------|
+| `add_parent_guardian` | Source child/person/opportunity + create or link person | Registry default role `guardian`; client relationship kind ignored |
+| `link_existing_person` | Existing `selectedPersonId` + `roleKey` | Cannot create identity; role from payload under registry rules |
+
+## Deferred (Add Family Member + remaining Relationship catalog)
+
+`add_emergency_contact`, `add_authorized_pickup`, `add_billing_contact`, `add_child`,
+`link_existing_child`, `make_primary_contact`, `add_family_member` / hub, sibling aliases.

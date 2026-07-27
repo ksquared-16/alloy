@@ -28,8 +28,9 @@ import type { CommandOperationalContext } from "@/lib/platform/commands/runtime/
  *
  * P1.S2: RegisteredAction capabilities execute through the Command Runtime facade,
  * which delegates once to `runRegisteredAction`.
- * P2.S1: `update_lead_status` / `close_lead` execute through the facade → Mutation Runtime.
- * Other keys keep `executeAdminAction`. `/api/admin/mutations/execute` remains unchanged.
+ * P2.S1 / P2.S2: Lead / Enrollment Mutation keys → facade → Mutation Runtime.
+ * P3.S1: `add_parent_guardian` / `link_existing_person` → facade → Relationship Framework.
+ * Other keys keep `executeAdminAction`. Dedicated relationship-actions routes remain.
  * @see docs/api/api-response-contract.md
  * @see docs/api/actions-execute-envelope-audit.md
  */
@@ -188,13 +189,13 @@ export async function POST(request: NextRequest) {
             }
 
             const compatPath =
-                result.executionOwner === "mutation_runtime"
-                    ? result.diagnostics.some((d) =>
-                          d.code.includes("child_enrollment")
-                      )
-                        ? "command_runtime_child_enrollment_mutation"
-                        : "command_runtime_lead_status_mutation"
-                    : "command_runtime_registered_action";
+                result.executionOwner === "relationship_runtime"
+                    ? "command_runtime_relationship"
+                    : result.executionOwner === "mutation_runtime"
+                      ? result.diagnostics.some((d) => d.code.includes("child_enrollment"))
+                          ? "command_runtime_child_enrollment_mutation"
+                          : "command_runtime_lead_status_mutation"
+                      : "command_runtime_registered_action";
 
             const mutationDomain =
                 result.executionOwner !== "mutation_runtime"
@@ -204,11 +205,13 @@ export async function POST(request: NextRequest) {
                       : "lead_status";
 
             const adapterName =
-                result.executionOwner === "mutation_runtime"
-                    ? mutationDomain === "enrollment_status"
-                        ? "child_enrollment_mutation"
-                        : "lead_status_mutation"
-                    : "registered_action";
+                result.executionOwner === "relationship_runtime"
+                    ? "relationship"
+                    : result.executionOwner === "mutation_runtime"
+                      ? mutationDomain === "enrollment_status"
+                          ? "child_enrollment_mutation"
+                          : "lead_status_mutation"
+                      : "registered_action";
 
             logCommandExecutePathDiagnostic({
                 requestedKey: actionKey,
@@ -286,7 +289,7 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            // Success — RegisteredAction or Mutation Runtime
+            // Success — RegisteredAction, Mutation Runtime, or Relationship Runtime
             if (result.executionOwner === "mutation_runtime" && result.mutationResult) {
                 if (result.mutationResult.status === "committed") {
                     try {
@@ -308,6 +311,27 @@ export async function POST(request: NextRequest) {
                         affected_id: entityId,
                     },
                     { request, correlationId: mutationId }
+                );
+            }
+
+            if (result.executionOwner === "relationship_runtime" && result.relationshipResult) {
+                try {
+                    revalidateTag(adminActionsOrgTag(ctx.orgId), "max");
+                } catch (e) {
+                    console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
+                }
+                return apiOk(
+                    {
+                        execution_result: {
+                            kind: "relationship",
+                            relationship_result: result.relationshipResult,
+                        },
+                        affected_id:
+                            result.relationshipResult.person_id ??
+                            result.relationshipResult.child_person_id ??
+                            entityId,
+                    },
+                    { request, correlationId: result.invocationId }
                 );
             }
 

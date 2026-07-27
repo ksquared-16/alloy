@@ -125,4 +125,6 @@ Relationship, Tour-domain, Processing, destructive, `mark_lost` remain out.
 
 ## Compatibility retained
 
-`/api/admin/mutations/execute` unchanged. Relationship / Tour / Processing / RegisteredAction / Lead Status paths unchanged.
+`/api/admin/mutations/execute` unchanged. RegisteredAction / Lead Status paths unchanged.
+~~Relationship~~ → see `commands-p3-relationship-adapter-msn_188e8bea6fb6de28dd21.md` (P3.S1 exact keys only).
+Tour / Processing remain outside.

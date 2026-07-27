@@ -4,6 +4,7 @@
  */
 
 import type { ActionResult } from "@/lib/adminV2/actions/actionTypes";
+import type { RelationshipActionExecutionResult } from "@/lib/admin/relationship/relationshipActionContract";
 import type { MutationResult } from "@/lib/mutations/types";
 import type { CapabilityExecutionOwner } from "@/lib/platform/commands/capabilityTypes";
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
@@ -64,12 +65,14 @@ export type CommandExecutionResult =
           ok: true;
           status: "previewed" | "committed";
           canonicalCapabilityKey: string;
-          executionOwner: "registered_action" | "mutation_runtime";
+          executionOwner: "registered_action" | "mutation_runtime" | "relationship_runtime";
           invocationId: string;
           /** Preserved RegisteredAction result for route compatibility. */
           actionResult?: ActionResult & { ok: true };
           /** Preserved Mutation Runtime result for route compatibility. */
           mutationResult?: MutationResult;
+          /** Preserved Relationship Framework result for route compatibility. */
+          relationshipResult?: RelationshipActionExecutionResult;
           diagnostics: readonly { code: string; message: string }[];
       }
     | {

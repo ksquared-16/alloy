@@ -45,7 +45,7 @@ Tokenized public actions: `/api/action/[token]/consume` → event → workflows.
 | **Config validation** | `web/lib/adminV2/actions/configValidation.ts` |
 | **Eligibility API** | `POST /api/admin/actions/eligibility` |
 | **Capability Registry (P0.S1)** | `web/lib/platform/commands/capabilityRegistry.ts` — classification honesty |
-| **Command Runtime Facade (P1–P2)** | `web/lib/platform/commands/runtime/*` — prepare + RegisteredAction + Lead/Enrollment Mutation execute |
+| **Command Runtime Facade (P1–P3)** | `web/lib/platform/commands/runtime/*` — prepare + RegisteredAction + Lead/Enrollment Mutation + Relationship (2 keys) execute |
 
 ---
 
@@ -65,13 +65,14 @@ unavailable identities are excluded from Settings “add Command” catalog flow
 as non-runnable in configured-key partitioning / process option support checks.
 
 **Execution remains distributed** behind existing owners for capabilities not yet adapted to the
-Command Runtime facade (`executeAdminAction`, Mutation Runtime for child enrollment, Relationship
-Framework, tour booking services).
+Command Runtime facade (`executeAdminAction`, remaining Relationship Framework keys, tour booking
+services).
 
 ## Command Runtime Facade (preparation + gated execute)
 
 **Status:** Preparation (P1.S1). RegisteredAction execute (P1.S2). Lead Status Mutation execute
-(P2.S1). Child Enrollment Mutation execute (P2.S2, July 2026).
+(P2.S1). Child Enrollment Mutation execute (P2.S2). Relationship Runtime adapter spine (P3.S1,
+July 2026) — exact keys only.
 
 `prepareCommandInvocation` remains **side-effect free**.
 
@@ -83,11 +84,17 @@ Framework, tour booking services).
   → existing Lead Status domain handler
 - **Child Enrollment Mutation** (`update_child_enrollment_status`, `waitlist_child`, `enroll_child`
   exact keys only) → `executeMutation` → existing Enrollment Status domain handler
-- `mutation_runtime` is **not** enabled as a global owner gate — only explicit Lead/Enrollment keys
+- **Relationship Runtime** (`add_parent_guardian`, `link_existing_person` exact keys only) →
+  `executeRelationshipAction` (Relationship Framework remains mutation authority)
+- `mutation_runtime` / `relationship_runtime` are **not** enabled as global owner gates — only
+  explicit exact keys
 - `mark_lost` remains on legacy compatibility (`executeAdminAction`); not consolidated
 - Enrollment aliases (`move_to_waitlist`, `approve_enrollment`) remain outside exact-key facade cutover
+- Remaining Relationship keys (`add_emergency_contact`, `add_child`, …) and Add Family Member hub
+  remain outside this cutover
 
-`POST /api/admin/actions/execute` remains the operator/API route name. `/api/admin/mutations/execute`
+`POST /api/admin/actions/execute` remains the operator/API route name. Dedicated
+`/api/admin/relationship-actions/execute` remains available. `/api/admin/mutations/execute`
 remains available and unchanged. `/configuration/commands` is **not** shipped.
 Exactly-once applies **per route invocation**, not distributed idempotency.
 
@@ -288,7 +295,13 @@ Shared **guided wizard** + **idempotent executor** — confirmation required bef
 | `link_existing_child` | Link existing household child |
 | `make_primary_contact` | **Layout contact-row only** — see below |
 
-Code: `relationshipActionRegistry.ts`, `relationshipActionClient.ts`, `RelationshipActionGuidedModal`.
+Code: `relationshipActionRegistry.ts`, `relationshipActionClient.ts`, `RelationshipActionGuidedModal`,
+`executeRelationshipAction`.
+
+**Command Runtime (P3.S1):** `add_parent_guardian` and `link_existing_person` may also reach
+`executeRelationshipAction` through `POST /api/admin/actions/execute` → Command Runtime facade →
+thin `relationshipExecutionAdapter`. Relationship kind/role/cardinality/identity resolution remain
+Relationship Framework–owned. Other relationship keys and the Add Family Member hub are not cut over.
 
 ### Make Primary Contact
 

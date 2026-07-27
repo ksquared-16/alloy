@@ -28,6 +28,10 @@ import {
     executeRegisteredActionViaAdapter,
     type RegisteredActionExecutionDeps,
 } from "@/lib/platform/commands/runtime/adapters/registeredActionExecutionAdapter";
+import {
+    executeRelationshipViaAdapter,
+    type RelationshipExecutionDeps,
+} from "@/lib/platform/commands/runtime/adapters/relationshipExecutionAdapter";
 import type {
     CommandExecutionFailureStatus,
     CommandExecutionResult,
@@ -40,6 +44,7 @@ import {
     isCommandRuntimeFacadeExecutionSupported,
     isExecutionOwnerEnabledForFacade,
     isLeadStatusMutationFacadeSupported,
+    isRelationshipRuntimeFacadeSupported,
 } from "@/lib/platform/commands/runtime/commandRuntimeExecutionGate";
 import { assertCommandSnapshotInvariants } from "@/lib/platform/commands/runtime/commandRuntimeInvariants";
 import { prepareCommandInvocation } from "@/lib/platform/commands/runtime/prepareCommandInvocation";
@@ -49,7 +54,8 @@ export type ExecuteCommandInvocationOptions = {
     server: ExecuteCommandInvocationServerContext;
     deps?: RegisteredActionExecutionDeps &
         LeadStatusMutationExecutionDeps &
-        ChildEnrollmentMutationExecutionDeps;
+        ChildEnrollmentMutationExecutionDeps &
+        RelationshipExecutionDeps;
 };
 
 function createDelegationGuard(invocationId: string): InvocationDelegationGuard {
@@ -447,6 +453,79 @@ export async function executeCommandInvocation(
             code: "mutation_capability_not_adapted",
             operatorMessage: "This command cannot be executed through the Command Runtime yet.",
         });
+    }
+
+    // ── Relationship Runtime (P3.S1) ────────────────────────────────────────
+    if (snapshot.executionDestination.owner === "relationship_runtime") {
+        if (!isRelationshipRuntimeFacadeSupported(invocation.commandKey)) {
+            return fail({
+                status: "unsupported_owner",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: snapshot.executionOwner,
+                code: "relationship_capability_not_adapted",
+                operatorMessage: "This command cannot be executed through the Command Runtime yet.",
+            });
+        }
+
+        let adapted;
+        try {
+            adapted = await executeRelationshipViaAdapter({
+                snapshot,
+                capability,
+                commandKey: invocation.commandKey,
+                invocation,
+                executionSubject: { entityType, entityId },
+                mode: request.mode,
+                supabase: server.supabase,
+                orgId: server.orgId,
+                userId: server.userId,
+                guard,
+                deps,
+            });
+        } catch (e) {
+            const raw = e instanceof Error ? e.message : "Relationship adapter failed";
+            const message = raw.replace(/^\[commandRuntime\]\s*/, "");
+            const preDelegation = !guard.hasDelegated();
+            // Domain executor throws operator-safe messages (parity with
+            // /api/admin/relationship-actions/execute). Never leak stacks.
+            const operatorMessage =
+                message && !/stack|at\s+\S+\s+\(|postgres|sqlstate/i.test(message)
+                    ? message
+                    : "Something went wrong. Please try again.";
+            return fail({
+                status: preDelegation ? "invalid" : "failed",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "relationship_runtime",
+                code: preDelegation ? "invalid_relationship_intent" : "relationship_executor_error",
+                operatorMessage,
+                delegated: guard.hasDelegated(),
+                diagnostics: [
+                    {
+                        code: preDelegation
+                            ? "invalid_relationship_intent"
+                            : "relationship_executor_error",
+                        message: raw,
+                    },
+                ],
+            });
+        }
+
+        return {
+            ok: true,
+            status: "committed",
+            canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+            executionOwner: "relationship_runtime",
+            invocationId,
+            relationshipResult: adapted.relationshipResult,
+            diagnostics: [
+                {
+                    code: "delegated_relationship_action",
+                    message: `key=${adapted.actionKey} links=${adapted.relationshipResult.links_written}`,
+                },
+            ],
+        };
     }
 
     return fail({
