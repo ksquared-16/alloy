@@ -35,9 +35,10 @@ describe("BOS Create Lead conversation + form gather (WP-07/08)", () => {
             "utf8"
         );
         expect(ctrl).toContain("createLeadConversationIntakeAdapter");
-        expect(ctrl).toContain("gatherSectionsFromFields");
+        expect(ctrl).toContain("projectCreateLeadFormSections");
         expect(ctrl).toContain("applyOperatorFieldEdit");
         expect(ctrl).toContain("useInquiryChildPlacementCascade");
         expect(ctrl).not.toContain("CREATE_LEAD_GATHER_FIELDS");
+        expect(ctrl).not.toContain("gatherSectionsFromFields");
     });
 });

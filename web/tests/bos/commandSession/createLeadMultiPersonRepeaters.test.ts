@@ -145,8 +145,15 @@ describe("Create Lead multi-person / multi-child repeaters", () => {
 
         const fields: ActionWorkspaceGatherField[] = [];
         const groups = buildUnderstandingGroups({ draft, gatherFields: fields });
-        expect(groups.find((g) => g.key === "person")?.rows).toHaveLength(2);
-        expect(groups.find((g) => g.key === "child")?.rows).toHaveLength(2);
+        expect(groups.find((g) => g.key === "person")?.rows).toEqual([
+            expect.objectContaining({ label: "Primary", value: expect.stringContaining("Sarah") }),
+            expect.objectContaining({ label: "Additional", value: expect.stringContaining("Mike") }),
+        ]);
+        expect(groups.find((g) => g.key === "child")?.rows).toEqual([
+            expect.objectContaining({ label: "Child", value: expect.stringContaining("Emma") }),
+            expect.objectContaining({ label: "Additional", value: expect.stringContaining("Leo") }),
+        ]);
+        expect(JSON.stringify(groups)).not.toMatch(/Parent \/ guardian \d|Parent \d|Child \d/);
 
         const review = buildReviewGroups({ draft, gatherFields: fields, preview: null });
         expect(review.find((g) => g.key === "person")?.rows).toHaveLength(2);
@@ -154,6 +161,31 @@ describe("Create Lead multi-person / multi-child repeaters", () => {
         const payload = bosDraftToEligiblePayload(draft);
         expect(payload.household_commit_v1).toBeTruthy();
         expect(String(payload.first_name)).toBe("Sarah");
+    });
+});
+
+describe("platform relationship presentation (label-only)", () => {
+    it("namespaces edge ids and applies singular overrides without changing catalog id", async () => {
+        const {
+            platformRelationshipLabelsKey,
+            resolvePlatformRelationshipLabels,
+            findPlatformRelationshipDefinition,
+        } = await import("@/lib/dataModel/platformRelationshipPresentation");
+        expect(platformRelationshipLabelsKey("child.parent_guardian")).toBe(
+            "relationship:child.parent_guardian"
+        );
+        expect(findPlatformRelationshipDefinition("child.parent_guardian")?.label).toBe(
+            "Parent / Guardian"
+        );
+        expect(
+            resolvePlatformRelationshipLabels("child.parent_guardian", {
+                singular: "Caregiver",
+                plural: "Caregivers",
+            })
+        ).toEqual({ label: "Caregiver", pluralLabel: "Caregivers" });
+        expect(resolvePlatformRelationshipLabels("child.parent_guardian", undefined).label).toBe(
+            "Parent / Guardian"
+        );
     });
 });
 
