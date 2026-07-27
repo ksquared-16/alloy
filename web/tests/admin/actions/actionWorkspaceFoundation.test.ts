@@ -217,7 +217,7 @@ describe("create lead BOS guidance", () => {
         const { resolveCreateLeadBosGuidance } = await import("@/lib/admin/actions/createLeadBosGuidance");
         const guidance = resolveCreateLeadBosGuidance({ first_name: "Jordan" });
         expect(guidance.ready).toBe(false);
-        expect(guidance.missingItems).toContain("Parent/Guardian Last Name");
+        expect(guidance.missingItems).toContain("Last Name");
         expect(guidance.missingItems).toContain("contact method");
     });
 
@@ -318,7 +318,6 @@ describe("create lead platform minimum", () => {
             first_name: "Ada",
             last_name: "Lovelace",
             email: "ada@example.com",
-            location_id: "site-1",
         });
         expect(valid.ok).toBe(true);
     });

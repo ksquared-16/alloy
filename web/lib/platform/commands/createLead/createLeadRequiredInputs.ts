@@ -7,13 +7,16 @@
  * (`deriveCreateLeadCommandState`) consume this, so manual UI, BOS, and the server
  * executor reason about the same minimum.
  *
- * This module is **read-only**. It does NOT create records. The authoritative create_lead
- * invariant + record creation lives in `executeCreateLeadAction` and runs at execute time
- * regardless of what the client believes. Stage-configured `field_rules` add config-supplied
- * required-input hints on top of this code-owned minimum (see the audit doc for the parity
- * boundary).
+ * Authoritative Create Lead requirements =
+ *   code-owned minimum (first + last + email|phone)
+ *   + explicit effective `record_creation` fields from ActionIntakeSpec
  *
- * @see docs/sprints/archive/06_2026/create_lead_command_flow_audit.md
+ * Location is **not** a universal platform minimum. It blocks only when present on the
+ * resolved intake spec as required (`record_creation`).
+ *
+ * This module is **read-only**. It does NOT create records. The authoritative create_lead
+ * mutation lives in `executeCreateLeadAction` / registered execute; eligibility is gated by
+ * `runRegisteredAction` → `resolveEligibility` before execute.
  */
 
 import {
@@ -22,28 +25,25 @@ import {
     type ActionEligibility,
     type ActionPreview,
     type ActionRequiredInput,
+    type ActionRequiredInputType,
 } from "@/lib/adminV2/actions/actionTypes";
-import { isCreateLeadLocationRequired } from "@/lib/admin/actions/createLead/resolveCreateLeadLocationPolicy";
+import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 
 export const CREATE_LEAD_ACTION_KEY = "create_lead";
+
+/** Code-owned minimum payload keys (name). Contact is email|phone (see blockers). */
+export const CREATE_LEAD_CODE_OWNED_REQUIRED_KEYS = ["first_name", "last_name"] as const;
 
 export function trimmedValue(v: unknown): string {
     return v != null ? String(v).trim() : "";
 }
 
-/** Code-owned minimum required inputs (server invariant mirror). */
+/** Code-owned minimum required inputs (server invariant mirror). No Location. */
 export const CREATE_LEAD_REQUIRED_INPUTS: readonly ActionRequiredInput[] = [
     { key: "first_name", label: "First name", type: "text", required: true },
     { key: "last_name", label: "Last name", type: "text", required: true },
     { key: "email", label: "Email", type: "email", required: false, hint: "Email or phone required." },
     { key: "phone", label: "Phone", type: "phone", required: false, hint: "Email or phone required." },
-    {
-        key: "location_id",
-        label: "Location",
-        type: "select",
-        required: true,
-        hint: "School / site is required to create a lead.",
-    },
 ] as const;
 
 export function createLeadDisplayName(payload: Record<string, unknown>): string {
@@ -56,10 +56,41 @@ export function createLeadPrimaryContact(payload: Record<string, unknown>): stri
     return trimmedValue(payload.email) || trimmedValue(payload.phone);
 }
 
+function toRequiredInputType(kind: string): ActionRequiredInputType {
+    if (kind === "email" || kind === "phone" || kind === "date" || kind === "select") return kind;
+    return "text";
+}
+
 /**
- * Code-owned minimum blockers (first + last + email|phone). Stage `field_rules` may add
- * more *client-side* required-input hints; the authoritative server check is
- * `executeCreateLeadAction`.
+ * Map ActionIntakeSpec.required (already filtered to explicit record_creation + platform
+ * name floor by resolveCreateLeadActionIntakeSpec) into eligibility config hints.
+ * Skips code-owned name keys so the floor is not double-labeled as fromConfig.
+ */
+export function createLeadConfigRequiredInputsFromIntakeSpec(
+    spec: ActionIntakeSpec | null | undefined
+): ActionRequiredInput[] {
+    if (!spec) return [];
+    const codeOwned = new Set<string>(CREATE_LEAD_CODE_OWNED_REQUIRED_KEYS);
+    const out: ActionRequiredInput[] = [];
+    const seen = new Set<string>();
+    for (const field of spec.required) {
+        const key = field.payload_key?.trim();
+        if (!key || codeOwned.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+            key,
+            label: field.field_label || key.replace(/_/g, " "),
+            type: toRequiredInputType(field.value_kind),
+            required: true,
+            fromConfig: true,
+        });
+    }
+    return out;
+}
+
+/**
+ * Code-owned minimum blockers (first + last + email|phone).
+ * Config `record_creation` blockers are added by {@link buildCreateLeadEligibility}.
  */
 export function deriveCreateLeadBlockers(payload: Record<string, unknown>): ActionBlocker[] {
     const blockers: ActionBlocker[] = [];
@@ -72,20 +103,12 @@ export function deriveCreateLeadBlockers(payload: Record<string, unknown>): Acti
     if (!trimmedValue(payload.email) && !trimmedValue(payload.phone)) {
         blockers.push({ code: "missing_required_input", message: "Phone or email is required.", field: "email" });
     }
-    if (isCreateLeadLocationRequired() && !trimmedValue(payload.location_id)) {
-        blockers.push({
-            code: "missing_required_input",
-            message: "Location is required.",
-            field: "location_id",
-        });
-    }
     return blockers;
 }
 
 /**
- * Build read-only eligibility for create_lead from a payload field map. Optionally merge
- * config-supplied required-input hints (e.g. stage `field_rules`); hints are flagged
- * `fromConfig` and only contribute blockers when their value is absent in the payload.
+ * Build read-only eligibility for create_lead from a payload field map. Merge
+ * config-supplied required-input hints from the resolved intake spec (`record_creation`).
  */
 export function buildCreateLeadEligibility(
     payload: Record<string, unknown>,

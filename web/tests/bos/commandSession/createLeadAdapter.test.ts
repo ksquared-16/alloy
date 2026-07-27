@@ -34,26 +34,9 @@ describe("createLeadBosCommandAdapter", () => {
     });
 
     it("matches platform eligibility blockers for identical eligible payload", () => {
-        let draft = applyCreateLeadParseToDraft(emptyBosCommandDraft(), JORDAN_PASTE, ctx);
-        // Location is platform-required; paste alone is not enough to execute.
-        const withoutLocation = revalidateCreateLeadDraft(draft, ctx);
-        expect(withoutLocation.readyToExecute).toBe(false);
-        expect(withoutLocation.blockers.some((b) => /location/i.test(b.message))).toBe(true);
-
-        draft = {
-            ...draft,
-            values: [
-                ...draft.values,
-                {
-                    fieldKey: "location_id",
-                    value: "site-1",
-                    state: "operator_entered",
-                    evidence: [],
-                    optionResolved: true,
-                },
-            ],
-        };
+        const draft = applyCreateLeadParseToDraft(emptyBosCommandDraft(), JORDAN_PASTE, ctx);
         const resolution = revalidateCreateLeadDraft(draft, ctx);
+        // Code-owned floor is first+last+email|phone — Jordan paste satisfies it.
         expect(resolution.readyToExecute).toBe(true);
         expect(resolution.missingRequired).toEqual([]);
 

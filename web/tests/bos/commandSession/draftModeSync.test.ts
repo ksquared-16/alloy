@@ -122,13 +122,6 @@ describe("shared draft mode sync (scenarios 10–12)", () => {
                 state: "inferred",
                 evidence: [],
                 optionResolved: false,
-            },
-            {
-                fieldKey: "location_id",
-                value: "site-1",
-                state: "operator_entered",
-                evidence: [],
-                optionResolved: true,
             }
         );
         expect(revalidateCreateLeadDraft(draft, ctx).readyToExecute).toBe(false);

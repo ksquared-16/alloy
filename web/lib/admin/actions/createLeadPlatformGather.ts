@@ -8,7 +8,7 @@ import {
 } from "@/lib/admin/actions/createLeadIntakeValidation";
 
 /** Platform minimum to create a lead — not lifecycle Required Information. */
-export const CREATE_LEAD_PLATFORM_REQUIRED_KEYS = ["first_name", "last_name", "location_id"] as const;
+export const CREATE_LEAD_PLATFORM_REQUIRED_KEYS = ["first_name", "last_name"] as const;
 export const CREATE_LEAD_PLATFORM_CONTACT_KEYS = ["email", "phone"] as const;
 
 /** Unified draft layout — required block (action-oriented, not entity tabs). */
@@ -17,7 +17,6 @@ export const CREATE_LEAD_UNIFIED_REQUIRED_KEYS = [
     "last_name",
     "email",
     "phone",
-    "location_id",
 ] as const;
 
 export const CREATE_LEAD_UNIFIED_OPTIONAL_KEYS = [
@@ -78,7 +77,7 @@ export const CREATE_LEAD_GATHER_FIELDS: readonly ActionWorkspaceGatherField[] = 
         field_label: "Location",
         section: "context",
         section_label: "Placement & preferences",
-        tier: "required",
+        tier: "optional",
         value_kind: "select",
         placement_select: "site",
     },
@@ -159,7 +158,7 @@ export function createLeadParserSpec(departmentId: string): ActionIntakeSpec {
         constraints: [],
         copy: {
             title: "Create Lead",
-            help: "Gather lead details with BOS assist. Name, contact, and location are required to create.",
+            help: "Gather lead details with BOS assist. Name and contact are required to create; stage configuration may require more.",
         },
     };
 }
@@ -190,11 +189,9 @@ export function validateCreateLeadPlatformMinimum(
     const last = (values.last_name ?? "").trim();
     const email = (values.email ?? "").trim();
     const phone = (values.phone ?? "").trim();
-    const location = (values.location_id ?? "").trim();
 
     if (!first) issues.push("First name is required.");
     if (!last) issues.push("Last name is required.");
-    if (!location) issues.push("Location is required.");
 
     const hasEmail = email.length > 0;
     const hasPhone = phone.length > 0;

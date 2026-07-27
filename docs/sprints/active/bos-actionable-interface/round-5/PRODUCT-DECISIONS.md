@@ -76,17 +76,16 @@ Same result must drive: Form · Conversation missing state · Review eligibility
 
 **Do not** preserve a BOS-only required Location rule.
 
-### Location (post-inspection)
+### Location (accepted durable decision)
 
 | Claim | Result |
 |---|---|
-| Config-owned when in effective `record_creation` | Possible — show/enforce if present on intake spec |
-| Code-owned platform gather/checklist policy | `CREATE_LEAD_PLATFORM_REQUIRED_KEYS` / `isCreateLeadLocationRequired` always flags Location |
-| Staging command eligibility mirror | **Does not** include Location in `CREATE_LEAD_REQUIRED_INPUTS` |
-| Server execute | **Does not** require Location |
-| Round 5 BOS Placement/eligibility force | **BOS-amplified — remove / realign** |
+| Code-owned Create Lead minimum | first name, last name, phone **or** email — **no Location** |
+| Config `record_creation` | Location (and other fields) required **only** when on resolved intake `required` |
+| Server | `resolveCreateLeadEligibilityForInvocation` merges those into `buildCreateLeadEligibility`; `runRegisteredAction` gates execute |
+| BOS-only Location rule | **Removed** |
 
-**Open product choice for command owner (not BOS alone):** promote Location to shared code-owned **server** minimum, **or** leave it config-`record_creation` only. Until decided, BOS must not invent a private blocker.
+See [`evidence/requiredness-realignment.md`](./evidence/requiredness-realignment.md).
 
 ---
 

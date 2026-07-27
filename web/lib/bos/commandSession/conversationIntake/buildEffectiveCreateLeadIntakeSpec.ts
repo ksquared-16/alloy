@@ -1,41 +1,15 @@
-import type { ActionRequiredInput, ActionRequiredInputType } from "@/lib/adminV2/actions/actionTypes";
 import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
 import { createLeadParserSpec } from "@/lib/admin/actions/createLeadPlatformGather";
 import {
     gatherFieldsFromActionIntakeSpec,
 } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
-import { isCreateLeadLocationRequired } from "@/lib/admin/actions/createLead/resolveCreateLeadLocationPolicy";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { IntakeSelectOption } from "@/lib/intake/types";
 import {
     CONVERSATION_INTAKE_SUPPORTED_VALUE_KINDS,
     type EffectiveCreateLeadIntakeSpec,
 } from "@/lib/bos/commandSession/conversationIntake/types";
-
-function toRequiredInputType(
-    kind: ActionWorkspaceGatherField["value_kind"]
-): ActionRequiredInputType {
-    if (kind === "email" || kind === "phone" || kind === "date" || kind === "select") return kind;
-    return "text";
-}
-
-function configInputsFromGather(
-    fields: readonly ActionWorkspaceGatherField[]
-): ActionRequiredInput[] {
-    return fields
-        .filter((f) => f.tier === "required")
-        .filter(
-            (f) =>
-                !["first_name", "last_name", "email", "phone"].includes(f.payload_key)
-        )
-        .map((f) => ({
-            key: f.payload_key,
-            label: f.field_label,
-            type: toRequiredInputType(f.value_kind),
-            required: true,
-            fromConfig: true,
-        }));
-}
+import { createLeadConfigRequiredInputsFromIntakeSpec } from "@/lib/platform/commands/createLead/createLeadRequiredInputs";
 
 function unsupportedPartition(fields: readonly ActionWorkspaceGatherField[]) {
     const supported = new Set<string>(CONVERSATION_INTAKE_SUPPORTED_VALUE_KINDS);
@@ -51,7 +25,8 @@ function unsupportedPartition(fields: readonly ActionWorkspaceGatherField[]) {
 
 /**
  * Build the session-scoped effective intake contract from a resolved ActionIntakeSpec
- * (or platform fallback).
+ * (or platform fallback). Required keys come only from the intake spec (record_creation
+ * + code-owned name floor already applied by resolveCreateLeadActionIntakeSpec).
  */
 export function buildEffectiveCreateLeadIntakeSpec(input: {
     actionIntakeSpec?: ActionIntakeSpec | null;
@@ -64,10 +39,7 @@ export function buildEffectiveCreateLeadIntakeSpec(input: {
         input.actionIntakeSpec ?? createLeadParserSpec(departmentId);
     const gatherFields = gatherFieldsFromActionIntakeSpec(actionIntakeSpec);
     const requiredPayloadKeys = [
-        ...new Set([
-            ...gatherFields.filter((f) => f.tier === "required").map((f) => f.payload_key),
-            ...(isCreateLeadLocationRequired({ intakeSpec: actionIntakeSpec }) ? ["location_id"] : []),
-        ]),
+        ...new Set(gatherFields.filter((f) => f.tier === "required").map((f) => f.payload_key)),
     ];
     const optionalPayloadKeys = gatherFields
         .filter((f) => f.tier === "optional")
@@ -81,7 +53,7 @@ export function buildEffectiveCreateLeadIntakeSpec(input: {
         requiredPayloadKeys,
         optionalPayloadKeys,
         unsupportedForConversation: unsupportedPartition(gatherFields),
-        configRequiredInputs: configInputsFromGather(gatherFields),
+        configRequiredInputs: createLeadConfigRequiredInputsFromIntakeSpec(actionIntakeSpec),
         fieldOptions: input.fieldOptions ?? {},
         loadedAt: input.now ?? new Date().toISOString(),
     };
