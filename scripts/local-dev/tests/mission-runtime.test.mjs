@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 
 process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-test-"));
+process.env.VACILANDO_SEED_FIXTURES = "1"; // this suite relies on the Access & Roles seed fixture
 
 const { validatePackage, createPackage, getPackage, revisePackage, computeDiff, packageLineage } = await import("../lib/vacilando/commands/mission-packages.mjs");
 const { deriveVerdict } = await import("../lib/vacilando/director-review.mjs");

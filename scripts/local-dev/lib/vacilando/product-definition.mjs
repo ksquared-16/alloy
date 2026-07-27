@@ -88,8 +88,13 @@ function seedAccessRoles(nowMs) {
 
 const SEEDS = { pd_access_roles: seedAccessRoles };
 
-/** Ensure the V1 seed product definitions exist (idempotent). Returns count seeded. */
+/**
+ * Ensure the V1 seed product definitions exist (idempotent). Returns count seeded.
+ * Fixture-gated (VACILANDO_SEED_FIXTURES=1) — a live launch runs unseeded so no
+ * product truth is baked in. See capability.mjs ensureSeeded for the rationale.
+ */
 export function ensureSeeded({ nowMs } = {}) {
+  if (process.env.VACILANDO_SEED_FIXTURES !== "1") return 0;
   let n = 0;
   const have = new Set(readProductDefinitions().map((p) => p.product_definition_id));
   for (const [id, fn] of Object.entries(SEEDS)) {

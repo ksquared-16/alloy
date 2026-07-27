@@ -85,8 +85,14 @@ function seedAccessRoles(nowMs) {
 
 const SEEDS = { cap_access_roles: seedAccessRoles };
 
-/** Ensure the V1 seed capabilities exist (idempotent). Returns count seeded. */
+/**
+ * Ensure the V1 seed capabilities exist (idempotent). Returns count seeded.
+ * Seeding is FIXTURE-GATED: it only runs when VACILANDO_SEED_FIXTURES=1 (the test
+ * suite sets this). A live launch runs unseeded — the registry starts empty and
+ * capabilities are defined through the Director, never baked in.
+ */
 export function ensureSeeded({ nowMs } = {}) {
+  if (process.env.VACILANDO_SEED_FIXTURES !== "1") return 0;
   let n = 0;
   const have = new Set(readCapabilities().map((c) => c.capability_id));
   for (const [id, fn] of Object.entries(SEEDS)) {
