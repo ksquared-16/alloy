@@ -72,7 +72,7 @@ describe("capabilityRegistry spine (P0.S1)", () => {
         }
     });
 
-    it("classifies make_primary_contact as admin_action replacement (P4.S1; facade commit disabled)", () => {
+    it("classifies make_primary_contact as admin_action replacement (P4.S2 facade allowlisted)", () => {
         const cap = assertKnownPlatformCapability("make_primary_contact");
         expect(cap.maturity).toBe("adapted");
         expect(cap.executionOwner).toBe("admin_action");
@@ -80,7 +80,7 @@ describe("capabilityRegistry spine (P0.S1)", () => {
         expect(cap.destructiveKind).toBe("replace");
         expect(cap.supportsPreview).toBe(true);
         expect(cap.reason).toMatch(/P4/i);
-        expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(true);
     });
 
     it("classifies Tour keys with tour_domain ownership (except confirm_tour registered dual-path)", () => {

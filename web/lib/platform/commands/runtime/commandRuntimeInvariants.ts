@@ -45,8 +45,26 @@ export function assertCommandSnapshotInvariants(
             }
         }
         if (snapshot.destructivePreparation) {
-            if (snapshot.destructivePreparation.facadeCommitEnabled !== false) {
-                errors.push("destructivePreparation.facadeCommitEnabled must be false in P4.S1");
+            const allowlisted = snapshot.destructivePreparation.facadeCommitEnabled === true;
+            if (
+                snapshot.destructivePreparation.facadeCommitEnabled !== false &&
+                !allowlisted
+            ) {
+                // only boolean true/false allowed
+            }
+            if (
+                snapshot.canonicalCapabilityKey === "make_primary_contact" &&
+                snapshot.destructivePreparation.facadeCommitEnabled !== true
+            ) {
+                errors.push("make_primary_contact must report facadeCommitEnabled true in P4.S2");
+            }
+            if (
+                snapshot.canonicalCapabilityKey !== "make_primary_contact" &&
+                snapshot.destructivePreparation.facadeCommitEnabled !== false
+            ) {
+                errors.push(
+                    "non-allowlisted destructivePreparation.facadeCommitEnabled must be false"
+                );
             }
             if (snapshot.destructivePreparation.requiresPreview !== true) {
                 errors.push("destructivePreparation.requiresPreview must be true");

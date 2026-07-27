@@ -152,12 +152,12 @@ describe("POST /api/admin/actions/execute Command Runtime cutover (P1.S2)", () =
         expect(executeAdminAction).not.toHaveBeenCalled();
     });
 
-    it("keeps unadapted relationship keys on executeAdminAction compatibility path", async () => {
+    it("keeps mark_lost on executeAdminAction compatibility path (not Make Primary)", async () => {
         const res = await POST(
             jsonReq({
-                action_key: "make_primary_contact",
-                entity_type: "person",
-                entity_id: "person-1",
+                action_key: "mark_lost",
+                entity_type: "opportunity",
+                entity_id: "opp-1",
                 payload: {},
             })
         );

@@ -47,7 +47,10 @@ export type { DestructivePermissionDecision } from "@/lib/platform/commands/runt
 export {
     assertDestructiveCommitAllowed,
     DESTRUCTIVE_COMMAND_RUNTIME_COMMIT_ENABLED,
+    DESTRUCTIVE_FACADE_COMMIT_ALLOWLIST,
     DESTRUCTIVE_PREVIEW_FRAMEWORK_ENABLED,
+    isDestructiveCapabilityCommitEnabled,
+    isDestructiveFacadeCommitAllowlisted,
     isDestructiveFacadeCommitEnabled,
 } from "@/lib/platform/commands/runtime/destructive/destructiveExecutionGuard";
 

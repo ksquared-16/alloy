@@ -100,7 +100,6 @@ describe("executeCommandInvocation (P1.S2)", () => {
         const cases = [
             "totally_unknown_xyz",
             "send_message_placeholder",
-            "make_primary_contact",
             "add_family_member",
             "cancel_tour",
             "open_record",
@@ -108,6 +107,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
             "mark_lost",
             "move_to_waitlist",
             "approve_enrollment",
+            "delete_lead",
         ] as const;
         for (const key of cases) {
             const result = await executeCommandInvocation({
@@ -244,7 +244,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
         expect(isCommandRuntimeFacadeExecutionSupported("add_billing_contact")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("add_child")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("link_existing_child")).toBe(true);
-        expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("add_family_member")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("mark_lost")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("move_to_waitlist")).toBe(false);

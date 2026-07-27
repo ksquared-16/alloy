@@ -473,7 +473,7 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
             expect(isCommandRuntimeFacadeExecutionSupported(key)).toBe(true);
         }
         expect(COMMAND_RUNTIME_EXECUTION_BY_OWNER.relationship_runtime).toBe(false);
-        expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("add_family_member")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("create_lead")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("close_lead")).toBe(true);

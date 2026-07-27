@@ -5,13 +5,13 @@
  * P1.S2: RegisteredAction
  * P2.S1 / P2.S2: Mutation Runtime — exact keys (owner globally false)
  * P3.S1–P3.S3: Relationship Runtime — exact keys (owner globally false)
- * P4.S1: Destructive/replacement — commit globally disabled (policy registry)
+ * P4.S2: Destructive/replacement — exact allowlist (make_primary_contact)
  */
 
 import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 import type { CapabilityExecutionOwner } from "@/lib/platform/commands/capabilityTypes";
 import {
-    DESTRUCTIVE_COMMAND_RUNTIME_COMMIT_ENABLED,
+    isDestructiveCapabilityCommitEnabled,
     isDestructiveOrReplacementCapability,
 } from "@/lib/platform/commands/runtime/destructive";
 
@@ -53,7 +53,7 @@ export type ChildEnrollmentMutationFacadeCommandKey =
  * P3.S1: parent/guardian + link existing person
  * P3.S2: contact-role commands (distinct capabilities; shared executor)
  * P3.S3: child relationship commands (create/link child identity)
- * Not included: make_primary_contact (external household designation → P4), Add Family Member hub
+ * Not included: Add Family Member hub. make_primary_contact → P4.S2 destructive allowlist.
  */
 export const RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS = [
     "add_parent_guardian",
@@ -95,6 +95,21 @@ export function isRelationshipRuntimeFacadeSupported(commandKey: string): boolea
     return (RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS as readonly string[]).includes(key);
 }
 
+export const DESTRUCTIVE_REPLACEMENT_FACADE_COMMAND_KEYS = [
+    "make_primary_contact",
+] as const;
+
+export type DestructiveReplacementFacadeCommandKey =
+    (typeof DESTRUCTIVE_REPLACEMENT_FACADE_COMMAND_KEYS)[number];
+
+export function isDestructiveReplacementFacadeSupported(commandKey: string): boolean {
+    const key = (commandKey ?? "").trim();
+    return (
+        (DESTRUCTIVE_REPLACEMENT_FACADE_COMMAND_KEYS as readonly string[]).includes(key) &&
+        isDestructiveCapabilityCommitEnabled(key)
+    );
+}
+
 /**
  * Whether `/api/admin/actions/execute` should invoke the Command Runtime facade.
  * Capability Registry owns execution-owner truth; this gate owns migration readiness.
@@ -107,11 +122,16 @@ export function isCommandRuntimeFacadeExecutionSupported(commandKey: string): bo
     if (resolved.status !== "known") return false;
     const cap = resolved.capability;
 
-    // P4.S1: destructive/replacement never commits through normal adapters.
+    // P4.S2: exact destructive/replacement allowlist (preview + commit).
     if (
         isDestructiveOrReplacementCapability(cap.canonicalCommandKey) &&
-        !DESTRUCTIVE_COMMAND_RUNTIME_COMMIT_ENABLED
+        isDestructiveReplacementFacadeSupported(cap.canonicalCommandKey)
     ) {
+        return true;
+    }
+
+    // Other destructive/replacement keys remain outside the facade.
+    if (isDestructiveOrReplacementCapability(cap.canonicalCommandKey)) {
         return false;
     }
 

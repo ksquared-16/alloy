@@ -86,15 +86,50 @@ Recovery: `restore` | `recreate` | `schedule_new` | `manual_support` | `none` (e
 
 Focused: `web/tests/platform/commands/destructiveCommandFoundation.test.ts` (+ P0–P3 regressions)
 
-## Deferred cutovers
+## Remaining destructive capabilities
 
-- Delete Lead Runtime wrap
-- Archive Lead implementation
-- Make Primary Contact adapter + domain preview
-- Cancel Tour Runtime confirm/preview
-- Withdraw Child
-- Remove / Revoke relationship Commands
-- Organization permission-product mapping for permission classes
+| Key | Facade commit |
+|-----|---------------|
+| `delete_lead` | disabled |
+| `archive_lead` | disabled |
+| `cancel_tour` | disabled |
+| `withdraw_child` | disabled |
+
+---
+
+# P4.S2 — Make Primary Contact Replacement Cutover
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Capability | `make_primary_contact` |
+| Impact | `replace` |
+| Commit | **Enabled** (exact allowlist only) |
+| Domain authority | `setHouseholdPrimaryContactForCustomer` |
+| Event | `household.primary_contact_changed` |
+| Direct API | PATCH `/api/admin/customers/:id/household-primary-contact` **unchanged** (Option A) |
+
+## Preview
+
+- Selected person promoted; current primary demoted (or “no current primary”)
+- Opportunity projection count (all opportunities for customer — same filter as write)
+- Non-effects: prior contact remains linked; no guardian/pickup/billing/membership change claimed
+- Fingerprint: `customer|selected|current|oppHash|count` via HMAC preview token + version_match
+- Already-primary → blocker; commit blocked (no duplicate event)
+
+## Commit
+
+- Requires `confirmation.confirmed === true` + valid preview token
+- Re-reads domain state; rejects stale version
+- Exactly once: adapter → `setHouseholdPrimaryContactForCustomer` → emit event
+- Never `executeRelationshipAction`
+
+## Permission transition
+
+```text
+Current floor: requireAdminOrOps
+Future class: replacement (seam only; no new org permission keys)
+```
 
 ## Confirmation
 

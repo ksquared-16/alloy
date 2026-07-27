@@ -22,7 +22,6 @@ import {
     evaluateDestructivePermissionClass,
     fixtureKindForPolicy,
     getDestructiveCommandPolicy,
-    isDestructiveFacadeCommitEnabled,
     isDestructiveOrReplacementCapability,
     issueDestructivePreviewToken,
     listDestructiveCommandPolicies,
@@ -108,6 +107,7 @@ describe("P4.S1 preparation integration", () => {
         );
         expect(result.snapshot.destructivePreparation?.impactClass).toBe("replace");
         expect(result.snapshot.destructivePreparation?.requiresDisplacedImpact).toBe(true);
+        expect(result.snapshot.destructivePreparation?.facadeCommitEnabled).toBe(true);
         expect(result.snapshot.confirmationPolicy).toBe("strong_confirm");
         expect(result.snapshot.supportsPreview).toBe(true);
         expect(result.snapshot.nextLifecycleStage).not.toBe("execute");
@@ -297,17 +297,20 @@ describe("P4.S1 permission-class seam", () => {
 });
 
 describe("P4.S1 execution guard", () => {
-    it("keeps destructive commit globally disabled", () => {
+    it("keeps destructive commit globally disabled except exact allowlist", () => {
         expect(DESTRUCTIVE_PREVIEW_FRAMEWORK_ENABLED).toBe(true);
         expect(DESTRUCTIVE_COMMAND_RUNTIME_COMMIT_ENABLED).toBe(false);
-        expect(isDestructiveFacadeCommitEnabled()).toBe(false);
         const guard = assertDestructiveCommitAllowed({ capabilityKey: "delete_lead" });
         expect(guard.allowed).toBe(false);
         expect(guard.code).toBe("commit_globally_disabled");
+        expect(assertDestructiveCommitAllowed({ capabilityKey: "make_primary_contact" }).allowed).toBe(
+            true
+        );
     });
 
-    it("blocks Delete Lead / Make Primary / Cancel Tour facade commit", async () => {
-        for (const key of ["delete_lead", "make_primary_contact", "cancel_tour"] as const) {
+    it("blocks Delete Lead / Cancel Tour facade commit; Make Primary is allowlisted in P4.S2", async () => {
+        expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(true);
+        for (const key of ["delete_lead", "cancel_tour"] as const) {
             expect(isCommandRuntimeFacadeExecutionSupported(key)).toBe(false);
             const result = await executeCommandInvocation({
                 request: {
@@ -316,6 +319,7 @@ describe("P4.S1 execution guard", () => {
                         commandKey: key,
                         subject: { type: "opportunity", id: "opp-1" },
                     }),
+                    executionSubject: { entityType: "opportunity", entityId: "opp-1" },
                 },
                 server: {
                     orgId: "org-1",

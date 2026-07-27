@@ -198,10 +198,11 @@ exact operator capabilities through `POST /api/admin/actions/execute`:
 `make_primary_contact` (external executor) and the Add Family Member hub remain outside facade
 execution. Dedicated `/api/admin/relationship-actions/*` routes remain.
 
-**Primary contact designation (P3.S4 / P4.S1):** Owned by `setHouseholdPrimaryContactForCustomer`
-(customer API), not `executeRelationshipAction`. Displaces prior household primary (**replacement**,
-not deletion). P4.S1 registers destructive policy `impactClass: replace` with preview + strong
-confirm required; Command Runtime facade **commit remains disabled** until a later P4 cutover.
+**Primary contact designation (P3.S4 / P4.S2):** Owned by `setHouseholdPrimaryContactForCustomer`
+(customer API), not `executeRelationshipAction`. Displaces prior household primary (**replacement**).
+P4.S2: Command Runtime facade preview + correlated commit enabled for `make_primary_contact` only.
+Direct `PATCH /api/admin/customers/:id/household-primary-contact` remains available without preview
+tokens (compatibility; Option A).
 
 ---
 

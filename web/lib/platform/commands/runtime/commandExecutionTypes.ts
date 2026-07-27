@@ -7,6 +7,8 @@ import type { ActionResult } from "@/lib/adminV2/actions/actionTypes";
 import type { RelationshipActionExecutionResult } from "@/lib/admin/relationship/relationshipActionContract";
 import type { MutationResult } from "@/lib/mutations/types";
 import type { CapabilityExecutionOwner } from "@/lib/platform/commands/capabilityTypes";
+import type { CommandImpactPreview } from "@/lib/platform/commands/runtime/destructive/commandImpactPreviewTypes";
+import type { MakePrimaryReplacementResult } from "@/lib/platform/commands/runtime/adapters/primaryContactReplacementAdapter";
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 
 export type CommandExecutionMode = "preview" | "execute";
@@ -34,6 +36,8 @@ export type ExecuteCommandInvocationRequest = {
     invocation: CommandInvocationRequest;
     mode: CommandExecutionMode;
     confirmation?: CommandExecutionConfirmation;
+    /** Correlated destructive/replacement preview token (required for allowlisted commits). */
+    previewToken?: string;
     /** Optional client/server correlation hint; server generates when absent. */
     idempotencyKey?: string;
     invocationId?: string;
@@ -65,7 +69,11 @@ export type CommandExecutionResult =
           ok: true;
           status: "previewed" | "committed";
           canonicalCapabilityKey: string;
-          executionOwner: "registered_action" | "mutation_runtime" | "relationship_runtime";
+          executionOwner:
+              | "registered_action"
+              | "mutation_runtime"
+              | "relationship_runtime"
+              | "admin_action";
           invocationId: string;
           /** Preserved RegisteredAction result for route compatibility. */
           actionResult?: ActionResult & { ok: true };
@@ -73,6 +81,10 @@ export type CommandExecutionResult =
           mutationResult?: MutationResult;
           /** Preserved Relationship Framework result for route compatibility. */
           relationshipResult?: RelationshipActionExecutionResult;
+          /** Replacement Command result (P4.S2 make_primary_contact). */
+          replacementResult?: MakePrimaryReplacementResult;
+          /** Operator-safe impact preview (destructive/replacement). */
+          impactPreview?: CommandImpactPreview;
           diagnostics: readonly { code: string; message: string }[];
       }
     | {
@@ -89,6 +101,7 @@ export type CommandExecutionResult =
           actionResult?: ActionResult & { ok: false };
           /** When adapter delegated and Mutation Runtime returned blocked. */
           mutationResult?: Extract<MutationResult, { status: "blocked" }>;
+          impactPreview?: CommandImpactPreview;
           diagnostics: readonly { code: string; message: string }[];
           /** True once a domain executor was invoked — forbids route fallback. */
           delegated: boolean;

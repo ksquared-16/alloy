@@ -282,7 +282,6 @@ describe("POST /api/admin/actions/execute Relationship Runtime cutover (P3.S1)",
 
     it("keeps unadapted Relationship / Tour / Processing on compatibility path", async () => {
         for (const key of [
-            "make_primary_contact",
             "add_family_member",
             "cancel_tour",
             "processing.create_lead",

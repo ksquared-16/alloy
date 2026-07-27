@@ -171,7 +171,7 @@ describe("POST /api/admin/actions/execute Child Enrollment cutover (P2.S2)", () 
         });
         await POST(
             jsonReq({
-                action_key: "make_primary_contact",
+                action_key: "add_family_member",
                 entity_type: "person",
                 entity_id: "person-1",
                 payload: {},

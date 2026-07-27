@@ -27,7 +27,7 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 | `add_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S3 facade** → `executeRelationshipAction` |
 | `link_existing_person` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S1 facade** → `executeRelationshipAction` |
 | `link_existing_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S3 facade** → `executeRelationshipAction` |
-| `make_primary_contact` | same | adapted | admin_action | organization_command_catalog | yes | **P4** | **replace** policy (P4.S1); facade commit **disabled**; household designation |
+| `make_primary_contact` | same | adapted | admin_action | organization_command_catalog | yes | **P4.S2** | **replace** cutover: facade preview+commit → `setHouseholdPrimaryContactForCustomer`; direct PATCH remains |
 | `add_family_member` | same | adapted | admin_action | organization_command_catalog | yes | Product hub | Hub; aliases `add_related_person`, `add_person` |
 | `add_sibling` | same | adapted | admin_action | organization_command_catalog | yes | Product hub | Overlaps add_child |
 | `schedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Not RegisteredAction |
@@ -325,3 +325,15 @@ Layout contact-row → confirm modal → client PATCH → `setHouseholdPrimaryCo
 ## Preview correlation
 
 HMAC-SHA256 compact claims; TTL + version; no DB store; not an idempotency key.
+
+---
+
+# P4.S2 — Make Primary Contact Replacement Cutover
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p4-destructive-foundation-msn_188e8bea6fb6de28dd21.md` (P4.S2) |
+| Facade | **Enabled** for `make_primary_contact` only |
+| Domain | `setHouseholdPrimaryContactForCustomer` (unchanged) |
+| Direct API | Compatibility retained (no preview token required) |

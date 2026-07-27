@@ -96,8 +96,10 @@ disabled**. No Delete Lead / Make Primary / Cancel Tour production cutover in P4
   explicit exact keys
 - `mark_lost` remains on legacy compatibility (`executeAdminAction`); not consolidated
 - Enrollment aliases (`move_to_waitlist`, `approve_enrollment`) remain outside exact-key facade cutover
-- Remaining Relationship keys (`make_primary_contact` — **P4.S1 classified as `replace`**;
-  facade commit still disabled; Add Family Member hub) remain outside facade cutover
+- Remaining Relationship keys (Add Family Member hub) remain outside facade cutover
+- **P4.S2:** `make_primary_contact` — destructive/replacement allowlist → primary-contact adapter →
+  `setHouseholdPrimaryContactForCustomer` (preview + strong confirm + preview token). Direct
+  `PATCH .../household-primary-contact` remains a compatibility path without facade tokens.
 
 ### Destructive / replacement Command policy (P4.S1)
 
@@ -339,9 +341,9 @@ Contact-role and child Commands share infrastructure but remain distinct identit
 designation via `PATCH /api/admin/customers/:id/household-primary-contact` →
 `setHouseholdPrimaryContactForCustomer` (displaces prior `is_primary`, syncs opportunity
 `primary_person_id`, emits `household.primary_contact_changed`). Confirm modal required.
-**Deferred to later P4 cutover** (after P4.S1 safety foundation). Capability owner: `admin_action`.
-P4.S1 classifies impact as **`replace`** (strong_confirm, displaced impact required); facade commit
-disabled.
+**P4.S2 cutover:** Facade preview + correlated commit via destructive replacement adapter.
+Capability owner: `admin_action`. Domain authority unchanged.
+P4.S1 classifies impact as **`replace`** (strong_confirm, displaced impact required).
 
 ### Make Primary Contact
 
@@ -352,8 +354,9 @@ disabled.
 - Primary row: read-only **badge**; non-primary row: **Make Primary Contact** button → confirm →
   `PATCH /api/admin/customers/:id/household-primary-contact` → `setHouseholdPrimaryContactForCustomer`.
 - Displaces prior household primary (`is_primary`); previous contact remains linked.
-- **Command Runtime:** not facade-adapted for commit (P3.S4 Disposition B → **P4.S1** policy
-  `replace`; later P4 cutover). Capability owner `admin_action` — not `executeRelationshipAction`.
+- **Command Runtime:** P4.S2 facade allowlisted for preview/commit (replacement adapter). Domain
+  write remains `setHouseholdPrimaryContactForCustomer`. Capability owner `admin_action` — not
+  `executeRelationshipAction`. Direct customer PATCH remains compatibility (Option A).
 
 ---
 

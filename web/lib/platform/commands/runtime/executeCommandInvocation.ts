@@ -25,6 +25,11 @@ import {
     type LeadStatusMutationExecutionDeps,
 } from "@/lib/platform/commands/runtime/adapters/leadStatusMutationExecutionAdapter";
 import {
+    commitMakePrimaryContactViaAdapter,
+    previewMakePrimaryContactViaAdapter,
+    type PrimaryContactReplacementDeps,
+} from "@/lib/platform/commands/runtime/adapters/primaryContactReplacementAdapter";
+import {
     executeRegisteredActionViaAdapter,
     type RegisteredActionExecutionDeps,
 } from "@/lib/platform/commands/runtime/adapters/registeredActionExecutionAdapter";
@@ -42,6 +47,7 @@ import type {
 import {
     isChildEnrollmentMutationFacadeSupported,
     isCommandRuntimeFacadeExecutionSupported,
+    isDestructiveReplacementFacadeSupported,
     isExecutionOwnerEnabledForFacade,
     isLeadStatusMutationFacadeSupported,
     isRelationshipRuntimeFacadeSupported,
@@ -59,7 +65,8 @@ export type ExecuteCommandInvocationOptions = {
     deps?: RegisteredActionExecutionDeps &
         LeadStatusMutationExecutionDeps &
         ChildEnrollmentMutationExecutionDeps &
-        RelationshipExecutionDeps;
+        RelationshipExecutionDeps &
+        PrimaryContactReplacementDeps;
 };
 
 function createDelegationGuard(invocationId: string): InvocationDelegationGuard {
@@ -157,7 +164,7 @@ export async function executeCommandInvocation(
         });
     }
 
-    // P4.S1: destructive/replacement commit is globally disabled (even before facade gate).
+    // P4: destructive/replacement commit — fail closed unless exact allowlist.
     {
         const earlyResolved = tryResolvePlatformCapability(invocation.commandKey);
         const earlyCanonical =
@@ -171,25 +178,27 @@ export async function executeCommandInvocation(
             const guardResult = assertDestructiveCommitAllowed({
                 capabilityKey: earlyCanonical,
             });
-            return fail({
-                status: "unsupported_owner",
-                invocationId,
-                canonicalCapabilityKey:
-                    earlyResolved.status === "known" ? earlyCanonical : undefined,
-                executionOwner:
-                    earlyResolved.status === "known"
-                        ? earlyResolved.capability.executionOwner
-                        : undefined,
-                code: guardResult.code,
-                operatorMessage:
-                    "This destructive or replacement command cannot be committed through the Command Runtime yet.",
-                diagnostics: [
-                    {
-                        code: guardResult.code,
-                        message: guardResult.message,
-                    },
-                ],
-            });
+            if (!guardResult.allowed) {
+                return fail({
+                    status: "unsupported_owner",
+                    invocationId,
+                    canonicalCapabilityKey:
+                        earlyResolved.status === "known" ? earlyCanonical : undefined,
+                    executionOwner:
+                        earlyResolved.status === "known"
+                            ? earlyResolved.capability.executionOwner
+                            : undefined,
+                    code: guardResult.code,
+                    operatorMessage:
+                        "This destructive or replacement command cannot be committed through the Command Runtime yet.",
+                    diagnostics: [
+                        {
+                            code: guardResult.code,
+                            message: guardResult.message,
+                        },
+                    ],
+                });
+            }
         }
     }
 
@@ -280,22 +289,41 @@ export async function executeCommandInvocation(
         });
     }
 
+    // Non-destructive: only block when client explicitly denies confirmation.
+    // Destructive allowlisted commits: require confirmed === true (enforced again in adapter).
     if (
         request.mode === "execute" &&
-        request.confirmation &&
-        request.confirmation.confirmed === false &&
         (snapshot.confirmationPolicy === "confirm" ||
             snapshot.confirmationPolicy === "strong_confirm" ||
             snapshot.confirmationPolicy === "typed_confirm")
     ) {
-        return fail({
-            status: "confirmation_required",
-            invocationId,
-            canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
-            executionOwner: snapshot.executionOwner,
-            code: "confirmation_required",
-            operatorMessage: "Confirm before continuing.",
-        });
+        const destructiveAllowlisted = isDestructiveReplacementFacadeSupported(
+            snapshot.canonicalCapabilityKey
+        );
+        if (destructiveAllowlisted && request.confirmation?.confirmed !== true) {
+            return fail({
+                status: "confirmation_required",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: snapshot.executionOwner,
+                code: "confirmation_required",
+                operatorMessage: "Confirm before continuing.",
+            });
+        }
+        if (
+            !destructiveAllowlisted &&
+            request.confirmation &&
+            request.confirmation.confirmed === false
+        ) {
+            return fail({
+                status: "confirmation_required",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: snapshot.executionOwner,
+                code: "confirmation_required",
+                operatorMessage: "Confirm before continuing.",
+            });
+        }
     }
 
     const entityType = (request.executionSubject.entityType ?? "").trim();
@@ -563,6 +591,125 @@ export async function executeCommandInvocation(
                 {
                     code: "delegated_relationship_action",
                     message: `key=${adapted.actionKey} links=${adapted.relationshipResult.links_written}`,
+                },
+            ],
+        };
+    }
+
+    // ── Destructive replacement (P4.S2 make_primary_contact) ────────────────
+    if (
+        isDestructiveReplacementFacadeSupported(capability.canonicalCommandKey) &&
+        capability.canonicalCommandKey === "make_primary_contact"
+    ) {
+        if (request.mode === "preview") {
+            const previewed = await previewMakePrimaryContactViaAdapter({
+                orgId: server.orgId,
+                supabase: server.supabase,
+                entityType,
+                entityId,
+                inputValues: invocation.inputValues,
+                trustedServerContext: true,
+                deps,
+            });
+            if (!previewed.ok) {
+                return fail({
+                    status:
+                        previewed.code === "permission_denied" ||
+                        previewed.code === "untrusted_context"
+                            ? "unauthorized"
+                            : previewed.code === "customer_not_found" ||
+                                previewed.code === "person_not_found"
+                              ? "unavailable"
+                              : "blocked",
+                    invocationId,
+                    canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                    executionOwner: "admin_action",
+                    code: previewed.code,
+                    operatorMessage: previewed.operatorMessage,
+                });
+            }
+            return {
+                ok: true,
+                status: "previewed",
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "admin_action",
+                invocationId,
+                impactPreview: previewed.preview,
+                diagnostics: [
+                    {
+                        code: "destructive_replacement_preview",
+                        message: `key=make_primary_contact already_primary=${previewed.state.alreadyPrimary}`,
+                    },
+                ],
+            };
+        }
+
+        const token = (request.previewToken ?? "").trim();
+        if (!token) {
+            return fail({
+                status: "invalid",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "admin_action",
+                code: "preview_token_required",
+                operatorMessage: "A preview token is required to commit this command.",
+            });
+        }
+
+        const committed = await commitMakePrimaryContactViaAdapter({
+            orgId: server.orgId,
+            userId: server.userId,
+            supabase: server.supabase,
+            entityType,
+            entityId,
+            inputValues: invocation.inputValues,
+            previewToken: token,
+            confirmation: request.confirmation ?? { confirmed: false },
+            trustedServerContext: true,
+            clientPermissionClass:
+                typeof invocation.inputValues?.permissionClass === "string"
+                    ? invocation.inputValues.permissionClass
+                    : null,
+            clientImpactClass:
+                typeof invocation.inputValues?.impactClass === "string"
+                    ? invocation.inputValues.impactClass
+                    : null,
+            guard,
+            deps,
+        });
+
+        if (!committed.ok) {
+            return fail({
+                status:
+                    committed.code === "confirmation_required"
+                        ? "confirmation_required"
+                        : committed.code === "permission_denied" ||
+                            committed.code === "untrusted_context"
+                          ? "unauthorized"
+                          : committed.code === "stale_preview" ||
+                              committed.code === "already_primary"
+                            ? "blocked"
+                            : "failed",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "admin_action",
+                code: committed.code,
+                operatorMessage: committed.operatorMessage,
+                delegated: committed.delegated,
+            });
+        }
+
+        return {
+            ok: true,
+            status: "committed",
+            canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+            executionOwner: "admin_action",
+            invocationId,
+            replacementResult: committed.result,
+            diagnostics: [
+                {
+                    code: "delegated_primary_contact_replacement",
+                    message: `customer=${committed.result.customer_id} opportunities=${committed.result.opportunities_updated}`,
                 },
             ],
         };

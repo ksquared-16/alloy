@@ -51,10 +51,21 @@ export function assertDestructivePreviewInvariants(
         errors.push("previewToken must not embed raw preview payload");
     }
     if (policy.requiresDisplacedImpact) {
-        const hasDemoted = preview.affectedRecords.some((r) => r.effect === "demoted");
         const hasPromoted = preview.affectedRecords.some((r) => r.effect === "promoted");
-        if (!hasDemoted || !hasPromoted) {
-            errors.push("replace preview must include promoted and demoted effects");
+        if (!hasPromoted) {
+            errors.push("replace preview must include promoted effect");
+        }
+        const hasDemoted = preview.affectedRecords.some((r) => r.effect === "demoted");
+        const notesNoCurrent = preview.affectedRecords.some(
+            (r) =>
+                r.effect === "updated" &&
+                (r.label ?? "").toLowerCase().includes("no current primary")
+        );
+        const alreadyPrimary = preview.blockers.some((b) => b.code === "already_primary");
+        if (!hasDemoted && !notesNoCurrent && !alreadyPrimary) {
+            errors.push(
+                "replace preview must include demoted effect, no-current-primary note, or already_primary blocker"
+            );
         }
     }
     // Operator-safe: no stack-like strings in messages

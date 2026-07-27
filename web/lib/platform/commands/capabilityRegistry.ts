@@ -270,8 +270,9 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
          * Not Relationship Framework (`executeRelationshipAction` rejects externalExecutor).
          * Canonical write: PATCH /api/admin/customers/:id/household-primary-contact
          * → setHouseholdPrimaryContactForCustomer (displaces prior is_primary + syncs opportunities).
-         * P4.S1: classified as replacement (destructive policy); facade commit still disabled.
-         * Deferred production cutover: P4 replacement/destructive foundation follow-on.
+         * P4.S2: Command Runtime replacement cutover (preview + correlated commit).
+         * Domain authority unchanged: setHouseholdPrimaryContactForCustomer.
+         * Direct PATCH /api/admin/customers/:id/household-primary-contact remains (Option A).
          */
         executionOwner: "admin_action",
         catalogVisibility: "organization_command_catalog",
@@ -281,8 +282,9 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         destructiveKind: "replace",
         implementationStatus: "production",
         reason:
-            "Household primary designation with displacement; dedicated customer API + confirm modal. " +
-            "P4.S1 policy: replace. Facade commit disabled until a later P4 cutover slice.",
+            "Household primary designation with displacement. P4.S2: facade preview+commit via " +
+            "destructive replacement adapter → setHouseholdPrimaryContactForCustomer. " +
+            "Direct customer PATCH remains a compatibility path without preview tokens.",
     }),
 
     // ── Family overlap (explicit; no execution consolidation in P0) ────────

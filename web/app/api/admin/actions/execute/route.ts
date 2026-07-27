@@ -166,6 +166,12 @@ export async function POST(request: NextRequest) {
                                   confirmationValue: body.confirmation.confirmationValue,
                               }
                             : undefined,
+                    previewToken:
+                        typeof body.preview_token === "string"
+                            ? body.preview_token
+                            : typeof body.previewToken === "string"
+                              ? body.previewToken
+                              : undefined,
                     executionSubject: { entityType, entityId },
                     departmentId: body.context?.department_id ?? null,
                     workUnitId: body.context?.work_unit_id ?? null,
@@ -195,7 +201,9 @@ export async function POST(request: NextRequest) {
                       ? result.diagnostics.some((d) => d.code.includes("child_enrollment"))
                           ? "command_runtime_child_enrollment_mutation"
                           : "command_runtime_lead_status_mutation"
-                      : "command_runtime_registered_action";
+                      : result.executionOwner === "admin_action"
+                        ? "command_runtime_destructive_replacement"
+                        : "command_runtime_registered_action";
 
             const mutationDomain =
                 result.executionOwner !== "mutation_runtime"
@@ -211,7 +219,9 @@ export async function POST(request: NextRequest) {
                       ? mutationDomain === "enrollment_status"
                           ? "child_enrollment_mutation"
                           : "lead_status_mutation"
-                      : "registered_action";
+                      : result.executionOwner === "admin_action"
+                        ? "primary_contact_replacement"
+                        : "registered_action";
 
             logCommandExecutePathDiagnostic({
                 requestedKey: actionKey,
@@ -330,6 +340,44 @@ export async function POST(request: NextRequest) {
                             result.relationshipResult.person_id ??
                             result.relationshipResult.child_person_id ??
                             entityId,
+                    },
+                    { request, correlationId: result.invocationId }
+                );
+            }
+
+            if (result.executionOwner === "admin_action" && result.status === "previewed") {
+                return apiOk(
+                    {
+                        execution_result: {
+                            kind: "replacement_preview",
+                            impact_preview: result.impactPreview,
+                        },
+                        affected_id: entityId,
+                    },
+                    { request, correlationId: result.invocationId }
+                );
+            }
+
+            if (result.executionOwner === "admin_action" && result.replacementResult) {
+                try {
+                    revalidateTag(adminActionsOrgTag(ctx.orgId), "max");
+                } catch (e) {
+                    console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
+                }
+                return apiOk(
+                    {
+                        execution_result: {
+                            kind: "replacement",
+                            replacement_result: result.replacementResult,
+                        },
+                        ok: true,
+                        previous_primary_person_id:
+                            result.replacementResult.previous_primary_person_id,
+                        customer_id: result.replacementResult.customer_id,
+                        primary_person_id: result.replacementResult.new_primary_person_id,
+                        opportunities_updated: result.replacementResult.opportunities_updated,
+                        opportunity_ids: result.replacementResult.opportunity_ids,
+                        affected_id: result.replacementResult.new_primary_person_id,
                     },
                     { request, correlationId: result.invocationId }
                 );

@@ -78,7 +78,7 @@ export type DestructivePreparationState = {
     permissionClass: DestructivePermissionClass;
     recoveryKind: DestructiveRecovery["kind"];
     requiresDisplacedImpact: boolean;
-    /** P4.S1: commit through facade is always false. */
-    facadeCommitEnabled: false;
+    /** P4.S2+: true only for exact allowlisted capabilities (e.g. make_primary_contact). */
+    facadeCommitEnabled: boolean;
     operatorSummary: string;
 };

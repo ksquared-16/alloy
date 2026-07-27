@@ -4,6 +4,7 @@
  */
 
 import type { DestructiveCommandPolicy } from "@/lib/platform/commands/runtime/destructive/destructivePolicyTypes";
+import { isDestructiveFacadeCommitAllowlisted } from "@/lib/platform/commands/runtime/destructive/destructiveFacadeAllowlist";
 
 const POLICIES: readonly DestructiveCommandPolicy[] = [
     {
@@ -144,7 +145,7 @@ export function toDestructivePreparationState(
         permissionClass: policy.permissionClass,
         recoveryKind: policy.recovery.kind,
         requiresDisplacedImpact: policy.requiresDisplacedImpact,
-        facadeCommitEnabled: false,
+        facadeCommitEnabled: isDestructiveFacadeCommitAllowlisted(policy.capabilityKey),
         operatorSummary: policy.operatorSummary,
     };
 }
