@@ -13,7 +13,10 @@ import {
     applyOperatorFieldEdit,
     applyParseResult,
     bosDraftToFormValues,
+    buildCreateLeadBosPreview,
     confirmBosDraftField,
+    executeCreateLeadFromBosDraft,
+    fingerprintBosCommandDraft,
     formValuesFromDraft,
     revalidateCreateLeadDraft,
     type BosCommandSession,
@@ -197,6 +200,87 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
         [ctx, session.draft]
     );
 
+    const onBuildPreview = useCallback(() => {
+        if (!ctx) return;
+        const adapterCtx = buildAdapterCtx(session, effectiveSpec, fieldOptions);
+        const preview = buildCreateLeadBosPreview(session.draft, adapterCtx);
+        ctx.dispatch({ type: "SET_PREVIEW", preview });
+        ctx.dispatch({
+            type: "APPEND_MESSAGE",
+            message: {
+                role: "assistant",
+                kind: "preview",
+                body: [preview.title, ...preview.summaryLines.slice(0, 6), ...preview.sideEffects].join("\n"),
+            },
+        });
+    }, [ctx, effectiveSpec, fieldOptions, session]);
+
+    const onConfirmPreview = useCallback(() => {
+        if (!ctx || !session.preview) return;
+        const currentFp = fingerprintBosCommandDraft(session.draft);
+        if (currentFp !== session.preview.draftFingerprint) {
+            ctx.dispatch({
+                type: "FAIL",
+                recovery: {
+                    reason: "stale_preview",
+                    preserveDraft: true,
+                    operatorMessage: "Details changed since preview. Review again before continuing.",
+                },
+                errorMessage: "Details changed since preview. Review again before continuing.",
+            });
+            return;
+        }
+        ctx.dispatch({
+            type: "SET_CONFIRMATION",
+            confirmation: {
+                confirmedAt: new Date().toISOString(),
+                confirmedByOperator: true,
+                previewFingerprint: session.preview.draftFingerprint,
+            },
+        });
+    }, [ctx, session.draft, session.preview]);
+
+    const onExecute = useCallback(async () => {
+        if (!ctx || !session.preview || !session.confirmation?.confirmedByOperator) return;
+        const currentFp = fingerprintBosCommandDraft(session.draft);
+        if (currentFp !== session.preview.draftFingerprint) {
+            ctx.dispatch({
+                type: "FAIL",
+                recovery: {
+                    reason: "stale_preview",
+                    preserveDraft: true,
+                    operatorMessage: "Details changed since preview. Review again before continuing.",
+                },
+            });
+            return;
+        }
+        ctx.dispatch({ type: "BEGIN_EXECUTE" });
+        const adapterCtx = buildAdapterCtx(session, effectiveSpec, fieldOptions);
+        const result = await executeCreateLeadFromBosDraft(session.draft, adapterCtx);
+        if (!result.ok) {
+            ctx.dispatch({
+                type: "EXECUTE_FAILURE",
+                execution: result,
+                recovery: {
+                    reason: result.retryable ? "network" : "server",
+                    preserveDraft: true,
+                    operatorMessage: result.errorMessage,
+                },
+            });
+            ctx.dispatch({
+                type: "APPEND_MESSAGE",
+                message: { role: "assistant", kind: "error", body: result.errorMessage },
+            });
+            return;
+        }
+        ctx.dispatch({
+            type: "EXECUTE_SUCCESS",
+            execution: result,
+            processingCaseId: result.processingCaseId ?? null,
+            phase: result.processingCaseId ? "processing_review" : "completed",
+        });
+    }, [ctx, effectiveSpec, fieldOptions, session]);
+
     return {
         pasteText,
         setPasteText,
@@ -211,6 +295,9 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
         onAnalyze,
         onFieldChange,
         onConfirmField,
+        onBuildPreview,
+        onConfirmPreview,
+        onExecute,
         draftValues: bosDraftToFormValues(session.draft),
         adapterCtx: buildAdapterCtx(session, effectiveSpec, fieldOptions),
     };

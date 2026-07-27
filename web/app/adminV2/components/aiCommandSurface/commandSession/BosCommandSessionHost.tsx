@@ -173,6 +173,66 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                     </div>
                 )}
             </div>
+
+            <div
+                className="shrink-0 border-t border-alloy-stone/25 bg-alloy-stone/[0.04] px-3 py-2.5"
+                data-bos-command-session-footer="true"
+            >
+                {session.phase === "failed" && session.recovery ? (
+                    <p className="mb-2 text-[12px] text-red-700" data-bos-command-session-recovery="true">
+                        {session.recovery.operatorMessage}
+                    </p>
+                ) : null}
+                {session.phase === "executing" ? (
+                    <p className="text-[12px] text-alloy-midnight/70">Continuing to Processing review…</p>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                    {session.phase !== "preview" &&
+                    session.phase !== "confirming" &&
+                    session.phase !== "executing" &&
+                    session.phase !== "processing_review" ? (
+                        <button
+                            type="button"
+                            className="rounded-md bg-alloy-midnight px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+                            data-bos-command-session-preview
+                            disabled={!controller.resolution.readyForPreview && !controller.resolution.readyToExecute}
+                            onClick={() => controller.onBuildPreview()}
+                        >
+                            Review
+                        </button>
+                    ) : null}
+                    {session.phase === "preview" ? (
+                        <button
+                            type="button"
+                            className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-[12px] font-semibold text-white"
+                            data-bos-command-session-confirm
+                            onClick={() => controller.onConfirmPreview()}
+                        >
+                            Continue to Processing review
+                        </button>
+                    ) : null}
+                    {session.phase === "confirming" ? (
+                        <button
+                            type="button"
+                            className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+                            data-bos-command-session-execute
+                            onClick={() => void controller.onExecute()}
+                        >
+                            Confirm
+                        </button>
+                    ) : null}
+                    {(session.phase === "preview" || session.phase === "confirming" || session.phase === "failed") && (
+                        <button
+                            type="button"
+                            className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[12px] font-semibold text-alloy-midnight/70"
+                            data-bos-command-session-back-gather
+                            onClick={() => ctx?.dispatch({ type: "SET_PHASE", phase: "gathering" })}
+                        >
+                            Back to details
+                        </button>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
