@@ -18,3 +18,8 @@ export {
     createLeadConversationIntakeAdapter,
     eligiblePayloadFromConversationDraft,
 } from "@/lib/bos/commandSession/conversationIntake/createLeadConversationIntakeAdapter";
+
+export {
+    describeConversationParseCoverage,
+    isConversationParseSupportedKind,
+} from "@/lib/bos/commandSession/conversationIntake/conversationParseCoverage";
