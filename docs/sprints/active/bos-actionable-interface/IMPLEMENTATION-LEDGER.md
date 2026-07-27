@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: active-round-4
+status: paused
 last_reviewed: 2026-07-27
 ---
 
@@ -40,7 +40,7 @@ last_reviewed: 2026-07-27
 | R4-01 | done | `919f65f91` | Code trace + contracts |
 | R4-02–R4-08 | done | `c3ca6c3ae` | Progressive Form, quiet inputs, help, sizing, Lead copy |
 | R4-09 | partial | `c3ca6c3ae` | Unit/contract tests pass; authenticated screenshots deferred (3012 unhealthy) |
-| R4-10 | pending | | Final pause closeout after evidence or explicit deferral |
+| R4-10 | done | `ac5df8e1a` | Closeout + BOS pause |
 
 | R4 punch | done | `1885bf9c1` | Multi-person/child Form repeaters + relationship label presentation |
 
