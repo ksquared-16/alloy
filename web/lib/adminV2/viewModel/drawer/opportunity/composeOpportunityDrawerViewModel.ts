@@ -1,20 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
-import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
-import { fetchDepartmentMetadataForActivity } from "@/lib/admin/loadOpportunityActivitySignal";
-import {
-    attachOpportunityHouseholdCustomerPersonsForDrawer,
-    buildOpportunityDrawerVisiblePayload,
-} from "@/lib/admin/opportunityEntityRecord";
-import { resolveWorkUnitQueueDefinitionForDrawer } from "@/lib/admin/drawer/resolveWorkUnitQueueDefinitionForDrawer";
 import { sanitizeDrawerOperTrustPreviewFromHints } from "@/lib/admin/sanitizeDrawerOperTrustPreview";
-import { fetchEffectiveStatusDefinitionsTagged } from "@/lib/admin/statusDefinitionsResolve";
-import { OPPORTUNITY_CANONICAL_ADMIN_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 import { createReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
 import { tryEvaluateDrawerRecordReadiness } from "@/lib/completion/readinessDrawerBootstrap";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
-import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 import {
     buildOpportunityDrawerViewModelAboveFold,
     compileOpportunityDrawerViewModelShell,
@@ -24,7 +14,6 @@ import {
     buildOpportunityDrawerHeaderTitle,
     buildOpportunityStatusControlVm,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelHeader";
-import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
 import { resolveStageOperatingPlanPurpose } from "@/lib/lifecycle/resolveStageOperatingPlanPurpose";
 import { resolveOpportunityStageWorkSlice } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice";
 import { filterResidualOperationalTasks } from "@/lib/lifecycle/filterResidualOperationalTasks";
@@ -64,40 +53,11 @@ import type {
     RemindersSummaryVm,
     StageWorkLoadState,
 } from "@/lib/adminV2/viewModel/drawer/types";
-import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
-
-function trimOrNull(v: unknown): string | null {
-    if (v == null) return null;
-    const s = String(v).trim();
-    return s ? s : null;
-}
-
-function layoutFromEffective(
-    effective: Awaited<ReturnType<typeof fetchEffectiveRecordDrawerLayout>>
-): {
-    config_json: RecordLayoutConfigJson;
-    inquiry_drawer_mode: "workflow_v1" | "classic";
-    layout_version: string;
-} | null {
-    if (!effective.ok || !effective.layout) return null;
-    const cfg = (effective.layout.config_json ?? {}) as RecordLayoutConfigJson;
-    const mode = cfg.inquiry_drawer_mode === "workflow_v1" ? "workflow_v1" : "classic";
-    return {
-        config_json: cfg,
-        inquiry_drawer_mode: mode,
-        layout_version: effective.layout.key,
-    };
-}
+import { resolveSharedCanonicalDeps } from "@/lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps";
 
 function taskAssistEnabledOnServer(): boolean {
     const v = process.env.NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED?.trim().toLowerCase();
     return v === "true" || v === "1";
-}
-
-function queueDefinitionFromWorkUnit(
-    wu: { queue_definition?: unknown } | null | undefined
-): QueueDefinitionV1 | null {
-    return resolveWorkUnitQueueDefinitionForDrawer(wu?.queue_definition);
 }
 
 const EMPTY_REMINDERS: RemindersSummaryVm = {
@@ -146,112 +106,43 @@ export async function composeOpportunityDrawerViewModel(
         return result;
     };
 
-    const tOpp0 = Date.now();
-    const { data: oppRow, error: oppErr } = await supabase
-        .from("opportunities")
-        .select(OPPORTUNITY_CANONICAL_ADMIN_SELECT)
-        .eq("id", opportunityId)
-        .eq("org_id", orgId)
-        .single();
-    phases.opportunity_select_ms = Date.now() - tOpp0;
-
-    if (oppErr || !oppRow) {
-        return finishCompose({
-            ok: false,
-            skipped: {
-                structureSettled: false,
-                reason: "opportunity_not_found",
-                compose_version: OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
-            },
-        });
-    }
-
-    const ctxDept = trimOrNull(params.departmentId);
-    const ctxWu = trimOrNull(params.workUnitId);
-    const rowWu = trimOrNull((oppRow as { work_unit_id?: unknown }).work_unit_id);
-    const workUnitId = ctxWu || rowWu;
-    const tLayout0 = Date.now();
-    const layoutP = fetchEffectiveRecordDrawerLayout(supabase, orgId, "opportunity");
-    const wuP =
-        workUnitId ?
-            supabase
-                .from("work_units")
-                .select("id, department_id, metadata, queue_definition")
-                .eq("id", workUnitId)
-                .eq("org_id", orgId)
-                .maybeSingle()
-        :   Promise.resolve({ data: null, error: null });
-
-    const [layoutRes, wuRes] = await Promise.all([layoutP, wuP]);
-    phases.record_layout_ms = Date.now() - tLayout0;
-
-    const layoutParsed = layoutFromEffective(layoutRes);
-    if (!layoutParsed || layoutParsed.inquiry_drawer_mode !== "workflow_v1") {
-        return finishCompose({
-            ok: false,
-            skipped: {
-                structureSettled: false,
-                reason: layoutParsed ? "classic_layout_deferred" : "layout_unavailable",
-                compose_version: OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
-            },
-        });
-    }
-
-    phases.base_subject_ms = phases.opportunity_select_ms + phases.record_layout_ms;
-    const tVisible0 = Date.now();
-    const record = await buildOpportunityDrawerVisiblePayload(
+    // S4.2 — the shared canonical DATA foundation (Module C): opportunity record (visible payload +
+    // household attach), layout inputs, work-unit identity + queue definition, department metadata +
+    // status definitions, and the lifecycle rail. Resolved once; both tiers read it by value.
+    const shared = await resolveSharedCanonicalDeps({
         supabase,
-        orgId,
-        oppRow as Record<string, unknown>,
-        { hintDepartmentId: ctxDept }
-    );
-    phases.visible_entity_ms = Date.now() - tVisible0;
-    // Bubble the visible-payload sub-phases so the dominant first-useful cost is measurable in the
-    // response `phases_ms` (drawer_primary_* = the parallel FK batch, children_* = child orientation).
-    const visiblePrimaryPhase = (record as { _drawer_primary_phase_ms?: Record<string, number> })._drawer_primary_phase_ms;
-    if (visiblePrimaryPhase) for (const [k, v] of Object.entries(visiblePrimaryPhase)) phases[`visible_${k}`] = v;
-    const childrenShellPhase = (record as { _children_shell_phase_ms?: Record<string, number> })._children_shell_phase_ms;
-    if (childrenShellPhase) {
-        for (const [k, v] of Object.entries(childrenShellPhase)) phases[`children_${k}`] = v;
-        phases.children_orientation_ms = Object.values(childrenShellPhase).reduce((a, b) => a + b, 0);
+        gate,
+        opportunityId,
+        departmentId: params.departmentId,
+        workUnitId: params.workUnitId,
+    });
+    if (!shared.ok) {
+        return finishCompose({
+            ok: false,
+            skipped: {
+                structureSettled: false,
+                reason: shared.reason,
+                compose_version: OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
+            },
+        });
     }
-
-    // `departmentId` derives from the work-unit row + the step-1 visible record (NOT the household
-    // attach), so the household-persons attach and the dept-metadata / status-definitions fetches are
-    // independent — run them in ONE parallel batch instead of three serial awaits on the first-paint
-    // critical path. The household attach mutates `record` in place and completes before the batch
-    // resolves, so all downstream code sees the fully-attached record.
-    const wuData = wuRes.data as {
-        id?: string;
-        department_id?: string | null;
-        metadata?: unknown;
-        queue_definition?: unknown;
-    } | null;
-    const departmentId =
-        ctxDept ||
-        trimOrNull(wuData?.department_id) ||
-        trimOrNull(record._work_unit_department_id as string | null);
-    const queueDefinition = queueDefinitionFromWorkUnit(wuData);
-
-    const tPrep0 = Date.now();
-    const tHousehold0 = Date.now();
-    const [, deptMetadata, statusDefsPack] = await Promise.all([
-        attachOpportunityHouseholdCustomerPersonsForDrawer(supabase, orgId, record).then((r) => {
-            phases.household_persons_ms = Date.now() - tHousehold0;
-            return r;
-        }),
-        departmentId ?
-            fetchDepartmentMetadataForActivity(supabase, orgId, departmentId)
-        :   Promise.resolve(null),
-        fetchEffectiveStatusDefinitionsTagged(supabase, orgId, "opportunities", {
-            activeOnly: true,
-        }),
-    ]);
-    phases.status_and_dept_ms = Date.now() - tPrep0;
-
-    const statusDefs = statusDefsPack.rows;
-    const statusKey =
-        record.status_key != null ? String(record.status_key).trim() : null;
+    const {
+        record,
+        workUnitId,
+        departmentId,
+        layoutConfigJson,
+        layoutVersion,
+        queueDefinitionRaw,
+        queueDefinition,
+        wuMetadata,
+        deptMetadata,
+        statusDefs,
+        statusKey,
+        lifecycle_rail,
+        currentStageKey,
+        currentStageLabel,
+    } = shared;
+    Object.assign(phases, shared.phases_ms);
 
     const readinessMemo = createReadinessMemoScope();
     const readiness = tryEvaluateDrawerRecordReadiness({
@@ -267,7 +158,7 @@ export async function composeOpportunityDrawerViewModel(
     record._record_surface = "full";
 
     const shell = compileOpportunityDrawerViewModelShell({
-        layoutConfig: layoutParsed.config_json,
+        layoutConfig: layoutConfigJson,
         record,
     });
     if (!shell) {
@@ -300,7 +191,7 @@ export async function composeOpportunityDrawerViewModel(
         dependencies: firstViewportPlan.dependencies,
         queueDefinition,
         statusDefs,
-        wuMetadata: wuData?.metadata ?? null,
+        wuMetadata,
         departmentMetadata: deptMetadata as Record<string, unknown> | null,
         readiness: readiness ?? null,
     });
@@ -368,19 +259,10 @@ export async function composeOpportunityDrawerViewModel(
 
     const attentionRaw = record._operational_attention as OpportunityAttentionResult | null | undefined;
 
-    const lifecycle_rail = buildOpportunityWorkspaceLifecycleRail({
-        departmentMetadata: deptMetadata,
-        statusKey,
-        statusDefs,
-        workUnitMetadata: wuData?.metadata ?? null,
-    });
     const stage_context = resolveStageOperatingPlanPurpose({
         departmentMetadata: deptMetadata,
         builderStageKey: lifecycle_rail?.current_stage_key ?? null,
     });
-    const currentStageKey = lifecycle_rail?.current_stage_key ?? null;
-    const currentStageLabel =
-        lifecycle_rail?.stages.find((s) => s.key === currentStageKey)?.label ?? null;
     // The communications preview is a first-paint seed only; the Activity embedded workspace
     // fetches it on demand (and prewarms on idle). Deferring it drops one server round-trip
     // from the record-open critical path and removes a redundant comms request on the surface.
@@ -449,7 +331,7 @@ export async function composeOpportunityDrawerViewModel(
             departmentId,
             workUnitId: workUnitId || null,
             statusKey,
-            layoutVersion: layoutParsed.layout_version,
+            layoutVersion,
             headerActionKeys: headerActions.map((a) => a.key),
             aboveFoldSectionKeys: aboveFoldRenderModel.sections.map((s) => s.section_key),
         }),
@@ -460,7 +342,7 @@ export async function composeOpportunityDrawerViewModel(
             department_id: departmentId,
             work_unit_id: workUnitId || null,
             /** Raw work-unit JSON (v1/v2) — client lifecycle parser re-coerces via resolveWorkUnitQueueDefinitionForDrawer. */
-            queue_definition: wuData?.queue_definition ?? null,
+            queue_definition: queueDefinitionRaw,
             lifecycle_rail,
             stage_context,
             work_intent_runtime,

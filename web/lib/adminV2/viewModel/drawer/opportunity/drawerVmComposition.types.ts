@@ -14,6 +14,9 @@
  * shipped VM shape; only `tasks` splits (A carries `tasks_raw`; the orchestrator produces `summaries.tasks`).
  */
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
+import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
+import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 
 type Vm = OpportunityDrawerViewModel;
 
@@ -21,25 +24,36 @@ type Vm = OpportunityDrawerViewModel;
 export type ComposePhaseTimings = Record<string, number>;
 
 /**
- * Module C — data BOTH A and B read. Kept narrow: identity, the layout/shell, the workspace identity
- * fields, and the once-resolved deptMetadata/statusDefs/lifecycle inputs. Neither A nor B re-fetches these.
+ * Module C — data BOTH A and B read (the shared DATA foundation). Kept narrow: identity, the raw layout
+ * inputs, the workspace identity fields, and the once-resolved deptMetadata/statusDefs/lifecycle inputs.
+ * Neither A nor B re-fetches these. (Shell compilation + first-viewport plan are NOT here — they consume C
+ * and are owned by A / the orchestrator; C is data, not layout assembly.)
  */
 export type SharedCanonicalDeps = {
     orgId: string;
     opportunityId: string;
     /** Base visible payload (mutable baseline the tiers patch; snapshot+stripped ONCE by the orchestrator). */
     record: Record<string, unknown>;
-    layout: Vm["layout"];
+    departmentId: string | null;
+    workUnitId: string | null;
+    /** Raw layout config the shell compiles from (owned downstream, not in C). */
+    layoutConfigJson: RecordLayoutConfigJson;
     /** → VM.generation input. */
     layoutVersion: string;
-    workspaceIdentity: Pick<Vm["workspace"], "department_id" | "work_unit_id" | "queue_definition">;
-    lifecycle_rail: Vm["workspace"]["lifecycle_rail"];
+    /** Raw `work_units.queue_definition` JSON → VM.workspace.queue_definition. */
+    queueDefinitionRaw: unknown;
+    /** Coerced queue definition for the first-paint deps. */
+    queueDefinition: QueueDefinitionV1 | null;
+    /** Raw `work_units.metadata` — first-paint deps + lifecycle inputs. */
+    wuMetadata: unknown;
     /** Once-resolved inputs passed by value (A: readiness/attention/header; B: stage_context/stage_work). */
     deptMetadata: Record<string, unknown> | null;
-    statusDefs: unknown[];
+    statusDefs: StatusDefinitionRow[];
     statusKey: string | null;
+    lifecycle_rail: Vm["workspace"]["lifecycle_rail"];
     currentStageKey: string | null;
     currentStageLabel: string | null;
+    phases_ms: ComposePhaseTimings;
 };
 
 /**
