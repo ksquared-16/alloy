@@ -72,6 +72,10 @@ App merge without applying these leaves Studio Types / commitment behavior broke
 | Full browser cert (auth + hard refresh zoom/summary) | Incomplete this session (auth stale); operator may re-prove on staging after deploy |
 | `npm run typecheck` | Required before merge |
 
+### Follow-up (2026-07-27 evening)
+
+Staging regression: display-only summary change also stripped `savePhoto` from **ChildFocusEdit** and gated live Focus Panel upload to Surfaces-composing only. Hotfix restores upload on focused child + Edit; summary roster stays display-only. Surfaces builder now passes `customerMemberId` for ensure-person.
+
 ---
 
 ## Explicitly not claimed done

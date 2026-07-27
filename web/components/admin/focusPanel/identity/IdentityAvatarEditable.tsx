@@ -150,6 +150,7 @@ export default function IdentityAvatarEditable({
                 visible={visible}
                 role={role}
                 recordId={recordId}
+                allowZoom={!showUploadControls}
             />
             {showUploadControls ? (
                 <div className="identity-avatar-editable__actions">
