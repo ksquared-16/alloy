@@ -85,12 +85,16 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
 
             {controller.resolution.blockers.length > 0 &&
             session.phase !== "processing_review" &&
-            session.phase !== "completed" ? (
+            session.phase !== "completed" &&
+            session.phase !== "preview" &&
+            session.phase !== "confirming" &&
+            session.phase !== "executing" ? (
                 <div
-                    className="shrink-0 border-b border-amber-200/80 bg-amber-50 px-3 py-2 text-[12px] text-amber-950"
+                    className="shrink-0 border-b border-alloy-stone/25 bg-alloy-stone/[0.04] px-3 py-2 text-[12px] text-alloy-midnight/70"
                     data-bos-command-session-resolution="true"
                 >
-                    {controller.resolution.blockers.map((b) => b.message).join(" · ")}
+                    Still needed:{" "}
+                    {controller.resolution.blockers.map((b) => b.message.replace(/\.$/, "")).join(" · ")}
                 </div>
             ) : null}
 
@@ -194,7 +198,9 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                 ) : (
                     <>
                 <ul className="mb-4 space-y-2" data-bos-command-session-messages="true">
-                    {session.messages.map((message) => (
+                    {session.messages
+                        .filter((message) => message.kind !== "mode_switch")
+                        .map((message) => (
                         <li
                             key={message.id}
                             className={`whitespace-pre-wrap rounded-lg px-3 py-2 text-[13px] leading-snug ${
@@ -212,12 +218,20 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                 {session.mode === "conversation" ? (
                     <div data-bos-command-session-mode-body="conversation" className="space-y-3">
                         <label className="block text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                            Paste or type the inquiry
+                            Your message
                         </label>
                         <textarea
-                            className="min-h-[120px] w-full resize-y rounded-lg border border-alloy-stone/30 bg-white px-3 py-2 text-[13px] text-alloy-midnight outline-none focus:border-alloy-bend-pine focus:ring-2 focus:ring-alloy-bend-pine/20"
+                            className="min-h-[88px] w-full resize-y rounded-lg border border-alloy-stone/30 bg-white px-3 py-2 text-[13px] text-alloy-midnight outline-none focus:border-alloy-bend-pine focus:ring-2 focus:ring-alloy-bend-pine/20"
                             value={controller.pasteText}
                             onChange={(e) => controller.setPasteText(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    if (!controller.analyzing && controller.pasteText.trim()) {
+                                        controller.onAnalyze();
+                                    }
+                                }
+                            }}
                             placeholder="Sarah Jones called about her daughter Emma…"
                             data-bos-command-session-composer="true"
                             disabled={controller.analyzing}
@@ -230,10 +244,11 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                                 type="button"
                                 className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-bend-pine/90 disabled:opacity-50"
                                 data-bos-command-session-analyze
+                                data-bos-command-session-send
                                 disabled={controller.analyzing || !controller.pasteText.trim()}
                                 onClick={() => controller.onAnalyze()}
                             >
-                                {controller.analyzing ? "Reading…" : "Read with BOS"}
+                                {controller.analyzing ? "Reading…" : "Send"}
                             </button>
                             {session.draft.values
                                 .filter((v) => v.state === "inferred")

@@ -12,11 +12,11 @@ describe("BOS Create Lead conversation + form gather (WP-07/08)", () => {
             "utf8"
         );
         expect(host).toContain("data-bos-command-session-composer");
-        expect(host).toContain("data-bos-command-session-analyze");
+        expect(host).toContain("data-bos-command-session-send");
         expect(host).toContain("ActionWorkspaceGatherFields");
         expect(host).toContain('data-bos-command-session-mode-body="form"');
-        expect(host).toContain("From your note");
-        expect(host).toContain("Suggested");
+        expect(host).toContain("mode_switch");
+        expect(host).toContain('message.kind !== "mode_switch"');
     });
 
     it("controller uses conversation intake adapter over effective gather fields", () => {

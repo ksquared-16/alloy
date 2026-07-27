@@ -57,7 +57,7 @@ export function createBosCommandSession(input: CreateBosCommandSessionInput): Bo
         kind: "ack",
         body:
             input.ackBody ??
-            `${label}. You can describe the inquiry in Conversation or switch to Form.`,
+            `${label} is ready. Paste or type the inquiry — I’ll summarize what I understand and ask only for what’s still needed. You can switch to Form anytime; your details stay with this command.`,
         createdAt: now,
     };
 

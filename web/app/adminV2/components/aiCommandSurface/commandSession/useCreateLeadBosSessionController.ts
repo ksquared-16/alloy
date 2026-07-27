@@ -192,7 +192,7 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
                         },
                     });
                 }
-                if (!pasteText.trim()) setPasteText(text);
+                setPasteText("");
             } catch (error) {
                 setAnalyzeError(error instanceof Error ? error.message : "Could not read that.");
                 ctx.dispatch({

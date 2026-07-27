@@ -77,24 +77,9 @@ export function reduceBosCommandSession(
             return touch(session, { requestSeq: session.requestSeq + 1 });
 
         case "SET_MODE": {
-            const at = nowIso();
-            const messages = [...session.messages];
-            if (action.mode !== session.mode) {
-                messages.push({
-                    id: nextBosMessageId(),
-                    role: "system",
-                    kind: "mode_switch",
-                    body:
-                        action.note ??
-                        (action.mode === "form"
-                            ? "Switched to Form. Your details are preserved."
-                            : "Switched to Conversation. Your details are preserved."),
-                    createdAt: at,
-                });
-            }
+            // Mode is chrome-only — do not pollute the transcript with mode_switch turns.
             return touch(session, {
                 mode: action.mode,
-                messages,
                 phase: session.phase === "acknowledged" ? "gathering" : session.phase,
             });
         }

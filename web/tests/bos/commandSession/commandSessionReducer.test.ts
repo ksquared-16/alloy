@@ -53,7 +53,8 @@ describe("reduceBosCommandSession", () => {
         expect(session.mode).toBe("form");
         expect(session.phase).toBe("gathering");
         expect(session.draft.values[0]?.value).toBe("Sarah");
-        expect(session.messages.some((m) => m.kind === "mode_switch")).toBe(true);
+        expect(session.messages.some((m) => m.kind === "mode_switch")).toBe(false);
+        expect(session.messages.every((m) => m.kind !== "mode_switch")).toBe(true);
 
         session = reduceBosCommandSession(session, { type: "SET_MODE", mode: "conversation" });
         expect(session.mode).toBe("conversation");
