@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 
 import { createLeadParserSpec } from "@/lib/admin/actions/createLeadPlatformGather";
 import {
@@ -29,6 +29,16 @@ import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContex
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
 import type { IntakeSelectOption } from "@/lib/intake/types";
+import type { BosCommandResolutionState } from "@/lib/bos/commandSession/types";
+
+function resolutionFingerprint(resolution: BosCommandResolutionState): string {
+    return [
+        resolution.readyForPreview ? "1" : "0",
+        resolution.readyToExecute ? "1" : "0",
+        resolution.missingRequired.join(","),
+        resolution.blockers.map((b) => `${b.code}:${b.message}`).join("|"),
+    ].join("::");
+}
 
 export function useCreateLeadBosSessionController(session: BosCommandSession) {
     const ctx = useBosCommandSessionOptional();
@@ -134,8 +144,11 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
     }, [effectiveSpec, session.draft, workspace]);
 
     useEffect(() => {
-        ctx?.dispatch({ type: "SET_RESOLUTION", resolution });
-    }, [ctx, resolution]);
+        if (!ctx) return;
+        const prev = session.resolution;
+        if (prev && resolutionFingerprint(prev) === resolutionFingerprint(resolution)) return;
+        ctx.dispatch({ type: "SET_RESOLUTION", resolution });
+    }, [ctx, resolution, session.resolution]);
 
     const gatherFields = effectiveSpec?.gatherFields ?? [];
     const sections = useMemo(
@@ -241,9 +254,12 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
     const onFieldChange = useCallback(
         (payloadKey: string, value: string) => {
             if (!ctx) return;
-            ctx.dispatch({
-                type: "SET_DRAFT",
-                draft: applyOperatorFieldEdit(session.draft, payloadKey, value),
+            // Keep Work Unit settlement responsive while the operator types in BOS Form.
+            startTransition(() => {
+                ctx.dispatch({
+                    type: "SET_DRAFT",
+                    draft: applyOperatorFieldEdit(session.draft, payloadKey, value),
+                });
             });
         },
         [ctx, session.draft]
@@ -257,9 +273,11 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
     const onCommitSelectionChange = useCallback(
         (next: CreateLeadCommitSelection) => {
             if (!ctx) return;
-            ctx.dispatch({
-                type: "SET_DRAFT",
-                draft: applyCreateLeadCommitSelectionToDraft(session.draft, next),
+            startTransition(() => {
+                ctx.dispatch({
+                    type: "SET_DRAFT",
+                    draft: applyCreateLeadCommitSelectionToDraft(session.draft, next),
+                });
             });
         },
         [ctx, session.draft]
