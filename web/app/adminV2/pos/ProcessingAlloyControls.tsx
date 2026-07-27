@@ -5,8 +5,11 @@ import type { ReactNode } from "react";
 import {
     WS_ACTION_SECONDARY,
     WS_FIELD_SEARCH_CHROME,
-    WS_FIELD_SELECT_CHROME,
 } from "@/components/workspace/workspaceTokens";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
+
+export { AlloySelect };
+export type { AlloySelectOption } from "@/components/workspace/AlloySelect";
 
 export function AlloyFieldLabel({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
     return (
@@ -73,43 +76,6 @@ export function AlloyTextArea({
             className={clsx(WS_FIELD_SEARCH_CHROME, "w-full resize-none disabled:opacity-50")}
             data-testid={testId}
         />
-    );
-}
-
-export function AlloySelect({
-    value,
-    onChange,
-    options,
-    disabled,
-    placeholder,
-    testId,
-}: {
-    value: string;
-    onChange: (value: string) => void;
-    options: Array<{ value: string; label: string }>;
-    disabled?: boolean;
-    placeholder?: string;
-    testId?: string;
-}) {
-    return (
-        <select
-            value={value}
-            disabled={disabled}
-            onChange={(e) => onChange(e.target.value)}
-            className={clsx(WS_FIELD_SELECT_CHROME, "w-full disabled:opacity-50")}
-            data-testid={testId}
-        >
-            {placeholder ? (
-                <option value="" disabled>
-                    {placeholder}
-                </option>
-            ) : null}
-            {options.map((o) => (
-                <option key={o.value} value={o.value}>
-                    {o.label}
-                </option>
-            ))}
-        </select>
     );
 }
 

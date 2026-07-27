@@ -141,10 +141,12 @@ export function builderRuleMetaFromUi(
     for (const field of palette) {
         if ((levels[field.rule_id] ?? "off") === "off") continue;
         const timingUi = timingByRuleId[field.rule_id] ?? "legacy_stage_progress";
+        // Explicit "During this stage" / unset → omit timing (legacy default). Do not invent
+        // record_creation from Required/Enforced level.
         const timing: RequirementTiming | undefined =
             timingUi === "legacy_stage_progress" ? undefined : timingUi;
         const transitionMeta = transitionMetaByRuleId?.[field.rule_id];
-        out[field.rule_id] = {
+        const entry: RequirementRuleMetaV1 = {
             ...(timing ? { timing } : {}),
             ...(transitionMeta?.applies_to_transition_keys?.length
                 ? { applies_to_transition_keys: transitionMeta.applies_to_transition_keys }
@@ -153,6 +155,16 @@ export function builderRuleMetaFromUi(
                 ? { excluded_transition_keys: transitionMeta.excluded_transition_keys }
                 : {}),
         };
+        if (
+            !entry.timing &&
+            !entry.applies_to_transition_keys?.length &&
+            !entry.excluded_transition_keys?.length &&
+            !entry.scope &&
+            !entry.enforcement
+        ) {
+            continue;
+        }
+        out[field.rule_id] = entry;
     }
     return out;
 }

@@ -8,83 +8,83 @@ import {
 } from "@/lib/admin/actions/createLeadIntakeValidation";
 
 /** Platform minimum to create a lead — not lifecycle Required Information. */
-export const CREATE_LEAD_PLATFORM_REQUIRED_KEYS = ["first_name", "last_name", "location_id"] as const;
+export const CREATE_LEAD_PLATFORM_REQUIRED_KEYS = ["first_name", "last_name"] as const;
 export const CREATE_LEAD_PLATFORM_CONTACT_KEYS = ["email", "phone"] as const;
 
-/** Unified draft layout — required block (action-oriented, not entity tabs). */
+/** Unified draft layout — code-owned floor only. */
 export const CREATE_LEAD_UNIFIED_REQUIRED_KEYS = [
     "first_name",
     "last_name",
     "email",
     "phone",
-    "location_id",
 ] as const;
 
-export const CREATE_LEAD_UNIFIED_OPTIONAL_KEYS = [
-    "child_first_name",
-    "child_last_name",
-    "child_date_of_birth",
-    "child_age",
-    "child_start_date",
-    "child_program",
-    "child_program_room_cohort_key",
-    "source",
-    "intake_notes",
-] as const;
+/** @deprecated No curated optional catalog — effective intake owns optional fields. */
+export const CREATE_LEAD_UNIFIED_OPTIONAL_KEYS = [] as const;
 
+/**
+ * Code-owned Create Lead floor only.
+ * Failed effective-spec fetch must not masquerade as tenant configuration
+ * (no Child / Location / enrollment catalog).
+ */
 export const CREATE_LEAD_GATHER_FIELDS: readonly ActionWorkspaceGatherField[] = [
-    { payload_key: "first_name", field_label: "Parent/Guardian First Name", section: "person", section_label: "Parent / guardian", tier: "required", value_kind: "text" },
-    { payload_key: "last_name", field_label: "Parent/Guardian Last Name", section: "person", section_label: "Parent / guardian", tier: "required", value_kind: "text" },
-    { payload_key: "email", field_label: "Email", section: "person", section_label: "Parent / guardian", tier: "optional", value_kind: "email" },
-    { payload_key: "phone", field_label: "Phone", section: "person", section_label: "Parent / guardian", tier: "optional", value_kind: "phone" },
-    { payload_key: "child_first_name", field_label: "Child First Name", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
-    { payload_key: "child_last_name", field_label: "Child Last Name", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
-    { payload_key: "child_date_of_birth", field_label: "Child DOB", section: "child", section_label: "Child", tier: "optional", value_kind: "date" },
-    { payload_key: "child_age", field_label: "Child Age", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
     {
-        payload_key: "child_program",
-        field_label: "Program interest",
-        section: "child",
-        section_label: "Child",
-        tier: "optional",
-        value_kind: "select",
-        placement_select: "site_program",
-    },
-    {
-        payload_key: "child_program_room_cohort_key",
-        field_label: "Classroom",
-        section: "child",
-        section_label: "Child",
-        tier: "optional",
-        value_kind: "select",
-        placement_select: "site_room",
-    },
-    {
-        payload_key: "child_schedule_type",
-        field_label: "Schedule interest",
-        section: "child",
-        section_label: "Child",
-        tier: "optional",
-        value_kind: "select",
-        option_set_key: "childcare_schedule_type",
-    },
-    { payload_key: "child_start_date", field_label: "Desired start date", section: "child", section_label: "Child", tier: "optional", value_kind: "date" },
-    {
-        payload_key: "location_id",
-        field_label: "Location",
-        section: "context",
-        section_label: "Context",
+        payload_key: "first_name",
+        field_label: "First Name",
+        section: "person",
+        section_label: "Person",
         tier: "required",
-        value_kind: "select",
-        placement_select: "site",
+        value_kind: "text",
     },
-    { payload_key: "source", field_label: "Source", section: "context", section_label: "Context", tier: "optional", value_kind: "text" },
-    { payload_key: "intake_notes", field_label: "Intake notes", section: "context", section_label: "Context", tier: "optional", value_kind: "text", multiline: true },
+    {
+        payload_key: "last_name",
+        field_label: "Last Name",
+        section: "person",
+        section_label: "Person",
+        tier: "required",
+        value_kind: "text",
+    },
+    {
+        payload_key: "email",
+        field_label: "Email",
+        section: "person",
+        section_label: "Person",
+        tier: "optional",
+        value_kind: "email",
+    },
+    {
+        payload_key: "phone",
+        field_label: "Phone",
+        section: "person",
+        section_label: "Person",
+        tier: "optional",
+        value_kind: "phone",
+    },
 ] as const;
 
-const GATHER_LABEL_BY_KEY = Object.fromEntries(
-    CREATE_LEAD_GATHER_FIELDS.map((f) => [f.payload_key, f.field_label])
-) as Record<string, string>;
+/** Display labels for known payload keys (mapping aid — not an intake catalog). */
+export const CREATE_LEAD_KNOWN_FIELD_LABELS: Readonly<Record<string, string>> = {
+    first_name: "First Name",
+    last_name: "Last Name",
+    email: "Email",
+    phone: "Phone",
+    child_first_name: "First Name",
+    child_last_name: "Last Name",
+    child_date_of_birth: "Date of birth",
+    child_age: "Age",
+    child_program: "Program interest",
+    child_program_room_cohort_key: "Classroom",
+    child_schedule_type: "Schedule interest",
+    child_start_date: "Desired start date",
+    location_id: "Location",
+    source: "Source",
+    intake_notes: "Intake notes",
+};
+
+const GATHER_LABEL_BY_KEY = {
+    ...CREATE_LEAD_KNOWN_FIELD_LABELS,
+    ...Object.fromEntries(CREATE_LEAD_GATHER_FIELDS.map((f) => [f.payload_key, f.field_label])),
+} as Record<string, string>;
 
 export function emptyCreateLeadGatherValues(): Record<string, string> {
     const out: Record<string, string> = {};
@@ -92,16 +92,28 @@ export function emptyCreateLeadGatherValues(): Record<string, string> {
     return out;
 }
 
-/** Minimal parser spec — field mapping only; not lifecycle Required Information. */
+function gatherEntityForSection(
+    section: ActionWorkspaceGatherField["section"]
+): "person" | "child" | "opportunity" {
+    if (section === "child") return "child";
+    if (section === "context") return "opportunity";
+    return "person";
+}
+
+/**
+ * Failed fetch / missing department fallback — code-owned floor only.
+ * Never restores Child or enrollment fields as if they were tenant config.
+ */
 export function createLeadParserSpec(departmentId: string): ActionIntakeSpec {
     const fields = CREATE_LEAD_GATHER_FIELDS.map((f) => {
         const ruleId =
             Object.entries(CREATE_LEAD_PAYLOAD_KEY_BY_RULE).find(([, key]) => key === f.payload_key)?.[0] ??
             `gather:${f.payload_key}`;
+        const entity = gatherEntityForSection(f.section);
         return {
             rule_id: ruleId,
-            entity: f.section === "child" ? ("child" as const) : ("person" as const),
-            entity_label: f.section_label,
+            entity,
+            entity_label: "Person",
             field_label: f.field_label,
             tier: f.tier,
             field_key: f.payload_key,
@@ -116,7 +128,6 @@ export function createLeadParserSpec(departmentId: string): ActionIntakeSpec {
     });
 
     const personFields = fields.filter((f) => f.entity === "person");
-    const childFields = fields.filter((f) => f.entity === "child");
 
     return {
         action_key: "create_lead",
@@ -125,17 +136,20 @@ export function createLeadParserSpec(departmentId: string): ActionIntakeSpec {
         operator_stage: "lead",
         mode: "hybrid",
         requirements_source: "platform",
-        groups: [
-            { entity: "person", entity_label: "Parent / guardian", fields: personFields },
-            ...(childFields.length ? [{ entity: "child" as const, entity_label: "Child", fields: childFields }] : []),
-        ],
+        groups: [{ entity: "person", entity_label: "Person", fields: personFields }],
         required: personFields.filter((f) => f.tier === "required"),
         recommended: [],
-        optional: [...personFields.filter((f) => f.tier === "optional"), ...childFields],
-        constraints: [],
+        optional: personFields.filter((f) => f.tier === "optional"),
+        constraints: [
+            {
+                kind: "at_least_one",
+                rule_ids: ["person:email", "person:phone"],
+                message: "Phone or email is required.",
+            },
+        ],
         copy: {
             title: "Create Lead",
-            help: "Gather lead details with BOS assist. Only name and contact are required to create.",
+            help: "Platform minimum only — name and email or phone. Stage configuration could not be loaded.",
         },
     };
 }
@@ -166,11 +180,9 @@ export function validateCreateLeadPlatformMinimum(
     const last = (values.last_name ?? "").trim();
     const email = (values.email ?? "").trim();
     const phone = (values.phone ?? "").trim();
-    const location = (values.location_id ?? "").trim();
 
-    if (!first) issues.push("Parent/Guardian first name is required.");
-    if (!last) issues.push("Parent/Guardian last name is required.");
-    if (!location) issues.push("Location is required.");
+    if (!first) issues.push("First name is required.");
+    if (!last) issues.push("Last name is required.");
 
     const hasEmail = email.length > 0;
     const hasPhone = phone.length > 0;
@@ -192,9 +204,9 @@ export function validateCreateLeadPlatformMinimum(
 
 export function mapCreateLeadGatherToExecutePayload(values: Record<string, string>): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const field of CREATE_LEAD_GATHER_FIELDS) {
-        const v = (values[field.payload_key] ?? "").trim();
-        if (v) out[field.payload_key] = v;
+    for (const [key, raw] of Object.entries(values)) {
+        const v = String(raw ?? "").trim();
+        if (v) out[key] = v;
     }
     return out;
 }

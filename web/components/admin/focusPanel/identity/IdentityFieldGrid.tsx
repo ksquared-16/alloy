@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import type { IdentityFieldRowVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import IdentityFieldValue from "@/components/admin/focusPanel/identity/IdentityFieldValue";
@@ -29,6 +29,8 @@ type Props = {
     batchEdit?: IdentityFieldBatchEditSession | null;
 };
 
+const SAVED_FLASH_MS = 1800;
+
 export default function IdentityFieldGrid({
     rows,
     className,
@@ -40,6 +42,24 @@ export default function IdentityFieldGrid({
 }: Props) {
     const [editingFieldRef, setEditingFieldRef] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const [justSavedFieldRef, setJustSavedFieldRef] = useState<string | null>(null);
+    const savedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(
+        () => () => {
+            if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
+        },
+        [],
+    );
+
+    const flashSaved = (fieldRef: string) => {
+        if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
+        setJustSavedFieldRef(fieldRef);
+        savedFlashTimer.current = setTimeout(() => {
+            setJustSavedFieldRef((cur) => (cur === fieldRef ? null : cur));
+            savedFlashTimer.current = null;
+        }, SAVED_FLASH_MS);
+    };
 
     if (rows.length === 0) return null;
     return (
@@ -68,6 +88,7 @@ export default function IdentityFieldGrid({
                                     cell.width === "third" && "identity-field-grid__cell--third",
                                     cell.width === "full" && "identity-field-grid__cell--full",
                                 )}
+                                savedFlash={justSavedFieldRef === cell.fieldRef}
                                 onEdit={
                                     cell.editable && onEditField && !canInline
                                         ? () => onEditField(cell.fieldRef)
@@ -107,6 +128,7 @@ export default function IdentityFieldGrid({
                                                         });
                                                         if (!result || result.ok !== false) {
                                                             setEditingFieldRef(null);
+                                                            flashSaved(cell.fieldRef);
                                                         }
                                                     } finally {
                                                         setSaving(false);

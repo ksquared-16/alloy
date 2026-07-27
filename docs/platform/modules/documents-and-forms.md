@@ -103,7 +103,13 @@ For lead-capture submissions, the public submit route opens/reuses a Processing 
 
 Plausible matches, ambiguity, and contradictions form a blocking **identity-review gate** before plan build, approval, or commit; source adapters may recommend/preselect trusted deterministic matches but may not bypass the gate.
 
-Manual Create Lead uses the same source-agnostic Processing spine. `applyFormIntakeSafe` is retired and throw-only; the C1 comparison helpers are retained for audit, not runtime authority. There is no source-cutover feature flag.
+Manual Create Lead uses the same source-agnostic Processing spine. Whether the operator enters
+through the BOS command session (Conversation/Form) or the compatibility modal host, confirmed
+execution still routes through registered `create_lead` and Processing identity review —
+BOS prepares and explains the payload; it does not bypass the identity-review gate or write
+canonical identity rows early. `applyFormIntakeSafe` is retired and throw-only; the C1
+comparison helpers are retained for audit, not runtime authority. There is no source-cutover
+feature flag.
 
 ### Studio — Forms and Builder
 

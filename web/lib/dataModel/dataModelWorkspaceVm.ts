@@ -90,6 +90,8 @@ export type EntityRelationshipVocabularyKind = "family_role" | "person_relations
 export type EntityRelationshipSummaryVm = {
     id: string;
     label: string;
+    /** Operator plural label when vocabulary presentation provides one. */
+    pluralLabel: string | null;
     connectionLabel: string;
     meaning: string;
     targetLabel: string;
@@ -339,6 +341,7 @@ function toRelationshipSummary(rel: EntityRelationshipDefinition): EntityRelatio
     return {
         id: rel.id,
         label: rel.label,
+        pluralLabel: null,
         connectionLabel: rel.connection_label,
         meaning: rel.meaning,
         targetLabel: rel.target_label,

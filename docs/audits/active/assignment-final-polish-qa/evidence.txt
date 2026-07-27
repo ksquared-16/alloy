@@ -1,0 +1,12 @@
+MODAL_MS=337
+SHOT 01-workspace-overview
+VOCAB kinds=5 purpose=0
+SHOT 02-studio-kinds
+SHOT 03-kind-editor
+STUDIO spaceReq=1 eligible=1
+FAIL locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('[data-scheduling-open]').first()
+
+    at /Users/Kelly/Code/alloy-worktrees/wt5-assignment-platform-phase-2/web/scripts/tmp-final-polish-qa.mjs:68:25
+SHOT 99-fail

@@ -27,6 +27,7 @@ import {
     inputTypeForIdentityFieldRef,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import { assignmentOwnsProgramRoomField } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
 
 /** Editable child focus values sent through the inquiry-child save path. */
 export type ChildFocusEditValues = {
@@ -73,6 +74,7 @@ function canonicalChildConfig(config: NestedSurfaceConfig | null): NestedSurface
 export function resolveChildFocusEditPolicy(
     config: NestedSurfaceConfig | null,
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+    opts?: { hasCommittedPrimaryAssignment?: boolean },
 ): ChildFocusEditFieldRow[] {
     config = canonicalChildConfig(config);
     if (!config) return [];
@@ -87,8 +89,10 @@ export function resolveChildFocusEditPolicy(
             editGroupKey: "child_edit",
         });
         const displayed = fieldShouldRender(visibility);
-        const editable = displayed && saveSupported && fieldIsSaveable(visibility);
-        const unsupported = displayed && !saveSupported;
+        const blockedByAssignment =
+            opts?.hasCommittedPrimaryAssignment === true && assignmentOwnsProgramRoomField(fieldKey);
+        const editable = displayed && saveSupported && fieldIsSaveable(visibility) && !blockedByAssignment;
+        const unsupported = displayed && (!saveSupported || blockedByAssignment);
         const inputType = inputTypeForIdentityFieldRef(fieldKey);
         return [
             {

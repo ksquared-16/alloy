@@ -8,7 +8,6 @@ import type { ReactNode } from "react";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
-// Mock the platform modal so we can assert it mounts with the right scope.
 vi.mock("@/components/platform/commands/createLead/CreateLeadCommandSurface", () => ({
     CreateLeadCommandSurface: ({
         open,
@@ -24,13 +23,27 @@ vi.mock("@/components/platform/commands/createLead/CreateLeadCommandSurface", ()
         ) : null,
 }));
 
+const startSpy = vi.fn();
+vi.mock("@/contexts/BosCommandSessionContext", () => ({
+    dispatchStartBosCommandSession: (invocation: unknown) => startSpy(invocation),
+}));
+
+const flagState = { enabled: true };
+vi.mock("@/lib/bos/commandSession/bosCreateLeadSessionFlag", () => ({
+    isBosCreateLeadSessionEnabled: () => flagState.enabled,
+}));
+
 import { CreateLeadEventHost } from "@/components/presentation/rightRail/CreateLeadEventHost";
 
 let container: HTMLElement | null = null;
+let root: ReturnType<typeof createRoot> | null = null;
 function render(node: ReactNode): HTMLElement {
     container = document.createElement("div");
     document.body.appendChild(container);
-    act(() => createRoot(container!).render(node));
+    root = createRoot(container);
+    act(() => {
+        root!.render(node);
+    });
     return container;
 }
 function fireOpen(detail: Record<string, unknown>) {
@@ -39,32 +52,60 @@ function fireOpen(detail: Record<string, unknown>) {
     });
 }
 afterEach(() => {
+    act(() => {
+        root?.unmount();
+    });
+    root = null;
     if (container) {
         container.remove();
         container = null;
     }
+    startSpy.mockClear();
+    flagState.enabled = true;
 });
 
-describe("CreateLeadEventHost", () => {
-    it("opens the Create Lead modal on adminv2:open-create-lead with the event's department + surface", () => {
+describe("CreateLeadEventHost — BOS session primary", () => {
+    it("starts a BOS command session instead of mounting the modal", () => {
+        flagState.enabled = true;
         const el = render(<CreateLeadEventHost />);
-        expect(el.querySelector("[data-create-lead-modal]")).toBeNull(); // closed until the event
+        fireOpen({ department_id: "dept-1", work_unit_id: "wu-1" });
+        expect(el.querySelector("[data-create-lead-modal]")).toBeNull();
+        expect(startSpy).toHaveBeenCalledTimes(1);
+        expect(startSpy.mock.calls[0]?.[0]).toMatchObject({
+            actionKey: "create_lead",
+            displayLabel: "Create Lead",
+            placement: "work_unit_actions",
+            workspace: { departmentId: "dept-1", workUnitId: "wu-1", surface: "work_unit" },
+        });
+    });
+
+    it("uses workspace placement when no work_unit_id", () => {
+        flagState.enabled = true;
+        render(<CreateLeadEventHost />);
+        fireOpen({ department_id: "dept-1" });
+        expect(startSpy.mock.calls[0]?.[0]).toMatchObject({
+            placement: "workspace_actions_menu",
+            workspace: { surface: "workspace", workUnitId: null },
+        });
+    });
+
+    it("ignores an event with no department", () => {
+        flagState.enabled = true;
+        render(<CreateLeadEventHost />);
+        fireOpen({ work_unit_id: "wu-1" });
+        expect(startSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe("CreateLeadEventHost — modal compatibility fallback", () => {
+    it("opens the Create Lead modal when the BOS session flag is off", () => {
+        flagState.enabled = false;
+        const el = render(<CreateLeadEventHost />);
         fireOpen({ department_id: "dept-1", work_unit_id: "wu-1" });
         const modal = el.querySelector("[data-create-lead-modal]");
         expect(modal).not.toBeNull();
         expect(modal?.getAttribute("data-dept")).toBe("dept-1");
-        expect(modal?.getAttribute("data-surface")).toBe("work_unit"); // work_unit_id present → work_unit
-    });
-
-    it("uses the workspace surface when no work_unit_id", () => {
-        const el = render(<CreateLeadEventHost />);
-        fireOpen({ department_id: "dept-1" });
-        expect(el.querySelector("[data-create-lead-modal]")?.getAttribute("data-surface")).toBe("workspace");
-    });
-
-    it("ignores an event with no department (Create Lead needs a target department)", () => {
-        const el = render(<CreateLeadEventHost />);
-        fireOpen({ work_unit_id: "wu-1" });
-        expect(el.querySelector("[data-create-lead-modal]")).toBeNull();
+        expect(modal?.getAttribute("data-surface")).toBe("work_unit");
+        expect(startSpy).not.toHaveBeenCalled();
     });
 });

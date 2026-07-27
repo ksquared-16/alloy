@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import type { IdentityRecordVM, IdentityDisclosureDepth, IdentityFieldRowVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import { identityRowsForDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityDisclosureVM";
@@ -29,6 +29,8 @@ type Props = {
     onLinkField?: (fieldRef: string) => void;
     onActivate?: (recordId: string) => void;
     dataAttr?: string;
+    /** Replaces default IdentityAvatar when provided (composer upload slot). */
+    avatarSlot?: ReactNode;
 };
 
 function collectEditableFieldRefs(rows: IdentityFieldRowVM[]): string[] {
@@ -63,6 +65,7 @@ export default function IdentityRecordSummary({
     onLinkField,
     onActivate,
     dataAttr,
+    avatarSlot,
 }: Props) {
     const { visibleRows, detailRows } = identityRowsForDisclosureDepth(record, depth);
     const showInlineDetails = depth === "details" || depth === "evidence";
@@ -168,13 +171,15 @@ export default function IdentityRecordSummary({
             data-identity-batch-editing={batchEditing ? "true" : undefined}
         >
             <div className="identity-record-summary__header">
-                <IdentityAvatar
-                    name={record.title}
-                    imageUrl={record.avatar?.imageUrl}
-                    visible={record.avatar?.visible !== false}
-                    role={record.avatar?.role as IdentityAvatarSemanticRole | undefined}
-                    recordId={record.id}
-                />
+                {avatarSlot ?? (
+                    <IdentityAvatar
+                        name={record.title}
+                        imageUrl={record.avatar?.imageUrl}
+                        visible={record.avatar?.visible !== false}
+                        role={record.avatar?.role as IdentityAvatarSemanticRole | undefined}
+                        recordId={record.id}
+                    />
+                )}
                 <div className="identity-record-summary__title-block min-w-0">
                     <span className="identity-record-summary__title">
                         {onActivate ? (

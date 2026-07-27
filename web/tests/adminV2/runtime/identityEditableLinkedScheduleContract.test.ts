@@ -78,7 +78,7 @@ describe("identity Editable / Linked / schedule compact", () => {
         );
     });
 
-    it("projects compact schedule with Room · Monday–Friday · from date (shared projector)", () => {
+    it("projects compact schedule with Room · Days · Effective · Time (shared projector)", () => {
         const scheduling = {
             status: "scheduled",
             child: { siteName: "North Campus" },
@@ -101,9 +101,9 @@ describe("identity Editable / Linked / schedule compact", () => {
         } as unknown as ChildScheduling;
         const compact = projectCompactScheduleForIdentity(scheduling);
         expect(compact.roomLabel).toBe("Preschool A");
-        expect(compact.daysLabel).toBe("Monday–Friday");
+        expect(compact.daysLabel).toBe("Mon–Fri");
         expect(compact.hoursLabel).toMatch(/8:00/);
-        expect(compact.compactLine).toBe("Preschool A · Monday–Friday · from Aug 1, 2026");
+        expect(compact.compactLine).toBe("Preschool A · Mon–Fri · Aug 1, 2026 · 8:00 AM–5:00 PM");
         expect(compact.scheduleLabel).toBe(compact.compactLine);
         expect(compact.compactLine).not.toContain("open-ended");
         expect(compact.compactLine).not.toContain("Full Day");

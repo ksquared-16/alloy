@@ -21,10 +21,29 @@ import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { buildRosterReadModel, type RosterReadModel } from "@/lib/scheduling/roster/buildRosterReadModel";
 import { detectStartsInWindow } from "@/lib/scheduling/problems/detectStartsThisWeek";
 import { computeTodayActivity } from "@/lib/scheduling/activity/todayActivity";
+import { computeAssignmentAttention } from "@/lib/scheduling/assignmentAttention";
+import { buildAssignmentRosterReadModel } from "@/lib/scheduling/roster/buildAssignmentRosterReadModel";
+import { loadOrgAssignmentTypes } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 import { listOperationalCalculationDefinitions } from "@/lib/operationalCalculations";
 import { readLocationSchedulingConfig } from "@/lib/locations/locationSchedulingConfig";
+import {
+    ORG_PROGRAM_CATEGORY_LABELS,
+    type OrgProgramCategoryKey,
+} from "@/lib/orchestration/placement/orgProgramCategory";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Operator-facing age-group label — never echo raw keys like `pre_k`. */
+function resolveAgeGroupOperatorLabel(raw: string | null | undefined): string | null {
+    const k = (raw ?? "").trim().toLowerCase();
+    if (!k) return null;
+    if (k in ORG_PROGRAM_CATEGORY_LABELS) {
+        return ORG_PROGRAM_CATEGORY_LABELS[k as OrgProgramCategoryKey];
+    }
+    // Already human (e.g. "Infant") — allow; snake_case keys without a label are omitted.
+    if (/^[a-z]+(?:_[a-z0-9]+)+$/.test(k)) return null;
+    return raw!.trim();
+}
 
 function addDaysYmd(ymd: string, days: number): string {
     const [y, m, d] = ymd.split("-").map(Number);
@@ -77,34 +96,37 @@ function presentRoster(model: RosterReadModel) {
             }
             if (tight) anyTight = true;
             const tone: RosterTone = breach ? "ember" : tight ? "gold" : "pine";
+            const committed = cell.occupancy ?? 0;
+            const planned = cell.plannedOccupancy ?? 0;
+            const projected = committed + planned;
             const ratioLabel =
                 cell.requiredStaff != null
-                    ? `${cell.requiredStaff} staff`
+                    ? `${cell.requiredStaff} staff required`
                     : cell.capacity != null
-                        ? `${cell.occupancy}/${cell.capacity}`
-                        : "—";
+                        ? `${projected} / ${cell.capacity} projected`
+                        : "Capacity unavailable";
             return {
                 dayKey: String(cell.weekday),
                 dayLabel: DAY_SHORT[cell.weekday],
                 occupancy: cell.occupancy,
+                planned: cell.plannedOccupancy,
+                projected,
                 capacity: cell.capacity,
+                requiredStaff: cell.requiredStaff,
                 pct,
                 ratioLabel,
                 tone,
                 state: breach ? ("breach" as const) : undefined,
                 isToday: cell.date === model.todayYmd,
+                evaluated: cell.capacity != null || cell.requiredStaff != null,
             };
         });
 
+        const anyEvaluated = cells.some((c) => c.evaluated);
         const healthTone: RosterTone = anyBreach ? "ember" : anyTight ? "gold" : "pine";
-        const healthLabel = anyBreach
-            ? `Over${breachDay != null ? ` ${DAY_SHORT[breachDay]}` : ""}`
-            : anyTight
-                ? "Tight"
-                : "Healthy";
 
         const metaParts: string[] = [];
-        const groupHint = room.ageGroupCompat ?? room.ageBandLabel;
+        const groupHint = resolveAgeGroupOperatorLabel(room.ageGroupCompat) ?? room.ageBandLabel;
         if (groupHint) metaParts.push(groupHint);
         if (room.capacity != null) metaParts.push(`holds ${room.capacity}`);
 
@@ -112,7 +134,18 @@ function presentRoster(model: RosterReadModel) {
             roomId: room.roomId,
             roomName: room.roomName,
             meta: metaParts.join(" · "),
-            health: { tone: healthTone, label: healthLabel },
+            health: {
+                tone: healthTone,
+                // Never show Healthy unless capacity/staff was evaluated.
+                // When unevaluated, omit a false "Capacity unavailable" pill — leave quiet.
+                label: anyBreach
+                    ? `Over${breachDay != null ? ` ${DAY_SHORT[breachDay]}` : ""}`
+                    : !anyEvaluated
+                      ? ""
+                      : anyTight
+                        ? "Tight"
+                        : "Healthy",
+            },
             cells,
         };
     });
@@ -262,7 +295,21 @@ export async function GET(request: NextRequest) {
                 addDaysYmd(mondayYmd(todayYmd), 6)
             );
             const activity = await computeTodayActivity(supabase, ctx.orgId, siteLocationId, todayYmd);
-            return NextResponse.json({ view, siteLocationId, unplaced, startsThisWeek, activity });
+            const assignmentAttention = await computeAssignmentAttention(
+                supabase,
+                ctx.orgId,
+                siteLocationId,
+                todayYmd,
+                unplaced.length
+            );
+            return NextResponse.json({
+                view,
+                siteLocationId,
+                unplaced,
+                startsThisWeek,
+                activity,
+                assignmentAttention,
+            });
         }
 
         if (view === "roster") {
@@ -281,6 +328,26 @@ export async function GET(request: NextRequest) {
                 todayYmd,
             });
             return NextResponse.json({ view, roster: presentRoster(model) });
+        }
+
+        if (view === "assignment_roster") {
+            const siteLocationId = param(request, "site_location_id");
+            if (!siteLocationId) {
+                return NextResponse.json({ error: "site_location_id is required", code: "invalid_input" }, { status: 400 });
+            }
+            const model = await buildAssignmentRosterReadModel(supabase, ctx.orgId, siteLocationId);
+            return NextResponse.json({
+                view,
+                siteLocationId,
+                subjects: model.subjects,
+                totalAssignments: model.totalAssignments,
+                staffReady: model.staffReady,
+            });
+        }
+
+        if (view === "assignment_types") {
+            const assignmentTypes = await loadOrgAssignmentTypes(supabase, ctx.orgId);
+            return NextResponse.json({ view, assignmentTypes });
         }
 
         if (view === "studio_config") {
@@ -310,12 +377,19 @@ export async function GET(request: NextRequest) {
             const programs = ((programRows ?? []) as { key: string; label: string | null; is_active: boolean }[])
                 .filter((p) => p.is_active)
                 .map((p) => ({ key: p.key, label: p.label?.trim() || p.key }));
+            const { loadSiteOperationalRooms } = await import(
+                "@/lib/operationalAssignments/loadSiteOperationalRooms"
+            );
+            const operationalRooms = await loadSiteOperationalRooms(supabase, ctx.orgId, siteLocationId).catch(
+                () => []
+            );
             return NextResponse.json({
                 view,
                 config: {
                     operatingDays: cfg.operatingDays,
                     scheduleTypes,
                     programs,
+                    operationalRooms,
                 },
             });
         }
@@ -368,7 +442,10 @@ export async function GET(request: NextRequest) {
                 dateStart,
                 dateEnd,
             });
-            return NextResponse.json({ view, options, range: { dateStart, dateEnd } });
+            // Echo the resolved program category back so clients that pass none can
+            // adopt the server-resolved value for subsequent client-side room filtering
+            // (e.g. re-filtering after a Category change without a full refetch).
+            return NextResponse.json({ view, options, range: { dateStart, dateEnd }, programCategoryId });
         }
 
         if (view === "projection") {

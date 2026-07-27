@@ -2,8 +2,8 @@
  * Code-built default `LayoutDoc` for the Enrollment Focus Panel Summary.
  *
  * Enrollment default composition (visibility model):
- *   Visible — What's Next, Household, Children, Billing Preview
- *   Linked  — Scheduling, Tour, Communications, Milestones
+ *   Visible — What's Next, Household, Children, Assignments, Billing Preview
+ *   Linked  — Tour, Communications, Milestones
  *
  * Linked cards are fully configured sections but omitted from the published grid
  * so they do not consume initial Focus Panel space.
@@ -44,8 +44,8 @@ const DEFAULT_CARD_SEEDS: readonly DefaultCardSeed[] = [
     { key: "current_work", span: 1, density: "standard", tier: "work", visibility: "visible" },
     { key: "household", span: 1, density: "standard", tier: "reference", visibility: "visible" },
     { key: "children", span: 1, density: "standard", tier: "reference", visibility: "visible" },
+    { key: "scheduling", span: 1, density: "compact", tier: "reference", visibility: "visible" },
     { key: "billing_preview", span: 1, density: "compact", tier: "context", visibility: "visible" },
-    { key: "scheduling", span: 1, density: "compact", tier: "reference", visibility: "linked" },
     { key: "tour_summary", span: 1, density: "compact", tier: "context", visibility: "linked" },
     { key: "communications", span: 1, density: "standard", tier: "reference", visibility: "linked" },
     { key: "milestones", span: 1, density: "compact", tier: "context", visibility: "linked" },
@@ -60,7 +60,9 @@ export function focusPanelSummaryDefaultGridLayout(): FocusPanelGridLayout {
     const childrenRows = defaultRowSpanForCard("children");
     const currentWorkRows = defaultRowSpanForCard("current_work");
     const billingRows = defaultRowSpanForCard("billing_preview");
+    const schedulingRows = defaultRowSpanForCard("scheduling");
     const rightStackRows = householdRows + childrenRows;
+    const mainRows = Math.max(currentWorkRows, rightStackRows);
 
     return {
         columns: 12,
@@ -70,7 +72,7 @@ export function focusPanelSummaryDefaultGridLayout(): FocusPanelGridLayout {
                 colStart: 1,
                 colSpan: 6,
                 rowStart: 1,
-                rowSpan: Math.max(currentWorkRows, rightStackRows),
+                rowSpan: mainRows,
             },
             { card: "household", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: householdRows },
             {
@@ -81,11 +83,18 @@ export function focusPanelSummaryDefaultGridLayout(): FocusPanelGridLayout {
                 rowSpan: childrenRows,
             },
             {
-                card: "billing_preview",
+                card: "scheduling",
                 colStart: 1,
-                colSpan: 12,
-                rowStart: 1 + Math.max(currentWorkRows, rightStackRows),
-                rowSpan: billingRows,
+                colSpan: 6,
+                rowStart: 1 + mainRows,
+                rowSpan: schedulingRows,
+            },
+            {
+                card: "billing_preview",
+                colStart: 7,
+                colSpan: 6,
+                rowStart: 1 + mainRows,
+                rowSpan: Math.max(billingRows, schedulingRows),
             },
         ],
     };

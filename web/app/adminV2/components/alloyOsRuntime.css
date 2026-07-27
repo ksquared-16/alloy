@@ -3359,6 +3359,7 @@ html[data-alloy-os-runtime-split="true"]
  * ring, matching the app's input doctrine (no rich date picker exists to adopt). */
 .alloy-os-sched-input {
   font-size: 13px;
+  font-weight: 500;
   padding: 7px 10px;
   border-radius: 8px;
   border: 1px solid #e5e9ef;
@@ -3366,6 +3367,13 @@ html[data-alloy-os-runtime-split="true"]
   color: #273f52;
   box-sizing: border-box;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* Days + Daily hours share one band on comfortable widths; stack on narrow panels. */
+@media (max-width: 420px) {
+  .alloy-os-sched-days-hours-band {
+    grid-template-columns: 1fr !important;
+  }
 }
 .alloy-os-sched-input:hover:not(:disabled) {
   border-color: #cfd6e0;
@@ -3746,7 +3754,11 @@ html[data-alloy-os-runtime-split="true"]
   transition: outline-color var(--motion-instant, 100ms) ease;
 }
 .fp-layout-surface--composing .fp-layout-field--composing {
-  padding-bottom: 2px;
+  /* Chrome (toolbar) is in document flow — never overlap neighbor fields. */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 .fp-layout-surface--composing .fp-layout-field:hover,
 .fp-layout-surface--composing .fp-layout-field.is-selected {
@@ -3756,13 +3768,15 @@ html[data-alloy-os-runtime-split="true"]
   opacity: 0.55;
 }
 .fp-field-instance__chrome {
-  position: absolute;
-  inset: auto 0 0 0;
-  z-index: 4;
+  /* In-flow layout chrome: reserved height so fields never occupy the same space. */
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  margin-top: 2px;
   pointer-events: none;
+  flex: 0 0 auto;
 }
 .fp-field-instance__toolbar {
   display: flex;
@@ -4100,6 +4114,19 @@ html[data-alloy-os-runtime-split="true"]
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
+}
+.fp-child-avatar--composing {
+  min-width: 120px;
+}
+.fp-child-avatar__hidden {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px dashed var(--alloy-os-border, #e5e9ef);
+  color: var(--alloy-os-text-tertiary, #9ca3af);
 }
 .fp-child-avatar__controls {
   display: flex;
@@ -4473,6 +4500,16 @@ html[data-alloy-os-runtime-split="true"]
   margin: 8px 0 0;
   font-size: 10.5px;
   color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-card-edit__avatar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0 8px;
+}
+.alloy-os-card-edit__avatar .alloy-os-card-edit__hint {
+  flex-basis: 100%;
+  margin-top: 2px;
 }
 
 /* — Live edit form (Household primary contact, Edit depth) — */
@@ -4860,21 +4897,73 @@ html[data-alloy-os-runtime-split="true"]
 /* ── Children Summary: scannable per-child mini-profile (details stack) ── */
 .alloy-os-children__roster { display: flex; flex-direction: column; gap: 1px; }
 .alloy-os-children__summary-row {
-  display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left;
-  padding: 4px 6px; border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+  /* Column stack — never put the "Needs …" chip beside the field grid.
+     A horizontal sibling chip used to shrink each child's grid differently,
+     so Gender/Program columns drifted between Blake vs Jarek. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
 }
 .alloy-os-children__roster .identity-record-summary {
   padding: 2px 0;
   gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+/* Keep avatar column fixed so photo vs initials rows stay aligned. */
+.alloy-os-children__roster .identity-record-summary__header {
+  align-items: center;
+}
+.alloy-os-children__roster .identity-record-summary__header > .identity-avatar,
+.alloy-os-children__roster .identity-record-summary__header > .alloy-os-card-avatar,
+.alloy-os-children__roster .identity-record-summary__header > .identity-avatar-editable,
+.alloy-os-children__roster .identity-record-summary__header > .fp-child-avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  align-self: center;
 }
 .alloy-os-children__roster .identity-record-summary__title-block {
   gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
+/* Shared column tracks across every child so half-width fields line up. */
+.alloy-os-children__roster .identity-field-grid {
+  width: 100%;
+}
+.alloy-os-children__roster .identity-field-grid__row--pair {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.alloy-os-children__roster .identity-field-grid__row--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .alloy-os-children__summary-row:hover { background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 5%, #fff); }
 .alloy-os-children__summary-main { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; }
 .alloy-os-children__summary-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .alloy-os-children__summary-meta { display: flex; flex-direction: column; gap: 2px; }
 .alloy-os-children__summary-line { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--alloy-os-text-secondary, #4b5563); }
+/* Keep the needs chip top-right without participating in field-grid width. */
+.alloy-os-children__summary-row > .alloy-os-children__summary-line[data-children-missing] {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  max-width: 42%;
+  justify-content: flex-end;
+  text-align: right;
+  font-size: 11px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  pointer-events: none;
+}
 .alloy-os-children__summary-wrap { display: flex; flex-direction: column; gap: 2px; }
 .alloy-os-children__details-toggle {
   align-self: flex-start; margin: 0 0 2px 54px; padding: 0; border: 0; background: transparent;
@@ -7436,6 +7525,105 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   min-width: 0;
 }
 
+.identity-avatar-editable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.identity-avatar-zoom-trigger {
+  all: unset;
+  display: inline-flex;
+  cursor: zoom-in;
+  border-radius: 999px;
+  line-height: 0;
+}
+.identity-avatar-zoom-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent);
+  outline-offset: 2px;
+}
+.identity-avatar-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, #0f172a 55%, transparent);
+  backdrop-filter: blur(2px);
+}
+.identity-avatar-zoom__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: min(92vw, 420px);
+  padding: 16px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
+}
+.identity-avatar-zoom__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--alloy-os-text, #0f172a);
+}
+.identity-avatar-zoom__image {
+  display: block;
+  width: min(72vw, 320px);
+  height: min(72vw, 320px);
+  object-fit: cover;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+.identity-avatar-zoom__close {
+  all: unset;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--alloy-os-bend-pine, #00a283);
+  padding: 4px 8px;
+}
+.identity-avatar-zoom__close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent);
+  outline-offset: 2px;
+}
+.identity-avatar-editable__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  max-width: 72px;
+}
+.identity-avatar-editable__btn {
+  all: unset;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--alloy-os-bend-pine, #00a283);
+  text-align: center;
+}
+.identity-avatar-editable__btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.identity-avatar-editable__btn--muted {
+  color: var(--alloy-os-text-secondary, #6b7280);
+  font-weight: 550;
+}
+.identity-avatar-editable__error {
+  margin: 0;
+  font-size: 10px;
+  color: #9a3412;
+  max-width: 88px;
+  text-align: center;
+}
+
 .identity-record-summary__title-block {
   display: grid;
   flex: 1 1 auto;
@@ -7492,6 +7680,20 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   padding: 0 2px;
   flex-shrink: 0;
   transition: opacity 120ms ease;
+}
+
+.identity-field-value__saved {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-accent, #2f6f4f);
+  letter-spacing: 0.01em;
+  animation: identity-field-saved-in 160ms ease-out;
+}
+
+@keyframes identity-field-saved-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .identity-field-value--inline-editable:hover .identity-field-value__edit,
@@ -7686,6 +7888,15 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+.identity-collection-context__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+.identity-collection-context__details {
+  margin-left: 2.25rem;
 }
 
 .identity-field-grid__row--pair {

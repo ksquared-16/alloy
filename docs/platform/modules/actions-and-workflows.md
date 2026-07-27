@@ -172,7 +172,7 @@ For compatibility, legacy child rules without timing are still downgraded to rec
 |-------|----------|
 | **Business Process** | Which actions are available for a stage/process (DB placements + lifecycle builder matrix) |
 | **Experience Builder** | Where actions appear on a layout surface (contact row, section, related list) |
-| **BOS** | Can propose/fill canonical action requests (adapters shipped; full rail UI wiring is follow-up) |
+| **BOS** | Command-session placement for registered commands (Create Lead V1: Conversation + Form over one draft → `executeCreateLeadCommand`) |
 | **Executors** | Perform durable writes (admin execute, relationship wizard, dedicated modals) |
 
 The **same canonical action key** may launch from:
@@ -422,7 +422,11 @@ Product language is **Lead**, not **Inquiry**. The internal `new_inquiry` status
 ## BOS readiness
 
 - Relationship and enrollment status adapters produce **canonical action requests** with confirmation policy.
-- Full BOS rail UI wiring for action proposals is **follow-up** — executors and modals are runtime-ready from drawer/rail/layout paths.
+- **Create Lead (V1 actionable interface):** Actions placements start a BOS command session by default
+  (`dispatchStartBosCommandSession` / `CreateLeadEventHost`). Conversation and Form share one draft;
+  confirm executes through `executeCreateLeadCommand`. Legacy modal host remains behind
+  `NEXT_PUBLIC_BOS_CREATE_LEAD_SESSION=0`. Additional registered-command adapters beyond Create Lead
+  remain follow-up.
 
 ---
 
@@ -565,14 +569,15 @@ guard (`isOperatorSafeCopy`) proving no payload keys / action keys / runtime enu
 `CreateLeadModal.tsx` is protected and not rewritten; convergence is at the model level with
 modal-body convergence documented as the next step.
 
-**First end-to-end operator wiring (V3).** Every Create Lead entry point (Work Unit Actions,
-BOS-launched intake, manual rail) now renders the platform host
-`CreateLeadCommandSurface.tsx`, which hosts the unchanged `CreateLeadModal` as the intake body
-but owns execution and success. Execution runs through the single shared client adapter
+**First end-to-end operator wiring (V3 → V6).** Create Lead still has **one** execute path:
 `executeCreateLeadCommand.ts` → `POST /api/admin/actions/execute` registered `create_lead`
-(no forked mutation path); success/refresh derive from `buildCreateLeadSuccess`. Replacing the
-modal's visible chrome with `CommandSurfaceShell` remains deferred to avoid regressing the rich
-intake.
+(no forked mutation path); success/refresh derive from `buildCreateLeadSuccess`. **Primary
+operator entry (V6):** Work Unit / Workspace Actions open a BOS command session (Conversation +
+Form over `BosCommandDraft`, then Processing identity review / success in-session). **Compatibility
+entry:** `CreateLeadCommandSurface` (rich `CreateLeadModal` body) when
+`NEXT_PUBLIC_BOS_CREATE_LEAD_SESSION=0`. Form mode inside the session reuses the same strong
+gather controls (`ActionWorkspaceGatherFields`) so intake richness is not replaced by a weaker
+generic form.
 
 See `docs/sprints/archive/06_2026/command_surface_v3.md`, `command_surface_v2.md`, `command_surface_v1.md`.
 
