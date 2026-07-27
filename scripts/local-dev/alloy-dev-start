@@ -87,14 +87,22 @@ main() {
   local trusted_source
   trusted_source="$(alloy_server_env_source_path)"
 
-  alloy_info "Starting ${ALLOY_DEV_COMMAND} in ${web_dir} on port ${port}..."
+  # Pin the dev server to NATIVE arm64 on Apple Silicon so a universal node can't run under
+  # Rosetta/x64 and fail to load the arm64 native modules (lightningcss/next-swc mismatch →
+  # spurious CSS build error). No-op on Intel/Linux. When wrapping we launch the SYSTEM
+  # /bin/bash (universal): the PATH `bash` may be an x86_64-only Homebrew build.
+  local arch_prefix launch_sh="bash"
+  arch_prefix="$(alloy_native_arch_prefix)"
+  [[ -n "$arch_prefix" ]] && launch_sh="/bin/bash"
+  alloy_warn_node_modules_arch "$web_dir"
+  alloy_info "Starting ${arch_prefix}${ALLOY_DEV_COMMAND} in ${web_dir} on port ${port}..."
   (
     cd "$web_dir"
     export PORT="$port"
     export NEXT_PUBLIC_APP_URL="$url"
     export NODE_OPTIONS
     # Inherited env includes agent-safe + trusted server vars (not on argv).
-    nohup bash -c "$ALLOY_DEV_COMMAND" >>"$log_path" 2>&1 &
+    nohup ${arch_prefix}${launch_sh} -c "$ALLOY_DEV_COMMAND" >>"$log_path" 2>&1 &
     echo $! >"$pid_path"
   )
 
