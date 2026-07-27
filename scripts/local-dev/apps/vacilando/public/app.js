@@ -17,7 +17,6 @@ const STATUS_ACC = { running: "var(--run)", review: "var(--review)", blocked: "v
 // so it stays meaningful even when the projection is degraded under load.
 const ACTIVITY = { working: { label: "Working", k: "run" }, idle: { label: "Idle", k: "idle" }, done: { label: "Done", k: "ok" }, paused: { label: "Paused", k: "paused" } };
 function activityPill(sp) {
-  if (sp.is_director) return `<span class="apill dir" title="Vacilando control plane — infrastructure, not a work slot"><span class="adot"></span>Director</span>`;
   const a = ACTIVITY[sp.activity];
   if (!a) return ""; // unknown / not yet enriched — show nothing rather than guess
   const when = sp.activity === "working" && sp.last_activity_ms ? ` · ${ago(sp.last_activity_ms)}` : "";
@@ -1262,7 +1261,7 @@ function conversationInbox() {
       <div class="dintent"><input id="d-intent" class="d-intent" placeholder="e.g. Improve Scheduling   ·   Redesign Financials   ·   Access &amp; Roles V2" value="${intent}" />
         <select id="d-runtarget" class="d-runtarget" title="Which worker runs this — Auto picks a free one">
           <option value="auto"${!state._runTarget || state._runTarget === "auto" ? " selected" : ""}>Auto worker</option>
-          ${(state.snap?.sprints || []).filter((s) => !s.is_director).map((s) => `<option value="${s.slot}"${state._runTarget === String(s.slot) ? " selected" : ""}>slot ${s.slot} · ${esc(shortBranch(s.branch, s.worktree))}${s.activity === "working" ? " (busy)" : ""}</option>`).join("")}
+          ${(state.snap?.sprints || []).map((s) => `<option value="${s.slot}"${state._runTarget === String(s.slot) ? " selected" : ""}>slot ${s.slot} · ${esc(shortBranch(s.branch, s.worktree))}${s.activity === "working" ? " (busy)" : ""}</option>`).join("")}
         </select>
         <button class="btn go" data-dprepare>Start</button></div>
       ${def ? `<div class="ddefine"><span>Director hasn't worked on <b>${esc(def.name || def.intent)}</b> before.</span>
@@ -1521,7 +1520,6 @@ async function prepareDirectorMission() {
     if (data.reason === "no_capability") { state._dirDefine = { intent, name: dirCapName(intent) }; render(true); return; }
     if (data.error === "all_workers_busy" || data.error === "no_workers") { toast("err", "No free worker", data.detail || "every worker is busy — pick one explicitly or wait"); return; }
     if (data.error === "slot_not_occupied") { toast("err", "No worker there", data.detail); return; }
-    if (data.error === "director_slot") { toast("err", "That's the Director", data.detail); return; }
     toast("err", "Couldn't prepare", data.detail || data.error || status); return;
   }
   state._dirIntent = ""; state._dirDefine = null;
