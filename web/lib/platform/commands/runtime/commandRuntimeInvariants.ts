@@ -47,7 +47,8 @@ export function assertCommandSnapshotInvariants(
         if (snapshot.destructivePreparation) {
             const allowlisted =
                 snapshot.canonicalCapabilityKey === "make_primary_contact" ||
-                snapshot.canonicalCapabilityKey === "delete_lead";
+                snapshot.canonicalCapabilityKey === "delete_lead" ||
+                snapshot.canonicalCapabilityKey === "cancel_tour";
             if (allowlisted && snapshot.destructivePreparation.facadeCommitEnabled !== true) {
                 errors.push(
                     `${snapshot.canonicalCapabilityKey} must report facadeCommitEnabled true when allowlisted`

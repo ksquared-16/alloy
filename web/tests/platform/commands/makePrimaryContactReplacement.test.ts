@@ -69,11 +69,14 @@ describe("P4.S2 make_primary_contact gate", () => {
         expect(assertDestructiveCommitAllowed({ capabilityKey: "make_primary_contact" }).allowed).toBe(
             true
         );
-        for (const key of ["archive_lead", "cancel_tour", "withdraw_child"]) {
+        for (const key of ["archive_lead", "withdraw_child"]) {
             expect(isDestructiveFacadeCommitAllowlisted(key)).toBe(false);
             expect(assertDestructiveCommitAllowed({ capabilityKey: key }).allowed).toBe(false);
             expect(isCommandRuntimeFacadeExecutionSupported(key)).toBe(false);
         }
+        expect(isDestructiveFacadeCommitAllowlisted("cancel_tour")).toBe(true);
+        expect(assertDestructiveCommitAllowed({ capabilityKey: "cancel_tour" }).allowed).toBe(true);
+        expect(isCommandRuntimeFacadeExecutionSupported("cancel_tour")).toBe(true);
         expect(isDestructiveFacadeCommitAllowlisted("delete_lead")).toBe(true);
         expect(assertDestructiveCommitAllowed({ capabilityKey: "delete_lead" }).allowed).toBe(true);
         expect(isDestructiveReplacementFacadeSupported("make_primary_contact")).toBe(true);

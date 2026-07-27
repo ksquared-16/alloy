@@ -30,6 +30,11 @@ import {
     type DeleteLeadAdapterDeps,
 } from "@/lib/platform/commands/runtime/adapters/deleteLeadAdapter";
 import {
+    commitCancelTourViaAdapter,
+    previewCancelTourViaAdapter,
+    type CancelTourAdapterDeps,
+} from "@/lib/platform/commands/runtime/adapters/cancelTourAdapter";
+import {
     commitMakePrimaryContactViaAdapter,
     previewMakePrimaryContactViaAdapter,
     type PrimaryContactReplacementDeps,
@@ -78,6 +83,7 @@ export type ExecuteCommandInvocationOptions = {
         RelationshipExecutionDeps &
         PrimaryContactReplacementDeps &
         DeleteLeadAdapterDeps &
+        CancelTourAdapterDeps &
         TourExecutionDeps;
 };
 
@@ -843,6 +849,124 @@ export async function executeCommandInvocation(
                 {
                     code: "delegated_delete_lead",
                     message: `opportunity=${committed.result.opportunity_id} audit=${committed.result.audit_logged}`,
+                },
+            ],
+        };
+    }
+
+    // ── Destructive cancel (P5.S2 cancel_tour) ────────────────────────────────
+    if (
+        isDestructiveFacadeSupported(capability.canonicalCommandKey) &&
+        capability.canonicalCommandKey === "cancel_tour"
+    ) {
+        if (request.mode === "preview") {
+            const previewed = await previewCancelTourViaAdapter({
+                orgId: server.orgId,
+                supabase: server.supabase,
+                entityType,
+                entityId,
+                inputValues: invocation.inputValues,
+                trustedServerContext: true,
+                deps,
+            });
+            if (!previewed.ok) {
+                return fail({
+                    status:
+                        previewed.code === "permission_denied" ||
+                        previewed.code === "untrusted_context"
+                            ? "unauthorized"
+                            : previewed.code === "booking_not_found"
+                              ? "unavailable"
+                              : "blocked",
+                    invocationId,
+                    canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                    executionOwner: "tour_domain",
+                    code: previewed.code,
+                    operatorMessage: previewed.operatorMessage,
+                });
+            }
+            return {
+                ok: true,
+                status: "previewed",
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "tour_domain",
+                invocationId,
+                impactPreview: previewed.preview,
+                diagnostics: [
+                    {
+                        code: "destructive_cancel_tour_preview",
+                        message: `key=cancel_tour terminal=${previewed.state.terminalKind ?? "none"}`,
+                    },
+                ],
+            };
+        }
+
+        const token = (request.previewToken ?? "").trim();
+        if (!token) {
+            return fail({
+                status: "invalid",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "tour_domain",
+                code: "preview_token_required",
+                operatorMessage: "A preview token is required to commit this command.",
+            });
+        }
+
+        const committed = await commitCancelTourViaAdapter({
+            orgId: server.orgId,
+            userId: server.userId,
+            supabase: server.supabase,
+            entityType,
+            entityId,
+            inputValues: invocation.inputValues,
+            previewToken: token,
+            confirmation: request.confirmation ?? { confirmed: false },
+            trustedServerContext: true,
+            invocationId,
+            guard,
+            deps,
+        });
+
+        if (!committed.ok) {
+            return fail({
+                status:
+                    committed.code === "permission_denied" ||
+                    committed.code === "untrusted_context"
+                        ? "unauthorized"
+                        : committed.code === "confirmation_required"
+                          ? "confirmation_required"
+                          : committed.code === "booking_not_found"
+                            ? "unavailable"
+                            : committed.code === "stale_preview" ||
+                                committed.code === "already_canceled" ||
+                                committed.code === "already_completed" ||
+                                committed.code === "already_no_show" ||
+                                committed.code === "invalid_inputs"
+                              ? "invalid"
+                              : committed.delegated
+                                ? "failed"
+                                : "blocked",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "tour_domain",
+                code: committed.code,
+                operatorMessage: committed.operatorMessage,
+                delegated: committed.delegated,
+            });
+        }
+
+        return {
+            ok: true,
+            status: "committed",
+            canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+            executionOwner: "tour_domain",
+            invocationId,
+            cancelTourResult: committed.result,
+            diagnostics: [
+                {
+                    code: "delegated_cancel_tour",
+                    message: `booking=${committed.result.booking_id}`,
                 },
             ],
         };

@@ -478,7 +478,8 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
         expect(isCommandRuntimeFacadeExecutionSupported("create_lead")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("close_lead")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("waitlist_child")).toBe(true);
-        expect(isCommandRuntimeFacadeExecutionSupported("cancel_tour")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("cancel_tour")).toBe(true);
+        expect(isCommandRuntimeFacadeExecutionSupported("complete_tour")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("open_record")).toBe(false);
     });
 

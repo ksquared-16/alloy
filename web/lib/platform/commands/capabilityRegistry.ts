@@ -460,8 +460,8 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         destructiveKind: "cancel",
         implementationStatus: "production",
         reason:
-            "Tour REST cancel remains production owner. P4.S1: cancel policy classified; " +
-            "facade commit disabled. Preview/confirm cutover deferred.",
+            "P5.S2: facade destructive preview + strong confirm → cancelTourBooking. " +
+            "Direct POST .../bookings/:id/cancel remains compatibility (Option A). Reopen Tour unavailable.",
     }),
     def({
         capabilityKey: "complete_tour",

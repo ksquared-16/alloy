@@ -52,7 +52,7 @@ Recovery: `restore` | `recreate` | `schedule_new` | `manual_support` | `none` (e
 | `delete_lead` | delete | irreversible | typed_confirm | sensitive_destructive | none | admin_action | false |
 | `archive_lead` | archive | reversible | strong_confirm | standard_destructive | none | none (stub) | false |
 | `make_primary_contact` | **replace** | conditionally_reversible | strong_confirm | replacement | restore | admin_action | false |
-| `cancel_tour` | cancel | conditionally_reversible | strong_confirm | standard_destructive | schedule_new | tour_domain | false |
+| `cancel_tour` | cancel | conditionally_reversible | strong_confirm | standard_destructive | schedule_new | tour_domain | true (P5.S2) |
 | `withdraw_child` | withdraw | conditionally_reversible | strong_confirm | sensitive_destructive | manual_support | none (stub) | false |
 
 ## Preview correlation strategy
@@ -91,7 +91,7 @@ Focused: `web/tests/platform/commands/destructiveCommandFoundation.test.ts` (+ P
 | Key | Facade commit |
 |-----|---------------|
 | `archive_lead` | disabled |
-| `cancel_tour` | disabled |
+| `cancel_tour` | enabled (P5.S2) |
 | `withdraw_child` | disabled |
 
 ---
@@ -205,7 +205,7 @@ P0–P4.S3 focused + delete domain: **14 files / 173 passed**. Production `npm r
 
 ## Remaining destructive (commit disabled)
 
-`archive_lead`, `cancel_tour`, `withdraw_child`.
+`archive_lead`, `withdraw_child`.
 
 ---
 
@@ -260,9 +260,12 @@ Focused Commands + Disposition B + delete domain + createLeadRequirednessParity 
 | `make_primary_contact` | replace | yes | yes | `setHouseholdPrimaryContactForCustomer` | migrated |
 | `delete_lead` | delete | yes | yes | `executeDeleteOpportunityLead` | migrated |
 | `archive_lead` | archive | no | no | none (stub) | **explicit unavailable (B)** |
-| `cancel_tour` | cancel | policy only | no | Tour domain | P5 |
+| `cancel_tour` | cancel | yes | **yes (P5.S2)** | `cancelTourBooking` | migrated |
 | `withdraw_child` | withdraw | policy only | no | none / future | deferred |
+| `complete_tour` | — | no | no | Tour domain | later |
+| `no_show_tour` | — | no | no | Tour domain | later |
+| `reopen_tour` | — | no | no | none | unavailable |
 
-**P4 exit:** Replacement proven. Hard deletion proven. Archive explicit Disposition B. Tour cancellation → P5. Withdrawal deferred. No silent executable destructive identities.
+**P4 exit:** Replacement proven. Hard deletion proven. Archive explicit Disposition B. Tour cancel migrated in P5.S2. Withdrawal deferred. No silent executable destructive identities.
 
-**P5 handoff:** `cancel_tour` (+ tour family convergence). Restore/Archive Lead product remains a future phase after domain design — not invented in Commands P4.
+**P5 handoff:** Tour reschedule (P5.S1) and cancel (P5.S2) shipped. Remaining: complete/no-show/schedule_tour; reopen unavailable. Restore/Archive Lead product remains future work.

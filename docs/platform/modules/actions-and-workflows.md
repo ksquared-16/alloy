@@ -106,6 +106,9 @@ disabled**. No Delete Lead / Make Primary / Cancel Tour production cutover in P4
   owner remains globally false). Direct booking reschedule route unchanged. `cancel_tour` still
   commit-disabled. Automations may later invoke the same Command / react to Tour domain events;
   Automations do not own Tour mutation execution.
+- **P5.S2:** `cancel_tour` — destructive preview + strong confirm → `cancelTourBooking`. Direct
+  `POST .../bookings/:id/cancel` remains compatibility (Option A). Recovery: schedule a new Tour
+  (`reopen_tour` unavailable). Complete / no-show remain uncut.
 
 ### Destructive / replacement Command policy (P4.S1)
 

@@ -32,7 +32,7 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 | `add_sibling` | same | adapted | admin_action | organization_command_catalog | yes | Product hub | Overlaps add_child |
 | `schedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Not RegisteredAction |
 | `reschedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | **P5.S1** | Facade → `rescheduleTourBooking`; direct POST reschedule remains |
-| `cancel_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 / P4.S1 | **cancel** policy classified; facade commit disabled; tour REST owner |
+| `cancel_tour` | same | adapted | tour_domain | organization_command_catalog | yes | **P5.S2** | Destructive facade → `cancelTourBooking`; direct POST cancel remains |
 | `complete_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | |
 | `no_show_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Alias `mark_tour_no_show` |
 | `reopen_tour` | same | unavailable | none | hidden | n/a | P5 contract | Execute deferred |
@@ -319,7 +319,7 @@ Layout contact-row → confirm modal → client PATCH → `setHouseholdPrimaryCo
 | `delete_lead` | delete | typed_confirm | sensitive_destructive | none | **enabled (P4.S3)** |
 | `archive_lead` | archive | strong_confirm | standard_destructive | none | disabled |
 | `make_primary_contact` | replace | strong_confirm | replacement | restore | **enabled (P4.S2)** |
-| `cancel_tour` | cancel | strong_confirm | standard_destructive | schedule_new | disabled |
+| `cancel_tour` | cancel | strong_confirm | standard_destructive | schedule_new | **enabled (P5.S2)** |
 | `withdraw_child` | withdraw | strong_confirm | sensitive_destructive | manual_support | disabled |
 
 ## Preview correlation
@@ -380,3 +380,16 @@ HMAC-SHA256 compact claims; TTL + version; no DB store; not an idempotency key.
 | Direct API | Compatibility retained |
 | Cancel | Still destructive commit-disabled |
 | Automation | Documented consumer/invoker only — not implemented |
+
+---
+
+# P5.S2 — Cancel Tour Destructive Cutover
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p5-tour-convergence-msn_188e8bea6fb6de28dd21.md` (P5.S2) |
+| Facade | **Enabled** for `cancel_tour` (destructive allowlist) |
+| Domain | `cancelTourBooking` (unchanged) |
+| Direct API | Compatibility retained |
+| Recovery | schedule_new; reopen unavailable |

@@ -96,12 +96,12 @@ describe("executeCommandInvocation (P1.S2)", () => {
         expect(runSpy.mock.calls[0][3]).toBe("preview");
     });
 
-    it("rejects unknown, placeholder, unadapted relationship, tour, navigation, processing, mark_lost, and enrollment aliases", async () => {
+    it("rejects unknown, placeholder, unadapted relationship, navigation, processing, mark_lost, and enrollment aliases", async () => {
         const cases = [
             "totally_unknown_xyz",
             "send_message_placeholder",
             "add_family_member",
-            "cancel_tour",
+            "complete_tour",
             "open_record",
             "processing.create_lead",
             "mark_lost",
@@ -144,13 +144,14 @@ describe("executeCommandInvocation (P1.S2)", () => {
     });
 
     it("does not let client select execution owner via body fields on invocation", async () => {
-        // Spoof attempt: cancel_tour is tour-owned and not facade-adapted.
-        expect(isCommandRuntimeFacadeExecutionSupported("cancel_tour")).toBe(false);
+        // Spoof attempt: cancel_tour is facade-adapted but still requires preview token + confirm;
+        // RegisteredAction must never run.
+        expect(isCommandRuntimeFacadeExecutionSupported("cancel_tour")).toBe(true);
         const result = await executeCommandInvocation({
             request: {
                 invocation: invocation({
                     commandKey: "cancel_tour",
-                    inputValues: { execution_owner: "registered_action" },
+                    inputValues: { execution_owner: "registered_action", booking_id: "bk-1" },
                 }),
                 mode: "execute",
                 executionSubject: { entityType: "opportunity", entityId: "opp-1" },

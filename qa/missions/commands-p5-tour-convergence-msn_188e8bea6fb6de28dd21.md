@@ -24,7 +24,7 @@ Worktree: Slot 1 Commands (`agent/cursor/1-commands-system-inventory`)
 | `schedule_tour` | tour_domain | Tour booking create API / service | production | disabled | later P5 |
 | `reschedule_tour` | tour_domain | `rescheduleTourBooking` | production | **enabled (P5.S1)** | — |
 | `confirm_tour` | registered_action | RegisteredAction (+ domain confirm path) | production | enabled (RA) | unchanged |
-| `cancel_tour` | tour_domain | `cancelTourBooking` | production | destructive commit **disabled** | P5.S2 |
+| `cancel_tour` | tour_domain | `cancelTourBooking` | production | **enabled destructive (P5.S2)** | — |
 | `complete_tour` | tour_domain | `completeTourBooking` (domain) | production | disabled | later P5 |
 | `no_show_tour` / `mark_tour_no_show` | tour_domain | domain no-show transition | production | disabled | later P5 |
 | `reopen_tour` | none | — | unavailable | unavailable | contract-only |
@@ -101,6 +101,57 @@ Production `npm run typecheck`: **pass**. `typecheck:tests`: deferred (machine p
 
 | Slice | Focus |
 |-------|-------|
-| P5.S2 | `cancel_tour` destructive cutover |
+| P5.S2 | `cancel_tour` destructive cutover — **shipped** (see below) |
 | Later | `complete_tour`, `no_show_tour`, `schedule_tour` convergence |
 | Deferred | `reopen_tour` execution |
+
+---
+
+# P5.S2 — Cancel Tour Destructive Cutover
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Capability | `cancel_tour` |
+| Impact | `cancel` |
+| Subject grain | `tour_bookings.id` (booking retained) |
+| Final executor | `cancelTourBooking` |
+| Adapter | `web/lib/platform/commands/runtime/adapters/cancelTourAdapter.ts` |
+| Confirmation | `strong_confirm` + preview token |
+| Recovery | `schedule_new` (not reopen) |
+| Direct API | `POST .../bookings/:id/cancel` unchanged (Option A) |
+
+## Semantics (proven)
+
+Soft cancel: status → `canceled`, row retained. Idempotent domain return for already `canceled`/`completed`/`no_show` — facade blocks terminal states before delegation. Optional `cancel_reason`. Reminders canceled via `orchestrateTourBookingCanceled` (`reminderAction: cancel`). Event `tour_canceled`. Opportunity integration kind `canceled`. Does not delete lead, withdraw participants, or create a new booking.
+
+## Fingerprint
+
+`sha256(bookingId|status|start|end|tz|location)[:32]` in preview token version_match.
+
+## Exactly-once
+
+Facade commit → adapter → `cancelTourBooking` once; no reschedule; no direct writes; no orchestrator import.
+
+## Behavior-parity matrix
+
+| Concern | Direct POST cancel | Facade path | Notes |
+|---------|-------------------|-------------|-------|
+| Authorization | requireAdminOrOps | same floor + permission class | preserved |
+| Booking lookup | org-scoped | same | preserved |
+| Status eligibility | domain terminal no-op | explicit blockers pre-delegate | strengthened clarity |
+| Cancellation reason | optional body | optional payload | preserved |
+| Booking mutation | cancelTourBooking | same | preserved |
+| Reminder / comms | domain orchestrator | same | preserved |
+| Event/audit | domain | same | preserved |
+| Response | `{ booking }` | compatible + envelope | preserved |
+| Confirmation | UI / none on API | preview + strong confirm + token | **intentionally strengthened** |
+
+## Staging
+
+0 behind at start; no reconcile required. Pre-edit P0–P5.S1: 112 passed.
+
+## Tests
+
+P0–P5.S2 Commands + Tour booking/comms/lifecycle: **19 files / 218 passed**.  
+Production `npm run typecheck`: **pass**. `typecheck:tests`: deferred (machine pressure).

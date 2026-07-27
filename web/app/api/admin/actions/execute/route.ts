@@ -208,7 +208,9 @@ export async function POST(request: NextRequest) {
                       : result.executionOwner === "admin_action"
                         ? "command_runtime_destructive_replacement"
                         : result.executionOwner === "tour_domain"
-                          ? "command_runtime_tour"
+                          ? result.canonicalCapabilityKey === "cancel_tour"
+                              ? "command_runtime_destructive_replacement"
+                              : "command_runtime_tour"
                           : "command_runtime_registered_action";
 
             const mutationDomain =
@@ -230,7 +232,9 @@ export async function POST(request: NextRequest) {
                           ? "delete_lead"
                           : "primary_contact_replacement"
                         : result.executionOwner === "tour_domain"
-                          ? "tour_reschedule"
+                          ? result.ok && "cancelTourResult" in result && result.cancelTourResult
+                              ? "cancel_tour"
+                              : "tour_reschedule"
                           : "registered_action";
 
             logCommandExecutePathDiagnostic({
@@ -424,10 +428,44 @@ export async function POST(request: NextRequest) {
                 return apiOk(
                     {
                         execution_result: {
-                            kind: "tour",
+                            kind:
+                                result.canonicalCapabilityKey === "cancel_tour"
+                                    ? "destructive_preview"
+                                    : "tour",
+                            impact_preview: result.impactPreview,
                             tour_preview: result.tourPreview,
                         },
                         affected_id: entityId,
+                    },
+                    { request, correlationId: result.invocationId }
+                );
+            }
+
+            if (result.executionOwner === "tour_domain" && result.cancelTourResult) {
+                try {
+                    revalidateTag(adminActionsOrgTag(ctx.orgId), "max");
+                } catch (e) {
+                    console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
+                }
+                return apiOk(
+                    {
+                        execution_result: {
+                            kind: "tour_cancel",
+                            cancel_tour_result: result.cancelTourResult,
+                        },
+                        ok: true,
+                        booking: {
+                            id: result.cancelTourResult.booking_id,
+                            opportunity_id: result.cancelTourResult.opportunity_id,
+                            status_key: result.cancelTourResult.status_key,
+                            start_at: result.cancelTourResult.start_at,
+                            end_at: result.cancelTourResult.end_at,
+                            timezone: result.cancelTourResult.timezone,
+                            location_id: result.cancelTourResult.location_id,
+                            cancel_reason: result.cancelTourResult.cancel_reason,
+                        },
+                        message: result.cancelTourResult.message,
+                        affected_id: result.cancelTourResult.booking_id,
                     },
                     { request, correlationId: result.invocationId }
                 );

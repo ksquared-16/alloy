@@ -6,6 +6,7 @@
 export const DESTRUCTIVE_FACADE_COMMIT_ALLOWLIST = [
     "make_primary_contact",
     "delete_lead",
+    "cancel_tour",
 ] as const;
 
 export type DestructiveFacadeCommitAllowlistKey =

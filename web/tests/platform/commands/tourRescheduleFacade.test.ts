@@ -59,11 +59,12 @@ describe("P5.S1 Tour authority", () => {
         expect(isCommandRuntimeFacadeExecutionSupported("reschedule_tour")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("schedule_tour")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("complete_tour")).toBe(false);
-        expect(isCommandRuntimeFacadeExecutionSupported("cancel_tour")).toBe(false);
-        expect(isDestructiveFacadeCommitAllowlisted("cancel_tour")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("cancel_tour")).toBe(true);
+        expect(isDestructiveFacadeCommitAllowlisted("cancel_tour")).toBe(true);
         expect(assertDestructiveCommitAllowed({ capabilityKey: "cancel_tour" }).allowed).toBe(
-            false
+            true
         );
+        expect(isCommandRuntimeFacadeExecutionSupported("complete_tour")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("reopen_tour")).toBe(false);
     });
 

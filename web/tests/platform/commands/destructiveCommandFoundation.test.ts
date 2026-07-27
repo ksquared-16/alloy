@@ -307,12 +307,14 @@ describe("P4.S1 execution guard", () => {
             true
         );
         expect(assertDestructiveCommitAllowed({ capabilityKey: "delete_lead" }).allowed).toBe(true);
+        expect(assertDestructiveCommitAllowed({ capabilityKey: "cancel_tour" }).allowed).toBe(true);
     });
 
-    it("blocks Cancel Tour facade commit; Delete Lead and Make Primary are allowlisted", async () => {
+    it("blocks Archive/Withdraw facade commit; Primary, Delete, Cancel Tour are allowlisted", async () => {
         expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("delete_lead")).toBe(true);
-        for (const key of ["cancel_tour", "archive_lead", "withdraw_child"] as const) {
+        expect(isCommandRuntimeFacadeExecutionSupported("cancel_tour")).toBe(true);
+        for (const key of ["archive_lead", "withdraw_child"] as const) {
             expect(isCommandRuntimeFacadeExecutionSupported(key)).toBe(false);
             const result = await executeCommandInvocation({
                 request: {

@@ -99,6 +99,7 @@ export function isRelationshipRuntimeFacadeSupported(commandKey: string): boolea
 export const DESTRUCTIVE_FACADE_COMMAND_KEYS = [
     "make_primary_contact",
     "delete_lead",
+    "cancel_tour",
 ] as const;
 
 export type DestructiveFacadeCommandKey = (typeof DESTRUCTIVE_FACADE_COMMAND_KEYS)[number];

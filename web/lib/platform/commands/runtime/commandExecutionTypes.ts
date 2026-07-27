@@ -10,6 +10,7 @@ import type { CapabilityExecutionOwner } from "@/lib/platform/commands/capabilit
 import type { CommandImpactPreview } from "@/lib/platform/commands/runtime/destructive/commandImpactPreviewTypes";
 import type { MakePrimaryReplacementResult } from "@/lib/platform/commands/runtime/adapters/primaryContactReplacementAdapter";
 import type { DeleteLeadReplacementResult } from "@/lib/platform/commands/runtime/adapters/deleteLeadAdapter";
+import type { CancelTourResult } from "@/lib/platform/commands/runtime/adapters/cancelTourAdapter";
 import type { TourRescheduleResult } from "@/lib/platform/commands/runtime/adapters/tourExecutionAdapter";
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 
@@ -90,6 +91,8 @@ export type CommandExecutionResult =
           replacementResult?: MakePrimaryReplacementResult;
           /** Destructive delete result (P4.S3 delete_lead). */
           deleteLeadResult?: DeleteLeadReplacementResult;
+          /** Destructive cancel result (P5.S2 cancel_tour). */
+          cancelTourResult?: CancelTourResult;
           /** Tour-domain result (P5.S1 reschedule_tour). */
           tourResult?: TourRescheduleResult;
           /** Lightweight non-destructive preview summary (Tour P5.S1). */
