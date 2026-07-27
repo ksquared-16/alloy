@@ -24,7 +24,7 @@ import { createReadStream, existsSync, readdirSync, readFileSync, statSync } fro
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { createConnection } from "node:net";
-import { extname, join, normalize, resolve } from "node:path";
+import { basename, extname, join, normalize, resolve } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -327,25 +327,52 @@ function probePortListening(port, timeoutMs = 500) {
 }
 
 const ACTIVITY_WORKING_MS = 15 * 60 * 1000;
-/**
- * Cheap, local, pressure-proof "last git activity" for a worktree: the mtime of
- * its ref log. Resolves the linked-worktree gitdir from the .git file. This lets
- * the per-worker activity pill stay meaningful (working vs idle) even when the
- * enriched projection is degraded under load — the same reason the port probe
- * above exists. Returns ms since epoch, or null.
- */
-function worktreeActivityMs(path) {
+/** Resolve a worktree's real gitdir (following the linked-worktree .git file). */
+function gitdirOf(path) {
   if (!path) return null;
   try {
     const dotgit = join(path, ".git");
-    let gitdir = dotgit;
-    if (statSync(dotgit).isFile()) {
-      const m = /^gitdir:\s*(.+)\s*$/m.exec(readFileSync(dotgit, "utf8"));
-      if (!m) return null;
-      gitdir = m[1].trim();
-    }
-    return Math.round(statSync(join(gitdir, "logs", "HEAD")).mtimeMs);
+    if (!statSync(dotgit).isFile()) return dotgit; // a normal .git directory
+    const m = /^gitdir:\s*(.+)\s*$/m.exec(readFileSync(dotgit, "utf8"));
+    return m ? m[1].trim() : null;
   } catch { return null; }
+}
+/**
+ * Cheap, local, pressure-proof "last git activity" for a worktree: the mtime of
+ * its ref log. Lets the per-worker activity pill stay meaningful even when the
+ * enriched projection is degraded under load. Returns ms since epoch, or null.
+ */
+function worktreeActivityMs(path) {
+  const gd = gitdirOf(path);
+  try { return gd ? Math.round(statSync(join(gd, "logs", "HEAD")).mtimeMs) : null; } catch { return null; }
+}
+/** Current branch of a worktree, read cheaply from gitdir/HEAD (no subprocess). */
+function branchOf(path) {
+  const gd = gitdirOf(path);
+  try {
+    const head = readFileSync(join(gd, "HEAD"), "utf8").trim();
+    const m = /^ref:\s*refs\/heads\/(.+)$/.exec(head);
+    return m ? m[1] : head.slice(0, 8); // detached → short sha
+  } catch { return null; }
+}
+
+// The Director/app runs from this checkout. Presented as the CHAMPION — a
+// distinct entry above the six worker slots, not itself a worker slot.
+const DIRECTOR_HOME = resolve(HERE, "..", "..", "..");
+function championEntry() {
+  const now = Date.now();
+  const path = DIRECTOR_HOME;
+  const last = worktreeActivityMs(path);
+  return {
+    role: "director",
+    title: "Vacilando",
+    worktree: basename(path),
+    path,
+    branch: branchOf(path),
+    activity: last != null && now - last < ACTIVITY_WORKING_MS ? "working" : "idle",
+    last_activity_ms: last,
+    glyph: "compass",
+  };
 }
 
 /**
@@ -370,6 +397,12 @@ async function applyLiveTruth(board) {
     }
     return out;
   });
+  // Vacilando itself — the CHAMPION — presented above the six worker slots, never
+  // as one of them. Its home worktree may still appear as a numbered worker until
+  // it's unregistered from the slot system; once freed, the six slots are all
+  // workers and this is the only place Vacilando shows.
+  board.champion = championEntry();
+  board.sprints = board.sprints.filter((s) => s.path !== board.champion.path);
   return board;
 }
 

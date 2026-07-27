@@ -322,6 +322,7 @@ function viewCommand() {
   return `<div class="room">
     <section class="board">
       <div class="board-h"><span>Worker Dock</span><button class="btn primary sm" data-start>+ Start Work</button></div>
+      ${championCard()}
       ${boardBanner()}
       ${state.snap.sprints.length ? state.snap.sprints.map(workerCard).join("") : `<div class="empty sm">No workers are configured.</div>`}
       ${resourcesCard()}
@@ -337,6 +338,18 @@ function needsYouHtml() {
 }
 
 function resFor(slot) { return (state.res?.workers || []).find((w) => w.slot === slot) || null; }
+
+// Vacilando itself — the CHAMPION — sits above the worker slots as the app that
+// stands them up. It is infrastructure, not a worker: no work is dispatched to it.
+function championCard() {
+  const c = state.snap?.champion;
+  if (!c) return "";
+  return `<div class="champ">
+    <div class="champ-top"><span class="gl">${glyph(c.glyph)}</span>
+      <div class="champ-id"><b>Vacilando</b> · app<div class="champ-sub trunc mono">${esc(c.branch || c.worktree || "")}</div></div>
+      <span class="apill dir" title="The control plane you're using — stands up the workers, not a worker itself"><span class="adot"></span>Champion</span></div>
+  </div>`;
+}
 
 function workerCard(sp) {
   // A slot whose worktree was deleted: tell the truth and offer to free it,
