@@ -37,6 +37,7 @@ Foundations operators and implementers can rely on today:
 - Waitlist V2 + ranking validation + demo readiness
 - Global search V1
 - BOS assist foundation (Orchestrator, Task Assist, Workflow Assist — human-in-the-loop)
+- BOS actionable interface V1 (Create Lead command session: Conversation + Form → registered action; Processing identity gate preserved; slash/briefing deferred — distinct from paused autonomous agents)
 - Roles, permissions, CRM dept/site scope
 - Queue/record authority boundary
 - Platform manifesto + July 2026 certification published
@@ -57,7 +58,7 @@ Foundations operators and implementers can rely on today:
 | Initiative | Outcome | Blockers / notes |
 |------------|---------|------------------|
 | **Waitlist mutator activation** | Replace `add_to_waitlist_placeholder` with `move_to_waitlist` | Catalog seeded; cutover + QA |
-| **Lifecycle action catalog** | Canonical actions aligned to stage matrix | `mark_won` deprecation; BOS invoke wiring |
+| **Lifecycle action catalog** | Canonical actions aligned to stage matrix | `mark_won` deprecation; Create Lead BOS session shipped locally — broader BOS invoke for other keys follow-up |
 | **Backend query/payload optimization** | Queue row + VM compose latency | Dominates perceived latency post-Pass 3 |
 | **Enrollment forms Phase 2 remainder** | DCP, P2-5 insight, UX hardening | Sprint cards in `later-phase/` |
 | **Status ownership grain expansion** | Consistent status SoT across surfaces | Active 06_2026 sprint |

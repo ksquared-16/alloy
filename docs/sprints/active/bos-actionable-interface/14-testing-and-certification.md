@@ -53,17 +53,17 @@ Serialize typecheck machine-wide per workspace orchestration.
 
 ## Certification checklist (V1)
 
-- [ ] WP-01..12 commits local only
-- [ ] Scenarios 1–22 evidenced
-- [ ] Processing identity guarantees intact
-- [ ] No auto-open regression
-- [ ] Queue refresh works
-- [ ] Actions entry opens BOS (not orphan modal-only)
-- [ ] BOS identity doctrine intact (visual spot check)
-- [ ] Docs list in `15` prepared for closeout
+- [x] WP-01..12 commits local only (see `CERTIFICATION-EVIDENCE.md`)
+- [ ] Scenarios 1–22 evidenced (live authenticated — product-owner QA on :3012)
+- [x] Processing identity guarantees intact (D4/E1 suites green)
+- [x] No auto-open regression
+- [x] Queue refresh works (success path + tests)
+- [x] Actions entry opens BOS (not orphan modal-only)
+- [x] BOS identity doctrine intact (Bend Pine header polish; no broader redesign)
+- [x] Docs list in `15` prepared for closeout
 
 ## Evidence to capture
 
-- Screenshot set under sprint `evidence/` (created during implementation sprint)
-- Test log excerpts
+- Screenshot set under sprint `evidence/` (created during product-owner live QA)
+- Test log excerpts — see `CERTIFICATION-EVIDENCE.md`
 - Live notes: org, role, work unit, case id, opportunity id

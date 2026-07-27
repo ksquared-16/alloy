@@ -304,8 +304,7 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                 <div className="flex flex-wrap items-center gap-2">
                     {session.phase !== "preview" &&
                     session.phase !== "confirming" &&
-                    session.phase !== "executing" &&
-                    session.phase !== "processing_review" ? (
+                    session.phase !== "executing" ? (
                         <button
                             type="button"
                             className="rounded-md bg-alloy-midnight px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"

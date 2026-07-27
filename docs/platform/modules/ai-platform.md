@@ -58,8 +58,9 @@ registered action, it uses the same `POST /api/admin/actions/execute` route as m
 (`runRegisteredAction` → validate → eligibility gate → invariant-owning mutation). BOS
 never invents executable behavior or mutates directly: it can only invoke *registered*
 action keys, and the server remains authoritative for validation, eligibility, required
-inputs, mutation, audit, and result. Reference implementation: `create_lead` (dedicated
-BOS rail apply UI is follow-up). See `actions-and-workflows.md` § Action Runtime contract.
+inputs, mutation, audit, and result. Reference implementation: `create_lead` via the BOS
+**command session** (Conversation + Form over one shared draft). See
+`actions-and-workflows.md` § Action Runtime contract.
 
 BOS is a **placement**, not a separate command system. A BOS recommendation invokes the
 same registered Operational Command as any other surface; its context resolution is
@@ -96,26 +97,29 @@ phone or email"). BOS confirms and executes through the **same** registered `cre
 action and execute route as manual entry. See
 `docs/sprints/archive/06_2026/create_lead_command_flow_audit.md`.
 
-**BOS uses the platform Command Surface, not a separate UI runtime (V5).** A BOS proposal is
-just a command snapshot fed to the same platform-owned Command Surface
-(`surface/deriveCommandSurfaceState.ts`) as manual/Work Unit/Focus Panel — the `bos` variant.
-The shell anatomy, preview/confirm/success patterns, and execution path are identical; only the
-entry point (and how much context arrives pre-resolved) differs.
+**BOS command session (V6 — actionable interface).** Create Lead from Actions (Work Unit or
+Workspace) opens a **scoped BOS command session** over the Operational Command Runtime — not a
+parallel mutation engine. Conversation and Form are projections of one shared `BosCommandDraft`
+(`web/lib/bos/commandSession/*`). The operator gathers, reviews, and confirms; confirmed
+execution calls `executeCreateLeadCommand` → `POST /api/admin/actions/execute` registered
+`create_lead`. Processing owns inbound identity resolution at the established approval boundary;
+no canonical identity rows are written before that commit. Success does **not** auto-open Focus
+Panel — Open Lead is explicit; queue/Work View refresh uses the canonical projection seam.
+Compatibility: `NEXT_PUBLIC_BOS_CREATE_LEAD_SESSION=0` restores the legacy
+`CreateLeadCommandSurface` modal host. Slash-command catalog and daily briefing remain deferred
+foundations, not V1 operator deliverables. Sprint package:
+`docs/sprints/active/bos-actionable-interface/`.
 
-**Operator-visible wiring (V2).** BOS renders the same `CommandSurfaceShell` driven by
-`useCommandSurfaceController`: it parses lead info → known inputs → the shared Create Lead
-command model → surface preview/missing-inputs → confirm. Confirm executes through the existing
-`/api/admin/actions/execute` registered `create_lead` (injected into the controller). BOS must
-not create leads through a private path, own its own command lifecycle, or bypass surface state.
+**BOS uses the platform Command Surface concepts, not a separate mutation runtime (V5).**
+Command Surface shell/controller remain platform-owned patterns for command anatomy. The V6
+Create Lead reference hosts Conversation/Form inside the BOS rail command-session host while
+still executing through the registered action path — BOS must not own a private mutation
+lifecycle or bypass server authority.
 
-**End-to-end wiring (V3).** In the live runtime, BOS Create Lead is the same `CreateLeadModal`
-workspace (launched via the `adminv2:open-create-lead` listener) now hosted by the platform
-`CreateLeadCommandSurface`. So a BOS-launched Create Lead confirms through the **same** shared
-client adapter `executeCreateLeadCommand` → registered `create_lead` as manual/Work Unit, with
-standardized success. The command model still derives BOS preview (complete parse) vs missing
-required inputs (incomplete parse) in operator language. BOS remains an entry point, not its own
-mutation path. See `docs/sprints/archive/06_2026/command_surface_v3.md`,
-`command_surface_v2.md`, `command_surface_v1.md`.
+**Prior wiring notes (V2–V3).** Earlier Command Surface / modal-host wiring documented that
+`adminv2:open-create-lead` mounted `CreateLeadCommandSurface`. That remains the **compatibility
+fallback**. Primary operator entry is now the V6 command session above. See
+`docs/sprints/archive/06_2026/command_surface_v3.md` for historical surface anatomy.
 
 **BOS intake field parity (Create Lead reliability thread).** BOS intake is parse-and-fill over
 the **same** field model as manual Create Lead — the BOS path must never present a different

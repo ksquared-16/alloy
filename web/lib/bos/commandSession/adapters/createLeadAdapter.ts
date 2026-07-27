@@ -105,7 +105,7 @@ export function applyCreateLeadParseToDraft(
 }
 
 function resolutionFromSnapshot(
-    missingInputs: Array<{ field?: string; message: string; code: string }>,
+    missingInputs: Array<{ field?: string | null; message: string; code: string }>,
     readyForPreview: boolean,
     readyToExecute: boolean
 ): BosCommandResolutionState {
