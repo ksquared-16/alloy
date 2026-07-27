@@ -11,10 +11,17 @@ describe("BOS Create Lead conversation + form gather (WP-07/08)", () => {
             ),
             "utf8"
         );
+        const progressive = readFileSync(
+            resolve(
+                __dirname,
+                "../../../app/adminV2/components/aiCommandSurface/commandSession/CreateLeadProgressiveForm.tsx"
+            ),
+            "utf8"
+        );
         expect(host).toContain("data-bos-command-session-composer");
         expect(host).toContain("data-bos-command-session-send");
-        expect(host).toContain("ActionWorkspaceGatherFields");
-        expect(host).toContain('data-bos-command-session-mode-body="form"');
+        expect(host).toContain("CreateLeadProgressiveForm");
+        expect(progressive).toContain('data-bos-command-session-mode-body="form"');
         expect(host).toContain("mode_switch");
         expect(host).toContain('message.kind !== "mode_switch"');
     });

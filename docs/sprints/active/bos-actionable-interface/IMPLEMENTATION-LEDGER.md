@@ -25,35 +25,21 @@ last_reviewed: 2026-07-27
 
 | ID | Status | Commit | Notes |
 |---|---|---|---|
-| R2-01 | done | `e0c8be524` | ConversationIntakeAdapter boundary |
-| R2-02 | done | `4f3cc04cd` | Effective intake + Form |
-| R2-03 | done | `2ad745ba2` | Spec-driven clarify |
-| R2-04 | done | `d6307ce2f` | Turn-based transcript |
-| R2-05 | done | `2c3d8813f` | Slash discovery (Create Lead) |
-| R2-06 | done | `4fffa1313` | Responsive layouts |
-| R2-07 | done | `869b21b61` | Focused QA + docs |
+| R2-01–R2-07 | done | see prior | Adapter + slash + layouts |
 
 ## Round 3 — UI convergence
 
 | ID | Status | Commit | Notes |
 |---|---|---|---|
-| R3 | done | `b06dc9e84` | Workspace cards, sections Form, understanding-first Conversation/Review, sticky footer |
+| R3 | done | `b06dc9e84` | Workspace cards + understanding-first |
 
-## Round 4 — Command surface product finish (final before BOS pause)
-
-Canonical package docs: `round-4/README.md` · `round-4/EXECUTION-LEDGER.md`
+## Round 4 — Command surface product finish
 
 | ID | Status | Commit | Notes |
 |---|---|---|---|
-| R4-01 | done | `919f65f91` | Code trace + primitive selection; contracts; no product code |
-| R4-02 | pending | | Stone-field / white-card layering |
-| R4-03 | pending | | Progressive sections + summaries |
-| R4-04 | pending | | Quiet gather chrome |
-| R4-05 | pending | | Help + Lead vocabulary |
-| R4-06 | pending | | Command-workspace sizing preset |
-| R4-07 | pending | | Responsive / pinned |
-| R4-08 | pending | | Review / success parity |
-| R4-09 | pending | | Tests + authenticated evidence |
-| R4-10 | pending | | Closeout + BOS pause |
+| R4-01 | done | `919f65f91` | Code trace + contracts |
+| R4-02–R4-08 | done | _(pending)_ | Progressive Form, quiet inputs, help, sizing, Lead copy |
+| R4-09 | partial | _(pending)_ | Unit/contract tests pass; authenticated screenshots deferred (3012 unhealthy) |
+| R4-10 | pending | | Final pause closeout after evidence or explicit deferral |
 
-**After R4-10:** BOS PAUSED — next owner is Commands and Processing Conversation Runtime.
+**Target after R4-10:** BOS PAUSED — next owner is Commands and Processing Conversation Runtime.

@@ -27,7 +27,7 @@ Parser · LLM · Conversation Runtime · new commands · slash expansion · migr
 
 | ID | Objective | Status |
 |---|---|---|
-| [R4-01](./R4-01-code-trace-and-primitives.md) | Code trace + primitive selection + ledger | **in progress** |
+| [R4-01](./R4-01-code-trace-and-primitives.md) | Code trace + primitive selection + ledger | **done** `919f65f91` |
 | R4-02 | Command body stone-field / white-card layering | pending |
 | R4-03 | Progressive section model + summaries | pending |
 | R4-04 | Input visual convergence | pending |

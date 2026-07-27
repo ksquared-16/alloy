@@ -1,22 +1,25 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
 import { useBosPresentationControllerOptional } from "@/contexts/BosPresentationControllerContext";
 import type { BosCommandMode, BosCommandSession } from "@/lib/bos/commandSession";
 import { resolveBosCommandSessionLayoutDensity } from "@/lib/bos/commandSession/commandSessionLayout";
 import {
-    CREATE_LEAD_PASTE_EXAMPLES,
     buildReviewGroups,
     buildUnderstandingGroups,
-    operationalSectionTitle,
     type UnderstandingGroup,
 } from "@/lib/bos/commandSession/createLeadUnderstandingPresentation";
-import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
-import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
+import {
+    bumpFloatingToCommandWorkspace,
+    restoreFloatingWidth,
+    type CommandWorkspaceWidthSnapshot,
+} from "@/lib/bos/commandSession/bosCommandWorkspaceGeometry";
 import { useCreateLeadBosSessionController } from "@/app/adminV2/components/aiCommandSurface/commandSession/useCreateLeadBosSessionController";
+import { CreateLeadCommandHelp } from "@/app/adminV2/components/aiCommandSurface/commandSession/CreateLeadCommandHelp";
+import { CreateLeadProgressiveForm } from "@/app/adminV2/components/aiCommandSurface/commandSession/CreateLeadProgressiveForm";
 import { opportunityIdFromAttempt } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { bosDraftToEligiblePayload } from "@/lib/bos/commandSession";
@@ -61,11 +64,46 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
     );
     const compact = layoutDensity === "compact";
     const controller = useCreateLeadBosSessionController(session);
+    const widthSnapshotRef = useRef<CommandWorkspaceWidthSnapshot | null>(null);
+
+    const viewportCanvas = () => {
+        if (typeof window === "undefined") return { width: 1440, height: 900 };
+        return { width: window.innerWidth, height: window.innerHeight };
+    };
+
 
     const setMode = (mode: BosCommandMode) => {
         if (!ctx || mode === session.mode) return;
         ctx.dispatch({ type: "SET_MODE", mode });
     };
+
+    const restoreWorkspaceWidth = useCallback(() => {
+        if (!bosPresentation || !widthSnapshotRef.current?.bumped) {
+            widthSnapshotRef.current = null;
+            return;
+        }
+        const next = restoreFloatingWidth(
+            bosPresentation.floatingGeometry,
+            widthSnapshotRef.current,
+            viewportCanvas()
+        );
+        bosPresentation.setFloatingGeometry(next, { persist: true });
+        widthSnapshotRef.current = null;
+    }, [bosPresentation]);
+
+    const ensureCommandWorkspace = useCallback(() => {
+        if (!bosPresentation) return;
+        if (bosPresentation.derivation.effective === "pinned") return;
+        if (widthSnapshotRef.current?.bumped) return;
+        const { next, snapshot } = bumpFloatingToCommandWorkspace(
+            bosPresentation.floatingGeometry,
+            viewportCanvas()
+        );
+        if (snapshot.bumped) {
+            widthSnapshotRef.current = snapshot;
+            bosPresentation.setFloatingGeometry(next, { persist: true });
+        }
+    }, [bosPresentation]);
 
     const operatorHasShared = session.draft.sourceTexts.length > 0 || session.draft.values.length > 0;
     const gatherPhase =
@@ -74,6 +112,17 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
         session.phase === "failed";
     const reviewPhase = session.phase === "preview" || session.phase === "confirming";
     const showModeToggle = gatherPhase;
+
+    useEffect(() => {
+        if (session.mode === "form" || reviewPhase || session.phase === "processing_review") {
+            ensureCommandWorkspace();
+        }
+    }, [ensureCommandWorkspace, reviewPhase, session.mode, session.phase]);
+
+    const discardWithRestore = useCallback(() => {
+        restoreWorkspaceWidth();
+        ctx?.discardSession();
+    }, [ctx, restoreWorkspaceWidth]);
 
     const understandingGroups = useMemo(
         () =>
@@ -94,14 +143,18 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
         [controller.gatherFields, session.draft, session.preview]
     );
 
-    const operationalSections = useMemo(
-        () =>
-            controller.sections.map((section) => ({
-                ...section,
-                label: operationalSectionTitle(section.key, section.label),
-            })),
-        [controller.sections]
-    );
+    const optionLabels = useMemo(() => {
+        const map = new Map<string, string>();
+        const opts = controller.effectiveSpec?.fieldOptions;
+        if (!opts) return map;
+        for (const [key, options] of Object.entries(opts)) {
+            for (const opt of options ?? []) {
+                map.set(`${key}:${opt.value}`, opt.label);
+                map.set(opt.value, opt.label);
+            }
+        }
+        return map;
+    }, [controller.effectiveSpec?.fieldOptions]);
 
     const padX = compact ? "px-3" : "px-4";
     const bodyPad = compact ? "px-3 py-3" : "px-4 py-4";
@@ -120,16 +173,22 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                 }`}
                 data-bos-command-session-header="true"
             >
-                <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
                     <p className="truncate text-[13px] font-semibold tracking-tight text-alloy-midnight">
                         {session.invocation.displayLabel}
                     </p>
-                    {!compact ? (
-                        <p className="mt-0.5 text-[11px] text-alloy-midnight/50">
-                            Conversation and details stay on the same command
-                        </p>
-                    ) : null}
+                    <CreateLeadCommandHelp compact={compact} />
                 </div>
+                {compact && bosPresentation?.derivation.effective === "pinned" ? (
+                    <button
+                        type="button"
+                        className={`${WS_ACTION_SECONDARY} shrink-0 min-h-[36px]`}
+                        data-bos-command-session-expand
+                        onClick={() => bosPresentation.unpinToFloating()}
+                    >
+                        Expand
+                    </button>
+                ) : null}
                 {showModeToggle ? (
                     <div
                         className="flex shrink-0 rounded-md border border-alloy-stone/30 bg-alloy-stone/5 p-0.5"
@@ -144,7 +203,7 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                         />
                         <ModeTab
                             active={session.mode === "form"}
-                            label={compact ? "Details" : "Form"}
+                            label="Form"
                             modeKey="form"
                             onClick={() => setMode("form")}
                         />
@@ -197,9 +256,10 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                         session={session}
                         compact={compact}
                         onCreateAnother={() => {
+                            restoreWorkspaceWidth();
                             ctx?.startSession(session.invocation);
                         }}
-                        onReturn={() => ctx?.discardSession()}
+                        onReturn={discardWithRestore}
                     />
                 ) : reviewPhase ? (
                     <ReviewBody groups={reviewGroups} preview={session.preview} compact={compact} />
@@ -222,9 +282,10 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                         unsupportedHints={controller.unsupportedHints}
                     />
                 ) : (
-                    <FormBody
+                    <CreateLeadProgressiveForm
                         compact={compact}
-                        sections={operationalSections}
+                        draft={session.draft}
+                        sections={controller.sections}
                         formValues={controller.formValues}
                         onFieldChange={controller.onFieldChange}
                         platformRequiredKeys={
@@ -233,6 +294,7 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                                 : ["first_name", "last_name"]
                         }
                         fieldConfidence={controller.fieldConfidence}
+                        optionLabels={optionLabels}
                         unsupportedHints={controller.unsupportedHints}
                     />
                 )}
@@ -249,7 +311,7 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                     onConfirmPreview={() => controller.onConfirmPreview()}
                     onExecute={() => void controller.onExecute()}
                     onBackGather={() => ctx?.dispatch({ type: "SET_PHASE", phase: "gathering" })}
-                    onDiscard={() => ctx?.discardSession()}
+                    onDiscard={discardWithRestore}
                 />
             ) : null}
         </div>
@@ -273,54 +335,32 @@ function ConversationBody(props: {
         (message) => message.kind !== "mode_switch"
     );
     const hasOperatorTurn = visibleMessages.some((m) => m.kind === "user_source");
-    const showEmptyGuide = !hasOperatorTurn && props.understandingGroups.length === 0;
 
     return (
         <div
             data-bos-command-session-mode-body="conversation"
             className={`mx-auto flex w-full flex-col gap-4 ${props.compact ? "max-w-none" : "max-w-xl"}`}
         >
-            {showEmptyGuide ? (
-                <WorkspaceCard padded={!props.compact} data-bos-command-session-empty="true">
-                    <p className={WS_EYEBROW}>Start here</p>
-                    <p className="mt-1.5 text-[13px] font-semibold text-alloy-midnight">
-                        Paste what you already have
-                    </p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-alloy-midnight/55">
-                        Drop an email, call note, website inquiry, voice transcript, or meeting notes.
-                        BOS will summarize what it understands — nothing is created until you confirm.
-                    </p>
-                    <ul className="mt-3 flex flex-wrap gap-1.5" data-bos-command-session-paste-examples>
-                        {CREATE_LEAD_PASTE_EXAMPLES.map((example) => (
-                            <li
-                                key={example}
-                                className="rounded-md border border-alloy-stone/25 bg-alloy-stone/[0.04] px-2 py-1 text-[11px] font-medium text-alloy-midnight/65"
-                            >
-                                {example}
-                            </li>
-                        ))}
-                    </ul>
-                </WorkspaceCard>
-            ) : (
-                <ul
-                    className={`space-y-2 ${props.compact ? "max-h-[32vh] overflow-y-auto" : ""}`}
-                    data-bos-command-session-messages="true"
-                >
-                    {visibleMessages.map((message) => (
-                        <li
-                            key={message.id}
-                            className={`whitespace-pre-wrap rounded-xl px-3 py-2.5 text-[13px] leading-snug ${
-                                message.role === "operator"
-                                    ? "ml-4 bg-alloy-bend-pine/10 text-alloy-midnight"
-                                    : "mr-2 bg-white text-alloy-midnight/90 ring-1 ring-alloy-stone/20"
-                            }`}
-                            data-bos-command-session-message={message.kind}
-                        >
-                            {message.body}
-                        </li>
-                    ))}
-                </ul>
-            )}
+            <ul
+                className={`space-y-2 ${props.compact && hasOperatorTurn ? "max-h-[32vh] overflow-y-auto" : ""}`}
+                data-bos-command-session-messages="true"
+            >
+                {visibleMessages
+                    .filter((message) => hasOperatorTurn || message.kind === "ack")
+                    .map((message) => (
+                    <li
+                        key={message.id}
+                        className={`whitespace-pre-wrap rounded-xl px-3 py-2.5 text-[13px] leading-snug ${
+                            message.role === "operator"
+                                ? "ml-4 bg-alloy-bend-pine/10 text-alloy-midnight"
+                                : "mr-2 bg-white text-alloy-midnight/90 ring-1 ring-alloy-stone/20"
+                        }`}
+                        data-bos-command-session-message={message.kind}
+                    >
+                        {message.body}
+                    </li>
+                ))}
+            </ul>
 
             {props.understandingGroups.length > 0 ? (
                 <UnderstandingStack
@@ -363,8 +403,7 @@ function ConversationBody(props: {
                                 data-bos-command-session-confirm-inferred={v.fieldKey}
                                 onClick={() => props.onConfirmField(v.fieldKey)}
                             >
-                                Confirm suggested{" "}
-                                {v.fieldKey.replace(/_/g, " ")}
+                                Confirm suggested {v.fieldKey.replace(/_/g, " ")}
                             </button>
                         ))}
                 </div>
@@ -372,10 +411,13 @@ function ConversationBody(props: {
 
             <WorkspaceCard padded className="space-y-2.5" data-bos-command-session-composer-card>
                 <label className="block text-[12px] font-medium text-alloy-midnight/70">
-                    {showEmptyGuide ? "Paste or type the inquiry" : "Add more detail"}
+                    Describe the lead
                 </label>
+                <p className="text-[11px] text-alloy-midnight/45">
+                    BOS will organize the details and ask for anything still needed.
+                </p>
                 <textarea
-                    className={`w-full resize-y rounded-xl border border-alloy-stone/20 bg-alloy-stone/5 px-3 py-3 text-[13px] text-alloy-midnight placeholder:text-alloy-midnight/40 outline-none focus:border-[rgba(0,162,131,0.45)] focus:ring-2 focus:ring-[rgba(0,162,131,0.12)] disabled:opacity-60 ${
+                    className={`w-full resize-y rounded-md border border-alloy-stone/55 bg-white px-3 py-2.5 text-[13px] text-alloy-midnight placeholder:text-alloy-midnight/40 outline-none focus-visible:border-alloy-bend-pine/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-alloy-bend-pine/35 disabled:opacity-60 ${
                         props.compact ? "min-h-[96px]" : "min-h-[112px]"
                     }`}
                     value={props.pasteText}
@@ -388,11 +430,7 @@ function ConversationBody(props: {
                             }
                         }
                     }}
-                    placeholder={
-                        showEmptyGuide
-                            ? "Parent: Jordan Lee\nEmail: jordan@example.com\nChild: Riley — Toddler program…"
-                            : "Add another note, correction, or missing detail…"
-                    }
+                    placeholder="Paste an email or call note, or describe the lead…"
                     data-bos-command-session-composer="true"
                     disabled={props.analyzing}
                 />
@@ -421,51 +459,6 @@ function ConversationBody(props: {
     );
 }
 
-function FormBody(props: {
-    compact: boolean;
-    sections: Array<{ key: string; label: string; fields: ActionWorkspaceGatherField[] }>;
-    formValues: Record<string, string>;
-    onFieldChange: (key: string, value: string) => void;
-    platformRequiredKeys: readonly string[];
-    fieldConfidence: Record<string, "high" | "medium" | "low" | "manual">;
-    unsupportedHints: ReadonlyArray<{ label: string }>;
-}) {
-    return (
-        <div
-            data-bos-command-session-mode-body="form"
-            className={`mx-auto w-full space-y-4 ${props.compact ? "max-w-none" : "max-w-2xl"}`}
-        >
-            {props.unsupportedHints.length > 0 ? (
-                <p
-                    className="rounded-xl border border-alloy-stone/25 bg-white px-3 py-2 text-[12px] text-alloy-midnight/70"
-                    data-bos-command-session-form-guidance="true"
-                >
-                    Complete the details below
-                    {props.unsupportedHints.length === 1
-                        ? ` — especially ${props.unsupportedHints[0]!.label}.`
-                        : "."}
-                </p>
-            ) : (
-                <p className="text-[12px] text-alloy-midnight/55">
-                    Same command as Conversation — edit any detail here.
-                </p>
-            )}
-            <WorkspaceCard padded={!props.compact} data-bos-command-session-form-grid={props.compact ? "single" : "responsive"}>
-                <ActionWorkspaceGatherFields
-                    sections={props.sections}
-                    values={props.formValues}
-                    onChange={props.onFieldChange}
-                    platformRequiredKeys={props.platformRequiredKeys}
-                    fieldConfidence={props.fieldConfidence}
-                    layout="sections"
-                    fieldColumns={props.compact ? 1 : 2}
-                    dataTestIdPrefix="bos-create-lead-form"
-                />
-            </WorkspaceCard>
-        </div>
-    );
-}
-
 function ReviewBody(props: {
     groups: UnderstandingGroup[];
     preview: BosCommandSession["preview"];
@@ -479,10 +472,10 @@ function ReviewBody(props: {
             <div>
                 <p className={WS_EYEBROW}>Review</p>
                 <h2 className="mt-1 text-[15px] font-semibold tracking-tight text-alloy-midnight">
-                    {props.preview?.title ?? "What will be created"}
+                    {props.preview?.title ?? "Review lead"}
                 </h2>
                 <p className="mt-1 text-[12px] text-alloy-midnight/55">
-                    Confirm operational understanding before Processing identity review.
+                    Review lead understanding before Processing identity review.
                 </p>
             </div>
             <UnderstandingStack

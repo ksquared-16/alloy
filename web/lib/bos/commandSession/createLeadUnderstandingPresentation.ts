@@ -100,7 +100,7 @@ export function buildReviewGroups(input: {
 export const CREATE_LEAD_PASTE_EXAMPLES = [
     "Parent email or phone",
     "Call notes",
-    "Website inquiry",
+    "Website lead",
     "Voice transcript",
     "Meeting notes",
 ] as const;

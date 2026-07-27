@@ -29,6 +29,10 @@ import {
 const LABEL = "text-[13px] font-medium text-alloy-midnight/75";
 const INPUT =
     "w-full rounded-xl border border-alloy-stone/12 bg-white px-4 py-3 text-[15px] text-alloy-midnight shadow-[inset_0_1px_2px_rgba(24,39,58,0.03)] focus:border-[#00A283]/35 focus:outline-none focus:ring-2 focus:ring-[#00A283]/10 disabled:opacity-60";
+/** Quiet workspace chrome — Command Surface / BOS progressive Form (no vertical rails). */
+const INPUT_QUIET =
+    "w-full min-h-[40px] rounded-md border border-alloy-stone/55 bg-white px-3 py-2 text-[13px] text-alloy-midnight shadow-[0_1px_3px_rgba(24,39,58,0.06)] placeholder:text-alloy-midnight/40 focus-visible:border-alloy-bend-pine/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-alloy-bend-pine/35 disabled:opacity-60";
+const LABEL_QUIET = "text-[12px] font-medium text-alloy-midnight/70";
 
 type Section = { key: string; label: string; fields: ActionWorkspaceGatherField[] };
 
@@ -45,6 +49,19 @@ type Props = {
     layout?: "tabs" | "unified" | "context" | "sections";
     /** Column count for `sections` layout (pinned → 1). */
     fieldColumns?: 1 | 2;
+    /**
+     * Input visual weight. `quiet` removes idle vertical rails and uses workspace field chrome
+     * (Create Lead command Form). Default preserves modal Action Workspace appearance.
+     */
+    chrome?: "default" | "quiet";
+    /** Hide per-section titles when the host already provides card chrome. */
+    hideSectionHeaders?: boolean;
+    /**
+     * When fieldColumns=2, only natural pairs use two columns; long/select fields stay full width.
+     */
+    pairAwareColumns?: boolean;
+    /** Payload keys allowed in a two-column pair when pairAwareColumns is set. */
+    pairFieldKeys?: ReadonlySet<string>;
 };
 
 function FieldConfidenceBadge({ level }: { level: BosFieldConfidenceDisplayLevel }) {
@@ -99,7 +116,16 @@ export function ActionWorkspaceGatherFields({
     fieldConfidence,
     layout = "tabs",
     fieldColumns = 2,
+    chrome = "default",
+    hideSectionHeaders = false,
+    pairAwareColumns = false,
+    pairFieldKeys,
 }: Props) {
+    const quiet = chrome === "quiet";
+    const labelClass = quiet ? LABEL_QUIET : LABEL;
+    const inputClass = quiet ? INPUT_QUIET : INPUT;
+    const railClass = quiet ? "" : "border-l-2 pl-2";
+    const railIdleClass = quiet ? "" : "border-l-2 border-alloy-stone/10 pl-2";
     const [activeTab, setActiveTab] = useState(sections[0]?.key ?? "person");
     const activeSection = sections.find((s) => s.key === activeTab) ?? sections[0];
     const allFields = sections.flatMap((s) => s.fields);
@@ -165,17 +191,21 @@ export function ActionWorkspaceGatherFields({
             return (
                 <div
                     key={field.payload_key}
-                    className="border-l-2 border-alloy-stone/10 pl-2"
+                    className={railIdleClass}
                     data-testid={`${dataTestIdPrefix}-field-${field.payload_key}`}
                 >
-                    <div className={`${LABEL} flex items-start gap-2`}>
+                    <div className={`${labelClass} flex items-start gap-2`}>
                         <span>{field.field_label}</span>
                         {fieldConfidence?.[field.payload_key] ?
                             <FieldConfidenceBadge level={fieldConfidence[field.payload_key]!} />
                         :   null}
                     </div>
                     <p
-                        className="mt-2 rounded-xl border border-alloy-stone/10 bg-alloy-stone/5 px-4 py-3 text-[15px] font-medium text-alloy-midnight"
+                        className={
+                            quiet
+                                ? "mt-1.5 rounded-md border border-alloy-stone/20 bg-alloy-stone/[0.04] px-3 py-2 text-[13px] font-medium text-alloy-midnight"
+                                : "mt-2 rounded-xl border border-alloy-stone/10 bg-alloy-stone/5 px-4 py-3 text-[15px] font-medium text-alloy-midnight"
+                        }
                         data-testid={`${dataTestIdPrefix}-derived-${field.payload_key}`}
                     >
                         {derivedDisplay.display}
@@ -211,14 +241,14 @@ export function ActionWorkspaceGatherFields({
         return (
             <label
                 key={field.payload_key}
-                className={`${field.multiline ? "col-span-2" : ""} ${
+                className={`${field.multiline || (pairAwareColumns && fieldColumns === 2 && !pairFieldKeys?.has(field.payload_key)) ? "col-span-full" : ""} ${
                     fieldConfidence?.[field.payload_key] ?
                         BOS_FIELD_CONFIDENCE_STYLES[fieldConfidence[field.payload_key]!].border
                     :   ""
-                } border-l-2 pl-2`}
+                } ${railClass}`.trim()}
                 data-testid={`${dataTestIdPrefix}-field-${field.payload_key}`}
             >
-                <div className={`${LABEL} flex items-start gap-2`}>
+                <div className={`${labelClass} flex items-start gap-2`}>
                     <span>
                         {field.field_label}
                         {isRequired && field.payload_key !== "email" && field.payload_key !== "phone" ?
@@ -239,8 +269,8 @@ export function ActionWorkspaceGatherFields({
                         value={values[field.payload_key] ?? ""}
                         disabled={disabled}
                         onChange={(e) => handleFieldChange(field.payload_key, e.target.value)}
-                        rows={4}
-                        className={`${INPUT} mt-2 resize-none`}
+                        rows={quiet ? 3 : 4}
+                        className={`${inputClass} mt-1.5 resize-none`}
                         data-testid={`${dataTestIdPrefix}-input-${field.payload_key}`}
                     />
                 : field.value_kind === "select" ?
@@ -250,7 +280,7 @@ export function ActionWorkspaceGatherFields({
                         onChange={(v) => handleFieldChange(field.payload_key, v)}
                         options={selectOptions}
                         placeholder={placeholder}
-                        className={`${INPUT} mt-2`}
+                        className={`${inputClass} mt-1.5`}
                         data-testid={`${dataTestIdPrefix}-select-${field.payload_key}`}
                         aria-label={field.field_label}
                     />
@@ -259,7 +289,7 @@ export function ActionWorkspaceGatherFields({
                         value={values[field.payload_key] ?? ""}
                         disabled={disabled}
                         onChange={(e) => handleFieldChange(field.payload_key, e.target.value)}
-                        className={`${INPUT} mt-2`}
+                        className={`${inputClass} mt-1.5`}
                         data-testid={`${dataTestIdPrefix}-input-${field.payload_key}`}
                     />
                 }
@@ -310,24 +340,36 @@ export function ActionWorkspaceGatherFields({
 
     /** Stacked operational groups — BOS command Form (no tab chrome). */
     if (layout === "sections") {
-        const cols = fieldColumns === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
+        const cols =
+            fieldColumns === 1
+                ? "grid-cols-1"
+                : pairAwareColumns
+                  ? "grid-cols-1 sm:grid-cols-2"
+                  : "grid-cols-1 sm:grid-cols-2";
         return (
-            <div className="flex flex-col gap-5" data-testid={`${dataTestIdPrefix}-fields`}>
+            <div
+                className={`flex flex-col ${hideSectionHeaders ? "gap-3" : "gap-5"}`}
+                data-testid={`${dataTestIdPrefix}-fields`}
+                data-gather-chrome={chrome}
+                data-gather-columns={fieldColumns}
+            >
                 {sections.map((section) => (
                     <div
                         key={section.key}
                         data-testid={`${dataTestIdPrefix}-section-${section.key}`}
                         className="space-y-3"
                     >
-                        <div>
-                            <h3 className="text-[13px] font-semibold tracking-tight text-alloy-midnight">
-                                {section.label}
-                            </h3>
-                            <p className="mt-0.5 text-[12px] text-alloy-midnight/50">
-                                {sectionHint(section.key, inheritedLocationLabel)}
-                            </p>
-                        </div>
-                        <div className={`grid ${cols} gap-x-5 gap-y-4 content-start`}>
+                        {!hideSectionHeaders ? (
+                            <div>
+                                <h3 className="text-[13px] font-semibold tracking-tight text-alloy-midnight">
+                                    {section.label}
+                                </h3>
+                                <p className="mt-0.5 text-[12px] text-alloy-midnight/50">
+                                    {sectionHint(section.key, inheritedLocationLabel)}
+                                </p>
+                            </div>
+                        ) : null}
+                        <div className={`grid ${cols} gap-x-4 gap-y-3 content-start`}>
                             {section.fields
                                 .filter((field) => {
                                     if (field.payload_key !== "child_location_id") return true;

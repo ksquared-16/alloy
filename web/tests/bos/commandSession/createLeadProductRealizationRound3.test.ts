@@ -107,7 +107,7 @@ describe("createLeadUnderstandingPresentation (Round 3)", () => {
 
     it("paste examples cover operator onboarding language", () => {
         expect(CREATE_LEAD_PASTE_EXAMPLES.length).toBeGreaterThanOrEqual(4);
-        expect(CREATE_LEAD_PASTE_EXAMPLES.join(" ")).toMatch(/call notes|website inquiry/i);
+        expect(CREATE_LEAD_PASTE_EXAMPLES.join(" ")).toMatch(/call notes|website lead/i);
     });
 });
 
@@ -127,10 +127,8 @@ describe("BosCommandSessionHost Round 3 convergence contracts", () => {
     it("uses workspace cards, sections layout, and sticky footer control center", () => {
         expect(host).toContain("WorkspaceCard");
         expect(host).toContain("WS_ACTION_PRIMARY");
-        expect(host).toContain('layout="sections"');
-        expect(host).toContain("fieldColumns={props.compact ? 1 : 2}");
+        expect(host).toContain("CreateLeadProgressiveForm");
         expect(host).toContain("data-bos-command-session-review");
-        expect(host).toContain("data-bos-command-session-empty");
         expect(host).toContain("data-bos-command-session-create-another");
         expect(host).toContain("data-bos-command-session-return-workspace");
         expect(host).toContain("sticky bottom-0");
