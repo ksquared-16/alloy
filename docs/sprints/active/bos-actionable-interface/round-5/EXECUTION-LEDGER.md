@@ -10,7 +10,7 @@ last_reviewed: 2026-07-27
 |---|---|---|---|
 | F5-01 | **done (docs)** | `80e38698b` | Path trace + retirement inventory |
 | F5-01b | **done (docs)** | `80e38698b` | Named constraint tip empty — no ports |
-| F5-01c | **done (docs)** | _(this commit)_ | Product decisions + command-authority comparison — **product-code gate** |
+| F5-01c | **done (docs)** | `6934651e7` | Product decisions + command-authority comparison — **product-code gate** |
 | F5-02 | **blocked** | `81a638241` provisional | Household merge reusable; **do not continue** until entity-section realignment |
 | F5-03 | pending | — | Conversation/Form parity after content contract |
 | F5-04 | **reset** | `8771c7c7a` misaligned | Placement section + BOS Location force **must be reversed/realigned** |
