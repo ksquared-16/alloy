@@ -312,6 +312,33 @@ export async function buildPlan(
         sourceResolutionVersions =
             sourceResolutionVersions ?? Array.from(new Set(rows.map((r) => r.generation_id)));
     }
+    // Thread the intake-resolved work_unit_id (lifecycle binding, stored in the case's
+    // create_lead_intake metadata) onto the lead subject so the created opportunity is
+    // work-unit-scoped. Required for Work Unit Work View membership (workUnitLeadMembership.ts
+    // excludes work_unit_id IS NULL). Only Create Lead cases carry create_lead_intake; other
+    // intakes leave the lead subject untouched.
+    {
+        const leadSubject = resolutionSet.subjects.find((s) => s.role === "lead");
+        if (leadSubject && !(typeof leadSubject.values?.work_unit_id === "string" && leadSubject.values.work_unit_id)) {
+            const { data: caseRow } = await deps.supabase
+                .from("processing_cases")
+                .select("metadata")
+                .eq("org_id", deps.orgId)
+                .eq("id", input.caseId)
+                .maybeSingle();
+            const intake = (caseRow as { metadata?: { create_lead_intake?: { work_unit_id?: unknown } } } | null)
+                ?.metadata?.create_lead_intake;
+            const workUnitId = typeof intake?.work_unit_id === "string" && intake.work_unit_id.trim() ? intake.work_unit_id : null;
+            if (workUnitId) {
+                resolutionSet = {
+                    subjects: resolutionSet.subjects.map((s) =>
+                        s.role === "lead" ? { ...s, values: { ...(s.values ?? {}), work_unit_id: workUnitId } } : s,
+                    ),
+                };
+            }
+        }
+    }
+
     const recs = buildRecommendations(resolutionSet);
     if (recs.operations.length === 0) {
         throw new OperatorServiceError(
