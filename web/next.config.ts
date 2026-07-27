@@ -253,6 +253,18 @@ const nextConfig: NextConfig = {
       { source: "/organization/commands/:path*", destination: "/adminV2/settings/organization/commands/:path*" },
       { source: "/organization/data-model", destination: "/adminV2/settings/organization/data-model" },
       { source: "/organization/data-model/:path*", destination: "/adminV2/settings/organization/data-model/:path*" },
+      { source: "/organization/operational-intelligence", destination: "/adminV2/settings/organization/operational-intelligence" },
+      {
+        source: "/organization/operational-intelligence/:path*",
+        destination: "/adminV2/settings/organization/operational-intelligence/:path*",
+      },
+      /** Organization Calculations — Path B authoring surface (not OI). */
+      { source: "/organization/calculations", destination: "/adminV2/settings/organization/calculations" },
+      {
+        source: "/organization/calculations/:path*",
+        destination: "/adminV2/settings/organization/calculations/:path*",
+      },
+
       /**
        * Organization Programs & Locations — relationship landing.
        * Must precede exact `/organization` rewrite. Collections remain at

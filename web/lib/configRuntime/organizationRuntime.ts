@@ -375,6 +375,31 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         distributionMode: "inherit",
         ownedConfiguration: ["Calculations & metrics", "Targets", "Indicator definitions"],
     },
+    {
+        key: "organization-calculations",
+        label: "Organization Calculations",
+        description: "Author governed capacity compositions over approved platform inputs.",
+        href: "/organization/calculations",
+        icon: "intelligence",
+        publisherLabel: "Organization",
+        configurationOwner: "Organization Calculations",
+        runtimeOwner: "Organization Calculation AST Evaluator",
+        consumers: ["Locations", "Capacity surfaces"],
+        inheritance: {
+            kind: "value",
+            path: ["platform", "organization", "location"],
+            label: "Definitions are organization-owned; evaluation is room-scoped",
+        },
+        publication: { mode: "explicit", status: "publish_required", label: "Publish required for runtime" },
+        override: { state: "not_allowed", label: "Published versions are immutable" },
+        health: {
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Proving slice — capacity composition only.",
+        },
+        distributionMode: "none",
+        ownedConfiguration: ["Calculation definitions", "Published versions", "Consumer bindings"],
+    },
 ] as const;
 
 /**
