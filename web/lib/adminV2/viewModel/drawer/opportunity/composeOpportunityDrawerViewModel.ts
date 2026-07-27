@@ -14,8 +14,6 @@ import {
     buildOpportunityDrawerHeaderTitle,
     buildOpportunityStatusControlVm,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelHeader";
-import { resolveStageOperatingPlanPurpose } from "@/lib/lifecycle/resolveStageOperatingPlanPurpose";
-import { resolveOpportunityStageWorkSlice } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice";
 import { filterResidualOperationalTasks } from "@/lib/lifecycle/filterResidualOperationalTasks";
 import { buildOpportunityDrawerHeaderMenuActions } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions";
 import { resolveOpportunityDrawerStatusCanMutateFromGate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
@@ -44,16 +42,15 @@ import {
     resolveOpportunityDrawerFirstPaintDependencies,
     tourBookingsFromFirstPaintData,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityDrawerFirstPaintDependencies";
-import { resolveFamilyCommunicationWorkspacePreview } from "@/lib/communications/v2/familyWorkspace";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import { logOpportunityDrawerViewModelComposeShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import type {
     OpportunityDrawerViewModel,
     OpportunityDrawerViewModelResult,
     RemindersSummaryVm,
-    StageWorkLoadState,
 } from "@/lib/adminV2/viewModel/drawer/types";
 import { resolveSharedCanonicalDeps } from "@/lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps";
+import { buildDeferredDetailResource } from "@/lib/adminV2/viewModel/drawer/opportunity/deferredDetailResource";
 
 function taskAssistEnabledOnServer(): boolean {
     const v = process.env.NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED?.trim().toLowerCase();
@@ -259,57 +256,34 @@ export async function composeOpportunityDrawerViewModel(
 
     const attentionRaw = record._operational_attention as OpportunityAttentionResult | null | undefined;
 
-    const stage_context = resolveStageOperatingPlanPurpose({
-        departmentMetadata: deptMetadata,
-        builderStageKey: lifecycle_rail?.current_stage_key ?? null,
-    });
-    // The communications preview is a first-paint seed only; the Activity embedded workspace
-    // fetches it on demand (and prewarms on idle). Deferring it drops one server round-trip
-    // from the record-open critical path and removes a redundant comms request on the surface.
-    const communicationsPreviewP = params.deferCommunicationsPreview
-        ? Promise.resolve(null)
-        : (async () => {
-              const tCommsPreview0 = Date.now();
-              const preview = await resolveFamilyCommunicationWorkspacePreview(supabase, orgId, {
-                  entityType: "opportunities",
-                  entityId: opportunityId,
-                  focusOpportunityId: opportunityId,
-                  composerChannel: "email",
-                  viewerUserId: gate.userId,
-                  familyStageLabel: currentStageLabel,
-              });
-              phases.activity_comms_preview_ms = Date.now() - tCommsPreview0;
-              return preview;
-          })();
-    // Stage work (Current Work region) is heavy — two operational_tasks reads — and does NOT feed
-    // the above-fold render model built above. On the workspace inline Focus Panel path it is
-    // deferred to a thin canonical resource resolved after first paint; the VM carries a `pending`
-    // load state so the region shows a neutral loading treatment, never a false "No active work".
+    // S4.3 — the deep/deferred (Tier-3) composition (Module B): stage context, family comms preview, and
+    // the heavy stage-work slice. Resolved independently of the visible primary panel; the workspace VM
+    // route defers comms + stage-work off the record-open path.
     const deferStageWork = params.deferStageWork === true;
-    const [stageSlice, communicationsPreviewVm] = await Promise.all([
-        deferStageWork
-            ? Promise.resolve({
-                  stage_work_runtime: null,
-                  published_stage_inputs: null,
-                  work_intent_runtime: null,
-              })
-            : resolveOpportunityStageWorkSlice({
-                  supabase,
-                  orgId,
-                  opportunityId,
-                  departmentId,
-                  stageKey: currentStageKey,
-                  stageLabel: currentStageLabel,
-                  departmentMetadata: deptMetadata,
-              }),
-        communicationsPreviewP,
-    ]);
-    const { stage_work_runtime, published_stage_inputs, work_intent_runtime } = stageSlice;
-    const stage_work_state: StageWorkLoadState = deferStageWork
-        ? { status: "pending" }
-        : stage_work_runtime
-          ? { status: "ready", value: stage_work_runtime }
-          : { status: "empty" };
+    const deferred = await buildDeferredDetailResource({
+        supabase,
+        orgId,
+        opportunityId,
+        viewerUserId: gate.userId,
+        departmentId,
+        deptMetadata,
+        currentStageKey,
+        currentStageLabel,
+        deferCommunicationsPreview: params.deferCommunicationsPreview === true,
+        deferStageWork,
+    });
+    Object.assign(phases, deferred.phases_ms);
+    const {
+        stage_context,
+        work_intent_runtime,
+        stage_work_runtime,
+        published_stage_inputs,
+        stage_work: stage_work_state,
+    } = deferred.workspace_detail;
+    const communicationsPreviewVm = deferred.activity.communicationsPreviewVm;
+
+    // Orchestrator-owned cross-tier join: the residual-tasks filter needs B's stage-work runtime; B's
+    // record patches are applied here, before the single `above_fold.record` snapshot below.
     const rawTasksSummary = parseInquirySummaryTasksFromRecord(record);
     // Null runtime leaves tasks unfiltered (Tier 1); the client re-filters when stage work lands.
     const filteredTasksSummary = filterResidualOperationalTasks(rawTasksSummary, stage_work_runtime);
@@ -317,8 +291,7 @@ export async function composeOpportunityDrawerViewModel(
     if (record._overview_data && typeof record._overview_data === "object" && !Array.isArray(record._overview_data)) {
         (record._overview_data as Record<string, unknown>)._inquiry_summary_tasks = filteredTasksSummary;
     }
-    record._stage_work_runtime = stage_work_runtime;
-    record._work_intent_runtime = work_intent_runtime;
+    Object.assign(record, deferred.record_patches);
     const status_can_mutate = resolveOpportunityDrawerStatusCanMutateFromGate({
         role: gate.role,
         roleKeys: gate.roleKeys,
