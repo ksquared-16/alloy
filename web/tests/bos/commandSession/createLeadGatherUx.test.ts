@@ -19,7 +19,7 @@ describe("BOS Create Lead conversation + form gather (WP-07/08)", () => {
         expect(host).toContain("Suggested");
     });
 
-    it("controller uses parse + form edits over shared draft", () => {
+    it("controller uses conversation intake adapter over effective gather fields", () => {
         const ctrl = readFileSync(
             resolve(
                 __dirname,
@@ -27,9 +27,10 @@ describe("BOS Create Lead conversation + form gather (WP-07/08)", () => {
             ),
             "utf8"
         );
-        expect(ctrl).toContain("applyParseResult");
+        expect(ctrl).toContain("createLeadConversationIntakeAdapter");
+        expect(ctrl).toContain("gatherSectionsFromFields");
         expect(ctrl).toContain("applyOperatorFieldEdit");
-        expect(ctrl).toContain("revalidateCreateLeadDraft");
         expect(ctrl).toContain("useInquiryChildPlacementCascade");
+        expect(ctrl).not.toContain("CREATE_LEAD_GATHER_FIELDS");
     });
 });

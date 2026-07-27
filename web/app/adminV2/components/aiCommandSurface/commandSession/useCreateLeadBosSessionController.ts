@@ -2,42 +2,27 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { createLeadParserSpec } from "@/lib/admin/actions/createLeadPlatformGather";
 import {
-    CREATE_LEAD_GATHER_FIELDS,
-    createLeadParserSpec,
-    gatherSections,
-} from "@/lib/admin/actions/createLeadPlatformGather";
+    emptyCreateLeadValuesForFields,
+    gatherSectionsFromFields,
+} from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 import { fetchActionIntakeSpec } from "@/lib/lifecycle/fetchActionIntakeSpec";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import {
     applyOperatorFieldEdit,
-    applyParseResult,
     bosDraftToFormValues,
-    buildCreateLeadBosPreview,
     confirmBosDraftField,
+    createLeadConversationIntakeAdapter,
     executeCreateLeadFromBosDraft,
     fingerprintBosCommandDraft,
     formValuesFromDraft,
-    revalidateCreateLeadDraft,
     type BosCommandSession,
-    type CreateLeadAdapterContext,
+    type EffectiveCreateLeadIntakeSpec,
 } from "@/lib/bos/commandSession";
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
 import { useInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
-
-function buildAdapterCtx(
-    session: BosCommandSession,
-    spec: ActionIntakeSpec,
-    fieldOptions?: CreateLeadAdapterContext["fieldOptions"]
-): CreateLeadAdapterContext {
-    return {
-        departmentId: session.invocation.workspace.departmentId,
-        workUnitId: session.invocation.workspace.workUnitId,
-        surface: session.invocation.workspace.surface || "bos_recommendations",
-        spec,
-        fieldOptions,
-    };
-}
+import type { IntakeSelectOption } from "@/lib/intake/types";
 
 export function useCreateLeadBosSessionController(session: BosCommandSession) {
     const ctx = useBosCommandSessionOptional();
@@ -45,16 +30,26 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
     const [analyzing, setAnalyzing] = useState(false);
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
     const [intakeSpec, setIntakeSpec] = useState<ActionIntakeSpec | null>(null);
+    const [effectiveSpec, setEffectiveSpec] = useState<EffectiveCreateLeadIntakeSpec | null>(null);
 
     const departmentId = session.invocation.workspace.departmentId;
-    const cascade = useInquiryChildPlacementCascade({ locationValue: "", programValue: "" });
+    const draftFormSnapshot = useMemo(() => formValuesFromDraft(session.draft), [session.draft]);
+    const formLocation = String(draftFormSnapshot.location_id ?? "");
+    const formProgram = String(draftFormSnapshot.child_program ?? "");
+    const cascade = useInquiryChildPlacementCascade({
+        locationValue: formLocation,
+        programValue: formProgram,
+    });
 
     const fieldOptions = useMemo(() => {
-        if (!cascade.siteOptions.length) return undefined;
-        return {
-            location_id: cascade.siteOptions,
-        } as CreateLeadAdapterContext["fieldOptions"];
-    }, [cascade.siteOptions]);
+        const options: Partial<Record<string, readonly IntakeSelectOption[]>> = {};
+        if (cascade.siteOptions.length) options.location_id = cascade.siteOptions;
+        if (cascade.programOptions.length) options.child_program = cascade.programOptions;
+        if (cascade.roomOptions.length) {
+            options.child_program_room_cohort_key = cascade.roomOptions;
+        }
+        return Object.keys(options).length ? options : undefined;
+    }, [cascade.programOptions, cascade.roomOptions, cascade.siteOptions]);
 
     useEffect(() => {
         let cancelled = false;
@@ -79,26 +74,56 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
         };
     }, [departmentId]);
 
-    const effectiveSpec = intakeSpec ?? createLeadParserSpec(departmentId?.trim() || "platform");
+    useEffect(() => {
+        const actionIntakeSpec = intakeSpec ?? createLeadParserSpec(departmentId?.trim() || "platform");
+        const loaded = createLeadConversationIntakeAdapter.loadEffectiveSpec({
+            departmentId: departmentId?.trim() || null,
+            actionIntakeSpec,
+            fieldOptions,
+        });
+        setEffectiveSpec(loaded);
+    }, [departmentId, fieldOptions, intakeSpec]);
 
-    const resolution = useMemo(
-        () => revalidateCreateLeadDraft(session.draft, buildAdapterCtx(session, effectiveSpec, fieldOptions)),
-        [session, effectiveSpec, fieldOptions]
+    const workspace = useMemo(
+        () => ({
+            departmentId: session.invocation.workspace.departmentId,
+            workUnitId: session.invocation.workspace.workUnitId,
+            surface: session.invocation.workspace.surface || "bos_recommendations",
+        }),
+        [session.invocation.workspace]
     );
+
+    const resolution = useMemo(() => {
+        if (!effectiveSpec) {
+            return {
+                missingRequired: [],
+                missingOptional: [],
+                invalid: [],
+                ambiguous: [],
+                blockers: [],
+                readyForPreview: false,
+                readyToExecute: false,
+            };
+        }
+        return createLeadConversationIntakeAdapter.syncDraftResolution({
+            draft: session.draft,
+            effectiveSpec,
+            workspace,
+        });
+    }, [effectiveSpec, session.draft, workspace]);
 
     useEffect(() => {
         ctx?.dispatch({ type: "SET_RESOLUTION", resolution });
     }, [ctx, resolution]);
 
+    const gatherFields = effectiveSpec?.gatherFields ?? [];
+    const sections = useMemo(() => gatherSectionsFromFields(gatherFields), [gatherFields]);
+
     const formValues = useMemo(() => {
         const base = formValuesFromDraft(session.draft);
-        for (const field of CREATE_LEAD_GATHER_FIELDS) {
-            if (base[field.payload_key] == null) base[field.payload_key] = "";
-        }
-        return base;
-    }, [session.draft]);
-
-    const sections = useMemo(() => gatherSections(), []);
+        const empty = emptyCreateLeadValuesForFields(gatherFields);
+        return { ...empty, ...base };
+    }, [gatherFields, session.draft]);
 
     const fieldConfidence = useMemo(() => {
         const out: Record<string, "high" | "medium" | "low" | "manual"> = {};
@@ -110,16 +135,21 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
         return out;
     }, [session.draft.values]);
 
+    const unsupportedHints = effectiveSpec?.unsupportedForConversation ?? [];
+
     const onAnalyze = useCallback(
         (textOverride?: string) => {
             const text = (textOverride ?? pasteText).trim();
-            if (!text || !ctx) return;
+            if (!text || !ctx || !effectiveSpec) return;
             setAnalyzing(true);
             setAnalyzeError(null);
             ctx.dispatch({ type: "BUMP_REQUEST_SEQ" });
             try {
-                const adapterCtx = buildAdapterCtx(session, effectiveSpec, fieldOptions);
-                const nextDraft = applyParseResult(session.draft, text, adapterCtx);
+                const nextDraft = createLeadConversationIntakeAdapter.parseOperatorTurn({
+                    text,
+                    draft: session.draft,
+                    effectiveSpec,
+                });
                 ctx.dispatch({ type: "SET_DRAFT", draft: nextDraft });
                 ctx.dispatch({
                     type: "APPEND_MESSAGE",
@@ -129,34 +159,36 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
                         body: text.length > 280 ? `${text.slice(0, 277)}…` : text,
                     },
                 });
-                const nextResolution = revalidateCreateLeadDraft(nextDraft, adapterCtx);
-                const summaryParts = nextDraft.values
-                    .filter((v) => v.state === "parsed_from_source" || v.state === "inferred")
-                    .map((v) => {
-                        const label = CREATE_LEAD_GATHER_FIELDS.find((f) => f.payload_key === v.fieldKey)?.field_label
-                            ?? v.fieldKey.replace(/_/g, " ");
-                        const tag = v.state === "inferred" ? " (suggested)" : "";
-                        return `${label}${tag}: ${String(v.value)}`;
-                    });
+                const summary = createLeadConversationIntakeAdapter.buildUnderstandingSummary({
+                    draft: nextDraft,
+                    effectiveSpec,
+                });
                 ctx.dispatch({
                     type: "APPEND_MESSAGE",
                     message: {
                         role: "assistant",
                         kind: "summary",
                         body:
-                            summaryParts.length > 0
-                                ? `Here’s what I found:\n${summaryParts.slice(0, 10).join("\n")}`
+                            summary.lines.length > 0
+                                ? `Here’s what I found:\n${summary.lines.slice(0, 12).join("\n")}`
                                 : "I couldn’t map that to lead fields. Try Form, or paste a clearer note.",
                     },
                 });
-                if (nextResolution.missingRequired.length > 0) {
-                    const labels = nextResolution.blockers.map((b) => b.message).join(" ");
+                const clarification = createLeadConversationIntakeAdapter.nextClarification({
+                    draft: nextDraft,
+                    effectiveSpec,
+                    workspace,
+                });
+                if (clarification) {
+                    const body = [clarification.prompt, clarification.formGuidance]
+                        .filter(Boolean)
+                        .join(" ");
                     ctx.dispatch({
                         type: "APPEND_MESSAGE",
                         message: {
                             role: "assistant",
                             kind: "follow_up",
-                            body: labels || "A few required details are still missing.",
+                            body,
                         },
                     });
                 }
@@ -175,7 +207,7 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
                 setAnalyzing(false);
             }
         },
-        [ctx, effectiveSpec, fieldOptions, pasteText, session]
+        [ctx, effectiveSpec, pasteText, session.draft, workspace]
     );
 
     const onFieldChange = useCallback(
@@ -201,9 +233,12 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
     );
 
     const onBuildPreview = useCallback(() => {
-        if (!ctx) return;
-        const adapterCtx = buildAdapterCtx(session, effectiveSpec, fieldOptions);
-        const preview = buildCreateLeadBosPreview(session.draft, adapterCtx);
+        if (!ctx || !effectiveSpec) return;
+        const preview = createLeadConversationIntakeAdapter.buildReview({
+            draft: session.draft,
+            effectiveSpec,
+            workspace,
+        });
         ctx.dispatch({ type: "SET_PREVIEW", preview });
         ctx.dispatch({
             type: "APPEND_MESSAGE",
@@ -213,7 +248,7 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
                 body: [preview.title, ...preview.summaryLines.slice(0, 6), ...preview.sideEffects].join("\n"),
             },
         });
-    }, [ctx, effectiveSpec, fieldOptions, session]);
+    }, [ctx, effectiveSpec, session.draft, workspace]);
 
     const onConfirmPreview = useCallback(() => {
         if (!ctx || !session.preview) return;
@@ -241,7 +276,9 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
     }, [ctx, session.draft, session.preview]);
 
     const onExecute = useCallback(async () => {
-        if (!ctx || !session.preview || !session.confirmation?.confirmedByOperator) return;
+        if (!ctx || !session.preview || !session.confirmation?.confirmedByOperator || !effectiveSpec) {
+            return;
+        }
         const currentFp = fingerprintBosCommandDraft(session.draft);
         if (currentFp !== session.preview.draftFingerprint) {
             ctx.dispatch({
@@ -255,8 +292,14 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
             return;
         }
         ctx.dispatch({ type: "BEGIN_EXECUTE" });
-        const adapterCtx = buildAdapterCtx(session, effectiveSpec, fieldOptions);
-        const result = await executeCreateLeadFromBosDraft(session.draft, adapterCtx);
+        const result = await executeCreateLeadFromBosDraft(session.draft, {
+            departmentId: workspace.departmentId,
+            workUnitId: workspace.workUnitId,
+            surface: workspace.surface,
+            spec: effectiveSpec.actionIntakeSpec,
+            fieldOptions: effectiveSpec.fieldOptions,
+            configRequiredInputs: effectiveSpec.configRequiredInputs,
+        });
         if (!result.ok) {
             ctx.dispatch({
                 type: "EXECUTE_FAILURE",
@@ -279,17 +322,19 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
             processingCaseId: result.processingCaseId ?? null,
             phase: result.processingCaseId ? "processing_review" : "completed",
         });
-    }, [ctx, effectiveSpec, fieldOptions, session]);
+    }, [ctx, effectiveSpec, session, workspace]);
 
     return {
         pasteText,
         setPasteText,
         analyzing,
         analyzeError,
-        intakeSpec: effectiveSpec,
+        intakeSpec: effectiveSpec?.actionIntakeSpec ?? createLeadParserSpec(departmentId?.trim() || "platform"),
+        effectiveSpec,
         formValues,
         sections,
-        gatherFields: CREATE_LEAD_GATHER_FIELDS,
+        gatherFields,
+        unsupportedHints,
         fieldConfidence,
         resolution,
         onAnalyze,
@@ -299,6 +344,5 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
         onConfirmPreview,
         onExecute,
         draftValues: bosDraftToFormValues(session.draft),
-        adapterCtx: buildAdapterCtx(session, effectiveSpec, fieldOptions),
     };
 }

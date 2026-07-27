@@ -272,12 +272,27 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                         ) : null}
                     </div>
                 ) : (
-                    <div data-bos-command-session-mode-body="form" className="min-h-0">
+                    <div data-bos-command-session-mode-body="form" className="min-h-0 space-y-3">
+                        {controller.unsupportedHints.length > 0 ? (
+                            <p
+                                className="rounded-md border border-alloy-stone/25 bg-alloy-stone/[0.04] px-3 py-2 text-[12px] text-alloy-midnight/70"
+                                data-bos-command-session-form-guidance="true"
+                            >
+                                Some fields need Form entry
+                                {controller.unsupportedHints.length === 1
+                                    ? `: ${controller.unsupportedHints[0]!.label}.`
+                                    : ` (${controller.unsupportedHints.map((h) => h.label).join(", ")}).`}
+                            </p>
+                        ) : null}
                         <ActionWorkspaceGatherFields
                             sections={controller.sections}
                             values={controller.formValues}
                             onChange={controller.onFieldChange}
-                            platformRequiredKeys={["first_name", "last_name"]}
+                            platformRequiredKeys={
+                                controller.effectiveSpec?.requiredPayloadKeys?.length
+                                    ? controller.effectiveSpec.requiredPayloadKeys
+                                    : ["first_name", "last_name"]
+                            }
                             fieldConfidence={controller.fieldConfidence}
                             layout="unified"
                             dataTestIdPrefix="bos-create-lead-form"
