@@ -2,7 +2,7 @@
  * Assignments Workspace product structure — Work | Studio (Operational Workspace Doctrine V3).
  *
  * Work    — Overview (attention), Roster (execution + bulk commands), Attendance.
- * Studio  — Types · Patterns · Validation. Templates stay hidden until usable.
+ * Studio  — Assignment Categories · Patterns · Validation. Templates stay hidden until usable.
  *
  * Commands live in the header Actions dropdown and on Roster selection — not a separate tab.
  * Scheduling (room × day, ratios, patterns) is a property of assignments — not the workspace noun.
@@ -27,7 +27,7 @@ export const SCHEDULING_WORK_TABS: { key: SchedulingWorkView; label: string }[] 
 ];
 
 export const SCHEDULING_STUDIO_TABS: { key: SchedulingStudioView; label: string }[] = [
-    { key: "types", label: "Types" },
+    { key: "types", label: "Assignment Categories" },
     { key: "patterns", label: "Patterns" },
     { key: "validation", label: "Validation" },
 ];

@@ -3,26 +3,39 @@
 /**
  * Assignment list + Assignment detail — Focus Panel States B & C.
  *
- * State B (list): Primary-first rows + child-day Timeline (all assignments).
- * State C (detail): Compact property grid + supporting sections — Timeline stays on the list.
+ * State B (list): Day filter above compact rows (rows ARE the day timeline).
+ * State C (detail): Compact white surface; History is a focused drill-in.
  */
 
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { BadgeCheck, Wallet } from "lucide-react";
+import { BadgeCheck, MoreHorizontal } from "lucide-react";
 
-import AssignmentTimeline from "@/components/adminV2/scheduling/AssignmentTimeline";
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    ASSIGNMENT_LIST_DAY_FILTERS,
     assignmentFinancialPlaceholder,
     buildAssignmentTimelineForWeekday,
-    pickTimelineWeekday,
-    sortAssignmentsForDisplay,
+    filterAssignmentsForDay,
 } from "@/lib/operationalAssignments/assignmentTimeline";
+import { resolveAssignmentLifecycleState } from "@/lib/operationalAssignments/assignmentLifecycleState";
 import {
     formatCompactScheduleEffective,
     formatCompactScheduleHours,
     formatCompactScheduleWeekdays,
 } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
 import type { Assignment, ScheduleHistoryEntry } from "@/lib/scheduling/projection/schedulingProjectionTypes";
+
+const LIFECYCLE_COLOR: Record<string, string> = {
+    blue: "#00458C",
+    pine: "#00A283",
+    muted: "#59678b",
+    gold: "#9a6700",
+};
 
 const T = {
     pine: "#00A283",
@@ -40,6 +53,8 @@ const TONE: Record<string, { fg: string; bg: string }> = {
     warning: { fg: "#9a6700", bg: "rgba(208,173,80,.14)" },
     accent: { fg: T.pine, bg: "rgba(0,162,131,.14)" },
 };
+
+const DAY_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function typeTone(a: Assignment) {
     return TONE[a.assignmentType.visualTone ?? "neutral"] ?? TONE.neutral;
@@ -79,7 +94,7 @@ function PrimaryBadge() {
 
 function TypeChip({ assignment }: { assignment: Assignment }) {
     const tone = typeTone(assignment);
-    const label = assignment.assignmentType.label?.trim() || "Assignment";
+    const label = assignment.assignmentType.label?.trim() || "Untitled type";
     return (
         <span
             data-assignment-type={assignment.assignmentType.key ?? "unknown"}
@@ -100,29 +115,6 @@ function TypeChip({ assignment }: { assignment: Assignment }) {
     );
 }
 
-function PropCell({ label, children }: { label: string; children: ReactNode }) {
-    return (
-        <div data-assignment-prop={label} style={{ display: "grid", gap: 2, minWidth: 0 }}>
-            <span
-                style={{
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: ".05em",
-                    textTransform: "uppercase",
-                    color: T.mid40,
-                }}
-            >
-                {label}
-            </span>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: T.forge, lineHeight: 1.3 }}>{children}</div>
-        </div>
-    );
-}
-
-function ScanSegment({ children }: { children: ReactNode }) {
-    return <span style={{ fontSize: 11.5, color: T.slate, whiteSpace: "nowrap" }}>{children}</span>;
-}
-
 function SectionLabel({ children }: { children: ReactNode }) {
     return (
         <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: T.mid40 }}>
@@ -131,39 +123,40 @@ function SectionLabel({ children }: { children: ReactNode }) {
     );
 }
 
-type Scan = {
-    program: string | null;
-    room: string | null;
-    days: string | null;
-    effective: string | null;
-    time: string | null;
-    financial: string;
-};
-
-function assignmentScanSegments(a: Assignment): Scan {
-    return {
-        program: a.room.program?.trim() || null,
-        room: a.room.name?.trim() || null,
-        days: formatCompactScheduleWeekdays(a.weekdays),
-        effective: formatCompactScheduleEffective({
-            effectiveFrom: a.effectiveFrom,
-            effectiveTo: a.effectiveTo,
-            openEnded: a.openEnded,
-        }),
-        time: formatCompactScheduleHours(a.arriveTime, a.departTime),
-        financial: assignmentFinancialPlaceholder(a),
-    };
+function softDivider(): CSSProperties {
+    return { borderTop: `1px solid ${T.border}`, paddingTop: 10, marginTop: 2 };
 }
 
-function joinScan(parts: Array<string | null | undefined>): ReactNode {
-    const filled = parts.filter((p): p is string => Boolean(p && String(p).trim()));
-    if (filled.length === 0) return null;
-    return filled.map((part, i) => (
-        <span key={`${part}-${i}`} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            {i > 0 ? <ScanSegment>·</ScanSegment> : null}
-            <ScanSegment>{part}</ScanSegment>
-        </span>
-    ));
+function operationalIdentity(a: Assignment): string | null {
+    const room = a.room.name?.trim() || null;
+    const program = a.room.program?.trim() || null;
+    if (room && program && program.toLowerCase() !== room.toLowerCase()) return `${room} · ${program}`;
+    return room || program || null;
+}
+
+/** Type-level eligibility labels are not an operator financial relationship. */
+function hasRealFinancial(a: Assignment): boolean {
+    const relationship = assignmentFinancialPlaceholder(a).trim();
+    if (!relationship || relationship === "—" || relationship === "Not linked") return false;
+    if (/^(billing eligible|recurring billing eligible|tuition|no billing)$/i.test(relationship)) {
+        return false;
+    }
+    return true;
+}
+
+function isBillingEligibleQuiet(a: Assignment): boolean {
+    return a.billing.participation === "eligible" && !hasRealFinancial(a);
+}
+
+function formatDetailEffective(a: Assignment): string | null {
+    const raw = formatCompactScheduleEffective({
+        effectiveFrom: a.effectiveFrom,
+        effectiveTo: a.effectiveTo,
+        openEnded: a.openEnded,
+    });
+    if (!raw) return null;
+    if (a.openEnded || !a.effectiveTo) return `Starts ${raw}`;
+    return raw;
 }
 
 export type AssignmentListActions = {
@@ -175,481 +168,534 @@ export type AssignmentListActions = {
     busy?: boolean;
 };
 
-/** Compact list of concurrent assignments + child-day Timeline (State B). */
+/** Compact list of concurrent assignments with day filter above (State B). */
 export function AssignmentSummaryList({
     assignments,
     onOpenAssignment,
     onCreate,
     listActions,
+    dayFilter = null,
+    onDayFilterChange,
 }: {
     assignments: Assignment[];
     onOpenAssignment: (id: string) => void;
     onCreate?: () => void;
     listActions?: AssignmentListActions;
+    /** null = All; 0–6 = weekday. Controlled so singular drill-in can preserve selection. */
+    dayFilter?: number | null;
+    onDayFilterChange?: (day: number | null) => void;
 }) {
-    const sorted = useMemo(() => sortAssignmentsForDisplay(assignments), [assignments]);
-    const todayWeekday = useMemo(() => new Date().getUTCDay(), []);
-    const [weekday, setWeekday] = useState(() => pickTimelineWeekday(assignments, todayWeekday));
-    const timeline = useMemo(
-        () => buildAssignmentTimelineForWeekday(assignments, weekday),
-        [assignments, weekday]
-    );
-    const dayChoices = useMemo(() => {
-        const set = new Set<number>();
-        for (const a of assignments) for (const d of a.weekdays) set.add(d);
-        return [...set].sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b));
-    }, [assignments]);
+    const [internalDay, setInternalDay] = useState<number | null>(dayFilter ?? null);
+    const activeDay = onDayFilterChange ? dayFilter ?? null : internalDay;
+    const setActiveDay = (next: number | null) => {
+        if (onDayFilterChange) onDayFilterChange(next);
+        else setInternalDay(next);
+    };
 
-    if (sorted.length === 0) {
+    const visible = useMemo(() => filterAssignmentsForDay(assignments, activeDay), [assignments, activeDay]);
+
+    const overlapById = useMemo(() => {
+        const map = new Map<string, boolean>();
+        if (activeDay == null) return map;
+        const model = buildAssignmentTimelineForWeekday(assignments, activeDay);
+        for (const seg of model.segments) {
+            if (seg.overlapsPrevious) map.set(seg.assignmentId, true);
+        }
+        return map;
+    }, [assignments, activeDay]);
+
+    const dayFilterBar = (
+        <div
+            role="tablist"
+            aria-label="Filter assignments by day"
+            data-assignment-day-filter="true"
+            style={{ display: "flex", gap: 4, flexWrap: "wrap" }}
+        >
+            {ASSIGNMENT_LIST_DAY_FILTERS.map((chip) => {
+                const on = activeDay === chip.key;
+                return (
+                    <button
+                        key={String(chip.key)}
+                        type="button"
+                        role="tab"
+                        aria-selected={on}
+                        data-day-filter={chip.key == null ? "all" : chip.key}
+                        onClick={() => setActiveDay(chip.key)}
+                        style={{
+                            ...pillBtn,
+                            background: on ? "rgba(0,162,131,.10)" : "#fff",
+                            color: on ? T.pine : T.muted,
+                            border: on ? "1px solid rgba(0,162,131,.35)" : `1px solid ${T.border}`,
+                        }}
+                    >
+                        {chip.label}
+                    </button>
+                );
+            })}
+        </div>
+    );
+
+    const headerRow = (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <SectionLabel>Assignments</SectionLabel>
+            {onCreate ? (
+                <button type="button" onClick={onCreate} data-schedule-create-new="true" style={{ ...linkBtn, fontSize: 11 }}>
+                    + Add Assignment
+                </button>
+            ) : null}
+        </div>
+    );
+
+    if (assignments.length === 0) {
         return (
             <div data-assignment-summary="empty" style={{ display: "grid", gap: 10 }}>
+                {headerRow}
                 <Empty>No assignments yet.</Empty>
-                {onCreate ? (
-                    <button type="button" onClick={onCreate} data-schedule-create-new="true" style={linkBtn}>
-                        + Add Assignment
-                    </button>
-                ) : null}
             </div>
         );
     }
 
     return (
-        <div data-assignment-summary="true" style={{ display: "grid", gap: 12 }}>
-            <div style={{ display: "grid", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <SectionLabel>Assignments</SectionLabel>
-                    {onCreate ? (
-                        <button
-                            type="button"
-                            onClick={onCreate}
-                            data-schedule-create-new="true"
-                            style={{ ...linkBtn, fontSize: 11 }}
-                        >
-                            + Add Assignment
-                        </button>
-                    ) : null}
+        <div data-assignment-summary="true" style={{ display: "grid", gap: 10, paddingBottom: 14 }}>
+            {headerRow}
+            {dayFilterBar}
+
+            {visible.length === 0 ? (
+                <div
+                    data-assignment-day-empty={activeDay == null ? "all" : activeDay}
+                    style={{
+                        padding: "14px 12px",
+                        borderRadius: 10,
+                        background: "#fff",
+                        border: `1px solid ${T.border}`,
+                    }}
+                >
+                    <Empty>
+                        {activeDay == null
+                            ? "No assignments in this view."
+                            : `No assignments on ${DAY_FULL[activeDay]}.`}
+                    </Empty>
                 </div>
-                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 5 }}>
-                    {sorted.map((a) => {
-                        const scan = assignmentScanSegments(a);
-                        const archiveBlocked = listActions?.archiveBlockedReasonFor?.(a) ?? null;
+            ) : (
+                <ul style={{ listStyle: "none", margin: 0, padding: "0 0 4px", display: "grid", gap: 7 }}>
+                    {visible.map((a) => {
+                        const identity = operationalIdentity(a);
+                        const days = formatCompactScheduleWeekdays(a.weekdays);
+                        const time = formatCompactScheduleHours(a.arriveTime, a.departTime);
+                        const effective = formatCompactScheduleEffective({
+                            effectiveFrom: a.effectiveFrom,
+                            effectiveTo: a.effectiveTo,
+                            openEnded: a.openEnded,
+                        });
+                        // List stays operational — financial relationship belongs on detail when real.
+                        const overlaps = overlapById.get(a.id) === true;
+                        const dayScoped = activeDay != null;
+
                         return (
                             <li key={a.id}>
-                                <div
+                                <button
+                                    type="button"
                                     data-assignment-row={a.id}
+                                    onClick={() => onOpenAssignment(a.id)}
                                     style={{
+                                        all: "unset",
                                         display: "grid",
-                                        gap: 5,
+                                        gap: dayScoped ? 3 : 4,
                                         width: "100%",
                                         boxSizing: "border-box",
                                         padding: "7px 10px",
                                         borderRadius: 10,
-                                        border: `1px solid ${T.border}`,
+                                        border: overlaps
+                                            ? "1px solid rgba(154,103,0,.35)"
+                                            : `1px solid ${T.border}`,
                                         background: "#fff",
+                                        cursor: "pointer",
                                     }}
                                 >
-                                    <button
-                                        type="button"
-                                        onClick={() => onOpenAssignment(a.id)}
-                                        style={{
-                                            all: "unset",
-                                            display: "grid",
-                                            gap: 4,
-                                            cursor: "pointer",
-                                            minWidth: 0,
-                                        }}
-                                    >
-                                        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                                            {a.isPrimary ? <PrimaryBadge /> : null}
-                                            <TypeChip assignment={a} />
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                                        {a.isPrimary ? <PrimaryBadge /> : null}
+                                        <TypeChip assignment={a} />
+                                        {overlaps ? (
                                             <span
+                                                data-assignment-overlap="true"
                                                 style={{
-                                                    marginLeft: "auto",
                                                     fontSize: 10,
                                                     fontWeight: 700,
-                                                    color: T.muted,
-                                                    textTransform: "capitalize",
-                                                    flex: "0 0 auto",
+                                                    color: "#9a6700",
+                                                    letterSpacing: ".02em",
                                                 }}
-                                                data-assignment-status={a.status}
                                             >
-                                                {a.status}
+                                                Overlap
                                             </span>
-                                        </div>
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                flexWrap: "wrap",
-                                                gap: "2px 0",
-                                                alignItems: "center",
-                                                minWidth: 0,
-                                            }}
-                                            data-assignment-scan={a.id}
-                                        >
-                                            {joinScan([
-                                                scan.program,
-                                                scan.room,
-                                                scan.days,
-                                                scan.effective,
-                                                scan.time,
-                                            ])}
-                                            {scan.financial !== "—" ? (
+                                        ) : null}
+                                        {(() => {
+                                            const life = resolveAssignmentLifecycleState({
+                                                commitmentKind: a.commitmentKind,
+                                                status: a.status,
+                                                effectiveFrom: a.effectiveFrom,
+                                                effectiveTo: a.effectiveTo,
+                                                openEnded: a.openEnded,
+                                                asOf: new Date().toISOString().slice(0, 10),
+                                            });
+                                            return (
                                                 <span
                                                     style={{
                                                         marginLeft: "auto",
-                                                        color: T.muted,
-                                                        fontSize: 10.5,
-                                                        whiteSpace: "nowrap",
+                                                        fontSize: 10,
+                                                        fontWeight: 700,
+                                                        color: LIFECYCLE_COLOR[life.tone] ?? T.muted,
+                                                        flex: "0 0 auto",
                                                     }}
+                                                    data-assignment-status={life.label.toLowerCase()}
+                                                    data-assignment-lifecycle={life.label}
                                                 >
-                                                    {scan.financial}
+                                                    {life.label}
                                                 </span>
-                                            ) : null}
-                                        </div>
-                                    </button>
-                                    {listActions ? (
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {identity ? (
                                         <div
-                                            data-assignment-row-actions={a.id}
-                                            style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 2 }}
+                                            data-assignment-identity={a.id}
+                                            style={{
+                                                fontSize: dayScoped ? 13 : 12.5,
+                                                fontWeight: 600,
+                                                color: T.forge,
+                                                lineHeight: 1.25,
+                                            }}
                                         >
-                                            {listActions.onEdit ? (
-                                                <button
-                                                    type="button"
-                                                    disabled={listActions.busy}
-                                                    onClick={() => listActions.onEdit?.(a.id)}
-                                                    style={rowActionBtn}
-                                                >
-                                                    Edit
-                                                </button>
-                                            ) : null}
-                                            {!a.isPrimary && listActions.onSetPrimary ? (
-                                                <button
-                                                    type="button"
-                                                    disabled={listActions.busy}
-                                                    onClick={() => listActions.onSetPrimary?.(a.id)}
-                                                    style={rowActionBtn}
-                                                >
-                                                    Make primary
-                                                </button>
-                                            ) : null}
-                                            {listActions.onDuplicate ? (
-                                                <button
-                                                    type="button"
-                                                    disabled={listActions.busy || !a.assignmentType.id}
-                                                    onClick={() => listActions.onDuplicate?.(a.id)}
-                                                    style={rowActionBtn}
-                                                    title={
-                                                        a.assignmentType.id
-                                                            ? undefined
-                                                            : "Unavailable until this assignment has an Assignment Type"
-                                                    }
-                                                >
-                                                    Duplicate
-                                                </button>
-                                            ) : null}
-                                            {listActions.onArchive && !a.isPrimary ? (
-                                                <button
-                                                    type="button"
-                                                    disabled={listActions.busy}
-                                                    onClick={() => listActions.onArchive?.(a.id)}
-                                                    style={{ ...rowActionBtn, color: "#9a3412" }}
-                                                >
-                                                    Archive
-                                                </button>
-                                            ) : null}
-                                            {a.isPrimary && archiveBlocked ? (
-                                                <button
-                                                    type="button"
-                                                    disabled
-                                                    data-archive-blocked="primary"
-                                                    title={archiveBlocked}
-                                                    style={{
-                                                        ...rowActionBtn,
-                                                        color: T.muted,
-                                                        cursor: "not-allowed",
-                                                        opacity: 0.7,
-                                                    }}
-                                                >
-                                                    Archive
-                                                </button>
-                                            ) : null}
+                                            {identity}
                                         </div>
                                     ) : null}
-                                </div>
+
+                                    <div
+                                        data-assignment-scan={a.id}
+                                        style={{
+                                            display: "flex",
+                                            flexWrap: "wrap",
+                                            gap: "2px 10px",
+                                            alignItems: "baseline",
+                                            fontSize: dayScoped ? 12.5 : 11.5,
+                                            color: T.slate,
+                                            fontWeight: dayScoped ? 600 : 500,
+                                        }}
+                                    >
+                                        {dayScoped ? (
+                                            time ? <span data-assignment-time="true">{time}</span> : null
+                                        ) : (
+                                            <>
+                                                {days ? <span>{days}</span> : null}
+                                                {time ? <span data-assignment-time="true">{time}</span> : null}
+                                                {effective ? <span style={{ color: T.muted, fontWeight: 500 }}>{effective}</span> : null}
+                                            </>
+                                        )}
+                                    </div>
+                                </button>
                             </li>
                         );
                     })}
                 </ul>
-            </div>
+            )}
 
-            <section data-assignment-list-timeline="true" style={{ display: "grid", gap: 8 }}>
-                <SectionLabel>Day timeline</SectionLabel>
-                {dayChoices.length > 1 ? (
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {dayChoices.map((d) => {
-                            const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-                            const on = d === weekday;
-                            return (
-                                <button
-                                    key={d}
-                                    type="button"
-                                    onClick={() => setWeekday(d)}
-                                    style={{
-                                        ...pillBtn,
-                                        background: on ? "rgba(0,162,131,.10)" : "#fff",
-                                        color: on ? T.pine : T.muted,
-                                        border: on
-                                            ? "1px solid rgba(0,162,131,.35)"
-                                            : `1px solid ${T.border}`,
-                                    }}
-                                >
-                                    {labels[d]}
-                                </button>
-                            );
-                        })}
-                    </div>
-                ) : null}
-                <AssignmentTimeline model={timeline} />
-            </section>
+            {/* Row-level actions stay off the list — detail owns Edit / Archive / Duplicate. */}
+            {listActions ? <span data-assignment-list-actions-owner="detail" hidden /> : null}
         </div>
     );
 }
 
-/** Compact billing line — no empty Fees/Funding/Subsidy/Price grid. */
-function FinancialSummarySection({ assignment }: { assignment: Assignment }) {
-    const relationship = assignmentFinancialPlaceholder(assignment);
-    const hasLink = relationship !== "—" && relationship !== "Not linked";
-
-    return (
-        <section data-assignment-financial="true" style={{ display: "grid", gap: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, color: T.mid40 }}>
-                <Wallet size={12.5} strokeWidth={2} />
-                <SectionLabel>Financial</SectionLabel>
-            </div>
-            <div
-                style={{
-                    padding: "8px 12px",
-                    borderRadius: 10,
-                    border: `1px solid ${T.border}`,
-                    background: "#fff",
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    color: hasLink ? T.forge : T.muted,
-                    lineHeight: 1.4,
-                }}
-            >
-                {hasLink
-                    ? relationship
-                    : "Billing not linked yet — amounts and rates are owned by Billing."}
-            </div>
-        </section>
-    );
-}
-
-function HistorySection({ entries }: { entries: ScheduleHistoryEntry[] }) {
-    if (entries.length === 0) {
-        return (
-            <section data-assignment-history="true" style={{ display: "grid", gap: 6 }}>
-                <SectionLabel>History</SectionLabel>
-                <Empty>No prior assignments on record.</Empty>
-            </section>
-        );
-    }
-
-    return (
-        <section data-assignment-history="true" style={{ display: "grid", gap: 6 }}>
-            <SectionLabel>History</SectionLabel>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
-                {entries.map((e, i) => (
-                    <li
-                        key={`${e.effectiveFrom}-${i}`}
-                        data-history-entry={e.effectiveFrom}
-                        style={{
-                            fontSize: 12,
-                            color: T.slate,
-                            padding: "6px 10px",
-                            borderRadius: 8,
-                            border: `1px solid ${T.border}`,
-                            background: "#fff",
-                        }}
-                    >
-                        <span style={{ fontWeight: 600, color: T.forge }}>{e.effectiveFrom}</span>
-                        {e.effectiveTo ? <span style={{ color: T.muted }}> → {e.effectiveTo}</span> : null}
-                        <span style={{ marginLeft: 8 }}>{e.summary}</span>
-                    </li>
-                ))}
-            </ul>
-        </section>
-    );
-}
-
-/** Canonical Assignment Detail — compact properties; Timeline lives on the list. */
+/** Canonical Assignment Detail — meaning first; Edit is the visual peer. */
 export function AssignmentDetailView({
     assignment,
     history = [],
-    onBack,
     onEdit,
     onSetPrimary,
     onDuplicate,
     onArchive,
     archiveBlockedReason,
+    onDelete,
+    onPromote,
+    promoteBlockedReason,
     busy,
+    asOf,
 }: {
     assignment: Assignment;
-    /** @deprecated Timeline is on the Assignments list; retained for call-site compat. */
+    /** @deprecated Retained for call-site compat; timeline lives on the list. */
     siblings?: Assignment[];
     history?: ScheduleHistoryEntry[];
-    onBack: () => void;
+    /** Back-to-Assignments is owned by the host's header (ONE header Back affordance per drill-in state). */
     onEdit?: () => void;
     onSetPrimary?: () => void;
     onDuplicate?: () => void;
     onArchive?: () => void;
     archiveBlockedReason?: string | null;
+    /** Proposed-only: permanently remove the assignment from planning projections. */
+    onDelete?: () => void;
+    onPromote?: () => void;
+    promoteBlockedReason?: string | null;
     busy?: boolean;
+    /** Org-local as-of for lifecycle resolution (YYYY-MM-DD). */
+    asOf?: string | null;
 }) {
+    const [historyOpen, setHistoryOpen] = useState(false);
+
     const hours = formatCompactScheduleHours(assignment.arriveTime, assignment.departTime);
     const days = formatCompactScheduleWeekdays(assignment.weekdays);
-    const starts = formatCompactScheduleEffective({
-        effectiveFrom: assignment.effectiveFrom,
-        effectiveTo: null,
-        openEnded: true,
-    });
-    const ends =
-        assignment.openEnded || !assignment.effectiveTo
-            ? "Open"
-            : formatCompactScheduleEffective({
-                  effectiveFrom: assignment.effectiveTo,
-                  effectiveTo: null,
-                  openEnded: true,
-              });
+    const effective = formatDetailEffective(assignment);
     const roomText = assignment.room.name?.trim() || null;
     const programText = assignment.room.program?.trim() || null;
+    const lifecycle = resolveAssignmentLifecycleState({
+        commitmentKind: assignment.commitmentKind,
+        status: assignment.status,
+        effectiveFrom: assignment.effectiveFrom,
+        effectiveTo: assignment.effectiveTo,
+        openEnded: assignment.openEnded,
+        asOf: asOf?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+    });
+    const isPlanning = assignment.commitmentKind === "proposed" || lifecycle.label === "Proposed";
+    const kindLabel = assignment.assignmentType.label?.trim() || "Assignment";
+    const scheduleLine = [days, hours].filter(Boolean).join(" · ");
     const effects = [
-        assignment.assignmentType.attendanceParticipation === "expected" ? "Attendance" : null,
-        assignment.assignmentType.staffingParticipation === "demand"
-            ? "Staff demand"
-            : assignment.assignmentType.staffingParticipation === "supply"
-              ? "Staff supply"
+        isPlanning ? "Proposed only — not attendance or billing truth" : null,
+        !isPlanning && assignment.assignmentType.attendanceParticipation === "expected"
+            ? "Attendance"
+            : null,
+        !isPlanning && assignment.assignmentType.staffingParticipation === "demand"
+            ? "Ratios"
+            : !isPlanning && assignment.assignmentType.staffingParticipation === "supply"
+              ? "Staffing"
               : null,
+        !isPlanning && assignment.assignmentType.attendanceParticipation === "expected" ? "Reporting" : null,
     ]
         .filter(Boolean)
         .join(" · ");
 
-    return (
-        <div data-assignment-detail={assignment.id} style={{ display: "grid", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <button type="button" onClick={onBack} style={linkBtn}>
-                    ← All assignments
+    const duplicateBlocked = !assignment.assignmentType.id;
+    const isProposed = assignment.commitmentKind === "proposed";
+    const archiveBlocked = Boolean(assignment.isPrimary && archiveBlockedReason);
+
+    if (historyOpen) {
+        return (
+            <div data-assignment-history-surface={assignment.id} style={{ display: "grid", gap: 12 }}>
+                <button type="button" onClick={() => setHistoryOpen(false)} style={linkBtn} data-assignment-history-back="true">
+                    ← Back to assignment
                 </button>
-                {assignment.isPrimary ? <PrimaryBadge /> : null}
-                <TypeChip assignment={assignment} />
+                <SectionLabel>History</SectionLabel>
+                {history.length === 0 ? (
+                    <Empty>No history for this assignment yet.</Empty>
+                ) : (
+                    <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+                        {history.map((e, i) => (
+                            <li
+                                key={`${e.effectiveFrom}-${i}`}
+                                data-history-entry={e.effectiveFrom}
+                                style={{
+                                    fontSize: 12,
+                                    color: T.slate,
+                                    padding: "8px 0",
+                                    borderBottom: i === history.length - 1 ? "none" : `1px solid ${T.border}`,
+                                }}
+                            >
+                                <span style={{ fontWeight: 600, color: T.forge }}>{e.effectiveFrom}</span>
+                                {e.effectiveTo ? <span style={{ color: T.muted }}> → {e.effectiveTo}</span> : null}
+                                <div style={{ marginTop: 2 }}>{e.summary}</div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
+        );
+    }
 
-            <div
-                data-assignment-props="true"
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "10px 14px",
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: `1px solid ${T.border}`,
-                    background: "#fff",
-                }}
-            >
-                <PropCell label="Program">{programText ?? "—"}</PropCell>
-                <PropCell label="Room">{roomText ?? <Empty>Pending</Empty>}</PropCell>
-                <PropCell label="State">
-                    <span style={{ textTransform: "capitalize" }}>{assignment.status}</span>
-                </PropCell>
-                <PropCell label="Days">{days ?? <Empty>Not set</Empty>}</PropCell>
-                <PropCell label="Time">{hours ?? <Empty>Not set</Empty>}</PropCell>
-                <PropCell label="Starts">{starts ?? "—"}</PropCell>
-                <PropCell label="Ends">{ends ?? "—"}</PropCell>
-            </div>
-
-            <section data-assignment-operational-effects="true" style={{ display: "grid", gap: 6 }}>
-                <SectionLabel>Operational effects</SectionLabel>
-                <div
-                    style={{
-                        padding: "8px 12px",
-                        borderRadius: 10,
-                        border: `1px solid ${T.border}`,
-                        background: "#fff",
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        color: T.forge,
-                    }}
-                >
-                    {effects || "—"}
+    return (
+        <div
+            data-assignment-detail={assignment.id}
+            style={{
+                display: "grid",
+                gap: 12,
+                padding: "4px 2px 8px",
+                background: "#fff",
+            }}
+        >
+            <header data-assignment-detail-header="true" style={{ display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span
+                        data-assignment-kind-title="true"
+                        style={{ fontSize: 16, fontWeight: 700, color: T.forge, lineHeight: 1.2 }}
+                    >
+                        {kindLabel}
+                    </span>
+                    {assignment.isPrimary ? <PrimaryBadge /> : null}
+                    <span
+                        data-assignment-status={lifecycle.label.toLowerCase()}
+                        data-assignment-lifecycle={lifecycle.label}
+                        style={{
+                            marginLeft: "auto",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: LIFECYCLE_COLOR[lifecycle.tone] ?? T.muted,
+                        }}
+                    >
+                        {lifecycle.label}
+                    </span>
                 </div>
-            </section>
 
-            <FinancialSummarySection assignment={assignment} />
+                <div data-assignment-detail-summary="true" style={{ display: "grid", gap: 4 }}>
+                    {roomText ? (
+                        <div data-assignment-room="true" style={{ fontSize: 15, fontWeight: 700, color: T.forge }}>
+                            {roomText}
+                        </div>
+                    ) : null}
+                    {programText && programText.toLowerCase() !== (roomText ?? "").toLowerCase() ? (
+                        <div data-assignment-program="true" style={{ fontSize: 12.5, fontWeight: 500, color: T.slate }}>
+                            {programText}
+                        </div>
+                    ) : null}
+                    {scheduleLine ? (
+                        <div data-assignment-schedule-line="true" style={{ fontSize: 13, fontWeight: 500, color: T.forge }}>
+                            {scheduleLine}
+                        </div>
+                    ) : null}
+                    {effective ? (
+                        <div data-assignment-effective="true" style={{ fontSize: 12, fontWeight: 500, color: T.muted }}>
+                            {effective}
+                        </div>
+                    ) : null}
+                </div>
+            </header>
 
-            <HistorySection entries={history} />
+            {effects ? (
+                <section data-assignment-operational-effects="true" style={softDivider()}>
+                    <SectionLabel>Operational effects</SectionLabel>
+                    <div style={{ marginTop: 6, fontSize: 12.5, color: T.forge, fontWeight: 500 }}>{effects}</div>
+                </section>
+            ) : null}
 
-            <section
-                data-assignment-actions="true"
-                style={{ borderTop: `1px solid ${T.border}`, paddingTop: 10, display: "grid", gap: 8 }}
+            {!isPlanning && hasRealFinancial(assignment) ? (
+                <section data-assignment-financial="true" style={softDivider()}>
+                    <SectionLabel>Financial</SectionLabel>
+                    <div style={{ marginTop: 6, fontSize: 12.5, color: T.forge, fontWeight: 500 }}>
+                        {assignmentFinancialPlaceholder(assignment)}
+                    </div>
+                </section>
+            ) : !isPlanning && isBillingEligibleQuiet(assignment) ? (
+                <div data-assignment-financial-quiet="true" style={{ ...softDivider(), fontSize: 11.5, color: T.muted }}>
+                    Recurring tuition eligible
+                </div>
+            ) : null}
+
+            <button
+                type="button"
+                data-assignment-view-history="true"
+                onClick={() => setHistoryOpen(true)}
+                style={{ ...linkBtn, ...softDivider(), width: "fit-content" }}
             >
-                <SectionLabel>Actions</SectionLabel>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                View history
+            </button>
+
+            <section data-assignment-actions="true" style={softDivider()}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                     {onEdit ? (
                         <button type="button" disabled={busy} onClick={onEdit} style={primaryBtn(Boolean(busy))}>
                             Edit Assignment
                         </button>
                     ) : null}
-                    {!assignment.isPrimary && onSetPrimary ? (
+                    {onPromote ? (
                         <button
                             type="button"
                             disabled={busy}
-                            onClick={onSetPrimary}
-                            style={onEdit ? linkBtn : primaryBtn(Boolean(busy))}
+                            onClick={onPromote}
+                            data-assignment-promote="true"
+                            style={linkBtn}
                         >
+                            Promote Proposed Assignment
+                        </button>
+                    ) : promoteBlockedReason ? (
+                        <span data-promote-blocked="true" style={{ fontSize: 11.5, color: T.muted }}>
+                            {promoteBlockedReason}
+                        </span>
+                    ) : null}
+                    {!assignment.isPrimary && onSetPrimary ? (
+                        <button type="button" disabled={busy} onClick={onSetPrimary} style={linkBtn}>
                             Make Primary
                         </button>
                     ) : null}
-                    {onDuplicate ? (
-                        <button type="button" disabled={busy} onClick={onDuplicate} style={linkBtn}>
-                            Duplicate
-                        </button>
-                    ) : null}
-                    {onArchive && !assignment.isPrimary ? (
-                        <button
-                            type="button"
-                            disabled={busy}
-                            onClick={onArchive}
-                            style={{ ...linkBtn, color: "#9a3412" }}
+
+                    <div style={{ marginLeft: "auto" }}>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                data-assignment-overflow="true"
+                                aria-label="More actions"
+                                style={{
+                                    all: "unset",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 8,
+                                    border: `1px solid ${T.border}`,
+                                    color: T.slate,
+                                }}
+                            >
+                                <MoreHorizontal size={16} strokeWidth={2} aria-hidden />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            side="bottom"
+                            collisionPadding={12}
+                            data-assignment-overflow-menu="true"
+                            className="min-w-[168px] z-[9999]"
                         >
-                            Archive
-                        </button>
-                    ) : null}
-                    {assignment.isPrimary && archiveBlockedReason ? (
-                        <button
-                            type="button"
-                            disabled
-                            data-archive-blocked="primary"
-                            title={archiveBlockedReason}
-                            style={{ ...linkBtn, color: T.muted, cursor: "not-allowed", opacity: 0.7 }}
-                        >
-                            Archive
-                        </button>
-                    ) : null}
+                            {onDuplicate ? (
+                                <DropdownMenuItem
+                                    disabled={busy || duplicateBlocked}
+                                    title={
+                                        duplicateBlocked
+                                            ? "Duplicate requires an Assignment Type on this assignment"
+                                            : undefined
+                                    }
+                                    onSelect={() => onDuplicate()}
+                                >
+                                    Duplicate
+                                </DropdownMenuItem>
+                            ) : null}
+                            {onArchive && !assignment.isPrimary && !isProposed ? (
+                                <DropdownMenuItem
+                                    disabled={busy}
+                                    className="text-[#9a3412] focus:text-[#9a3412]"
+                                    onSelect={() => onArchive()}
+                                >
+                                    Archive
+                                </DropdownMenuItem>
+                            ) : null}
+                            {archiveBlocked && !isProposed ? (
+                                <DropdownMenuItem
+                                    disabled
+                                    data-archive-blocked="primary"
+                                    title={archiveBlockedReason ?? undefined}
+                                >
+                                    Archive
+                                </DropdownMenuItem>
+                            ) : null}
+                            {onDelete && isProposed ? (
+                                <DropdownMenuItem
+                                    disabled={busy}
+                                    data-assignment-delete-proposed="true"
+                                    className="text-[#9a3412] focus:text-[#9a3412]"
+                                    onSelect={() => onDelete()}
+                                >
+                                    Delete Proposed Assignment
+                                </DropdownMenuItem>
+                            ) : null}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    </div>
                 </div>
-                {assignment.isPrimary && archiveBlockedReason ? (
-                    <p
-                        data-archive-blocked-reason="true"
-                        style={{ margin: 0, fontSize: 11.5, color: T.muted, lineHeight: 1.4 }}
-                    >
-                        {archiveBlockedReason}
-                    </p>
-                ) : null}
-                {!onDuplicate && !assignment.assignmentType.id ? (
-                    <p style={{ margin: 0, fontSize: 11.5, color: T.muted, lineHeight: 1.4 }}>
-                        Duplicate is unavailable until this assignment has an Assignment Type.
-                    </p>
-                ) : null}
             </section>
         </div>
     );
@@ -659,14 +705,6 @@ const linkBtn: CSSProperties = {
     all: "unset",
     cursor: "pointer",
     fontSize: 12,
-    fontWeight: 600,
-    color: T.pine,
-};
-
-const rowActionBtn: CSSProperties = {
-    all: "unset",
-    cursor: "pointer",
-    fontSize: 10.5,
     fontWeight: 600,
     color: T.pine,
 };

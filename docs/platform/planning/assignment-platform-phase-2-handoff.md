@@ -30,19 +30,24 @@ Background multitask subagents repeatedly **hung mid-turn** (zero tool growth fo
 
 ## What landed in code (unproven / partially proven)
 
-### Identity / Gender (Slice 1 — code fix, **not browser-proven**)
+### Identity / Gender (Slice 1 — **browser-proven 2026-07-26**)
 
 **Reproduced earlier:** Children Context Facts → Gender edit → select **disabled** with only `Select…` (no Male/Female/etc.).
 
-**Likely cause:** `useOptionSetSelectOptions` left `loading=true` when an in-flight fetch was cancelled (Strict Mode / remount), and Identity select was `disabled={busy \|\| choiceOptionsLoading}`.
+**Causes (both fixed):**
 
-**Fix committed in this handoff:**
+1. `useOptionSetSelectOptions` left `loading=true` when an in-flight fetch was cancelled (Strict Mode / remount), and Identity select was `disabled={busy \|\| choiceOptionsLoading}`.
+2. After PATCH succeeded, UI stayed `—` because `buildChildrenCardEvidence` read gender from mapped drawer rows (profile fields stripped). Now reads raw `_inquiry_children` via `personDrawerGenderDisplayLabel`.
+
+**Fix files:**
 
 - `web/lib/admin/hooks/useOptionSetSelectOptions.ts` — clear loading on cancel / `finally`
 - `web/components/admin/focusPanel/identity/IdentityFieldValue.tsx` — disable select only while save `busy`; AlloySelect for gender
 - `web/components/workspace/AlloySelect.tsx` — always include empty `Select…` option
+- `web/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence.ts` — gender from raw inquiry rows
+- `web/lib/adminV2/runtime/focusPanel/focusPanelMutation.ts` — `saveInquiryChild` merge uses `getTruth?.() ?? truth`
 
-**Still required:** live proof on 3015 — Wenc → Blake → Gender → pick → Save → value sticks on reopen. DB already has `person_gender` (female/male/not_specified) for orgs; edit control resolves `child.gender` → `person_gender`.
+**Browser proof (3015):** Wenc → Blake → Gender → Male → Save → UI **Male**; API `gender: male`; cold reload still **Male**. Cert: `docs/audits/active/assignment-phase2-gender-save-cert/`.
 
 ### Assignment Platform recovery (code from earlier agent; **not fully browser-proven**)
 
@@ -71,16 +76,18 @@ Background multitask subagents repeatedly **hung mid-turn** (zero tool growth fo
 
 ## Ordered resume checklist (one at a time)
 
-1. **Gender Save** — browser-prove fix on 3015; add focused test if missing; screenshot.
-2. **Rename / hierarchy** — confirm Focus Panel **Assignments** card + condensed plural/singular UX.
-3. **Add Assignment** — every entry point (Focus list, Workspace header, Actions, Roster); create refreshes roster.
-4. **Studio Types CRUD** — create type via UI; confirm type appears in create picker (apply migrations if API/schema fails).
-5. **Bulk commands** — no “Planned”; preview/commit via action runtime.
-6. **Program/Room gating** — after Primary Assignment, inquiry fields blocked / derived.
-7. **AlloySelect + BOS-over-Workspace** — remaining raw selects; modal stacking.
-8. **Overview dedupe + Roster** — row → detail; selection toolbar complete.
-9. **Full screenshot pack +** `cd web && npm run typecheck` (+ focused tests).
-10. Kelly browser acceptance → then push/PR only when authorized.
+1. ~~**Gender Save** — browser-prove fix on 3015; add focused test if missing; screenshot.~~ **DONE 2026-07-26**
+2. ~~**Children summary alignment + inline save UX** — multi-child field columns align; Gender options sync-fallback (instant); `✓ Saved` flash after inline commit.~~ **DONE 2026-07-26** (browser: Blake/Jarek Gender `left` delta **0**; options ready **0ms**; save flash **✓ Saved**)
+3. ~~**Rename / hierarchy** — Focus Panel **Assignments** card Visible on enrollment (default + promote Linked→Visible at composition).~~ **DONE 2026-07-26** (Wenc Focus Panel shows Assignments beside Children)
+4. **Add Assignment** — every entry point (Focus list, Workspace header, Actions, Roster); create refreshes roster. *(Workspace empty state clarified: needs enrollment agreement at site.)*
+5. **Studio Types CRUD** — create type via UI; confirm type appears in create picker (apply migrations if API/schema fails).
+   - **2026-07-26:** Studio → Types → Create form works; Save fails with `could not find the table 'public.operational_assignment_types' in the schema cache`. Apply `supabase/migrations/20260725030801_operational_assignment_foundation_v1.sql` then `20260725190000_operational_assignment_type_defaults_v1.sql` to the connected DB, then re-prove.
+6. **Bulk commands** — no “Planned”; preview/commit via action runtime.
+7. **Program/Room gating** — after Primary Assignment, inquiry fields blocked / derived. *(ChildFocusEdit now passes `hasCommittedPrimaryAssignment`.)*
+8. **AlloySelect + BOS-over-Workspace** — remaining raw selects; modal stacking. *(Workspace BOS modal z-index raised above BOS rail.)*
+9. **Overview dedupe + Roster** — Overview attention/activity no longer duplicates launch KPIs; roster row opens assignment detail panel.
+10. **Full screenshot pack +** `cd web && npm run typecheck` (+ focused tests).
+11. Kelly browser acceptance → then push/PR only when authorized.
 
 ---
 

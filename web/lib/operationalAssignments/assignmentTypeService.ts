@@ -7,8 +7,10 @@ import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/op
 import { SCHEDULE_ASSIGNMENT_OPERATIONAL_STATUSES } from "@/lib/childcareOperational/enrollmentOperationalStatus";
 import type { AssignmentTypePresentation } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 import {
+    defaultVisualToneForAssignmentTypeLabel,
     readAssignmentTypeBehavior,
     slugAssignmentTypeKey,
+    writeAssignmentTypeBehavior,
     type AssignmentTypeBehavior,
 } from "@/lib/operationalAssignments/assignmentTypeBehavior";
 
@@ -86,14 +88,7 @@ export async function loadOrgAssignmentTypesAdmin(
 
 function behaviorPayload(behavior?: AssignmentTypeBehavior): Record<string, unknown> {
     if (!behavior) return {};
-    return {
-        description: behavior.description ?? null,
-        primaryEligible: behavior.primaryEligible === true,
-        requiresProgram: behavior.requiresProgram === true,
-        requiresRoom: behavior.requiresRoom === true,
-        allowsOverlap: behavior.allowsOverlap === true,
-        locationIds: behavior.locationIds ?? [],
-    };
+    return writeAssignmentTypeBehavior(behavior) as Record<string, unknown>;
 }
 
 export async function createOrgAssignmentType(
@@ -111,7 +106,9 @@ export async function createOrgAssignmentType(
             key,
             label,
             icon_key: input.iconKey?.trim() || "calendar-clock",
-            visual_tone: input.visualTone ?? "neutral",
+            // Runtime default by label (not a migration edit) — see
+            // `ASSIGNMENT_CATEGORY_DEFAULT_TONE_BY_LABEL` for why label, not key.
+            visual_tone: input.visualTone ?? defaultVisualToneForAssignmentTypeLabel(label) ?? "neutral",
             subject_types: input.subjectTypes?.length ? input.subjectTypes : ["child"],
             billing_participation: input.billingParticipation ?? "none",
             attendance_participation: input.attendanceParticipation ?? "expected",
@@ -141,7 +138,7 @@ export async function updateOrgAssignmentType(
         .eq("id", typeId)
         .maybeSingle();
     if (loadErr) throw new OperationalEnrollmentServiceError("db_error", loadErr.message);
-    if (!existing) throw new OperationalEnrollmentServiceError("not_found", "Assignment Type not found");
+    if (!existing) throw new OperationalEnrollmentServiceError("not_found", "Assignment Category not found");
 
     const priorBehavior = readAssignmentTypeBehavior(
         (existing as { default_behavior?: unknown }).default_behavior,

@@ -24,7 +24,13 @@ export type RosterDayFact = {
     date: string;
     /** 0 = Sun … 6 = Sat. */
     weekday: number;
+    /** Committed occupancy — attendance/staffing/capacity truth. */
     occupancy: number;
+    /**
+     * Planned (Proposed) occupancy — a distinct, non-authoritative signal. NEVER
+     * folded into `occupancy`, `requiredStaff`, `capacityExceeded`, or `ratioBreach`.
+     */
+    plannedOccupancy: number;
     capacity: number | null;
     requiredStaff: number | null;
     /** Occupancy exceeds the binding capacity for the room on this date. */
@@ -162,6 +168,7 @@ export async function buildRosterReadModel(
         config: inputsWithAgeGroups.config,
         ageGroupByRoomLocationId: inputsWithAgeGroups.ageGroupByRoomLocationId,
         ageGroupByProgramCategoryId: inputsWithAgeGroups.ageGroupByProgramCategoryId,
+        proposedAssignments: inputsWithAgeGroups.proposedAssignments,
     });
 
     const { resolveCapacityBinding } = buildRoomConfigResolvers({
@@ -176,6 +183,10 @@ export async function buildRosterReadModel(
     const occByKey = new Map<string, number>();
     for (const o of expectations.expectedOccupancyByRoomDate) {
         occByKey.set(`${o.roomLocationId}|${o.date}`, o.childCount);
+    }
+    const plannedOccByKey = new Map<string, number>();
+    for (const o of expectations.plannedOccupancyByRoomDate) {
+        plannedOccByKey.set(`${o.roomLocationId}|${o.date}`, o.childCount);
     }
     const staffByKey = new Map<string, { requiredStaff: number; exceedsDefinedTiers: boolean }>();
     for (const s of expectations.expectedStaffingByRoomDate) {
@@ -193,6 +204,7 @@ export async function buildRosterReadModel(
         const cells: RosterDayFact[] = days.map((day) => {
             const key = `${room.id}|${day.date}`;
             const occupancy = occByKey.get(key) ?? 0;
+            const plannedOccupancy = plannedOccByKey.get(key) ?? 0;
             const staff = staffByKey.get(key) ?? null;
             const capacity = resolveCapacityBinding(room.id, day.date);
             if (capacity != null) capacities.push(capacity);
@@ -200,6 +212,7 @@ export async function buildRosterReadModel(
                 date: day.date,
                 weekday: day.weekday,
                 occupancy,
+                plannedOccupancy,
                 capacity,
                 requiredStaff: staff?.requiredStaff ?? null,
                 capacityExceeded: capacityExceededKeys.has(key),

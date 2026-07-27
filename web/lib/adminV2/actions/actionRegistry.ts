@@ -20,7 +20,10 @@ import { confirmTourAction } from "@/lib/adminV2/actions/definitions/confirmTour
 import { scheduleCreateAction } from "@/lib/adminV2/actions/definitions/scheduleCreateAction";
 import { assignmentSetPrimaryAction } from "@/lib/adminV2/actions/definitions/assignmentSetPrimaryAction";
 import { assignmentCreateAction } from "@/lib/adminV2/actions/definitions/assignmentCreateAction";
+import { assignmentPromoteProposedAction } from "@/lib/adminV2/actions/definitions/assignmentPromoteProposedAction";
 import { assignmentArchiveAction } from "@/lib/adminV2/actions/definitions/assignmentArchiveAction";
+import { assignmentDeleteProposedAction } from "@/lib/adminV2/actions/definitions/assignmentDeleteProposedAction";
+import { assignmentChangeRoomAction } from "@/lib/adminV2/actions/definitions/assignmentChangeRoomAction";
 
 /** Actions with fully code-owned, executable handlers. */
 const REGISTERED_ACTION_LIST: RegisteredAction[] = [
@@ -30,7 +33,10 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     scheduleCreateAction,
     assignmentSetPrimaryAction,
     assignmentCreateAction,
+    assignmentPromoteProposedAction,
     assignmentArchiveAction,
+    assignmentDeleteProposedAction,
+    assignmentChangeRoomAction,
 ];
 
 const REGISTERED_ACTIONS: Map<string, RegisteredAction> = new Map(

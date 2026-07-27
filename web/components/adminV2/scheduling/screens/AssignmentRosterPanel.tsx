@@ -5,10 +5,11 @@
  * Staff subject expansion is structurally ready via subjectType on each row.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BadgeCheck, ChevronDown, ChevronRight } from "lucide-react";
 
 import { AlloySelect } from "@/components/workspace/AlloySelect";
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 
 export type AssignmentRosterSubject = {
@@ -18,6 +19,8 @@ export type AssignmentRosterSubject = {
     subjectType: "child" | "staff";
     assignmentCount: number;
     primaryRoom: string | null;
+    /** Profile image URL when the child/staff person record carries one, else initials avatar. */
+    imageUrl?: string | null;
     assignments: {
         assignmentId: string;
         isPrimary: boolean;
@@ -25,9 +28,12 @@ export type AssignmentRosterSubject = {
         assignmentTypeLabel: string | null;
         roomName: string | null;
         weekdaysLabel: string;
+        timeLabel?: string | null;
         effectiveFrom: string;
         effectiveTo: string | null;
         status: string;
+        lifecycleLabel?: string;
+        commitmentKind?: "proposed" | "committed";
     }[];
 };
 
@@ -60,19 +66,36 @@ export default function AssignmentRosterPanel({
     loading,
     siteName,
     bulk,
+    initialBulkMode = null,
 }: {
     subjects: AssignmentRosterSubject[];
     loading: boolean;
     siteName: string;
     bulk?: AssignmentRosterBulkHandlers;
+    /** Header Actions → Roster deep-link into a bulk preview. */
+    initialBulkMode?: "assignment" | "room" | null;
 }) {
     const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
     const [selected, setSelected] = useState<Set<string>>(() => new Set());
-    const [bulkMode, setBulkMode] = useState<"assignment" | "room" | null>(null);
+    const [bulkMode, setBulkMode] = useState<"assignment" | "room" | null>(initialBulkMode);
     const [bulkTypeId, setBulkTypeId] = useState("");
     const [bulkPatternId, setBulkPatternId] = useState("");
     const [bulkRoomId, setBulkRoomId] = useState("");
     const [bulkStartDate, setBulkStartDate] = useState(new Date().toISOString().slice(0, 10));
+
+    useEffect(() => {
+        if (initialBulkMode) setBulkMode(initialBulkMode);
+    }, [initialBulkMode]);
+
+    const [detailAssignmentId, setDetailAssignmentId] = useState<string | null>(null);
+    const detailAssignment = useMemo(() => {
+        if (!detailAssignmentId) return null;
+        for (const s of subjects) {
+            const a = s.assignments.find((x) => x.assignmentId === detailAssignmentId);
+            if (a) return { subject: s, assignment: a };
+        }
+        return null;
+    }, [detailAssignmentId, subjects]);
 
     const totalAssignments = useMemo(
         () => subjects.reduce((n, s) => n + s.assignmentCount, 0),
@@ -153,9 +176,9 @@ export default function AssignmentRosterPanel({
                 className="flex flex-col items-center justify-center rounded-xl border border-alloy-stone/20 bg-white px-6 py-14 text-center"
                 data-assignment-roster-empty="true"
             >
-                <p className="text-[13px] font-semibold text-alloy-midnight">No operational assignments at {siteName}</p>
+                <p className="text-[13px] font-semibold text-alloy-midnight">No assignments at {siteName}</p>
                 <p className="mt-1 max-w-md text-[12px] text-alloy-slate">
-                    Children with active assignments appear here with Primary / Secondary roles, room, type, and status.
+                    Proposed and committed assignments appear here with room, Assignment Category, role, and lifecycle state.
                 </p>
             </div>
         );
@@ -250,28 +273,27 @@ export default function AssignmentRosterPanel({
                         <AlloySelect
                             value={bulkTypeId}
                             onChange={setBulkTypeId}
-                            placeholder="Assignment type"
+                            placeholder="Assignment Category"
                             options={(bulk?.assignmentTypes ?? []).map((t) => ({
                                 value: t.id ?? "",
                                 label: t.label ?? "",
                             }))}
-                            aria-label="Bulk assignment type"
+                            aria-label="Bulk Assignment Category"
                         />
                         <input
                             type="text"
                             value={bulkPatternId}
                             onChange={(e) => setBulkPatternId(e.target.value)}
-                            placeholder="Schedule pattern id"
+                            placeholder="Schedule Pattern"
                             className="rounded-lg border border-alloy-stone/25 px-2 py-1.5 text-[12px]"
                         />
                         <input
                             type="text"
                             value={bulkRoomId}
                             onChange={(e) => setBulkRoomId(e.target.value)}
-                            placeholder="Room location id"
+                            placeholder="Choose room"
                             className="rounded-lg border border-alloy-stone/25 px-2 py-1.5 text-[12px]"
-                        />
-                        <input
+                        />                        <input
                             type="date"
                             value={bulkStartDate}
                             onChange={(e) => setBulkStartDate(e.target.value)}
@@ -335,7 +357,7 @@ export default function AssignmentRosterPanel({
                             type="text"
                             value={bulkRoomId}
                             onChange={(e) => setBulkRoomId(e.target.value)}
-                            placeholder="New room location id"
+                            placeholder="Choose room"
                             className="min-w-[200px] flex-1 rounded-lg border border-alloy-stone/25 px-2 py-1.5 text-[12px]"
                         />
                         <button
@@ -380,107 +402,239 @@ export default function AssignmentRosterPanel({
                 </div>
             ) : null}
 
-            <div className="overflow-hidden rounded-xl border border-alloy-stone/15 bg-white shadow-[0_2px_8px_rgba(24,39,58,0.06)]">
-                <div className="grid grid-cols-[28px_minmax(180px,1.4fr)_minmax(80px,0.6fr)_minmax(100px,0.7fr)_minmax(90px,0.6fr)_minmax(120px,0.8fr)_minmax(80px,0.5fr)] gap-2 border-b border-alloy-stone/12 bg-alloy-stone/[0.55] px-3 py-2 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-alloy-slate">
-                    <span className="sr-only">Select</span>
-                    <span>Child</span>
-                    <span>Count</span>
-                    <span>Primary room</span>
-                    <span>Role</span>
-                    <span>Type · Days</span>
-                    <span>Status</span>
-                </div>
-                <ul className="divide-y divide-alloy-stone/10">
+            <div
+                className="overflow-hidden rounded-xl border border-alloy-stone/12 bg-white"
+                data-assignment-roster-list="true"
+            >
+                <ul className="divide-y divide-alloy-stone/8">
                     {subjects.map((subject) => {
-                        const isOpen = expanded.has(subject.agreementId) || subject.assignmentCount <= 1;
+                        const isOpen = expanded.has(subject.agreementId);
                         const primary = subject.assignments.find((a) => a.isPrimary) ?? subject.assignments[0];
-                        const primarySelected = primary ? selected.has(primary.assignmentId) : false;
+                        const primaryLifecycle = primary?.lifecycleLabel ?? null;
+                        const subjectSelected = subject.assignments.some((a) => selected.has(a.assignmentId));
                         return (
-                            <li key={subject.agreementId} data-assignment-roster-subject={subject.agreementId}>
-                                <div className="grid w-full grid-cols-[28px_minmax(180px,1.4fr)_minmax(80px,0.6fr)_minmax(100px,0.7fr)_minmax(90px,0.6fr)_minmax(120px,0.8fr)_minmax(80px,0.5fr)] gap-2 px-3 py-2.5 hover:bg-alloy-stone/[0.04]">
-                                    <label className="flex items-center justify-center">
+                            <li
+                                key={subject.agreementId}
+                                className="px-3 py-2.5"
+                                data-assignment-roster-subject={subject.agreementId}
+                            >
+                                <div className="flex items-start gap-2.5">
+                                    <label className="mt-1.5 flex shrink-0 items-center justify-center">
                                         <input
                                             type="checkbox"
                                             className="h-3.5 w-3.5 accent-alloy-bend-pine"
-                                            checked={primarySelected}
-                                            disabled={!primary}
-                                            onChange={() => primary && toggleSelect(primary.assignmentId)}
+                                            checked={subjectSelected}
+                                            onChange={() => {
+                                                if (subjectSelected) {
+                                                    setSelected((prev) => {
+                                                        const next = new Set(prev);
+                                                        for (const a of subject.assignments) next.delete(a.assignmentId);
+                                                        return next;
+                                                    });
+                                                } else if (primary) {
+                                                    toggleSelect(primary.assignmentId);
+                                                }
+                                            }}
                                             aria-label={`Select ${subject.childName}`}
                                         />
                                     </label>
                                     <button
                                         type="button"
-                                        className="col-span-6 grid grid-cols-[minmax(180px,1.4fr)_minmax(80px,0.6fr)_minmax(100px,0.7fr)_minmax(90px,0.6fr)_minmax(120px,0.8fr)_minmax(80px,0.5fr)] gap-2 text-left"
-                                        onClick={() => subject.assignmentCount > 1 && toggle(subject.agreementId)}
+                                        className="min-w-0 flex-1 text-left"
+                                        onClick={() => {
+                                            if (subject.assignmentCount > 1) {
+                                                toggle(subject.agreementId);
+                                                return;
+                                            }
+                                            if (primary) setDetailAssignmentId(primary.assignmentId);
+                                        }}
                                         aria-expanded={isOpen}
+                                        data-assignment-roster-child={subject.agreementId}
                                     >
-                                        <span className="flex min-w-0 items-center gap-1.5">
-                                            {subject.assignmentCount > 1 ? (
-                                                isOpen ?
-                                                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-alloy-slate" aria-hidden />
-                                                :   <ChevronRight className="h-3.5 w-3.5 shrink-0 text-alloy-slate" aria-hidden />
-                                            ) : (
-                                                <span className="w-3.5 shrink-0" aria-hidden />
-                                            )}
-                                            <span className="truncate text-[12.5px] font-semibold text-alloy-midnight">
-                                                {subject.childName}
+                                        <div className="flex items-start gap-2.5">
+                                            <span className="mt-0.5 shrink-0" data-assignment-roster-avatar={subject.agreementId}>
+                                                <CardAvatar name={subject.childName} imageUrl={subject.imageUrl} size={32} />
                                             </span>
-                                        </span>
-                                        <span className="text-[12px] tabular-nums text-alloy-midnight">{subject.assignmentCount}</span>
-                                        <span className="truncate text-[11.5px] text-alloy-slate">
-                                            {subject.primaryRoom ?? "—"}
-                                        </span>
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-alloy-midnight">
-                                            {primary?.isPrimary ?
-                                                <BadgeCheck className="h-3 w-3 text-alloy-bend-pine" aria-hidden />
-                                            :   null}
-                                            {primary?.roleLabel ?? "—"}
-                                        </span>
-                                        <span className="truncate text-[11px] text-alloy-slate">
-                                            {primary?.assignmentTypeLabel ?? "—"} · {primary?.weekdaysLabel ?? "—"}
-                                        </span>
-                                        <span className="text-[11px] capitalize text-alloy-slate">{primary?.status ?? "—"}</span>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                                    <span className="text-[13px] font-semibold text-alloy-midnight">
+                                                        {subject.childName}
+                                                    </span>
+                                                    {primaryLifecycle ? (
+                                                        <span
+                                                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                                                                primaryLifecycle === "Proposed" ||
+                                                                primary?.commitmentKind === "proposed"
+                                                                    ? "bg-[#00458C]/12 text-[#00458C]"
+                                                                    : "bg-alloy-stone/50 text-alloy-midnight/70"
+                                                            }`}
+                                                            data-assignment-roster-lifecycle={primaryLifecycle}
+                                                        >
+                                                            {primaryLifecycle}
+                                                        </span>
+                                                    ) : null}
+                                                    {subject.assignmentCount > 1 ? (
+                                                        isOpen ?
+                                                            <ChevronDown className="h-3.5 w-3.5 text-alloy-slate" aria-hidden />
+                                                        :   <ChevronRight className="h-3.5 w-3.5 text-alloy-slate" aria-hidden />
+                                                    ) : null}
+                                                </div>
+                                                <p className="mt-0.5 text-[11.5px] text-alloy-slate">
+                                                    Primary: {subject.primaryRoom ?? "—"}
+                                                    <span className="mx-1.5 text-alloy-stone">·</span>
+                                                    {subject.assignmentCount}{" "}
+                                                    {subject.assignmentCount === 1 ? "Assignment" : "Assignments"}
+                                                </p>
+                                            </div>
+                                        </div>
                                     </button>
                                 </div>
-                                {isOpen && subject.assignmentCount > 1 ?
-                                    <ul className="border-t border-alloy-stone/8 bg-alloy-stone/[0.03]">
-                                        {subject.assignments.map((a) => (
-                                            <li
-                                                key={a.assignmentId}
-                                                className="grid grid-cols-[28px_minmax(180px,1.4fr)_minmax(80px,0.6fr)_minmax(100px,0.7fr)_minmax(90px,0.6fr)_minmax(120px,0.8fr)_minmax(80px,0.5fr)] gap-2 px-3 py-2 text-[11px] text-alloy-slate"
-                                                data-assignment-roster-row={a.assignmentId}
-                                            >
-                                                <label className="flex items-center justify-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="h-3.5 w-3.5 accent-alloy-bend-pine"
-                                                        checked={selected.has(a.assignmentId)}
-                                                        onChange={() => toggleSelect(a.assignmentId)}
-                                                        aria-label={`Select assignment ${a.assignmentTypeLabel ?? a.assignmentId}`}
-                                                    />
-                                                </label>
-                                                <span className="pl-6 text-alloy-midnight/70">↳ assignment</span>
-                                                <span />
-                                                <span className="truncate">{a.roomName ?? "—"}</span>
-                                                <span className="inline-flex items-center gap-1 font-medium text-alloy-midnight">
-                                                    {a.isPrimary ?
-                                                        <BadgeCheck className="h-3 w-3 text-alloy-bend-pine" aria-hidden />
-                                                    :   null}
-                                                    {a.roleLabel}
-                                                </span>
-                                                <span className="truncate">
-                                                    {a.assignmentTypeLabel ?? "—"} · {a.weekdaysLabel}
-                                                </span>
-                                                <span className="capitalize">{a.status}</span>
-                                            </li>
-                                        ))}
+
+                                {(isOpen || subject.assignmentCount === 1) ? (
+                                    <ul className="mt-2 space-y-1.5 pl-[42px]">
+                                        {subject.assignments.map((a) => {
+                                            const scheduleBits = [a.weekdaysLabel, a.timeLabel].filter(Boolean).join(" · ");
+                                            return (
+                                                <li
+                                                    key={a.assignmentId}
+                                                    className="flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-alloy-stone/[0.04]"
+                                                    data-assignment-roster-row={a.assignmentId}
+                                                    data-assignment-roster-line={a.assignmentId}
+                                                >
+                                                    <label className="mt-0.5 flex shrink-0 items-center justify-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="h-3.5 w-3.5 accent-alloy-bend-pine"
+                                                            checked={selected.has(a.assignmentId)}
+                                                            onChange={() => toggleSelect(a.assignmentId)}
+                                                            aria-label={`Select ${a.assignmentTypeLabel ?? "assignment"}`}
+                                                        />
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        className="min-w-0 flex-1 text-left"
+                                                        onClick={() => setDetailAssignmentId(a.assignmentId)}
+                                                        data-assignment-roster-open={a.assignmentId}
+                                                    >
+                                                        <div className="flex flex-wrap items-center gap-1.5">
+                                                            <span className="text-[12px] font-semibold text-alloy-midnight">
+                                                                {a.assignmentTypeLabel ?? "Assignment"}
+                                                            </span>
+                                                            {a.isPrimary ? (
+                                                                <span className="inline-flex items-center gap-0.5 rounded-full bg-alloy-bend-pine/10 px-1.5 py-0.5 text-[10px] font-semibold text-alloy-bend-pine">
+                                                                    <BadgeCheck className="h-3 w-3" aria-hidden />
+                                                                    Primary
+                                                                </span>
+                                                            ) : null}
+                                                            {a.lifecycleLabel === "Proposed" ||
+                                                            a.commitmentKind === "proposed" ? (
+                                                                <span
+                                                                    className="rounded-full bg-[#00458C]/12 px-1.5 py-0.5 text-[10px] font-semibold text-[#00458C]"
+                                                                    data-assignment-roster-proposed="true"
+                                                                >
+                                                                    Proposed
+                                                                </span>
+                                                            ) : a.lifecycleLabel && a.lifecycleLabel !== "Active" ? (
+                                                                <span className="text-[10px] font-medium text-alloy-slate">
+                                                                    {a.lifecycleLabel}
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+                                                        <p className="mt-0.5 text-[11px] text-alloy-slate">
+                                                            {[a.roomName, scheduleBits].filter(Boolean).join(" · ") || "—"}
+                                                        </p>
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
                                     </ul>
-                                :   null}
+                                ) : null}
                             </li>
                         );
                     })}
                 </ul>
             </div>
+
+            {detailAssignment ? (
+                <aside
+                    className="rounded-xl border border-alloy-stone/15 bg-white px-4 py-3 shadow-[0_2px_8px_rgba(24,39,58,0.06)]"
+                    data-assignment-roster-detail={detailAssignment.assignment.assignmentId}
+                >
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">
+                                Assignment detail
+                            </p>
+                            <p className="text-[13px] font-semibold text-alloy-midnight">
+                                {detailAssignment.subject.childName}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            className="text-[11px] font-semibold text-alloy-bend-pine hover:underline"
+                            onClick={() => setDetailAssignmentId(null)}
+                        >
+                            Close
+                        </button>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
+                        <div>
+                            <dt className="text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">Role</dt>
+                            <dd className="text-alloy-midnight">{detailAssignment.assignment.roleLabel}</dd>
+                        </div>
+                        <div>
+                            <dt className="text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">Type</dt>
+                            <dd className="text-alloy-midnight">
+                                {detailAssignment.assignment.assignmentTypeLabel ?? "—"}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt className="text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">Room</dt>
+                            <dd className="text-alloy-midnight">{detailAssignment.assignment.roomName ?? "—"}</dd>
+                        </div>
+                        <div>
+                            <dt className="text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">Days</dt>
+                            <dd className="text-alloy-midnight">{detailAssignment.assignment.weekdaysLabel || "—"}</dd>
+                        </div>
+                        <div>
+                            <dt className="text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">
+                                Effective
+                            </dt>
+                            <dd className="text-alloy-midnight">
+                                {detailAssignment.assignment.effectiveFrom}
+                                {detailAssignment.assignment.effectiveTo
+                                    ? ` → ${detailAssignment.assignment.effectiveTo}`
+                                    : ""}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt className="text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">Status</dt>
+                            <dd
+                                className={
+                                    detailAssignment.assignment.lifecycleLabel === "Proposed" ||
+                                    detailAssignment.assignment.commitmentKind === "proposed"
+                                        ? "font-semibold text-[#00458C]"
+                                        : "text-alloy-midnight"
+                                }
+                            >
+                                {detailAssignment.assignment.lifecycleLabel
+                                    ?? (detailAssignment.assignment.commitmentKind === "proposed"
+                                        ? "Proposed"
+                                        : "—")}
+                            </dd>
+                        </div>
+                    </dl>
+                    {bulk?.onCreateForChild ? (
+                        <button
+                            type="button"
+                            className="mt-3 text-[11.5px] font-semibold text-alloy-bend-pine hover:underline"
+                            onClick={() => bulk.onCreateForChild?.(detailAssignment.subject.customerMemberId)}
+                        >
+                            + Add Assignment for this child
+                        </button>
+                    ) : null}
+                </aside>
+            ) : null}
         </div>
     );
 }

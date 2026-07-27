@@ -25,6 +25,9 @@ import {
     formatFocusPanelDate,
     formatFocusPanelDobAgeLine,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
+import { resolveInquiryChildGenderLabelFromRaw } from "@/lib/admin/drawer/inquiryChildrenHydration";
+import { personDrawerGenderDisplayLabel } from "@/lib/admin/person/personDrawerGenderField";
+import { primaryAssignmentFromScheduling } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 export type ChildStatusTone = "positive" | "work" | "risk" | "neutral";
@@ -102,6 +105,27 @@ function trimOrNull(value: unknown): string | null {
     return text.length > 0 ? text : null;
 }
 
+/** Match drawer row → raw `_inquiry_children` entry (policy may reorder vs raw index). */
+function rawInquiryChildForRow(
+    row: { id?: string | null; person_id?: string | null; customer_member_id?: string | null },
+    rawRows: readonly Record<string, unknown>[],
+): Record<string, unknown> {
+    const id = trimOrNull(row.id);
+    const personId = trimOrNull(row.person_id);
+    const memberId = trimOrNull(row.customer_member_id);
+    return (
+        rawRows.find((raw) => {
+            const rid = trimOrNull(raw.id);
+            const rpid = trimOrNull(raw.person_id);
+            const rcm = trimOrNull(raw.customer_member_id);
+            if (id && (rid === id || rcm === id || rpid === id)) return true;
+            if (memberId && (rcm === memberId || rid === memberId)) return true;
+            if (personId && rpid === personId) return true;
+            return false;
+        }) ?? {}
+    );
+}
+
 function statusTone(statusKey: string | null): ChildStatusTone {
     if (!statusKey) return "neutral";
     const key = statusKey.toLowerCase();
@@ -143,6 +167,7 @@ export function buildChildrenCardEvidence(
     const schedulingByMember = readSchedulingProjectionByMemberId(context.truth);
 
     const children: ChildrenEvidenceChild[] = rows.map((row, index) => {
+        const raw = rawInquiryChildForRow(row, rawRows);
         const name = childName(row);
         const memberId =
             trimOrNull((row as { customer_member_id?: unknown }).customer_member_id)
@@ -150,23 +175,15 @@ export function buildChildrenCardEvidence(
             ?? trimOrNull(row.person_id);
         const schedulingProjection = memberId ? schedulingByMember[memberId] ?? null : null;
         const scheduleCompact = projectCompactScheduleForIdentity(schedulingProjection);
-        const primaryFromAssignment =
-            schedulingProjection?.current?.assignments?.find((a) => a.isPrimary)
-            ?? schedulingProjection?.proposed?.assignments?.find((a) => a.isPrimary)
-            ?? schedulingProjection?.current?.assignments?.[0]
-            ?? schedulingProjection?.proposed?.assignments?.[0]
-            ?? null;
-        const hasCommittedPrimaryAssignment =
-            schedulingProjection != null
-            && (schedulingProjection.status === "scheduled"
-                || schedulingProjection.status === "proposed"
-                || schedulingProjection.status === "upcoming-only")
-            && primaryFromAssignment != null;
-        const program =
-            (hasCommittedPrimaryAssignment ? primaryFromAssignment.room.program?.trim() : null)
-            ?? trimOrNull(row.desired_program_label);
+        // Canonical gate (shared with the Identity surface's Program/Room fields):
+        // once a committed Primary Assignment exists, it — not the inquiry's desired
+        // Program/Room — is operational truth.
+        const primaryAssignment = primaryAssignmentFromScheduling(schedulingProjection);
+        const hasCommittedPrimaryAssignment = primaryAssignment != null;
+        const program = primaryAssignment?.program ?? trimOrNull(row.desired_program_label);
         const room =
-            scheduleCompact.roomLabel
+            primaryAssignment?.room
+            ?? scheduleCompact.roomLabel
             ?? trimOrNull(row.program_room_cohort_label)
             ?? trimOrNull(row.location_label);
         const schedule = scheduleCompact.scheduleLabel ?? trimOrNull(row.desired_schedule_label);
@@ -235,14 +252,21 @@ export function buildChildrenCardEvidence(
             nickname: trimOrNull((row as { nickname?: unknown }).nickname),
             dob: trimOrNull(row.dob)?.slice(0, 10) ?? null,
             age: trimOrNull(row.age),
+            // Drawer-row mapping strips profile fields — gender lives on raw inquiry rows
+            // (and after inline save merge into `_inquiry_children`). Prefer display labels.
             gender:
-                trimOrNull((row as { gender_label?: unknown }).gender_label)
+                personDrawerGenderDisplayLabel(raw)
+                ?? trimOrNull((raw as { gender_label?: unknown }).gender_label)
+                ?? resolveInquiryChildGenderLabelFromRaw(raw)
+                ?? trimOrNull((row as { gender_label?: unknown }).gender_label)
                 ?? trimOrNull((row as { gender?: unknown }).gender),
             ageBand:
                 trimOrNull((row as { age_band?: unknown }).age_band)
-                ?? trimOrNull((row as { age_band_label?: unknown }).age_band_label),
+                ?? trimOrNull((row as { age_band_label?: unknown }).age_band_label)
+                ?? trimOrNull((raw as { age_band?: unknown }).age_band)
+                ?? trimOrNull((raw as { age_band_label?: unknown }).age_band_label),
             initial: name.charAt(0).toUpperCase(),
-            imageUrl: resolveChildPhotoUrlFromRaw(rawRows[index] ?? {}),
+            imageUrl: resolveChildPhotoUrlFromRaw(raw),
             dobAge,
             program,
             room,

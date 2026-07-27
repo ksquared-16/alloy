@@ -171,7 +171,7 @@ test.describe("Assignment Platform Phase 2A acceptance", () => {
                 await snap(page, "S05-timeline-alt-weekday");
             }
 
-            await page.getByText("← All assignments").click();
+            await page.locator('[data-schedule-back="true"]').click();
             await page.locator("[data-assignment-summary], [data-schedule-detail]").first().waitFor({ timeout: 5000 });
             await snap(page, "S06-return-to-summary");
         } else {

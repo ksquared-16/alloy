@@ -6,8 +6,10 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { X } from "lucide-react";
 
+import WeekPicker from "@/components/workspace/WeekPicker";
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import AssignmentRosterPanel, {
     type AssignmentRosterBulkHandlers,
     type AssignmentRosterSubject,
@@ -20,13 +22,21 @@ export type RosterTone = "pine" | "gold" | "ember";
 export type RosterCell = {
     dayKey: string;
     dayLabel: string;
+    /** Committed occupancy — attendance/staffing truth. */
     occupancy: number | null;
+    /** Planned (Proposed) occupancy — a distinct, non-authoritative signal shown alongside committed. */
+    planned?: number | null;
+    /** Committed + planned projected demand (never attendance truth). */
+    projected?: number | null;
     capacity: number | null;
+    requiredStaff?: number | null;
     pct: number;
     ratioLabel: string;
     tone: RosterTone;
     state?: "breach" | "closed";
     isToday?: boolean;
+    /** True when capacity or staff was authoritatively evaluated. */
+    evaluated?: boolean;
 };
 
 export type RosterRoom = {
@@ -41,6 +51,9 @@ export type RosterData = {
     rooms: RosterRoom[];
     days: { key: string; label: string; isToday?: boolean }[];
     weekLabel: string;
+    /** Monday of the displayed operating week (YYYY-MM-DD) — the roster cache key. */
+    weekStart?: string;
+    weekEnd?: string;
 };
 
 export type RosterFilterKind = "unplaced" | "starts" | "near_capacity" | "ratio_risk";
@@ -53,6 +66,18 @@ export type RosterFilterContext = {
     /** Child-centric filters (unplaced / starts) show these above the board. */
     children?: { name: string; sub?: string }[];
 };
+
+/** Compact committed / proposed / projected / capacity display. */
+function formatOccupancyCompact(cell: RosterCell): string {
+    const committed = cell.occupancy ?? 0;
+    const proposed = cell.planned ?? 0;
+    const projected = cell.projected ?? committed + proposed;
+    const parts = [`${committed} committed`];
+    if (proposed) parts.push(`+${proposed} proposed`);
+    if (cell.capacity != null) parts.push(`${projected} / ${cell.capacity} projected`);
+    else parts.push(`${projected} projected`);
+    return parts.join(" · ");
+}
 
 const TONE_DOT: Record<RosterTone, string> = { pine: "bg-alloy-bend-pine", gold: "bg-alloy-gold-dark", ember: "bg-alloy-ember" };
 const TONE_HEALTH: Record<RosterTone, string> = {
@@ -76,7 +101,11 @@ export default function SchedulingRoster({
     onSelectCell,
     onSelectRoom,
     onWeekChange,
+    onSelectWeek,
     rosterBulk,
+    initialBulkMode = null,
+    weekChangePending = false,
+    lastWeekLoadMs = null,
 }: {
     data: RosterData | null;
     assignmentSubjects: AssignmentRosterSubject[];
@@ -91,7 +120,13 @@ export default function SchedulingRoster({
     onSelectCell?: (roomId: string, dayKey: string) => void;
     onSelectRoom?: (roomId: string) => void;
     onWeekChange?: (dir: -1 | 1 | 0) => void;
+    onSelectWeek?: (weekStart: string) => void;
     rosterBulk?: AssignmentRosterBulkHandlers;
+    initialBulkMode?: "assignment" | "room" | null;
+    /** True the instant a week nav click fires, until the new week's data is ready (optimistic feedback). */
+    weekChangePending?: boolean;
+    /** Dev-only click→ready timing for the most recent week change, for perf inspection. */
+    lastWeekLoadMs?: number | null;
 }) {
     const [selectedCell, setSelectedCell] = useState<{ roomId: string; dayKey: string } | null>(null);
     const [detail, setDetail] = useState<{ roomId: string; dayKey: string | null } | null>(null);
@@ -103,6 +138,10 @@ export default function SchedulingRoster({
     const highlight = useMemo(
         () => (filter?.highlightRoomIds ? new Set(filter.highlightRoomIds) : null),
         [filter]
+    );
+    const totalPlanned = useMemo(
+        () => rooms.reduce((sum, r) => sum + r.cells.reduce((s, c) => s + (c.planned ?? 0), 0), 0),
+        [rooms]
     );
 
     // Open the detail inspector for the room a launch card / overview focused.
@@ -138,7 +177,12 @@ export default function SchedulingRoster({
     );
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col gap-3" data-scheduling-roster="true">
+        <div
+            className="flex min-h-0 flex-1 flex-col gap-3"
+            data-scheduling-roster="true"
+            data-roster-week-change-pending={weekChangePending ? "true" : "false"}
+            data-roster-last-load-ms={lastWeekLoadMs ?? undefined}
+        >
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/25">
                     <button
@@ -166,23 +210,35 @@ export default function SchedulingRoster({
                     loading={loadingAssignments}
                     siteName={siteName}
                     bulk={rosterBulk}
+                    initialBulkMode={initialBulkMode}
                 />
             :   <>
             {/* Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/25">
-                    <button type="button" className="px-2.5 py-1.5 text-alloy-slate hover:bg-alloy-stone/[0.06]" onClick={() => onWeekChange?.(-1)} aria-label="Previous week">
-                        <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
-                    </button>
-                    <button type="button" className="border-x border-alloy-stone/25 px-3 py-1.5 text-[12px] font-semibold text-alloy-midnight hover:bg-alloy-stone/[0.06]" onClick={() => onWeekChange?.(0)}>
-                        {weekLabel}
-                    </button>
-                    <button type="button" className="px-2.5 py-1.5 text-alloy-slate hover:bg-alloy-stone/[0.06]" onClick={() => onWeekChange?.(1)} aria-label="Next week">
-                        <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
-                    </button>
-                </div>
+                <WeekPicker
+                    weekStart={data?.weekStart}
+                    weekLabel={weekLabel}
+                    pending={weekChangePending}
+                    onPrev={() => onWeekChange?.(-1)}
+                    onNext={() => onWeekChange?.(1)}
+                    onSelectWeek={(ws) => {
+                        if (onSelectWeek) onSelectWeek(ws);
+                        else onWeekChange?.(0);
+                    }}
+                />
                 <p className="text-[11px] text-alloy-slate">
                     {rooms.length > 0 ? `${rooms.length} ${rooms.length === 1 ? "room" : "rooms"} · ${siteName}` : siteName}
+                    {totalPlanned > 0 ? (
+                        <span className="text-[#00458C]" data-scheduling-roster-total-planned={totalPlanned}>
+                            {" "}
+                            · {totalPlanned} proposed (not attendance)
+                        </span>
+                    ) : null}
+                    {lastWeekLoadMs != null ? (
+                        <span className="ml-2 text-alloy-midnight/35" data-roster-week-load-ms={lastWeekLoadMs}>
+                            {lastWeekLoadMs}ms
+                        </span>
+                    ) : null}
                 </p>
             </div>
 
@@ -258,7 +314,13 @@ export default function SchedulingRoster({
                     </div>
 
                     {detailRoom ? (
-                        <RoomDetailPanel room={detailRoom} focusDayKey={detail?.dayKey ?? null} onClose={() => setDetail(null)} />
+                        <RoomDetailPanel
+                            room={detailRoom}
+                            focusDayKey={detail?.dayKey ?? null}
+                            weekLabel={weekLabel}
+                            assignmentSubjects={assignmentSubjects}
+                            onClose={() => setDetail(null)}
+                        />
                     ) : null}
                 </div>
             )}
@@ -296,7 +358,9 @@ function RoomRow({
             >
                 <span className="text-[12px] font-semibold text-alloy-midnight">{room.roomName}</span>
                 <span className="text-[9.5px] text-alloy-slate">{room.meta}</span>
-                <span className={`mt-0.5 rounded-full px-2 py-0.5 text-[9px] font-semibold ${TONE_HEALTH[room.health.tone]}`}>{room.health.label}</span>
+                {room.health.label ? (
+                    <span className={`mt-0.5 rounded-full px-2 py-0.5 text-[9px] font-semibold ${TONE_HEALTH[room.health.tone]}`}>{room.health.label}</span>
+                ) : null}
             </button>
             {room.cells.map((cell) => {
                 const closed = cell.state === "closed";
@@ -324,16 +388,40 @@ function RoomRow({
                             </>
                         ) : (
                             <>
-                                <div className="flex items-baseline gap-1">
-                                    <span className="text-[14px] font-semibold tabular-nums text-alloy-midnight">{cell.occupancy ?? "—"}</span>
-                                    {cell.capacity != null ? <span className="text-[9.5px] text-alloy-slate">of {cell.capacity}</span> : null}
+                                <div className="space-y-0.5" data-scheduling-cell-metrics="true">
+                                    <div className="text-[12px] font-semibold tabular-nums text-alloy-midnight">
+                                        {cell.occupancy ?? 0}{" "}
+                                        <span className="text-[10px] font-medium text-alloy-slate">committed</span>
+                                    </div>
+                                    {(cell.planned ?? 0) > 0 ? (
+                                        <div
+                                            className="text-[11px] font-semibold tabular-nums text-[#00458C]"
+                                            data-scheduling-cell-planned={cell.planned}
+                                            data-scheduling-cell-proposed={cell.planned}
+                                        >
+                                            +{cell.planned}{" "}
+                                            <span className="text-[10px] font-medium">Proposed</span>
+                                        </div>
+                                    ) : null}
+                                    <div className="text-[10px] tabular-nums text-alloy-slate">
+                                        {cell.capacity != null
+                                            ? `${cell.projected ?? (cell.occupancy ?? 0) + (cell.planned ?? 0)} / ${cell.capacity} projected`
+                                            : `${cell.projected ?? (cell.occupancy ?? 0) + (cell.planned ?? 0)} projected`}
+                                    </div>
+                                    {cell.requiredStaff != null ? (
+                                        <div
+                                            className={`text-[9.5px] ${cell.state === "breach" ? "font-semibold text-alloy-ember" : "text-alloy-slate"}`}
+                                            data-scheduling-cell-staff={cell.requiredStaff}
+                                        >
+                                            {cell.requiredStaff} staff
+                                        </div>
+                                    ) : null}
                                 </div>
                                 <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-alloy-stone/25">
-                                    <span className={`block h-full rounded-full ${cell.state === "breach" ? "bg-alloy-ember" : TONE_BAR[cell.tone]}`} style={{ width: `${Math.min(cell.pct, 100)}%` }} />
-                                </div>
-                                <div className={`mt-1.5 flex items-center gap-1 text-[9px] ${cell.state === "breach" ? "font-semibold text-alloy-ember" : "text-alloy-slate"}`}>
-                                    <span className={`h-2 w-2 rounded-full ${cell.state === "breach" ? "bg-alloy-ember" : TONE_DOT[cell.tone]}`} />
-                                    {cell.ratioLabel}
+                                    <span
+                                        className={`block h-full rounded-full ${cell.state === "breach" ? "bg-alloy-ember" : TONE_BAR[cell.tone]}`}
+                                        style={{ width: `${Math.min(cell.pct, 100)}%` }}
+                                    />
                                 </div>
                             </>
                         )}
@@ -344,53 +432,182 @@ function RoomRow({
     );
 }
 
-// ── Room detail inspector — the room's week from the read-model ────────────────
-function RoomDetailPanel({ room, focusDayKey, onClose }: { room: RosterRoom; focusDayKey: string | null; onClose: () => void }) {
+// ── Room detail — click scope determines weekly vs daily (no toggle) ───────────
+function RoomDetailPanel({
+    room,
+    focusDayKey,
+    weekLabel,
+    assignmentSubjects,
+    onClose,
+}: {
+    room: RosterRoom;
+    focusDayKey: string | null;
+    weekLabel: string;
+    assignmentSubjects: AssignmentRosterSubject[];
+    onClose: () => void;
+}) {
+    /** Day cell click → daily; room name click → weekly. */
+    const scope: "daily" | "weekly" = focusDayKey ? "daily" : "weekly";
+
     const open = room.cells.filter((c) => c.state !== "closed");
-    const peak = open.reduce((m, c) => Math.max(m, c.occupancy ?? 0), 0);
+    const totalCommitted = open.reduce((m, c) => m + (c.occupancy ?? 0), 0);
+    const totalProposed = open.reduce((m, c) => m + (c.planned ?? 0), 0);
     const anyBreach = open.some((c) => c.state === "breach");
+    const focusCell = focusDayKey ? room.cells.find((c) => c.dayKey === focusDayKey) : null;
+    const capacitySample = open.find((c) => c.capacity != null)?.capacity ?? null;
+    const staffSample = open.find((c) => c.requiredStaff != null)?.requiredStaff ?? null;
+
+    const roomAssignments = useMemo(() => {
+        const lines: Array<{
+            childName: string;
+            imageUrl?: string | null;
+            assignment: AssignmentRosterSubject["assignments"][number];
+        }> = [];
+        for (const s of assignmentSubjects) {
+            for (const a of s.assignments) {
+                if ((a.roomName ?? "").trim() !== room.roomName.trim()) continue;
+                lines.push({ childName: s.childName, imageUrl: s.imageUrl, assignment: a });
+            }
+        }
+        return lines;
+    }, [assignmentSubjects, room.roomName]);
+
+    const committedLines = roomAssignments.filter((l) => l.assignment.commitmentKind !== "proposed");
+    const proposedLines = roomAssignments.filter((l) => l.assignment.commitmentKind === "proposed");
+
+    const dayTitle = focusCell
+        ? `${focusCell.dayLabel}${focusCell.isToday ? " · today" : ""}`
+        : null;
+
     return (
         <aside
-            className="flex w-[300px] shrink-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/18 bg-white shadow-[0_2px_10px_rgba(24,39,58,0.07)]"
+            className="flex w-[320px] shrink-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/18 bg-white shadow-[0_2px_10px_rgba(24,39,58,0.07)]"
             data-scheduling-room-detail={room.roomId}
+            data-scheduling-room-detail-scope={scope}
+            data-scheduling-room-detail-day={focusDayKey ?? undefined}
         >
             <header className="flex items-start justify-between gap-2 border-b border-alloy-stone/12 px-3.5 py-3">
                 <div className="min-w-0">
                     <p className="truncate text-[13px] font-semibold text-alloy-midnight">{room.roomName}</p>
-                    <p className="text-[10.5px] text-alloy-slate">{room.meta}</p>
+                    <p className="text-[10.5px] text-alloy-slate">{room.meta || "Operational space"}</p>
+                    {scope === "daily" && dayTitle ? (
+                        <p className="mt-1 text-[12px] font-semibold text-[#00458C]" data-room-day-header="true">
+                            {dayTitle}
+                        </p>
+                    ) : (
+                        <p className="mt-1 text-[12px] font-semibold text-alloy-midnight" data-room-week-header="true">
+                            {weekLabel}
+                        </p>
+                    )}
                 </div>
                 <button type="button" onClick={onClose} aria-label="Close room detail" className="rounded-md p-1 text-alloy-midnight/45 hover:bg-alloy-stone/[0.08] hover:text-alloy-midnight">
                     <X className="h-3.5 w-3.5" aria-hidden />
                 </button>
             </header>
-            <div className="flex items-center gap-2 border-b border-alloy-stone/10 px-3.5 py-2.5">
-                <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TONE_HEALTH[room.health.tone]}`}>{room.health.label}</span>
-                <span className="text-[11px] text-alloy-slate">Peak {peak}{anyBreach ? " · over ratio" : ""}</span>
+
+            <div className="border-b border-alloy-stone/10 px-3.5 py-2.5 text-[11px] text-alloy-slate" data-room-capacity-summary="true">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TONE_HEALTH[room.health.tone]}`}>
+                        {room.health.label || (anyBreach ? "Attention" : "—")}
+                    </span>
+                    {anyBreach ? <span className="font-semibold text-alloy-ember">Attention</span> : null}
+                </div>
+                {scope === "weekly" ? (
+                    <p className="mt-1.5 tabular-nums">
+                        {totalCommitted} committed
+                        {totalProposed > 0 ? (
+                            <span className="text-[#00458C]"> · +{totalProposed} Proposed</span>
+                        ) : null}
+                        {" · "}
+                        {totalCommitted + totalProposed} projected
+                        {capacitySample != null ? ` · cap ${capacitySample}` : ""}
+                        {staffSample != null ? ` · ${staffSample} staff` : ""}
+                    </p>
+                ) : focusCell ? (
+                    <p className="mt-1.5 tabular-nums">
+                        {formatOccupancyCompact(focusCell)}
+                        {focusCell.requiredStaff != null ? ` · ${focusCell.requiredStaff} staff` : ""}
+                    </p>
+                ) : null}
             </div>
+
             <div className="min-h-0 flex-1 overflow-y-auto px-3.5 py-2">
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">This week</p>
-                <ul className="flex flex-col gap-1">
-                    {room.cells.map((c) => {
-                        const closed = c.state === "closed";
-                        const isFocus = focusDayKey === c.dayKey;
-                        return (
-                            <li
-                                key={c.dayKey}
-                                className={`flex items-center justify-between gap-2 rounded-md px-2 py-1.5 ${isFocus ? "bg-alloy-bend-pine/[0.07] ring-1 ring-inset ring-alloy-bend-pine/30" : ""}`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <span className={`h-2 w-2 rounded-full ${closed ? "bg-alloy-stone" : c.state === "breach" ? "bg-alloy-ember" : TONE_DOT[c.tone]}`} />
-                                    <span className="text-[12px] font-medium text-alloy-midnight">{c.dayLabel}</span>
-                                    {c.isToday ? <span className="text-[9px] font-semibold text-alloy-bend-pine">today</span> : null}
-                                </span>
-                                <span className="text-[11px] text-alloy-slate">
-                                    {closed ? "closed" : `${c.occupancy ?? 0}${c.capacity != null ? `/${c.capacity}` : ""} · ${c.ratioLabel}`}
-                                </span>
-                            </li>
-                        );
-                    })}
-                </ul>
+                {scope === "weekly" ? (
+                    <>
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">Weekday summary</p>
+                        <ul className="mb-3 flex flex-col gap-1">
+                            {room.cells.map((c) => {
+                                const closed = c.state === "closed";
+                                return (
+                                    <li key={c.dayKey} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5">
+                                        <span className="flex items-center gap-2">
+                                            <span className={`h-2 w-2 rounded-full ${closed ? "bg-alloy-stone" : c.state === "breach" ? "bg-alloy-ember" : TONE_DOT[c.tone]}`} />
+                                            <span className="text-[12px] font-medium text-alloy-midnight">{c.dayLabel}</span>
+                                        </span>
+                                        <span className="text-[10.5px] text-alloy-slate">
+                                            {closed ? "closed" : formatOccupancyCompact(c)}
+                                        </span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                        <RoomAssignmentList title="Weekly roster" lines={roomAssignments} empty="No assignments touch this room this week." />
+                    </>
+                ) : (
+                    <>
+                        <RoomAssignmentList title="Committed roster" lines={committedLines} empty="No committed assignments." />
+                        <RoomAssignmentList title="Proposed roster" lines={proposedLines} empty="No proposed assignments." />
+                    </>
+                )}
             </div>
         </aside>
+    );
+}
+
+function RoomAssignmentList({
+    title,
+    lines,
+    empty,
+}: {
+    title: string;
+    lines: Array<{ childName: string; imageUrl?: string | null; assignment: AssignmentRosterSubject["assignments"][number] }>;
+    empty: string;
+}) {
+    return (
+        <div className="mb-3" data-room-assignment-list={title}>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">{title}</p>
+            {lines.length === 0 ? (
+                <p className="text-[11px] text-alloy-slate">{empty}</p>
+            ) : (
+                <ul className="flex flex-col gap-1.5">
+                    {lines.map(({ childName, imageUrl, assignment: a }) => (
+                        <li
+                            key={a.assignmentId}
+                            className="rounded-md border border-alloy-stone/10 px-2 py-1.5"
+                            data-room-assignment-line={a.assignmentId}
+                        >
+                            <div className="flex items-center gap-2">
+                                <CardAvatar name={childName} imageUrl={imageUrl} size={22} />
+                                <div className="min-w-0">
+                                    <p className="truncate text-[12px] font-semibold text-alloy-midnight">{childName}</p>
+                                    <p className="truncate text-[10.5px] text-alloy-slate">
+                                        {[a.assignmentTypeLabel, a.weekdaysLabel, a.timeLabel].filter(Boolean).join(" · ")}
+                                    </p>
+                                    <p className="text-[10px] text-alloy-slate">
+                                        {a.isPrimary ? (
+                                            "Primary"
+                                        ) : a.lifecycleLabel === "Proposed" || a.commitmentKind === "proposed" ? (
+                                            <span className="text-[#00458C]">Proposed</span>
+                                        ) : a.lifecycleLabel && a.lifecycleLabel !== "Active" ? (
+                                            a.lifecycleLabel
+                                        ) : null}
+                                    </p>
+                                </div>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
     );
 }

@@ -63,6 +63,13 @@ Do not invent a new Offering abstraction. Do not duplicate Program, Room, or sch
 | Schedule patterns / recurrence types | **Location** scheduling config | Already owned; Assignment consumes |
 | Billing rates / tuition | **Billing** | Display only on Assignment |
 
+**Schedule patterns detail:** one canonical `schedule_patterns` table/API
+(`/api/admin/schedule-patterns`), scoped to a single `site_location_id` — there is no
+org-wide pattern row. Studio → Patterns (Scheduling Workspace) and Locations → Schedule
+(`LocationSchedulePatternsSettingsPanel` / `LocationSchedulePatternCreatePanel`) are two
+UIs over the same rows; Studio is not a duplicate store. "Available everywhere" means
+creating the same-shaped pattern at each site, not a new org-scoped table.
+
 ---
 
 ## 3. What Assignment Platform Settings should eventually include

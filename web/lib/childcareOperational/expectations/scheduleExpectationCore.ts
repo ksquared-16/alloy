@@ -51,6 +51,23 @@ export type SchedulePatternInput = {
     schedule_type_key: string;
 };
 
+/**
+ * A Proposed (planning-only) operational assignment — carries its own room/program
+ * directly (no `child_placements` join; proposed rows have no enrollment agreement).
+ * Never counted as attendance/staffing truth — surfaced only as a separate
+ * "planned" signal alongside committed occupancy.
+ */
+export type OperationalProposedAssignmentInput = {
+    customer_member_id: string;
+    site_location_id: string | null;
+    room_location_id: string | null;
+    program_category_id: string | null;
+    schedule_pattern_id: string;
+    start_date: string;
+    end_date: string | null;
+    status: string;
+};
+
 export type ExpectedAttendanceEntry = {
     date: string;
     weekday: number;
@@ -64,6 +81,25 @@ export type ExpectedAttendanceEntry = {
 };
 
 export type ExpectedOccupancyEntry = {
+    roomLocationId: string;
+    date: string;
+    childCount: number;
+};
+
+/** Planned (proposed) attendance for a room·date — a distinct, non-authoritative signal. */
+export type PlannedAttendanceEntry = {
+    date: string;
+    weekday: number;
+    customerMemberId: string;
+    siteLocationId: string | null;
+    roomLocationId: string | null;
+    programCategoryId: string | null;
+    schedulePatternId: string;
+    scheduleTypeKey: string;
+};
+
+/** Planned (proposed) occupancy for a room·date — never merged with committed occupancy. */
+export type PlannedOccupancyEntry = {
     roomLocationId: string;
     date: string;
     childCount: number;
@@ -185,11 +221,11 @@ export function expandExpectedAttendance(
     return entries;
 }
 
-/** Aggregate expected occupancy by room x date (entries without a room are skipped). */
-export function aggregateExpectedOccupancyByRoomDate(
-    entries: readonly ExpectedAttendanceEntry[]
-): ExpectedOccupancyEntry[] {
-    const counts = new Map<string, ExpectedOccupancyEntry>();
+/** Shared room·date tally — entries without a room are skipped. */
+function tallyByRoomDate(
+    entries: readonly { roomLocationId: string | null; date: string }[]
+): { roomLocationId: string; date: string; childCount: number }[] {
+    const counts = new Map<string, { roomLocationId: string; date: string; childCount: number }>();
     for (const e of entries) {
         if (!e.roomLocationId) continue;
         const key = `${e.roomLocationId}::${e.date}`;
@@ -203,6 +239,67 @@ export function aggregateExpectedOccupancyByRoomDate(
     return [...counts.values()].sort(
         (a, b) => a.roomLocationId.localeCompare(b.roomLocationId) || a.date.localeCompare(b.date)
     );
+}
+
+/** Aggregate expected occupancy by room x date (entries without a room are skipped). */
+export function aggregateExpectedOccupancyByRoomDate(
+    entries: readonly ExpectedAttendanceEntry[]
+): ExpectedOccupancyEntry[] {
+    return tallyByRoomDate(entries);
+}
+
+export type ExpandPlannedAttendanceInput = {
+    dateStart: string;
+    dateEnd: string;
+    proposedAssignments: readonly OperationalProposedAssignmentInput[];
+    patternsById: ReadonlyMap<string, SchedulePatternInput>;
+};
+
+/**
+ * Planned attendance per child per date, from Proposed (planning-only) assignments:
+ * pattern weekdays x each proposed row's own effective dates and room/program (no
+ * placement/agreement join — proposed rows carry their room directly). Never
+ * combined with `expandExpectedAttendance` — planning is a distinct, non-authoritative
+ * signal.
+ */
+export function expandPlannedAttendance(
+    input: ExpandPlannedAttendanceInput
+): PlannedAttendanceEntry[] {
+    const dates = enumerateDates(input.dateStart, input.dateEnd);
+    const entries: PlannedAttendanceEntry[] = [];
+
+    for (const a of input.proposedAssignments) {
+        if (!OPERATIONAL_STATUSES.has(a.status)) continue;
+        const pattern = input.patternsById.get(a.schedule_pattern_id);
+        if (!pattern) continue;
+        const weekdays = new Set(pattern.weekdays ?? []);
+
+        for (const date of dates) {
+            if (!isWithin(date, a.start_date, a.end_date)) continue;
+            const weekday = weekdayOf(date);
+            if (!weekdays.has(weekday)) continue;
+
+            entries.push({
+                date,
+                weekday,
+                customerMemberId: a.customer_member_id,
+                siteLocationId: a.site_location_id,
+                roomLocationId: a.room_location_id,
+                programCategoryId: a.program_category_id,
+                schedulePatternId: pattern.id,
+                scheduleTypeKey: pattern.schedule_type_key,
+            });
+        }
+    }
+
+    return entries;
+}
+
+/** Aggregate planned occupancy by room x date (entries without a room are skipped). */
+export function aggregatePlannedOccupancyByRoomDate(
+    entries: readonly PlannedAttendanceEntry[]
+): PlannedOccupancyEntry[] {
+    return tallyByRoomDate(entries);
 }
 
 /**

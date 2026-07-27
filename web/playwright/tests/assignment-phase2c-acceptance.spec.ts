@@ -124,17 +124,17 @@ test.describe("Assignment Platform Phase 2C acceptance", () => {
         expect(await page.locator("[data-schedule-create-new]").count()).toBeGreaterThan(0);
 
         const assignmentRows = await page.locator("[data-assignment-row]").count();
-        expect(await page.locator("[data-assignment-list-timeline]").count()).toBeGreaterThan(0);
+        // Day filter sits above the list (timeline under the list was removed).
+        expect(await page.locator("[data-assignment-day-filter]").count()).toBeGreaterThan(0);
         if (assignmentRows > 0) {
             await page.locator("[data-assignment-row]").first().click();
             await page.locator("[data-assignment-detail]").first().waitFor({ timeout: 8000 });
             await snap(page, "S03-assignment-detail");
-            expect(await page.locator("[data-assignment-props]").count()).toBeGreaterThan(0);
-            expect(await page.locator("[data-assignment-financial]").count()).toBeGreaterThan(0);
-            const propsText = await page.locator("[data-assignment-props]").innerText();
-            expect(propsText).toMatch(/Program|Room|Days|Time|Starts|Ends/i);
+            expect(await page.locator("[data-assignment-detail-grid]").count()).toBeGreaterThan(0);
+            const detailText = await page.locator("[data-assignment-detail]").innerText();
+            expect(detailText).toMatch(/Assignment Category|Room|Days|Time|Starts|Ends/i);
 
-            await page.getByText("← All assignments").click();
+            await page.locator('[data-schedule-back="true"]').click();
             await page.locator("[data-assignment-summary], [data-assignment-list]").first().waitFor({
                 timeout: 5000,
             });

@@ -91,7 +91,7 @@ export default function SchedulingKpiStrip({
 
     const studioItems: WorkspaceOperationalHealthItem[] = useMemo(
         () => [
-            { key: "types", label: "Assignment types", value: show(studio.assignmentTypes), tone: "midnight" },
+            { key: "types", label: "Assignment Categories", value: show(studio.assignmentTypes), tone: "midnight" },
             { key: "patterns", label: "Patterns", value: show(studio.patterns), tone: "pine" },
         ],
         [studio.assignmentTypes, studio.patterns]

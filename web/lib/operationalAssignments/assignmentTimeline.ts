@@ -173,6 +173,38 @@ export function buildAssignmentTimelineForWeekday(
     };
 }
 
+/**
+ * Filter + sort assignments for the plural Assignments surface.
+ * dayFilter: null = All; 0–6 = weekday (Sun–Sat).
+ * When a weekday is selected, order chronologically by arrive time (Primary first on ties).
+ * When All, Primary first then secondary by label / effective date.
+ */
+export function filterAssignmentsForDay(
+    assignments: Assignment[],
+    dayFilter: number | null,
+): Assignment[] {
+    const scoped =
+        dayFilter == null ? assignments : assignments.filter((a) => a.weekdays.includes(dayFilter));
+    if (dayFilter == null) return sortAssignmentsForDisplay(scoped);
+    return [...scoped].sort((a, b) => {
+        const at = a.arriveTime ?? "99:99";
+        const bt = b.arriveTime ?? "99:99";
+        if (at !== bt) return at.localeCompare(bt);
+        if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+        return displayLabel(a).localeCompare(displayLabel(b));
+    });
+}
+
+/** Fixed Mon–Fri day chips for the Assignments list (All = null). */
+export const ASSIGNMENT_LIST_DAY_FILTERS: ReadonlyArray<{ key: number | null; label: string }> = [
+    { key: null, label: "All" },
+    { key: 1, label: "Mon" },
+    { key: 2, label: "Tue" },
+    { key: 3, label: "Wed" },
+    { key: 4, label: "Thu" },
+    { key: 5, label: "Fri" },
+];
+
 /** Prefer today if it appears on any assignment; else first weekday with work. */
 export function pickTimelineWeekday(
     assignments: Assignment[],
@@ -186,9 +218,16 @@ export function pickTimelineWeekday(
 }
 
 /** Primary first, then secondary by type label then effective start. */
-export function sortAssignmentsForDisplay(assignments: Assignment[]): Assignment[] {
+export function sortAssignmentsForDisplay(assignments: Assignment[], asOfYmd?: string): Assignment[] {
+    const asOf = asOfYmd?.slice(0, 10) || new Date().toISOString().slice(0, 10);
     return [...assignments].sort((a, b) => {
         if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+        const aFuture = a.effectiveFrom > asOf;
+        const bFuture = b.effectiveFrom > asOf;
+        if (aFuture !== bFuture) return aFuture ? 1 : -1;
+        const at = a.arriveTime ?? "99:99";
+        const bt = b.arriveTime ?? "99:99";
+        if (at !== bt) return at.localeCompare(bt);
         const al = displayLabel(a);
         const bl = displayLabel(b);
         if (al !== bl) return al.localeCompare(bl);

@@ -177,7 +177,11 @@ export function summarizeIdentityFieldLinkTarget(
     const subject =
         IDENTITY_LINK_SUBJECT_OPTIONS.find((opt) => opt.value === target.subject)?.label
         ?? target.subject;
-    return `Linked → ${card} · ${open} · ${subject}`;
+    // Operator-facing: describe the destination in plain language (Advanced may still show keys).
+    if (target.toCard === "scheduling" && target.open === "detail") {
+        return `Displays the child’s Primary Assignment summary`;
+    }
+    return `Opens ${card} · ${open} · ${subject}`;
 }
 
 export function normalizeIdentityFieldLinkTarget(

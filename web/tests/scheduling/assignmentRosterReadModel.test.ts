@@ -28,6 +28,8 @@ describe("assignment roster read model shape", () => {
                             effectiveFrom: "2026-08-01",
                             effectiveTo: null,
                             status: "active",
+                            lifecycleLabel: "Active",
+                            commitmentKind: "committed",
                         },
                         {
                             assignmentId: "as2",
@@ -43,6 +45,8 @@ describe("assignment roster read model shape", () => {
                             effectiveFrom: "2026-08-01",
                             effectiveTo: null,
                             status: "active",
+                            lifecycleLabel: "Active",
+                            commitmentKind: "committed",
                         },
                     ],
                 },

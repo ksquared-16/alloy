@@ -9,9 +9,11 @@ import { X } from "lucide-react";
 
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
+import { filterRoomsForPurposeBehavior } from "@/lib/operationalAssignments/assignmentTypeBehavior";
 
 export type WorkspaceCreateChildCandidate = {
     customerMemberId: string;
+    /** Empty when child is not yet enrolled — creates a Proposed Assignment. */
     agreementId: string;
     personId: string | null;
     name: string;
@@ -24,6 +26,7 @@ type PlacementOption = {
     roomName: string | null;
     classification: "recommended" | "eligible" | "blocked";
     reason: string;
+    programCategoryId?: string | null;
 };
 
 type Step = "child" | "type" | "editor";
@@ -39,6 +42,9 @@ async function schedApi(path: string, init?: RequestInit): Promise<any> {
 }
 
 async function executeAction(body: Record<string, unknown>): Promise<void> {
+    const { operatorFacingAssignmentError } = await import(
+        "@/lib/operationalAssignments/operatorAssignmentErrors"
+    );
     const res = await fetch("/api/admin/actions/execute", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -46,7 +52,8 @@ async function executeAction(body: Record<string, unknown>): Promise<void> {
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok || json?.ok === false) {
-        throw new Error(typeof json?.error === "string" ? json.error : "Action failed");
+        const raw = typeof json?.error === "string" ? json.error : "Action failed";
+        throw new Error(operatorFacingAssignmentError(raw));
     }
 }
 
@@ -80,18 +87,37 @@ export default function WorkspaceCreateAssignmentModal({
     const [startDate, setStartDate] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Server-resolved from the child's placement/enrollment context (never a hardcoded
+    // null) — echoed back by `?view=options` and adopted here for client-side
+    // "Spaces matching Program" filtering once scored options resolve.
+    const [programCategoryId, setProgramCategoryId] = useState<string | null>(null);
 
     const child = useMemo(
         () => candidates.find((c) => c.customerMemberId === childId) ?? null,
         [candidates, childId],
     );
     const selectedType = assignmentTypes.find((t) => t.id === typeId) ?? null;
+    const roomReq =
+        selectedType?.behavior?.roomRequirement ??
+        (selectedType?.behavior?.requiresRoom ? "required" : "optional");
+    const roomRequired = roomReq === "required";
+    const roomNotUsed = roomReq === "not_used";
+
+    const filteredRoomOptions = useMemo(() => {
+        if (roomOptions == null) return null;
+        if (roomNotUsed) return [];
+        return filterRoomsForPurposeBehavior(
+            roomOptions,
+            selectedType?.behavior ?? {},
+            programCategoryId
+        );
+    }, [roomOptions, selectedType, roomNotUsed, programCategoryId]);
 
     useEffect(() => {
         if (!open) return;
         setError(null);
         setBusy(false);
-        setRoomOptions(null);
+        // Keep prior room options warm across reopen; do not blank the picker.
         if (preselectedChildId && candidates.some((c) => c.customerMemberId === preselectedChildId)) {
             setChildId(preselectedChildId);
             setStep(assignmentTypes.length === 1 ? "editor" : "type");
@@ -109,14 +135,40 @@ export default function WorkspaceCreateAssignmentModal({
         setRoomId(null);
         setRoomName(null);
         setStartDate("");
+        setProgramCategoryId(null);
     }, [open, preselectedChildId, candidates, assignmentTypes]);
 
+    // Prefetch patterns + operational rooms as soon as the modal opens (instant pickers).
     useEffect(() => {
         if (!open || !siteId) return;
-        void schedApi(`?view=studio_config&site_location_id=${encodeURIComponent(siteId)}`).then(() => {});
+        let cancelled = false;
+        void schedApi(`?view=studio_config&site_location_id=${encodeURIComponent(siteId)}`)
+            .then((body) => {
+                if (cancelled) return;
+                const rooms = (body?.config?.operationalRooms ?? []) as {
+                    roomId: string;
+                    roomName: string | null;
+                    programCategoryId?: string | null;
+                }[];
+                if (rooms.length) {
+                    setRoomOptions((prev) =>
+                        prev && prev.length
+                            ? prev
+                            : rooms.map((r) => ({
+                                  roomId: r.roomId,
+                                  roomName: r.roomName,
+                                  classification: "eligible" as const,
+                                  reason: "Operational space",
+                                  programCategoryId: r.programCategoryId ?? null,
+                              }))
+                    );
+                }
+            })
+            .catch(() => {});
         void fetch(`/api/admin/schedule-patterns?site_location_id=${encodeURIComponent(siteId)}`)
             .then((r) => r.json())
             .then((body) => {
+                if (cancelled) return;
                 const ps = ((body?.patterns ?? []) as Record<string, unknown>[]).map((row) => ({
                     id: String(row.id),
                     label: String(row.label ?? "Pattern"),
@@ -124,27 +176,38 @@ export default function WorkspaceCreateAssignmentModal({
                     scheduleTypeKey: String(row.schedule_type_key ?? ""),
                 }));
                 setPatterns(ps);
-                if (ps[0]) setPatternId(ps[0].id);
-            })
-            .catch(() => setPatterns([]));
-    }, [open, siteId]);
-
-    useEffect(() => {
-        if (!child || !patternId || !siteId) return;
-        let cancelled = false;
-        void schedApi(
-            `?view=options&site_location_id=${encodeURIComponent(siteId)}&pattern_id=${encodeURIComponent(patternId)}&child_agreement_id=${encodeURIComponent(child.customerMemberId)}${startDate ? `&start_date=${startDate}` : ""}`,
-        )
-            .then((o) => {
-                if (!cancelled) setRoomOptions(o.options ?? []);
+                if (ps[0]) setPatternId((prev) => prev || ps[0]!.id);
             })
             .catch(() => {
-                if (!cancelled) setRoomOptions([]);
+                if (!cancelled) setPatterns([]);
             });
         return () => {
             cancelled = true;
         };
-    }, [child, patternId, siteId, startDate]);
+    }, [open, siteId]);
+
+    useEffect(() => {
+        if (!open || !siteId || !patternId) return;
+        const memberId = child?.customerMemberId || preselectedChildId || candidates[0]?.customerMemberId;
+        if (!memberId) return;
+        let cancelled = false;
+        void schedApi(
+            `?view=options&site_location_id=${encodeURIComponent(siteId)}&pattern_id=${encodeURIComponent(patternId)}&child_agreement_id=${encodeURIComponent(memberId)}${startDate ? `&start_date=${startDate}` : ""}`,
+        )
+            .then((o) => {
+                if (cancelled) return;
+                setRoomOptions(o.options ?? []);
+                if (typeof o.programCategoryId === "string" && o.programCategoryId) {
+                    setProgramCategoryId(o.programCategoryId);
+                }
+            })
+            .catch(() => {
+                // Keep seed list; do not blank on scoring failure.
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, child, patternId, siteId, startDate, preselectedChildId, candidates]);
 
     const onPickChild = (id: string) => {
         setChildId(id);
@@ -159,21 +222,23 @@ export default function WorkspaceCreateAssignmentModal({
         setBusy(true);
         setError(null);
         try {
-            if (!patternId) throw new Error("Choose a schedule pattern.");
+            if (!patternId) throw new Error("Choose days and hours (schedule pattern).");
             if (!startDate) throw new Error("Start date is required.");
-            if (!roomId) throw new Error("Choose a room.");
-            if (!selectedType?.id) throw new Error("Choose an Assignment Type.");
+            if (!selectedType?.id) throw new Error("Choose an Assignment Category.");
 
+            const agreementId = (child.agreementId ?? "").trim();
             await executeAction({
                 action_key: "assignment.create",
                 entity_type: "child",
                 entity_id: child.customerMemberId,
                 payload: {
                     subject_type: "child",
-                    enrollment_agreement_id: child.agreementId,
+                    enrollment_agreement_id: agreementId || undefined,
+                    customer_member_id: child.customerMemberId,
+                    site_location_id: siteId,
                     schedule_pattern_id: patternId,
                     start_date: startDate,
-                    room_location_id: roomId,
+                    room_location_id: roomId || undefined,
                     assignment_type_id: selectedType.id,
                     assignment_type_label: selectedType.label,
                     is_primary: false,
@@ -186,7 +251,7 @@ export default function WorkspaceCreateAssignmentModal({
         } finally {
             setBusy(false);
         }
-    }, [child, patternId, startDate, roomId, selectedType, onSaved, onClose]);
+    }, [child, patternId, startDate, roomId, selectedType, siteId, onSaved, onClose]);
 
     if (!open) return null;
 
@@ -234,7 +299,10 @@ export default function WorkspaceCreateAssignmentModal({
                                 Choose child
                             </p>
                             {candidates.length === 0 ? (
-                                <p className="text-[12px] text-alloy-slate">No children at this site.</p>
+                                <p className="text-[12px] text-alloy-slate" data-create-empty="no-enrolled-children">
+                                    No children available at this site yet. Select a child from the roster, or open a
+                                    record that includes a child. Without enrollment, the Assignment saves as Proposed.
+                                </p>
                             ) : (
                                 <ul className="grid gap-1.5">
                                     {candidates.map((c) => (
@@ -268,23 +336,27 @@ export default function WorkspaceCreateAssignmentModal({
                             </p>
                             {assignmentTypes.length === 0 ? (
                                 <p className="text-[12px] text-alloy-slate">
-                                    No Assignment Types configured — create types in Studio → Types first.
+                                    No Assignment Categories configured — create them in Studio → Assignment
+                                    Categories first.
                                 </p>
                             ) : (
                                 <>
+                                    <p className="text-[12.5px] font-semibold text-alloy-midnight">
+                                        What category of assignment is this?
+                                    </p>
                                     <label className="grid gap-1">
                                         <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">
-                                            Assignment type
+                                            Assignment Category
                                         </span>
                                         <AlloySelect
                                             value={typeId}
                                             onChange={setTypeId}
-                                            placeholder="Choose type…"
+                                            placeholder="Choose category…"
                                             options={assignmentTypes.map((t) => ({
                                                 value: t.id ?? t.key ?? "",
-                                                label: t.label ?? t.key ?? "Type",
+                                                label: t.label ?? t.key ?? "Assignment Category",
                                             }))}
-                                            aria-label="Assignment type"
+                                            aria-label="Assignment Category"
                                         />
                                     </label>
                                     <button
@@ -330,34 +402,45 @@ export default function WorkspaceCreateAssignmentModal({
                                     className="rounded-lg border border-alloy-stone/25 px-2.5 py-2 text-[12px]"
                                 />
                             </label>
-                            <label className="grid gap-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">
-                                    Room
-                                </span>
-                                {roomOptions == null ? (
-                                    <p className="text-[11px] text-alloy-slate">Evaluating rooms…</p>
-                                ) : (
-                                    <AlloySelect
-                                        value={roomId ?? ""}
-                                        onChange={(v) => {
-                                            setRoomId(v || null);
-                                            const opt = roomOptions.find((o) => o.roomId === v);
-                                            setRoomName(opt?.roomName ?? null);
-                                        }}
-                                        options={roomOptions
-                                            .filter((o) => o.classification !== "blocked")
-                                            .map((o) => ({
-                                                value: o.roomId,
-                                                label: `${o.roomName ?? "Room"} · ${o.reason}`,
-                                            }))}
-                                        placeholder="Choose room…"
-                                        aria-label="Room"
-                                    />
-                                )}
-                                {roomName ? (
-                                    <p className="text-[10.5px] text-alloy-slate">Selected: {roomName}</p>
-                                ) : null}
-                            </label>
+                            {roomNotUsed ? (
+                                <p className="text-[12px] text-alloy-slate" data-room-not-used="true">
+                                    Operational space not used for this Assignment Category.
+                                </p>
+                            ) : (
+                                <label
+                                    className="grid gap-1"
+                                    data-assignment-program-resolved={programCategoryId ? "true" : "false"}
+                                >
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-slate">
+                                        Room{roomRequired ? "" : " (optional)"}
+                                    </span>
+                                    {filteredRoomOptions == null ? (
+                                        <p className="text-[11px] text-alloy-slate">Loading rooms…</p>
+                                    ) : (
+                                        <AlloySelect
+                                            value={roomId ?? ""}
+                                            onChange={(v) => {
+                                                setRoomId(v || null);
+                                                const opt = filteredRoomOptions.find((o) => o.roomId === v);
+                                                setRoomName(opt?.roomName ?? null);
+                                            }}
+                                            options={filteredRoomOptions
+                                                .filter((o) => o.classification !== "blocked")
+                                                .map((o) => ({
+                                                    value: o.roomId,
+                                                    label: o.roomName ?? "Room",
+                                                }))}
+                                            placeholder={roomRequired ? "Choose room…" : "Choose room (optional)…"}
+                                            aria-label="Room"
+                                        />
+                                    )}
+                                    {!child.agreementId ? (
+                                        <p className="text-[11px] text-alloy-slate">
+                                            This child is not enrolled yet. This Assignment will be saved as Proposed.
+                                        </p>
+                                    ) : null}
+                                </label>
+                            )}
                         </div>
                     ) : null}
                 </div>
@@ -385,7 +468,13 @@ export default function WorkspaceCreateAssignmentModal({
                         {step === "editor" ? (
                             <button
                                 type="button"
-                                disabled={busy || !patternId || !startDate || !roomId || !selectedType?.id}
+                                disabled={
+                                    busy ||
+                                    !patternId ||
+                                    !startDate ||
+                                    !selectedType?.id ||
+                                    (roomRequired && !roomId)
+                                }
                                 className="rounded-lg bg-alloy-bend-pine px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-50"
                                 onClick={() => void save()}
                                 data-schedule-commit="true"

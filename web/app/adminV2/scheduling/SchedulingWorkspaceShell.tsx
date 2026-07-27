@@ -40,6 +40,7 @@ export default function SchedulingWorkspaceShell({
     metricsColumn,
     onClose,
     onAddAssignment,
+    onBulkCommand,
     children,
 }: {
     mode: SchedulingMode;
@@ -57,6 +58,8 @@ export default function SchedulingWorkspaceShell({
     onClose?: () => void;
     /** Primary Overview / header Add Assignment — opens subject selection on Roster when needed. */
     onAddAssignment?: () => void;
+    /** Opens Roster with the bulk command toolbar / preview for the selected command. */
+    onBulkCommand?: (command: "assignment" | "room" | "primary" | "archive") => void;
     children: ReactNode;
 }) {
     const isWork = mode === "work";
@@ -90,29 +93,42 @@ export default function SchedulingWorkspaceShell({
                                 Actions
                                 <ChevronDown className="h-3.5 w-3.5 text-alloy-slate" aria-hidden />
                             </summary>
-                            <div className="absolute right-0 z-20 mt-1 min-w-[220px] rounded-xl border border-alloy-stone/20 bg-white p-1.5 shadow-lg">
+                            <div className="absolute right-0 z-20 mt-1 min-w-[240px] rounded-xl border border-alloy-stone/20 bg-white p-1.5 shadow-lg">
                                 <button
                                     type="button"
                                     className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-alloy-midnight hover:bg-alloy-stone/30"
                                     onClick={onAddAssignment}
+                                    data-assignment-action="add"
                                 >
                                     Add Assignment
                                     <span className="text-[9px] font-semibold uppercase tracking-wide text-alloy-bend-pine">
                                         Available
                                     </span>
                                 </button>
-                                <button
-                                    type="button"
-                                    className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/30"
-                                    onClick={() => {
-                                        onWorkViewChange("roster");
-                                    }}
-                                >
-                                    Bulk commands
-                                    <span className="text-[9px] font-semibold uppercase tracking-wide text-alloy-bend-pine">
-                                        Roster toolbar
-                                    </span>
-                                </button>
+                                {(
+                                    [
+                                        ["assignment", "Bulk Assignment"],
+                                        ["room", "Bulk Room Change"],
+                                        ["primary", "Bulk Primary Change"],
+                                        ["archive", "Bulk Archive"],
+                                    ] as const
+                                ).map(([key, label]) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-alloy-midnight hover:bg-alloy-stone/30"
+                                        data-assignment-action={`bulk-${key}`}
+                                        onClick={() => {
+                                            onWorkViewChange("roster");
+                                            onBulkCommand?.(key);
+                                        }}
+                                    >
+                                        {label}
+                                        <span className="text-[9px] font-semibold uppercase tracking-wide text-alloy-bend-pine">
+                                            Roster
+                                        </span>
+                                    </button>
+                                ))}
                             </div>
                         </details>
                     </div>

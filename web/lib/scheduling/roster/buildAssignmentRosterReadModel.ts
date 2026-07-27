@@ -1,7 +1,7 @@
 /**
  * Site-wide Assignment roster read model — indexes operational assignments for the
- * Assignments Workspace Roster. Consumes `schedule_assignments` + Assignment Platform
- * presentation; never duplicates schedule-expectation logic from the room board.
+ * Assignments Workspace Roster. Includes proposed (pre-enrollment) member-scoped
+ * rows so planning is visible without counting them as attendance truth.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -10,14 +10,20 @@ import {
     SCHEDULE_ASSIGNMENT_OPERATIONAL_STATUSES,
 } from "@/lib/childcareOperational/enrollmentOperationalStatus";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { resolveAssignmentLifecycleState } from "@/lib/operationalAssignments/assignmentLifecycleState";
 import { formatWeekdays } from "@/lib/scheduling/projection/buildSchedulingProjection";
 import type { AssignmentTypePresentation } from "@/lib/scheduling/projection/schedulingProjectionTypes";
+import { readPatternDefaultHours } from "@/lib/scheduling/editorPatterns";
+import { formatCompactScheduleHours } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
+import { resolveIdentityPhotoUrlFromMetadata } from "@/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl";
 
 export type AssignmentRosterRow = {
     assignmentId: string;
     agreementId: string;
     customerMemberId: string;
     childName: string;
+    /** The child/staff person id backing this row, when resolved — used for avatar lookup. */
+    personId?: string | null;
     subjectType: "child" | "staff";
     isPrimary: boolean;
     roleLabel: "Primary" | "Secondary";
@@ -27,6 +33,11 @@ export type AssignmentRosterRow = {
     effectiveFrom: string;
     effectiveTo: string | null;
     status: string;
+    /** Operator lifecycle label (Proposed / Upcoming / Active / …). */
+    lifecycleLabel: string;
+    commitmentKind: "proposed" | "committed";
+    /** Compact daily hours from the schedule pattern (e.g. "7:30 AM–5:30 PM"), when configured. */
+    timeLabel?: string | null;
 };
 
 export type AssignmentRosterSubject = {
@@ -37,6 +48,8 @@ export type AssignmentRosterSubject = {
     assignmentCount: number;
     primaryRoom: string | null;
     assignments: AssignmentRosterRow[];
+    /** Profile image URL when the child's person record carries one, else null → initials avatar. */
+    imageUrl?: string | null;
 };
 
 export type AssignmentRosterReadModel = {
@@ -61,10 +74,10 @@ type AssignmentRow = {
     operational_assignment_type_id: string | null;
     schedule_pattern_id: string | null;
     room_location_id: string | null;
-    weekdays: number[] | null;
     start_date: string;
     end_date: string | null;
     status: string;
+    commitment_kind: string | null;
 };
 
 type TypeRow = {
@@ -72,20 +85,54 @@ type TypeRow = {
     label: string;
 };
 
+function memberSubjectKey(customerMemberId: string): string {
+    return `member:${customerMemberId}`;
+}
+
 async function resolvePersonNames(
     supabase: SupabaseClient,
     orgId: string,
     personIds: string[]
-): Promise<Map<string, string>> {
-    const map = new Map<string, string>();
-    if (personIds.length === 0) return map;
+): Promise<{ names: Map<string, string>; imageUrls: Map<string, string> }> {
+    const names = new Map<string, string>();
+    const imageUrls = new Map<string, string>();
+    if (personIds.length === 0) return { names, imageUrls };
     const { data } = await supabase
         .from("persons")
-        .select("id, display_name")
+        .select("id, full_name, first_name, last_name, metadata")
         .eq("org_id", orgId)
         .in("id", personIds);
-    for (const p of (data ?? []) as { id: string; display_name: string | null }[]) {
-        if (p.display_name) map.set(p.id, p.display_name);
+    for (const p of (data ?? []) as {
+        id: string;
+        full_name: string | null;
+        first_name: string | null;
+        last_name: string | null;
+        metadata: unknown;
+    }[]) {
+        const composed = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
+        const name = p.full_name?.trim() || composed;
+        if (name) names.set(p.id, name);
+        const photo = resolveIdentityPhotoUrlFromMetadata(p.metadata);
+        if (photo) imageUrls.set(p.id, photo);
+    }
+    return { names, imageUrls };
+}
+
+async function resolveMemberPersonIds(
+    supabase: SupabaseClient,
+    orgId: string,
+    memberIds: string[]
+): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    const distinct = [...new Set(memberIds.filter(Boolean))];
+    if (distinct.length === 0) return map;
+    const { data } = await supabase
+        .from("customer_members")
+        .select("id, person_id")
+        .eq("org_id", orgId)
+        .in("id", distinct);
+    for (const row of (data ?? []) as { id: string; person_id: string | null }[]) {
+        if (row.person_id) map.set(row.id, row.person_id);
     }
     return map;
 }
@@ -113,19 +160,27 @@ async function resolvePatternWeekdays(
     supabase: SupabaseClient,
     orgId: string,
     patternIds: string[]
-): Promise<Map<string, number[]>> {
-    const map = new Map<string, number[]>();
+): Promise<{ weekdaysById: Map<string, number[]>; timeLabelById: Map<string, string> }> {
+    const weekdaysById = new Map<string, number[]>();
+    const timeLabelById = new Map<string, string>();
     const distinct = [...new Set(patternIds.filter(Boolean))];
-    if (distinct.length === 0) return map;
+    if (distinct.length === 0) return { weekdaysById, timeLabelById };
     const { data } = await supabase
         .from("schedule_patterns")
-        .select("id, weekdays")
+        .select("id, weekdays, metadata")
         .eq("org_id", orgId)
         .in("id", distinct);
-    for (const row of (data ?? []) as { id: string; weekdays: number[] | null }[]) {
-        map.set(row.id, Array.isArray(row.weekdays) ? row.weekdays.map(Number) : []);
+    for (const row of (data ?? []) as {
+        id: string;
+        weekdays: number[] | null;
+        metadata: Record<string, unknown> | null;
+    }[]) {
+        weekdaysById.set(row.id, Array.isArray(row.weekdays) ? row.weekdays.map(Number) : []);
+        const hours = readPatternDefaultHours(row.metadata ?? null);
+        const timeLabel = hours ? formatCompactScheduleHours(hours.arrive, hours.depart) : null;
+        if (timeLabel) timeLabelById.set(row.id, timeLabel);
     }
-    return map;
+    return { weekdaysById, timeLabelById };
 }
 
 async function resolveAssignmentTypes(
@@ -166,12 +221,14 @@ async function resolveAssignmentTypes(
     return map;
 }
 
-/** Load the site Assignment roster — one row per assignment, grouped by child subject. */
+/** Load the site Assignment roster — agreement-backed + proposed member-scoped rows. */
 export async function buildAssignmentRosterReadModel(
     supabase: SupabaseClient,
     orgId: string,
     siteLocationId: string
 ): Promise<AssignmentRosterReadModel> {
+    const asOf = new Date().toISOString().slice(0, 10);
+
     const { data: agreementData, error: agreementError } = await supabase
         .from("child_enrollment_agreements")
         .select("id, customer_member_id, person_id")
@@ -181,59 +238,88 @@ export async function buildAssignmentRosterReadModel(
     if (agreementError) throw new OperationalEnrollmentServiceError("db_error", agreementError.message);
 
     const agreements = (agreementData ?? []) as AgreementRow[];
-    if (agreements.length === 0) {
-        return { subjects: [], totalAssignments: 0, staffReady: true };
-    }
-
-    const agreementIds = agreements.map((a) => a.id);
-    const personIds = [...new Set(agreements.map((a) => a.person_id).filter((id): id is string => !!id))];
-    const nameByPersonId = await resolvePersonNames(supabase, orgId, personIds);
-    const nameByAgreementId = new Map<string, string>();
-    for (const a of agreements) {
-        const name = (a.person_id && nameByPersonId.get(a.person_id)) || "Unnamed child";
-        nameByAgreementId.set(a.id, name);
-    }
+    const agreementByMember = new Map<string, AgreementRow>();
+    for (const a of agreements) agreementByMember.set(a.customer_member_id, a);
 
     const { data: assignmentData, error: assignmentError } = await supabase
         .from("schedule_assignments")
         .select(
-            "id, enrollment_agreement_id, customer_member_id, subject_type, subject_person_id, is_primary, operational_assignment_type_id, schedule_pattern_id, room_location_id, weekdays, start_date, end_date, status"
+            "id, enrollment_agreement_id, customer_member_id, subject_type, subject_person_id, is_primary, operational_assignment_type_id, schedule_pattern_id, room_location_id, start_date, end_date, status, commitment_kind"
         )
         .eq("org_id", orgId)
-        .in("enrollment_agreement_id", agreementIds)
+        .eq("site_location_id", siteLocationId)
         .in("status", [...SCHEDULE_ASSIGNMENT_OPERATIONAL_STATUSES])
         .order("is_primary", { ascending: false })
         .order("start_date", { ascending: true });
     if (assignmentError) throw new OperationalEnrollmentServiceError("db_error", assignmentError.message);
 
     const rows = (assignmentData ?? []) as AssignmentRow[];
-    const roomIds = rows.map((r) => r.room_location_id).filter((id): id is string => !!id);
-    const patternIds = rows.map((r) => r.schedule_pattern_id).filter((id): id is string => !!id);
-    const typeIds = rows.map((r) => r.operational_assignment_type_id).filter((id): id is string => !!id);
+    if (rows.length === 0) {
+        return { subjects: [], totalAssignments: 0, staffReady: true };
+    }
 
-    const [roomLabels, patternWeekdays, typeMap] = await Promise.all([
+    const memberIds = [
+        ...new Set(
+            rows
+                .map((r) => r.customer_member_id)
+                .filter((id): id is string => Boolean(id))
+        ),
+    ];
+    const memberPersonIds = await resolveMemberPersonIds(supabase, orgId, memberIds);
+    const personIds = [
+        ...new Set([
+            ...agreements.map((a) => a.person_id).filter((id): id is string => Boolean(id)),
+            ...memberPersonIds.values(),
+        ]),
+    ];
+    const { names: nameByPersonId, imageUrls: imageUrlByPersonId } = await resolvePersonNames(supabase, orgId, personIds);
+
+    const roomIds = rows.map((r) => r.room_location_id).filter((id): id is string => Boolean(id));
+    const patternIds = rows.map((r) => r.schedule_pattern_id).filter((id): id is string => Boolean(id));
+    const typeIds = rows
+        .map((r) => r.operational_assignment_type_id)
+        .filter((id): id is string => Boolean(id));
+
+    const [roomLabels, { weekdaysById: patternWeekdays, timeLabelById: patternTimeLabels }, typeMap] = await Promise.all([
         resolveLocationLabels(supabase, orgId, roomIds),
         resolvePatternWeekdays(supabase, orgId, patternIds),
         resolveAssignmentTypes(supabase, orgId, typeIds),
     ]);
 
-    const byAgreement = new Map<string, AssignmentRosterRow[]>();
+    const bySubject = new Map<string, AssignmentRosterRow[]>();
+    const personIdBySubject = new Map<string, string>();
     for (const row of rows) {
-        const agreementId = row.enrollment_agreement_id;
-        if (!agreementId) continue;
+        const memberId = row.customer_member_id;
+        if (!memberId) continue;
+        const agreement =
+            (row.enrollment_agreement_id
+                ? agreements.find((a) => a.id === row.enrollment_agreement_id)
+                : null) ?? agreementByMember.get(memberId) ?? null;
+        const subjectKey = agreement?.id ?? memberSubjectKey(memberId);
+        const personId = agreement?.person_id ?? memberPersonIds.get(memberId) ?? null;
+        const childName = (personId && nameByPersonId.get(personId)) || "Unnamed child";
+        if (personId) personIdBySubject.set(subjectKey, personId);
         const subjectType = row.subject_type === "staff" ? "staff" : "child";
-        const weekdays =
-            Array.isArray(row.weekdays) && row.weekdays.length > 0
-                ? row.weekdays.map(Number)
-                : (row.schedule_pattern_id ? patternWeekdays.get(row.schedule_pattern_id) : []) ?? [];
+        const weekdays = (row.schedule_pattern_id ? patternWeekdays.get(row.schedule_pattern_id) : []) ?? [];
+        const timeLabel = (row.schedule_pattern_id ? patternTimeLabels.get(row.schedule_pattern_id) : null) ?? null;
         const type = row.operational_assignment_type_id
             ? typeMap.get(row.operational_assignment_type_id)
             : null;
+        const commitmentKind = row.commitment_kind === "proposed" ? "proposed" : "committed";
+        const lifecycle = resolveAssignmentLifecycleState({
+            commitmentKind,
+            status: row.status,
+            effectiveFrom: row.start_date,
+            effectiveTo: row.end_date,
+            openEnded: !row.end_date,
+            asOf,
+        });
         const rosterRow: AssignmentRosterRow = {
             assignmentId: row.id,
-            agreementId,
-            customerMemberId: row.customer_member_id ?? agreements.find((a) => a.id === agreementId)?.customer_member_id ?? "",
-            childName: nameByAgreementId.get(agreementId) ?? "Unnamed child",
+            agreementId: subjectKey,
+            customerMemberId: memberId,
+            childName,
+            personId,
             subjectType,
             isPrimary: row.is_primary === true,
             roleLabel: row.is_primary ? "Primary" : "Secondary",
@@ -243,25 +329,32 @@ export async function buildAssignmentRosterReadModel(
             effectiveFrom: row.start_date,
             effectiveTo: row.end_date,
             status: row.status,
+            lifecycleLabel: lifecycle.label,
+            commitmentKind,
+            timeLabel,
         };
-        const list = byAgreement.get(agreementId) ?? [];
+        const list = bySubject.get(subjectKey) ?? [];
         list.push(rosterRow);
-        byAgreement.set(agreementId, list);
+        bySubject.set(subjectKey, list);
     }
 
     const subjects: AssignmentRosterSubject[] = [];
-    for (const agreement of agreements) {
-        const assignments = byAgreement.get(agreement.id) ?? [];
+    for (const [subjectKey, assignments] of bySubject) {
         if (assignments.length === 0) continue;
+        assignments.sort((a, b) => {
+            if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+            return a.effectiveFrom.localeCompare(b.effectiveFrom);
+        });
         const primary = assignments.find((a) => a.isPrimary) ?? assignments[0];
         subjects.push({
-            agreementId: agreement.id,
-            customerMemberId: agreement.customer_member_id,
-            childName: nameByAgreementId.get(agreement.id) ?? "Unnamed child",
-            subjectType: "child",
+            agreementId: subjectKey,
+            customerMemberId: primary.customerMemberId,
+            childName: primary.childName,
+            subjectType: primary.subjectType,
             assignmentCount: assignments.length,
             primaryRoom: primary?.roomName ?? null,
             assignments,
+            imageUrl: primary.personId ? imageUrlByPersonId.get(primary.personId) ?? null : null,
         });
     }
 

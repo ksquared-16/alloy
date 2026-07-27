@@ -6,6 +6,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AssignmentTypePresentation } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import {
+    readAssignmentTypeBehavior,
+    type AssignmentTypeBehavior,
+} from "@/lib/operationalAssignments/assignmentTypeBehavior";
 
 type AssignmentTypeRow = {
     id: string;
@@ -18,11 +22,14 @@ type AssignmentTypeRow = {
     staffing_participation: AssignmentTypePresentation["staffingParticipation"];
     subject_types: string[] | null;
     sort_order: number | null;
+    default_behavior: Record<string, unknown> | null;
 };
 
 export type OrgAssignmentTypeOption = AssignmentTypePresentation & {
     subjectTypes: Array<"child" | "staff">;
     sortOrder: number;
+    /** Purpose eligibility / requirements (operator: Assignment Kind behavior). */
+    behavior: AssignmentTypeBehavior;
 };
 
 function mapRow(raw: AssignmentTypeRow): OrgAssignmentTypeOption {
@@ -40,6 +47,7 @@ function mapRow(raw: AssignmentTypeRow): OrgAssignmentTypeOption {
         staffingParticipation: raw.staffing_participation,
         subjectTypes: subjectTypes.length ? subjectTypes : ["child"],
         sortOrder: raw.sort_order ?? 100,
+        behavior: readAssignmentTypeBehavior(raw.default_behavior),
     };
 }
 
@@ -52,7 +60,7 @@ export async function loadOrgAssignmentTypes(
     const { data, error } = await supabase
         .from("operational_assignment_types")
         .select(
-            "id, key, label, icon_key, visual_tone, billing_participation, attendance_participation, staffing_participation, subject_types, sort_order"
+            "id, key, label, icon_key, visual_tone, billing_participation, attendance_participation, staffing_participation, subject_types, sort_order, default_behavior"
         )
         .eq("org_id", orgId)
         .eq("is_active", true)

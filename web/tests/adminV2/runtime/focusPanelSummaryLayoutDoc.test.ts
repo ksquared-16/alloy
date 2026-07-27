@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { SUMMARY_GRID } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import {
     buildFocusPanelSummaryDefaultDoc,
     FOCUS_PANEL_SUMMARY_DEFAULT_DOC,
@@ -22,10 +21,9 @@ describe("buildFocusPanelSummaryDefaultDoc", () => {
         expect(doc.metadata?.layoutKey).toBe(FOCUS_PANEL_SUMMARY_LAYOUT_KEY);
     });
 
-    it("creates one section per SUMMARY_GRID cell", () => {
+    it("creates one section per default enrollment card seed (Visible + Linked)", () => {
         const doc = buildFocusPanelSummaryDefaultDoc();
-        const cellCount = SUMMARY_GRID.rows.reduce((sum, row) => sum + row.cells.length, 0);
-        expect(doc.sections).toHaveLength(cellCount);
+        expect(doc.sections).toHaveLength(8);
         for (const section of doc.sections) {
             expect(readFocusPanelCardSectionMeta(section)).not.toBeNull();
         }
@@ -54,16 +52,24 @@ describe("buildFocusPanelSummaryDefaultDoc", () => {
 });
 
 describe("deriveFocusPanelGridFromLayoutDoc", () => {
-    it("round-trips the default doc back to SUMMARY_GRID exactly (visual parity)", () => {
-        const grid = deriveFocusPanelGridFromLayoutDoc(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
-        // `instanceKey` is an additive per-placement id (defaults to the card type);
-        // it does not affect visual rendering, so compare the visual cell shape.
-        const stripInstanceKey = (g: typeof grid) => ({
-            rows: g.rows.map((row) => ({
-                cells: row.cells.map(({ key, span, density, tier }) => ({ key, span, density, tier })),
-            })),
-        });
-        expect(stripInstanceKey(grid)).toEqual(stripInstanceKey(SUMMARY_GRID));
+    it("places Visible default cards including Assignments (scheduling) on the published grid", async () => {
+        const { focusPanelSummaryDefaultGridLayout } = await import(
+            "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc"
+        );
+        const { deriveFocusPanelSummaryCompositionInputs } = await import(
+            "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs"
+        );
+        const { publishedLayoutReadingOrder } = await import(
+            "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout"
+        );
+        const inputs = deriveFocusPanelSummaryCompositionInputs(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
+        const laidOut = publishedLayoutReadingOrder(inputs.publishedLayout!);
+        expect(laidOut).toEqual(
+            expect.arrayContaining(["current_work", "household", "children", "scheduling", "billing_preview"]),
+        );
+        expect(laidOut).not.toContain("milestones");
+        const defaultAreas = focusPanelSummaryDefaultGridLayout().areas.map((a) => a.card);
+        expect(laidOut).toEqual(expect.arrayContaining(defaultAreas));
     });
 
     it("returns no rows for an empty / missing doc (caller falls back)", () => {

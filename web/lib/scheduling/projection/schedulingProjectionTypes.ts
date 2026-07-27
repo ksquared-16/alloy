@@ -80,6 +80,8 @@ export type Assignment = {
     kind: "base" | "temporary";
     status: string;
     isPrimary: boolean;
+    /** proposed = planning (no agreement); committed = agreement-backed operational truth */
+    commitmentKind?: "proposed" | "committed";
     assignmentType: AssignmentTypePresentation;
     patternId: string | null;
     patternLabel: string | null;

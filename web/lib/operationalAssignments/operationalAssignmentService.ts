@@ -19,7 +19,12 @@ import { validateSchedulePatternForSite } from "@/lib/childcareOperational/valid
 export type OperationalAssignmentSubject =
     | {
           type: "child";
-          enrollmentAgreementId: string;
+          /** When set → committed assignment. */
+          enrollmentAgreementId?: string | null;
+          /** Required for proposed (and preferred for listing). */
+          customerMemberId?: string | null;
+          /** Required when creating proposed without an agreement. */
+          siteLocationId?: string | null;
       }
     | {
           type: "staff";
@@ -39,6 +44,7 @@ export type CreateOperationalAssignmentInput = {
      * Only child assignments may be primary. A primary change must supersede
      * the prior primary through a dedicated command; this create operation
      * cannot silently replace an operational home.
+     * Proposed primaries are planning-only (commitment_kind = proposed).
      */
     isPrimary?: boolean;
     /**
@@ -47,6 +53,11 @@ export type CreateOperationalAssignmentInput = {
      * Primary home changes still use `assignment.set_primary`.
      */
     supersedesAssignmentId?: string | null;
+    /**
+     * Force proposed even if an agreement id is present (rare). Default: proposed
+     * when agreement is absent, committed when present.
+     */
+    commitmentKind?: "proposed" | "committed";
     sourceKey?: string;
     metadata?: Record<string, unknown>;
     actorUserId?: string | null;
@@ -56,6 +67,8 @@ export type CreateOperationalAssignmentInput = {
 export type ListOperationalAssignmentFilters = {
     subject?: OperationalAssignmentSubject;
     includeTerminal?: boolean;
+    /** When true, include proposed rows (default true). */
+    includeProposed?: boolean;
 };
 
 function assertNonBlank(value: string | null, field: string): string {
@@ -68,26 +81,58 @@ function assertNonBlank(value: string | null, field: string): string {
 async function resolveSubjectSite(
     supabase: SupabaseClient,
     orgId: string,
-    subject: OperationalAssignmentSubject
-): Promise<{ siteLocationId: string; enrollmentAgreementId: string | null; customerMemberId: string | null; personId: string | null }> {
+    subject: OperationalAssignmentSubject,
+    commitmentKind: "proposed" | "committed"
+): Promise<{
+    siteLocationId: string;
+    enrollmentAgreementId: string | null;
+    customerMemberId: string | null;
+    personId: string | null;
+    commitmentKind: "proposed" | "committed";
+}> {
     if (subject.type === "child") {
-        const enrollmentAgreementId = assertNonBlank(trimOrNull(subject.enrollmentAgreementId), "enrollmentAgreementId");
-        const agreement = await getAgreementById(supabase, orgId, enrollmentAgreementId);
-        if (!agreement) {
-            throw new OperationalEnrollmentServiceError("not_found", "Enrollment agreement not found");
+        const agreementId = trimOrNull(subject.enrollmentAgreementId);
+        if (commitmentKind === "committed" || agreementId) {
+            const enrollmentAgreementId = assertNonBlank(agreementId, "enrollment");
+            const agreement = await getAgreementById(supabase, orgId, enrollmentAgreementId);
+            if (!agreement) {
+                throw new OperationalEnrollmentServiceError("not_found", "Enrollment agreement not found");
+            }
+            if (agreement.status === "canceled" || agreement.status === "ended") {
+                throw new OperationalEnrollmentServiceError(
+                    "invalid_state",
+                    "Cannot create an assignment for a terminal enrollment agreement",
+                    { status: agreement.status }
+                );
+            }
+            return {
+                siteLocationId: agreement.site_location_id,
+                enrollmentAgreementId: agreement.id,
+                customerMemberId: agreement.customer_member_id,
+                personId: null,
+                commitmentKind: "committed",
+            };
         }
-        if (agreement.status === "canceled" || agreement.status === "ended") {
-            throw new OperationalEnrollmentServiceError(
-                "invalid_state",
-                "Cannot create an assignment for a terminal enrollment agreement",
-                { status: agreement.status }
-            );
+
+        // Proposed — participation / inquiry child, no agreement.
+        const customerMemberId = assertNonBlank(trimOrNull(subject.customerMemberId), "child");
+        const siteLocationId = assertNonBlank(trimOrNull(subject.siteLocationId), "site");
+        const { data: member, error } = await supabase
+            .from("customer_members")
+            .select("id, org_id")
+            .eq("org_id", orgId)
+            .eq("id", customerMemberId)
+            .maybeSingle();
+        if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
+        if (!member) {
+            throw new OperationalEnrollmentServiceError("not_found", "Child was not found for this organization");
         }
         return {
-            siteLocationId: agreement.site_location_id,
-            enrollmentAgreementId: agreement.id,
-            customerMemberId: agreement.customer_member_id,
+            siteLocationId,
+            enrollmentAgreementId: null,
+            customerMemberId,
             personId: null,
+            commitmentKind: "proposed",
         };
     }
 
@@ -108,7 +153,13 @@ async function resolveSubjectSite(
             { person_id: personId }
         );
     }
-    return { siteLocationId, enrollmentAgreementId: null, customerMemberId: null, personId };
+    return {
+        siteLocationId,
+        enrollmentAgreementId: null,
+        customerMemberId: null,
+        personId,
+        commitmentKind: "committed",
+    };
 }
 
 /**
@@ -123,7 +174,13 @@ export async function createOperationalAssignment(
     const schedulePatternId = assertNonBlank(trimOrNull(input.schedulePatternId), "schedulePatternId");
     assertValidIsoDate(startDate, "startDate");
 
-    const subject = await resolveSubjectSite(supabase, input.orgId, input.subject);
+    const requestedKind: "proposed" | "committed" =
+        input.commitmentKind ??
+        (input.subject.type === "child" && !trimOrNull(input.subject.enrollmentAgreementId)
+            ? "proposed"
+            : "committed");
+
+    const subject = await resolveSubjectSite(supabase, input.orgId, input.subject, requestedKind);
     const patternCheck = await validateSchedulePatternForSite(
         supabase,
         input.orgId,
@@ -141,13 +198,15 @@ export async function createOperationalAssignment(
     if (isPrimary && input.subject.type !== "child") {
         throw new OperationalEnrollmentServiceError("invalid_input", "Only a child assignment may be primary");
     }
-    if (isPrimary && !supersedesAssignmentId) {
+    // Committed primary uniqueness only — proposed primaries are planning markers.
+    if (isPrimary && !supersedesAssignmentId && subject.commitmentKind === "committed" && subject.enrollmentAgreementId) {
         const { data, error } = await supabase
             .from("schedule_assignments")
             .select("id")
             .eq("org_id", input.orgId)
             .eq("enrollment_agreement_id", subject.enrollmentAgreementId)
             .eq("subject_type", "child")
+            .eq("commitment_kind", "committed")
             .eq("is_primary", true)
             .in("status", ["planned", "active", "ending"])
             .maybeSingle();
@@ -205,14 +264,22 @@ export async function createOperationalAssignment(
         program_category_id: trimOrNull(input.programCategoryId),
         operational_assignment_type_id: trimOrNull(input.assignmentTypeId),
         is_primary: supersedesAssignmentId ? priorIsPrimary : isPrimary,
+        commitment_kind: subject.commitmentKind,
         schedule_pattern_id: schedulePatternId,
         start_date: startDate,
         end_date: null,
-        status: derivePlacementStatusFromStartDate(startDate, input.todayYmd),
+        // Proposed rows stay in planned status for operator clarity even when start ≤ today.
+        status:
+            subject.commitmentKind === "proposed"
+                ? "planned"
+                : derivePlacementStatusFromStartDate(startDate, input.todayYmd),
         assignment_kind: "base",
         source_key: trimOrNull(input.sourceKey) ?? "operator",
         supersedes_assignment_id: supersedesAssignmentId,
-        metadata: input.metadata ?? {},
+        metadata: {
+            ...(input.metadata ?? {}),
+            ...(subject.commitmentKind === "proposed" ? { planning: true } : {}),
+        },
         created_by: trimOrNull(input.actorUserId),
         updated_by: trimOrNull(input.actorUserId),
     };
@@ -231,15 +298,146 @@ export async function listOperationalAssignments(
 ): Promise<ScheduleAssignmentRow[]> {
     let query = supabase.from("schedule_assignments").select("*").eq("org_id", orgId);
     if (filters.subject?.type === "child") {
-        query = query
-            .eq("subject_type", "child")
-            .eq("enrollment_agreement_id", filters.subject.enrollmentAgreementId);
+        query = query.eq("subject_type", "child");
+        const memberId = trimOrNull(filters.subject.customerMemberId);
+        const agreementId = trimOrNull(filters.subject.enrollmentAgreementId);
+        if (memberId) {
+            query = query.eq("customer_member_id", memberId);
+        } else if (agreementId) {
+            query = query.eq("enrollment_agreement_id", agreementId);
+        }
     }
     if (filters.subject?.type === "staff") {
         query = query.eq("subject_type", "staff").eq("subject_person_id", filters.subject.personId);
+    }
+    if (filters.includeProposed === false) {
+        query = query.eq("commitment_kind", "committed");
     }
     if (!filters.includeTerminal) query = query.in("status", ["planned", "active", "ending"]);
     const { data, error } = await query.order("start_date", { ascending: true });
     if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
     return (data ?? []) as ScheduleAssignmentRow[];
+}
+
+/**
+ * Promote a proposed (planning) assignment onto a live enrollment agreement.
+ * Same row id — no duplicate commitment.
+ */
+export async function promoteProposedAssignment(
+    supabase: SupabaseClient,
+    input: {
+        orgId: string;
+        assignmentId: string;
+        enrollmentAgreementId: string;
+        actorUserId?: string | null;
+    }
+): Promise<ScheduleAssignmentRow> {
+    const agreementId = assertNonBlank(trimOrNull(input.enrollmentAgreementId), "enrollment");
+    const agreement = await getAgreementById(supabase, input.orgId, agreementId);
+    if (!agreement) {
+        throw new OperationalEnrollmentServiceError("not_found", "Enrollment agreement not found");
+    }
+    if (agreement.status === "canceled" || agreement.status === "ended") {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            "Cannot promote onto a terminal enrollment agreement"
+        );
+    }
+
+    const { data: priorRaw, error: loadErr } = await supabase
+        .from("schedule_assignments")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .eq("id", input.assignmentId)
+        .maybeSingle();
+    if (loadErr) throw new OperationalEnrollmentServiceError("db_error", loadErr.message);
+    const prior = priorRaw as ScheduleAssignmentRow | null;
+    if (!prior || prior.subject_type !== "child") {
+        throw new OperationalEnrollmentServiceError("not_found", "Proposed assignment not found");
+    }
+    if ((prior.commitment_kind ?? "committed") !== "proposed") {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            "Only a Proposed Assignment can be promoted"
+        );
+    }
+    if (prior.customer_member_id !== agreement.customer_member_id) {
+        throw new OperationalEnrollmentServiceError(
+            "validation_failed",
+            "This Proposed Assignment belongs to a different child than the enrollment"
+        );
+    }
+
+    const meta =
+        prior.metadata && typeof prior.metadata === "object" ? { ...(prior.metadata as object) } : {};
+    const { data, error } = await supabase
+        .from("schedule_assignments")
+        .update({
+            enrollment_agreement_id: agreement.id,
+            site_location_id: agreement.site_location_id ?? prior.site_location_id,
+            commitment_kind: "committed",
+            status: prior.status === "planned" ? "active" : prior.status,
+            metadata: {
+                ...meta,
+                promoted_from_proposed_at: new Date().toISOString(),
+                planning: false,
+            },
+            updated_by: trimOrNull(input.actorUserId),
+        })
+        .eq("org_id", input.orgId)
+        .eq("id", prior.id)
+        .select("*")
+        .single();
+    if (error || !data) {
+        throw new OperationalEnrollmentServiceError("db_error", error?.message ?? "Could not promote assignment");
+    }
+    return data as ScheduleAssignmentRow;
+}
+
+/**
+ * Delete a Proposed (planning-only) assignment — the operator wants it removed from
+ * planning projections entirely, not just ended. Hard delete: Proposed rows carry no
+ * agreement, no attendance/billing history, and no primary-uniqueness invariant, so
+ * there is no downstream truth to preserve. Committed rows can NEVER be deleted here —
+ * use `archiveOperationalAssignment` (or a supersede) for committed truth. Callers must
+ * write an `action_executed` audit event (the row itself no longer exists to derive
+ * history from — see `assignmentDeleteProposedAction`).
+ */
+export async function deleteProposedOperationalAssignment(
+    supabase: SupabaseClient,
+    input: {
+        orgId: string;
+        assignmentId: string;
+        actorUserId?: string | null;
+    }
+): Promise<ScheduleAssignmentRow> {
+    const assignmentId = assertNonBlank(trimOrNull(input.assignmentId), "assignmentId");
+
+    const { data, error } = await supabase
+        .from("schedule_assignments")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .eq("id", assignmentId)
+        .maybeSingle();
+    if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
+    const row = data as ScheduleAssignmentRow | null;
+    if (!row) {
+        throw new OperationalEnrollmentServiceError("not_found", "Proposed assignment not found");
+    }
+    if ((row.commitment_kind ?? "committed") !== "proposed") {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            "Only a Proposed Assignment can be deleted; committed assignments must be archived or superseded"
+        );
+    }
+
+    const { error: deleteError } = await supabase
+        .from("schedule_assignments")
+        .delete()
+        .eq("org_id", input.orgId)
+        .eq("id", assignmentId);
+    if (deleteError) {
+        throw new OperationalEnrollmentServiceError("db_error", deleteError.message);
+    }
+    return row;
 }

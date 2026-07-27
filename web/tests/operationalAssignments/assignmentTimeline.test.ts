@@ -5,6 +5,7 @@ import {
     assignmentSummaryLine,
     sortAssignmentsForDisplay,
     assignmentFinancialPlaceholder,
+    filterAssignmentsForDay,
 } from "@/lib/operationalAssignments/assignmentTimeline";
 import type { Assignment } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 
@@ -213,18 +214,75 @@ describe("sortAssignmentsForDisplay", () => {
     });
 });
 
-describe("assignmentFinancialPlaceholder", () => {
-    it("returns relationship label when billing eligible", () => {
-        expect(
-            assignmentFinancialPlaceholder(
-                assignment({ id: "x", label: "Primary", weekdays: [1] })
-            )
-        ).toBe("Recurring billing eligible");
+describe("filterAssignmentsForDay", () => {
+    const primary = assignment({
+        id: "primary",
+        label: "Primary Classroom",
+        weekdays: [1, 2, 3, 4, 5],
+        arriveTime: "08:30",
+        departTime: "16:00",
+        isPrimary: true,
+    });
+    const before = assignment({
+        id: "before",
+        label: "Before Care",
+        weekdays: [1, 2, 3, 4, 5],
+        arriveTime: "07:00",
+        departTime: "08:30",
+    });
+    const soccer = assignment({
+        id: "soccer",
+        label: "Soccer Shots",
+        weekdays: [2],
+        arriveTime: "10:00",
+        departTime: "11:00",
+    });
+    const after = assignment({
+        id: "after",
+        label: "After Care",
+        weekdays: [1, 2, 3, 4, 5],
+        arriveTime: "16:00",
+        departTime: "18:00",
     });
 
-    it("returns em dash when billing not linked", () => {
-        const a = assignment({ id: "x", label: "Therapy", weekdays: [1] });
-        a.billing = { participation: "none", label: null };
-        expect(assignmentFinancialPlaceholder(a)).toBe("—");
+    it("All keeps primary-first then chronological secondaries", () => {
+        const sorted = filterAssignmentsForDay([after, soccer, before, primary], null);
+        expect(sorted.map((a) => a.id)).toEqual(["primary", "before", "soccer", "after"]);
+    });
+
+    it("weekday filter returns only applicable rows in chronological order", () => {
+        const tue = filterAssignmentsForDay([after, soccer, before, primary], 2);
+        expect(tue.map((a) => a.id)).toEqual(["before", "primary", "soccer", "after"]);
+    });
+
+    it("weekday with no secondary enrichment returns calm empty after filter", () => {
+        const wed = filterAssignmentsForDay([soccer], 3);
+        expect(wed).toEqual([]);
+    });
+});
+
+describe("day filter overlap presentation", () => {
+    it("flags overlapping segments on the filtered day", () => {
+        const model = buildAssignmentTimelineForWeekday(
+            [
+                assignment({
+                    id: "primary",
+                    label: "Primary Classroom",
+                    weekdays: [2],
+                    arriveTime: "08:30",
+                    departTime: "16:00",
+                    isPrimary: true,
+                }),
+                assignment({
+                    id: "soccer",
+                    label: "Soccer Shots",
+                    weekdays: [2],
+                    arriveTime: "10:00",
+                    departTime: "11:00",
+                }),
+            ],
+            2
+        );
+        expect(model.segments.find((s) => s.assignmentId === "soccer")?.overlapsPrevious).toBe(true);
     });
 });

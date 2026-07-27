@@ -5,6 +5,10 @@ import clsx from "clsx";
 import { ImagePlus, ImageOff, Trash2 } from "lucide-react";
 
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import type {
+    IdentityAvatarPhotoClear,
+    IdentityAvatarPhotoSave,
+} from "@/components/admin/focusPanel/identity/IdentityAvatarEditable";
 import {
     groupShowAvatarForNestedGroup,
     groupUseProfilePhotosForNestedGroup,
@@ -13,6 +17,12 @@ import {
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
+import {
+    clearPersonProfilePhoto,
+    resolveSurfaceAvatarRuntime,
+    uploadAndBindPersonProfilePhoto,
+    uploadPersonProfilePhotoDocument,
+} from "@/lib/adminV2/runtime/focusPanel/persistPersonProfilePhoto";
 
 type BuilderBinding = {
     config: NestedSurfaceConfig;
@@ -32,13 +42,17 @@ type Props = {
      * Used when FocusPanelComposerProvider is not wrapping this tree.
      */
     builder?: BuilderBinding;
+    /** Live Work Unit — bind + refresh projection through Focus Panel mutation. */
+    onSavePhoto?: IdentityAvatarPhotoSave;
+    onClearPhoto?: IdentityAvatarPhotoClear;
 };
 
 /**
- * Child identity avatar — runtime display + in-place composer controls.
+ * Child identity avatar — Surfaces composer controls + shared runtime persistence.
  *
- * Upload uses documents API (`entity_type=person`). Canonical photo persistence on
- * `persons` is not wired yet — composer preview URLs are session-only until that lands.
+ * Upload uses documents API (`entity_type=person`), then binds
+ * `persons.metadata.profile_photo_document_id` so every shared Avatar consumer
+ * resolves the same image after refresh.
  */
 export default function ChildProfileAvatarComposer({
     surfaceId,
@@ -49,6 +63,8 @@ export default function ChildProfileAvatarComposer({
     personId,
     size = 40,
     builder,
+    onSavePhoto,
+    onClearPhoto,
 }: Props) {
     const composer = useFocusPanelComposer();
     const composingFromContext = composer?.isComposingSurface(surfaceId) ?? false;
@@ -65,7 +81,11 @@ export default function ChildProfileAvatarComposer({
         ?? imageUrl;
     const showAvatar = config ? groupShowAvatarForNestedGroup(config, groupKey) : true;
     const useProfilePhotos = config ? groupUseProfilePhotosForNestedGroup(config, groupKey) : true;
-    const displayUrl = showAvatar && useProfilePhotos ? previewUrl : null;
+    const { imageUrl: displayUrl } = resolveSurfaceAvatarRuntime({
+        showAvatar,
+        useProfilePhotos,
+        imageUrl: previewUrl,
+    });
 
     const mutate = (next: NestedSurfaceConfig) => {
         if (builder) {
@@ -89,39 +109,65 @@ export default function ChildProfileAvatarComposer({
         setUploading(true);
         setUploadError(null);
         try {
-            const body = new FormData();
-            body.append("file", file);
-            body.append("entity_type", "person");
-            body.append("entity_id", personId);
-            body.append("doc_type", "profile_photo");
-            body.append("title", `${childName} profile photo`);
-
-            const uploadRes = await fetch("/api/admin/documents/upload", { method: "POST", body });
-            if (!uploadRes.ok) throw new Error("Upload failed");
-            const payload = (await uploadRes.json()) as { document?: { id?: string } };
-            const docId = payload.document?.id;
-            if (!docId) throw new Error("Upload response missing document id");
-            const signedRes = await fetch(`/api/admin/documents/${docId}/signed-url`);
-            if (!signedRes.ok) throw new Error("Could not resolve uploaded image URL");
-            const signed = (await signedRes.json()) as { url?: string };
-            if (!signed.url) throw new Error("Signed URL missing");
-            setPreview(signed.url);
+            let photoUrl: string | null = null;
+            if (onSavePhoto) {
+                const uploaded = await uploadPersonProfilePhotoDocument({
+                    personId,
+                    file,
+                    title: `${childName} profile photo`,
+                });
+                if (!uploaded.ok) throw new Error(uploaded.error);
+                const result = await onSavePhoto({
+                    childId,
+                    personId,
+                    documentId: uploaded.documentId,
+                });
+                if (!result.ok) throw new Error(result.error || "Could not save profile photo");
+                photoUrl = result.photoUrl ?? null;
+            } else {
+                const bound = await uploadAndBindPersonProfilePhoto({
+                    personId,
+                    file,
+                    title: `${childName} profile photo`,
+                });
+                if (!bound.ok) throw new Error(bound.error);
+                photoUrl = bound.photoUrl;
+            }
+            setPreview(photoUrl);
             if (config && !useProfilePhotos) {
                 mutate(setGroupUseProfilePhotosInNestedGroup(config, groupKey, true));
             }
             if (config && !showAvatar) {
                 mutate(setGroupShowAvatarInNestedGroup(config, groupKey, true));
             }
-        } catch {
-            setUploadError("Upload stored in documents; preview-only until person photo field persists.");
+        } catch (e) {
+            setUploadError(e instanceof Error ? e.message : "Upload failed");
         } finally {
             setUploading(false);
         }
     };
 
-    const removeImage = () => {
-        setPreview(null);
+    const removeImage = async () => {
         setUploadError(null);
+        if (!personId) {
+            setPreview(null);
+            return;
+        }
+        setUploading(true);
+        try {
+            if (onClearPhoto) {
+                const result = await onClearPhoto({ childId, personId });
+                if (!result.ok) throw new Error(result.error || "Could not remove photo");
+            } else {
+                const result = await clearPersonProfilePhoto({ personId });
+                if (!result.ok) throw new Error(result.error);
+            }
+            setPreview(null);
+        } catch (e) {
+            setUploadError(e instanceof Error ? e.message : "Remove failed");
+        } finally {
+            setUploading(false);
+        }
     };
 
     return (
@@ -193,7 +239,7 @@ export default function ChildProfileAvatarComposer({
                                     aria-label="Remove profile image"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        removeImage();
+                                        void removeImage();
                                     }}
                                 >
                                     <Trash2 className="h-3 w-3" aria-hidden />

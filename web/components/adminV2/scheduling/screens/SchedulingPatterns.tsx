@@ -6,13 +6,22 @@
  * (never redirected to Settings). Writes go through the governed
  * `/api/admin/schedule-patterns` endpoints (the container owns the I/O); this component
  * owns the operator experience only.
+ *
+ * Canonical `schedule_patterns` · shared with Locations — Studio and Locations →
+ * Schedule (`LocationSchedulePatternsSettingsPanel` / `LocationSchedulePatternCreatePanel`)
+ * read/write the exact same table through the same `/api/admin/schedule-patterns`
+ * endpoints. There is no separate Studio-only pattern store. A Pattern belongs to ONE
+ * site (`site_location_id`) — there is no org-wide pattern row; "available everywhere"
+ * means creating the same-shaped Pattern at each site that needs it (see
+ * docs/platform/planning/assignment-platform-settings-inventory.md §"Schedule patterns").
  */
 
 import { useMemo, useState } from "react";
-import { ArchiveRestore, CalendarRange, Copy, Eye, Pencil, Plus, Power } from "lucide-react";
+import { ArchiveRestore, ArrowLeft, CalendarRange, Copy, Eye, Pencil, Plus, Power } from "lucide-react";
 
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
-import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY, WS_EYEBROW, WS_FIELD_SELECT_CHROME } from "@/components/workspace/workspaceTokens";
+import { WS_ACTION_PRIMARY, WS_EYEBROW, WS_FIELD_SELECT_CHROME } from "@/components/workspace/workspaceTokens";
+import { resolveOperatorLabel } from "@/lib/adminV2/scheduling/resolveOperatorLabel";
 import { allowedPatternWeekdays } from "@/lib/locations/locationSchedulingConfig";
 import { resolveVisibleDayPills } from "@/lib/scheduling/dayPills";
 
@@ -35,6 +44,8 @@ export type PatternEditorConfig = {
     operatingDays: number[];
     scheduleTypes: { key: string; label: string; behavior?: string }[];
     programs: { key: string; label: string }[];
+    /** Operational spaces for Category eligibility — shared Workspace snapshot. */
+    operationalRooms?: { roomId: string; roomName: string | null }[];
 };
 
 export type PatternInput = {
@@ -58,7 +69,11 @@ export type PatternMutation =
 const DAY_LABEL: Record<number, string> = { 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 0: "Sun" };
 
 function typeLabel(config: PatternEditorConfig, key: string): string {
-    return config.scheduleTypes.find((t) => t.key === key)?.label ?? key;
+    return resolveOperatorLabel(key, config.scheduleTypes);
+}
+
+function programLabel(config: PatternEditorConfig, key: string): string {
+    return resolveOperatorLabel(key, config.programs);
 }
 
 export default function SchedulingPatterns({
@@ -92,6 +107,7 @@ export default function SchedulingPatterns({
             <PatternEditor
                 pattern={editing === "new" ? null : editing}
                 config={editorConfig}
+                siteName={siteName}
                 onCancel={() => setEditing(null)}
                 onSave={async (data) => {
                     const res =
@@ -221,9 +237,7 @@ function PatternCard({
     onRestore: () => void;
     onTogglePreview: () => void;
 }) {
-    const programNames = p.programKeys
-        .map((k) => config.programs.find((pr) => pr.key === k)?.label ?? k)
-        .filter(Boolean);
+    const programNames = p.programKeys.map((k) => programLabel(config, k));
     return (
         <WorkspaceCard className={`p-4 ${p.isActive ? "" : "opacity-70"}`} data-scheduling-pattern={p.id}>
             <div className="flex items-start justify-between gap-2">
@@ -311,15 +325,27 @@ function ActionBtn({
     );
 }
 
-// ── Editor ────────────────────────────────────────────────────────────────────
+// ── Editor sections — Identity · Schedule · Availability, like Assignment
+//    Categories' Back-link + title/Save-Cancel header, constrained to ~720px. ─────
+function PatternSection({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <section className="border-t border-alloy-stone/15 pt-3.5 first:border-t-0 first:pt-0" data-pattern-section={title}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">{title}</p>
+            <div className="mt-2.5 grid gap-3">{children}</div>
+        </section>
+    );
+}
+
 function PatternEditor({
     pattern,
     config,
+    siteName,
     onCancel,
     onSave,
 }: {
     pattern: StudioPattern | null;
     config: PatternEditorConfig;
+    siteName: string;
     onCancel: () => void;
     onSave: (data: PatternInput) => Promise<{ ok: boolean; error?: string }>;
 }) {
@@ -379,144 +405,213 @@ function PatternEditor({
     };
 
     return (
-        <div data-pattern-editor="true" className="mx-auto w-full max-w-[640px]">
-            <button type="button" onClick={onCancel} className="mb-3 text-[12px] font-semibold text-alloy-bend-pine hover:underline">
-                ← Back to patterns
+        <div data-pattern-editor="true">
+            <button
+                type="button"
+                onClick={onCancel}
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-alloy-bend-pine"
+                data-pattern-back="true"
+            >
+                <ArrowLeft className="h-3.5 w-3.5" aria-hidden strokeWidth={2.25} />
+                Back to Patterns
             </button>
-            <WorkspaceCard className="p-5">
-                <p className="text-[14px] font-semibold text-alloy-midnight">{pattern ? "Edit pattern" : "New pattern"}</p>
 
-                <Field label="Name">
-                    <input
-                        type="text"
-                        value={label}
-                        onChange={(e) => setLabel(e.target.value)}
-                        placeholder="Full day"
-                        data-pattern-field="label"
-                        className="w-full rounded-md border border-alloy-stone/40 px-3 py-1.5 text-[13px] text-alloy-midnight focus:border-alloy-bend-pine/50 focus:outline-none"
-                    />
-                </Field>
-
-                <Field label="Schedule type">
-                    <select
-                        value={scheduleTypeKey}
-                        onChange={(e) => setScheduleTypeKey(e.target.value)}
-                        data-pattern-field="type"
-                        className={`${WS_FIELD_SELECT_CHROME} w-full`}
-                    >
-                        {config.scheduleTypes.length === 0 ? <option value="">No schedule types configured</option> : null}
-                        {config.scheduleTypes.map((t) => (
-                            <option key={t.key} value={t.key}>
-                                {t.label}
-                            </option>
-                        ))}
-                    </select>
-                </Field>
-
-                <Field label="Available days" hint="Days this pattern covers (limited to the site's operating days).">
-                    <div className="flex gap-1.5">
-                        {orderedAllowed.map((d) => {
-                            const on = weekdays.includes(d);
-                            return (
-                                <button
-                                    key={d}
-                                    type="button"
-                                    onClick={() => toggleAvailable(d)}
-                                    data-pattern-day={d}
-                                    aria-pressed={on}
-                                    className={`h-8 w-8 rounded-lg text-[11px] font-semibold ${
-                                        on ? "bg-alloy-bend-pine/12 text-alloy-bend-pine ring-1 ring-alloy-bend-pine/35" : "bg-alloy-stone/30 text-alloy-midnight/40"
-                                    }`}
-                                >
-                                    {DAY_LABEL[d].slice(0, 1)}
-                                </button>
-                            );
-                        })}
+            <div className="mx-auto mt-3 grid w-full max-w-[720px] gap-3" data-pattern-form="true">
+                <div className="flex items-center justify-between gap-2">
+                    <p className="text-[14px] font-semibold text-alloy-midnight">
+                        {pattern ? "Edit Pattern" : "Create Pattern"}
+                    </p>
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            className="text-[12px] font-semibold text-alloy-slate"
+                            onClick={onCancel}
+                            disabled={saving}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={save}
+                            disabled={saving}
+                            data-pattern-save="true"
+                            className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                        >
+                            {saving ? "Saving…" : pattern ? "Save Pattern" : "Create Pattern"}
+                        </button>
                     </div>
-                </Field>
-
-                <Field label="Default days" hint="Pre-selected when the pattern is applied (a subset of available days).">
-                    <div className="flex gap-1.5">
-                        {orderedAllowed.map((d) => {
-                            const available = weekdays.includes(d);
-                            const on = defaultDays.includes(d);
-                            return (
-                                <button
-                                    key={d}
-                                    type="button"
-                                    disabled={!available}
-                                    onClick={() => toggleDefault(d)}
-                                    data-pattern-default-day={d}
-                                    aria-pressed={on}
-                                    className={`h-8 w-8 rounded-lg text-[11px] font-semibold ${
-                                        !available
-                                            ? "bg-alloy-stone/20 text-alloy-midnight/20"
-                                            : on
-                                                ? "bg-alloy-bend-pine/12 text-alloy-bend-pine ring-1 ring-alloy-bend-pine/35"
-                                                : "bg-alloy-stone/30 text-alloy-midnight/40"
-                                    }`}
-                                >
-                                    {DAY_LABEL[d].slice(0, 1)}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </Field>
-
-                <div className="grid grid-cols-2 gap-3">
-                    <Field label="Opens at">
-                        <input type="time" value={arrive} onChange={(e) => setArrive(e.target.value)} data-pattern-field="opens" className="w-full rounded-md border border-alloy-stone/40 px-3 py-1.5 text-[13px] text-alloy-midnight focus:border-alloy-bend-pine/50 focus:outline-none" />
-                    </Field>
-                    <Field label="Closes at">
-                        <input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} data-pattern-field="closes" className="w-full rounded-md border border-alloy-stone/40 px-3 py-1.5 text-[13px] text-alloy-midnight focus:border-alloy-bend-pine/50 focus:outline-none" />
-                    </Field>
                 </div>
 
-                <label className="mt-3 flex items-center gap-2 text-[12.5px] text-alloy-midnight">
-                    <input type="checkbox" checked={perDayEnabled} onChange={(e) => setPerDayEnabled(e.target.checked)} data-pattern-field="perday" />
-                    Allow different times per day
-                </label>
+                {error ? (
+                    <p className="rounded-lg border border-alloy-ember/25 bg-alloy-ember/5 px-3 py-2 text-[12px] text-alloy-ember">
+                        {error}
+                    </p>
+                ) : null}
 
-                {config.programs.length > 0 ? (
-                    <Field label="Applicable programs" hint="Which programs this pattern is offered to.">
-                        <div className="flex flex-wrap gap-1.5">
-                            {config.programs.map((pr) => {
-                                const on = programKeys.includes(pr.key);
+                <PatternSection title="Identity">
+                    <Field label="Name">
+                        <input
+                            type="text"
+                            value={label}
+                            onChange={(e) => setLabel(e.target.value)}
+                            placeholder="Full day"
+                            data-pattern-field="label"
+                            className="w-full rounded-md border border-alloy-stone/40 px-3 py-1.5 text-[13px] text-alloy-midnight focus:border-alloy-bend-pine/50 focus:outline-none"
+                        />
+                    </Field>
+
+                    <Field label="Recurrence" hint="How this pattern repeats — matches one of the site's configured schedule types.">
+                        <select
+                            value={scheduleTypeKey}
+                            onChange={(e) => setScheduleTypeKey(e.target.value)}
+                            data-pattern-field="type"
+                            className={`${WS_FIELD_SELECT_CHROME} w-full`}
+                        >
+                            {config.scheduleTypes.length === 0 ? <option value="">No schedule types configured</option> : null}
+                            {config.scheduleTypes.map((t) => (
+                                <option key={t.key} value={t.key}>
+                                    {t.label}
+                                </option>
+                            ))}
+                        </select>
+                    </Field>
+
+                    <label className="flex items-center gap-2 text-[12.5px] text-alloy-midnight">
+                        <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} data-pattern-field="active" />
+                        Active — offered as a one-click shortcut in the schedule editor
+                    </label>
+                </PatternSection>
+
+                <PatternSection title="Schedule">
+                    <Field label="Available days" hint="The days this pattern can use, limited to the site's operating days.">
+                        <div className="flex gap-1.5">
+                            {orderedAllowed.map((d) => {
+                                const on = weekdays.includes(d);
                                 return (
                                     <button
-                                        key={pr.key}
+                                        key={d}
                                         type="button"
-                                        onClick={() => toggleProgram(pr.key)}
-                                        data-pattern-program={pr.key}
+                                        onClick={() => toggleAvailable(d)}
+                                        data-pattern-day={d}
                                         aria-pressed={on}
-                                        className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                                            on ? "bg-alloy-bend-pine/12 text-alloy-bend-pine ring-1 ring-alloy-bend-pine/30" : "bg-alloy-stone/30 text-alloy-midnight/60"
+                                        className={`h-8 w-8 rounded-lg text-[11px] font-semibold ${
+                                            on ? "bg-alloy-bend-pine/12 text-alloy-bend-pine ring-1 ring-alloy-bend-pine/35" : "bg-alloy-stone/30 text-alloy-midnight/40"
                                         }`}
                                     >
-                                        {pr.label}
+                                        {DAY_LABEL[d].slice(0, 1)}
                                     </button>
                                 );
                             })}
                         </div>
                     </Field>
-                ) : null}
 
-                <label className="mt-3 flex items-center gap-2 text-[12.5px] text-alloy-midnight">
-                    <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} data-pattern-field="active" />
-                    Active (available in the schedule editor)
-                </label>
+                    <Field
+                        label="Default selected days"
+                        hint="Which of the available days come pre-checked when an operator applies this pattern — they can still add or remove days before saving."
+                    >
+                        <div className="flex gap-1.5">
+                            {orderedAllowed.map((d) => {
+                                const available = weekdays.includes(d);
+                                const on = defaultDays.includes(d);
+                                return (
+                                    <button
+                                        key={d}
+                                        type="button"
+                                        disabled={!available}
+                                        onClick={() => toggleDefault(d)}
+                                        data-pattern-default-day={d}
+                                        aria-pressed={on}
+                                        className={`h-8 w-8 rounded-lg text-[11px] font-semibold ${
+                                            !available
+                                                ? "bg-alloy-stone/20 text-alloy-midnight/20"
+                                                : on
+                                                    ? "bg-alloy-bend-pine/12 text-alloy-bend-pine ring-1 ring-alloy-bend-pine/35"
+                                                    : "bg-alloy-stone/30 text-alloy-midnight/40"
+                                        }`}
+                                    >
+                                        {DAY_LABEL[d].slice(0, 1)}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {defaultDays.length > 0 && defaultDays.length < weekdays.length ? (
+                            <p className="text-[11px] text-alloy-slate/80">
+                                Only {defaultDays.length} of {weekdays.length} available days are pre-checked —
+                                the operator can still turn on the rest when applying this pattern.
+                            </p>
+                        ) : null}
+                    </Field>
 
-                {error ? <p className="mt-3 text-[12px] font-medium text-alloy-ember">{error}</p> : null}
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Default start">
+                            <input type="time" value={arrive} onChange={(e) => setArrive(e.target.value)} data-pattern-field="opens" className="w-full rounded-md border border-alloy-stone/40 px-3 py-1.5 text-[13px] text-alloy-midnight focus:border-alloy-bend-pine/50 focus:outline-none" />
+                        </Field>
+                        <Field label="Default end">
+                            <input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} data-pattern-field="closes" className="w-full rounded-md border border-alloy-stone/40 px-3 py-1.5 text-[13px] text-alloy-midnight focus:border-alloy-bend-pine/50 focus:outline-none" />
+                        </Field>
+                    </div>
 
-                <div className="mt-4 flex items-center gap-2 border-t border-alloy-stone/12 pt-4">
-                    <button type="button" className={WS_ACTION_PRIMARY} onClick={save} disabled={saving} data-pattern-save="true">
-                        {saving ? "Saving…" : pattern ? "Save changes" : "Create pattern"}
-                    </button>
-                    <button type="button" className={WS_ACTION_SECONDARY} onClick={onCancel} disabled={saving}>
+                    <label className="flex items-center gap-2 text-[12.5px] text-alloy-midnight">
+                        <input type="checkbox" checked={perDayEnabled} onChange={(e) => setPerDayEnabled(e.target.checked)} data-pattern-field="perday" />
+                        Allow different start/end times by day
+                    </label>
+                </PatternSection>
+
+                <PatternSection title="Availability">
+                    <p className="text-[11.5px] text-alloy-slate">
+                        This Pattern belongs to <strong className="text-alloy-midnight">{siteName || "this site"}</strong> only
+                        — Patterns are scoped to one location, the same as Locations → Schedule. To offer the same
+                        shape at another site, create it there too (Duplicate copies the shape, not the site).
+                    </p>
+
+                    {config.programs.length > 0 ? (
+                        <Field label="Applicable programs" hint="Which programs this pattern is offered to — leave empty to offer it for any program.">
+                            <div className="flex flex-wrap gap-1.5">
+                                {config.programs.map((pr) => {
+                                    const on = programKeys.includes(pr.key);
+                                    return (
+                                        <button
+                                            key={pr.key}
+                                            type="button"
+                                            onClick={() => toggleProgram(pr.key)}
+                                            data-pattern-program={pr.key}
+                                            aria-pressed={on}
+                                            className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                                                on ? "bg-alloy-bend-pine/12 text-alloy-bend-pine ring-1 ring-alloy-bend-pine/30" : "bg-alloy-stone/30 text-alloy-midnight/60"
+                                            }`}
+                                        >
+                                            {pr.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </Field>
+                    ) : null}
+                </PatternSection>
+
+                <div
+                    className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-end gap-3 border-t border-alloy-stone/15 bg-white/95 px-1 py-3 backdrop-blur-sm"
+                    data-pattern-editor-actions="true"
+                >
+                    <button
+                        type="button"
+                        className="text-[12px] font-semibold text-alloy-slate"
+                        onClick={onCancel}
+                        disabled={saving}
+                    >
                         Cancel
                     </button>
+                    <button
+                        type="button"
+                        onClick={save}
+                        disabled={saving || !label.trim() || !scheduleTypeKey || weekdays.length === 0}
+                        data-pattern-save-sticky="true"
+                        className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                    >
+                        {saving ? "Saving…" : pattern ? "Save Pattern" : "Create Pattern"}
+                    </button>
                 </div>
-            </WorkspaceCard>
+            </div>
         </div>
     );
 }

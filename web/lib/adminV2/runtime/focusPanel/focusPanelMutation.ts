@@ -74,6 +74,10 @@ export type FocusPanelSaveResult =
     | { ok: true }
     | { ok: false; status: number; error: string };
 
+export type FocusPanelPhotoSaveResult =
+    | { ok: true; photoUrl: string | null }
+    | { ok: false; status: number; error: string };
+
 /** Tour status actions (action-only card — no inline form). */
 export type FocusPanelTourMutation = {
     cancelTour: (bookingId: string) => Promise<FocusPanelSaveResult>;
@@ -100,6 +104,22 @@ export type FocusPanelMutation = {
         patch: ChildFocusSavePatch;
         identityBaseline: InquiryChildIdentityPatch;
     }) => Promise<FocusPanelSaveResult>;
+    /**
+     * Mark a just-uploaded document (existing documents-upload path) as a child's
+     * canonical profile photo — persists `persons.metadata.profile_photo_document_id`
+     * (+ a cached signed URL) and refreshes Focus Panel truth so every card sharing this
+     * child's evidence (Children, Assignments/Scheduling) shows the same image.
+     */
+    savePersonChildPhoto: (args: {
+        childId: string;
+        personId: string;
+        documentId: string;
+    }) => Promise<FocusPanelPhotoSaveResult>;
+    /** Clear canonical profile photo — initials fallback. */
+    clearPersonChildPhoto: (args: {
+        childId: string;
+        personId: string;
+    }) => Promise<FocusPanelPhotoSaveResult>;
     /** Open the existing add-emergency-contact relationship modal. */
     openAddEmergencyContact: () => void;
     /** Child-scoped add emergency contact (focused child drill-in). */
@@ -437,7 +457,7 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                 };
             }
 
-            const merged = mergeInquiryChildIntoFocusPanelTruth(truth, {
+            const merged = mergeInquiryChildIntoFocusPanelTruth(getTruth?.() ?? truth, {
                 childId,
                 row,
                 patch,
@@ -450,6 +470,67 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                 record: merged,
             });
             return { ok: true };
+        },
+        savePersonChildPhoto: async ({ childId, personId, documentId }) => {
+            const pid = personId.trim();
+            const docId = documentId.trim();
+            if (!pid || !docId) return { ok: false, status: 400, error: "Missing person or document" };
+
+            try {
+                const res = await f(`/api/admin/persons/${encodeURIComponent(pid)}/profile-photo`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ document_id: docId }),
+                });
+                const json = (await res.json().catch(() => ({}))) as { photoUrl?: string; error?: string };
+                if (!res.ok || !json.photoUrl) {
+                    return { ok: false, status: res.status, error: json.error ?? "Could not save photo" };
+                }
+
+                const merged = mergeInquiryChildIntoFocusPanelTruth(getTruth?.() ?? truth, {
+                    childId,
+                    row: { person_id: pid },
+                    patch: { identityPatch: {}, ocmPatch: {}, profilePatch: { photo_url: json.photoUrl } },
+                });
+                dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
+                dispatchDrawerLayoutRuntimeBodyRecordPatch({
+                    entityType: "opportunities",
+                    entityId: opportunityId,
+                    record: merged,
+                });
+                return { ok: true, photoUrl: json.photoUrl };
+            } catch (e) {
+                return { ok: false, status: 500, error: e instanceof Error ? e.message : "Could not save photo" };
+            }
+        },
+        clearPersonChildPhoto: async ({ childId, personId }) => {
+            const pid = personId.trim();
+            if (!pid) return { ok: false, status: 400, error: "Missing person" };
+            try {
+                const res = await f(`/api/admin/persons/${encodeURIComponent(pid)}/profile-photo`, {
+                    method: "DELETE",
+                    credentials: "include",
+                });
+                if (!res.ok) {
+                    const json = (await res.json().catch(() => ({}))) as { error?: string };
+                    return { ok: false, status: res.status, error: json.error ?? "Could not remove photo" };
+                }
+                const merged = mergeInquiryChildIntoFocusPanelTruth(getTruth?.() ?? truth, {
+                    childId,
+                    row: { person_id: pid },
+                    patch: { identityPatch: {}, ocmPatch: {}, profilePatch: { photo_url: null } },
+                });
+                dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
+                dispatchDrawerLayoutRuntimeBodyRecordPatch({
+                    entityType: "opportunities",
+                    entityId: opportunityId,
+                    record: merged,
+                });
+                return { ok: true, photoUrl: null };
+            } catch (e) {
+                return { ok: false, status: 500, error: e instanceof Error ? e.message : "Could not remove photo" };
+            }
         },
         openAddEmergencyContact: () => {
             // Household Focus Panel — one-surface identity-resolved flow (not the

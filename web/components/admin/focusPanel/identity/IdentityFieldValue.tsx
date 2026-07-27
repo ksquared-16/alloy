@@ -41,6 +41,8 @@ type InlineEditProps = {
 type Props = {
     cell: IdentityFieldCellVM;
     className?: string;
+    /** Transient post-save confirmation owned by IdentityFieldGrid. */
+    savedFlash?: boolean;
     inlineEdit?: InlineEditProps;
     /** Legacy: open full edit surface (Children) when inline save is unavailable. */
     onEdit?: () => void;
@@ -228,7 +230,14 @@ function IdentityInlineEditInput({
     );
 }
 
-export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit, onLink }: Props) {
+export default function IdentityFieldValue({
+    cell,
+    className,
+    savedFlash = false,
+    inlineEdit,
+    onEdit,
+    onLink,
+}: Props) {
     const [draft, setDraft] = useState(cell.value ?? "");
     const inputId = useId();
     const inputRef = useRef<HTMLInputElement>(null);
@@ -264,12 +273,8 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
     const canLegacyEdit = Boolean(cell.editable && onEdit && !inlineEdit);
     const canLink = Boolean(cell.linked && onLink && !canInlineEdit);
     const valueText = cell.value?.trim() ?? "";
-    // Compact summary (hidden labels) never shows empty "—" placeholders between contact lines.
-    const hideEmpty =
-        !valueText
-        && (cell.hideWhenEmpty || cell.labelMode === "hidden")
-        && !inlineEdit?.isEditing;
-    if (hideEmpty) return null;
+    // Empty/hidden fields are removed in `resolveIdentityFieldRows` before packing.
+    // Never return null here — late nulls leave pair/triple grid holes (field collision).
 
     const commit = async () => {
         if (!inlineEdit || inlineEdit.busy) return;
@@ -366,7 +371,16 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
                             {valueText || "—"}
                         </span>
                     )}
-                    {canInlineEdit && inlineEdit ? (
+                    {savedFlash ? (
+                        <span
+                            className="identity-field-value__saved"
+                            data-identity-saved="true"
+                            role="status"
+                            aria-live="polite"
+                        >
+                            ✓ Saved
+                        </span>
+                    ) : canInlineEdit && inlineEdit ? (
                         <button
                             type="button"
                             className="identity-field-value__edit"

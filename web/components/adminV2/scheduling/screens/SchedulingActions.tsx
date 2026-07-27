@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Assignments Workspace — operator action framework.
- * Surfaces registered Assignment Platform commands; bulk commands are inventory-only until implemented.
+ * Assignments Workspace — operator action pointers.
+ * Commands execute from the Workspace header Actions menu and Roster selection toolbar.
+ * This panel is informational only — not a parallel Actions page for execution.
  */
 
 import type { ReactNode } from "react";
@@ -26,7 +27,7 @@ const ASSIGNMENT_WORKSPACE_ACTIONS: AssignmentWorkspaceAction[] = [
     {
         key: "add_assignment",
         label: "Add Assignment",
-        description: "Create a new operational assignment for a child from the Focus Panel or child record.",
+        description: "Header Add Assignment, Focus Panel, or selected Roster child.",
         status: "available",
         registeredActionKey: "assignment.create",
         icon: <Plus className="h-4 w-4" strokeWidth={2} />,
@@ -34,30 +35,30 @@ const ASSIGNMENT_WORKSPACE_ACTIONS: AssignmentWorkspaceAction[] = [
     {
         key: "bulk_assignment",
         label: "Bulk Assignment",
-        description: "Apply an assignment pattern to many children at once.",
-        status: "planned",
+        description: "Select children on the Roster Assignments view, then Bulk assign.",
+        status: "available",
         icon: <Users className="h-4 w-4" strokeWidth={2} />,
     },
     {
         key: "bulk_room_change",
         label: "Bulk Room Change",
-        description: "Move a cohort of assignments to a different room with effective dating.",
-        status: "planned",
+        description: "Select assignments on the Roster, then Bulk room change with effective dating.",
+        status: "available",
         icon: <ArrowRightLeft className="h-4 w-4" strokeWidth={2} />,
     },
     {
         key: "bulk_primary_change",
         label: "Bulk Primary Change",
-        description: "Promote a secondary assignment to primary across selected children.",
-        status: "planned",
+        description: "Select secondary assignments on the Roster, then Make primary.",
+        status: "available",
         registeredActionKey: "assignment.set_primary",
         icon: <Star className="h-4 w-4" strokeWidth={2} />,
     },
     {
         key: "bulk_archive",
         label: "Bulk Archive",
-        description: "End or archive assignments in bulk with audit trail.",
-        status: "planned",
+        description: "Select non-primary assignments on the Roster, then Archive.",
+        status: "available",
         registeredActionKey: "assignment.archive",
         icon: <Archive className="h-4 w-4" strokeWidth={2} />,
     },
@@ -65,7 +66,7 @@ const ASSIGNMENT_WORKSPACE_ACTIONS: AssignmentWorkspaceAction[] = [
 
 const STATUS_LABEL: Record<AssignmentWorkspaceActionStatus, string> = {
     available: "Available",
-    planned: "Planned",
+    planned: "Proposed",
     gated: "Setup required",
 };
 
@@ -81,9 +82,8 @@ export default function SchedulingActions({ siteName }: { siteName: string }) {
             <div>
                 <p className={WS_EYEBROW}>Workspace actions</p>
                 <p className="mt-1 max-w-2xl text-[12.5px] text-alloy-slate">
-                    Assignment commands run through the registered action platform at {siteName}. Open a child in the
-                    Focus Panel to run <strong className="font-semibold text-alloy-midnight">Add Assignment</strong> today;
-                    bulk commands are framed here for the next phase.
+                    Assignment commands for {siteName} run from the Workspace header Actions menu and the Roster
+                    selection toolbar — not from a separate Actions page.
                 </p>
             </div>
 
@@ -109,11 +109,6 @@ export default function SchedulingActions({ siteName }: { siteName: string }) {
                                     </span>
                                 </div>
                                 <p className="mt-1 text-[11.5px] leading-snug text-alloy-slate">{action.description}</p>
-                                {action.registeredActionKey ? (
-                                    <p className="mt-2 text-[10px] text-alloy-midnight/45">
-                                        Action key · <code className="text-alloy-midnight/40">{action.registeredActionKey}</code>
-                                    </p>
-                                ) : null}
                             </div>
                         </div>
                     </WorkspaceCard>
@@ -125,10 +120,10 @@ export default function SchedulingActions({ siteName }: { siteName: string }) {
                     <Layers className="h-4 w-4" strokeWidth={2} aria-hidden />
                 </span>
                 <div>
-                    <p className="text-[12.5px] font-semibold text-alloy-midnight">Command rail integration</p>
+                    <p className="text-[12.5px] font-semibold text-alloy-midnight">Command surfaces</p>
                     <p className="mt-1 text-[11.5px] leading-snug text-alloy-slate">
-                        Workspace actions share the same registered command surface as the Focus Panel Scheduling card.
-                        Bulk execution will mount here without a parallel assignment model.
+                        Use header Actions for Add Assignment and bulk entry points, then complete selection and preview on
+                        the Roster Assignments view.
                     </p>
                 </div>
             </WorkspaceCard>

@@ -157,29 +157,16 @@ export default function SchedulingOverview({
         { key: "placements", label: "Placements", value: String(activity?.placementsToday ?? 0), tone: "pine" },
         { key: "created", label: "Assignments created", value: String(activity?.schedulesCreatedToday ?? 0), tone: "pine" },
         { key: "modified", label: "Assignments modified", value: String(activity?.schedulesModifiedToday ?? 0), tone: "midnight" },
-        { key: "starting", label: "Upcoming assignments", value: String(upcoming), tone: "midnight" },
         { key: "ratio", label: "Ratio warnings", value: String(ratioRisks), tone: ratioRisks > 0 ? "ember" : "pine" },
         { key: "capacity", label: "Near capacity", value: String(nearCap), tone: nearCap > 0 ? "gold" : "pine" },
     ];
 
     const assignmentItems: WorkspaceOperationalHealthItem[] = [
         {
-            key: "missing",
-            label: "Children missing assignments",
-            value: String(missingAssignments),
-            tone: missingAssignments > 0 ? "ember" : "pine",
-        },
-        {
             key: "multiple",
             label: "Multiple assignments",
             value: String(multi),
             tone: multi > 0 ? "midnight" : "pine",
-        },
-        {
-            key: "upcoming",
-            label: "Upcoming assignments",
-            value: String(upcoming),
-            tone: "midnight",
         },
         {
             key: "future-primary",
@@ -189,7 +176,7 @@ export default function SchedulingOverview({
         },
         {
             key: "missing-types",
-            label: "Missing assignment types",
+            label: "Missing Assignment Categories",
             value: String(missingTypes),
             tone: missingTypes > 0 ? "gold" : "pine",
         },
@@ -351,15 +338,7 @@ export default function SchedulingOverview({
                 </Zone>
             </div>
 
-            <div
-                className="rounded-xl border border-alloy-stone/18 bg-white px-4 py-4 shadow-[0_2px_10px_rgba(24,39,58,0.05)]"
-                data-scheduling-overview-zone="recent-changes"
-            >
-                <p className="text-[13px] font-semibold text-alloy-midnight">Recent assignment changes</p>
-                <p className="mt-1 text-[12px] leading-snug text-alloy-slate">
-                    Placements and assignment changes made recently will appear here as the change history feed comes online.
-                </p>
-            </div>
+            {/* Recent changes: omit until an authoritative history feed is wired — no roadmap placeholder. */}
         </WorkspaceOverviewStack>
     );
 }

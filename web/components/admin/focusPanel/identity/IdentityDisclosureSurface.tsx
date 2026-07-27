@@ -1,11 +1,16 @@
 "use client";
 
+import { type ReactNode } from "react";
 import clsx from "clsx";
 import type { IdentityDisclosureDepth, IdentityRecordVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import IdentityRecordSummary from "@/components/admin/focusPanel/identity/IdentityRecordSummary";
 import type { IdentityFieldSaveArgs } from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
 import type { IdentityFieldBatchSaveArgs } from "@/components/admin/focusPanel/identity/IdentityRecordSummary";
 import IdentityEvidenceCollections from "@/components/admin/focusPanel/identity/IdentityEvidenceCollections";
+import IdentityAvatarEditable, {
+    type IdentityAvatarPhotoClear,
+    type IdentityAvatarPhotoSave,
+} from "@/components/admin/focusPanel/identity/IdentityAvatarEditable";
 
 type Props = {
     record: IdentityRecordVM;
@@ -18,6 +23,11 @@ type Props = {
     onLinkField?: (fieldRef: string) => void;
     onSelectEvidenceCollection?: (key: string) => void;
     onEnterEvidence?: () => void;
+    /** Live Work Unit avatar upload (canonical person profile photo). */
+    personId?: string | null;
+    onSavePhoto?: IdentityAvatarPhotoSave;
+    onClearPhoto?: IdentityAvatarPhotoClear;
+    avatarSlot?: ReactNode;
 };
 
 /** Details or Evidence depth for one selected identity. */
@@ -32,7 +42,31 @@ export default function IdentityDisclosureSurface({
     onLinkField,
     onSelectEvidenceCollection,
     onEnterEvidence,
+    personId,
+    onSavePhoto,
+    onClearPhoto,
+    avatarSlot,
 }: Props) {
+    const liveAvatarSlot =
+        avatarSlot
+        ?? (record.avatar?.visible === false
+            ? undefined
+            : onSavePhoto || personId
+              ? (
+                    <IdentityAvatarEditable
+                        name={record.title}
+                        imageUrl={record.avatar?.imageUrl}
+                        visible={true}
+                        role={record.avatar?.role}
+                        recordId={record.id}
+                        personId={personId}
+                        onSavePhoto={onSavePhoto}
+                        onClearPhoto={onClearPhoto}
+                        size={40}
+                    />
+                )
+              : undefined);
+
     return (
         <div
             className={clsx("identity-disclosure-surface", className)}
@@ -47,6 +81,7 @@ export default function IdentityDisclosureSurface({
                 onSaveFields={onSaveFields}
                 onEditField={onEditField}
                 onLinkField={onLinkField}
+                avatarSlot={liveAvatarSlot}
             />
             {depth === "details" ?
                 <>

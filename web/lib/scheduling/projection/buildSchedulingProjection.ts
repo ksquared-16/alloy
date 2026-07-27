@@ -126,6 +126,7 @@ function mapAssignment(input: AssignmentInput): Assignment {
         kind: row.assignment_kind === "temporary" ? "temporary" : "base",
         status: row.status,
         isPrimary: row.is_primary === true,
+        commitmentKind: row.commitment_kind === "proposed" ? "proposed" : "committed",
         assignmentType,
         patternId: row.schedule_pattern_id ?? null,
         patternLabel,
@@ -199,6 +200,7 @@ function resolveStatus(
 /** Pure: resolve one child's scheduling projection from already-loaded rows. */
 export function buildChildScheduling(input: PureChildSchedulingInput): ChildScheduling {
     const currentAssignments: Assignment[] = [];
+    const proposedAssignments: Assignment[] = [];
     const upcomingByStart = new Map<string, Assignment[]>();
     const temporaryViews: ScheduleView[] = [];
     const historyEntries: ScheduleHistoryEntry[] = [];
@@ -207,6 +209,16 @@ export function buildChildScheduling(input: PureChildSchedulingInput): ChildSche
     for (const item of input.assignments) {
         const assignment = mapAssignment(item);
         if (!item.patternResolved) partialReasons.add("schedule pattern unresolved");
+        // Proposed (planning) rows never become committed current/upcoming truth.
+        if (assignment.commitmentKind === "proposed") {
+            if (!isScheduleAssignmentTerminalStatus(item.row.status)) {
+                proposedAssignments.push(assignment);
+                if (!assignment.room.id) partialReasons.add("room unresolved");
+            } else {
+                historyEntries.push(historyEntry(assignment));
+            }
+            continue;
+        }
         const bucket = bucketFor(item.row, input.asOf);
         switch (bucket) {
             case "current":
@@ -249,8 +261,22 @@ export function buildChildScheduling(input: PureChildSchedulingInput): ChildSche
 
     historyEntries.sort((a, b) => compareIsoDates(b.effectiveFrom, a.effectiveFrom));
 
-    // A proposed draft only surfaces when there is no committed current schedule.
-    const proposed = current == null ? input.proposed ?? null : null;
+    // Ledger proposed rows win over participation-metadata draft when present.
+    // Proposed still surfaces alongside committed current (planning vs truth).
+    const proposedFromRows =
+        proposedAssignments.length > 0
+            ? scheduleViewFrom(
+                  "current",
+                  [...proposedAssignments].sort((a, b) => {
+                      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+                      const at = a.arriveTime ?? "99:99";
+                      const bt = b.arriveTime ?? "99:99";
+                      return at.localeCompare(bt);
+                  }),
+                  false
+              )
+            : null;
+    const proposed = proposedFromRows ?? (current == null ? input.proposed ?? null : null);
 
     const status = resolveStatus(
         input.agreementStatus,
@@ -417,6 +443,7 @@ async function loadProposedDraftForChild(
         kind: "base",
         status: "proposed",
         isPrimary: true,
+        commitmentKind: "proposed",
         assignmentType: {
             ...EMPTY_TYPE,
             key: scheduleType,
@@ -567,9 +594,17 @@ export async function loadSchedulingProjectionForChild(
         return programLabelCache.get(id) ?? null;
     }
 
-    // No operational agreement → pre-enrollment child. Surface the PROPOSED draft (if any)
-    // from the enrollment participation; otherwise a true empty state.
-    if (!agreement) {
+    // Always load by customer_member_id so proposed (no agreement) and committed rows
+    // compose into one projection. Agreement remains the committed authority when present.
+    const [assignmentRows, placements] = await Promise.all([
+        listScheduleAssignments(supabase, orgId, { customerMemberId }),
+        agreement
+            ? listChildPlacements(supabase, orgId, { enrollmentAgreementId: agreement.id })
+            : Promise.resolve([] as ChildPlacementRow[]),
+    ]);
+
+    // No ledger rows yet → fall back to participation-metadata draft (compat).
+    if (!agreement && assignmentRows.length === 0) {
         const proposed = await loadProposedDraftForChild(
             supabase,
             orgId,
@@ -596,11 +631,6 @@ export async function loadSchedulingProjectionForChild(
         });
         return buildSchedulingProjectionForChild(child, todayYmd, computedAt);
     }
-
-    const [assignmentRows, placements] = await Promise.all([
-        listScheduleAssignments(supabase, orgId, { enrollmentAgreementId: agreement.id }),
-        listChildPlacements(supabase, orgId, { enrollmentAgreementId: agreement.id }),
-    ]);
 
     const patterns = await loadPatterns(
         supabase,
@@ -660,8 +690,8 @@ export async function loadSchedulingProjectionForChild(
 
     const child = buildChildScheduling({
         subject,
-        agreementStatus: agreement.status,
-        enrollmentAgreementId: agreement.id,
+        agreementStatus: agreement?.status ?? null,
+        enrollmentAgreementId: agreement?.id ?? null,
         assignments,
         asOf: todayYmd,
     });

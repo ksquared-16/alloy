@@ -173,6 +173,25 @@ describe("buildChildrenCardEvidence", () => {
         expect(evidence.children[0]!.status).toBeNull();
     });
 
+    it("reads gender from raw inquiry child profile (drawer mapping strips it)", () => {
+        const evidence = buildChildrenCardEvidence(
+            ctx({
+                id: "opp-1",
+                _inquiry_children: [
+                    {
+                        id: "c1",
+                        customer_member_id: "cm-1",
+                        display_name: "Blake Wenc",
+                        first_name: "Blake",
+                        last_name: "Wenc",
+                        gender: "male",
+                    },
+                ],
+            }),
+        );
+        expect(evidence.children[0]!.gender).toBe("Male");
+    });
+
     it("does NOT import drawer VM types — it observes the Operational Context", () => {
         const source = readFileSync(
             path.join(process.cwd(), "lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence.ts"),

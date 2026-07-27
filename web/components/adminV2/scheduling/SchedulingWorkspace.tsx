@@ -49,6 +49,12 @@ import {
     type PatternInput,
     type PatternMutation,
 } from "@/components/adminV2/scheduling/screens/SchedulingPatterns";
+import {
+    emptyAssignmentsWorkspaceTimings,
+    markAssignmentsWorkspacePerf,
+    measureAssignmentsWorkspacePerf,
+    type AssignmentsWorkspaceTimings,
+} from "@/lib/adminV2/scheduling/assignmentsWorkspaceRuntime";
 import { readPatternDefaultHours } from "@/lib/scheduling/editorPatterns";
 
 type OverviewResp = {
@@ -60,8 +66,14 @@ type OverviewResp = {
 
 const EMPTY_STUDIO_CONFIG: PatternEditorConfig = { operatingDays: [], scheduleTypes: [], programs: [] };
 
-/** Map a raw `schedule_patterns` row to the Studio pattern shape (metadata preserved). */
-function mapRawPattern(row: Record<string, any>): StudioPattern {
+/**
+ * Map a raw `schedule_patterns` row — the exact `SchedulePatternRow` shape
+ * `/api/admin/schedule-patterns` returns to both Studio and Locations →
+ * `LocationSchedulePatternsSettingsPanel` (`fetchSchedulePatternsForSite`) — to the
+ * Studio pattern shape (metadata preserved). Exported for the convergence test at
+ * `tests/adminV2/scheduling/schedulePatternShapeConvergence.test.ts`.
+ */
+export function mapRawPattern(row: Record<string, any>): StudioPattern {
     const metadata = (row.metadata ?? {}) as Record<string, unknown>;
     const weekdays = Array.isArray(row.weekdays) ? row.weekdays.map(Number) : [];
     const defaultDays = Array.isArray(metadata.default_days) ? (metadata.default_days as unknown[]).map(Number) : weekdays;
@@ -120,6 +132,19 @@ function addDaysYmd(ymd: string, days: number): string {
     return dt.toISOString().slice(0, 10);
 }
 
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Client-side mirror of the server's compact week-range label, for optimistic display only. */
+function fmtMonthDay(ymd: string): string {
+    const [, m, d] = ymd.split("-").map(Number);
+    if (!m || !d) return ymd;
+    return `${MONTH_SHORT[m - 1]} ${d}`;
+}
+
+function nowMs(): number {
+    return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
 /** Derive the Overview launch metrics + KPI counts from the roster read-model. */
 function deriveRosterSummary(roster: RosterData | null): RosterSummary {
     if (!roster) return { roomsNearCapacity: [], ratioRisks: [], fill: null, roomsInRatio: null };
@@ -162,6 +187,7 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
 
     const [mode, setMode] = useState<SchedulingMode>("work");
     const [workView, setWorkView] = useState<SchedulingWorkView>("overview");
+    const [rosterBulkIntent, setRosterBulkIntent] = useState<"assignment" | "room" | null>(null);
     const [studioView, setStudioView] = useState<SchedulingStudioView>("types");
     const [rosterView, setRosterView] = useState<RosterViewMode>("assignments");
     const [focusRoomId, setFocusRoomId] = useState<string | undefined>(undefined);
@@ -217,14 +243,42 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     const [loadingAssignmentRoster, setLoadingAssignmentRoster] = useState(false);
     const [loadingCalc, setLoadingCalc] = useState(false);
     const [loadingStudio, setLoadingStudio] = useState(false);
+    /** Shared site snapshot: true after parallel core loads finish for the active site. */
+    const [coreSnapshotReady, setCoreSnapshotReady] = useState(false);
+    const [wsTimings, setWsTimings] = useState<AssignmentsWorkspaceTimings>(() =>
+        emptyAssignmentsWorkspaceTimings(),
+    );
+    const siteBootstrapSeqRef = useRef(0);
+    const workspaceOpenAtRef = useRef<number | null>(null);
 
     /** The week currently shown in the roster (weekStart from the last payload). */
     const [weekOf, setWeekOf] = useState<string>("");
     const weekStartRef = useRef<string>("");
+    /** Instant label shown the moment an operator clicks week nav, before the fetch resolves. */
+    const [optimisticWeekLabel, setOptimisticWeekLabel] = useState<string | null>(null);
+    /** True from click until the target week's data is applied — drives the pending-label style. */
+    const [weekChangePending, setWeekChangePending] = useState(false);
+    /** Dev-only click→ready timing for the roster board, surfaced as a data attribute. */
+    const [lastWeekLoadMs, setLastWeekLoadMs] = useState<number | null>(null);
+    const weekClickAtRef = useRef<number | null>(null);
+    /** Latest-request-wins guard so a fast double-click can't apply a stale response. */
+    const rosterRequestSeqRef = useRef(0);
+    /** In-memory cache of loaded weeks (by weekStart), so revisits + prefetches are instant. */
+    const rosterCacheRef = useRef<Map<string, RosterData>>(new Map());
 
     // Sites (once) — resolve the operator's site. Retries a transient empty result
     // (e.g. a cold route compile) so the workspace never strands on an unresolved site.
     useEffect(() => {
+        workspaceOpenAtRef.current = nowMs();
+        markAssignmentsWorkspacePerf("workspace_click");
+        markAssignmentsWorkspacePerf("shell_first_paint");
+        const shellMs = measureAssignmentsWorkspacePerf(
+            "shell_first_paint",
+            "workspace_click",
+            "shell_first_paint",
+        );
+        setWsTimings((t) => ({ ...t, shellPaintMs: shellMs }));
+
         let cancelled = false;
         (async () => {
             for (let attempt = 0; attempt < 3 && !cancelled; attempt++) {
@@ -251,15 +305,73 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
         setLoadingOverview(false);
     }, []);
 
-    const loadRoster = useCallback(async (id: string, week: string) => {
-        setLoadingRoster(true);
-        const weekParam = week ? `&week_of=${encodeURIComponent(week)}` : "";
-        const r = await schedApi(`?view=roster&site_location_id=${encodeURIComponent(id)}${weekParam}`);
-        const data: RosterData | null = r?.roster ?? null;
-        setRoster(data);
-        weekStartRef.current = (r?.roster?.weekStart as string) ?? "";
-        setLoadingRoster(false);
+    /** Dev-only click→ready timing (console + a data attribute the board renders). */
+    const recordWeekReady = useCallback((source: "cache" | "network") => {
+        const clickedAt = weekClickAtRef.current;
+        if (clickedAt == null) return;
+        const elapsed = nowMs() - clickedAt;
+        weekClickAtRef.current = null;
+        setLastWeekLoadMs(Math.round(elapsed));
+        if (process.env.NODE_ENV !== "production") {
+            console.debug(`[SchedulingRoster] week ready in ${elapsed.toFixed(0)}ms (${source})`);
+        }
     }, []);
+
+    /** Background-fetch a week into the cache without touching visible state (best-effort). */
+    const prefetchWeek = useCallback((id: string, week: string) => {
+        if (!id || rosterCacheRef.current.has(week)) return;
+        schedApi(`?view=roster&site_location_id=${encodeURIComponent(id)}&week_of=${encodeURIComponent(week)}`)
+            .then((r) => {
+                const d: RosterData | null = r?.roster ?? null;
+                if (d?.weekStart) rosterCacheRef.current.set(d.weekStart, d);
+            })
+            .catch(() => {
+                /* best-effort prefetch */
+            });
+    }, []);
+
+    const loadRoster = useCallback(
+        async (id: string, week: string) => {
+            const seq = ++rosterRequestSeqRef.current;
+            const cacheKey = week || "__current__";
+            const cached = rosterCacheRef.current.get(cacheKey);
+
+            // Serve a cached week instantly — keeps the previous board visible with zero
+            // blank/loading flash when the operator revisits a recently-seen week.
+            if (cached) {
+                setRoster(cached);
+                weekStartRef.current = cached.weekStart ?? "";
+                setOptimisticWeekLabel(null);
+                setWeekChangePending(false);
+                recordWeekReady("cache");
+            } else {
+                setLoadingRoster(true);
+            }
+
+            const weekParam = week ? `&week_of=${encodeURIComponent(week)}` : "";
+            const r = await schedApi(`?view=roster&site_location_id=${encodeURIComponent(id)}${weekParam}`);
+            if (seq !== rosterRequestSeqRef.current) return; // superseded by a newer week-change
+
+            const data: RosterData | null = r?.roster ?? null;
+            if (data?.weekStart) {
+                rosterCacheRef.current.set(data.weekStart, data);
+                if (!week) rosterCacheRef.current.set("__current__", data);
+            }
+            setRoster(data);
+            weekStartRef.current = data?.weekStart ?? "";
+            setOptimisticWeekLabel(null);
+            setWeekChangePending(false);
+            setLoadingRoster(false);
+            if (!cached) recordWeekReady("network");
+
+            // Prefetch adjacent weeks so the next/previous click is instant.
+            if (data?.weekStart) {
+                prefetchWeek(id, addDaysYmd(data.weekStart, -7));
+                prefetchWeek(id, addDaysYmd(data.weekStart, 7));
+            }
+        },
+        [prefetchWeek, recordWeekReady]
+    );
 
     const loadAssignmentRoster = useCallback(async (id: string) => {
         setLoadingAssignmentRoster(true);
@@ -267,15 +379,6 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
         setAssignmentRoster((r?.subjects as AssignmentRosterSubject[]) ?? []);
         setLoadingAssignmentRoster(false);
     }, []);
-
-    // Site change → (re)load overview + roster; reset to current week.
-    useEffect(() => {
-        if (!siteId) return;
-        setWeekOf("");
-        void loadOverview(siteId);
-        void loadRoster(siteId, "");
-        void loadAssignmentRoster(siteId);
-    }, [siteId, loadOverview, loadRoster, loadAssignmentRoster]);
 
     const loadAssignmentTypesAdmin = useCallback(async () => {
         const r = await fetch("/api/admin/assignment-types").then((res) => res.json()).catch(() => ({}));
@@ -287,26 +390,6 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
         setPickerAssignmentTypes((r?.assignmentTypes as OrgAssignmentTypeOption[]) ?? []);
     }, []);
 
-    // Entering Studio → lazily load calculations catalogue + assignment types.
-    useEffect(() => {
-        if (mode !== "studio") return;
-        if (calculations == null) {
-            (async () => {
-                setLoadingCalc(true);
-                const r = await schedApi(`?view=calculations`);
-                setCalculations((r?.calculations as StudioCalculation[]) ?? []);
-                setLoadingCalc(false);
-            })();
-        }
-        if (assignmentTypes == null) void loadAssignmentTypesAdmin();
-    }, [mode, calculations, assignmentTypes, loadAssignmentTypesAdmin]);
-
-    useEffect(() => {
-        if (pickerAssignmentTypes == null) void loadPickerAssignmentTypes();
-    }, [pickerAssignmentTypes, loadPickerAssignmentTypes]);
-
-    // Studio administration data (patterns + editor config) — loaded for the active site
-    // whenever Studio is open (reloads on site change).
     const loadStudioData = useCallback(async (id: string) => {
         if (!id) return;
         setLoadingStudio(true);
@@ -319,10 +402,140 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
         setLoadingStudio(false);
     }, []);
 
+    /**
+     * Shared Assignments Workspace runtime snapshot — preload in parallel on site open /
+     * site change. Tabs consume this snapshot; entering Studio must not cold-bootstrap.
+     */
+    useEffect(() => {
+        if (!siteId) return;
+        const seq = ++siteBootstrapSeqRef.current;
+        const startedAt = nowMs();
+        setCoreSnapshotReady(false);
+        rosterCacheRef.current.clear();
+        weekStartRef.current = "";
+        setOptimisticWeekLabel(null);
+        setWeekChangePending(false);
+        setWeekOf("");
+
+        // Hold prior rows while refreshing — do not blank UI on warm site switch.
+        setLoadingOverview(true);
+        setLoadingRoster(true);
+        setLoadingAssignmentRoster(true);
+        setLoadingStudio(true);
+        setLoadingCalc(true);
+
+        void (async () => {
+            const [
+                overviewRes,
+                rosterRes,
+                assignmentRosterRes,
+                typesAdminRes,
+                pickerTypesRes,
+                patternsRes,
+                studioConfigRes,
+                calcRes,
+            ] = await Promise.all([
+                schedApi(`?view=overview&site_location_id=${encodeURIComponent(siteId)}`),
+                schedApi(`?view=roster&site_location_id=${encodeURIComponent(siteId)}`),
+                schedApi(`?view=assignment_roster&site_location_id=${encodeURIComponent(siteId)}`),
+                fetch("/api/admin/assignment-types").then((res) => res.json()).catch(() => ({})),
+                schedApi(`?view=assignment_types`),
+                patternApi(`?site_location_id=${encodeURIComponent(siteId)}`)
+                    .then((r) => r.json())
+                    .catch(() => ({})),
+                schedApi(`?view=studio_config&site_location_id=${encodeURIComponent(siteId)}`),
+                schedApi(`?view=calculations`),
+            ]);
+
+            if (seq !== siteBootstrapSeqRef.current) return; // stale site response
+
+            setOverview((overviewRes as OverviewResp) ?? {});
+            setLoadingOverview(false);
+            markAssignmentsWorkspacePerf("tab_overview_ready");
+
+            const rosterData: RosterData | null = rosterRes?.roster ?? null;
+            if (rosterData?.weekStart) {
+                rosterCacheRef.current.set(rosterData.weekStart, rosterData);
+                rosterCacheRef.current.set("__current__", rosterData);
+                weekStartRef.current = rosterData.weekStart;
+                prefetchWeek(siteId, addDaysYmd(rosterData.weekStart, -7));
+                prefetchWeek(siteId, addDaysYmd(rosterData.weekStart, 7));
+            }
+            setRoster(rosterData);
+            setLoadingRoster(false);
+            markAssignmentsWorkspacePerf("tab_roster_ready");
+
+            setAssignmentRoster((assignmentRosterRes?.subjects as AssignmentRosterSubject[]) ?? []);
+            setLoadingAssignmentRoster(false);
+
+            setAssignmentTypes((typesAdminRes?.types as AssignmentTypeAdminRecord[]) ?? []);
+            markAssignmentsWorkspacePerf("tab_categories_ready");
+
+            setPickerAssignmentTypes((pickerTypesRes?.assignmentTypes as OrgAssignmentTypeOption[]) ?? []);
+
+            setStudioPatterns(((patternsRes?.patterns ?? []) as Record<string, any>[]).map(mapRawPattern));
+            setStudioConfig((studioConfigRes?.config as PatternEditorConfig) ?? EMPTY_STUDIO_CONFIG);
+            setLoadingStudio(false);
+            markAssignmentsWorkspacePerf("tab_patterns_ready");
+
+            setCalculations((calcRes?.calculations as StudioCalculation[]) ?? []);
+            setLoadingCalc(false);
+            markAssignmentsWorkspacePerf("tab_validation_ready");
+
+            markAssignmentsWorkspacePerf("core_snapshot_ready");
+            const coreMs = Math.round(nowMs() - startedAt);
+            setWsTimings((t) => ({
+                ...t,
+                coreSnapshotMs: coreMs,
+                overviewReadyMs: measureAssignmentsWorkspacePerf(
+                    "overview_ready",
+                    "workspace_click",
+                    "tab_overview_ready",
+                ),
+                rosterReadyMs: measureAssignmentsWorkspacePerf(
+                    "roster_ready",
+                    "workspace_click",
+                    "tab_roster_ready",
+                ),
+                categoriesReadyMs: measureAssignmentsWorkspacePerf(
+                    "categories_ready",
+                    "workspace_click",
+                    "tab_categories_ready",
+                ),
+                patternsReadyMs: measureAssignmentsWorkspacePerf(
+                    "patterns_ready",
+                    "workspace_click",
+                    "tab_patterns_ready",
+                ),
+                calculationsReadyMs: measureAssignmentsWorkspacePerf(
+                    "validation_ready",
+                    "workspace_click",
+                    "tab_validation_ready",
+                ),
+                assignmentRosterReadyMs: coreMs,
+            }));
+            setCoreSnapshotReady(true);
+            if (process.env.NODE_ENV !== "production") {
+                console.debug(`[AssignmentsWorkspace] core snapshot ready in ${coreMs}ms (site=${siteId})`);
+            }
+        })();
+    }, [siteId, prefetchWeek]);
+
+    // Entering Studio no longer cold-loads — snapshot already holds categories / patterns / calcs.
+    // Refresh on demand only when still null (e.g. race before first site bootstrap).
     useEffect(() => {
         if (mode !== "studio" || !siteId) return;
-        void loadStudioData(siteId);
-    }, [mode, siteId, loadStudioData]);
+        if (calculations == null) {
+            void (async () => {
+                setLoadingCalc(true);
+                const r = await schedApi(`?view=calculations`);
+                setCalculations((r?.calculations as StudioCalculation[]) ?? []);
+                setLoadingCalc(false);
+            })();
+        }
+        if (assignmentTypes == null) void loadAssignmentTypesAdmin();
+        if (studioPatterns == null) void loadStudioData(siteId);
+    }, [mode, siteId, calculations, assignmentTypes, studioPatterns, loadAssignmentTypesAdmin, loadStudioData]);
 
     const onMutatePattern = useCallback(
         async (m: PatternMutation): Promise<{ ok: boolean; error?: string }> => {
@@ -485,7 +698,10 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     const onWeekChange = useCallback(
         (dir: -1 | 1 | 0) => {
             if (!siteId) return;
+            weekClickAtRef.current = nowMs();
+            setWeekChangePending(true);
             if (dir === 0) {
+                setOptimisticWeekLabel("This week");
                 setWeekOf("");
                 void loadRoster(siteId, "");
                 return;
@@ -493,10 +709,35 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
             const base = weekStartRef.current || weekOf;
             if (!base) return;
             const next = addDaysYmd(base, dir * 7);
+            setOptimisticWeekLabel(`${fmtMonthDay(next)}–${fmtMonthDay(addDaysYmd(next, 6))}`);
             setWeekOf(next);
             void loadRoster(siteId, next);
         },
         [siteId, weekOf, loadRoster]
+    );
+
+    const onSelectWeek = useCallback(
+        (weekStart: string) => {
+            if (!siteId) return;
+            weekClickAtRef.current = nowMs();
+            setWeekChangePending(true);
+            if (!weekStart) {
+                setOptimisticWeekLabel("This week");
+                setWeekOf("");
+                void loadRoster(siteId, "");
+                return;
+            }
+            setOptimisticWeekLabel(`${fmtMonthDay(weekStart)}–${fmtMonthDay(addDaysYmd(weekStart, 6))}`);
+            setWeekOf(weekStart);
+            void loadRoster(siteId, weekStart);
+        },
+        [siteId, loadRoster]
+    );
+
+    /** The roster shown to the operator, with the optimistic label applied instantly on click. */
+    const displayRoster = useMemo(
+        () => (roster && optimisticWeekLabel ? { ...roster, weekLabel: optimisticWeekLabel } : roster),
+        [roster, optimisticWeekLabel]
     );
 
     // Operational health lives in the control band — hidden on the Work→Overview landing
@@ -543,7 +784,31 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
             metricsColumn={metricsColumn}
             onClose={onClose}
             onAddAssignment={() => openCreateAssignment(null)}
+            onBulkCommand={(command) => {
+                setMode("work");
+                setWorkView("roster");
+                setRosterView("assignments");
+                if (command === "assignment" || command === "room") {
+                    setRosterBulkIntent(command);
+                } else {
+                    // Primary / Archive run from selection toolbar once rows are checked.
+                    setRosterBulkIntent(null);
+                }
+            }}
         >
+            <div
+                className="sr-only"
+                aria-hidden
+                data-assignments-ws-timings="true"
+                data-ws-core-ready={coreSnapshotReady ? "true" : "false"}
+                data-ws-shell-ms={wsTimings.shellPaintMs ?? undefined}
+                data-ws-core-ms={wsTimings.coreSnapshotMs ?? undefined}
+                data-ws-overview-ms={wsTimings.overviewReadyMs ?? undefined}
+                data-ws-roster-ms={wsTimings.rosterReadyMs ?? undefined}
+                data-ws-categories-ms={wsTimings.categoriesReadyMs ?? undefined}
+                data-ws-patterns-ms={wsTimings.patternsReadyMs ?? undefined}
+                data-ws-validation-ms={wsTimings.calculationsReadyMs ?? undefined}
+            />
             <WorkspaceCreateAssignmentModal
                 open={createOpen}
                 siteId={siteId}
@@ -575,7 +840,7 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
 
                 {mode === "work" && workView === "roster" ? (
                     <SchedulingRoster
-                        data={roster}
+                        data={displayRoster}
                         assignmentSubjects={assignmentRoster ?? []}
                         rosterView={rosterView}
                         onRosterViewChange={setRosterView}
@@ -588,6 +853,10 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                         onSelectRoom={(roomId) => setFocusRoomId(roomId)}
                         onSelectCell={(roomId) => setFocusRoomId(roomId)}
                         onWeekChange={onWeekChange}
+                        onSelectWeek={onSelectWeek}
+                        weekChangePending={weekChangePending}
+                        lastWeekLoadMs={lastWeekLoadMs}
+                        initialBulkMode={rosterBulkIntent}
                         rosterBulk={{
                             onCreateForChild: (customerMemberId) => openCreateAssignment(customerMemberId),
                             onBulkArchive: async (assignmentIds) => {
@@ -670,7 +939,11 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                         assignmentTypes={assignmentTypes ?? []}
                         calculations={calculations ?? []}
                         editorConfig={studioConfig ?? EMPTY_STUDIO_CONFIG}
-                        loading={studioView === "validation" ? loadingCalc : loadingStudio}
+                        loading={
+                            mode === "studio"
+                                ? !coreSnapshotReady && (studioView === "validation" ? loadingCalc : loadingStudio)
+                                : false
+                        }
                         siteName={siteName}
                         sites={sites ?? []}
                         onMutatePattern={onMutatePattern}

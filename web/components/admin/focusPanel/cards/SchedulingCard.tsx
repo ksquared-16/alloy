@@ -25,6 +25,15 @@ import {
     AssignmentSummaryList,
     type AssignmentListActions,
 } from "@/components/adminV2/scheduling/AssignmentSummaryDetail";
+import {
+    filterRoomsForPurposeBehavior,
+    type AssignmentTypeBehavior,
+} from "@/lib/operationalAssignments/assignmentTypeBehavior";
+import type { SiteOperationalRoom } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
+import {
+    programCategoryIdForRoom,
+    resolveProgramOnRoomChange,
+} from "@/lib/operationalAssignments/assignmentProgramRoomResolution";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -98,6 +107,7 @@ type AssignmentTypeOpt = {
     key: string | null;
     label: string;
     visualTone?: string | null;
+    behavior?: AssignmentTypeBehavior;
 };
 /** The site's configured scheduling constraints + preloaded patterns, from first-paint. */
 type SchedConfig = {
@@ -105,8 +115,16 @@ type SchedConfig = {
     scheduleTypes: SchedTypeOpt[];
     patterns: Pattern[];
     assignmentTypes: AssignmentTypeOpt[];
+    /** Instant operational room list (Category/Program filter client-side). */
+    operationalRooms: SiteOperationalRoom[];
 };
-type PlacementOption = { roomId: string; roomName: string | null; classification: "recommended" | "eligible" | "blocked"; reason: string };
+type PlacementOption = {
+    roomId: string;
+    roomName: string | null;
+    classification: "recommended" | "eligible" | "blocked";
+    reason: string;
+    programCategoryId?: string | null;
+};
 type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string; defaultHours: DailyHours | null; defaultOpenEnded: boolean };
 type SchedChild = { id: string; personId: string | null; name: string; imageUrl: string | null; dobAge: string | null };
 
@@ -136,6 +154,9 @@ async function schedApi(path: string, init?: RequestInit): Promise<any> {
 }
 
 async function executeAssignmentAction(body: Record<string, unknown>): Promise<void> {
+    const { operatorFacingAssignmentError } = await import(
+        "@/lib/operationalAssignments/operatorAssignmentErrors"
+    );
     const res = await fetch("/api/admin/actions/execute", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -150,8 +171,25 @@ async function executeAssignmentAction(body: Record<string, unknown>): Promise<v
                 : err && typeof err === "object" && typeof err.message === "string"
                   ? err.message
                   : `Action failed (${res.status})`;
-        throw new Error(message);
+        throw new Error(operatorFacingAssignmentError(message));
     }
+}
+
+/** Shared create payload — proposed when no agreement, committed when agreement exists. */
+function childAssignmentCreatePayload(
+    child: SchedChild,
+    proj: ChildProj | null,
+    extra: Record<string, unknown>
+): Record<string, unknown> {
+    const agreementId = (proj?.enrollmentAgreementId ?? "").trim();
+    const siteId = (proj?.child.siteId ?? "").trim();
+    return {
+        subject_type: "child",
+        enrollment_agreement_id: agreementId || undefined,
+        customer_member_id: child.id,
+        site_location_id: siteId || undefined,
+        ...extra,
+    };
 }
 
 // ── Derived schedule state (business meaning leads) ──────────────────────────
@@ -174,7 +212,7 @@ function deriveScheduleState(p: ChildProj | null): ScheduleState {
         case "proposed":
             // A child WITH a (planned) schedule reads distinctly from one that still
             // needs a room — blue "has a schedule" vs gold "needs a room".
-            return { label: "Proposed", tone: "blue", sub: p.proposed?.effectiveFrom ? `Starts ${formatDate(p.proposed.effectiveFrom)}` : "Planning — active at enrollment" };
+            return { label: "Proposed", tone: "blue", sub: p.proposed?.effectiveFrom ? `Starts ${formatDate(p.proposed.effectiveFrom)}` : "Proposed — active at enrollment" };
         case "upcoming-only":
             return { label: "Future", tone: "blue", sub: p.current?.effectiveFrom ? `Starts ${formatDate(p.current.effectiveFrom)}` : null };
         case "ended":
@@ -187,11 +225,24 @@ function deriveScheduleState(p: ChildProj | null): ScheduleState {
 /** Compact status for the summary rows. */
 function summaryStatus(p: ChildProj): { label: string; color: string } {
     const s = deriveScheduleState(p);
-    if (p.status === "proposed" && p.proposed?.effectiveFrom) return { label: `Starts ${formatDate(p.proposed.effectiveFrom)}`, color: TONE_COLOR[s.tone] };
+    if (p.status === "proposed" && p.proposed?.effectiveFrom) return { label: "Proposed", color: TONE_COLOR[s.tone] };
     return { label: s.label, color: TONE_COLOR[s.tone] };
 }
 function existingView(p: ChildProj | null): ProjView | null {
     return p?.current ?? p?.proposed ?? null;
+}
+
+/** Plural list: committed + proposed planning rows (proposed never replaces committed). */
+function listAssignments(p: ChildProj | null): ProjAssignment[] {
+    const committed = p?.current?.assignments ?? [];
+    const proposed = p?.proposed?.assignments ?? [];
+    if (committed.length === 0) return proposed.filter((a) => a.subjectType !== "staff");
+    if (proposed.length === 0) return committed.filter((a) => a.subjectType !== "staff");
+    const seen = new Set(committed.map((a) => a.id));
+    return [
+        ...committed.filter((a) => a.subjectType !== "staff"),
+        ...proposed.filter((a) => a.subjectType !== "staff" && !seen.has(a.id)),
+    ];
 }
 
 /**
@@ -236,6 +287,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                   scheduleTypes?: unknown;
                   patterns?: unknown;
                   assignmentTypes?: unknown;
+                  operationalRooms?: unknown;
               }
             | undefined;
         const operatingDays = Array.isArray(bag?.operatingDays)
@@ -246,7 +298,10 @@ export default function SchedulingCard({ model, context, receded = false, coordi
         const assignmentTypes = Array.isArray(bag?.assignmentTypes)
             ? (bag!.assignmentTypes as AssignmentTypeOpt[]).filter((t) => t?.id && t?.label)
             : [];
-        return { operatingDays, scheduleTypes, patterns, assignmentTypes };
+        const operationalRooms = Array.isArray(bag?.operationalRooms)
+            ? (bag!.operationalRooms as SiteOperationalRoom[]).filter((r) => r?.roomId)
+            : [];
+        return { operatingDays, scheduleTypes, patterns, assignmentTypes, operationalRooms };
     }, [context.truth]);
 
     // Local overrides after a save (the prebuilt context does not re-compose on its own).
@@ -409,31 +464,56 @@ function ScheduleWorkSurface({
     const [pendingTypeId, setPendingTypeId] = useState<string | null>(null);
     const [actionBusy, setActionBusy] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
+    /** Persist Assignments day filter across singular detail drill-in. */
+    const [listDayFilter, setListDayFilter] = useState<number | null>(null);
 
-    const currentAssignments: ProjAssignment[] = useMemo(() => {
-        const view = existingView(proj);
-        return (view?.assignments ?? []).filter((a) => a.subjectType !== "staff");
-    }, [proj]);
+    const currentAssignments: ProjAssignment[] = useMemo(() => listAssignments(proj), [proj]);
 
     const activeAssignment =
         currentAssignments.find((a) => a.id === activeAssignmentId) ?? null;
 
     const previousFocus = coordination?.previousFocus ?? null;
-    const backLabel = previousFocus
-        ? `← Back to ${focusPanelCardBackLabel(previousFocus.card)}`
-        : null;
+
+    /**
+     * ONE header Back affordance per drill-in state — its target changes with depth
+     * (Children → Assignments → Assignment Detail → Edit), it never stacks with a
+     * second back control in the body. Edit/create/pick-type surfaces resolve to
+     * "Cancel" (always lands on the Assignments list, never all the way out).
+     */
+    const cancelToDetail = () => {
+        setPendingTypeId(null);
+        setEditingAssignmentId(null);
+        setActiveAssignmentId(null);
+        setMode("detail");
+    };
+    const headerBack: { label: string; kind: "back" | "cancel"; onClick: () => void } | null =
+        mode === "assignment"
+            ? {
+                  label: "Assignments",
+                  kind: "back",
+                  onClick: () => {
+                      setActiveAssignmentId(null);
+                      setMode("detail");
+                  },
+              }
+            : mode === "edit" || mode === "create" || mode === "pick-type"
+              ? { label: "Cancel", kind: "cancel", onClick: cancelToDetail }
+              : previousFocus
+                ? { label: focusPanelCardBackLabel(previousFocus.card), kind: "back", onClick: onBack }
+                : null;
 
     const header = (
         <div
             style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}
             data-schedule-nav="true"
         >
-            {backLabel ? (
+            {headerBack ? (
                 <button
                     type="button"
-                    onClick={onBack}
-                    aria-label={backLabel}
+                    onClick={headerBack.onClick}
+                    aria-label={headerBack.kind === "cancel" ? "Cancel" : `Back to ${headerBack.label}`}
                     data-schedule-back="true"
+                    data-schedule-back-target={headerBack.label}
                     style={{
                         all: "unset",
                         cursor: "pointer",
@@ -444,7 +524,7 @@ function ScheduleWorkSurface({
                         padding: "2px 0",
                     }}
                 >
-                    {backLabel}
+                    {headerBack.kind === "cancel" ? "Cancel" : `← ${headerBack.label}`}
                 </button>
             ) : null}
             <button
@@ -495,14 +575,16 @@ function ScheduleWorkSurface({
         entity_type: string;
         entity_id: string;
         payload: Record<string, unknown>;
-    }) => {
+    }): Promise<boolean> => {
         setActionBusy(true);
         setActionError(null);
         try {
             await executeAssignmentAction(body);
             await onSaved();
+            return true;
         } catch (e) {
             setActionError(e instanceof Error ? e.message : "Action failed");
+            return false;
         } finally {
             setActionBusy(false);
         }
@@ -520,10 +602,6 @@ function ScheduleWorkSurface({
                     siblings={currentAssignments}
                     history={proj?.history ?? []}
                     busy={actionBusy}
-                    onBack={() => {
-                        setMode("detail");
-                        setActiveAssignmentId(null);
-                    }}
                     onEdit={() => {
                         if (activeAssignment.isPrimary) {
                             setActiveAssignmentId(null);
@@ -539,7 +617,7 @@ function ScheduleWorkSurface({
                             return;
                         }
                         if (config.assignmentTypes.length === 0) {
-                            setActionError("No Assignment Types are configured for this organization.");
+                            setActionError("No Assignment Categories are configured for this organization.");
                             setMode("detail");
                             return;
                         }
@@ -556,6 +634,7 @@ function ScheduleWorkSurface({
                                       entity_id: child.id,
                                       payload: {
                                           subject_type: "child",
+                                          ...childAssignmentCreatePayload(child, proj, {}),
                                           enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
                                           effective_date: activeAssignment.effectiveFrom,
                                           promote_assignment_id: activeAssignment.id,
@@ -570,9 +649,7 @@ function ScheduleWorkSurface({
                                       action_key: "assignment.create",
                                       entity_type: "child",
                                       entity_id: child.id,
-                                      payload: {
-                                          subject_type: "child",
-                                          enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                      payload: childAssignmentCreatePayload(child, proj, {
                                           schedule_pattern_id: activeAssignment.patternId,
                                           start_date: activeAssignment.effectiveFrom,
                                           room_location_id: activeAssignment.room.id,
@@ -580,7 +657,7 @@ function ScheduleWorkSurface({
                                           duplicate_of: activeAssignment.id,
                                           assignment_type_label: activeAssignment.assignmentType.label,
                                           is_primary: false,
-                                      },
+                                      }),
                                   })
                             : undefined
                     }
@@ -600,6 +677,52 @@ function ScheduleWorkSurface({
                             ? "Make another assignment primary before archiving this one."
                             : null
                     }
+                    onDelete={
+                        activeAssignment.commitmentKind === "proposed"
+                            ? () => {
+                                  if (
+                                      typeof window !== "undefined" &&
+                                      !window.confirm(
+                                          "Delete this proposed assignment? This can't be undone."
+                                      )
+                                  ) {
+                                      return;
+                                  }
+                                  void runAction({
+                                      action_key: "assignment.delete_proposed",
+                                      entity_type: "child",
+                                      entity_id: child.id,
+                                      payload: { assignment_id: activeAssignment.id },
+                                  }).then((ok) => {
+                                      if (ok) {
+                                          setActiveAssignmentId(null);
+                                          setMode("detail");
+                                      }
+                                  });
+                              }
+                            : undefined
+                    }
+                    onPromote={
+                        activeAssignment.commitmentKind === "proposed" &&
+                        (proj?.enrollmentAgreementId ?? "").trim()
+                            ? () =>
+                                  runAction({
+                                      action_key: "assignment.promote_proposed",
+                                      entity_type: "child",
+                                      entity_id: child.id,
+                                      payload: {
+                                          assignment_id: activeAssignment.id,
+                                          enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                      },
+                                  })
+                            : undefined
+                    }
+                    promoteBlockedReason={
+                        activeAssignment.commitmentKind === "proposed" &&
+                        !(proj?.enrollmentAgreementId ?? "").trim()
+                            ? "This Assignment can only become active after enrollment is completed."
+                            : null
+                    }
                 />
             </div>
         );
@@ -613,6 +736,8 @@ function ScheduleWorkSurface({
                     child={child}
                     proj={proj}
                     assignments={currentAssignments}
+                    dayFilter={listDayFilter}
+                    onDayFilterChange={setListDayFilter}
                     onCreate={beginCreateAssignment}
                     onOpenAssignment={(id) => {
                         setActiveAssignmentId(id);
@@ -651,6 +776,7 @@ function ScheduleWorkSurface({
                                 entity_type: "child",
                                 entity_id: child.id,
                                 payload: {
+                                    ...childAssignmentCreatePayload(child, proj, {}),
                                     subject_type: "child",
                                     enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
                                     effective_date: a.effectiveFrom,
@@ -666,9 +792,7 @@ function ScheduleWorkSurface({
                                 action_key: "assignment.create",
                                 entity_type: "child",
                                 entity_id: child.id,
-                                payload: {
-                                    subject_type: "child",
-                                    enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                payload: childAssignmentCreatePayload(child, proj, {
                                     schedule_pattern_id: a.patternId,
                                     start_date: a.effectiveFrom,
                                     room_location_id: a.room.id,
@@ -676,7 +800,7 @@ function ScheduleWorkSurface({
                                     duplicate_of: a.id,
                                     assignment_type_label: a.assignmentType.label,
                                     is_primary: false,
-                                },
+                                }),
                             });
                         },
                         onArchive: (id) => {
@@ -706,7 +830,7 @@ function ScheduleWorkSurface({
                 ) : null}
                 <AssignmentTypePicker
                     types={config.assignmentTypes}
-                    onCancel={() => setMode("detail")}
+                    onCancel={cancelToDetail}
                     onPick={(typeId) => {
                         setPendingTypeId(typeId);
                         setMode("create");
@@ -729,7 +853,7 @@ function ScheduleWorkSurface({
     const selectedType =
         config.assignmentTypes.find((t) => t.id === pendingTypeId) ??
         (editingAssignment?.assignmentType.id
-            ? {
+            ? config.assignmentTypes.find((t) => t.id === editingAssignment.assignmentType.id) ?? {
                   id: editingAssignment.assignmentType.id,
                   key: editingAssignment.assignmentType.key,
                   label: editingAssignment.assignmentType.label ?? "Assignment",
@@ -758,23 +882,25 @@ function ScheduleWorkSurface({
                 mode={mode === "edit" ? "edit" : "create"}
                 createAsSecondary={createAsSecondary}
                 assignmentTypeLabel={selectedType?.label ?? null}
-                onCancel={() => {
-                    setPendingTypeId(null);
-                    setEditingAssignmentId(null);
-                    setMode("detail");
-                }}
+                assignmentTypeBehavior={selectedType?.behavior}
+                // Real program from assignment/child context — never a hardcoded null. When
+                // editing an existing assignment, its room already implies a canonical
+                // program (if any); ScheduleEditor keeps this current as the room changes.
+                programCategoryId={programCategoryIdForRoom(
+                    config.operationalRooms,
+                    (mode === "edit" ? existing?.assignments[0]?.room.id : editingAssignment?.room.id) ?? null
+                )}
+                onCancel={cancelToDetail}
                 onSaved={onSaved}
                 onCreateSecondary={async (payload) => {
                     if (!selectedType?.id) {
-                        throw new Error("Choose an Assignment Type before creating.");
+                        throw new Error("Choose an Assignment Category before creating.");
                     }
                     await executeAssignmentAction({
                         action_key: "assignment.create",
                         entity_type: "child",
                         entity_id: child.id,
-                        payload: {
-                            subject_type: "child",
-                            enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                        payload: childAssignmentCreatePayload(child, proj, {
                             schedule_pattern_id: payload.schedule_pattern_id,
                             start_date: payload.start_date,
                             room_location_id: payload.room_location_id,
@@ -782,7 +908,7 @@ function ScheduleWorkSurface({
                             assignment_type_label: selectedType.label,
                             is_primary: false,
                             supersedes_assignment_id: editingAssignmentId,
-                        },
+                        }),
                     });
                     await onSaved();
                 }}
@@ -806,10 +932,10 @@ function AssignmentTypePicker({
         return (
             <div style={{ display: "grid", gap: 12, paddingTop: 4 }} data-assignment-type-picker-empty="true">
                 <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: T.forge }}>Assignment Types needed</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.forge }}>Assignment Categories needed</div>
                     <p style={{ margin: "4px 0 0", fontSize: 12, color: T.muted, lineHeight: 1.4 }}>
-                        Configure Assignment Types (Primary Classroom, Before Care, Enrichment, and similar) before
-                        creating additional assignments. You can return here afterward.
+                        Configure Assignment Categories (Primary Classroom, Before Care, Enrichment, and similar)
+                        before creating additional assignments. You can return here afterward.
                     </p>
                 </div>
                 {onConfigureTypes ? (
@@ -829,7 +955,7 @@ function AssignmentTypePicker({
                             width: "fit-content",
                         }}
                     >
-                        Configure Assignment Types
+                        Configure Assignment Categories
                     </button>
                 ) : null}
                 <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
@@ -842,9 +968,9 @@ function AssignmentTypePicker({
     return (
         <div style={{ display: "grid", gap: 12, paddingTop: 4 }}>
             <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: T.forge }}>Choose Assignment Type</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.forge }}>What category of assignment is this?</div>
                 <p style={{ margin: "4px 0 0", fontSize: 12, color: T.muted, lineHeight: 1.4 }}>
-                    Every additional assignment needs an explicit type — Primary Classroom, Before Care, Enrichment, and similar.
+                    Choose an Assignment Category — Primary Classroom, Before Care, Enrichment, and similar.
                 </p>
             </div>
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
@@ -1009,9 +1135,19 @@ function ScheduleRegions({
         <div style={{ display: "grid", gap: 13, paddingTop: 2 }} {...(surface === "detail" ? { "data-schedule-detail": "true" } : { "data-schedule-editor": "true" })}>
             <IdentityHeader child={child} state={state} />
             {state.sub ? <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div> : null}
-            <Region icon={CalendarDays} label="Days">{days}</Region>
-            <Region icon={Clock} label="Daily hours">{hours}</Region>
-            <Region icon={DoorOpen} label="Site & room">{siteRoom}</Region>
+            <div
+                data-schedule-days-hours-band="true"
+                style={{
+                    display: "grid",
+                    gap: 12,
+                    gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 1fr)",
+                }}
+                className="alloy-os-sched-days-hours-band"
+            >
+                <Region icon={CalendarDays} label="Days">{days}</Region>
+                <Region icon={Clock} label="Daily hours">{hours}</Region>
+            </div>
+            <Region icon={DoorOpen} label="Room">{siteRoom}</Region>
             <Region icon={CalendarRange} label="Effective">{effective}</Region>
             <BillingConsequence billing={billing} />
             <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>{footer}</div>
@@ -1027,6 +1163,8 @@ function AssignmentListSurface({
     onCreate,
     onOpenAssignment,
     listActions,
+    dayFilter,
+    onDayFilterChange,
 }: {
     child: SchedChild;
     proj: ChildProj | null;
@@ -1034,6 +1172,8 @@ function AssignmentListSurface({
     onCreate: () => void;
     onOpenAssignment: (id: string) => void;
     listActions?: AssignmentListActions;
+    dayFilter?: number | null;
+    onDayFilterChange?: (day: number | null) => void;
 }) {
     const state = deriveScheduleState(proj);
 
@@ -1048,6 +1188,8 @@ function AssignmentListSurface({
                 onOpenAssignment={onOpenAssignment}
                 onCreate={onCreate}
                 listActions={listActions}
+                dayFilter={dayFilter}
+                onDayFilterChange={onDayFilterChange}
             />
         </div>
     );
@@ -1063,6 +1205,8 @@ function ScheduleEditor({
     mode,
     createAsSecondary = false,
     assignmentTypeLabel = null,
+    assignmentTypeBehavior,
+    programCategoryId: initialProgramCategoryId = null,
     onCancel,
     onSaved,
     onCreateSecondary,
@@ -1076,6 +1220,9 @@ function ScheduleEditor({
     /** When true, create an independent secondary assignment (not a schedule successor). */
     createAsSecondary?: boolean;
     assignmentTypeLabel?: string | null;
+    assignmentTypeBehavior?: AssignmentTypeBehavior;
+    /** Real program from assignment/child context (never a hardcoded null) — the room's canonical program overrides this once a room is picked. */
+    programCategoryId?: string | null;
     onCancel: () => void;
     onSaved: () => Promise<void>;
     onCreateSecondary?: (payload: {
@@ -1106,6 +1253,14 @@ function ScheduleEditor({
     const [roomId, setRoomId] = useState<string | null>(ex?.room.id ?? null);
     const [roomName, setRoomName] = useState<string | null>(ex?.room.name ?? null);
     const [roomFromRec, setRoomFromRec] = useState<boolean>(false);
+    // Program resolution (pure helpers in assignmentProgramRoomResolution.ts): a room
+    // with a canonical program locks the program and shows it read-only; a room with
+    // none leaves whatever program was already resolved from context untouched.
+    const [programCategoryId, setProgramCategoryId] = useState<string | null>(initialProgramCategoryId);
+    const [programFromRoom, setProgramFromRoom] = useState<boolean>(
+        programCategoryIdForRoom(config.operationalRooms, roomId) === initialProgramCategoryId
+            && initialProgramCategoryId != null
+    );
     const [roomPicking, setRoomPicking] = useState(false);
     const [patternPicking, setPatternPicking] = useState(false);
 
@@ -1184,12 +1339,21 @@ function ScheduleEditor({
             : mode === "create" && !existing
               ? { label: "New schedule", tone: "blue", sub: null }
               : { ...state, sub: null };
+    const roomReq =
+        assignmentTypeBehavior?.roomRequirement ??
+        (assignmentTypeBehavior?.requiresRoom ? "required" : "optional");
+    const roomRequired = roomReq === "required";
+    const programReq =
+        assignmentTypeBehavior?.programRequirement ??
+        (assignmentTypeBehavior?.requiresProgram ? "required" : "optional");
+    const programUsed = programReq !== "not_used";
+    // Room prominence remains, but Category may not require space (Transportation, some Enrichment).
     const canSave =
         days.length > 0 &&
         !!start &&
-        !!roomId &&
         (!arrive || !depart || depart > arrive) &&
-        (!createAsSecondary || Boolean(assignmentTypeLabel));
+        (!createAsSecondary || Boolean(assignmentTypeLabel)) &&
+        (!roomRequired || Boolean(roomId));
 
     async function save() {
         setBusy(true);
@@ -1254,10 +1418,24 @@ function ScheduleEditor({
                 patternId={patternId}
                 start={start}
                 selectedRoomId={roomId}
+                seedRooms={config.operationalRooms}
+                purposeBehavior={assignmentTypeBehavior}
+                programCategoryId={programCategoryId}
+                onProgramResolved={(resolvedProgramCategoryId) => {
+                    setProgramCategoryId(resolvedProgramCategoryId);
+                    setProgramFromRoom(false);
+                }}
                 onPick={(id, name, recommended) => {
                     setRoomId(id);
                     setRoomName(name);
                     setRoomFromRec(recommended);
+                    const resolved = resolveProgramOnRoomChange({
+                        rooms: config.operationalRooms,
+                        roomId: id,
+                        priorProgramCategoryId: programCategoryId,
+                    });
+                    setProgramCategoryId(resolved.programCategoryId);
+                    setProgramFromRoom(resolved.programFromRoom);
                     setRoomPicking(false);
                 }}
                 onCancel={() => setRoomPicking(false)}
@@ -1277,7 +1455,7 @@ function ScheduleEditor({
                     <div style={{ display: "grid", gap: 8 }}>
                         <DayPills days={days} interactive allowed={allowedDays} onToggle={toggleDay} />
                         <button type="button" onClick={openPatternPicker} data-pattern-shortcut="true" style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine, width: "fit-content" }}>
-                            Use a schedule pattern →
+                            Use a schedule pattern
                         </button>
                         {patternPicking &&
                             (patterns == null ? (
@@ -1328,28 +1506,62 @@ function ScheduleEditor({
                     </div>
                 }
                 siteRoom={
-                    <div style={{ display: "grid", gap: 6 }}>
-                        <div data-schedule-site-context="true" style={{ fontSize: 13, fontWeight: 600, color: T.forge }}>{siteName}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            {roomName ? (
-                                <span data-room-value="true" style={{ fontSize: 12.5, fontWeight: 600, color: T.slate }}>{roomName}</span>
-                            ) : null}
-                            {roomName && roomFromRec ? <RecTag /> : null}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    // The room decision needs a pattern (schedule) to evaluate fit —
-                                    // load it as part of invoking Change, then open the picker.
-                                    void ensurePatterns();
-                                    setRoomPicking(true);
-                                }}
-                                data-room-change="true"
-                                style={{ all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.pine }}
-                            >
-                                {roomName ? "Change →" : "Select a room →"}
-                            </button>
+                    roomReq === "not_used" ? (
+                        <div
+                            data-room-not-used="true"
+                            data-assignment-program-resolved={programCategoryId ? "true" : "false"}
+                            style={{ fontSize: 12.5, color: T.muted }}
+                        >
+                            Operational space not used for this Category
+                            <div data-schedule-site-context="true" style={{ marginTop: 4, fontSize: 11.5, fontWeight: 500 }}>
+                                Site · {siteName}
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div
+                            style={{ display: "grid", gap: 6 }}
+                            data-assignment-program-resolved={programCategoryId ? "true" : "false"}
+                        >
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                {roomName ? (
+                                    <span data-room-value="true" style={{ fontSize: 15, fontWeight: 700, color: T.forge }}>
+                                        {roomName}
+                                    </span>
+                                ) : (
+                                    <span data-room-value="pending" style={{ fontSize: 13, fontWeight: 600, color: T.muted }}>
+                                        {roomRequired ? "Select a room" : "Room optional"}
+                                    </span>
+                                )}
+                                {roomName && roomFromRec ? <RecTag /> : null}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        void ensurePatterns();
+                                        setRoomPicking(true);
+                                    }}
+                                    data-room-change="true"
+                                    style={{ all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.pine }}
+                                >
+                                    {roomName ? "Change" : "Select"}
+                                </button>
+                            </div>
+                            <div data-schedule-site-context="true" style={{ fontSize: 11.5, fontWeight: 500, color: T.muted }}>
+                                Site · {siteName}
+                            </div>
+                            {programUsed && programFromRoom ? (
+                                <div
+                                    data-program-from-room="true"
+                                    style={{ fontSize: 11, fontWeight: 600, color: T.pine }}
+                                >
+                                    Program set by this room — read-only here (change the room to change it).
+                                </div>
+                            ) : programUsed && programCategoryId ? (
+                                <div style={{ fontSize: 11, color: T.muted }}>
+                                    Program resolved from the child&rsquo;s enrollment.
+                                </div>
+                            ) : null}
+                        </div>
+                    )
                 }
                 effective={
                     <div style={{ display: "grid", gap: 6 }}>
@@ -1402,13 +1614,17 @@ function ScheduleEditor({
     );
 }
 
-// ── Room picker (invokes the placement resolver; ranking stays owned there) ──
+// ── Room picker — seed from first-paint; Category filter sync; scoring revalidates ──
 function RoomPicker({
     siteId,
     childId,
     patternId,
     start,
     selectedRoomId,
+    seedRooms,
+    purposeBehavior,
+    programCategoryId,
+    onProgramResolved,
     onPick,
     onCancel,
 }: {
@@ -1417,24 +1633,58 @@ function RoomPicker({
     patternId: string | null;
     start: string;
     selectedRoomId: string | null;
+    seedRooms: SiteOperationalRoom[];
+    purposeBehavior?: AssignmentTypeBehavior;
+    programCategoryId?: string | null;
+    /** Server-resolved Program from child/assignment context (`?view=options`), adopted
+     *  only when no Program is already known client-side — never overrides a Program
+     *  a Room selection already implied. */
+    onProgramResolved?: (programCategoryId: string) => void;
     onPick: (id: string, name: string | null, recommended: boolean) => void;
     onCancel: () => void;
 }) {
-    const [options, setOptions] = useState<PlacementOption[] | null>(null);
+    const seedOptions = useMemo((): PlacementOption[] => {
+        const active = seedRooms.filter((r) => r.active !== false);
+        const filtered = filterRoomsForPurposeBehavior(
+            active,
+            purposeBehavior ?? {},
+            programCategoryId
+        );
+        return filtered.map((r) => ({
+            roomId: r.roomId,
+            roomName: r.roomName,
+            classification: "eligible" as const,
+            reason: "Operational space",
+            programCategoryId: r.programCategoryId,
+        }));
+    }, [seedRooms, purposeBehavior, programCategoryId]);
+
+    const [scored, setScored] = useState<PlacementOption[] | null>(null);
     const [error, setError] = useState<string | null>(null);
+
     useEffect(() => {
-        // The fit resolver evaluates against a schedule (pattern) — wait for it to
-        // resolve (loaded as part of invoking Change) rather than fire a request the
-        // resolver would reject.
         if (!patternId) return;
         let cancelled = false;
         setError(null);
         (async () => {
             try {
                 const o = await schedApi(
-                    `?view=options&site_location_id=${encodeURIComponent(siteId)}&pattern_id=${encodeURIComponent(patternId)}&child_agreement_id=${encodeURIComponent(childId)}${start ? `&start_date=${start}` : ""}`
+                    `?view=options&site_location_id=${encodeURIComponent(siteId)}&pattern_id=${encodeURIComponent(patternId)}&child_agreement_id=${encodeURIComponent(childId)}${start ? `&start_date=${start}` : ""}${programCategoryId ? `&program_category_id=${encodeURIComponent(programCategoryId)}` : ""}`
                 );
-                if (!cancelled) setOptions(o.options ?? []);
+                if (cancelled) return;
+                const raw = (o.options ?? []) as PlacementOption[];
+                const filtered = filterRoomsForPurposeBehavior(
+                    raw.map((r) => ({
+                        ...r,
+                        programCategoryId: r.programCategoryId ?? null,
+                    })),
+                    purposeBehavior ?? {},
+                    programCategoryId
+                );
+                setScored(filtered);
+                if (!programCategoryId && typeof o.programCategoryId === "string" && o.programCategoryId) {
+                    onProgramResolved?.(o.programCategoryId);
+                }
             } catch (e) {
                 if (!cancelled) setError((e as Error).message);
             }
@@ -1442,28 +1692,71 @@ function RoomPicker({
         return () => {
             cancelled = true;
         };
-    }, [siteId, patternId, childId, start]);
+        // `onProgramResolved` intentionally omitted — an inline callback from the parent;
+        // depending on it would refetch every render without changing behavior.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [siteId, patternId, childId, start, purposeBehavior, programCategoryId]);
+
+    const options = scored ?? seedOptions;
 
     return (
         <div style={{ display: "grid", gap: 10, paddingTop: 4 }} data-room-picker="true">
             {label("Choose a room")}
             {error && <ErrorNote message={error} />}
-            {!options ? (
-                <Thinking label="Evaluating rooms…" />
+            {options.length === 0 ? (
+                <span style={{ fontSize: 12, color: T.muted }}>
+                    No eligible operational spaces for this Category
+                    {programCategoryId ? " and program" : ""}.
+                </span>
             ) : (
-                <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ display: "grid", gap: 6 }} data-room-options-ready={scored ? "scored" : "seed"}>
                     {options.map((o) => {
                         const blocked = o.classification === "blocked";
                         const selected = o.roomId === selectedRoomId;
                         return (
-                            <button key={o.roomId} type="button" disabled={blocked} onClick={() => onPick(o.roomId, o.roomName, o.classification === "recommended")} data-room-option={o.roomId}
-                                style={{ all: "unset", cursor: blocked ? "not-allowed" : "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", border: selected ? `1px solid ${T.pine}` : `1px solid ${T.border}`, background: blocked ? "#f9fafb" : selected ? "rgba(0,162,131,.06)" : "#fff", borderRadius: 8, padding: "8px 12px", opacity: blocked ? 0.7 : 1 }}>
+                            <button
+                                key={o.roomId}
+                                type="button"
+                                disabled={blocked}
+                                onClick={() => onPick(o.roomId, o.roomName, o.classification === "recommended")}
+                                data-room-option={o.roomId}
+                                style={{
+                                    all: "unset",
+                                    cursor: blocked ? "not-allowed" : "pointer",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    border: selected ? `1px solid ${T.pine}` : `1px solid ${T.border}`,
+                                    background: blocked ? "#f9fafb" : selected ? "rgba(0,162,131,.06)" : "#fff",
+                                    borderRadius: 8,
+                                    padding: "8px 12px",
+                                    opacity: blocked ? 0.7 : 1,
+                                }}
+                            >
                                 <span style={{ color: blocked ? T.muted : T.forge, minWidth: 0 }}>
                                     <span style={{ fontWeight: 600 }}>{o.roomName ?? "Room"}</span>
                                     <span style={{ color: T.muted, marginLeft: 8, fontSize: 11.5 }}>{o.reason}</span>
                                 </span>
-                                <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: o.classification === "recommended" ? T.pine : blocked ? T.ember : T.muted, flex: "0 0 auto" }}>
-                                    {o.classification === "recommended" ? "Recommended" : o.classification === "blocked" ? "Ineligible" : "Eligible"}
+                                <span
+                                    style={{
+                                        fontSize: 9,
+                                        fontWeight: 700,
+                                        textTransform: "uppercase",
+                                        letterSpacing: ".04em",
+                                        color:
+                                            o.classification === "recommended"
+                                                ? T.pine
+                                                : blocked
+                                                  ? T.ember
+                                                  : T.muted,
+                                        flex: "0 0 auto",
+                                    }}
+                                >
+                                    {o.classification === "recommended"
+                                        ? "Recommended"
+                                        : o.classification === "blocked"
+                                          ? "Ineligible"
+                                          : "Eligible"}
                                 </span>
                             </button>
                         );

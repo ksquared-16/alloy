@@ -82,6 +82,8 @@ export type ScheduleAssignmentRow = {
     program_category_id: string | null;
     operational_assignment_type_id: string | null;
     is_primary: boolean;
+    /** proposed = planning (no agreement); committed = agreement-backed operational truth */
+    commitment_kind?: "proposed" | "committed";
     start_date: string;
     end_date: string | null;
     status: ScheduleAssignmentStatus;

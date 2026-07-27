@@ -66,6 +66,7 @@ export default function SchedulingStudio({
                     siteName={siteName}
                     sites={sites}
                     onChanged={onAssignmentTypesChanged}
+                    operationalRooms={editorConfig.operationalRooms}
                 />
             : null}
 
@@ -182,13 +183,18 @@ function ValidationInventory({ calculations, loading }: { calculations: StudioCa
                                                         :   "bg-alloy-stone/40 text-alloy-midnight/60"
                                                     }`}
                                                 >
-                                                    {c.status}
+                                                    {c.status === "active" ? "Active" : "Inactive"}
                                                 </span>
                                             </div>
-                                            <p className="mt-2.5 pl-9 text-[10px] text-alloy-midnight/45">
-                                                <FunctionSquare className="mr-1 inline h-3 w-3 opacity-50" aria-hidden />
-                                                <code className="text-alloy-midnight/40">{c.key}</code>
-                                            </p>
+                                            <details className="mt-2.5 pl-9 text-[10px] text-alloy-midnight/45">
+                                                <summary className="cursor-pointer select-none font-medium text-alloy-midnight/50">
+                                                    Advanced details
+                                                </summary>
+                                                <p className="mt-1">
+                                                    <FunctionSquare className="mr-1 inline h-3 w-3 opacity-50" aria-hidden />
+                                                    <code className="text-alloy-midnight/40">{c.key}</code>
+                                                </p>
+                                            </details>
                                         </WorkspaceCard>
                                     );
                                 })}

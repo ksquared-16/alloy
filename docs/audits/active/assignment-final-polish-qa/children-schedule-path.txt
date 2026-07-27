@@ -1,0 +1,58 @@
+childrenBtn=1
+info=[
+  {
+    "text": "Assignments — rooms, types, and operational placement",
+    "aria": "Assignments — rooms, types, and operational placement",
+    "linked": null,
+    "testid": null,
+    "open": null,
+    "cls": "adminv2-sidebar-rail-link relative",
+    "visible": true,
+    "x": 6,
+    "y": 216
+  },
+  {
+    "text": "K Kurzman Family New Leads Kelly Kurzman · (602) 290-4816 Lennon Kurzman · 2y | Wrigley Kurzman · 4m",
+    "aria": null,
+    "linked": null,
+    "testid": null,
+    "open": null,
+    "cls": "alloy-os-queue-row-card motion-control relative block w-full overflow-visible ro",
+    "visible": true,
+    "x": 89,
+    "y": 214
+  },
+  {
+    "text": "Schedule tour",
+    "aria": null,
+    "linked": null,
+    "testid": null,
+    "open": null,
+    "cls": "alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summa",
+    "visible": true,
+    "x": 623,
+    "y": 369
+  },
+  {
+    "text": "Children →",
+    "aria": null,
+    "linked": null,
+    "testid": null,
+    "open": null,
+    "cls": "alloy-os-currentwork__readiness-owner alloy-os-currentwork__readiness-owner--lin",
+    "visible": true,
+    "x": 523,
+    "y": 458
+  }
+]
+exactSchedule=0
+linkedSchedule=0
+after={
+  "schedulingCard": 0,
+  "openers": 0,
+  "surface": 0,
+  "dayFilter": 0,
+  "rows": 0,
+  "create": 0,
+  "elevatedText": []
+}
