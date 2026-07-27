@@ -990,7 +990,24 @@ async function execute(command, input, confirm, confirmText) {
     if (command === "director.ask") msg = d?.response_ok ? `${d.provider}: ${d.response}` : `${d?.provider || "provider"}: ${d?.error || "no response"}`;
     else if (command === "director.route") msg = "recorded + copied to clipboard";
     else if (command === "review.resolve") msg = `review ${d?.disposition}`;
-    toast(okc ? "ok" : "err", `${command.replace(/\./g, " ")} ${okc ? "done" : "failed"}`, String(msg).split("\n").slice(0, 4).join("\n"));
+    // Server START is truthful about COMPILING vs READY: alloy-dev-start spawns
+    // Next and returns after a 1s liveness check — the app is NOT yet listening.
+    // Never claim "done" (the old "it says it happened but it didn't"); say
+    // "starting" and watch the port actually come up before confirming.
+    if (command === "server.start") {
+      if (okc) {
+        const sp0 = state.snap?.sprints.find((x) => x.slot === input.slot);
+        toast("ok", `slot ${input.slot} server starting…`, "compiling — it opens when the port is actually listening");
+        watchServerReady(input.slot, sp0?.port);
+      } else {
+        toast("err", "server start failed", String(msg).split("\n").slice(0, 4).join("\n"));
+      }
+    } else {
+      // server.stop is now port-authoritative: exit 0 means the port is genuinely
+      // free, so "stopped" is truthful (it refuses success while a listener holds).
+      const word = okc ? (command === "server.stop" ? "stopped" : "done") : "failed";
+      toast(okc ? "ok" : "err", `${command.replace(/\./g, " ")} ${word}`, String(msg).split("\n").slice(0, 4).join("\n"));
+    }
     // Clear the draft ONLY on a genuinely completed send: a real worker response
     // (director.ask) or a successful copy (director.route). Never on failure,
     // authentication error, validation error, or a cancelled confirmation.
@@ -1004,6 +1021,23 @@ async function execute(command, input, confirm, confirmText) {
     if (input.slot != null && state._closeout) { delete state._closeout[input.slot]; if (state.tab === "closeout") fetchCloseout(input.slot); }
     render(true);
   } else { toast("err", `${command.replace(/\./g, " ")} not run`, data.reason || (data.errors || []).join("; ") || data.code); }
+}
+// After a server.start, the process is spawned but Next is still compiling. Watch
+// the LIVE projection (which counts the real port listener) until the slot is
+// actually serving, then confirm truthfully — or report it never came up. This is
+// what turns "it says it happened but it didn't" into an honest ready signal.
+function watchServerReady(slot, port) {
+  const deadline = Date.now() + 75000;
+  const iv = setInterval(() => {
+    const sp = state.snap?.sprints?.find((x) => x.slot === slot);
+    if (sp && sp.server === "running") {
+      clearInterval(iv);
+      toast("ok", `slot ${slot} app is up`, `${port ? `listening on :${port} — ` : ""}click Open App`);
+    } else if (Date.now() > deadline) {
+      clearInterval(iv);
+      toast("err", `slot ${slot} app still not listening`, "still compiling under load, or it failed to start — try Diagnose");
+    }
+  }, 2000);
 }
 function loadAuditIfOpen() { if (route() === "history") { state._audit = null; fetchAudit(); } }
 function showConfirm(pv, onConfirm) {
