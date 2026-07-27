@@ -34,6 +34,8 @@ import {
   BosRailHeader,
   BosRailStarterCards,
 } from "@/app/adminV2/components/aiCommandSurface/bosRail/BosRailPresentation";
+import { BosCommandSessionHost } from "@/app/adminV2/components/aiCommandSurface/commandSession/BosCommandSessionHost";
+import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
 import {
   JobLayoutOperationalProposalCard,
   type JobLayoutCardUiState,
@@ -656,6 +658,8 @@ export default function AICommandSurfaceShell({
   const adminDrawer = useAdminDrawerOptional();
 
   const globalAssistant = useGlobalAssistantOptional();
+  const bosCommandSession = useBosCommandSessionOptional();
+  const activeCommandSession = bosCommandSession?.session ?? null;
   const { labels: entityLabelMap } = useEntityLabelsOptional();
   const opportunitySingular = entityLabelMap.opportunities?.singular ?? "Lead";
   const siteFilter = useWorkspaceSiteFilter();
@@ -2234,6 +2238,10 @@ export default function AICommandSurfaceShell({
             contextPills={bosContextPills}
             statusLabel={threadStatusLabel}
           />
+          {activeCommandSession && activeCommandSession.phase !== "discarded" ? (
+            <BosCommandSessionHost />
+          ) : (
+            <>
           <div className="bos-rail-upper shrink-0">
             <BosRailAttentionSection attention={bosRailAttention} onCta={onBosRailAttentionCta} />
             {hasThread ? null : (
@@ -2299,6 +2307,8 @@ export default function AICommandSurfaceShell({
             onSubmit={() => void handleSubmit()}
             inputRef={inputRef}
           />
+            </>
+          )}
         </>
       :   null}
       {presentation !== "rail" && hasThread ? (
