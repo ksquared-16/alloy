@@ -236,11 +236,14 @@ function buildOneSection(input: {
         statusLabel = "In progress";
     }
 
+    // Person empty: count name gaps + code-owned contact (email|phone) as one detail.
+    // Matches the four visible required controls without treating email and phone as two.
     if (input.key === "person" && populatedCount === 0) {
-        if (missingRequiredKeys.length > 0) {
-            statusLabel = `${missingRequiredKeys.length} details still needed`;
+        const gaps = missingRequiredKeys.length + (contactGap ? 1 : 0);
+        if (gaps > 0) {
+            statusLabel = gaps === 1 ? "1 detail still needed" : `${gaps} details still needed`;
         } else {
-            statusLabel = "Required to create the lead";
+            statusLabel = "Required to create this lead";
         }
     }
 

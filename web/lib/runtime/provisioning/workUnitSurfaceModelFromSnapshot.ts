@@ -233,8 +233,9 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
         // the count + identities commit WITH the surface (no Actions(0) flash, no post-commit layout
         // discovery). Settlement still confirms with the same resolver but merges only non-empty results,
         // so it never clobbers this to zero. The snapshot-owned primary Action is elsewhere and untouched.
+        // Department scope is baked with the projection — Actions (Create Lead) must not wait on Settlement.
         rightRailActions: snapshot.actionsProjection?.actions ?? [],
-        departmentId: null,
+        departmentId: snapshot.actionsProjection?.departmentId ?? null,
         workUnitId: snapshot.workUnit.id,
         ready: true,
         readiness: READY_ALL,

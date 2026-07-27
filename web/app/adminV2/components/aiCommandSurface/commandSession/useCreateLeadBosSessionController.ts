@@ -26,18 +26,25 @@ import {
     resolveCreateLeadCommitSelectionFromDraft,
 } from "@/lib/bos/commandSession/createLeadRepeaterDraft";
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
+import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
 import type { IntakeSelectOption } from "@/lib/intake/types";
 
 export function useCreateLeadBosSessionController(session: BosCommandSession) {
     const ctx = useBosCommandSessionOptional();
+    const globalAssistant = useGlobalAssistantOptional();
     const [pasteText, setPasteText] = useState("");
     const [analyzing, setAnalyzing] = useState(false);
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
     const [intakeSpec, setIntakeSpec] = useState<ActionIntakeSpec | null>(null);
     const [effectiveSpec, setEffectiveSpec] = useState<EffectiveCreateLeadIntakeSpec | null>(null);
 
-    const departmentId = session.invocation.workspace.departmentId;
+    // Slash Create Lead historically launched with null department when workspace scope
+    // was unset — fall back to live GlobalAssistant scope so Form loads effective intake.
+    const departmentId =
+        session.invocation.workspace.departmentId?.trim() ||
+        globalAssistant?.workspaceScope?.department_id?.trim() ||
+        null;
     const draftFormSnapshot = useMemo(() => formValuesFromDraft(session.draft), [session.draft]);
     const formLocation = String(draftFormSnapshot.location_id ?? "");
     const formProgram = String(draftFormSnapshot.child_program ?? "");
