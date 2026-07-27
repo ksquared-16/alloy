@@ -1,16 +1,30 @@
 "use client";
 
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
-import type { BosCommandMode } from "@/lib/bos/commandSession";
+import type { BosCommandMode, BosCommandSession } from "@/lib/bos/commandSession";
+import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
+import { useCreateLeadBosSessionController } from "@/app/adminV2/components/aiCommandSurface/commandSession/useCreateLeadBosSessionController";
 
 /**
- * BOS command-session host — ack + Conversation|Form toggle.
- * Gather bodies are filled by later work packages; this package locks the shell.
+ * BOS command-session host — ack, Conversation|Form toggle, Create Lead gather.
  */
 export function BosCommandSessionHost() {
     const ctx = useBosCommandSessionOptional();
     const session = ctx?.session ?? null;
     if (!session || session.phase === "discarded") return null;
+    if (session.invocation.actionKey !== "create_lead") {
+        return (
+            <div className="p-3 text-sm text-alloy-midnight/70" data-bos-command-session-host="true">
+                This command is not available in BOS yet.
+            </div>
+        );
+    }
+    return <CreateLeadCommandSessionBody session={session} />;
+}
+
+function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession }) {
+    const ctx = useBosCommandSessionOptional();
+    const controller = useCreateLeadBosSessionController(session);
 
     const setMode = (mode: BosCommandMode) => {
         if (!ctx || mode === session.mode) return;
@@ -57,12 +71,21 @@ export function BosCommandSessionHost() {
                 </button>
             </div>
 
+            {controller.resolution.blockers.length > 0 ? (
+                <div
+                    className="shrink-0 border-b border-amber-200/80 bg-amber-50 px-3 py-2 text-[12px] text-amber-950"
+                    data-bos-command-session-resolution="true"
+                >
+                    {controller.resolution.blockers.map((b) => b.message).join(" · ")}
+                </div>
+            ) : null}
+
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3" data-bos-command-session-body="true">
-                <ul className="space-y-2" data-bos-command-session-messages="true">
+                <ul className="mb-4 space-y-2" data-bos-command-session-messages="true">
                     {session.messages.map((message) => (
                         <li
                             key={message.id}
-                            className={`rounded-lg px-3 py-2 text-[13px] leading-snug ${
+                            className={`whitespace-pre-wrap rounded-lg px-3 py-2 text-[13px] leading-snug ${
                                 message.role === "operator"
                                     ? "ml-6 bg-alloy-bend-pine/10 text-alloy-midnight"
                                     : "mr-4 bg-alloy-stone/10 text-alloy-midnight/90"
@@ -74,14 +97,81 @@ export function BosCommandSessionHost() {
                     ))}
                 </ul>
 
-                <div
-                    className="mt-4 rounded-lg border border-dashed border-alloy-stone/40 bg-alloy-stone/[0.03] px-3 py-4 text-[12px] text-alloy-midnight/60"
-                    data-bos-command-session-mode-body={session.mode}
-                >
-                    {session.mode === "conversation"
-                        ? "Conversation gather will appear here."
-                        : "Form gather will appear here."}
-                </div>
+                {session.mode === "conversation" ? (
+                    <div data-bos-command-session-mode-body="conversation" className="space-y-3">
+                        <label className="block text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                            Paste or type the inquiry
+                        </label>
+                        <textarea
+                            className="min-h-[120px] w-full resize-y rounded-lg border border-alloy-stone/30 bg-white px-3 py-2 text-[13px] text-alloy-midnight outline-none focus:border-alloy-bend-pine focus:ring-2 focus:ring-alloy-bend-pine/20"
+                            value={controller.pasteText}
+                            onChange={(e) => controller.setPasteText(e.target.value)}
+                            placeholder="Sarah Jones called about her daughter Emma…"
+                            data-bos-command-session-composer="true"
+                            disabled={controller.analyzing}
+                        />
+                        {controller.analyzeError ? (
+                            <p className="text-[12px] text-red-700">{controller.analyzeError}</p>
+                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-bend-pine/90 disabled:opacity-50"
+                                data-bos-command-session-analyze
+                                disabled={controller.analyzing || !controller.pasteText.trim()}
+                                onClick={() => controller.onAnalyze()}
+                            >
+                                {controller.analyzing ? "Reading…" : "Read with BOS"}
+                            </button>
+                            {session.draft.values
+                                .filter((v) => v.state === "inferred")
+                                .map((v) => (
+                                    <button
+                                        key={v.fieldKey}
+                                        type="button"
+                                        className="rounded-md border border-alloy-bend-pine/40 bg-alloy-bend-pine/10 px-2.5 py-1 text-[11px] font-semibold text-alloy-bend-pine"
+                                        data-bos-command-session-confirm-inferred={v.fieldKey}
+                                        onClick={() => controller.onConfirmField(v.fieldKey)}
+                                    >
+                                        Confirm suggested {v.fieldKey.replace(/_/g, " ")}
+                                    </button>
+                                ))}
+                        </div>
+                        {session.draft.values.length > 0 ? (
+                            <div className="rounded-lg border border-alloy-stone/25 bg-alloy-stone/[0.04] p-3" data-bos-command-session-evidence="true">
+                                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                    Known details
+                                </p>
+                                <ul className="space-y-1.5">
+                                    {session.draft.values.map((v) => (
+                                        <li key={v.fieldKey} className="flex items-start justify-between gap-2 text-[12px]">
+                                            <span className="text-alloy-midnight/80">
+                                                <span className="font-medium">{v.fieldKey.replace(/_/g, " ")}</span>
+                                                {": "}
+                                                {String(v.value)}
+                                            </span>
+                                            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/55 ring-1 ring-alloy-stone/25">
+                                                {evidenceLabel(v.state)}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
+                    </div>
+                ) : (
+                    <div data-bos-command-session-mode-body="form" className="min-h-0">
+                        <ActionWorkspaceGatherFields
+                            sections={controller.sections}
+                            values={controller.formValues}
+                            onChange={controller.onFieldChange}
+                            platformRequiredKeys={["first_name", "last_name"]}
+                            fieldConfidence={controller.fieldConfidence}
+                            layout="unified"
+                            dataTestIdPrefix="bos-create-lead-form"
+                        />
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -104,4 +194,21 @@ function ModeTab(props: { active: boolean; label: string; onClick: () => void })
             {props.label}
         </button>
     );
+}
+
+function evidenceLabel(state: string): string {
+    switch (state) {
+        case "parsed_from_source":
+            return "From your note";
+        case "inferred":
+            return "Suggested";
+        case "operator_entered":
+            return "Entered by you";
+        case "confirmed":
+            return "Confirmed";
+        case "invalid":
+            return "Invalid";
+        default:
+            return "Review";
+    }
 }
