@@ -144,13 +144,84 @@ command execution only.
 | `tests/admin/relationship/*` | pass (22) |
 | `npm run typecheck` | pass |
 
-## Remaining P3 slices
+## Remaining P3 slices (after P3.S1)
 
-- Additional Relationship exact-key adapters (emergency, pickup, billing, child, primary, …)
+~~Contact-role commands (emergency, pickup, billing)~~ → **P3.S2**  
+- `add_child` / `link_existing_child` (P3.S3)
+- `make_primary_contact` (P3.S4)
 - Add Family Member hub composition (not mutation convergence)
-- Optional retirement of dual UI paths when product ready
 
 ## Intentionally not claimed
 
 Full Relationship convergence · Add Family Member product · arbitrary relationship configuration ·
 `/configuration/commands` · API rename · Relationship Framework retirement · schema/migrations.
+
+---
+
+# P3.S2 — Contact-role Relationship Commands
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Slice | P3.S2 Contact-Role Relationship Commands |
+| Commit message target | `feat(commands): adapt contact role relationship commands` |
+
+## Outcome
+
+```text
+add_emergency_contact | add_authorized_pickup | add_billing_contact
+→ POST /api/admin/actions/execute
+→ Command Runtime
+→ relationshipExecutionAdapter
+→ executeRelationshipAction
+→ existing Relationship Framework (child_scoped_contact | billing)
+```
+
+Shared adapter/executor; **three distinct capability identities** (no generic “add contact”).
+
+## Exact mappings
+
+| Capability | relationshipActionKey | Fixed role (registry) | executorKind | Target resolution |
+|------------|----------------------|------------------------|--------------|-------------------|
+| `add_emergency_contact` | same | `emergency_contact` | `child_scoped_contact` | create or link person |
+| `add_authorized_pickup` | same | `authorized_pickup` | `child_scoped_contact` | create or link person |
+| `add_billing_contact` | same | `billing_contact` | `billing` | create or link person |
+
+Client `role_key` / `relationship_kind` / `relationship_direction` ignored for these fixed-role keys.
+
+## Source / target grain
+
+| Capability | Source | Target |
+|------------|--------|--------|
+| Emergency / Pickup | typically child (+ `sourceCustomerId`); scopes this_child / selected / all children | person create or link |
+| Billing | child or opportunity (+ household/opportunity scopes) | person create or link |
+
+## Cross-role isolation
+
+- Emergency does not confer pickup or guardian.
+- Pickup does not confer guardian or billing.
+- Billing contact does not imply financial-account / payer ownership beyond existing Relationship Framework billing write targets.
+- Distinct `actionKey` passed through to executor and result (`relationship_result.actionKey`).
+
+## Exactly-once / spoofing
+
+Same as P3.S1: `InvocationDelegationGuard`; server org/actor; no post-delegation `executeAdminAction`.
+
+## Compatibility retained
+
+`add_child`, `link_existing_child`, `make_primary_contact`, Add Family Member hub, Tour, Processing,
+RegisteredAction, Mutation paths unchanged. Dedicated relationship-actions routes remain.
+
+## Behavior-parity matrix (P3.S2)
+
+| Capability | Before write | After actions/execute | Final executor |
+|------------|--------------|----------------------|----------------|
+| `add_emergency_contact` | relationship-actions → `executeRelationshipAction` | facade → same | same |
+| `add_authorized_pickup` | same | facade → same | same |
+| `add_billing_contact` | same | facade → same | same |
+
+## Remaining after P3.S2
+
+- P3.S3: `add_child`, `link_existing_child`
+- P3.S4: `make_primary_contact`
+- Later: Add Family Member hub

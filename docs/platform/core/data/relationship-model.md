@@ -179,19 +179,22 @@ Relationships are **edges** between canonical entities — not duplicate copies 
 
 ---
 
-## Command Runtime delegation (P3.S1)
+## Command Runtime delegation (P3.S1 / P3.S2)
 
 Relationship **semantics and mutation ownership** remain in the Relationship Action Framework
 (`executeRelationshipAction`, registries, role resolution). The Command Runtime may delegate
-exactly two operator capabilities through `POST /api/admin/actions/execute`:
+exact operator capabilities through `POST /api/admin/actions/execute`:
 
 | Capability | Notes |
 |------------|-------|
 | `add_parent_guardian` | Fixed guardian role via registry; create or link person as today |
 | `link_existing_person` | Existing identity + role only; no identity creation |
+| `add_emergency_contact` | Fixed emergency_contact; create or link; does not imply pickup/guardian |
+| `add_authorized_pickup` | Fixed authorized_pickup; create or link; does not imply guardian/billing |
+| `add_billing_contact` | Fixed billing_contact; create or link; does not imply financial-account ownership |
 
-Other relationship actions and the Add Family Member hub are unchanged. Dedicated
-`/api/admin/relationship-actions/*` routes remain.
+Other relationship actions (`add_child`, `link_existing_child`, `make_primary_contact`) and the
+Add Family Member hub are unchanged. Dedicated `/api/admin/relationship-actions/*` routes remain.
 
 ---
 

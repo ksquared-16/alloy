@@ -4,7 +4,7 @@
  * Fail closed: owners/capabilities must be explicitly enabled.
  * P1.S2: RegisteredAction
  * P2.S1 / P2.S2: Mutation Runtime — exact keys (owner globally false)
- * P3.S1: Relationship Runtime — exact keys (owner globally false)
+ * P3.S1 / P3.S2: Relationship Runtime — exact keys (owner globally false)
  */
 
 import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
@@ -43,10 +43,18 @@ export const CHILD_ENROLLMENT_MUTATION_FACADE_COMMAND_KEYS = [
 export type ChildEnrollmentMutationFacadeCommandKey =
     (typeof CHILD_ENROLLMENT_MUTATION_FACADE_COMMAND_KEYS)[number];
 
-/** P3.S1 Relationship — exact keys only (no Add Family Member hub). */
+/**
+ * Relationship Runtime facade — exact keys only.
+ * P3.S1: parent/guardian + link existing person
+ * P3.S2: contact-role commands (distinct capabilities; shared executor)
+ * Not included: add_child, link_existing_child, make_primary_contact, Add Family Member hub
+ */
 export const RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS = [
     "add_parent_guardian",
     "link_existing_person",
+    "add_emergency_contact",
+    "add_authorized_pickup",
+    "add_billing_contact",
 ] as const;
 
 export type RelationshipRuntimeFacadeCommandKey =
@@ -117,8 +125,9 @@ export function isCommandRuntimeFacadeExecutionSupported(commandKey: string): bo
     if (cap.executionOwner === "relationship_runtime") {
         return (
             isRelationshipRuntimeFacadeSupported(key) &&
-            (cap.canonicalCommandKey === "add_parent_guardian" ||
-                cap.canonicalCommandKey === "link_existing_person")
+            (RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS as readonly string[]).includes(
+                cap.canonicalCommandKey
+            )
         );
     }
 

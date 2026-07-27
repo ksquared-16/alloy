@@ -71,8 +71,8 @@ services).
 ## Command Runtime Facade (preparation + gated execute)
 
 **Status:** Preparation (P1.S1). RegisteredAction execute (P1.S2). Lead Status Mutation execute
-(P2.S1). Child Enrollment Mutation execute (P2.S2). Relationship Runtime adapter spine (P3.S1,
-July 2026) — exact keys only.
+(P2.S1). Child Enrollment Mutation execute (P2.S2). Relationship Runtime adapter (P3.S1 parent/link;
+P3.S2 contact-role commands, July 2026) — exact keys only.
 
 `prepareCommandInvocation` remains **side-effect free**.
 
@@ -84,14 +84,16 @@ July 2026) — exact keys only.
   → existing Lead Status domain handler
 - **Child Enrollment Mutation** (`update_child_enrollment_status`, `waitlist_child`, `enroll_child`
   exact keys only) → `executeMutation` → existing Enrollment Status domain handler
-- **Relationship Runtime** (`add_parent_guardian`, `link_existing_person` exact keys only) →
-  `executeRelationshipAction` (Relationship Framework remains mutation authority)
+- **Relationship Runtime** (exact keys only) → `executeRelationshipAction`:
+  - P3.S1: `add_parent_guardian`, `link_existing_person`
+  - P3.S2: `add_emergency_contact`, `add_authorized_pickup`, `add_billing_contact`
+  (Relationship Framework remains mutation authority; each key retains distinct Command identity)
 - `mutation_runtime` / `relationship_runtime` are **not** enabled as global owner gates — only
   explicit exact keys
 - `mark_lost` remains on legacy compatibility (`executeAdminAction`); not consolidated
 - Enrollment aliases (`move_to_waitlist`, `approve_enrollment`) remain outside exact-key facade cutover
-- Remaining Relationship keys (`add_emergency_contact`, `add_child`, …) and Add Family Member hub
-  remain outside this cutover
+- Remaining Relationship keys (`add_child`, `link_existing_child`, `make_primary_contact`, …) and
+  Add Family Member hub remain outside this cutover
 
 `POST /api/admin/actions/execute` remains the operator/API route name. Dedicated
 `/api/admin/relationship-actions/execute` remains available. `/api/admin/mutations/execute`
@@ -298,10 +300,20 @@ Shared **guided wizard** + **idempotent executor** — confirmation required bef
 Code: `relationshipActionRegistry.ts`, `relationshipActionClient.ts`, `RelationshipActionGuidedModal`,
 `executeRelationshipAction`.
 
-**Command Runtime (P3.S1):** `add_parent_guardian` and `link_existing_person` may also reach
-`executeRelationshipAction` through `POST /api/admin/actions/execute` → Command Runtime facade →
-thin `relationshipExecutionAdapter`. Relationship kind/role/cardinality/identity resolution remain
-Relationship Framework–owned. Other relationship keys and the Add Family Member hub are not cut over.
+**Command Runtime (P3.S1 / P3.S2):** Exact keys may also reach `executeRelationshipAction` through
+`POST /api/admin/actions/execute` → Command Runtime facade → thin `relationshipExecutionAdapter`:
+
+| Capability | Fixed registry role (server-owned) |
+|------------|-------------------------------------|
+| `add_parent_guardian` | `guardian` |
+| `link_existing_person` | operator-selected `roleKey` (domain-validated) |
+| `add_emergency_contact` | `emergency_contact` |
+| `add_authorized_pickup` | `authorized_pickup` |
+| `add_billing_contact` | `billing_contact` |
+
+Relationship kind/role/cardinality/identity resolution remain Relationship Framework–owned.
+Contact-role Commands share infrastructure but remain distinct identities (no generic “add contact”
+mutation). Other relationship keys and the Add Family Member hub are not cut over.
 
 ### Make Primary Contact
 

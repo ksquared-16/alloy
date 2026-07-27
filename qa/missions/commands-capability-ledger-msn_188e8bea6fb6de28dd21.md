@@ -20,9 +20,9 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 | `update_child_enrollment_status` | same | adapted | mutation_runtime | internal_only | yes | P2 | |
 | `waitlist_child` | same | adapted | mutation_runtime | organization_command_catalog | yes | P2 | Aliases: `move_to_waitlist` |
 | `enroll_child` | same | adapted | mutation_runtime | organization_command_catalog | yes | P2 | Aliases: `approve_enrollment` |
-| `add_emergency_contact` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
-| `add_authorized_pickup` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
-| `add_billing_contact` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | |
+| `add_emergency_contact` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S2 facade** → `executeRelationshipAction` |
+| `add_authorized_pickup` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S2 facade** → `executeRelationshipAction` |
+| `add_billing_contact` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S2 facade** → `executeRelationshipAction` |
 | `add_parent_guardian` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S1 facade** → `executeRelationshipAction` |
 | `add_child` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | Dual UI overlap |
 | `link_existing_person` | same | adapted | relationship_runtime | organization_command_catalog | yes | P3 | **P3.S1 facade** → `executeRelationshipAction` |
@@ -243,5 +243,21 @@ the two cut-over keys), Tour-domain (non-RA), Processing, destructive.
 
 ## Deferred (Add Family Member + remaining Relationship catalog)
 
-`add_emergency_contact`, `add_authorized_pickup`, `add_billing_contact`, `add_child`,
-`link_existing_child`, `make_primary_contact`, `add_family_member` / hub, sibling aliases.
+~~`add_emergency_contact`, `add_authorized_pickup`, `add_billing_contact`~~ → **P3.S2**  
+`add_child`, `link_existing_child`, `make_primary_contact`, `add_family_member` / hub, sibling aliases.
+
+---
+
+# P3.S2 — Contact-role Relationship Commands
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p3-relationship-adapter-msn_188e8bea6fb6de28dd21.md` (P3.S2) |
+| Exact keys | `add_emergency_contact`, `add_authorized_pickup`, `add_billing_contact` |
+| Final authority | `executeRelationshipAction` |
+| Fixed roles | `emergency_contact` / `authorized_pickup` / `billing_contact` (registry; client role ignored) |
+
+## Cross-role isolation
+
+Emergency ≠ pickup ≠ billing ≠ guardian. Shared adapter does not collapse Command identities.

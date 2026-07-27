@@ -112,6 +112,69 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
         expect(built.createPersonDraft).toBeUndefined();
     });
 
+    it.each([
+        ["add_emergency_contact", "emergency_contact"],
+        ["add_authorized_pickup", "authorized_pickup"],
+        ["add_billing_contact", "billing_contact"],
+    ] as const)(
+        "maps %s to fixed registry role %s (client role spoof ignored)",
+        (key, fixedRole) => {
+            const built = buildRelationshipExecutionRequest({
+                commandKey: key,
+                executionSubject: { entityType: "child", entityId: "child-1" },
+                invocation: invocation({
+                    commandKey: key,
+                    inputValues: {
+                        ...basePayload,
+                        selected_person_id: "person-1",
+                        role_key: "guardian",
+                        relationship_kind: "sibling",
+                        relationship_direction: "reversed",
+                        execution_owner: "mutation_runtime",
+                        org_id: "spoof",
+                    },
+                }),
+            });
+            expect("error" in built).toBe(false);
+            if ("error" in built) return;
+            expect(built.actionKey).toBe(key);
+            expect(built.roleKey).toBe(fixedRole);
+            expect(built.selectedPersonId).toBe("person-1");
+            expect(built.sourceEntityType).toBe("child");
+            expect(built.sourceCustomerId).toBe("cust-1");
+        }
+    );
+
+    it("allows createPersonDraft for contact-role commands and preserves distinct action keys", () => {
+        for (const key of [
+            "add_emergency_contact",
+            "add_authorized_pickup",
+            "add_billing_contact",
+        ] as const) {
+            const built = buildRelationshipExecutionRequest({
+                commandKey: key,
+                executionSubject: { entityType: "child", entityId: "child-1" },
+                invocation: invocation({
+                    commandKey: key,
+                    inputValues: {
+                        ...basePayload,
+                        create_person_draft: { first_name: "Pat", last_name: "Lee" },
+                    },
+                }),
+            });
+            expect("error" in built).toBe(false);
+            if ("error" in built) return;
+            expect(built.actionKey).toBe(key);
+            expect(built.createPersonDraft).toEqual({
+                first_name: "Pat",
+                last_name: "Lee",
+                email: undefined,
+                phone: undefined,
+            });
+            expect(built.selectedPersonId).toBeUndefined();
+        }
+    });
+
     it("rejects link_existing_person createPersonDraft and missing selection", () => {
         expect(
             buildRelationshipExecutionRequest({
@@ -143,9 +206,9 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
     it("rejects unsupported Relationship capability and incompatible source type", () => {
         expect(
             buildRelationshipExecutionRequest({
-                commandKey: "add_emergency_contact",
-                executionSubject: { entityType: "child", entityId: "child-1" },
-                invocation: invocation({ commandKey: "add_emergency_contact", inputValues: basePayload }),
+                commandKey: "add_child",
+                executionSubject: { entityType: "opportunity", entityId: "opp-1" },
+                invocation: invocation({ commandKey: "add_child", inputValues: basePayload }),
             })
         ).toMatchObject({ error: expect.stringContaining("Unsupported") });
 
@@ -209,7 +272,39 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
             if (key === "add_parent_guardian") {
                 expect(relSpy.mock.calls[0][1].roleKey).toBe("guardian");
             }
+            if (key === "add_emergency_contact") {
+                expect(relSpy.mock.calls[0][1].roleKey).toBe("emergency_contact");
+            }
+            if (key === "add_authorized_pickup") {
+                expect(relSpy.mock.calls[0][1].roleKey).toBe("authorized_pickup");
+            }
+            if (key === "add_billing_contact") {
+                expect(relSpy.mock.calls[0][1].roleKey).toBe("billing_contact");
+            }
+            if (key === "link_existing_person") {
+                expect(relSpy.mock.calls[0][1].roleKey).toBe("emergency_contact");
+            }
         }
+    });
+
+    it("keeps contact-role fixed roles distinct (no cross-role collapse)", () => {
+        const roles = (
+            ["add_emergency_contact", "add_authorized_pickup", "add_billing_contact"] as const
+        ).map((key) => {
+            const built = buildRelationshipExecutionRequest({
+                commandKey: key,
+                executionSubject: { entityType: "child", entityId: "child-1" },
+                invocation: invocation({
+                    commandKey: key,
+                    inputValues: { ...basePayload, selected_person_id: "person-1" },
+                }),
+            });
+            expect("error" in built).toBe(false);
+            if ("error" in built) return null;
+            return built.roleKey;
+        });
+        expect(new Set(roles).size).toBe(3);
+        expect(roles).toEqual(["emergency_contact", "authorized_pickup", "billing_contact"]);
     });
 
     it("maps domain executor errors after delegation without fallback", async () => {
@@ -280,11 +375,10 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
             expect(isCommandRuntimeFacadeExecutionSupported(key)).toBe(true);
         }
         expect(COMMAND_RUNTIME_EXECUTION_BY_OWNER.relationship_runtime).toBe(false);
-        expect(isCommandRuntimeFacadeExecutionSupported("add_emergency_contact")).toBe(false);
-        expect(isCommandRuntimeFacadeExecutionSupported("add_billing_contact")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("add_child")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("link_existing_child")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("add_family_member")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("create_lead")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("close_lead")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("waitlist_child")).toBe(true);

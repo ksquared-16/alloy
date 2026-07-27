@@ -104,13 +104,29 @@ describe("POST /api/admin/actions/execute Relationship Runtime cutover (P3.S1)",
         });
     });
 
-    it.each(["add_parent_guardian", "link_existing_person"] as const)(
+    it.each([
+        "add_parent_guardian",
+        "link_existing_person",
+        "add_emergency_contact",
+        "add_authorized_pickup",
+        "add_billing_contact",
+    ] as const)(
         "routes %s through Command Runtime → executeRelationshipAction once",
         async (key) => {
+            const fixedRole =
+                key === "add_parent_guardian"
+                    ? "guardian"
+                    : key === "add_emergency_contact"
+                      ? "emergency_contact"
+                      : key === "add_authorized_pickup"
+                        ? "authorized_pickup"
+                        : key === "add_billing_contact"
+                          ? "billing_contact"
+                          : "emergency_contact";
             executeRelationshipAction.mockResolvedValueOnce({
                 ok: true,
                 actionKey: key,
-                role_key: key === "add_parent_guardian" ? "guardian" : "emergency_contact",
+                role_key: fixedRole,
                 person_id: "person-1",
                 child_person_id: "child-1",
                 contact_id: "c1",
@@ -130,7 +146,7 @@ describe("POST /api/admin/actions/execute Relationship Runtime cutover (P3.S1)",
                     payload: {
                         source_customer_id: "cust-1",
                         selected_person_id: "person-1",
-                        role_key: "emergency_contact",
+                        role_key: "guardian",
                         relationship_kind: "sibling",
                         execution_owner: "mutation_runtime",
                         org_id: "spoof-org",
@@ -164,8 +180,8 @@ describe("POST /api/admin/actions/execute Relationship Runtime cutover (P3.S1)",
                     sourceCustomerId: "cust-1",
                 })
             );
-            if (key === "add_parent_guardian") {
-                expect(executeRelationshipAction.mock.calls[0][1].roleKey).toBe("guardian");
+            if (key !== "link_existing_person") {
+                expect(executeRelationshipAction.mock.calls[0][1].roleKey).toBe(fixedRole);
             }
         }
     );
@@ -247,8 +263,9 @@ describe("POST /api/admin/actions/execute Relationship Runtime cutover (P3.S1)",
 
     it("keeps unadapted Relationship / Tour / Processing on compatibility path", async () => {
         for (const key of [
-            "add_emergency_contact",
             "add_child",
+            "link_existing_child",
+            "make_primary_contact",
             "cancel_tour",
             "processing.create_lead",
         ]) {

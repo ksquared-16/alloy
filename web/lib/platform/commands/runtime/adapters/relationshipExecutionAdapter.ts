@@ -1,13 +1,19 @@
 /**
- * Relationship Runtime adapter (P3.S1).
+ * Relationship Runtime adapter (P3.S1 / P3.S2).
  *
  * Delegates exactly once to `executeRelationshipAction` — never writes relationship
  * rows, contacts, or PCR/CMC tables directly. Relationship kind/role/scope remain
  * Relationship Framework–owned.
  *
- * Enabled keys (exact):
- * - add_parent_guardian — fixed guardian role via registry; create or link person allowed
- * - link_existing_person — existing identity only (no createPersonDraft)
+ * Exact facade keys:
+ * - add_parent_guardian — fixed guardian; create or link person
+ * - link_existing_person — existing identity only (role from payload)
+ * - add_emergency_contact — fixed emergency_contact; create or link
+ * - add_authorized_pickup — fixed authorized_pickup; create or link
+ * - add_billing_contact — fixed billing_contact; create or link
+ *
+ * Contact-role capabilities share this adapter and executor but remain distinct
+ * Command identities (do not collapse into a generic “add contact” mutation).
  */
 
 import { executeRelationshipAction } from "@/lib/admin/relationship/executeRelationshipAction";
@@ -53,6 +59,14 @@ export type RelationshipExecutionOutput = {
     delegated: true;
     actionKey: RelationshipActionKey;
 };
+
+/** Fixed-role relationship commands that may create or link a person. */
+const FIXED_ROLE_CREATE_OR_LINK_KEYS = new Set<string>([
+    "add_parent_guardian",
+    "add_emergency_contact",
+    "add_authorized_pickup",
+    "add_billing_contact",
+]);
 
 const SOURCE_ENTITY_TYPES = new Set(["child", "person", "opportunity"]);
 const SURFACES = new Set([
@@ -126,6 +140,7 @@ function readCreatePersonDraft(
 /**
  * Build RelationshipActionExecutionRequest from Command Runtime inputs.
  * Ignores client relationship_kind / execution_owner / org / actor spoof fields.
+ * Fixed-role commands use registry defaultRoleKey — client role_key is ignored.
  */
 export function buildRelationshipExecutionRequest(input: {
     commandKey: string;
@@ -141,10 +156,12 @@ export function buildRelationshipExecutionRequest(input: {
     if (!entry) return { error: `Unregistered relationship action: ${actionKey}` };
 
     const payload = readPayload(input.invocation.inputValues);
-    // Ignore spoofed relationship kind — registry owns kind/role defaults.
+    // Ignore spoofed relationship kind / direction / owner — registry owns fixed roles.
     void payload.relationship_kind;
     void payload.relationshipKind;
     void payload.relationship_type;
+    void payload.relationship_direction;
+    void payload.relationshipDirection;
     void payload.execution_owner;
     void payload.domain;
     void payload.org_id;
@@ -177,6 +194,7 @@ export function buildRelationshipExecutionRequest(input: {
             payload.targetEntityId
     );
     const createPersonDraft = readCreatePersonDraft(payload);
+    const isFixedRoleCreateOrLink = FIXED_ROLE_CREATE_OR_LINK_KEYS.has(actionKey);
 
     if (actionKey === "link_existing_person") {
         if (createPersonDraft) {
@@ -189,18 +207,17 @@ export function buildRelationshipExecutionRequest(input: {
         }
     }
 
-    if (actionKey === "add_parent_guardian" && !selectedPersonId && !createPersonDraft) {
+    if (isFixedRoleCreateOrLink && !selectedPersonId && !createPersonDraft) {
         return {
-            error: "Provide selectedPersonId or createPersonDraft for add_parent_guardian.",
+            error: `Provide selectedPersonId or createPersonDraft for ${actionKey}.`,
         };
     }
 
-    // Role: add_parent_guardian uses registry default (guardian path); client role_key ignored
-    // for fixed guardian semantics. link_existing_person accepts role_key from payload.
-    const roleKey =
-        actionKey === "add_parent_guardian"
-            ? entry.defaultRoleKey ?? "guardian"
-            : asString(payload.role_key ?? payload.roleKey) || undefined;
+    // Fixed-role commands: registry defaultRoleKey only (client role_key ignored).
+    // link_existing_person: operator-selected role under domain rules.
+    const roleKey = isFixedRoleCreateOrLink
+        ? entry.defaultRoleKey ?? undefined
+        : asString(payload.role_key ?? payload.roleKey) || undefined;
 
     if (actionKey === "link_existing_person" && !roleKey) {
         return { error: "roleKey is required for link_existing_person." };
@@ -237,8 +254,7 @@ export function buildRelationshipExecutionRequest(input: {
             asString(payload.anchor_customer_member_id ?? payload.anchorCustomerMemberId) ||
             null,
         selectedPersonId: selectedPersonId || undefined,
-        createPersonDraft:
-            actionKey === "add_parent_guardian" ? createPersonDraft : undefined,
+        createPersonDraft: isFixedRoleCreateOrLink ? createPersonDraft : undefined,
         roleKey,
         scope,
         selectedChildCustomerMemberIds,

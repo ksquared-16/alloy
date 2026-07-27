@@ -155,9 +155,9 @@ describe("POST /api/admin/actions/execute Command Runtime cutover (P1.S2)", () =
     it("keeps unadapted relationship keys on executeAdminAction compatibility path", async () => {
         const res = await POST(
             jsonReq({
-                action_key: "add_emergency_contact",
-                entity_type: "child",
-                entity_id: "child-1",
+                action_key: "add_child",
+                entity_type: "opportunity",
+                entity_id: "opp-1",
                 payload: {},
             })
         );
