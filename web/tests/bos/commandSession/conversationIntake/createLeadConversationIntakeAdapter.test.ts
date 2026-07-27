@@ -19,6 +19,8 @@ describe("createLeadConversationIntakeAdapter", () => {
             departmentId: "dept-1",
             actionIntakeSpec: createLeadParserSpec("dept-1"),
         });
+        // Sync contract — Create Lead controller setState must not receive a Promise.
+        expect(effective).not.toBeInstanceOf(Promise);
         expect(effective.actionKey).toBe("create_lead");
         expect(effective.gatherFields.length).toBeGreaterThan(0);
         expect(effective.requiredPayloadKeys).toContain("first_name");

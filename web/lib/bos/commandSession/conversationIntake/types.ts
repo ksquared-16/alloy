@@ -84,7 +84,7 @@ export type ConversationIntakeAdapter = {
         fieldOptions?: Partial<Record<string, readonly IntakeSelectOption[]>>;
         /** When provided, skip network — tests and warm cache. */
         actionIntakeSpec?: ActionIntakeSpec | null;
-    }): Promise<EffectiveCreateLeadIntakeSpec> | EffectiveCreateLeadIntakeSpec;
+    }): EffectiveCreateLeadIntakeSpec;
 
     parseOperatorTurn(input: {
         text: string;

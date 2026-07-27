@@ -81,12 +81,21 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
 
     useEffect(() => {
         const actionIntakeSpec = intakeSpec ?? createLeadParserSpec(departmentId?.trim() || "platform");
-        const loaded = createLeadConversationIntakeAdapter.loadEffectiveSpec({
-            departmentId: departmentId?.trim() || null,
-            actionIntakeSpec,
-            fieldOptions,
+        // loadEffectiveSpec is sync today; Promise.resolve keeps the effect safe if the
+        // adapter later becomes async without regressing setState typing.
+        let cancelled = false;
+        void Promise.resolve(
+            createLeadConversationIntakeAdapter.loadEffectiveSpec({
+                departmentId: departmentId?.trim() || null,
+                actionIntakeSpec,
+                fieldOptions,
+            }),
+        ).then((loaded) => {
+            if (!cancelled) setEffectiveSpec(loaded);
         });
-        setEffectiveSpec(loaded);
+        return () => {
+            cancelled = true;
+        };
     }, [departmentId, fieldOptions, intakeSpec]);
 
     const workspace = useMemo(

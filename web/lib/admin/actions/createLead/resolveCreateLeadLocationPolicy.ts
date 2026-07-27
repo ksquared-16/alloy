@@ -10,9 +10,9 @@ import { CREATE_LEAD_PLATFORM_REQUIRED_KEYS } from "@/lib/admin/actions/createLe
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 
 /** Always false after Location was removed from the platform minimum key set. */
-export const CREATE_LEAD_PLATFORM_REQUIRES_LOCATION = CREATE_LEAD_PLATFORM_REQUIRED_KEYS.includes(
-    "location_id"
-);
+export const CREATE_LEAD_PLATFORM_REQUIRES_LOCATION = (
+    CREATE_LEAD_PLATFORM_REQUIRED_KEYS as readonly string[]
+).includes("location_id");
 
 /** Pure resolver for tests — platform flag + spec required payload keys. */
 export function resolveCreateLeadLocationRequired(input: {

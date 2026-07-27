@@ -449,6 +449,7 @@ function RelationshipCreatePanel({
             onCreated({
                 id: `vocabulary:${kind}:${normalizedKey}`,
                 label: label.trim(),
+                pluralLabel: null,
                 connectionLabel: VOCABULARY_KIND_LABEL[kind],
                 meaning:
                     kind === "family_role" ?
