@@ -69,13 +69,16 @@ describe("P4.S2 make_primary_contact gate", () => {
         expect(assertDestructiveCommitAllowed({ capabilityKey: "make_primary_contact" }).allowed).toBe(
             true
         );
-        for (const key of ["delete_lead", "archive_lead", "cancel_tour", "withdraw_child"]) {
+        for (const key of ["archive_lead", "cancel_tour", "withdraw_child"]) {
             expect(isDestructiveFacadeCommitAllowlisted(key)).toBe(false);
             expect(assertDestructiveCommitAllowed({ capabilityKey: key }).allowed).toBe(false);
             expect(isCommandRuntimeFacadeExecutionSupported(key)).toBe(false);
         }
+        expect(isDestructiveFacadeCommitAllowlisted("delete_lead")).toBe(true);
+        expect(assertDestructiveCommitAllowed({ capabilityKey: "delete_lead" }).allowed).toBe(true);
         expect(isDestructiveReplacementFacadeSupported("make_primary_contact")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(true);
+        expect(isCommandRuntimeFacadeExecutionSupported("delete_lead")).toBe(true);
     });
 });
 
@@ -395,12 +398,14 @@ describe("P4.S2 executeCommandInvocation integration", () => {
         ).toEqual({ customerId: "cust-1", selectedPersonId: "p-1" });
     });
 
-    it("preparation reports facade commit enabled for make_primary only", () => {
+    it("preparation reports facade commit enabled for make_primary and delete_lead", () => {
         const primary = prepareCommandInvocation(
             baseInvocation({ commandKey: "make_primary_contact" })
         );
         expect(primary.snapshot.destructivePreparation?.facadeCommitEnabled).toBe(true);
         const del = prepareCommandInvocation(baseInvocation({ commandKey: "delete_lead" }));
-        expect(del.snapshot.destructivePreparation?.facadeCommitEnabled).toBe(false);
+        expect(del.snapshot.destructivePreparation?.facadeCommitEnabled).toBe(true);
+        const archive = prepareCommandInvocation(baseInvocation({ commandKey: "archive_lead" }));
+        expect(archive.snapshot.destructivePreparation?.facadeCommitEnabled).toBe(false);
     });
 });

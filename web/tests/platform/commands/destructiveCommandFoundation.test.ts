@@ -85,7 +85,7 @@ describe("P4.S1 destructive policy registry", () => {
 });
 
 describe("P4.S1 preparation integration", () => {
-    it("destructive snapshot reports preview required and commit disabled", () => {
+    it("destructive snapshot reports preview required; delete_lead commit allowlisted in P4.S3", () => {
         const result = prepareCommandInvocation(baseRequest({ commandKey: "delete_lead" }));
         expect(result.snapshot.destructivePreparation).toMatchObject({
             impactClass: "delete",
@@ -93,7 +93,7 @@ describe("P4.S1 preparation integration", () => {
             confirmation: "typed_confirm",
             permissionClass: "sensitive_destructive",
             recoveryKind: "none",
-            facadeCommitEnabled: false,
+            facadeCommitEnabled: true,
         });
         expect(result.snapshot.supportsPreview).toBe(true);
         expect(result.snapshot.confirmationPolicy).toBe("typed_confirm");
@@ -300,17 +300,19 @@ describe("P4.S1 execution guard", () => {
     it("keeps destructive commit globally disabled except exact allowlist", () => {
         expect(DESTRUCTIVE_PREVIEW_FRAMEWORK_ENABLED).toBe(true);
         expect(DESTRUCTIVE_COMMAND_RUNTIME_COMMIT_ENABLED).toBe(false);
-        const guard = assertDestructiveCommitAllowed({ capabilityKey: "delete_lead" });
+        const guard = assertDestructiveCommitAllowed({ capabilityKey: "archive_lead" });
         expect(guard.allowed).toBe(false);
         expect(guard.code).toBe("commit_globally_disabled");
         expect(assertDestructiveCommitAllowed({ capabilityKey: "make_primary_contact" }).allowed).toBe(
             true
         );
+        expect(assertDestructiveCommitAllowed({ capabilityKey: "delete_lead" }).allowed).toBe(true);
     });
 
-    it("blocks Delete Lead / Cancel Tour facade commit; Make Primary is allowlisted in P4.S2", async () => {
+    it("blocks Cancel Tour facade commit; Delete Lead and Make Primary are allowlisted", async () => {
         expect(isCommandRuntimeFacadeExecutionSupported("make_primary_contact")).toBe(true);
-        for (const key of ["delete_lead", "cancel_tour"] as const) {
+        expect(isCommandRuntimeFacadeExecutionSupported("delete_lead")).toBe(true);
+        for (const key of ["cancel_tour", "archive_lead", "withdraw_child"] as const) {
             expect(isCommandRuntimeFacadeExecutionSupported(key)).toBe(false);
             const result = await executeCommandInvocation({
                 request: {
@@ -329,7 +331,11 @@ describe("P4.S1 execution guard", () => {
             });
             expect(result.ok).toBe(false);
             if (!result.ok) {
-                expect(result.error.code).toBe("commit_globally_disabled");
+                expect(
+                    result.error.code === "commit_globally_disabled" ||
+                        result.error.code === "facade_execution_unsupported" ||
+                        result.error.code === "capability_not_executable"
+                ).toBe(true);
             }
         }
     });

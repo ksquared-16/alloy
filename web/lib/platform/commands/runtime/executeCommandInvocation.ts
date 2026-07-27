@@ -25,6 +25,11 @@ import {
     type LeadStatusMutationExecutionDeps,
 } from "@/lib/platform/commands/runtime/adapters/leadStatusMutationExecutionAdapter";
 import {
+    commitDeleteLeadViaAdapter,
+    previewDeleteLeadViaAdapter,
+    type DeleteLeadAdapterDeps,
+} from "@/lib/platform/commands/runtime/adapters/deleteLeadAdapter";
+import {
     commitMakePrimaryContactViaAdapter,
     previewMakePrimaryContactViaAdapter,
     type PrimaryContactReplacementDeps,
@@ -47,7 +52,7 @@ import type {
 import {
     isChildEnrollmentMutationFacadeSupported,
     isCommandRuntimeFacadeExecutionSupported,
-    isDestructiveReplacementFacadeSupported,
+    isDestructiveFacadeSupported,
     isExecutionOwnerEnabledForFacade,
     isLeadStatusMutationFacadeSupported,
     isRelationshipRuntimeFacadeSupported,
@@ -66,7 +71,8 @@ export type ExecuteCommandInvocationOptions = {
         LeadStatusMutationExecutionDeps &
         ChildEnrollmentMutationExecutionDeps &
         RelationshipExecutionDeps &
-        PrimaryContactReplacementDeps;
+        PrimaryContactReplacementDeps &
+        DeleteLeadAdapterDeps;
 };
 
 function createDelegationGuard(invocationId: string): InvocationDelegationGuard {
@@ -297,7 +303,7 @@ export async function executeCommandInvocation(
             snapshot.confirmationPolicy === "strong_confirm" ||
             snapshot.confirmationPolicy === "typed_confirm")
     ) {
-        const destructiveAllowlisted = isDestructiveReplacementFacadeSupported(
+        const destructiveAllowlisted = isDestructiveFacadeSupported(
             snapshot.canonicalCapabilityKey
         );
         if (destructiveAllowlisted && request.confirmation?.confirmed !== true) {
@@ -598,7 +604,7 @@ export async function executeCommandInvocation(
 
     // ── Destructive replacement (P4.S2 make_primary_contact) ────────────────
     if (
-        isDestructiveReplacementFacadeSupported(capability.canonicalCommandKey) &&
+        isDestructiveFacadeSupported(capability.canonicalCommandKey) &&
         capability.canonicalCommandKey === "make_primary_contact"
     ) {
         if (request.mode === "preview") {
@@ -710,6 +716,127 @@ export async function executeCommandInvocation(
                 {
                     code: "delegated_primary_contact_replacement",
                     message: `customer=${committed.result.customer_id} opportunities=${committed.result.opportunities_updated}`,
+                },
+            ],
+        };
+    }
+
+    // ── Destructive delete (P4.S3 delete_lead) ───────────────────────────────
+    if (
+        isDestructiveFacadeSupported(capability.canonicalCommandKey) &&
+        capability.canonicalCommandKey === "delete_lead"
+    ) {
+        if (request.mode === "preview") {
+            const previewed = await previewDeleteLeadViaAdapter({
+                orgId: server.orgId,
+                supabase: server.supabase,
+                entityType,
+                entityId,
+                inputValues: invocation.inputValues,
+                trustedServerContext: true,
+                deps,
+            });
+            if (!previewed.ok) {
+                return fail({
+                    status:
+                        previewed.code === "permission_denied" ||
+                        previewed.code === "untrusted_context"
+                            ? "unauthorized"
+                            : previewed.code === "lead_not_found"
+                              ? "unavailable"
+                              : "blocked",
+                    invocationId,
+                    canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                    executionOwner: "admin_action",
+                    code: previewed.code,
+                    operatorMessage: previewed.operatorMessage,
+                });
+            }
+            return {
+                ok: true,
+                status: "previewed",
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "admin_action",
+                invocationId,
+                impactPreview: previewed.preview,
+                diagnostics: [
+                    {
+                        code: "destructive_delete_preview",
+                        message: `key=delete_lead blocked=${previewed.state.domainPreview.blocked}`,
+                    },
+                ],
+            };
+        }
+
+        const token = (request.previewToken ?? "").trim();
+        if (!token) {
+            return fail({
+                status: "invalid",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "admin_action",
+                code: "preview_token_required",
+                operatorMessage: "A preview token is required to commit this command.",
+            });
+        }
+
+        const committed = await commitDeleteLeadViaAdapter({
+            orgId: server.orgId,
+            userId: server.userId,
+            actorRole: server.actorRole,
+            supabase: server.supabase,
+            entityType,
+            entityId,
+            inputValues: invocation.inputValues,
+            previewToken: token,
+            confirmation: request.confirmation ?? { confirmed: false },
+            trustedServerContext: true,
+            clientPermissionClass:
+                typeof invocation.inputValues?.permissionClass === "string"
+                    ? invocation.inputValues.permissionClass
+                    : null,
+            clientImpactClass:
+                typeof invocation.inputValues?.impactClass === "string"
+                    ? invocation.inputValues.impactClass
+                    : null,
+            guard,
+            deps,
+        });
+
+        if (!committed.ok) {
+            return fail({
+                status:
+                    committed.code === "confirmation_required" ||
+                    committed.code === "typed_confirmation_mismatch"
+                        ? "confirmation_required"
+                        : committed.code === "permission_denied" ||
+                            committed.code === "untrusted_context"
+                          ? "unauthorized"
+                          : committed.code === "stale_preview" ||
+                              committed.code === "deletion_blocked" ||
+                              committed.code === "lead_not_found"
+                            ? "blocked"
+                            : "failed",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "admin_action",
+                code: committed.code,
+                operatorMessage: committed.operatorMessage,
+                delegated: committed.delegated,
+            });
+        }
+
+        return {
+            ok: true,
+            status: "committed",
+            canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+            executionOwner: "admin_action",
+            invocationId,
+            deleteLeadResult: committed.result,
+            diagnostics: [
+                {
+                    code: "delegated_delete_lead",
+                    message: `opportunity=${committed.result.opportunity_id} audit=${committed.result.audit_logged}`,
                 },
             ],
         };

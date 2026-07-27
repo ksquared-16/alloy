@@ -423,6 +423,10 @@ Every action uses the same seven-section surface:
 6. **Projection preview** — what UI changes
 7. **Confirmation** — a generated natural-language statement; submit button says the action
 
+Destructive delete via Command Runtime (`delete_lead`, P4.S3) additionally requires an authoritative
+impact preview, server-derived typed confirmation, and a correlated preview token before commit.
+Domain deletion semantics are unchanged (hard-delete opportunity graph; work units retained).
+
 **Placement rules:**
 - Subject is the Focus Panel subject → command renders inline in Focus Panel (no modal)
 - Initiated from queue/list → side panel slides in from right

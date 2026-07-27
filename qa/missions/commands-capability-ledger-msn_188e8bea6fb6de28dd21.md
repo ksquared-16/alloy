@@ -36,7 +36,7 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 | `complete_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | |
 | `no_show_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Alias `mark_tour_no_show` |
 | `reopen_tour` | same | unavailable | none | hidden | n/a | P5 contract | Execute deferred |
-| `delete_lead` | same | adapted | admin_action | internal_only | yes | P4 | **delete** policy (P4.S1); facade commit disabled; preview API exists |
+| `delete_lead` | same | adapted | admin_action | internal_only | yes | **P4.S3** | **delete** hard-delete cutover → `executeDeleteOpportunityLead`; direct POST delete remains |
 | `archive_lead` | same | unavailable | none | hidden | n/a | P4 | **archive** policy classified; stub only |
 | `reopen_lead` | same | unavailable | none | hidden | n/a | P4+ | Missing |
 | `withdraw_child` | same | unavailable | none | hidden | n/a | P4+ | **withdraw** policy classified; planned/stub |
@@ -309,18 +309,18 @@ Layout contact-row → confirm modal → client PATCH → `setHouseholdPrimaryCo
 | Date | 2026-07-27 |
 | Evidence | `qa/missions/commands-p4-destructive-foundation-msn_188e8bea6fb6de28dd21.md` |
 | Module | `web/lib/platform/commands/runtime/destructive/` |
-| Facade commit | **Disabled** (`DESTRUCTIVE_COMMAND_RUNTIME_COMMIT_ENABLED = false`) |
-| Production cutovers | **None** |
+| Facade commit | Exact allowlist only (`make_primary_contact`, `delete_lead` as of P4.S3) |
+| Production cutovers | P4.S2 + P4.S3 (see below) |
 
-## Classified (policy only)
+## Classified (policy)
 
-| Key | Impact | Confirm | Permission | Recovery |
-|-----|--------|---------|------------|----------|
-| `delete_lead` | delete | typed_confirm | sensitive_destructive | none |
-| `archive_lead` | archive | strong_confirm | standard_destructive | restore |
-| `make_primary_contact` | replace | strong_confirm | replacement | restore |
-| `cancel_tour` | cancel | strong_confirm | standard_destructive | schedule_new |
-| `withdraw_child` | withdraw | strong_confirm | sensitive_destructive | manual_support |
+| Key | Impact | Confirm | Permission | Recovery | Facade commit |
+|-----|--------|---------|------------|----------|---------------|
+| `delete_lead` | delete | typed_confirm | sensitive_destructive | none | **enabled (P4.S3)** |
+| `archive_lead` | archive | strong_confirm | standard_destructive | restore | disabled |
+| `make_primary_contact` | replace | strong_confirm | replacement | restore | **enabled (P4.S2)** |
+| `cancel_tour` | cancel | strong_confirm | standard_destructive | schedule_new | disabled |
+| `withdraw_child` | withdraw | strong_confirm | sensitive_destructive | manual_support | disabled |
 
 ## Preview correlation
 
@@ -334,6 +334,20 @@ HMAC-SHA256 compact claims; TTL + version; no DB store; not an idempotency key.
 |-------|-------|
 | Date | 2026-07-27 |
 | Evidence | `qa/missions/commands-p4-destructive-foundation-msn_188e8bea6fb6de28dd21.md` (P4.S2) |
-| Facade | **Enabled** for `make_primary_contact` only |
+| Facade | **Enabled** for `make_primary_contact` (exact allowlist; with `delete_lead` as of P4.S3) |
 | Domain | `setHouseholdPrimaryContactForCustomer` (unchanged) |
 | Direct API | Compatibility retained (no preview token required) |
+
+---
+
+# P4.S3 — Delete Lead Destructive Cutover
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p4-destructive-foundation-msn_188e8bea6fb6de28dd21.md` (P4.S3) |
+| Facade | **Enabled** for `delete_lead` (exact allowlist) |
+| Domain | `executeDeleteOpportunityLead` → `executeOpportunityLeadDeletionGraph` (unchanged) |
+| Kind | Hard delete; work units retained; recovery none |
+| Typed confirm | `opportunity_name` ≤64 or `DELETE` |
+| Direct API | POST `.../opportunities/:id/delete` unchanged (Option A) |

@@ -90,7 +90,6 @@ Focused: `web/tests/platform/commands/destructiveCommandFoundation.test.ts` (+ P
 
 | Key | Facade commit |
 |-----|---------------|
-| `delete_lead` | disabled |
 | `archive_lead` | disabled |
 | `cancel_tour` | disabled |
 | `withdraw_child` | disabled |
@@ -131,14 +130,79 @@ Current floor: requireAdminOrOps
 Future class: replacement (seam only; no new org permission keys)
 ```
 
-## Confirmation
+---
 
-```text
-P4.S1 safety foundation only
-No production destructive execution cutover
-No Delete Lead exposure
-No make-primary cutover
-No Tour cancellation cutover
-No schema or API change
-No operator behavior change
-```
+# P4.S3 — Delete Lead Destructive Cutover
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Capability | `delete_lead` |
+| Impact | `delete` (hard delete) |
+| Subject grain | Opportunity |
+| Final executor | `executeDeleteOpportunityLead` → `executeOpportunityLeadDeletionGraph` |
+| Preview adapter | `web/lib/platform/commands/runtime/adapters/deleteLeadAdapter.ts` (`previewDeleteLeadViaAdapter`) |
+| Commit adapter | same file (`commitDeleteLeadViaAdapter`) |
+| Commit | **Enabled** (exact allowlist with `make_primary_contact`) |
+| Direct API | POST `/api/admin/opportunities/:id/delete` **unchanged** (Option A) |
+| Preview API | GET `/api/admin/opportunities/:id/delete-preview` remains |
+| Auth floor | `requireAdminOrOps` on actions/execute + direct delete; future class `sensitive_destructive` |
+
+## Current Delete Lead behavior table (proven)
+
+| Concern | Current behavior |
+|---------|------------------|
+| Subject grain | Opportunity (`opportunities.id`) |
+| Final executor | `executeDeleteOpportunityLead` → graph hard-delete |
+| Hard/soft | **Hard delete** (not soft-delete/archive/tombstone) |
+| Opportunity record | Deleted |
+| Customer/person identity | Conditionally deleted only when unreferenced; otherwise retained |
+| Opportunity members (OCM) | Deleted with opportunity |
+| Relationships | Opportunity-scoped links removed with graph; retained persons keep other links |
+| Work unit | **Not deleted** (explicit domain comment) |
+| Communications | Opportunity-scoped threads/messages/scheduled sends deleted |
+| Tours / placements | Placement candidates (+ related tour graph per domain) deleted |
+| Documents / form submissions / tasks / field values | Opportunity-scoped deleted |
+| Scheduling | No general schedules table wipe beyond tour/placement graph |
+| Events | Opportunity/entity `workflow_events` (+ related runs/outbox) deleted — not a new emit |
+| Audit/history | `logAdminAudit` console entry; no restore ledger |
+| Projections | No separate Command Runtime refresh; domain/route behavior unchanged |
+| Recovery | **none** |
+| Authorization | admin/ops floor |
+| Confirmation (facade) | typed_confirm (strengthened vs direct API) |
+| Response (facade) | destructive envelope + `delete_lead_result` counts |
+
+## Typed confirmation
+
+Server-derived: `opportunity_name` truncated to 64 chars, else `DELETE`. Visible in preview; client cannot choose the required value; BOS/API/automation cannot bypass.
+
+## Fingerprint / stale preview
+
+Token version: `opp:{id}|blocked:{0\|1}|impact:{sha256(will_delete+will_retain)[:32]}`. Commit re-previews domain, recomputes version, validates HMAC claims. TTL alone insufficient. Material impact change → `stale_preview`.
+
+## Exactly-once
+
+One facade commit → one adapter → one `executeDeleteOpportunityLead` → zero Relationship/Mutation/RegisteredAction fallback. Adapter does not import deletion graph DB helpers or re-emit audit/events.
+
+## Behavior-parity matrix
+
+| Concern | Direct POST delete | Facade path | Notes |
+|---------|-------------------|-------------|-------|
+| Authorization | requireAdminOrOps | same floor + server permission class | preserved |
+| Lead lookup | org-scoped opportunity | same domain preview | preserved |
+| Work-unit handling | not deleted | same | preserved |
+| Dependent cleanup | deletion graph | same executor | preserved |
+| Person/customer retention | conditional orphans | same | preserved |
+| Events | workflow_events deleted | same | preserved |
+| Audit | logAdminAudit | same | preserved |
+| Projections | unchanged | unchanged | preserved |
+| Response | delete counts | compatible + envelope | preserved |
+| Confirmation | route-level (no typed token) | preview + typed + token | **intentionally strengthened** |
+
+## Tests (2026-07-27)
+
+P0–P4.S3 focused + delete domain: **14 files / 173 passed**. Production `npm run typecheck`: **pass**. `typecheck:tests`: deferred (machine pressure; doctrine optional for this slice).
+
+## Remaining destructive (commit disabled)
+
+`archive_lead`, `cancel_tour`, `withdraw_child`.

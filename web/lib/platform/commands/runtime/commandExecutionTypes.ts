@@ -9,6 +9,7 @@ import type { MutationResult } from "@/lib/mutations/types";
 import type { CapabilityExecutionOwner } from "@/lib/platform/commands/capabilityTypes";
 import type { CommandImpactPreview } from "@/lib/platform/commands/runtime/destructive/commandImpactPreviewTypes";
 import type { MakePrimaryReplacementResult } from "@/lib/platform/commands/runtime/adapters/primaryContactReplacementAdapter";
+import type { DeleteLeadReplacementResult } from "@/lib/platform/commands/runtime/adapters/deleteLeadAdapter";
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 
 export type CommandExecutionMode = "preview" | "execute";
@@ -51,6 +52,8 @@ export type ExecuteCommandInvocationRequest = {
 export type ExecuteCommandInvocationServerContext = {
     orgId: string;
     userId?: string | null;
+    /** Portal compatibility role for audit (admin|ops). */
+    actorRole?: string | null;
     accessScope?: import("@/lib/admin/accessScope").AdminAccessScopeDimensions | null;
     supabase: import("@supabase/supabase-js").SupabaseClient;
 };
@@ -83,6 +86,8 @@ export type CommandExecutionResult =
           relationshipResult?: RelationshipActionExecutionResult;
           /** Replacement Command result (P4.S2 make_primary_contact). */
           replacementResult?: MakePrimaryReplacementResult;
+          /** Destructive delete result (P4.S3 delete_lead). */
+          deleteLeadResult?: DeleteLeadReplacementResult;
           /** Operator-safe impact preview (destructive/replacement). */
           impactPreview?: CommandImpactPreview;
           diagnostics: readonly { code: string; message: string }[];

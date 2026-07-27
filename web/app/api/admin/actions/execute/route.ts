@@ -75,6 +75,9 @@ type ExecuteBody = {
     /** Optional preview mode — defaults to execute (preserves historical route). */
     mode?: "preview" | "execute";
     confirmation?: { confirmed?: boolean; confirmationValue?: string };
+    /** Correlated destructive/replacement preview token (P4). */
+    preview_token?: string;
+    previewToken?: string;
 };
 
 function mapOrigin(raw: string | null | undefined): CommandInvocationOrigin {
@@ -179,6 +182,7 @@ export async function POST(request: NextRequest) {
                 server: {
                     orgId: runtimeCtx.orgId,
                     userId: runtimeCtx.userId,
+                    actorRole: ctx.role,
                     accessScope: runtimeCtx.accessScope,
                     supabase,
                 },
@@ -220,7 +224,9 @@ export async function POST(request: NextRequest) {
                           ? "child_enrollment_mutation"
                           : "lead_status_mutation"
                       : result.executionOwner === "admin_action"
-                        ? "primary_contact_replacement"
+                        ? result.ok && "deleteLeadResult" in result && result.deleteLeadResult
+                          ? "delete_lead"
+                          : "primary_contact_replacement"
                         : "registered_action";
 
             logCommandExecutePathDiagnostic({
@@ -349,10 +355,37 @@ export async function POST(request: NextRequest) {
                 return apiOk(
                     {
                         execution_result: {
-                            kind: "replacement_preview",
+                            kind:
+                                result.canonicalCapabilityKey === "delete_lead"
+                                    ? "destructive_preview"
+                                    : "replacement_preview",
                             impact_preview: result.impactPreview,
                         },
                         affected_id: entityId,
+                    },
+                    { request, correlationId: result.invocationId }
+                );
+            }
+
+            if (result.executionOwner === "admin_action" && result.deleteLeadResult) {
+                try {
+                    revalidateTag(adminActionsOrgTag(ctx.orgId), "max");
+                } catch (e) {
+                    console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
+                }
+                return apiOk(
+                    {
+                        execution_result: {
+                            kind: "destructive_delete",
+                            delete_lead_result: result.deleteLeadResult,
+                        },
+                        ok: true,
+                        result: {
+                            deleted: result.deleteLeadResult.deleted,
+                            orphans: result.deleteLeadResult.orphans,
+                            audit_logged: result.deleteLeadResult.audit_logged,
+                        },
+                        affected_id: result.deleteLeadResult.opportunity_id,
                     },
                     { request, correlationId: result.invocationId }
                 );

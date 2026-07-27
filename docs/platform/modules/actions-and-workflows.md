@@ -97,9 +97,10 @@ disabled**. No Delete Lead / Make Primary / Cancel Tour production cutover in P4
 - `mark_lost` remains on legacy compatibility (`executeAdminAction`); not consolidated
 - Enrollment aliases (`move_to_waitlist`, `approve_enrollment`) remain outside exact-key facade cutover
 - Remaining Relationship keys (Add Family Member hub) remain outside facade cutover
-- **P4.S2:** `make_primary_contact` — destructive/replacement allowlist → primary-contact adapter →
-  `setHouseholdPrimaryContactForCustomer` (preview + strong confirm + preview token). Direct
-  `PATCH .../household-primary-contact` remains a compatibility path without facade tokens.
+- **P4.S2:** `make_primary_contact` — replacement adapter → `setHouseholdPrimaryContactForCustomer`
+- **P4.S3:** `delete_lead` — destructive adapter → `executeDeleteOpportunityLead` (hard delete; typed
+  confirm + preview token). Direct `POST .../opportunities/:id/delete` remains compatibility (Option A).
+  Archive / cancel tour / withdraw remain commit-disabled.
 
 ### Destructive / replacement Command policy (P4.S1)
 
@@ -111,9 +112,10 @@ Shared server contract under `web/lib/platform/commands/runtime/destructive/`:
   `strong_confirm` | `typed_confirm`), and a **permission class** (server-owned; client cannot weaken)
 - Preview correlation: HMAC-SHA256 token (compact claims; no full payload; TTL + version match)
 - Domain adapters own real impact discovery; shared runtime does not scan domain tables
-- **P4.S1 state:** destructive preview framework enabled; **commit through Command Runtime disabled**
-- Representative policies: `delete_lead`, `archive_lead`, `make_primary_contact`, `cancel_tour`,
-  `withdraw_child` — classified only; existing routes/UI unchanged
+- **P4.S1 state:** destructive preview framework enabled; commit globally disabled until exact allowlist
+- **P4.S2–S3 exact commit allowlist:** `make_primary_contact`, `delete_lead` only
+- Representative policies also classify (commit still disabled): `archive_lead`, `cancel_tour`,
+  `withdraw_child` — existing routes/UI unchanged for those keys
 
 `POST /api/admin/actions/execute` remains the operator/API route name. Dedicated
 `/api/admin/relationship-actions/execute` remains available. `/api/admin/mutations/execute`

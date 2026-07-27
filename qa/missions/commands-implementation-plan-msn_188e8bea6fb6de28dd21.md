@@ -10,7 +10,7 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → P1.S1 → P1.S2 → P2.S1 → P2.S2 → P3.S1 → P3.S2 → P3.S3 → P3.S4 certified → P4.S1 foundation → **P4.S2 make_primary_contact replacement cutover**. Next: later P4 destructive cutovers (Delete Lead / etc.).
+**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → … → P4.S1 foundation → P4.S2 make_primary_contact → **P4.S3 delete_lead hard-delete cutover**. Next: archive_lead / cancel_tour / withdraw as separate slices.
 
 ---
 
@@ -323,7 +323,7 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 |----|-------|
 | **P4.S1** | Destructive/replacement policy + preview + correlation + commit-disabled guard (**shipped**) |
 | **P4.S2** | Make Primary Contact replacement preview + facade cutover (**shipped**) |
-| **P4.S3** | Delete Lead via Runtime + Manage wiring |
+| **P4.S3** | Delete Lead via Runtime + typed confirm (**shipped**) |
 | **P4.S4** | Archive Lead Capability (implement or explicit unsupported) |
 | **P4.S5** | Remove / Revoke relationship Capabilities |
 

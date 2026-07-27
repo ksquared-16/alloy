@@ -3,7 +3,10 @@
  * Keep this module free of registry/guard imports to avoid cycles.
  */
 
-export const DESTRUCTIVE_FACADE_COMMIT_ALLOWLIST = ["make_primary_contact"] as const;
+export const DESTRUCTIVE_FACADE_COMMIT_ALLOWLIST = [
+    "make_primary_contact",
+    "delete_lead",
+] as const;
 
 export type DestructiveFacadeCommitAllowlistKey =
     (typeof DESTRUCTIVE_FACADE_COMMIT_ALLOWLIST)[number];

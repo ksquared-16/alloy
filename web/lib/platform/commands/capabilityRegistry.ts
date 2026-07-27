@@ -419,7 +419,7 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         confirmationPolicy: "typed_confirm",
         destructiveKind: "delete",
         implementationStatus: "partial",
-        reason: "Hard-delete service + preview API exist; Manage UI wiring incomplete — keep internal until later P4 cutover. P4.S1: delete policy classified; facade commit disabled.",
+        reason: "Hard-delete via executeDeleteOpportunityLead. P4.S3: facade preview+typed confirm+commit. Direct POST /api/admin/opportunities/:id/delete remains compatibility (Option A).",
     }),
     def({
         capabilityKey: "archive_lead",

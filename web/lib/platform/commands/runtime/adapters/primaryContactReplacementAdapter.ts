@@ -217,7 +217,7 @@ export function buildMakePrimaryImpactPreview(input: {
             policy.previewFreshness.mode === "ttl" ? policy.previewFreshness.seconds : 300,
     });
 
-    const affectedRecords: CommandImpactPreview["affectedRecords"] = [
+    const affectedRecords: Array<CommandImpactPreview["affectedRecords"][number]> = [
         {
             type: "person",
             id: state.selectedPersonId,
@@ -255,8 +255,8 @@ export function buildMakePrimaryImpactPreview(input: {
         });
     }
 
-    const blockers: CommandImpactPreview["blockers"] = [];
-    const warnings: CommandImpactPreview["warnings"] = [
+    const blockers: Array<{ code: string; message: string }> = [];
+    const warnings: Array<{ code: string; message: string }> = [
         {
             code: "prior_contact_remains_linked",
             message:

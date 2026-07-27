@@ -45,23 +45,15 @@ export function assertCommandSnapshotInvariants(
             }
         }
         if (snapshot.destructivePreparation) {
-            const allowlisted = snapshot.destructivePreparation.facadeCommitEnabled === true;
-            if (
-                snapshot.destructivePreparation.facadeCommitEnabled !== false &&
-                !allowlisted
-            ) {
-                // only boolean true/false allowed
+            const allowlisted =
+                snapshot.canonicalCapabilityKey === "make_primary_contact" ||
+                snapshot.canonicalCapabilityKey === "delete_lead";
+            if (allowlisted && snapshot.destructivePreparation.facadeCommitEnabled !== true) {
+                errors.push(
+                    `${snapshot.canonicalCapabilityKey} must report facadeCommitEnabled true when allowlisted`
+                );
             }
-            if (
-                snapshot.canonicalCapabilityKey === "make_primary_contact" &&
-                snapshot.destructivePreparation.facadeCommitEnabled !== true
-            ) {
-                errors.push("make_primary_contact must report facadeCommitEnabled true in P4.S2");
-            }
-            if (
-                snapshot.canonicalCapabilityKey !== "make_primary_contact" &&
-                snapshot.destructivePreparation.facadeCommitEnabled !== false
-            ) {
+            if (!allowlisted && snapshot.destructivePreparation.facadeCommitEnabled !== false) {
                 errors.push(
                     "non-allowlisted destructivePreparation.facadeCommitEnabled must be false"
                 );

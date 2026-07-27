@@ -95,19 +95,29 @@ export function isRelationshipRuntimeFacadeSupported(commandKey: string): boolea
     return (RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS as readonly string[]).includes(key);
 }
 
-export const DESTRUCTIVE_REPLACEMENT_FACADE_COMMAND_KEYS = [
+export const DESTRUCTIVE_FACADE_COMMAND_KEYS = [
     "make_primary_contact",
+    "delete_lead",
 ] as const;
 
-export type DestructiveReplacementFacadeCommandKey =
-    (typeof DESTRUCTIVE_REPLACEMENT_FACADE_COMMAND_KEYS)[number];
+export type DestructiveFacadeCommandKey = (typeof DESTRUCTIVE_FACADE_COMMAND_KEYS)[number];
 
-export function isDestructiveReplacementFacadeSupported(commandKey: string): boolean {
+/** @deprecated Prefer {@link isDestructiveFacadeSupported}. */
+export const DESTRUCTIVE_REPLACEMENT_FACADE_COMMAND_KEYS = DESTRUCTIVE_FACADE_COMMAND_KEYS;
+
+export type DestructiveReplacementFacadeCommandKey = DestructiveFacadeCommandKey;
+
+export function isDestructiveFacadeSupported(commandKey: string): boolean {
     const key = (commandKey ?? "").trim();
     return (
-        (DESTRUCTIVE_REPLACEMENT_FACADE_COMMAND_KEYS as readonly string[]).includes(key) &&
+        (DESTRUCTIVE_FACADE_COMMAND_KEYS as readonly string[]).includes(key) &&
         isDestructiveCapabilityCommitEnabled(key)
     );
+}
+
+/** @deprecated Prefer {@link isDestructiveFacadeSupported}. */
+export function isDestructiveReplacementFacadeSupported(commandKey: string): boolean {
+    return isDestructiveFacadeSupported(commandKey);
 }
 
 /**
@@ -122,10 +132,10 @@ export function isCommandRuntimeFacadeExecutionSupported(commandKey: string): bo
     if (resolved.status !== "known") return false;
     const cap = resolved.capability;
 
-    // P4.S2: exact destructive/replacement allowlist (preview + commit).
+    // P4.S2/S3: exact destructive/replacement allowlist (preview + commit).
     if (
         isDestructiveOrReplacementCapability(cap.canonicalCommandKey) &&
-        isDestructiveReplacementFacadeSupported(cap.canonicalCommandKey)
+        isDestructiveFacadeSupported(cap.canonicalCommandKey)
     ) {
         return true;
     }
