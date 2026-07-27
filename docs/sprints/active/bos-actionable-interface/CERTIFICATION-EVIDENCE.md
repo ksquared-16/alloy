@@ -22,7 +22,7 @@ last_reviewed: 2026-07-27
 | WP-09 | `ed7ccfec2` |
 | WP-10 | `b41c39218` |
 | WP-11 | `b409497a8` |
-| WP-12 | (this certification commit) |
+| WP-12 | `6ce732bdf` |
 | Push | **local only — not pushed** |
 
 ## Automated suites (WP-12)

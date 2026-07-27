@@ -19,4 +19,4 @@ last_reviewed: 2026-07-27
 | WP-09 | done | `ed7ccfec2` | Preview confirm execute |
 | WP-10 | done | `b41c39218` | Processing review + success |
 | WP-11 | done | `b409497a8` | Actions → BOS session; modal flag fallback |
-| WP-12 | done | pending commit | Certification + docs; live QA deferred to product-owner |
+| WP-12 | done | `6ce732bdf` | Certification + docs; live QA deferred to product-owner |
