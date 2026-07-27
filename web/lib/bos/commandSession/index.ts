@@ -83,3 +83,15 @@ export {
 } from "@/lib/bos/commandSession/draftEdits";
 
 export { isBosCreateLeadSessionEnabled } from "@/lib/bos/commandSession/bosCreateLeadSessionFlag";
+
+export {
+    CONVERSATION_INTAKE_SUPPORTED_VALUE_KINDS,
+    buildEffectiveCreateLeadIntakeSpec,
+    createLeadConversationIntakeAdapter,
+    eligiblePayloadFromConversationDraft,
+    labelForEffectiveField,
+    type ConversationClarification,
+    type ConversationIntakeAdapter,
+    type ConversationUnderstandingSummary,
+    type EffectiveCreateLeadIntakeSpec,
+} from "@/lib/bos/commandSession/conversationIntake";
