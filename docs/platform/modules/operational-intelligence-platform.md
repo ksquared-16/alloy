@@ -1,13 +1,13 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-27
 supersedes: []
 ---
 
 # Operational Intelligence Platform
 
-**Status:** Canonical platform module doc (Phase 0 MVP + Phase 1 expansion).
+**Status:** Canonical platform module doc (Phase 0 MVP + Phase 1 expansion). **Amended 2026-07-27:** measurements remain downstream consumers of **published** Operational Calculation results (platform Definitions and Organization Calculations). OI owns targets, health, snapshots, and trends — not calculation math. See [`../core/operational-calculations.md`](../core/operational-calculations.md) §3.1.
 
 Alloy's measurement layer: **Events → Metrics → KPIs → Insights → Dashboards → Reports**.
 
@@ -35,8 +35,10 @@ Reports are a byproduct of the measurement system — not the foundation.
 |---|--------|-----|
 | **What** | Computed measurement | Metric + accountability |
 | **Example** | Median time to schedule tour = 36h | Target < 48h |
-| **Defined in** | TypeScript registry | KPI registry + target config |
-| **Config** | None (code-owned math) | Targets, thresholds, pack enablement |
+| **Defined in** | TypeScript registry **or** published Organization Calculation result binding | KPI registry + target config |
+| **Config** | None for code-owned metric math; org may bind a published calculation as a measurement source | Targets, thresholds, pack enablement |
+
+> **Path B (2026-07-27).** Organization Calculations author **read-only derived truth** via a typed AST over approved platform functions ([`../core/operational-calculations.md`](../core/operational-calculations.md) §3.1). Operational Intelligence does **not** author those calculations. When a measurement is bound to a published calculation, OI still owns only accountability overlays (targets/health/history).
 
 ---
 
