@@ -6,7 +6,7 @@
 import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
 import { actionIntakeFieldToGatherField } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
-import { operationalSectionTitle } from "@/lib/bos/commandSession/createLeadUnderstandingPresentation";
+import { lifecycleEntityLabel } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 
 export type CreateLeadEntityFormSection = {
     /** Intake entity key: person | child | opportunity | household | … */
@@ -27,17 +27,42 @@ function sectionKeyForEntity(entity: string): string {
     return entity;
 }
 
+/** Canonical entity fallbacks — never Parent / Guardian (that is a relationship role). */
 function defaultLabel(entity: string, fallback: string): string {
-    if (entity === "person") return operationalSectionTitle("person", fallback || "Parent / Guardian");
-    if (entity === "child") return operationalSectionTitle("child", fallback || "Child");
-    if (entity === "opportunity") return "Lead";
-    if (entity === "household") return "Household";
-    return fallback || entity;
+    const cleaned = fallback.trim();
+    const isStaleRoleOrPlacement =
+        /^placement/i.test(cleaned) ||
+        /preferences/i.test(cleaned) ||
+        /^context$/i.test(cleaned) ||
+        /^parent\s*\/\s*guardian$/i.test(cleaned);
+
+    if (entity === "person") {
+        if (cleaned && !isStaleRoleOrPlacement && !/^person$/i.test(cleaned)) return cleaned;
+        return lifecycleEntityLabel("person");
+    }
+    if (entity === "child") {
+        if (cleaned && !isStaleRoleOrPlacement && !/^child$/i.test(cleaned)) return cleaned;
+        return lifecycleEntityLabel("child");
+    }
+    if (entity === "opportunity") {
+        if (
+            cleaned &&
+            !isStaleRoleOrPlacement &&
+            !/^opportunity$/i.test(cleaned) &&
+            !/^lead$/i.test(cleaned)
+        ) {
+            return cleaned;
+        }
+        return "Lead";
+    }
+    if (entity === "household") return cleaned || "Household";
+    return cleaned || entity;
 }
 
 /**
  * Project full ActionIntakeSpec into entity-owned Form sections.
  * Every required/recommended/optional field is assigned; none silently omitted.
+ * Entities absent from the effective spec produce no section.
  */
 export function projectCreateLeadEntityFormSections(
     intakeSpec: ActionIntakeSpec | null | undefined,
@@ -54,7 +79,6 @@ export function projectCreateLeadEntityFormSections(
                 else additionalFields.push(gather);
             }
             if (requiredFields.length === 0 && additionalFields.length === 0) continue;
-            // Household only when fields exist (already gated by non-empty).
             sections.push({
                 key: sectionKeyForEntity(group.entity),
                 label: defaultLabel(group.entity, group.entity_label),
@@ -105,7 +129,6 @@ export function projectCreateLeadFormSections(
     return entitySections.map((section) => ({
         key: section.key === "opportunity" ? "context" : section.key,
         label: section.label,
-        // Host still receives a flat field list; Required vs Additional is applied in presentation.
         fields: [...section.requiredFields, ...section.additionalFields],
     }));
 }
@@ -116,7 +139,6 @@ export function everyRequiredKeyHasFormControl(input: {
     sections: Array<{ fields: readonly ActionWorkspaceGatherField[] }>;
 }): { ok: true } | { ok: false; missingControls: string[] } {
     const visible = new Set(input.sections.flatMap((s) => s.fields.map((f) => f.payload_key)));
-    // Person identity may be edited via repeaters rather than scalar gather controls.
     const repeaterCovered = new Set([
         "first_name",
         "last_name",
@@ -132,4 +154,24 @@ export function everyRequiredKeyHasFormControl(input: {
         (key) => !visible.has(key) && !repeaterCovered.has(key)
     );
     return missing.length ? { ok: false, missingControls: missing } : { ok: true };
+}
+
+/** Payload keys present on the effective intake (required + recommended + optional). */
+export function effectiveCreateLeadPayloadKeys(spec: ActionIntakeSpec | null | undefined): Set<string> {
+    const keys = new Set<string>();
+    if (!spec) return keys;
+    for (const field of [...spec.required, ...spec.recommended, ...spec.optional]) {
+        keys.add(field.payload_key);
+    }
+    return keys;
+}
+
+/** Entity keys present on the effective intake groups. */
+export function effectiveCreateLeadEntities(spec: ActionIntakeSpec | null | undefined): Set<string> {
+    const entities = new Set<string>();
+    if (!spec?.groups?.length) return entities;
+    for (const group of spec.groups) {
+        if (group.fields.length) entities.add(group.entity);
+    }
+    return entities;
 }

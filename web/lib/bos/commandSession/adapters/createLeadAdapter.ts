@@ -22,6 +22,13 @@ import {
     summarizeCommitChildren,
     summarizeCommitParents,
 } from "@/lib/bos/commandSession/createLeadRepeaterDraft";
+import {
+    filterCommitSelectionToEffectiveIntake,
+    filterDraftValuesToEffectiveIntake,
+    filterParsedHouseholdForEffectiveIntake,
+    filterPayloadToEffectiveIntake,
+} from "@/lib/bos/commandSession/createLeadEffectiveIntakeFilter";
+import { effectiveCreateLeadEntities } from "@/lib/bos/commandSession/createLeadFormSectionProjection";
 import type {
     BosCommandAdapter,
     BosCommandDraft,
@@ -76,10 +83,29 @@ export function applyCreateLeadParseToDraft(
     };
 
     if (extraction.household != null) {
-        next = applyParsedHouseholdToDraft(next, extraction.household);
+        const filteredHousehold = filterParsedHouseholdForEffectiveIntake(
+            extraction.household,
+            ctx.spec
+        );
+        next = applyParsedHouseholdToDraft(next, filteredHousehold);
+        const selection = filterCommitSelectionToEffectiveIntake(
+            resolveCreateLeadCommitSelectionFromDraft(next),
+            ctx.spec
+        );
+        next = { ...next, household: selection };
     }
 
+    const effectiveKeys = new Set(
+        [...ctx.spec.required, ...ctx.spec.recommended, ...ctx.spec.optional].map(
+            (f) => f.payload_key
+        )
+    );
+
     for (const field of extraction.fields) {
+        if (effectiveKeys.size > 0 && !effectiveKeys.has(field.payload_key)) {
+            // Keep source text / unmapped evidence; do not materialize excluded fields.
+            continue;
+        }
         const state = confidenceToState(field.confidence);
         // High confidence overwrites empty or prior parsed/inferred; never clobber operator edits.
         const existing = next.values.find((v) => v.fieldKey === field.payload_key);
@@ -118,7 +144,7 @@ export function applyCreateLeadParseToDraft(
         });
     }
 
-    return next;
+    return filterDraftValuesToEffectiveIntake(next, ctx.spec);
 }
 
 function resolutionFromSnapshot(
@@ -162,13 +188,15 @@ export function buildCreateLeadBosPreview(
     draft: BosCommandDraft,
     ctx: CreateLeadAdapterContext
 ): BosCommandPreview {
-    const payload = bosDraftToEligiblePayload(draft);
+    const rawPayload = bosDraftToEligiblePayload(draft);
+    const payload = filterPayloadToEffectiveIntake(rawPayload, ctx.spec);
     const snapshot = deriveCreateLeadCommandFromBosProposal({
         parsedValues: payload,
         departmentId: ctx.departmentId,
         workUnitId: ctx.workUnitId,
         configRequiredInputs: ctx.configRequiredInputs,
     });
+    const entities = effectiveCreateLeadEntities(ctx.spec);
     const name = [payload.first_name, payload.last_name].filter(Boolean).join(" ").trim();
     const summaryLines: string[] = [...(snapshot.preview.changes ?? [])];
     if (name && !summaryLines.some((line) => line.includes(name))) {
@@ -176,7 +204,10 @@ export function buildCreateLeadBosPreview(
     }
     if (payload.email) summaryLines.push(`Email: ${String(payload.email)}`);
     if (payload.phone) summaryLines.push(`Phone: ${String(payload.phone)}`);
-    if (payload.child_first_name || payload.child_last_name) {
+    if (
+        entities.has("child") &&
+        (payload.child_first_name || payload.child_last_name)
+    ) {
         summaryLines.push(
             `Child: ${[payload.child_first_name, payload.child_last_name].filter(Boolean).join(" ")}`
         );
@@ -196,10 +227,14 @@ export function buildCreateLeadBosPreview(
         summaryLines,
         householdSummary: (() => {
             if (!draft.household) return null;
-            const sel = resolveCreateLeadCommitSelectionFromDraft(draft);
-            const parts = [...summarizeCommitParents(sel), ...summarizeCommitChildren(sel)].filter(
-                (line) => line && !/^(Primary|Additional|Child)$/.test(line)
+            const sel = filterCommitSelectionToEffectiveIntake(
+                resolveCreateLeadCommitSelectionFromDraft(draft),
+                ctx.spec
             );
+            const parts = [
+                ...summarizeCommitParents(sel),
+                ...(entities.has("child") ? summarizeCommitChildren(sel) : []),
+            ].filter((line) => line && !/^(Primary|Additional|Child)$/.test(line));
             return parts.length ? parts.join("; ") : "Household details included";
         })(),
 
@@ -219,7 +254,10 @@ export async function executeCreateLeadFromBosDraft(
     draft: BosCommandDraft,
     ctx: CreateLeadAdapterContext
 ): Promise<BosCommandExecutionResult> {
-    const payload = bosDraftToEligiblePayload(draft);
+    const payload = filterPayloadToEffectiveIntake(
+        bosDraftToEligiblePayload(draft),
+        ctx.spec
+    );
     const result = await executeCreateLeadCommand({
         payload,
         departmentId: ctx.departmentId,

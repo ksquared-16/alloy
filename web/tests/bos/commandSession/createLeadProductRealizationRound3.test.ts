@@ -68,9 +68,12 @@ function draftWithValues(): BosCommandDraft {
 
 describe("createLeadUnderstandingPresentation (Round 3)", () => {
     it("maps sections to operational titles", () => {
-        expect(operationalSectionTitle("person", "Parent")).toBe("Family");
-        expect(operationalSectionTitle("child", "Child")).toBe("Children");
-        expect(operationalSectionTitle("context", "Context")).toBe("Placement & preferences");
+        expect(operationalSectionTitle("person", "Parent")).toBe("Parent");
+        expect(operationalSectionTitle("child", "Child")).toBe("Child");
+        expect(operationalSectionTitle("context", "Context")).toBe("Lead");
+        expect(operationalSectionTitle("context", "Lead")).toBe("Lead");
+        expect(operationalSectionTitle("context", "Placement & preferences")).toBe("Lead");
+        expect(operationalSectionTitle("person", "Parent / Guardian")).toBe("Person");
     });
 
     it("groups draft values by operational understanding cards", () => {
@@ -79,9 +82,9 @@ describe("createLeadUnderstandingPresentation (Round 3)", () => {
             gatherFields: FIELDS,
         });
         expect(groups.map((g) => g.title)).toEqual([
-            "Family",
-            "Children",
-            "Placement & preferences",
+            "Person",
+            "Child",
+            "Lead",
         ]);
         expect(groups[0]!.rows[0]).toMatchObject({ label: "First name", value: "Jordan" });
     });

@@ -205,6 +205,7 @@ function SectionCard(props: {
                             <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
                                 Required to create this lead
                             </p>
+                            {/* Repeaters own required + Additional for person/child — no duplicate section Additional. */}
                             <CreateLeadBosRepeaterCards
                                 kind={model.key === "person" ? "parent" : "child"}
                                 selection={props.commitSelection}
@@ -213,81 +214,88 @@ function SectionCard(props: {
                                 contextValues={props.formValues}
                                 compact={props.compact}
                             />
-                            {model.fields.filter((f) => !props.platformRequiredKeys.includes(f.payload_key) && f.tier !== "required").length >
-                            0 ? (
-                                <AdditionalFieldsBlock
-                                    fields={model.fields.filter(
-                                        (f) =>
-                                            !props.platformRequiredKeys.includes(f.payload_key) &&
-                                            f.tier !== "required"
-                                    )}
-                                    formValues={props.formValues}
-                                    onFieldChange={props.onFieldChange}
-                                    platformRequiredKeys={props.platformRequiredKeys}
-                                    fieldConfidence={props.fieldConfidence}
-                                    compact={props.compact}
-                                    sectionKey={model.key}
-                                />
-                            ) : null}
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {model.fields.filter(
-                                (f) =>
-                                    f.tier === "required" ||
-                                    props.platformRequiredKeys.includes(f.payload_key)
-                            ).length > 0 ? (
-                                <>
-                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                                        Required to create this lead
-                                    </p>
-                                    <ActionWorkspaceGatherFields
-                                        sections={[
-                                            {
-                                                key: model.key,
-                                                label: model.title,
-                                                fields: model.fields.filter(
-                                                    (f) =>
-                                                        f.tier === "required" ||
-                                                        props.platformRequiredKeys.includes(
-                                                            f.payload_key
-                                                        )
-                                                ),
-                                            },
-                                        ]}
-                                        values={props.formValues}
-                                        onChange={props.onFieldChange}
-                                        platformRequiredKeys={props.platformRequiredKeys}
-                                        fieldConfidence={props.fieldConfidence}
-                                        layout="sections"
-                                        fieldColumns={props.compact ? 1 : 2}
-                                        chrome="quiet"
-                                        hideSectionHeaders
-                                        pairAwareColumns={!props.compact}
-                                        pairFieldKeys={PAIR_KEYS}
-                                        dataTestIdPrefix={`bos-create-lead-form-${model.key}-required`}
-                                    />
-                                </>
-                            ) : null}
-                            {model.fields.filter(
-                                (f) =>
-                                    f.tier !== "required" &&
-                                    !props.platformRequiredKeys.includes(f.payload_key)
-                            ).length > 0 ? (
-                                <AdditionalFieldsBlock
-                                    fields={model.fields.filter(
-                                        (f) =>
-                                            f.tier !== "required" &&
-                                            !props.platformRequiredKeys.includes(f.payload_key)
-                                    )}
-                                    formValues={props.formValues}
-                                    onFieldChange={props.onFieldChange}
-                                    platformRequiredKeys={props.platformRequiredKeys}
-                                    fieldConfidence={props.fieldConfidence}
-                                    compact={props.compact}
-                                    sectionKey={model.key}
-                                />
-                            ) : null}
+                            {(() => {
+                                const requiredFields = model.fields.filter(
+                                    (f) =>
+                                        f.tier === "required" ||
+                                        props.platformRequiredKeys.includes(f.payload_key)
+                                );
+                                const additionalFields = model.fields.filter(
+                                    (f) =>
+                                        f.tier !== "required" &&
+                                        !props.platformRequiredKeys.includes(f.payload_key)
+                                );
+                                // When nothing is hard-required, surface fields directly (do not bury Location under Additional).
+                                const showAdditionalCollapsed = requiredFields.length > 0;
+                                return (
+                                    <>
+                                        {requiredFields.length > 0 ? (
+                                            <>
+                                                <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                                    Required to create this lead
+                                                </p>
+                                                <ActionWorkspaceGatherFields
+                                                    sections={[
+                                                        {
+                                                            key: model.key,
+                                                            label: model.title,
+                                                            fields: requiredFields,
+                                                        },
+                                                    ]}
+                                                    values={props.formValues}
+                                                    onChange={props.onFieldChange}
+                                                    platformRequiredKeys={props.platformRequiredKeys}
+                                                    fieldConfidence={props.fieldConfidence}
+                                                    layout="sections"
+                                                    fieldColumns={props.compact ? 1 : 2}
+                                                    chrome="quiet"
+                                                    hideSectionHeaders
+                                                    pairAwareColumns={!props.compact}
+                                                    pairFieldKeys={PAIR_KEYS}
+                                                    dataTestIdPrefix={`bos-create-lead-form-${model.key}-required`}
+                                                />
+                                            </>
+                                        ) : null}
+                                        {additionalFields.length > 0 ? (
+                                            showAdditionalCollapsed ? (
+                                                <AdditionalFieldsBlock
+                                                    fields={additionalFields}
+                                                    formValues={props.formValues}
+                                                    onFieldChange={props.onFieldChange}
+                                                    platformRequiredKeys={props.platformRequiredKeys}
+                                                    fieldConfidence={props.fieldConfidence}
+                                                    compact={props.compact}
+                                                    sectionKey={model.key}
+                                                />
+                                            ) : (
+                                                <ActionWorkspaceGatherFields
+                                                    sections={[
+                                                        {
+                                                            key: model.key,
+                                                            label: model.title,
+                                                            fields: additionalFields,
+                                                        },
+                                                    ]}
+                                                    values={props.formValues}
+                                                    onChange={props.onFieldChange}
+                                                    platformRequiredKeys={props.platformRequiredKeys}
+                                                    fieldConfidence={props.fieldConfidence}
+                                                    layout="sections"
+                                                    fieldColumns={props.compact ? 1 : 2}
+                                                    chrome="quiet"
+                                                    hideSectionHeaders
+                                                    pairAwareColumns={!props.compact}
+                                                    pairFieldKeys={PAIR_KEYS}
+                                                    dataTestIdPrefix={`bos-create-lead-form-${model.key}-fields`}
+                                                />
+                                            )
+                                        ) : null}
+                                    </>
+                                );
+                            })()}
                         </div>
                     )}
                 </div>

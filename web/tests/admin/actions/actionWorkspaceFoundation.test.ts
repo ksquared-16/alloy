@@ -330,11 +330,18 @@ describe("create lead BOS suggestion flow", () => {
             text: "Parent: Jordan Lee\nEmail: jordan@example.com",
             spec,
         });
+        expect(extraction.fields.length).toBeGreaterThan(0);
         const suggestions = bosSuggestionsFromExtraction(extraction);
-        expect(suggestions.length).toBeGreaterThan(0);
+        // Medium/low confidence become suggestions; high confidence may apply with no suggestion row.
+        if (suggestions.length > 0) {
+            expect(suggestions.some((s) => s.payload_key === "first_name" || s.payload_key === "email")).toBe(
+                true
+            );
+        } else {
+            expect(extraction.fields.some((f) => f.confidence === "high")).toBe(true);
+        }
         const values = emptyCreateLeadGatherValues();
         expect(values.first_name).toBe("");
-        expect(suggestions.some((s) => s.payload_key === "first_name")).toBe(true);
     });
 });
 

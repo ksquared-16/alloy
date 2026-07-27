@@ -65,7 +65,8 @@ describe("Create Lead entity-group Form (no Placement section)", () => {
     it("does not invent a Placement & preferences section", () => {
         const sections = projectCreateLeadEntityFormSections(specWithLocationRequired());
         expect(sections.some((s) => /placement/i.test(s.label))).toBe(false);
-        expect(sections.some((s) => s.key === "opportunity" || s.label === "Lead")).toBe(true);
+        expect(sections.some((s) => s.key === "opportunity")).toBe(true);
+        expect(sections.find((s) => s.key === "opportunity")?.label).toBe("Lead");
     });
 
     it("puts Location under its canonical opportunity/Lead owner when record_creation required", () => {
@@ -77,11 +78,11 @@ describe("Create Lead entity-group Form (no Placement section)", () => {
         );
     });
 
-    it("empty Lead section still materializes when Location is the only opportunity field", () => {
+    it("Lead section still materializes when Location is the only opportunity field", () => {
         const sections = projectCreateLeadFormSections([], {
             intakeSpec: specWithLocationRequired(),
         });
-        expect(sections.some((s) => s.key === "context" || s.label === "Lead")).toBe(true);
+        expect(sections.some((s) => s.key === "context" && s.label === "Lead")).toBe(true);
     });
 
     it("every hard required key has a rendered editable control", () => {

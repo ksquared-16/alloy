@@ -18,12 +18,23 @@ export type UnderstandingGroup = {
 };
 
 const SECTION_TITLE: Record<string, string> = {
-    person: "Parent / Guardian",
+    person: "Person",
     child: "Child",
+    /** Opportunity/context owns Lead-stage context fields. */
     context: "Lead",
     opportunity: "Lead",
     household: "Household",
 };
+
+function isStaleSectionLabel(label: string): boolean {
+    return (
+        /^placement/i.test(label) ||
+        /preferences/i.test(label) ||
+        /^context$/i.test(label) ||
+        /^parent\s*\/\s*guardian$/i.test(label) ||
+        /^opportunity$/i.test(label)
+    );
+}
 
 const PERSON_IDENTITY_KEYS = new Set(["first_name", "last_name", "email", "phone"]);
 const CHILD_IDENTITY_KEYS = new Set([
@@ -35,7 +46,13 @@ const CHILD_IDENTITY_KEYS = new Set([
 ]);
 
 export function operationalSectionTitle(sectionKey: string, fallbackLabel: string): string {
-    return SECTION_TITLE[sectionKey] ?? fallbackLabel;
+    const cleaned = fallbackLabel.trim();
+    // Prefer configured / projected labels when they are not stale role/placement copy.
+    if (cleaned && !isStaleSectionLabel(cleaned)) {
+        if (sectionKey === "context" || sectionKey === "opportunity") return cleaned;
+        if (sectionKey === "person" || sectionKey === "child") return cleaned;
+    }
+    return SECTION_TITLE[sectionKey] ?? cleaned;
 }
 
 function resolveDisplayValue(
@@ -70,7 +87,7 @@ export function buildUnderstandingGroups(input: {
     if (parents.length) {
         groups.push({
             key: "person",
-            title: "Parent / Guardian",
+            title: "Person",
             rows: parents.map((value, i) => ({
                 label: i === 0 ? "Primary" : "Additional",
                 value,

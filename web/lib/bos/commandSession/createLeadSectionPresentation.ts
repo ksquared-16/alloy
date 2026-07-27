@@ -97,7 +97,7 @@ export function buildCreateLeadSectionModels(input: {
                 models.push(
                     buildOneSection({
                         key: "context",
-                        title: "Placement & preferences",
+                        title: operationalSectionTitle("context", section.label || "Lead"),
                         helper: SECTION_HELPER.context!,
                         fields: placementFields,
                         values,

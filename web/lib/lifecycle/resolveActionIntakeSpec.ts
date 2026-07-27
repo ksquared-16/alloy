@@ -14,6 +14,7 @@ import type {
     ActionIntakeValidationRule,
 } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import {
+    CREATE_LEAD_CODE_OWNED_FLOOR_RULE_IDS,
     CREATE_LEAD_CONTACT_RULE_IDS,
     CREATE_LEAD_INTAKE_ENTITIES,
     CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS,
@@ -207,30 +208,25 @@ function buildGroups(fields: ActionIntakeFieldSpec[]): ActionIntakeEntityGroup[]
         if (!entityFields.length) continue;
         groups.push({
             entity,
-            entity_label: lifecycleEntityLabel(entity),
+            entity_label: entity === "opportunity" ? "Lead" : lifecycleEntityLabel(entity),
             fields: entityFields,
         });
     }
     return groups;
 }
 
-function buildCreateLeadContactConstraints(
-    requiredIds: string[],
-    requirementsSource: "platform" | "department",
-): ActionIntakeConstraint[] {
+function buildCreateLeadContactConstraints(requiredIds: string[]): ActionIntakeConstraint[] {
     const emailRequired = requiredIds.includes("person:email");
     const phoneRequired = requiredIds.includes("person:phone");
     if (emailRequired || phoneRequired) return [];
-    if (requirementsSource === "platform") {
-        return [
-            {
-                kind: "at_least_one",
-                rule_ids: CREATE_LEAD_CONTACT_RULE_IDS,
-                message: "Phone or email is required.",
-            },
-        ];
-    }
-    return [];
+    // Code-owned floor: email|phone regardless of platform vs department source.
+    return [
+        {
+            kind: "at_least_one",
+            rule_ids: CREATE_LEAD_CONTACT_RULE_IDS,
+            message: "Phone or email is required.",
+        },
+    ];
 }
 
 export function resolveCreateLeadActionIntakeSpec(input: {
@@ -291,15 +287,35 @@ export function resolveCreateLeadActionIntakeSpec(input: {
         if (spec) recommended.push(spec);
     }
 
-    const allRuleIds = new Set([...policy.requiredIds, ...policy.recommendedIds]);
-    for (const entry of palette) {
-        if (allRuleIds.has(entry.rule_id)) continue;
-        if (!CREATE_LEAD_INTAKE_ENTITIES.includes(entry.entity)) continue;
-        const spec = buildFieldSpec(entry.rule_id, "optional", entry, input.org_field_definitions);
-        if (spec) optional.push(spec);
+    // Do NOT dump unused palette fields as optional. The palette is the catalog of
+    // fields available for configuration — not the effective Create Lead intake.
+    // Code-owned contact (email|phone) must still be present for Form + constraint.
+    const includedRuleIds = new Set([
+        ...policy.requiredIds,
+        ...policy.recommendedIds,
+    ]);
+    for (const ruleId of CREATE_LEAD_CONTACT_RULE_IDS) {
+        if (includedRuleIds.has(ruleId)) continue;
+        if (policy.requiredIds.includes(ruleId)) continue;
+        const spec = buildFieldSpec(ruleId, "optional", byRule.get(ruleId) ?? null, input.org_field_definitions);
+        if (spec) {
+            optional.push(spec);
+            includedRuleIds.add(ruleId);
+        }
+    }
+    // Ensure code-owned name floor specs exist even if palette lookup missed them.
+    for (const ruleId of CREATE_LEAD_CODE_OWNED_FLOOR_RULE_IDS) {
+        if (includedRuleIds.has(ruleId)) continue;
+        if (CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS.includes(ruleId as (typeof CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS)[number])) {
+            const spec = buildFieldSpec(ruleId, "required", byRule.get(ruleId) ?? null, input.org_field_definitions);
+            if (spec) {
+                required.push(spec);
+                includedRuleIds.add(ruleId);
+            }
+        }
     }
 
-    const constraints = buildCreateLeadContactConstraints(policy.requiredIds, requirementsSource);
+    const constraints = buildCreateLeadContactConstraints(policy.requiredIds);
 
     const leadLabel = input.primary_record_label?.trim() || "Lead";
     const allFields = dedupeFieldSpecs([...required, ...recommended, ...optional]);

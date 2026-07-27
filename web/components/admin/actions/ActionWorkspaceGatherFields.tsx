@@ -328,7 +328,7 @@ export function ActionWorkspaceGatherFields({
                 <div data-testid={`${dataTestIdPrefix}-section-optional`}>
                     <h3 className="text-[13px] font-semibold text-alloy-midnight">Optional if available</h3>
                     <p className="mt-1 text-[12px] text-alloy-midnight/45">
-                        Child, program, and source details — not required to create the lead.
+                        Additional details from your Lead stage configuration.
                     </p>
                     <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-6 content-start">
                         {optionalFields.map((field) => renderField(field!))}

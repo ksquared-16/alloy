@@ -103,16 +103,16 @@ function draft(values: Record<string, string>): BosCommandDraft {
 }
 
 describe("Round 4 progressive sections", () => {
-    it("derives Family / Children / Placement / Additional from effective sections", () => {
+    it("derives Person / Child / Lead / Additional from effective sections", () => {
         const models = buildCreateLeadSectionModels({
             sections: sectionsFromFields(),
             draft: emptyBosCommandDraft(),
             requiredPayloadKeys: ["first_name", "last_name"],
         });
         expect(models.map((m) => m.title)).toEqual([
-            "Family",
-            "Children",
-            "Placement & preferences",
+            "Person",
+            "Child",
+            "Lead",
             "Additional information",
         ]);
     });
