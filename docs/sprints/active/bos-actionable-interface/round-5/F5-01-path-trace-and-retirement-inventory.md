@@ -348,3 +348,13 @@ executeCreateLeadFromBosDraft  OR  CreateLeadCommandSurface.onSubmit
 - Foundational runtime redesign required
 
 Do **not** stop for normal bounded defects — fix at the correct owner in F5-02+.
+
+---
+
+## F5-01c gate (product decisions)
+
+Binding decisions after path trace: [`PRODUCT-DECISIONS.md`](./PRODUCT-DECISIONS.md).
+
+Command-authority inspection (named constraint lane + staging Location ownership): [`evidence/command-authority-comparison.md`](./evidence/command-authority-comparison.md).
+
+**F5-02+ product code remains gated** until those documents are accepted. Premature Placement / BOS-only Location work must be realigned to entity-group Form ownership.

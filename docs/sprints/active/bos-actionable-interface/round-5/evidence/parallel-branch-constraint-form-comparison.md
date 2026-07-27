@@ -99,4 +99,16 @@ These are **current-branch** findings, not parallel-branch ports:
 
 **Proceed with F5-02 + F5-04 implementation on the current branch without porting from this parallel branch.**
 
-**Integration strategy executed:** implement on current BOS branch (no ports). See `EXECUTION-LEDGER.md` for F5-02/F5-04 status.
+---
+
+## Superseded by F5-01c (2026-07-27)
+
+This note’s “implement Placement on current branch” direction is **obsolete**.
+
+Binding decisions: [`../PRODUCT-DECISIONS.md`](../PRODUCT-DECISIONS.md)  
+Command authority: [`command-authority-comparison.md`](./command-authority-comparison.md)
+
+- No BOS-owned Placement section  
+- No BOS-only Location rule  
+- No BOS process resolver  
+- Consume command effective intake; realign premature Placement commits before continuing F5-02
