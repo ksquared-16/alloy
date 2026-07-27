@@ -192,12 +192,18 @@ describe("linked identity field presentation polish", () => {
         expect(summary).not.toContain("data-identity-open-details");
     });
 
-    it("compact summary hides empty placeholders (no lone — between phone/email)", () => {
+    it("compact summary hides empty placeholders via pre-pack filter (no lone — between phone/email)", () => {
+        const resolver = readFileSync(
+            join(process.cwd(), "lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows.ts"),
+            "utf8",
+        );
+        expect(resolver).toContain('labelMode ?? "visible") === "hidden"');
+        expect(resolver).toContain("hideWhenEmpty");
         const field = readFileSync(
             join(process.cwd(), "components/admin/focusPanel/identity/IdentityFieldValue.tsx"),
             "utf8",
         );
-        expect(field).toContain("labelMode === \"hidden\"");
-        expect(field).toContain("hideEmpty");
+        // Late nulls left pair/triple holes — filtering belongs in the shared row resolver.
+        expect(field).not.toContain("if (hideEmpty) return null");
     });
 });

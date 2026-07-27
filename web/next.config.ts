@@ -44,6 +44,11 @@ const nextConfig: NextConfig = {
    * server's `.next` (the one the operator's browser is on). Unset → default `.next` (dev unaffected).
    */
   ...(process.env.ALLOY_PROD_CERT_DIST ? { distDir: ".next-prodcert" } : {}),
+  /**
+   * Next 16 blocks cross-origin `/_next/*` in dev. Operators often open 127.0.0.1 while
+   * NEXT_PUBLIC_APP_URL is localhost (or the reverse) — allow both so assets can load.
+   */
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   /** Build SHA inlined for client + server (see resolveBuildSha) — proves the deployed commit. */
   env: {
     NEXT_PUBLIC_BUILD_SHA: BUILD_SHA,

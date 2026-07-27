@@ -37,6 +37,7 @@ export type OperationalEnrollmentMockStore = {
     resolved_obligations: Row[];
     locations: Row[];
     location_program_categories: Row[];
+    persons: Row[];
     customer_members: Row[];
     opportunities: Row[];
     opportunity_customer_members: Row[];
@@ -78,6 +79,7 @@ export function createOperationalEnrollmentMockStore(
         resolved_obligations: seed?.resolved_obligations ?? [],
         locations: seed?.locations ?? [],
         location_program_categories: seed?.location_program_categories ?? [],
+        persons: seed?.persons ?? [],
         customer_members: seed?.customer_members ?? [],
         opportunities: seed?.opportunities ?? [],
         opportunity_customer_members: seed?.opportunity_customer_members ?? [],

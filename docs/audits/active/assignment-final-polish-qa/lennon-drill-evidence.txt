@@ -1,0 +1,160 @@
+lennonBtns=1
+dump={
+  "attrs": [
+    [
+      "[data-assignment-list]",
+      0
+    ],
+    [
+      "[data-assignment-row]",
+      0
+    ],
+    [
+      "[data-assignment-day-filter]",
+      0
+    ],
+    [
+      "[data-schedule-surface]",
+      0
+    ],
+    [
+      "[data-schedule-create-new]",
+      0
+    ],
+    [
+      "[data-assignment-detail]",
+      0
+    ],
+    [
+      "[data-assignment-kind-title]",
+      0
+    ],
+    [
+      "[data-assignment-lifecycle]",
+      0
+    ],
+    [
+      "[data-day-filter]",
+      0
+    ]
+  ],
+  "candidates": [
+    {
+      "key": "current_work",
+      "depth": null,
+      "text": "WHAT'S NEXT Open Contact Family Reach the family, understand their needs, and determine the next step. Message Schedule tour Send form Record outcome STILL NEEDED Children → ○ First Name ○ Last N"
+    },
+    {
+      "key": "household",
+      "depth": null,
+      "text": "HOUSEHOLD Needs contact Kurzman household KK Kelly Kurzman Primary First name Kelly Last name Kurzman Email kelly.kurzman@gmail.com Phone (602) 290-4816 Add emergency contact → View household →"
+    }
+  ],
+  "visibleText": true,
+  "hasAll": false,
+  "snippet": [
+    "Assignments",
+    "Needs a decision Rooms & ratios All children at All sites have an assignment. N"
+  ]
+}
+allPill=0
+addAssign=1
+primaryish=3
+BEST=
+1
+4
+⌘K
+Site filter
+All locations
+North Campus
+South Campus
+West Campus
+KK
+Enrollment
+
+Pipeline
+
+3
+Needs attention
+3
+Overdue work
+6
+Pipeline Children
+Actions (2)
+▶
+New Leads
+3
+Active Pipeline
+0
+Registration
+0
+Waitlist
+0
+Tours
+0
+Filters
+Clear
+1 of 3
+K
+Kurzman Family
+New Leads
+Kelly Kurzman · (602) 290-4816
+Lennon Kurzman · 2y | Wrigley Kurzman · 4m
+2 children
+Kurzman Family
+New Leads
+Work
+Activity
+WHAT'S NEXT
+Open
+
+Contact Family
+
+Reach the family, understand their needs, and determine the next step.
+
+Message
+Schedule tour
+Send form
+Record outcome
+
+STILL NEEDED
+
+Children
+→
+○
+First Name
+○
+Last Name
+○
+Program
+○
+Date of Birth
+
++4 more in Required information
+
+View details →
+MILESTONES
+Preparing…
+BILLING PREVIEW
+Preparing…
+CHILDREN
+Preparing…
+HOUSEHOLD
+Needs contact
+
+Kurzman household
+
+KK
+Kelly Kurzman
+Primary
+First name
+Kelly
+Last name
+Kurzman
+Email
+kelly.kurzman@gmail.com
+Phone
+(602) 290-4816
+Add emergency contact →
+View household →
+BOS

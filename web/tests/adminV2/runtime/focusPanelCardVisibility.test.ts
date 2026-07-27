@@ -46,28 +46,31 @@ describe("Focus Panel card visibility model", () => {
             expect(laidOut).not.toContain(linked);
         }
         expect(inputs.linkedCardKeys).toEqual([...ENROLLMENT_DEFAULT_LINKED_CARD_KEYS]);
-        expect(inputs.visibilityByCardKey.get("scheduling")).toBe("linked");
+        expect(inputs.visibilityByCardKey.get("scheduling")).toBe("visible");
         expect(inputs.cellResolution.has("scheduling")).toBe(true);
     });
 
     it("moving Visible ↔ Linked preserves card identity", () => {
         const order = readSummaryCardOrder(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
-        const after = setSummaryCardVisibility(order, "scheduling", "visible");
-        expect(after.find((e) => e.key === "scheduling")?.visibility).toBe("visible");
+        const after = setSummaryCardVisibility(order, "scheduling", "linked");
+        expect(after.find((e) => e.key === "scheduling")?.visibility).toBe("linked");
         expect(after.find((e) => e.key === "scheduling")?.instanceId).toBe("scheduling");
-        const back = setSummaryCardVisibility(after, "scheduling", "linked");
-        expect(back.find((e) => e.key === "scheduling")?.visibility).toBe("linked");
+        const back = setSummaryCardVisibility(after, "scheduling", "visible");
+        expect(back.find((e) => e.key === "scheduling")?.visibility).toBe("visible");
     });
 
-    it("Linked cards are omitted from published layout filter (leave Visible composition)", () => {
+    it("Assignments (scheduling) is Visible in the default published layout", () => {
         const order = readSummaryCardOrder(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
         const inputs = deriveFocusPanelSummaryCompositionInputs(
             FOCUS_PANEL_SUMMARY_DEFAULT_DOC,
         );
         expect(inputs.publishedLayout).not.toBeNull();
         const keys = publishedLayoutReadingOrder(inputs.publishedLayout!);
-        expect(keys).not.toContain("scheduling");
-        expect(partitionSummaryCardsByVisibility(order).linked.map((e) => e.key)).toContain(
+        expect(keys).toContain("scheduling");
+        expect(partitionSummaryCardsByVisibility(order).visible.map((e) => e.key)).toContain(
+            "scheduling",
+        );
+        expect(partitionSummaryCardsByVisibility(order).linked.map((e) => e.key)).not.toContain(
             "scheduling",
         );
     });

@@ -1,11 +1,9 @@
 "use client";
 
 /**
- * Scheduling Overview — the Work-mode landing. Answers "what needs scheduling
- * attention today?" with operational launch surfaces, each with a real destination:
- * Needs Placement, Starts This Week, Rooms Near Capacity, Ratio Risks, plus the
- * decision + starts zones and an honest recent-changes strip. Counts are real (or an
- * honest empty state); nothing is a dead card.
+ * Assignments Overview — the Work-mode landing. Answers "what needs assignment
+ * attention today?" with operational launch surfaces backed by Assignment Platform
+ * signals. Room capacity / ratio cards remain scheduling properties of assignments.
  */
 
 import type { ReactNode } from "react";
@@ -21,6 +19,18 @@ import { WS_EYEBROW, WS_OVERVIEW_INFO_SPLIT, WS_OVERVIEW_LAUNCH_GRID } from "@/c
 export type OverviewChild = { agreementId: string; customerMemberId: string; name: string; startDate?: string | null };
 export type OverviewStart = { agreementId: string; name: string; startDate: string };
 export type TodayActivity = { placementsToday: number; schedulesCreatedToday: number; schedulesModifiedToday: number };
+
+/** Light Assignment Platform signals for Overview (derived, not a new engine). */
+export type AssignmentAttentionSummary = {
+    multipleAssignments: number;
+    upcomingAssignments: number;
+    futurePrimaryChanges: number;
+    missingAssignmentTypes: number;
+    childrenMissingAssignments: number;
+    assignmentConflicts: number;
+    expiringSoon: number;
+    changesAwaitingReview: number;
+};
 
 export type RosterSummary = {
     roomsNearCapacity: { roomId: string; roomName: string; pct: number }[];
@@ -118,6 +128,7 @@ export default function SchedulingOverview({
     starts,
     summary,
     activity,
+    assignmentAttention,
     onNavigateRoster,
 }: {
     loading: boolean;
@@ -126,19 +137,67 @@ export default function SchedulingOverview({
     starts: OverviewStart[];
     summary: RosterSummary;
     activity: TodayActivity | null;
+    assignmentAttention?: AssignmentAttentionSummary | null;
     onNavigateRoster: (focusRoomId?: string, filter?: string) => void;
 }) {
     const toDecide = unplaced.length;
     const nearCap = summary.roomsNearCapacity.length;
     const ratioRisks = summary.ratioRisks.length;
+    const attn = assignmentAttention ?? null;
+    const missingAssignments = attn?.childrenMissingAssignments ?? toDecide;
+    const multi = attn?.multipleAssignments ?? 0;
+    const upcoming = attn?.upcomingAssignments ?? starts.length;
+    const futurePrimary = attn?.futurePrimaryChanges ?? 0;
+    const missingTypes = attn?.missingAssignmentTypes ?? 0;
+    const conflicts = attn?.assignmentConflicts ?? 0;
+    const expiring = attn?.expiringSoon ?? 0;
+    const awaitingReview = attn?.changesAwaitingReview ?? 0;
 
     const activityItems: WorkspaceOperationalHealthItem[] = [
         { key: "placements", label: "Placements", value: String(activity?.placementsToday ?? 0), tone: "pine" },
-        { key: "created", label: "Schedules created", value: String(activity?.schedulesCreatedToday ?? 0), tone: "pine" },
-        { key: "modified", label: "Schedules modified", value: String(activity?.schedulesModifiedToday ?? 0), tone: "midnight" },
-        { key: "starting", label: "Starting soon", value: String(starts.length), tone: "midnight" },
+        { key: "created", label: "Assignments created", value: String(activity?.schedulesCreatedToday ?? 0), tone: "pine" },
+        { key: "modified", label: "Assignments modified", value: String(activity?.schedulesModifiedToday ?? 0), tone: "midnight" },
         { key: "ratio", label: "Ratio warnings", value: String(ratioRisks), tone: ratioRisks > 0 ? "ember" : "pine" },
         { key: "capacity", label: "Near capacity", value: String(nearCap), tone: nearCap > 0 ? "gold" : "pine" },
+    ];
+
+    const assignmentItems: WorkspaceOperationalHealthItem[] = [
+        {
+            key: "multiple",
+            label: "Multiple assignments",
+            value: String(multi),
+            tone: multi > 0 ? "midnight" : "pine",
+        },
+        {
+            key: "future-primary",
+            label: "Future primary changes",
+            value: String(futurePrimary),
+            tone: futurePrimary > 0 ? "gold" : "pine",
+        },
+        {
+            key: "missing-types",
+            label: "Missing Assignment Categories",
+            value: String(missingTypes),
+            tone: missingTypes > 0 ? "gold" : "pine",
+        },
+        {
+            key: "conflicts",
+            label: "Assignment conflicts",
+            value: String(conflicts),
+            tone: conflicts > 0 ? "ember" : "pine",
+        },
+        {
+            key: "expiring",
+            label: "Expiring soon",
+            value: String(expiring),
+            tone: expiring > 0 ? "gold" : "pine",
+        },
+        {
+            key: "awaiting-review",
+            label: "Awaiting review",
+            value: String(awaitingReview),
+            tone: awaitingReview > 0 ? "midnight" : "pine",
+        },
     ];
 
     return (
@@ -149,18 +208,18 @@ export default function SchedulingOverview({
                     <LaunchCard
                         testId="needs-placement"
                         icon={<UserPlus className="h-4 w-4" strokeWidth={2} />}
-                        value={String(toDecide)}
-                        label="Needs placement"
-                        hint={toDecide > 0 ? "Place into a room" : "All placed"}
-                        tone={toDecide > 0 ? "ember" : "pine"}
+                        value={String(missingAssignments)}
+                        label="Missing assignments"
+                        hint={missingAssignments > 0 ? "Children without an assignment" : "All assigned"}
+                        tone={missingAssignments > 0 ? "ember" : "pine"}
                         onClick={() => onNavigateRoster(undefined, "unplaced")}
                     />
                     <LaunchCard
                         testId="starts-this-week"
                         icon={<CalendarClock className="h-4 w-4" strokeWidth={2} />}
-                        value={String(starts.length)}
-                        label="Starts this week"
-                        hint="See the week"
+                        value={String(upcoming)}
+                        label="Upcoming assignments"
+                        hint="Future effective windows"
                         tone="midnight"
                         onClick={() => onNavigateRoster(undefined, "starts")}
                     />
@@ -183,6 +242,19 @@ export default function SchedulingOverview({
                         onClick={() => onNavigateRoster(summary.ratioRisks[0]?.roomId, "ratio_risk")}
                     />
                 </div>
+            </div>
+
+            <div
+                className="rounded-xl border border-alloy-stone/18 bg-white px-4 py-3 shadow-[0_2px_10px_rgba(24,39,58,0.05)]"
+                data-assignment-attention="true"
+            >
+                <WorkspaceOperationalHealth
+                    eyebrow="Assignment attention"
+                    items={assignmentItems}
+                    loading={loading}
+                    ariaLabel="Assignment platform attention"
+                    data-testid="scheduling-assignment-attention"
+                />
             </div>
 
             <div
@@ -216,7 +288,7 @@ export default function SchedulingOverview({
                     {loading ? (
                         <p className="text-[12px] text-alloy-slate">Loading…</p>
                     ) : toDecide === 0 ? (
-                        <p className="text-[12.5px] text-alloy-slate">All children at {siteName} have a room. Nothing to decide.</p>
+                        <p className="text-[12.5px] text-alloy-slate">All children at {siteName} have an assignment. Nothing to decide.</p>
                     ) : (
                         <ul className="flex flex-col">
                             {unplaced.map((c) => (
@@ -226,7 +298,7 @@ export default function SchedulingOverview({
                                 >
                                     <span className="h-7 w-0.5 shrink-0 rounded-full bg-alloy-bend-pine" aria-hidden />
                                     <span className="min-w-0 flex-1">
-                                        <span className="block truncate text-[13px] font-semibold text-alloy-midnight">{c.name} needs a room</span>
+                                        <span className="block truncate text-[13px] font-semibold text-alloy-midnight">{c.name} needs an assignment</span>
                                         <span className="block text-[11px] text-alloy-slate">
                                             {c.startDate ? `starts ${fmtDate(c.startDate)}` : "ready to place"}
                                         </span>
@@ -245,7 +317,7 @@ export default function SchedulingOverview({
                     )}
                 </Zone>
 
-                <Zone title="Starts this week" testId="starts">
+                <Zone title="Upcoming starts" testId="starts">
                     {loading ? (
                         <p className="text-[12px] text-alloy-slate">Loading…</p>
                     ) : starts.length === 0 ? (
@@ -266,15 +338,7 @@ export default function SchedulingOverview({
                 </Zone>
             </div>
 
-            <div
-                className="rounded-xl border border-alloy-stone/18 bg-white px-4 py-4 shadow-[0_2px_10px_rgba(24,39,58,0.05)]"
-                data-scheduling-overview-zone="recent-changes"
-            >
-                <p className="text-[13px] font-semibold text-alloy-midnight">Recent schedule changes</p>
-                <p className="mt-1 text-[12px] leading-snug text-alloy-slate">
-                    Placements and schedule changes made recently will appear here as the change history feed comes online.
-                </p>
-            </div>
+            {/* Recent changes: omit until an authoritative history feed is wired — no roadmap placeholder. */}
         </WorkspaceOverviewStack>
     );
 }

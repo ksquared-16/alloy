@@ -194,7 +194,12 @@ function HouseholdComposerContactRows({
                 const details = fields.filter((f) => f !== nameField);
                 return (
                     <div key={contact.personId || contact.name} className="alloy-os-household__row">
-                        <CardAvatar name={contact.name} size={26} />
+                        <CardAvatar
+                            name={contact.name}
+                            imageUrl={contact.imageUrl}
+                            size={26}
+                            recordId={contact.personId}
+                        />
                         <span className="alloy-os-household__row-main min-w-0">
                             {nameField ? (
                                 <span className="alloy-os-household__row-name">{nameField.value}</span>
@@ -232,7 +237,13 @@ function HouseholdComposerChildrenRows({
                 const details = fields.filter((f) => f !== nameField);
                 return (
                     <div key={child.id} className="alloy-os-household__row">
-                        <CardAvatar name={child.name} size={26} />
+                        <CardAvatar
+                            name={child.name}
+                            imageUrl={child.imageUrl}
+                            size={26}
+                            role="child"
+                            recordId={child.id}
+                        />
                         <span className="alloy-os-household__row-main min-w-0">
                             {nameField ? (
                                 <span className="alloy-os-household__row-name">{nameField.value}</span>

@@ -1,0 +1,78 @@
+roster=
+Assignments
+
+North Campus · operational
+
+Site
+Select…
+North Campus
+South Campus
+West Campus
+Add Assignment
+Actions
+Close
+Work
+Studio
+Overview
+Roster
+Attendance
+
+ASSIGNMENT HEALTH
+
+…Missing assignments
+
+—
+
+…Multiple
+
+—
+
+…Upcoming
+
+—
+
+…Future primary
+
+—
+
+…Conflicts
+
+—
+
+…Expiring soon
+
+—
+
+Assignments
+Room board
+
+1 child · 5 assignments · North Campus
+
+SELECT
+CHILD
+COUNT
+PRIMARY ROOM
+ROLE
+TYPE · DAYS
+STATUS
+Lennon Kurzman
+5
+Pre-K
+Primary
+Primary Classroom · Mon, Tue, Wed, Thu, Fri
+Planned
+pluralLife=Planned
+tueRows=4
+detail=
+← All assignments
+Primary Classroom
+PRIMARY
+Planned
+Pre-K
+Mon–Fri · 8:30 AM–4:00 PM
+Starts Aug 24, 2026
+OPERATIONAL EFFECTS
+Planning only — not attendance or billing truth
+View history →
+Edit Assignment
+This Assignment can only become active after enrollment is completed.

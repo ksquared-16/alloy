@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import clsx from "clsx";
 import {
     BadgeCheck,
@@ -14,7 +14,14 @@ import {
     Phone,
     type LucideIcon,
 } from "lucide-react";
+import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
+import { useOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
 import type { IdentityFieldCellVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import {
+    resolveIdentityFieldEditControl,
+    type IdentityFieldEditControl,
+} from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldEditControl";
 
 type InlineEditProps = {
     isEditing: boolean;
@@ -34,6 +41,8 @@ type InlineEditProps = {
 type Props = {
     cell: IdentityFieldCellVM;
     className?: string;
+    /** Transient post-save confirmation owned by IdentityFieldGrid. */
+    savedFlash?: boolean;
     inlineEdit?: InlineEditProps;
     /** Legacy: open full edit surface (Children) when inline save is unavailable. */
     onEdit?: () => void;
@@ -58,13 +67,188 @@ function resolveIcon(name?: string): LucideIcon | null {
     return ICONS[name] ?? null;
 }
 
-export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit, onLink }: Props) {
+function IdentityInlineEditInput({
+    cell,
+    editControl,
+    controlledDraft,
+    inlineEdit,
+    shared,
+    setDraft,
+    inputId,
+    inputRef,
+    commit,
+}: {
+    cell: IdentityFieldCellVM;
+    editControl: IdentityFieldEditControl;
+    controlledDraft: string;
+    inlineEdit: InlineEditProps;
+    shared: boolean;
+    setDraft: (value: string) => void;
+    inputId: string;
+    inputRef: RefObject<HTMLInputElement | null>;
+    commit: () => void | Promise<void>;
+}) {
+    const optionSetKeys =
+        editControl.kind === "select" && inlineEdit.isEditing ? [editControl.optionSetKey] : [];
+    const { optionsBySetKey } = useOptionSetSelectOptions(optionSetKeys);
+    const selectOptions =
+        editControl.kind === "select" ? (optionsBySetKey[editControl.optionSetKey] ?? []) : [];
+
+    // Display may store the option label; `<select>` values are keys — map label → value on edit.
+    const selectValue = useMemo(() => {
+        if (editControl.kind !== "select") return controlledDraft;
+        const raw = controlledDraft.trim();
+        if (!raw) return "";
+        if (selectOptions.some((o) => o.value === raw)) return raw;
+        const byLabel = selectOptions.find((o) => o.label === raw);
+        return byLabel?.value ?? raw;
+    }, [controlledDraft, editControl.kind, selectOptions]);
+
+    useEffect(() => {
+        if (editControl.kind !== "select" || !inlineEdit.isEditing) return;
+        if (selectValue === controlledDraft) return;
+        if (shared) {
+            inlineEdit.onDraftChange?.(selectValue);
+        } else {
+            setDraft(selectValue);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- sync once options resolve label→value
+    }, [selectValue, editControl.kind, inlineEdit.isEditing]);
+
+    const onDraftChange = (next: string) => {
+        if (shared) {
+            inlineEdit.onDraftChange?.(next);
+        } else {
+            setDraft(next);
+        }
+    };
+
+    let control: ReactNode;
+    if (editControl.kind === "select") {
+        const useAlloySelect =
+            cell.fieldRef === "child.gender"
+            || cell.fieldRef.endsWith(".gender")
+            || cell.fieldRef.includes("assignment")
+            || cell.fieldRef.includes("program")
+            || cell.fieldRef.includes("room")
+            || cell.fieldRef.includes("schedule");
+        // Disable only while busy saving — not while options load. A stuck/cancelled
+        // option fetch previously left Gender permanently disabled with only Select….
+        const selectDisabled = Boolean(inlineEdit.busy);
+        control = useAlloySelect ? (
+            <AlloySelect
+                value={selectValue}
+                onChange={onDraftChange}
+                options={selectOptions}
+                disabled={selectDisabled}
+                aria-label={cell.label}
+                testId="identity-field-select"
+            />
+        ) : (
+            <SelectFieldControl
+                value={selectValue}
+                onChange={onDraftChange}
+                options={selectOptions}
+                disabled={selectDisabled}
+                className="identity-field-value__input identity-field-value__select"
+                aria-label={cell.label}
+                data-testid="identity-field-select"
+            />
+        );
+    } else if (editControl.kind === "date") {
+        control = (
+            <input
+                ref={inputRef}
+                id={inputId}
+                type="date"
+                className="identity-field-value__input"
+                value={controlledDraft}
+                disabled={inlineEdit.busy}
+                onChange={(event) => onDraftChange(event.target.value)}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        if (!shared) void commit();
+                    }
+                    if (event.key === "Escape") {
+                        event.preventDefault();
+                        inlineEdit.onCancel();
+                    }
+                }}
+                aria-label={cell.label}
+            />
+        );
+    } else {
+        control = (
+            <input
+                ref={inputRef}
+                id={inputId}
+                className="identity-field-value__input"
+                type={editControl.inputType}
+                value={controlledDraft}
+                disabled={inlineEdit.busy}
+                onChange={(event) => onDraftChange(event.target.value)}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        if (!shared) void commit();
+                    }
+                    if (event.key === "Escape") {
+                        event.preventDefault();
+                        inlineEdit.onCancel();
+                    }
+                }}
+                aria-label={cell.label}
+            />
+        );
+    }
+
+    return (
+        <>
+            {control}
+            {!shared ? (
+                <span className="identity-field-value__inline-actions">
+                    <button
+                        type="button"
+                        className="identity-field-value__edit"
+                        disabled={inlineEdit.busy}
+                        onClick={() => void commit()}
+                    >
+                        Save
+                    </button>
+                    <button
+                        type="button"
+                        className="identity-field-value__edit identity-field-value__edit--cancel"
+                        disabled={inlineEdit.busy}
+                        onClick={inlineEdit.onCancel}
+                    >
+                        Cancel
+                    </button>
+                </span>
+            ) : null}
+        </>
+    );
+}
+
+export default function IdentityFieldValue({
+    cell,
+    className,
+    savedFlash = false,
+    inlineEdit,
+    onEdit,
+    onLink,
+}: Props) {
     const [draft, setDraft] = useState(cell.value ?? "");
     const inputId = useId();
     const inputRef = useRef<HTMLInputElement>(null);
 
     const shared = Boolean(inlineEdit?.sharedSession);
     const controlledDraft = shared ? (inlineEdit?.draftValue ?? cell.value ?? "") : draft;
+
+    const editControl = useMemo(
+        () => cell.editControl ?? resolveIdentityFieldEditControl(cell.fieldRef),
+        [cell.editControl, cell.fieldRef],
+    );
 
     useEffect(() => {
         if (shared) return;
@@ -75,12 +259,12 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
 
     useEffect(() => {
         if (shared) return;
-        if (inlineEdit?.isEditing) {
-            setDraft(cell.value ?? "");
-            inputRef.current?.focus();
-            inputRef.current?.select();
-        }
-    }, [inlineEdit?.isEditing, cell.value, shared]);
+        if (!inlineEdit?.isEditing) return;
+        setDraft(cell.value ?? "");
+        if (editControl.kind === "select") return;
+        inputRef.current?.focus();
+        inputRef.current?.select();
+    }, [inlineEdit?.isEditing, cell.value, shared, editControl.kind]);
 
     const Icon = resolveIcon(cell.icon);
     const showLabel = cell.labelMode !== "hidden";
@@ -89,16 +273,14 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
     const canLegacyEdit = Boolean(cell.editable && onEdit && !inlineEdit);
     const canLink = Boolean(cell.linked && onLink && !canInlineEdit);
     const valueText = cell.value?.trim() ?? "";
-    // Compact summary (hidden labels) never shows empty "—" placeholders between contact lines.
-    const hideEmpty =
-        !valueText
-        && (cell.hideWhenEmpty || cell.labelMode === "hidden")
-        && !inlineEdit?.isEditing;
-    if (hideEmpty) return null;
+    // Empty/hidden fields are removed in `resolveIdentityFieldRows` before packing.
+    // Never return null here — late nulls leave pair/triple grid holes (field collision).
 
     const commit = async () => {
         if (!inlineEdit || inlineEdit.busy) return;
-        await inlineEdit.onCommit(draft);
+        // Prefer selectValue when editing a choice field so Save writes the option key, not the label.
+        const value = shared ? controlledDraft : draft;
+        await inlineEdit.onCommit(value);
     };
 
     return (
@@ -110,6 +292,7 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
                 className,
             )}
             data-identity-field={cell.fieldRef}
+            data-identity-edit-control={editControl.kind}
             // Editability provenance (P4) — "why is this editable?" is browser-observable: `policy` is the
             // PUBLISHED config decision (editable | read-only), `editable` is the final state after the auth
             // (canMutate) and save-binding gates. policy=editable + editable=false ⇒ blocked by a runtime/auth
@@ -130,52 +313,17 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
                     {!showLabel && Icon ? (
                         <Icon className="identity-field-value__icon identity-field-value__icon--solo" aria-hidden />
                     ) : null}
-                    <input
-                        ref={inputRef}
-                        id={inputId}
-                        className="identity-field-value__input"
-                        value={controlledDraft}
-                        disabled={inlineEdit.busy}
-                        onChange={(event) => {
-                            const next = event.target.value;
-                            if (shared) {
-                                inlineEdit.onDraftChange?.(next);
-                            } else {
-                                setDraft(next);
-                            }
-                        }}
-                        onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                                event.preventDefault();
-                                if (!shared) void commit();
-                            }
-                            if (event.key === "Escape") {
-                                event.preventDefault();
-                                inlineEdit.onCancel();
-                            }
-                        }}
-                        aria-label={cell.label}
+                    <IdentityInlineEditInput
+                        cell={cell}
+                        editControl={editControl}
+                        controlledDraft={controlledDraft}
+                        inlineEdit={inlineEdit}
+                        shared={shared}
+                        setDraft={setDraft}
+                        inputId={inputId}
+                        inputRef={inputRef}
+                        commit={commit}
                     />
-                    {!shared ? (
-                        <span className="identity-field-value__inline-actions">
-                            <button
-                                type="button"
-                                className="identity-field-value__edit"
-                                disabled={inlineEdit.busy}
-                                onClick={() => void commit()}
-                            >
-                                Save
-                            </button>
-                            <button
-                                type="button"
-                                className="identity-field-value__edit identity-field-value__edit--cancel"
-                                disabled={inlineEdit.busy}
-                                onClick={inlineEdit.onCancel}
-                            >
-                                Cancel
-                            </button>
-                        </span>
-                    ) : null}
                 </span>
             ) : (
                 <span className="identity-field-value__value-row">
@@ -223,7 +371,16 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
                             {valueText || "—"}
                         </span>
                     )}
-                    {canInlineEdit && inlineEdit ? (
+                    {savedFlash ? (
+                        <span
+                            className="identity-field-value__saved"
+                            data-identity-saved="true"
+                            role="status"
+                            aria-live="polite"
+                        >
+                            ✓ Saved
+                        </span>
+                    ) : canInlineEdit && inlineEdit ? (
                         <button
                             type="button"
                             className="identity-field-value__edit"

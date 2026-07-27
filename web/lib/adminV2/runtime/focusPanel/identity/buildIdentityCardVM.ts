@@ -6,9 +6,11 @@ import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nested
 import {
     fieldPresentationLabel,
     groupShowAvatarForNestedGroup,
+    groupUseProfilePhotosForNestedGroup,
     nestedGroupLabel,
     groupDefsFor,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+
 import { fieldIsLinked, fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import type {
     HouseholdEvidenceChild,
@@ -41,6 +43,8 @@ import {
     resolveCompactIdentitySummaryLabelMode,
 } from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
 import { composeContextCollectionRows } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
+import { resolveIdentityFieldEditControl } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldEditControl";
+import { assignmentOwnsProgramRoomField } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
 import {
     enabledEvidenceSections,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -186,7 +190,14 @@ function buildRecordRows(args: {
             policy === "read-only" && linkContract.canOfferLinked && !hasExplicitPolicy
                 ? "linked"
                 : policy;
-        const editable = args.canMutate && fieldIsSaveable(effectivePolicy) && saveSupported;
+        const editableBase = args.canMutate && fieldIsSaveable(effectivePolicy) && saveSupported;
+        const childHasPrimary =
+            args.subject.kind === "child"
+            && "hasCommittedPrimaryAssignment" in args.subject.value
+            && (args.subject.value as ChildrenEvidenceChild).hasCommittedPrimaryAssignment === true;
+        const editable =
+            editableBase
+            && !(childHasPrimary && assignmentOwnsProgramRoomField(placement.fieldRef));
         const linked = fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked;
         const linkTarget = linked
             ? normalizeIdentityFieldLinkTarget(placement.linkTarget, placement.fieldRef)
@@ -220,6 +231,10 @@ function buildRecordRows(args: {
             linkLabel: linked ? linkContract.linkLabel : null,
             linkDestination: linked ? (linkTarget?.toCard ?? linkContract.destinationCard) : null,
             linkTarget,
+            editControl: resolveIdentityFieldEditControl(
+                placement.fieldRef,
+                args.tenantFieldDefinitions,
+            ),
         });
     }
     return resolveIdentityFieldRows(inputs);
@@ -270,6 +285,7 @@ function buildContactRecordVM(args: {
 }): IdentityRecordVM {
     const subject = contactSubject(args.contact);
     const showAvatar = groupShowAvatarForNestedGroup(args.config, args.groupKey);
+    const useProfilePhotos = groupUseProfilePhotosForNestedGroup(args.config, args.groupKey);
     const summaryRows = buildRecordRows({
         config: args.config,
         groupKey: args.groupKey,
@@ -304,7 +320,7 @@ function buildContactRecordVM(args: {
         id: args.contact.personId,
         title: composedIdentityDisplayName(subject, args.config, args.groupKey, args.contact.name),
         avatar: {
-            imageUrl: args.contact.imageUrl ?? null,
+            imageUrl: useProfilePhotos ? args.contact.imageUrl ?? null : null,
             initials: args.contact.initials || initialsFor(args.contact.name),
             visible: showAvatar,
             role: inferAvatarRoleFromSectionKey(args.groupKey),
@@ -326,6 +342,7 @@ function buildChildRecordVM(args: {
 }): IdentityRecordVM {
     const subject = childSubject(args.child);
     const showAvatar = groupShowAvatarForNestedGroup(args.config, args.groupKey);
+    const useProfilePhotos = groupUseProfilePhotosForNestedGroup(args.config, args.groupKey);
     const summaryRows = buildRecordRows({
         config: args.config,
         groupKey: args.groupKey,
@@ -354,11 +371,12 @@ function buildChildRecordVM(args: {
         editGroupKey: "child_edit",
     });
     const name = "name" in args.child ? args.child.name : "Child";
+    const rawImageUrl = "imageUrl" in args.child ? args.child.imageUrl ?? null : null;
     return finalizeIdentityRecordVM({
         id: args.child.id,
         title: composedIdentityDisplayName(subject, args.config, args.groupKey, name),
         avatar: {
-            imageUrl: "imageUrl" in args.child ? args.child.imageUrl ?? null : null,
+            imageUrl: useProfilePhotos ? rawImageUrl : null,
             initials: initialsFor(name),
             visible: showAvatar,
             role: "child",

@@ -56,6 +56,7 @@ import { loadInquiryChildCustomFieldValuesByOcmId } from "@/lib/admin/drawer/inq
 import { normalizeIsoDateOnly } from "@/lib/fields/inquiryChildFieldRegistry";
 import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inquiryChildOcmPlacementDisplay";
 import { enrichInquiryChildrenWithPlacementOptionLabels } from "@/lib/admin/drawer/enrichInquiryChildrenPlacementLabels";
+import { attachCustomerMemberProfileToInquiryChildren } from "@/lib/admin/drawer/attachCustomerMemberProfileToInquiryChildren";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -68,7 +69,19 @@ type WarmPersonRow = {
   email?: string | null;
   phone?: string | null;
   date_of_birth?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
+
+function warmPersonPhotoUrl(person: WarmPersonRow | null | undefined): string | null {
+  if (!person) return null;
+  const meta = person.metadata;
+  if (!meta || typeof meta !== "object") return null;
+  for (const key of ["photo_url", "avatar_url", "profile_photo_url", "profile_image_url", "image_url"]) {
+    const value = meta[key];
+    if (value != null && String(value).trim() !== "") return String(value).trim();
+  }
+  return null;
+}
 
 function trimOrNull(v: unknown): string | null {
   if (v == null) return null;
@@ -176,7 +189,7 @@ async function fetchPrimaryPersonContactHydrate(
   if (primaryPersonId) {
     const { data: person } = await supabase
       .from("persons")
-      .select("id, first_name, last_name, full_name, email, phone, date_of_birth")
+      .select("id, first_name, last_name, full_name, email, phone, date_of_birth, metadata")
       .eq("id", primaryPersonId)
       .eq("org_id", orgId)
       .maybeSingle();
@@ -211,7 +224,7 @@ async function fetchPrimaryPersonContactHydrate(
     if (c && (c as { person_id?: string | null }).person_id) {
       const { data: person } = await supabase
         .from("persons")
-        .select("id, first_name, last_name, full_name, email, phone, date_of_birth")
+        .select("id, first_name, last_name, full_name, email, phone, date_of_birth, metadata")
         .eq("id", (c as { person_id: string }).person_id)
         .eq("org_id", orgId)
         .maybeSingle();
@@ -324,6 +337,8 @@ type InquiryHydrateChild = {
   _operational_facts_source?: "durable" | "process_instance" | "ocm";
   custom_fields: Record<string, unknown>;
   metadata: Record<string, unknown> | null;
+  /** Profile image when present on linked person/member metadata. */
+  photo_url?: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -451,6 +466,17 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
       program_room_cohort_label: cohortLabel,
       custom_fields: {},
       metadata: (r.metadata as Record<string, unknown>) ?? null,
+      photo_url:
+        warmPersonPhotoUrl(p)
+        ?? (() => {
+          const memMeta = (m?.metadata ?? null) as Record<string, unknown> | null;
+          if (!memMeta) return null;
+          for (const key of ["photo_url", "avatar_url", "profile_photo_url", "profile_image_url", "image_url"]) {
+            const value = memMeta[key];
+            if (value != null && String(value).trim() !== "") return String(value).trim();
+          }
+          return null;
+        })(),
       created_at: r.created_at ?? null,
       updated_at: r.updated_at ?? null,
     };
@@ -877,6 +903,11 @@ export async function attachOpportunityInquiryChildrenShell(
   const tDraft0 = Date.now();
   inquiryChildrenOut = await overlayProcessDraftParticipation(supabase, orgId, opportunityId, inquiryChildrenOut);
   cph.process_draft_ms = Date.now() - tDraft0;
+  inquiryChildrenOut = await attachCustomerMemberProfileToInquiryChildren(
+    supabase,
+    orgId,
+    inquiryChildrenOut,
+  );
 
   host._inquiry_children = inquiryChildrenOut;
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
@@ -916,7 +947,7 @@ export async function attachOpportunityPersonsShell(
   if (personIds.length > 0) {
     const { data: people } = await supabase
       .from("persons")
-      .select("id, first_name, last_name, full_name, email, phone")
+      .select("id, first_name, last_name, full_name, email, phone, metadata")
       .eq("org_id", orgId)
       .in("id", personIds);
     for (const row of (people ?? []) as WarmPersonRow[]) {
@@ -935,6 +966,7 @@ export async function attachOpportunityPersonsShell(
         name: warmPersonDisplayName(p),
         phone: trimOrNull(p?.phone),
         email: trimOrNull(p?.email),
+        photo_url: warmPersonPhotoUrl(p),
       };
     });
   host._opportunity_persons = mapped;
@@ -990,7 +1022,7 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
   if (missingCpPersonIds.length > 0) {
     const { data: cpPeople } = await supabase
       .from("persons")
-      .select("id, first_name, last_name, full_name, email, phone")
+      .select("id, first_name, last_name, full_name, email, phone, metadata")
       .eq("org_id", orgId)
       .in("id", missingCpPersonIds);
     for (const row of (cpPeople ?? []) as WarmPersonRow[]) {
@@ -1012,6 +1044,7 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
       name: warmPersonDisplayName(p),
       phone: trimOrNull(p?.phone),
       email: trimOrNull(p?.email),
+      photo_url: warmPersonPhotoUrl(p),
     };
   });
 }
@@ -1197,7 +1230,7 @@ async function respondOpportunityRelationshipMemberOverlay(
     const tPl = Date.now();
     const { data: personRows } = await supabase
       .from("persons")
-      .select("id, first_name, last_name, full_name, date_of_birth, email, phone")
+      .select("id, first_name, last_name, full_name, date_of_birth, email, phone, metadata")
       .eq("org_id", orgId)
       .in("id", allNeeded);
     hydrateGraphTimings.relationship_overlay_member_linked_person_fetch_ms = Date.now() - tPl;
@@ -2279,7 +2312,7 @@ export async function respondOpportunityEntityGet(
     const tPl = Date.now();
     const { data: personRows } = await supabase
       .from("persons")
-      .select("id, first_name, last_name, full_name, date_of_birth, email, phone")
+      .select("id, first_name, last_name, full_name, date_of_birth, email, phone, metadata")
       .eq("org_id", orgId)
       .in("id", oppRolesPersonPrefetchIds);
     const wall = Date.now() - tPl;
@@ -2343,6 +2376,11 @@ export async function respondOpportunityEntityGet(
     inquiryChildrenOut,
   );
   inquiryChildrenOut = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryChildrenOut);
+  inquiryChildrenOut = await attachCustomerMemberProfileToInquiryChildren(
+    supabase,
+    orgId,
+    inquiryChildrenOut,
+  );
   out._inquiry_children = inquiryChildrenOut;
   attachOpportunityChildLifecycleSummary(out);
   {
@@ -2407,15 +2445,7 @@ export async function respondOpportunityEntityGet(
       person_id: string;
       role_type?: string | null;
     };
-    type PersonRowAgg = {
-      id: string;
-      first_name?: string | null;
-      last_name?: string | null;
-      full_name?: string | null;
-      date_of_birth?: string | null;
-      email?: string | null;
-      phone?: string | null;
-    };
+    type PersonRowAgg = WarmPersonRow;
     const personIdsForOpp = [
       ...new Set(
         ((opRows ?? []) as OppPersonLite[])
@@ -2429,7 +2459,7 @@ export async function respondOpportunityEntityGet(
       const tMiss = Date.now();
       const { data: extraPeople } = await supabase
         .from("persons")
-        .select("id, first_name, last_name, full_name, date_of_birth, email, phone")
+        .select("id, first_name, last_name, full_name, date_of_birth, email, phone, metadata")
         .eq("org_id", orgId)
         .in("id", missingOppPersonIds);
       hydrateGraphTimings.opportunity_persons_missing_persons_ms = Date.now() - tMiss;
@@ -2449,6 +2479,7 @@ export async function respondOpportunityEntityGet(
         name: personDisplayName(p),
         phone: trimOrNull(p?.phone),
         email: trimOrNull(p?.email),
+        photo_url: warmPersonPhotoUrl(p),
       };
     });
 
@@ -2469,7 +2500,7 @@ export async function respondOpportunityEntityGet(
       if (missingCpPersonIds.length > 0) {
         const { data: cpPeople } = await supabase
           .from("persons")
-          .select("id, first_name, last_name, full_name, email, phone")
+          .select("id, first_name, last_name, full_name, email, phone, metadata")
           .eq("org_id", orgId)
           .in("id", missingCpPersonIds);
         for (const row of (cpPeople ?? []) as PersonRowAgg[]) {
@@ -2490,6 +2521,7 @@ export async function respondOpportunityEntityGet(
           name: personDisplayName(p),
           phone: trimOrNull(p?.phone),
           email: trimOrNull(p?.email),
+          photo_url: warmPersonPhotoUrl(p),
         };
       });
     }

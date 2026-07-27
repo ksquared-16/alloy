@@ -29,11 +29,11 @@ export const ENROLLMENT_DEFAULT_VISIBLE_CARD_KEYS: readonly FocusPanelCardKey[] 
     "current_work",
     "household",
     "children",
+    "scheduling",
     "billing_preview",
 ];
 
 export const ENROLLMENT_DEFAULT_LINKED_CARD_KEYS: readonly FocusPanelCardKey[] = [
-    "scheduling",
     "tour_summary",
     "communications",
     "milestones",

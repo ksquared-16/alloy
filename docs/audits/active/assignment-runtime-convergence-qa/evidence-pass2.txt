@@ -1,0 +1,11 @@
+ROOM rooms=7 cells=35 proposed=0 toggles=0
+SHOT 11-room-board
+WEEKLY=1 hdr=This week
+SHOT 12-room-weekly
+DAILY=1 hdr=Mon · today
+SHOT 13-room-daily
+LOC_URL=http://127.0.0.1:3015/organization/locations
+LOC_SAVE=0 sticky=0 disabled=n/a
+SHOT 14-locations-pattern-save
+AVATAR upload=2 editable=2 form=0
+SHOT 15-kurzman-children-avatar
