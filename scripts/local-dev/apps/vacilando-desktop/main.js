@@ -16,7 +16,7 @@
  * lifecycle. Nothing about the server changes.
  */
 
-const { app, BrowserWindow, Menu, shell, dialog } = require("electron");
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require("electron");
 const { spawn } = require("node:child_process");
 const http = require("node:http");
 const path = require("node:path");
@@ -356,6 +356,14 @@ if (!gotLock) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
+  });
+
+  // Double-click on the app header (preload sends this) → zoom/fill the window,
+  // matching the native macOS title-bar gesture.
+  ipcMain.on("win:toggle-zoom", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
   });
 
   app.whenReady().then(() => {
