@@ -54,3 +54,21 @@ export {
     isBosRequestSeqCurrent,
     type BosRequestSeqGate,
 } from "@/lib/bos/commandSession/staleGuards";
+
+export {
+    bosDraftToEligiblePayload,
+    bosDraftToFormValues,
+    bosDraftValueMap,
+    bosInputStateCountsTowardEligibility,
+    clearBosDraftField,
+    upsertBosDraftValue,
+} from "@/lib/bos/commandSession/draftValues";
+
+export {
+    applyCreateLeadParseToDraft,
+    buildCreateLeadBosPreview,
+    createLeadBosCommandAdapter,
+    executeCreateLeadFromBosDraft,
+    revalidateCreateLeadDraft,
+    type CreateLeadAdapterContext,
+} from "@/lib/bos/commandSession/adapters/createLeadAdapter";
