@@ -85,6 +85,12 @@ export {
 export { isBosCreateLeadSessionEnabled } from "@/lib/bos/commandSession/bosCreateLeadSessionFlag";
 
 export {
+  BOS_SLASH_SESSION_ADAPTER_KEYS,
+  isBosSlashComposerQuery,
+  queryBosSlashCatalog,
+} from "@/lib/bos/commandSession/slash";
+
+export {
     CONVERSATION_INTAKE_SUPPORTED_VALUE_KINDS,
     buildEffectiveCreateLeadIntakeSpec,
     createLeadConversationIntakeAdapter,
