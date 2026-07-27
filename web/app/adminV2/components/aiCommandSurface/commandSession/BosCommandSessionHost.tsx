@@ -1,9 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useState } from "react";
 
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
+import { useBosPresentationControllerOptional } from "@/contexts/BosPresentationControllerContext";
 import type { BosCommandMode, BosCommandSession } from "@/lib/bos/commandSession";
+import { resolveBosCommandSessionLayoutDensity } from "@/lib/bos/commandSession/commandSessionLayout";
 import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
 import { useCreateLeadBosSessionController } from "@/app/adminV2/components/aiCommandSurface/commandSession/useCreateLeadBosSessionController";
 import { opportunityIdFromAttempt } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
@@ -36,6 +39,12 @@ export function BosCommandSessionHost() {
 
 function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession }) {
     const ctx = useBosCommandSessionOptional();
+    const bosPresentation = useBosPresentationControllerOptional();
+    const layoutDensity = resolveBosCommandSessionLayoutDensity(
+        bosPresentation?.derivation.effective
+    );
+    const compact = layoutDensity === "compact";
+    const [formSectionsOpen, setFormSectionsOpen] = useState(true);
     const controller = useCreateLeadBosSessionController(session);
 
     const setMode = (mode: BosCommandMode) => {
@@ -49,13 +58,25 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
             data-bos-command-session-host="true"
             data-bos-command-session-phase={session.phase}
             data-bos-command-session-mode={session.mode}
+            data-bos-command-session-layout={layoutDensity}
         >
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/25 px-3 py-2">
-                <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-alloy-midnight">
+            <div
+                className={`flex shrink-0 items-center gap-2 border-b border-alloy-stone/25 ${
+                    compact ? "px-2.5 py-1.5" : "justify-between px-3 py-2"
+                }`}
+                data-bos-command-session-header="true"
+            >
+                <div className="min-w-0 flex-1">
+                    <p
+                        className={`truncate font-semibold text-alloy-midnight ${
+                            compact ? "text-[13px]" : "text-sm"
+                        }`}
+                    >
                         {session.invocation.displayLabel}
                     </p>
-                    <p className="text-[11px] text-alloy-midnight/55">Command session</p>
+                    {!compact ? (
+                        <p className="text-[11px] text-alloy-midnight/55">Command session</p>
+                    ) : null}
                 </div>
                 <div
                     className="flex shrink-0 rounded-md border border-alloy-stone/30 bg-alloy-stone/5 p-0.5"
@@ -64,7 +85,7 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                 >
                     <ModeTab
                         active={session.mode === "conversation"}
-                        label="Conversation"
+                        label={compact ? "Chat" : "Conversation"}
                         onClick={() => setMode("conversation")}
                     />
                     <ModeTab
@@ -73,14 +94,6 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                         onClick={() => setMode("form")}
                     />
                 </div>
-                <button
-                    type="button"
-                    className="shrink-0 rounded-md border border-alloy-stone/30 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
-                    data-bos-command-session-discard
-                    onClick={() => ctx?.discardSession()}
-                >
-                    Close
-                </button>
             </div>
 
             {controller.resolution.blockers.length > 0 &&
@@ -197,7 +210,10 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                     </div>
                 ) : (
                     <>
-                <ul className="mb-4 space-y-2" data-bos-command-session-messages="true">
+                <ul
+                    className={`mb-4 space-y-2 ${compact ? "max-h-[40vh] overflow-y-auto" : ""}`}
+                    data-bos-command-session-messages="true"
+                >
                     {session.messages
                         .filter((message) => message.kind !== "mode_switch")
                         .map((message) => (
@@ -288,6 +304,16 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                     </div>
                 ) : (
                     <div data-bos-command-session-mode-body="form" className="min-h-0 space-y-3">
+                        {compact ? (
+                            <button
+                                type="button"
+                                className="text-[11px] font-semibold text-alloy-bend-pine"
+                                data-bos-command-session-form-toggle
+                                onClick={() => setFormSectionsOpen((open) => !open)}
+                            >
+                                {formSectionsOpen ? "Hide fields" : "Show fields"}
+                            </button>
+                        ) : null}
                         {controller.unsupportedHints.length > 0 ? (
                             <p
                                 className="rounded-md border border-alloy-stone/25 bg-alloy-stone/[0.04] px-3 py-2 text-[12px] text-alloy-midnight/70"
@@ -299,19 +325,30 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                                     : ` (${controller.unsupportedHints.map((h) => h.label).join(", ")}).`}
                             </p>
                         ) : null}
-                        <ActionWorkspaceGatherFields
-                            sections={controller.sections}
-                            values={controller.formValues}
-                            onChange={controller.onFieldChange}
-                            platformRequiredKeys={
-                                controller.effectiveSpec?.requiredPayloadKeys?.length
-                                    ? controller.effectiveSpec.requiredPayloadKeys
-                                    : ["first_name", "last_name"]
-                            }
-                            fieldConfidence={controller.fieldConfidence}
-                            layout="unified"
-                            dataTestIdPrefix="bos-create-lead-form"
-                        />
+                        {formSectionsOpen ? (
+                            <div
+                                className={
+                                    compact
+                                        ? "space-y-3"
+                                        : "grid gap-4 sm:grid-cols-1 lg:grid-cols-2"
+                                }
+                                data-bos-command-session-form-grid={compact ? "single" : "responsive"}
+                            >
+                                <ActionWorkspaceGatherFields
+                                    sections={controller.sections}
+                                    values={controller.formValues}
+                                    onChange={controller.onFieldChange}
+                                    platformRequiredKeys={
+                                        controller.effectiveSpec?.requiredPayloadKeys?.length
+                                            ? controller.effectiveSpec.requiredPayloadKeys
+                                            : ["first_name", "last_name"]
+                                    }
+                                    fieldConfidence={controller.fieldConfidence}
+                                    layout="unified"
+                                    dataTestIdPrefix="bos-create-lead-form"
+                                />
+                            </div>
+                        ) : null}
                     </div>
                 )}
                     </>
@@ -375,6 +412,14 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                             Back to details
                         </button>
                     )}
+                    <button
+                        type="button"
+                        className="ml-auto rounded-md border border-transparent px-2 py-1.5 text-[11px] font-semibold text-alloy-midnight/55 hover:bg-alloy-stone/10"
+                        data-bos-command-session-discard
+                        onClick={() => ctx?.discardSession()}
+                    >
+                        Discard command
+                    </button>
                 </div>
             </div>
             ) : null}

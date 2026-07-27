@@ -32,6 +32,11 @@ export {
 export { fingerprintBosCommandDraft } from "@/lib/bos/commandSession/fingerprint";
 
 export {
+    resolveBosCommandSessionLayoutDensity,
+    type BosCommandSessionLayoutDensity,
+} from "@/lib/bos/commandSession/commandSessionLayout";
+
+export {
     bosCommandSessionAllowsEdits,
     reduceBosCommandSession,
     type BosCommandSessionAction,
