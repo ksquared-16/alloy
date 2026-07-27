@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createLeadParserSpec } from "@/lib/admin/actions/createLeadPlatformGather";
 import {
     emptyCreateLeadValuesForFields,
-    gatherSectionsFromFields,
 } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 import { fetchActionIntakeSpec } from "@/lib/lifecycle/fetchActionIntakeSpec";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
@@ -20,6 +19,7 @@ import {
     type BosCommandSession,
     type EffectiveCreateLeadIntakeSpec,
 } from "@/lib/bos/commandSession";
+import { projectCreateLeadFormSections } from "@/lib/bos/commandSession/createLeadFormSectionProjection";
 import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import {
     applyCreateLeadCommitSelectionToDraft,
@@ -122,7 +122,13 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
     }, [ctx, resolution]);
 
     const gatherFields = effectiveSpec?.gatherFields ?? [];
-    const sections = useMemo(() => gatherSectionsFromFields(gatherFields), [gatherFields]);
+    const sections = useMemo(
+        () =>
+            projectCreateLeadFormSections(gatherFields, {
+                requiredPayloadKeys: effectiveSpec?.requiredPayloadKeys,
+            }),
+        [effectiveSpec?.requiredPayloadKeys, gatherFields]
+    );
 
     const formValues = useMemo(() => {
         const base = formValuesFromDraft(session.draft);

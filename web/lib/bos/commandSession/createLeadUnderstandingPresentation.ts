@@ -6,6 +6,9 @@
 import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
 import type { BosCommandDraft, BosCommandPreview } from "@/lib/bos/commandSession/types";
 import {
+    CREATE_LEAD_PLACEMENT_PAYLOAD_KEYS,
+} from "@/lib/bos/commandSession/createLeadFormSectionProjection";
+import {
     resolveCreateLeadCommitSelectionFromDraft,
     summarizeCommitChildren,
     summarizeCommitParents,
@@ -23,19 +26,48 @@ const SECTION_TITLE: Record<string, string> = {
     context: "Placement & preferences",
 };
 
+const PERSON_IDENTITY_KEYS = new Set(["first_name", "last_name", "email", "phone"]);
+const CHILD_IDENTITY_KEYS = new Set([
+    "child_first_name",
+    "child_last_name",
+    "child_date_of_birth",
+    "child_dob",
+    "child_age",
+]);
+
 export function operationalSectionTitle(sectionKey: string, fallbackLabel: string): string {
     return SECTION_TITLE[sectionKey] ?? fallbackLabel;
+}
+
+function resolveDisplayValue(
+    fieldKey: string,
+    raw: string,
+    optionLabels?: ReadonlyMap<string, string>
+): string {
+    return optionLabels?.get(`${fieldKey}:${raw}`) ?? optionLabels?.get(raw) ?? raw;
+}
+
+function sectionKeyForField(fieldKey: string, metaSection?: string): string {
+    if (CREATE_LEAD_PLACEMENT_PAYLOAD_KEYS.has(fieldKey) || fieldKey === "source" || fieldKey === "intake_notes") {
+        return fieldKey === "source" || fieldKey === "intake_notes" ? "context" : "context";
+    }
+    if (PERSON_IDENTITY_KEYS.has(fieldKey)) return "person";
+    if (CHILD_IDENTITY_KEYS.has(fieldKey)) return "child";
+    return metaSection ?? "context";
 }
 
 export function buildUnderstandingGroups(input: {
     draft: BosCommandDraft;
     gatherFields: readonly ActionWorkspaceGatherField[];
+    optionLabels?: ReadonlyMap<string, string>;
 }): UnderstandingGroup[] {
     const selection = resolveCreateLeadCommitSelectionFromDraft(input.draft);
     const parents = summarizeCommitParents(selection).filter(
-        (line) => line && line !== "Parent / guardian"
+        (line) => line && line !== "Primary" && line !== "Additional"
     );
-    const children = summarizeCommitChildren(selection).filter((line) => line && line !== "Child");
+    const children = summarizeCommitChildren(selection).filter(
+        (line) => line && line !== "Child" && line !== "Additional"
+    );
     const groups: UnderstandingGroup[] = [];
 
     if (parents.length) {
@@ -43,7 +75,7 @@ export function buildUnderstandingGroups(input: {
             key: "person",
             title: "Family",
             rows: parents.map((value, i) => ({
-                label: parents.length > 1 ? `Parent ${i + 1}` : "Parent / guardian",
+                label: i === 0 ? "Primary" : "Additional",
                 value,
             })),
         });
@@ -54,7 +86,7 @@ export function buildUnderstandingGroups(input: {
             key: "child",
             title: "Children",
             rows: children.map((value, i) => ({
-                label: children.length > 1 ? `Child ${i + 1}` : "Child",
+                label: i === 0 ? "Child" : "Additional",
                 value,
             })),
         });
@@ -64,12 +96,15 @@ export function buildUnderstandingGroups(input: {
     const bySection = new Map<string, UnderstandingGroup>();
 
     for (const entry of input.draft.values) {
-        const display = String(entry.value ?? "").trim();
-        if (!display) continue;
+        const displayRaw = String(entry.value ?? "").trim();
+        if (!displayRaw) continue;
         const meta = fieldMeta.get(entry.fieldKey);
-        const sectionKey = meta?.section ?? "context";
-        // Prefer repeater summaries for person/child when present.
-        if ((sectionKey === "person" && parents.length) || (sectionKey === "child" && children.length)) {
+        const sectionKey = sectionKeyForField(entry.fieldKey, meta?.section);
+        // Prefer repeater summaries for person/child identity when present.
+        if (
+            (PERSON_IDENTITY_KEYS.has(entry.fieldKey) && parents.length) ||
+            (CHILD_IDENTITY_KEYS.has(entry.fieldKey) && children.length)
+        ) {
             continue;
         }
         const title = operationalSectionTitle(sectionKey, meta?.section_label ?? "Details");
@@ -89,7 +124,7 @@ export function buildUnderstandingGroups(input: {
                     : undefined);
         group.rows.push({
             label: meta?.field_label ?? entry.fieldKey.replace(/_/g, " "),
-            value: display,
+            value: resolveDisplayValue(entry.fieldKey, displayRaw, input.optionLabels),
             note,
         });
     }
@@ -113,10 +148,12 @@ export function buildReviewGroups(input: {
     draft: BosCommandDraft;
     gatherFields: readonly ActionWorkspaceGatherField[];
     preview: BosCommandPreview | null;
+    optionLabels?: ReadonlyMap<string, string>;
 }): UnderstandingGroup[] {
     const base = buildUnderstandingGroups({
         draft: input.draft,
         gatherFields: input.gatherFields,
+        optionLabels: input.optionLabels,
     });
     const extras: UnderstandingGroup["rows"] = [];
     if (input.preview?.householdSummary) {

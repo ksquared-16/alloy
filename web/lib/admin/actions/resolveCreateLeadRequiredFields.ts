@@ -24,6 +24,16 @@ const PLATFORM_CONFIDENCE_KEYS = new Set([
     ...CONTEXT_OPTIONAL_KEYS,
 ]);
 
+/** Role is section-owned; never prefix these Create Lead field labels. */
+const CREATE_LEAD_ROLE_FREE_LABELS: Readonly<Record<string, string>> = {
+    first_name: "First Name",
+    last_name: "Last Name",
+    child_first_name: "First Name",
+    child_last_name: "Last Name",
+    child_date_of_birth: "Date of birth",
+    child_age: "Age",
+};
+
 function sectionForEntity(entity: LifecycleRequirementEntityKey): {
     section: ActionWorkspaceGatherField["section"];
     section_label: string;
@@ -34,11 +44,15 @@ function sectionForEntity(entity: LifecycleRequirementEntityKey): {
     return { section: "context", section_label: "Context" };
 }
 
+export function createLeadDisplayFieldLabel(payloadKey: string, fallbackLabel: string): string {
+    return CREATE_LEAD_ROLE_FREE_LABELS[payloadKey] ?? fallbackLabel;
+}
+
 export function actionIntakeFieldToGatherField(field: ActionIntakeSpec["required"][number]): ActionWorkspaceGatherField {
     const { section, section_label } = sectionForEntity(field.entity);
     return {
         payload_key: field.payload_key,
-        field_label: field.field_label,
+        field_label: createLeadDisplayFieldLabel(field.payload_key, field.field_label),
         section,
         section_label,
         tier: field.tier === "required" ? "required" : "optional",

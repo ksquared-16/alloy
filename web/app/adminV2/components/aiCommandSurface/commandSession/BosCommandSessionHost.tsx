@@ -124,25 +124,6 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
         ctx?.discardSession();
     }, [ctx, restoreWorkspaceWidth]);
 
-    const understandingGroups = useMemo(
-        () =>
-            buildUnderstandingGroups({
-                draft: session.draft,
-                gatherFields: controller.gatherFields,
-            }),
-        [controller.gatherFields, session.draft]
-    );
-
-    const reviewGroups = useMemo(
-        () =>
-            buildReviewGroups({
-                draft: session.draft,
-                gatherFields: controller.gatherFields,
-                preview: session.preview,
-            }),
-        [controller.gatherFields, session.draft, session.preview]
-    );
-
     const optionLabels = useMemo(() => {
         const map = new Map<string, string>();
         const opts = controller.effectiveSpec?.fieldOptions;
@@ -156,6 +137,26 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
         return map;
     }, [controller.effectiveSpec?.fieldOptions]);
 
+    const understandingGroups = useMemo(
+        () =>
+            buildUnderstandingGroups({
+                draft: session.draft,
+                gatherFields: controller.gatherFields,
+                optionLabels,
+            }),
+        [controller.gatherFields, optionLabels, session.draft]
+    );
+
+    const reviewGroups = useMemo(
+        () =>
+            buildReviewGroups({
+                draft: session.draft,
+                gatherFields: controller.gatherFields,
+                preview: session.preview,
+                optionLabels,
+            }),
+        [controller.gatherFields, optionLabels, session.draft, session.preview]
+    );
     const padX = compact ? "px-3" : "px-4";
     const bodyPad = compact ? "px-3 py-3" : "px-4 py-4";
 
@@ -291,7 +292,7 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                         platformRequiredKeys={
                             controller.effectiveSpec?.requiredPayloadKeys?.length
                                 ? controller.effectiveSpec.requiredPayloadKeys
-                                : ["first_name", "last_name"]
+                                : ["first_name", "last_name", "location_id"]
                         }
                         fieldConfidence={controller.fieldConfidence}
                         optionLabels={optionLabels}

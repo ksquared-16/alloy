@@ -80,6 +80,8 @@ export function buildCreateLeadSectionModels(input: {
     /** Multi-person summary lines from commit selection (overrides flat summary). */
     parentSummaries?: string[];
     childSummaries?: string[];
+    /** Explicit child row count — empty optional section vs incomplete added rows. */
+    childRowCount?: number;
 }): CreateLeadSectionModel[] {
     const values = draftValueMap(input.draft);
     const required = new Set(input.requiredPayloadKeys);
@@ -141,6 +143,7 @@ export function buildCreateLeadSectionModels(input: {
                         : key === "child"
                           ? input.childSummaries
                           : undefined,
+                childRowCount: key === "child" ? input.childRowCount : undefined,
             })
         );
     }
@@ -157,36 +160,67 @@ function buildOneSection(input: {
     required: Set<string>;
     optionLabels?: ReadonlyMap<string, string>;
     summaryOverride?: string[];
+    childRowCount?: number;
 }): CreateLeadSectionModel {
     const requiredPayloadKeys = input.fields
         .map((f) => f.payload_key)
         .filter((k) => input.required.has(k));
     const missingRequiredKeys = requiredPayloadKeys.filter((k) => !input.values.has(k));
+    const namedSummaries =
+        input.summaryOverride?.filter((line) => {
+            return (
+                !/^Parent \/ guardian$/.test(line) &&
+                !/^Child$/.test(line) &&
+                !/^Primary$/.test(line) &&
+                !/^Additional$/.test(line)
+            );
+        }) ?? [];
     const populatedCount =
-        input.summaryOverride?.filter((line) => line.trim()).length ??
-        input.fields.filter((f) => input.values.has(f.payload_key)).length;
-    const isRequiredSection = input.key === "person";
+        input.key === "child" && (input.childRowCount ?? 0) > 0
+            ? Math.max(namedSummaries.length, input.childRowCount ?? 0)
+            : namedSummaries.length > 0
+              ? namedSummaries.length
+              : input.fields.filter((f) => input.values.has(f.payload_key)).length;
+    const isRequiredSection =
+        input.key === "person" ||
+        (requiredPayloadKeys.length > 0 && input.key !== "additional" && input.key !== "child");
     const contactGap = input.key === "person" && needsContact(input.values);
+    const incompleteChildRows =
+        input.key === "child" && (input.childRowCount ?? 0) > 0 && namedSummaries.length < (input.childRowCount ?? 0);
 
     let completion: CreateLeadSectionModel["completion"] = "empty";
-    if (populatedCount > 0) {
-        completion =
-            missingRequiredKeys.length === 0 && !contactGap ? "ready" : "partial";
+    if (missingRequiredKeys.length > 0 || contactGap || incompleteChildRows) {
+        completion = "partial";
+    } else if (populatedCount > 0) {
+        completion = "ready";
     }
 
     const summaryLines =
-        input.summaryOverride && input.summaryOverride.length > 0
-            ? input.summaryOverride.filter((line) => {
-                  // Drop blank placeholder adults with only default label
-                  return !/^Parent \/ guardian$/.test(line) && !/^Child$/.test(line);
-              })
-            : buildSummaryLines(input.key, input.values, input.optionLabels);
+        input.key === "child" && (input.childRowCount ?? 0) > 0
+            ? namedSummaries.length > 0
+                ? namedSummaries
+                : [`${input.childRowCount} child${(input.childRowCount ?? 0) === 1 ? "" : "ren"} started`]
+            : namedSummaries.length > 0
+              ? namedSummaries
+              : buildSummaryLines(input.key, input.values, input.optionLabels);
 
     let statusLabel: string;
     if (completion === "ready") {
         statusLabel = "Ready";
-    } else if (isRequiredSection && populatedCount === 0) {
-        statusLabel = "Required to create the lead";
+    } else if (incompleteChildRows) {
+        statusLabel =
+            (input.childRowCount ?? 0) === 1
+                ? "1 detail still needed"
+                : `${input.childRowCount} children need names`;
+    } else if (isRequiredSection && missingRequiredKeys.length > 0 && populatedCount === 0) {
+        if (missingRequiredKeys.includes("location_id") && missingRequiredKeys.length === 1) {
+            statusLabel = "Location is required";
+        } else {
+            statusLabel =
+                missingRequiredKeys.length === 1
+                    ? "1 detail still needed"
+                    : `${missingRequiredKeys.length} details still needed`;
+        }
     } else if (contactGap && input.key === "person" && missingRequiredKeys.length === 0) {
         statusLabel = "Add a phone or email";
     } else if (missingRequiredKeys.length > 0) {
@@ -198,15 +232,12 @@ function buildOneSection(input: {
         statusLabel = "In progress";
     }
 
-    // Prefer a clear missing count when Family is empty aside from helper.
-    if (isRequiredSection && populatedCount === 0) {
-        const n = Math.max(missingRequiredKeys.length, 2); // name parts at minimum
+    if (input.key === "person" && populatedCount === 0) {
         if (missingRequiredKeys.length > 0) {
             statusLabel = `${missingRequiredKeys.length} details still needed`;
         } else {
             statusLabel = "Required to create the lead";
         }
-        void n;
     }
 
     return {
@@ -275,10 +306,14 @@ function buildSummaryLines(
     return lines;
 }
 
-/** Default open section: Family when required creation info is incomplete. */
+/** Default open section: Family when incomplete, else Placement when Location still needed. */
 export function defaultOpenSectionKeys(models: CreateLeadSectionModel[]): string[] {
     const family = models.find((m) => m.key === "person");
     if (family && family.completion !== "ready") return ["person"];
+    const placement = models.find((m) => m.key === "context");
+    if (placement && placement.completion !== "ready" && placement.isRequiredSection) {
+        return ["context"];
+    }
     return [];
 }
 

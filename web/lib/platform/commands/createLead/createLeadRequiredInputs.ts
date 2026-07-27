@@ -23,6 +23,7 @@ import {
     type ActionPreview,
     type ActionRequiredInput,
 } from "@/lib/adminV2/actions/actionTypes";
+import { isCreateLeadLocationRequired } from "@/lib/admin/actions/createLead/resolveCreateLeadLocationPolicy";
 
 export const CREATE_LEAD_ACTION_KEY = "create_lead";
 
@@ -36,6 +37,13 @@ export const CREATE_LEAD_REQUIRED_INPUTS: readonly ActionRequiredInput[] = [
     { key: "last_name", label: "Last name", type: "text", required: true },
     { key: "email", label: "Email", type: "email", required: false, hint: "Email or phone required." },
     { key: "phone", label: "Phone", type: "phone", required: false, hint: "Email or phone required." },
+    {
+        key: "location_id",
+        label: "Location",
+        type: "select",
+        required: true,
+        hint: "School / site is required to create a lead.",
+    },
 ] as const;
 
 export function createLeadDisplayName(payload: Record<string, unknown>): string {
@@ -63,6 +71,13 @@ export function deriveCreateLeadBlockers(payload: Record<string, unknown>): Acti
     }
     if (!trimmedValue(payload.email) && !trimmedValue(payload.phone)) {
         blockers.push({ code: "missing_required_input", message: "Phone or email is required.", field: "email" });
+    }
+    if (isCreateLeadLocationRequired() && !trimmedValue(payload.location_id)) {
+        blockers.push({
+            code: "missing_required_input",
+            message: "Location is required.",
+            field: "location_id",
+        });
     }
     return blockers;
 }

@@ -52,6 +52,7 @@ export function CreateLeadProgressiveForm(props: Props) {
                 optionLabels: props.optionLabels,
                 parentSummaries: summarizeCommitParents(props.commitSelection),
                 childSummaries: summarizeCommitChildren(props.commitSelection),
+                childRowCount: props.commitSelection.children.length,
             }),
         [props.commitSelection, props.draft, props.optionLabels, props.platformRequiredKeys, props.sections]
     );

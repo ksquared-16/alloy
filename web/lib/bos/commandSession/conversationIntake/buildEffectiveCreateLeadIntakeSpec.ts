@@ -4,6 +4,7 @@ import { createLeadParserSpec } from "@/lib/admin/actions/createLeadPlatformGath
 import {
     gatherFieldsFromActionIntakeSpec,
 } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
+import { isCreateLeadLocationRequired } from "@/lib/admin/actions/createLead/resolveCreateLeadLocationPolicy";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { IntakeSelectOption } from "@/lib/intake/types";
 import {
@@ -62,12 +63,16 @@ export function buildEffectiveCreateLeadIntakeSpec(input: {
     const actionIntakeSpec =
         input.actionIntakeSpec ?? createLeadParserSpec(departmentId);
     const gatherFields = gatherFieldsFromActionIntakeSpec(actionIntakeSpec);
-    const requiredPayloadKeys = gatherFields
-        .filter((f) => f.tier === "required")
-        .map((f) => f.payload_key);
+    const requiredPayloadKeys = [
+        ...new Set([
+            ...gatherFields.filter((f) => f.tier === "required").map((f) => f.payload_key),
+            ...(isCreateLeadLocationRequired({ intakeSpec: actionIntakeSpec }) ? ["location_id"] : []),
+        ]),
+    ];
     const optionalPayloadKeys = gatherFields
         .filter((f) => f.tier === "optional")
-        .map((f) => f.payload_key);
+        .map((f) => f.payload_key)
+        .filter((key) => !requiredPayloadKeys.includes(key));
 
     return {
         actionKey: "create_lead",

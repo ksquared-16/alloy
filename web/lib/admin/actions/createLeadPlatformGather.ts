@@ -32,15 +32,19 @@ export const CREATE_LEAD_UNIFIED_OPTIONAL_KEYS = [
     "intake_notes",
 ] as const;
 
+/**
+ * Field labels omit role prefixes — section context (Family / Children) already
+ * establishes parent vs child. Do not reintroduce "Parent/Guardian …" here.
+ */
 export const CREATE_LEAD_GATHER_FIELDS: readonly ActionWorkspaceGatherField[] = [
-    { payload_key: "first_name", field_label: "Parent/Guardian First Name", section: "person", section_label: "Parent / guardian", tier: "required", value_kind: "text" },
-    { payload_key: "last_name", field_label: "Parent/Guardian Last Name", section: "person", section_label: "Parent / guardian", tier: "required", value_kind: "text" },
+    { payload_key: "first_name", field_label: "First Name", section: "person", section_label: "Parent / guardian", tier: "required", value_kind: "text" },
+    { payload_key: "last_name", field_label: "Last Name", section: "person", section_label: "Parent / guardian", tier: "required", value_kind: "text" },
     { payload_key: "email", field_label: "Email", section: "person", section_label: "Parent / guardian", tier: "optional", value_kind: "email" },
     { payload_key: "phone", field_label: "Phone", section: "person", section_label: "Parent / guardian", tier: "optional", value_kind: "phone" },
-    { payload_key: "child_first_name", field_label: "Child First Name", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
-    { payload_key: "child_last_name", field_label: "Child Last Name", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
-    { payload_key: "child_date_of_birth", field_label: "Child DOB", section: "child", section_label: "Child", tier: "optional", value_kind: "date" },
-    { payload_key: "child_age", field_label: "Child Age", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
+    { payload_key: "child_first_name", field_label: "First Name", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
+    { payload_key: "child_last_name", field_label: "Last Name", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
+    { payload_key: "child_date_of_birth", field_label: "Date of birth", section: "child", section_label: "Child", tier: "optional", value_kind: "date" },
+    { payload_key: "child_age", field_label: "Age", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
     {
         payload_key: "child_program",
         field_label: "Program interest",
@@ -73,13 +77,13 @@ export const CREATE_LEAD_GATHER_FIELDS: readonly ActionWorkspaceGatherField[] = 
         payload_key: "location_id",
         field_label: "Location",
         section: "context",
-        section_label: "Context",
+        section_label: "Placement & preferences",
         tier: "required",
         value_kind: "select",
         placement_select: "site",
     },
-    { payload_key: "source", field_label: "Source", section: "context", section_label: "Context", tier: "optional", value_kind: "text" },
-    { payload_key: "intake_notes", field_label: "Intake notes", section: "context", section_label: "Context", tier: "optional", value_kind: "text", multiline: true },
+    { payload_key: "source", field_label: "Source", section: "context", section_label: "Placement & preferences", tier: "optional", value_kind: "text" },
+    { payload_key: "intake_notes", field_label: "Intake notes", section: "context", section_label: "Placement & preferences", tier: "optional", value_kind: "text", multiline: true },
 ] as const;
 
 const GATHER_LABEL_BY_KEY = Object.fromEntries(
@@ -92,15 +96,24 @@ export function emptyCreateLeadGatherValues(): Record<string, string> {
     return out;
 }
 
+function gatherEntityForSection(
+    section: ActionWorkspaceGatherField["section"]
+): "person" | "child" | "opportunity" {
+    if (section === "child") return "child";
+    if (section === "context") return "opportunity";
+    return "person";
+}
+
 /** Minimal parser spec — field mapping only; not lifecycle Required Information. */
 export function createLeadParserSpec(departmentId: string): ActionIntakeSpec {
     const fields = CREATE_LEAD_GATHER_FIELDS.map((f) => {
         const ruleId =
             Object.entries(CREATE_LEAD_PAYLOAD_KEY_BY_RULE).find(([, key]) => key === f.payload_key)?.[0] ??
             `gather:${f.payload_key}`;
+        const entity = gatherEntityForSection(f.section);
         return {
             rule_id: ruleId,
-            entity: f.section === "child" ? ("child" as const) : ("person" as const),
+            entity,
             entity_label: f.section_label,
             field_label: f.field_label,
             tier: f.tier,
@@ -117,6 +130,7 @@ export function createLeadParserSpec(departmentId: string): ActionIntakeSpec {
 
     const personFields = fields.filter((f) => f.entity === "person");
     const childFields = fields.filter((f) => f.entity === "child");
+    const contextFields = fields.filter((f) => f.entity === "opportunity");
 
     return {
         action_key: "create_lead",
@@ -128,14 +142,24 @@ export function createLeadParserSpec(departmentId: string): ActionIntakeSpec {
         groups: [
             { entity: "person", entity_label: "Parent / guardian", fields: personFields },
             ...(childFields.length ? [{ entity: "child" as const, entity_label: "Child", fields: childFields }] : []),
+            ...(contextFields.length
+                ? [{ entity: "opportunity" as const, entity_label: "Placement & preferences", fields: contextFields }]
+                : []),
         ],
-        required: personFields.filter((f) => f.tier === "required"),
+        required: [
+            ...personFields.filter((f) => f.tier === "required"),
+            ...contextFields.filter((f) => f.tier === "required"),
+        ],
         recommended: [],
-        optional: [...personFields.filter((f) => f.tier === "optional"), ...childFields],
+        optional: [
+            ...personFields.filter((f) => f.tier === "optional"),
+            ...childFields,
+            ...contextFields.filter((f) => f.tier === "optional"),
+        ],
         constraints: [],
         copy: {
             title: "Create Lead",
-            help: "Gather lead details with BOS assist. Only name and contact are required to create.",
+            help: "Gather lead details with BOS assist. Name, contact, and location are required to create.",
         },
     };
 }
@@ -168,8 +192,8 @@ export function validateCreateLeadPlatformMinimum(
     const phone = (values.phone ?? "").trim();
     const location = (values.location_id ?? "").trim();
 
-    if (!first) issues.push("Parent/Guardian first name is required.");
-    if (!last) issues.push("Parent/Guardian last name is required.");
+    if (!first) issues.push("First name is required.");
+    if (!last) issues.push("Last name is required.");
     if (!location) issues.push("Location is required.");
 
     const hasEmail = email.length > 0;
