@@ -231,15 +231,26 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 (fieldRulesRaw as { rule_meta_v1?: unknown }).rule_meta_v1
             );
             if (operator) {
-                metadataPatch = buildLifecycleFieldRulesOverridePatch({
-                    stage: operator,
-                    required_rule_ids: required,
-                    recommended_rule_ids: recommended,
-                    existingMetadata: prevMeta,
-                    mergedPalette,
-                    explicit_rule_levels_v1,
-                    explicit_rule_meta_v1,
-                });
+                metadataPatch = deepMergeJsonObjects(
+                    buildLifecycleFieldRulesOverridePatch({
+                        stage: operator,
+                        required_rule_ids: required,
+                        recommended_rule_ids: recommended,
+                        existingMetadata: prevMeta,
+                        mergedPalette,
+                        explicit_rule_levels_v1,
+                        explicit_rule_meta_v1,
+                    }),
+                    buildBuilderStageFieldRulesPatch({
+                        builderStageKey: stage,
+                        required_rule_ids: required,
+                        recommended_rule_ids: recommended,
+                        existingMetadata: prevMeta,
+                        mergedPalette,
+                        explicit_rule_levels_v1,
+                        explicit_rule_meta_v1,
+                    }),
+                );
             } else {
                 metadataPatch = buildBuilderStageFieldRulesPatch({
                     builderStageKey: stage,

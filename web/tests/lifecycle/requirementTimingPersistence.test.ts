@@ -194,6 +194,51 @@ describe("requirement timing persistence (Builder → rule_meta_v1)", () => {
 });
 
 describe("Create Lead policy with persisted record_creation", () => {
+    it("progression Off wins over stale builder_stage Schools with record_creation", () => {
+        const LOCATION = "opportunity:location";
+        const metadata = {
+            lifecycle_builder_stage_field_rules_v1: {
+                version: 1,
+                by_stage_key: {
+                    lead: {
+                        required_rule_ids: [SCHOOLS],
+                        recommended_rule_ids: [],
+                        rule_levels_v1: { version: 1, by_rule_id: { [SCHOOLS]: "required" } },
+                        rule_meta_v1: {
+                            version: 1,
+                            by_rule_id: { [SCHOOLS]: { timing: "record_creation" } },
+                        },
+                    },
+                },
+            },
+            lifecycle_progression_requirements_v1: {
+                version: 1,
+                stages: {
+                    lead: {
+                        field_rules: {
+                            required_rule_ids: [LOCATION],
+                            recommended_rule_ids: [],
+                            rule_levels_v1: { version: 1, by_rule_id: { [LOCATION]: "required" } },
+                            rule_meta_v1: {
+                                version: 1,
+                                by_rule_id: { [LOCATION]: { timing: "record_creation" } },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        const spec = resolveCreateLeadActionIntakeSpec({
+            department_id: "dept-1",
+            operator_stage: "lead",
+            builder_stage_key: "lead",
+            department_metadata: metadata,
+        });
+        expect(spec.required.some((f) => f.rule_id === SCHOOLS)).toBe(false);
+        expect(spec.recommended.some((f) => f.rule_id === SCHOOLS)).toBe(false);
+        expect(spec.required.some((f) => f.rule_id === LOCATION)).toBe(true);
+    });
+
     it("record_creation field becomes Create Lead required; stage-only Required stays recommended", () => {
         const draft = draftFromUi({
             levels: {

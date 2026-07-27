@@ -100,6 +100,26 @@ describe("parseCreateLeadChildParticipationPayload", () => {
         });
         expect(parsed!.ocm.location_id).toBe(SITE_ID);
     });
+
+    it("cascades Lead location_id onto child OCM when child_location_id is absent", () => {
+        const parsed = parseCreateLeadChildParticipationPayload({
+            child_first_name: "Sam",
+            child_last_name: "Lee",
+            location_id: SITE_ID,
+        });
+        expect(parsed!.ocm.location_id).toBe(SITE_ID);
+    });
+
+    it("prefers explicit child_location_id over Lead location_id", () => {
+        const childSite = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+        const parsed = parseCreateLeadChildParticipationPayload({
+            child_first_name: "Sam",
+            child_last_name: "Lee",
+            location_id: SITE_ID,
+            child_location_id: childSite,
+        });
+        expect(parsed!.ocm.location_id).toBe(childSite);
+    });
 });
 
 describe("buildCreateLeadOcmInsertRow", () => {
