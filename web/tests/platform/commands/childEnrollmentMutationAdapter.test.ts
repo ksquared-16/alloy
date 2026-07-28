@@ -152,7 +152,7 @@ describe("Child Enrollment Mutation adapter (P2.S2)", () => {
                     invocationId: `inv-${c.key}`,
                 },
                 server: { orgId: "org-real", userId: "user-real", supabase },
-                deps: { executeMutation: mutationSpy },
+                deps: { executeMutation: mutationSpy as never },
             });
             expect(result.ok).toBe(true);
             if (result.ok) {
@@ -189,7 +189,7 @@ describe("Child Enrollment Mutation adapter (P2.S2)", () => {
                 },
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { executeMutation: mutationSpy },
+            deps: { executeMutation: mutationSpy as never },
         });
         expect(result.ok).toBe(true);
         if (result.ok) expect(result.status).toBe("previewed");
@@ -208,7 +208,7 @@ describe("Child Enrollment Mutation adapter (P2.S2)", () => {
                 executionSubject: { entityType: "opportunity", entityId: "opp-1" },
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { executeMutation: mutationSpy },
+            deps: { executeMutation: mutationSpy as never },
         });
         expect(result.ok).toBe(false);
         expect(mutationSpy).not.toHaveBeenCalled();

@@ -71,11 +71,12 @@ services).
 ## Command Runtime Facade (preparation + gated execute)
 
 **Status:** Preparation (P1.S1). RegisteredAction execute (P1.S2). Lead Status Mutation execute
-(P2.S1). Child Enrollment Mutation execute (P2.S2). Relationship Runtime adapter (P3.S1 parent/link;
-P3.S2 contact-role; P3.S3 child relationship commands, July 2026) — exact keys only.
-**Destructive/replacement safety foundation (P4.S1):** policy registry, impact preview contract,
-permission-class seam, HMAC preview correlation, stale-preview guards — **facade commit globally
-disabled**. No Delete Lead / Make Primary / Cancel Tour production cutover in P4.S1.
+(P2.S1). Child Enrollment Mutation execute (P2.S2). Relationship Runtime adapter (P3.S1–P3.S3).
+Destructive allowlist commit (P4.S2–S3: `make_primary_contact`, `delete_lead`, `cancel_tour`).
+Tour domain adapter (P5). Process `command_set_v1` authority (P6). Organization Commands product
+`/organization/commands` (P7–P8). Fallback disposition ledger + telemetry (P9). Remaining
+`executeAdminAction` keys are classified intentional compatibility / unsupported — not silently
+deleted.
 
 `prepareCommandInvocation` remains **side-effect free**.
 

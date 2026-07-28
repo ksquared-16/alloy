@@ -10,7 +10,7 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress:** P0 → P8 product → **P9 fallback ledger + telemetry**. Next: P10 certification.
+**Implementation progress:** **P0–P10 certified** (local mission). Awaiting owner promotion — not pushed.
 
 ### Autonomous execution ledger
 
@@ -19,7 +19,8 @@
 | P6.S3 + P6 cert | `571080d0f` | processCommandSetAuthoring + prior P6 | pass | Authoring stamps V1; WT gated; publish validates | Legacy read fallback | P7 |
 | P7 foundation | `1f0f049b3` | organizationCommandCatalog + organizationCommandsRoute + P6 authoring (15) | pass | Commands shell + Ops nav + Action Buttons redirect | `/adminV2/settings/actions` developer | P8 |
 | P8 product completion | `b3c3ddbf3` | commandsProductCompletion + route + catalog + authoring (20) | pass | Detail workspace, usage, variants, safety, placement toggle | actions APIs + developer Action defs | P9 |
-| P9 drain ledger | *(this commit)* | executeAdminActionFallbackDrain + execute route suites (28) | pass | Fallback dispositions + in-process counter | Intentional compatibility keys | P10 |
+| P9 drain ledger | `905652666` | executeAdminActionFallbackDrain + execute route suites (28) | pass | Fallback dispositions + in-process counter | Intentional compatibility keys | P10 |
+| P10 certification | *(this commit)* | Commands suite 245 passed | prod pass; tests graph residual fails | Closeout evidence + doctrine sync | Intentional compat + telemetry | Owner promotion |
 
 
 ---
@@ -387,8 +388,8 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 
 | ID | Title |
 |----|-------|
-| **P10.S1** | Cross-family certification suite |
-| **P10.S2** | Canonical doctrine updates matching shipped behavior |
+| **P10.S1** | Cross-family certification suite (**shipped** — 245 Commands regression tests) |
+| **P10.S2** | Canonical doctrine updates matching shipped behavior (**shipped**) |
 
 Each slice inherits phase tests/QA/security from §4; **commit boundary** = one coherent local commit per slice; **stop** if dual execute detected or production smoke regresses.
 

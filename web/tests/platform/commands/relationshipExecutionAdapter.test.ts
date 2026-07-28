@@ -283,7 +283,7 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
                     invocationId: `inv-${key}`,
                 },
                 server: { orgId: "org-real", userId: "user-real", supabase },
-                deps: { executeRelationshipAction: relSpy },
+                deps: { executeRelationshipAction: relSpy as never },
             });
             expect(result.ok).toBe(true);
             if (result.ok) {
@@ -421,7 +421,7 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
                 executionSubject: { entityType: "child", entityId: "child-1" },
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { executeRelationshipAction: relSpy },
+            deps: { executeRelationshipAction: relSpy as never },
         });
         expect(result.ok).toBe(false);
         if (!result.ok) {
@@ -442,7 +442,7 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
                 executionSubject: { entityType: "child", entityId: "child-1" },
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { executeRelationshipAction: relSpy },
+            deps: { executeRelationshipAction: relSpy as never },
         });
         expect(preview.ok).toBe(false);
         if (!preview.ok) expect(preview.delegated).toBe(false);
@@ -458,7 +458,7 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
                 executionSubject: { entityType: "child", entityId: "child-1" },
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { executeRelationshipAction: relSpy },
+            deps: { executeRelationshipAction: relSpy as never },
         });
         expect(missing.ok).toBe(false);
         if (!missing.ok) expect(missing.delegated).toBe(false);
@@ -516,7 +516,7 @@ describe("Relationship Runtime adapter (P3.S1)", () => {
                 orgId: "org-1",
                 userId: "user-1",
                 guard: { invocationId: "g1", hasDelegated: () => false, markDelegated: () => {} },
-                deps: { executeRelationshipAction: relSpy },
+                deps: { executeRelationshipAction: relSpy as never },
             })
         ).rejects.toThrow(/refused/);
         expect(relSpy).not.toHaveBeenCalled();

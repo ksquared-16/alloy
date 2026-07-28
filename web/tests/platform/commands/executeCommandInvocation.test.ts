@@ -65,7 +65,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
                     invocationId: `inv-${key}`,
                 },
                 server: { orgId: "org-1", userId: "user-1", supabase },
-                deps: { runRegisteredAction: runSpy },
+                deps: { runRegisteredAction: runSpy as never },
             });
             expect(result.ok).toBe(true);
             if (result.ok) {
@@ -88,7 +88,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
                 invocationId: "inv-preview",
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { runRegisteredAction: runSpy },
+            deps: { runRegisteredAction: runSpy as never },
         });
         expect(result.ok).toBe(true);
         if (result.ok) expect(result.status).toBe("previewed");
@@ -116,7 +116,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
                     executionSubject: { entityType: "opportunity", entityId: "opp-1" },
                 },
                 server: { orgId: "org-1", userId: "user-1", supabase },
-                deps: { runRegisteredAction: runSpy },
+                deps: { runRegisteredAction: runSpy as never },
             });
             expect(result.ok).toBe(false);
             expect(runSpy).not.toHaveBeenCalled();
@@ -135,7 +135,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
                 executionSubject: { entityType: "opportunity", entityId: "opp-1" },
             },
             server: { orgId: "real-org", userId: "real-user", supabase },
-            deps: { runRegisteredAction: runSpy },
+            deps: { runRegisteredAction: runSpy as never },
         });
         expect(runSpy).toHaveBeenCalledTimes(1);
         expect(runSpy.mock.calls[0][1]).toEqual(
@@ -157,7 +157,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
                 executionSubject: { entityType: "opportunity", entityId: "opp-1" },
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { runRegisteredAction: runSpy },
+            deps: { runRegisteredAction: runSpy as never },
         });
         expect(result.ok).toBe(false);
         expect(runSpy).not.toHaveBeenCalled();
@@ -172,7 +172,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
                 executionSubject: { entityType: "opportunity", entityId: "create-lead" },
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { runRegisteredAction: runSpy },
+            deps: { runRegisteredAction: runSpy as never },
         });
         expect(result.ok).toBe(false);
         if (!result.ok) expect(result.status).toBe("confirmation_required");
@@ -188,7 +188,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
                 executionSubject: { entityType: "opportunity", entityId: "opp-1" },
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { runRegisteredAction: runSpy },
+            deps: { runRegisteredAction: runSpy as never },
         });
         expect(result.ok).toBe(false);
         expect(runSpy).not.toHaveBeenCalled();
@@ -210,7 +210,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
                 invocationId: "inv-err",
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { runRegisteredAction: runSpy },
+            deps: { runRegisteredAction: runSpy as never },
         });
         expect(result.ok).toBe(false);
         if (!result.ok) {

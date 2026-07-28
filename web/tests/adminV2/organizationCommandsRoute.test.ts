@@ -41,14 +41,10 @@ describe("Organization Commands route foundation", () => {
 
     it("rewrites /organization/commands and redirects Action Buttons + product alias", () => {
         const cfg = read("next.config.ts");
-        expect(cfg).toMatch(
-            /source:\s*"\/organization\/commands".*destination:\s*"\/adminV2\/settings\/organization\/commands"/s
-        );
-        expect(cfg).toMatch(
-            /source:\s*"\/settings\/actions".*destination:\s*"\/organization\/commands"/s
-        );
-        expect(cfg).toMatch(
-            /source:\s*"\/configuration\/commands".*destination:\s*"\/organization\/commands"/s
-        );
+        expect(cfg).toContain('source: "/organization/commands"');
+        expect(cfg).toContain('destination: "/adminV2/settings/organization/commands"');
+        expect(cfg).toContain('source: "/settings/actions"');
+        expect(cfg).toContain('destination: "/organization/commands"');
+        expect(cfg).toContain('source: "/configuration/commands"');
     });
 });

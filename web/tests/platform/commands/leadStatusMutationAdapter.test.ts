@@ -120,7 +120,7 @@ describe("Lead Status Mutation adapter (P2.S1)", () => {
                     invocationId: `inv-${key}`,
                 },
                 server: { orgId: "org-real", userId: "user-real", supabase },
-                deps: { executeMutation: mutationSpy },
+                deps: { executeMutation: mutationSpy as never },
             });
             expect(result.ok).toBe(true);
             if (result.ok) {
@@ -160,7 +160,7 @@ describe("Lead Status Mutation adapter (P2.S1)", () => {
                 executionSubject: { entityType: "opportunity", entityId: "opp-1" },
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { executeMutation: mutationSpy },
+            deps: { executeMutation: mutationSpy as never },
         });
         expect(result.ok).toBe(true);
         if (result.ok) {
@@ -190,7 +190,7 @@ describe("Lead Status Mutation adapter (P2.S1)", () => {
                 executionSubject: { entityType: "opportunity", entityId: "opp-1" },
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { executeMutation: mutationSpy },
+            deps: { executeMutation: mutationSpy as never },
         });
         expect(result.ok).toBe(false);
         if (!result.ok) {
@@ -213,7 +213,7 @@ describe("Lead Status Mutation adapter (P2.S1)", () => {
                 executionSubject: { entityType: "opportunity", entityId: "opp-1" },
             },
             server: { orgId: "org-1", userId: "user-1", supabase },
-            deps: { executeMutation: mutationSpy },
+            deps: { executeMutation: mutationSpy as never },
         });
         expect(result.ok).toBe(false);
         expect(mutationSpy).not.toHaveBeenCalled();
