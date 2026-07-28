@@ -76,6 +76,7 @@ const ORGANIZATION_CONFIG_SUBPATH_ALIASES: Record<string, string> = {
     "users-roles": "access",
     processes: "processes",
     "business-processes": "processes",
+    commands: "commands",
     "data-model": "data-model",
     /** Legacy Data Model landing slug → `/organization/data-model` (default Entities). */
     entities: "data-model",

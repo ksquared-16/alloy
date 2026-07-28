@@ -128,6 +128,20 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         description: "Configure how work gets done.",
         items: [
             {
+                href: "/organization/commands",
+                label: "Commands",
+                description: "Organization Command catalog and policy.",
+                icon: "integrations",
+                testId: "config-mode-nav-commands",
+            },
+            {
+                href: "/admin/workflows",
+                label: "Automation",
+                description: "Workflow triggers and platform-triggered behavior.",
+                icon: "automation",
+                testId: "config-mode-nav-automation",
+            },
+            {
                 href: settings("processes"),
                 label: "Processes",
                 description: "Stages, Work Views, and operating plans.",
@@ -140,13 +154,6 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
                 description: "Design Surfaces for queues, rows, Focus Panel, and cards.",
                 icon: "layouts",
                 testId: "config-mode-nav-surfaces",
-            },
-            {
-                href: "/admin/workflows",
-                label: "Automation",
-                description: "Workflow triggers and platform-triggered behavior.",
-                icon: "automation",
-                testId: "config-mode-nav-automation",
             },
         ],
     },
@@ -169,9 +176,10 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
 /** Internal / developer catalog — not shown in primary operator nav. */
 export const CONFIGURATION_MODE_INTERNAL_NAV_ITEMS: readonly ConfigurationModeNavItem[] = [
     {
-        href: settings("actions"),
-        label: "Action definitions",
-        description: "Platform action definition catalog (developer metadata).",
+        // Direct adminV2 path — `/settings/actions` redirects to Commands for operators.
+        href: "/adminV2/settings/actions",
+        label: "Action definitions (legacy)",
+        description: "Transitional action definition / placement catalog (developer).",
         icon: "integrations",
         testId: "config-mode-nav-action-definitions",
         internal: true,
@@ -233,6 +241,16 @@ export function configurationModeNavItemActive(
             || p.startsWith("/organization/access/")
             || p === "/settings/users-roles"
             || p.startsWith("/settings/users-roles/")
+        );
+    }
+    if (h === "/organization/commands") {
+        return (
+            p === h
+            || p.startsWith(`${h}/`)
+            || p.startsWith("/organization/commands")
+            || p.startsWith("/settings/actions")
+            || p.startsWith("/adminV2/settings/organization/commands")
+            || p.startsWith("/configuration/commands")
         );
     }
     if (h === settings("processes")) {

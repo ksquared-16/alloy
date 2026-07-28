@@ -10,7 +10,15 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress:** P0 → P5 → P6.S1 → P6.S2 → **P6.S3 authoring + P6 certified**. Next: P7 `/configuration/commands`.
+**Implementation progress:** P0 → P6 certified → **P7 foundation shipped** (`/organization/commands`). Next: P8 product completion.
+
+### Autonomous execution ledger
+
+| Slice | Commit | Tests | Typecheck | Behavior | Compat retained | Next |
+|-------|--------|-------|-----------|----------|-----------------|------|
+| P6.S3 + P6 cert | `571080d0f` | processCommandSetAuthoring + prior P6 | pass | Authoring stamps V1; WT gated; publish validates | Legacy read fallback | P7 |
+| P7 foundation | *(this commit)* | organizationCommandCatalog + organizationCommandsRoute + P6 authoring (15) | pass | Commands shell + Ops nav + Action Buttons redirect | `/adminV2/settings/actions` developer | P8 |
+
 
 ---
 
@@ -351,11 +359,11 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 
 | ID | Title |
 |----|-------|
-| **P7.S1** | Catalog read service |
-| **P7.S2** | `/configuration/commands` list+detail shell |
-| **P7.S3** | Availability service over placements |
-| **P7.S4** | Optional `/api/admin/commands` aliases |
-| **P7.S5** | Action Buttons bridge/redirect |
+| **P7.S1** | Catalog read service (**shipped** — `organizationCommandCatalog.ts`) |
+| **P7.S2** | `/organization/commands` list+detail shell (**shipped**; `/configuration/commands` redirects) |
+| **P7.S3** | Availability service over placements (**deferred to P8** — Action Buttons absorb) |
+| **P7.S4** | Optional `/api/admin/commands` aliases (**deferred** — D3 mid-stream; not required for foundation) |
+| **P7.S5** | Action Buttons bridge/redirect (**shipped** — `/settings/actions` → Commands) |
 
 ### P8 — Config completion (3)
 

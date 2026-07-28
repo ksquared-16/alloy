@@ -140,8 +140,10 @@ Shared server contract under `web/lib/platform/commands/runtime/destructive/`:
 
 `POST /api/admin/actions/execute` remains the operator/API route name. Dedicated
 `/api/admin/relationship-actions/execute` remains available. `/api/admin/mutations/execute`
-remains available and unchanged. `/configuration/commands` is **not** shipped.
-Exactly-once applies **per route invocation**, not distributed idempotency.
+remains available and unchanged. Organization Commands product foundation ships at
+`/organization/commands` (product name **Commands**; `/configuration/commands` and
+`/settings/actions` redirect there). Exactly-once applies **per route invocation**,
+not distributed idempotency.
 
 ---
 
@@ -192,7 +194,7 @@ For compatibility, legacy child rules without timing are still downgraded to rec
 | Layer | Controls |
 |-------|----------|
 | **Capability Registry** | Whether a Command identity exists, maturity, and execution owner (honesty — not authorization) |
-| **Organization Command Catalog** | Org enablement / labels / availability rows (`action_definitions` + placements today; `/configuration/commands` is P7) |
+| **Organization Command Catalog** | Org enablement / labels / availability (`action_definitions` + placements; product UI `/organization/commands`, P7 foundation) |
 | **Business Process `command_set_v1`** | Which Commands the process selects (sole target process-wide authority; P6.S1) |
 | **Stage `action_catalog_v1`** | Stage recommendation / evaluation metadata for selected Commands only |
 | **Experience Builder** | Where actions appear on a layout surface (contact row, section, related list) |

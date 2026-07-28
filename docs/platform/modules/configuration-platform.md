@@ -20,7 +20,7 @@ Configuration control plane — configuration steers presentation within platfor
 | Fields | `/settings/fields` | Field registry, types, visibility |
 | Field grouping | `/settings/field-sections` | Section labels |
 | Surfaces | `/settings/surfaces` | Surface composition (drawer, queue row, headers) |
-| Actions | `/settings/actions` | Org action placements |
+| Commands | `/organization/commands` (product alias `/configuration/commands`) | Organization Command catalog and policy; Action Buttons (`/settings/actions`) redirects here |
 
 Plus: statuses, business processes, placement priority, and organization configuration.
 
