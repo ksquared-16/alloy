@@ -8,7 +8,7 @@ import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/li
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
-import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { LifecycleBuilderProcessRecord, LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { ReactNode } from "react";
 
 export type { StageEditorV2Handle as LifecycleStageConfigurationHandle };
@@ -22,6 +22,7 @@ export default function LifecycleStageConfiguration({
     stageRecord,
     allStages,
     processTracks,
+    process,
     bootstrap,
     bootstrapLoading,
     statusesError,
@@ -41,6 +42,7 @@ export default function LifecycleStageConfiguration({
     stageRecord?: LifecycleBuilderStageRecord | null;
     allStages?: LifecycleBuilderStageRecord[];
     processTracks?: ProcessTracksV1 | null;
+    process?: LifecycleBuilderProcessRecord | null;
     bootstrap: LifecycleStageBootstrapPayload | null;
     bootstrapLoading: boolean;
     statusesError: string | null;
@@ -67,6 +69,7 @@ export default function LifecycleStageConfiguration({
                 stageRecord={stageRecord}
                 allStages={allStages}
                 processTracks={processTracks ?? null}
+                process={process ?? null}
                 bootstrap={bootstrap}
                 bootstrapLoading={bootstrapLoading}
                 statusesError={statusesError}

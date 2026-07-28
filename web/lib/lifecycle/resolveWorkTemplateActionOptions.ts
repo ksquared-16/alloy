@@ -96,6 +96,8 @@ export function resolveWorkTemplateActionOptions(input: {
     workTemplateKey?: string | null;
     processDefinition?: unknown;
     stageDefinition?: unknown;
+    /** P6.S3 — gates options to process Command selection when provided. */
+    process?: import("@/lib/lifecycle/lifecycleBuilderConfig").LifecycleBuilderProcessRecord | null;
 }): {
     primaryActionOptions: WorkTemplateActionOption[];
     helpfulActionOptions: WorkTemplateActionOption[];
@@ -119,6 +121,7 @@ export function resolveWorkTemplateActionOptions(input: {
         processStages,
         stageKey: input.stageKey,
         stageLabel: input.stageLabel,
+        process: input.process ?? null,
     };
 
     const primaryActionOptions = resolveCanonicalWorkTemplateActionOptions(canonicalInput).map(toWorkTemplateActionOption);

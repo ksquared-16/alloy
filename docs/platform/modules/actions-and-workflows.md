@@ -120,6 +120,8 @@ disabled**. No Delete Lead / Make Primary / Cancel Tour production cutover in P4
 - **P6.S2:** Runtime consumers (Current Work allowlist/catalog fallback, process-aware stage
   evaluation, optional BOS process-effective slash filter) read through
   `projectProcessRuntimeCommands`. Editors / Work Template authoring unchanged until P6.S3.
+- **P6.S3:** Process saves stamp `command_set_v1`; Work Template option authoring gates to process
+  selection; publish validates orphans. Process Command picker UI deferred (P6.S4). P6 certified.
 
 ### Destructive / replacement Command policy (P4.S1)
 

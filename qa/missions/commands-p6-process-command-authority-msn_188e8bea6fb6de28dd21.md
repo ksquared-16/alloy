@@ -223,3 +223,42 @@ process command_set_v1 / legacy migrate order
 Pre-existing unrelated: `currentWorkOperationalSurface` enrollment fixture `showOutcomeCompletion` (fails without P6.S2 changes).
 
 Production typecheck: **pass**. `typecheck:tests`: deferred under pressure.
+
+---
+
+# P6.S3 — Editor and Work Template authoring authority
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Save stamp | `ensureProcessCommandSetV1OnSave` / `ensureBuilderCommandSetsOnSave` |
+| Persist hooks | lifecycle-builder `saveConfig` + `persistStageV2DraftFields` |
+| Publish validation | `validateProcessCommandSetsForPublish` |
+| WT option gating | `resolveCanonicalWorkTemplateActionOptions({ process })` |
+
+## Behavior
+
+- New process saves stamp `command_set_v1` from deterministic legacy migrate when absent.
+- Explicit-empty V1 is preserved (no legacy fill).
+- Existing V1 upserts newly seen stage-catalog keys (maintains edit UX).
+- Work Template options ⊆ process selection when `process` is threaded from Activation Board.
+- Stage catalogs remain recommendation/evaluation only.
+- Publish rejects unknown capabilities and stage/WT orphans when V1 present.
+- No editor UX redesign (P6.S4 picker deferred).
+
+## Tests
+
+`processCommandSetAuthoring.test.ts` + P6.S1/S2 + WT option suites (pre-existing waitlist alternate-path fail unrelated).
+
+## P6 certification
+
+| Criterion | Status |
+|-----------|--------|
+| One process-wide selection authority (`command_set_v1`) | **met** |
+| Runtime consumers use effective projection | **met** (P6.S2) |
+| Editors write/stamp V1 on save | **met** (P6.S3) |
+| Stages only recommend/evaluate | **met** |
+| Work Templates do not invent selection | **met** when process threaded |
+| BOS does not invent selection | **met** (optional filter) |
+| Legacy fallback explicit/measurable | **met** |
+| P7 can consume without reopening P6 | **ready** |

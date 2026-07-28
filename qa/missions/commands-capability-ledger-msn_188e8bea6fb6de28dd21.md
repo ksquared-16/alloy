@@ -434,3 +434,16 @@ HMAC-SHA256 compact claims; TTL + version; no DB store; not an idempotency key.
 | Projection | `projectProcessRuntimeCommands` |
 | Consumers | Current Work, process-aware stage evaluation, optional BOS process filter |
 | Editor / WT authoring | Unchanged (P6.S3) |
+
+---
+
+# P6.S3 — Authoring Authority + P6 Certification
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p6-process-command-authority-msn_188e8bea6fb6de28dd21.md` |
+| Save | `ensureProcessCommandSetV1OnSave` on lifecycle-builder + stage V2 persist |
+| WT options | Gated via `process` on canonical resolver |
+| Publish | `validateProcessCommandSetsForPublish` |
+| P6 status | **Certified** — ready for P7 |

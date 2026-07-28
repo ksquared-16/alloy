@@ -6,7 +6,12 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    LIFECYCLE_BUILDER_METADATA_KEY,
+    lifecycleBuilderFromDepartmentMetadata,
+    mergeLifecycleBuilderIntoMetadata,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { ensureBuilderCommandSetsOnSave } from "@/lib/lifecycle/ensureProcessCommandSetV1OnSave";
 import {
     parseStageGrain,
     parseSubjectResolutionStrategy,
@@ -107,7 +112,12 @@ export async function persistStageV2DraftFields(
         draft: StageV2DraftInput;
     },
 ): Promise<{ metadata: Record<string, unknown>; updated: boolean }> {
-    const nextMetadata = applyV2DraftToBuilderStage(params.metadata, params.stageKey.trim(), params.draft);
+    let nextMetadata = applyV2DraftToBuilderStage(params.metadata, params.stageKey.trim(), params.draft);
+
+    // P6.S3: stamp command_set_v1 after stage catalog/draft writes.
+    const builder = lifecycleBuilderFromDepartmentMetadata(nextMetadata);
+    const stamped = ensureBuilderCommandSetsOnSave(builder);
+    nextMetadata = mergeLifecycleBuilderIntoMetadata(nextMetadata, stamped);
 
     const { error } = await supabase
         .from("departments")

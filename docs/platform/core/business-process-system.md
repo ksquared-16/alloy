@@ -65,7 +65,7 @@ A business process defines:
 
 **Operations hierarchy (Commands mission):** Commands define capabilities → Automations may invoke/react to Commands → Business Processes select Commands → Stages recommend/evaluate selected Commands → Surfaces expose effective Commands. Automations product and `/configuration/commands` are not required for `command_set_v1` authority.
 
-**Runtime consumption (P6.S2):** Current Work, process-aware stage evaluation, and optional BOS process filters resolve Commands through `projectProcessRuntimeCommands` → `resolveEffectiveBusinessProcessCommands`. Editors still author through legacy-compatible paths until P6.S3.
+**Runtime consumption (P6.S2):** Current Work, process-aware stage evaluation, and optional BOS process filters resolve Commands through `projectProcessRuntimeCommands` → `resolveEffectiveBusinessProcessCommands`. **Authoring (P6.S3):** process saves stamp `command_set_v1`; Work Template options gate to process selection. Process Command picker UI remains P6.S4.
 
 **Implementation tables:** `lifecycles`, `business_process_layout_assignments`, lifecycle builder metadata (JSON in org/dept metadata), stage keys in builder config.
 
