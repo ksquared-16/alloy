@@ -67,7 +67,7 @@ const DEFAULT_LINK_DESTINATIONS: Readonly<Record<string, FocusPanelCardKey>> = {
 };
 
 export const IDENTITY_LINK_CARD_OPTIONS: ReadonlyArray<{ value: FocusPanelCardKey; label: string }> = [
-    { value: "scheduling", label: "Scheduling" },
+    { value: "scheduling", label: "Assignments" },
     { value: "children", label: "Children" },
     { value: "household", label: "Household" },
     { value: "current_work", label: "What's Next" },
@@ -141,7 +141,7 @@ export function resolveIdentityFieldLinkContract(fieldRef: string): IdentityFiel
     }
     const dest = defaultTarget.toCard;
     const linkLabel =
-        dest === "scheduling" ? "Schedule"
+        dest === "scheduling" ? "Assignments"
         : dest === "household" ? "Household"
         : dest === "children" ? "Children"
         : dest === "communications" ? "Contacts"

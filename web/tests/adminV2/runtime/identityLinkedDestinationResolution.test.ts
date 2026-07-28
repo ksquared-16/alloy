@@ -120,7 +120,7 @@ describe("identity Linked destination / subject resolution", () => {
         };
         expect(isIdentityFieldLinkTargetComplete(target)).toBe(true);
         expect(summarizeIdentityFieldLinkTarget(target)).toBe(
-            "Linked → Scheduling · Detail · Current schedule",
+            "Displays the child’s Primary Assignment summary",
         );
     });
 
