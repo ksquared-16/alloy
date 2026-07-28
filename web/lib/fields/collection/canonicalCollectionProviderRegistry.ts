@@ -5,6 +5,12 @@
  * Processing) derive authoring enablement and presentation separately.
  */
 
+import {
+    RELATIONSHIP_COLLECTION_DEFINITIONS,
+    relationshipDefinitionForRole,
+    type RelationshipCollectionDefinition,
+} from "@/lib/fields/collection/relationshipCollectionDefinitions";
+
 export type CanonicalCollectionProviderKind = "household_membership" | "relationship_role" | "document" | "communication" | "work";
 
 export type CanonicalCollectionProviderDefinition = {
@@ -59,59 +65,41 @@ const HOUSEHOLD_MEMBERS: CanonicalCollectionProviderDefinition = {
     orderingPolicy: "display_name",
 };
 
-const PARENTS_GUARDIANS: CanonicalCollectionProviderDefinition = {
-    refKey: "person.contact_role.parents",
-    collectionRef: "parents_guardians",
-    label: "Parents / Guardians",
-    itemEntityType: "person",
-    providerKind: "relationship_role",
-    sourceEntityType: "customer",
-    requiredContextKeys: ["customer_id"],
-    resolverOwner: "web/lib/fields/relationship/canonicalCollectionResolver.ts",
-    activeOnly: false,
-    itemIdentityField: "id",
-    orderingPolicy: "display_name",
-    relationshipRoleKey: "parents",
-};
+const RESOLVER_OWNER = "web/lib/fields/relationship/canonicalCollectionResolver.ts";
 
-const EMERGENCY_CONTACTS: CanonicalCollectionProviderDefinition = {
-    refKey: "person.contact_role.emergency_contacts",
-    collectionRef: "emergency_contacts",
-    label: "Emergency Contacts",
-    itemEntityType: "person",
-    providerKind: "relationship_role",
-    sourceEntityType: "customer",
-    requiredContextKeys: ["customer_id"],
-    resolverOwner: "web/lib/fields/relationship/canonicalCollectionResolver.ts",
-    activeOnly: false,
-    itemIdentityField: "id",
-    orderingPolicy: "display_name",
-    // Canonical operational role key (person_child_relationship_roles) — NOT a document-specific key.
-    relationshipRoleKey: "emergency_contact",
-};
+/**
+ * NATIVE STRUCTURAL COLLECTIONS (documented native exceptions). `children` and `household.members`
+ * are foundational household-membership collections that resolve directly off `customer_members` —
+ * they are NOT role-derived relationship projections, so they stay native rather than deriving from a
+ * relationship definition. Every other relationship-role collection is DERIVED from configuration
+ * (`RELATIONSHIP_COLLECTION_DEFINITIONS`) — no hand-authored per-role provider.
+ */
+const NATIVE_PROVIDERS: readonly CanonicalCollectionProviderDefinition[] = [CHILDREN, HOUSEHOLD_MEMBERS];
 
-const AUTHORIZED_PICKUPS: CanonicalCollectionProviderDefinition = {
-    refKey: "person.contact_role.authorized_pickups",
-    collectionRef: "authorized_pickups",
-    label: "Authorized Pickup People",
-    itemEntityType: "person",
-    providerKind: "relationship_role",
-    sourceEntityType: "customer",
-    requiredContextKeys: ["customer_id"],
-    resolverOwner: "web/lib/fields/relationship/canonicalCollectionResolver.ts",
-    activeOnly: false,
-    itemIdentityField: "id",
-    orderingPolicy: "display_name",
-    relationshipRoleKey: "authorized_pickup",
-};
+/** Derive the collection provider for one relationship definition (generic — no per-role code). */
+export function providerFromRelationshipDefinition(def: RelationshipCollectionDefinition): CanonicalCollectionProviderDefinition {
+    return {
+        refKey: def.provider_ref,
+        collectionRef: def.collection_ref,
+        label: def.label,
+        itemEntityType: def.item_entity_type,
+        providerKind: "relationship_role",
+        sourceEntityType: def.source_entity_type,
+        requiredContextKeys: def.required_context_keys,
+        resolverOwner: RESOLVER_OWNER,
+        activeOnly: def.active_only,
+        itemIdentityField: "id",
+        orderingPolicy: def.ordering_policy,
+        relationshipRoleKey: def.provider_role_key,
+    };
+}
 
-const REGISTRY: readonly CanonicalCollectionProviderDefinition[] = [
-    CHILDREN,
-    HOUSEHOLD_MEMBERS,
-    PARENTS_GUARDIANS,
-    EMERGENCY_CONTACTS,
-    AUTHORIZED_PICKUPS,
-];
+/** All configured relationship-role collection providers, derived from definitions (not hand-authored). */
+export function deriveRelationshipCollectionProviders(): CanonicalCollectionProviderDefinition[] {
+    return RELATIONSHIP_COLLECTION_DEFINITIONS.map(providerFromRelationshipDefinition);
+}
+
+const REGISTRY: readonly CanonicalCollectionProviderDefinition[] = [...NATIVE_PROVIDERS, ...deriveRelationshipCollectionProviders()];
 
 const BY_REF = new Map(REGISTRY.map((p) => [p.refKey, p]));
 
@@ -143,7 +131,20 @@ export function isRegisteredCanonicalCollectionProvider(refKey: string): boolean
  * provider instead of flat fields.
  */
 export function canonicalCollectionProviderForRole(operationalRoleKey: string): CanonicalCollectionProviderDefinition | undefined {
-    const r = operationalRoleKey.trim();
-    if (r === "parent" || r === "guardian") return BY_REF.get("person.contact_role.parents");
-    return REGISTRY.find((p) => p.providerKind === "relationship_role" && p.relationshipRoleKey === r);
+    // Definition-driven: the relationship definition owns the role→provider mapping (parent/guardian
+    // both resolve to the parents/guardians definition). No per-role branch here.
+    const def = relationshipDefinitionForRole(operationalRoleKey);
+    return def ? BY_REF.get(def.provider_ref) : undefined;
+}
+
+/** The relationship definition behind a registered relationship-role provider (native providers → undefined). */
+export function relationshipDefinitionForProvider(refKey: string): RelationshipCollectionDefinition | undefined {
+    return RELATIONSHIP_COLLECTION_DEFINITIONS.find((d) => d.provider_ref === refKey.trim());
+}
+
+/** Classify a provider: native structural collection vs configured relationship projection. */
+export function classifyCollectionProvider(refKey: string): "native_structural" | "configured_relationship" | "unknown" {
+    if (RELATIONSHIP_COLLECTION_DEFINITIONS.some((d) => d.provider_ref === refKey.trim())) return "configured_relationship";
+    if (refKey.trim() === "children" || refKey.trim() === "household.members") return "native_structural";
+    return "unknown";
 }
