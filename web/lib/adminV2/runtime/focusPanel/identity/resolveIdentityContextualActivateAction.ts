@@ -24,7 +24,7 @@ function cellsFromRecord(record: IdentityRecordVM): IdentityFieldCellVM[] {
 
 function labelForLinkedCell(cell: IdentityFieldCellVM): string {
     const dest = cell.linkDestination;
-    if (dest === "scheduling" || SCHEDULE_FIELD_RE.test(cell.fieldRef)) return "Schedule →";
+    if (dest === "scheduling" || SCHEDULE_FIELD_RE.test(cell.fieldRef)) return "Assignments →";
     if (dest === "household") return "View household →";
     if (dest === "children") return "View children →";
     if (dest === "communications") return "Contacts →";

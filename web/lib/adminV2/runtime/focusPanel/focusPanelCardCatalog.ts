@@ -46,6 +46,9 @@ const FOCUS_PANEL_CARD_LABEL_ALIASES: Readonly<Record<string, FocusPanelCardKey>
     "current work": FOCUS_PANEL_WHATS_NEXT_CARD_KEY,
     "what's next": FOCUS_PANEL_WHATS_NEXT_CARD_KEY,
     "whats next": FOCUS_PANEL_WHATS_NEXT_CARD_KEY,
+    /** Legacy Surfaces / catalog label for the Assignments card (runtime key stays `scheduling`). */
+    scheduling: "scheduling",
+    assignments: "scheduling",
 };
 
 export const FOCUS_PANEL_CARD_CATALOG: readonly FocusPanelCardCatalogEntry[] = [
@@ -58,7 +61,7 @@ export const FOCUS_PANEL_CARD_CATALOG: readonly FocusPanelCardCatalogEntry[] = [
     { label: "Household", cardKey: "household" },
     { label: "Children", cardKey: "children" },
     { label: "Milestones", cardKey: "milestones" },
-    { label: "Scheduling", cardKey: "scheduling" },
+    { label: "Assignments", cardKey: "scheduling" },
     { label: "Communications", cardKey: "communications" },
     { label: "Documents", cardKey: "documents" },
     { label: "Tasks", cardKey: "tasks" },
