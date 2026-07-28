@@ -30,8 +30,40 @@ import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { TOOLKIT_DIR } from "./commands/executor.mjs";
 import { freeDiskGb, runGc } from "./disk-hygiene.mjs";
+import { ensureObjective, getObjective, advanceOnAccept, intentForPhase, clearProposedNext, setMode } from "./objective.mjs";
 
 const PROVISION_HARD_GB = 5; // pre-provision floor: below this, reclaim then fail fast
+
+/**
+ * Conductor: prepare the next phase's mission from the objective plan. In
+ * autonomous mode it also starts it (the operator has stepped out); in gated mode
+ * it just compiles a Ready package for the operator to review + start. Returns the
+ * compiled mission or an error — best-effort, never throws into the accept path.
+ */
+function conductNext(capability, phase, { autonomous } = {}) {
+  try {
+    const intent = intentForPhase(capability, phase);
+    if (!intent) return null;
+    // Auto slot resolution lives in the server; the conductor compiles onto a free
+    // slot the same way the operator's Compile does — reuse a dedicated helper so
+    // the phase mission is bound + provisionable exactly like a hand-started one.
+    const out = compileMissionForIntent({ slot: pickFreeSlotForConductor(), intent });
+    if (!out.ok) return { ok: false, error: out.reason || out.error };
+    // Tag the mission to its objective + phase so accept advances the right slot.
+    updateMission(out.mission.mission_id, { objective_capability_id: capability.capability_id, phase_id: phase.id });
+    if (autonomous) {
+      const started = startMission({ mission_id: out.mission.mission_id, confirm: true });
+      return { ok: true, mission: out.mission, started: started.ok };
+    }
+    return { ok: true, mission: out.mission, started: false };
+  } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+}
+
+/** First free worker slot (no worktree) for the conductor to provision onto. */
+function pickFreeSlotForConductor() {
+  for (let s = 1; s <= 6; s++) { const id = resolveSlotIdentity(s); if (!id.ok && id.conflict?.kind === "unregistered_slot") return s; }
+  return null; // none free → compile will surface an identity error the caller handles
+}
 
 /**
  * The LAUNCHER: provision a fresh managed worktree on a FREE worker slot so a
@@ -122,6 +154,7 @@ export function compileMissionForIntent({ slot, intent }) {
     return { ok: false, stage: "capability", reason: "no_capability", intent, known: cap.known };
   }
   const capability = cap.capability;
+  ensureObjective(capability, { intent }); // the conductor's phase spine (audit&plan → roadmap)
   const snapshot = retrieveForCapability(capability);
 
   // Stage: Gap Analysis (the reasoning stage) — compares intent vs the prepared context.
@@ -290,6 +323,27 @@ export function addProductDecision({ capability_id, statement, rationale, actor 
   audit("product-decision", { kind: "capability", id: capability_id, label: cap.name }, "succeeded", { summary: statement.slice(0, 60), confirmed: true });
   return { ok: true, product_definition_id: r.product_definition_id, decision: r.decision, added: r.added };
 }
+
+/** Hand the objective to Director (autonomous) or take it back (gated). */
+export function setObjectiveMode({ capability_id, mode }) {
+  const o = setMode(capability_id, mode);
+  return o ? { ok: true, objective: o } : { ok: false, error: "no_objective" };
+}
+
+/** Gated conductor: prepare the objective's next phase as a Ready mission to review. */
+export function prepareNextPhase({ capability_id }) {
+  const cap = getCapability(capability_id);
+  const o = getObjective(capability_id);
+  if (!cap || !o) return { ok: false, error: "no_objective" };
+  const next = o.phases.find((p) => p.status === "pending");
+  if (!next) return { ok: false, error: "objective_complete" };
+  const run = conductNext(cap, next, { autonomous: false });
+  if (run?.ok) { clearProposedNext(capability_id); return { ok: true, mission: run.mission, phase: next }; }
+  return { ok: false, error: run?.error || "prepare_failed" };
+}
+
+/** Read the objective (phase spine + mode + proposed next) for a capability. */
+export function readObjective(capability_id) { return getObjective(capability_id); }
 
 /** Build a preview for a consequential mission action (pure; never executes). */
 export function previewAction(action, mission_id) {
@@ -498,8 +552,21 @@ export function accept({ mission_id, confirm }) {
       if (pd) recordMissionInHistory(pd.product_definition_id, { mission_id, title: mission.title, outcome: "completed" });
     }
   } catch { /* write-back best-effort; acceptance already recorded */ }
-  audit("accept", targetOf(mission, identity), "succeeded", { confirmed: true, summary: `accepted (gate=${result.gate})` });
-  return { ok: true, result, status: "completed" };
+  // Conductor: advance the objective's phase spine, then PROPOSE the next phase
+  // (gated) or PREPARE + RUN it (autonomous — the operator has stepped out).
+  let conductor = null;
+  try {
+    const cap = mission.capability_id ? getCapability(mission.capability_id) : null;
+    if (cap && result.gate !== "fail") {
+      const adv = advanceOnAccept(cap, { mission_id });
+      conductor = { complete: adv.complete, next: adv.next || null, mode: adv.objective?.mode || "gated" };
+      if (!adv.complete && conductor.mode === "autonomous") {
+        conductor.conducted = conductNext(cap, adv.next, { autonomous: true });
+      }
+    }
+  } catch { /* conductor is best-effort; acceptance already recorded */ }
+  audit("accept", targetOf(mission, identity), "succeeded", { confirmed: true, summary: `accepted (gate=${result.gate})${conductor?.next ? ` → next: ${conductor.next.title}` : conductor?.complete ? " → objective complete" : ""}` });
+  return { ok: true, result, status: "completed", conductor };
 }
 
 /**

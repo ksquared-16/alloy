@@ -52,7 +52,7 @@ import { readMissions, getMission, recoverMissions } from "./vacilando/commands/
 import { getPackage } from "./vacilando/commands/mission-packages.mjs";
 import { readMissionOutputs, readTurnOutput, liveMissionIds } from "./vacilando/mission-executor.mjs";
 import { providerResumable } from "./vacilando/provider-runtime.mjs";
-import { compileMissionForIntent, recompileMission, reframeMission, answerQuestions, defineCapability, addProductDecision, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, close as directorClose, previewAction, readAcceptance } from "./vacilando/mission-director.mjs";
+import { compileMissionForIntent, recompileMission, reframeMission, answerQuestions, defineCapability, addProductDecision, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, close as directorClose, previewAction, readAcceptance, setObjectiveMode, prepareNextPhase, readObjective } from "./vacilando/mission-director.mjs";
 import { listCapabilities, getCapability, registerCapability } from "./vacilando/capability.mjs";
 import { assembleConversation, listConversations } from "./vacilando/conversation.mjs";
 import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
@@ -568,6 +568,27 @@ async function refreshDisk({ act = false } = {}) {
 }
 
 /**
+ * Autonomous conductor: once the operator has handed an objective off (mode =
+ * autonomous), a phase that FINISHES and whose acceptance gate fully passes (every
+ * criterion evidence-met) is auto-accepted — which advances the objective and
+ * starts the next phase. A gate that needs judgment (needs_operator) or a blocker
+ * is LEFT for the operator, who is pulled in by notification. Governance is
+ * unchanged: the worker still may not push/merge/promote, and consequential
+ * actions still preview→confirm. Never rubber-stamps judgment.
+ */
+function conductorTick() {
+  try {
+    for (const m of readMissions(null, 200)) {
+      if (m.status !== "waiting_for_acceptance" || !m.capability_id) continue;
+      const obj = readObjective(m.capability_id);
+      if (!obj || obj.mode !== "autonomous") continue;
+      const ev = directorEvaluate({ mission_id: m.mission_id });
+      if (ev?.result?.gate === "pass") directorAccept({ mission_id: m.mission_id, confirm: true });
+    }
+  } catch { /* best-effort; the operator path always still works */ }
+}
+
+/**
  * Director async send: run a durable request's provider turn in the background
  * and update its record through the lifecycle. The browser never waits on this —
  * it created the record (Queued) and polls /api/director/requests for status.
@@ -663,6 +684,21 @@ export function createVacilandoServer() {
 
     // Disk hygiene: run the safe reclaim now (operator-triggered), or set the policy
     // (enable/disable the reactive auto-gc, tune the low-water mark).
+    // Conductor: hand the objective to Director (autonomous) or take it back (gated),
+    // and prepare the next phase as a Ready mission (gated).
+    if (req.method === "POST" && path === "/api/director/objective/mode") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      const out = setObjectiveMode({ capability_id: body.value?.capability_id, mode: body.value?.mode });
+      return sendJson(res, out.ok ? 200 : 404, out);
+    }
+    if (req.method === "POST" && path === "/api/director/objective/prepare-next") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      const out = prepareNextPhase({ capability_id: body.value?.capability_id });
+      return sendJson(res, out.ok ? 200 : 409, out);
+    }
+
     if (req.method === "POST" && path === "/api/disk/reclaim") {
       const out = await runGc({ minFreeGb: DISK_POLICY.cache_min_free_gb });
       lastDiskGc.auto_actions = [{ ...out, trigger: "operator", at: new Date().toISOString() }, ...(lastDiskGc.auto_actions || [])].slice(0, 10);
@@ -1000,7 +1036,10 @@ export function createVacilandoServer() {
       const id = url.searchParams.get("id") || "";
       const c = assembleConversation(id);
       if (!c) return sendJson(res, 404, { error: "unknown_conversation" });
-      return sendJson(res, 200, { conversation: c });
+      // Attach the objective (phase spine + mode + proposed next) so the UI can
+      // render Director conducting the objective, not just the single mission.
+      const objective = c.capability_id ? readObjective(c.capability_id) : null;
+      return sendJson(res, 200, { conversation: c, objective });
     }
 
     // Capability Runtime (registry). Read-only projections; enriched at read time.
@@ -1109,6 +1148,9 @@ export function createVacilandoServer() {
   // Disk hygiene changes slowly — measure + (opt-in) reactively reclaim every 10 min.
   const diskTimer = setInterval(() => { refreshDisk({ act: true }).catch(() => {}); }, 10 * 60 * 1000);
   diskTimer.unref?.();
+  // Autonomous conductor: advance handed-off objectives without the operator.
+  const condTimer = setInterval(() => { try { conductorTick(); } catch {} }, 15000);
+  condTimer.unref?.();
 
   // Any Director request left non-terminal died with a previous process — mark it
   // interrupted honestly rather than showing a fake "running".
@@ -1132,7 +1174,7 @@ export function createVacilandoServer() {
   const warmTimer = setInterval(warmExpensive, 30000);
   warmTimer.unref?.();
 
-  return { server, clients, close: () => { clearInterval(timer); clearInterval(memTimer); clearInterval(diskTimer); server.close(); } };
+  return { server, clients, close: () => { clearInterval(timer); clearInterval(memTimer); clearInterval(diskTimer); clearInterval(condTimer); server.close(); } };
 }
 
 export function startVacilandoServer(port = DEFAULT_PORT) {

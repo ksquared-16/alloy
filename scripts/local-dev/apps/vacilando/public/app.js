@@ -1051,6 +1051,22 @@ async function diskSetAuto(on) {
   catch { toast("err", "Couldn't change policy", ""); }
   fetchDashboard();
 }
+// Conductor controls: hand the objective to Director (autonomous) or take it back,
+// and prepare the next phase (gated).
+async function objSetMode(cap, mode) {
+  try { await api("/api/director/objective/mode", { capability_id: cap, mode }); toast("ok", mode === "autonomous" ? "Handed off to Director" : "Taken back", mode === "autonomous" ? "Director conducts the remaining phases; you're pulled in only for a decision or blocker." : "You approve each phase."); }
+  catch { toast("err", "Couldn't change mode", ""); }
+  fetchConversations();
+  for (const id in (state._objective || {})) { if (state._objective[id] && state._objective[id].capability_id === cap) fetchConversation(id); }
+}
+async function objPrepareNext(cap) {
+  toast("idle", "Preparing next phase…", "");
+  try {
+    const { data } = await api("/api/director/objective/prepare-next", { capability_id: cap });
+    if (data && data.ok) { toast("ok", "Next phase prepared — review & start", (data.phase && data.phase.title) || ""); fetchConversations(); if (data.mission && data.mission.mission_id) state._openConvo = data.mission.mission_id; }
+    else toast("err", "Couldn't prepare next", (data && data.error) || "");
+  } catch { toast("err", "Couldn't prepare next", ""); }
+}
 async function fetchProviders() { try { const r = await fetch("/api/providers"); state._providers = await r.json(); render(true); } catch {} }
 // A worker's provider status is READ from the Provider Runtime (shared), never owned by the worker.
 function providerRt(id) { return (state._providers?.providers || state._dash?.provider_runtime?.providers || []).find((p) => p.id === id) || null; }
@@ -1324,7 +1340,24 @@ const DIR_MARK = { done: "✓", current: "•", review: "!", blocked: "⛔", pen
 
 async function fetchConversations() { try { const r = await fetch("/api/director/conversations"); state._convos = (await r.json()).conversations || []; render(true); } catch { /* keep last */ } }
 async function fetchCapabilities() { try { const r = await fetch("/api/capabilities"); state._caps = (await r.json()).capabilities || []; render(true); } catch { /* keep last */ } }
-async function fetchConversation(id) { try { const r = await fetch("/api/director/conversation?id=" + encodeURIComponent(id)); (state._convo = state._convo || {})[id] = (await r.json()).conversation; render(true); } catch { /* keep last */ } }
+async function fetchConversation(id) { try { const r = await fetch("/api/director/conversation?id=" + encodeURIComponent(id)); const j = await r.json(); (state._convo = state._convo || {})[id] = j.conversation; (state._objective = state._objective || {})[id] = j.objective || null; render(true); } catch { /* keep last */ } }
+// The conductor strip: shows Director conducting the objective as a phase spine,
+// a hand-off toggle (gated ⇄ autonomous), and — after an Accept — a one-click
+// "Prepare next phase" so the operator never returns to a blank box.
+function objectiveStrip(id) {
+  const o = (state._objective || {})[id];
+  if (!o || !(o.phases || []).length) return "";
+  const done = o.phases.filter((p) => p.status === "done").length;
+  const auto = o.mode === "autonomous";
+  const spine = o.phases.map((p) => `<span class="ophase ${p.status}" title="${esc(p.title)}">${p.status === "done" ? "✓" : "○"} ${esc(p.title)}</span>`).join('<span class="oarrow">→</span>');
+  const pn = o.proposed_next;
+  return `<div class="objstrip">
+    <div class="objhead"><b>${esc(o.title)}</b> · ${done}/${o.phases.length} phases · <span class="${auto ? "clean" : "muted"}">${auto ? "Director is conducting (autonomous)" : "operator-gated"}</span>
+      <button class="btn sm ${auto ? "warn" : ""}" data-obj-mode="${auto ? "gated" : "autonomous"}" data-cap="${esc(o.capability_id)}">${auto ? "Take back" : "Hand off to Director"}</button></div>
+    <div class="ospine">${spine}</div>
+    ${pn && !auto ? `<div class="objnext">Next: <b>${esc(pn.phase.title)}</b> <button class="btn sm go" data-obj-prepare="${esc(o.capability_id)}">Prepare it</button></div>` : ""}
+  </div>`;
+}
 
 function viewDirector() {
   const r = parseRoute();
@@ -1586,6 +1619,7 @@ function conversationWorkspace(id) {
     <div class="dmhead"><button class="btn sm" data-dback>← Conversations</button>
       <div class="dmtitle"><h2>${esc(c.title)}</h2><span class="dmintent">${esc(stageLabel)}</span></div>
       ${o ? `<span class="mbadge ${STAGE_TONE[headStage] || o.state.tone} big">${esc(stageLabel)}</span>` : ""}</div>
+    ${objectiveStrip(id)}
     <div class="cvgrid">${left}${center}${right}</div>
   </div>`;
 }
@@ -1741,6 +1775,8 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-cmd]"))) { e.stopPropagation(); startCommand(n.dataset.cmd, n.dataset.slot ? { slot: Number(n.dataset.slot) } : {}); return; }
   if ((n = t("[data-disk-reclaim]"))) { e.stopPropagation(); diskReclaim(); return; }
   if ((n = t("[data-disk-auto]"))) { e.stopPropagation(); diskSetAuto(n.dataset.diskAuto === "1"); return; }
+  if ((n = t("[data-obj-mode]"))) { e.stopPropagation(); objSetMode(n.dataset.cap, n.dataset.objMode); return; }
+  if ((n = t("[data-obj-prepare]"))) { e.stopPropagation(); objPrepareNext(n.dataset.objPrepare); return; }
   if ((n = t("[data-end]"))) { e.stopPropagation(); showEndWork(Number(n.dataset.end)); return; }
   if (t("[data-start]")) { showStartWork(); return; }
   if ((n = t("[data-startserver]"))) { e.stopPropagation(); showStartServer(Number(n.dataset.startserver)); return; }
@@ -1849,6 +1885,32 @@ if (!location.hash) location.hash = "#/command";
 connect(); poll(); fetchResources();
 setInterval(poll, 4000);
 setInterval(fetchResources, 9000);
+
+// ---- Operator notifications: pulled in when Director needs you, not by checking.
+// Fires a native (Electron) desktop notification the moment a conversation newly
+// enters a state that needs the operator — a question to answer, a package to
+// review, or work ready for acceptance — and stays quiet otherwise. Same signal a
+// future Mac-mini + mobile push would ride; only the transport differs.
+const NOTIFY_ACTIONS = { Answer: "has a question for you", Review: "prepared work to review", Accept: "finished work — ready for your acceptance", Continue: "is blocked and needs you" };
+const _notifySeen = new Map(); // conversation_id -> last action (only notify on transitions, never on first load)
+function notifyOperator(convos) {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  for (const c of (convos || [])) {
+    const action = (c.state && c.state.action) || "";
+    const id = c.conversation_id;
+    const prev = _notifySeen.has(id) ? _notifySeen.get(id) : null;
+    _notifySeen.set(id, action);
+    if (prev === null || prev === action) continue;         // first sight or unchanged → no notification
+    if (!NOTIFY_ACTIONS[action]) continue;                   // only the states that need a human
+    try {
+      const n = new Notification(`Vacilando · ${c.title || "Director"}`, { body: `Director ${NOTIFY_ACTIONS[action]}.`, tag: id, requireInteraction: action === "Accept" || action === "Continue" });
+      n.onclick = () => { try { window.focus(); location.hash = "#/director"; state._openConvo = id; render(true); } catch {} };
+    } catch { /* notifications unavailable */ }
+  }
+}
+async function notifyPoll() { try { const r = await fetch("/api/director/conversations"); notifyOperator((await r.json()).conversations || []); } catch { /* keep last */ } }
+if (typeof Notification !== "undefined" && Notification.permission === "default") { try { Notification.requestPermission().catch(() => {}); } catch {} }
+notifyPoll(); setInterval(notifyPoll, 15000);
 // Poll the selected worker's Director requests while any is still running, so
 // status advances live and the elapsed timer ticks. Server store is authoritative.
 setInterval(() => { const slot = state.sel; if (slot == null || document.hidden) return; const rs = state.requests[slot]; if (rs && rs.some((r) => !REQ_TERMINAL.has(r.status))) fetchRequests(slot); }, 2500);

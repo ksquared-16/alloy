@@ -651,3 +651,14 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .oprisk{font-size:12px;color:var(--ink-2);line-height:1.5;}
 .oprec{margin-top:10px;font-size:12.5px;color:var(--ink);line-height:1.55;border-top:1px solid var(--line);padding-top:8px;}
 @media(max-width:900px){.cvgrid{grid-template-columns:1fr;}}
+
+/* Conductor: objective phase spine + hand-off */
+.objstrip{margin:8px 0 12px;padding:10px 12px;border:1px solid var(--line,#e3d9c9);border-radius:10px;background:var(--panel,#fbf7f0)}
+.objhead{display:flex;align-items:center;gap:8px;font-size:13px;flex-wrap:wrap}
+.objhead .btn{margin-left:auto}
+.ospine{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:8px;font-size:12px}
+.ophase{padding:2px 8px;border-radius:999px;background:rgba(0,0,0,.05);white-space:nowrap}
+.ophase.done{background:rgba(60,140,90,.16);color:#2f6b45}
+.ophase.pending{color:var(--muted,#8a7f6d)}
+.oarrow{color:var(--muted,#b3a894);font-size:11px}
+.objnext{margin-top:8px;font-size:13px;display:flex;align-items:center;gap:8px}
