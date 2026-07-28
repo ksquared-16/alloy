@@ -9,14 +9,14 @@ Continue the Phase 7 Document-to-Packet mission on the EXISTING managed slot 4. 
 **Environment (confirm first):**
 - Canonical root: `/Users/Kelly/Alloy`. Toolkit commands live at `/Users/Kelly/bin/alloy-dev/` (add to PATH if `alloy-*` "command not found": `export PATH="/Users/Kelly/bin/alloy-dev:$PATH"`).
 - Slot 4 worktree: `/Users/Kelly/Code/alloy-worktrees/wt4-phase7-slice3-participant-runtime`
-- Branch: `agent/claude/4-phase7-slice3-participant-runtime` (off staging, which now CONTAINS promoted Slice 1+2). Currently ahead 1 (the import-dialog z-fix).
+- Branch: `agent/claude/4-phase7-slice3-participant-runtime` (off staging, which now CONTAINS promoted Slice 1+2 AND the import-dialog z-fix — PR #252, merge `a2b20f373`).
 - Dev server: slot 4, port 3014, http://localhost:3014. **GOTCHA: the server needs Node ≥20; the toolkit shell may default to Node 16 and fail with "Node.js version >=20.9.0 is required."** Always start it with Node 22 on PATH:
   `export PATH="/Users/Kelly/.nvm/versions/node/v22.21.1/bin:/Users/Kelly/bin/alloy-dev:$PATH" && alloy-dev-start wt4-phase7-slice3-participant-runtime`
 - Auth for browser QA: log in as admin at :3014 (the in-app browser pane can't hold the operator Supabase session; Playwright certs use `playwright/helpers/adminSessionAuth.ts` with service-role env from `/Users/Kelly/Alloy/web/.env.local`, `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3014`, run with Node 22).
 
 **State so far:**
 - Slice 1 (governed OCR document→published form) + Slice 2 (packet composition + requirement responsibility) are COMPLETE, CERTIFIED, and **PROMOTED to origin/staging** (PR #251, merge `8179a246f`).
-- QA in progress. Fixed one QA bug (`395026bf8`): the Processing import dialogs opened BEHIND the BOS modal shell — `ProcessingAlloyDialog` was `z-[80]` vs the shell's panel `z=97` (raised to `z-[110]`; fixes all 7 nested Processing dialogs). **RE-VERIFY:** open Processing → Overview "Import document" tile ("Open →") and Work→Queue "Import document" — both should now open a clickable intent modal.
+- QA in progress. One QA bug fixed and **MERGED TO STAGING** (PR #252, merge `a2b20f373`, fix commit `395026bf8`): the Processing import dialogs opened BEHIND the BOS modal shell — `ProcessingAlloyDialog` was `z-[80]` vs the shell's panel `z=97` (raised to `z-[110]`; fixes all 7 nested Processing dialogs). **RE-VERIFY:** open Processing → Overview "Import document" tile ("Open →") and Work→Queue "Import document" — both should now open a clickable intent modal.
 
 **Do now:**
 1. Continue QA of Slice 1+2 through the real UI on :3014. Log each finding; fix small QA bugs on this branch (commit coherently, don't push). Bugs in promoted staging code are fair game to fix here.
