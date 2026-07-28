@@ -128,13 +128,6 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         description: "Configure how work gets done.",
         items: [
             {
-                href: "/organization/commands",
-                label: "Commands",
-                description: "Organization Command catalog and policy.",
-                icon: "integrations",
-                testId: "config-mode-nav-commands",
-            },
-            {
                 href: "/admin/workflows",
                 label: "Automation",
                 description: "Workflow triggers and platform-triggered behavior.",
@@ -176,12 +169,19 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
 /** Internal / developer catalog — not shown in primary operator nav. */
 export const CONFIGURATION_MODE_INTERNAL_NAV_ITEMS: readonly ConfigurationModeNavItem[] = [
     {
-        // Direct adminV2 path — `/settings/actions` redirects to Commands for operators.
         href: "/adminV2/settings/actions",
         label: "Action definitions (legacy)",
         description: "Transitional action definition / placement catalog (developer).",
         icon: "integrations",
         testId: "config-mode-nav-action-definitions",
+        internal: true,
+    },
+    {
+        href: "/organization/commands",
+        label: "Command capability diagnostics",
+        description: "Internal Capability Registry inspection — not organization configuration.",
+        icon: "integrations",
+        testId: "config-mode-nav-commands-diagnostics",
         internal: true,
     },
 ] as const;
@@ -247,11 +247,12 @@ export function configurationModeNavItemActive(
         return (
             p === h
             || p.startsWith(`${h}/`)
-            || p.startsWith("/organization/commands")
-            || p.startsWith("/settings/actions")
             || p.startsWith("/adminV2/settings/organization/commands")
             || p.startsWith("/configuration/commands")
         );
+    }
+    if (h === "/adminV2/settings/actions") {
+        return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/actions");
     }
     if (h === settings("processes")) {
         return (

@@ -73,8 +73,7 @@ services).
 **Status:** Preparation (P1.S1). RegisteredAction execute (P1.S2). Lead Status Mutation execute
 (P2.S1). Child Enrollment Mutation execute (P2.S2). Relationship Runtime adapter (P3.S1–P3.S3).
 Destructive allowlist commit (P4.S2–S3: `make_primary_contact`, `delete_lead`, `cancel_tour`).
-Tour domain adapter (P5). Process `command_set_v1` authority (P6). Organization Commands product
-`/organization/commands` (P7–P8). Fallback disposition ledger + telemetry (P9). Remaining
+Tour domain adapter (P5). Process `command_set_v1` authority (P6). Organization Commands **operator configuration product rejected** (P7–P8 product-boundary correction): `/organization/commands` is internal capability diagnostics only. Fallback disposition ledger + telemetry (P9). Remaining
 `executeAdminAction` keys are classified intentional compatibility / unsupported — not silently
 deleted.
 
@@ -141,9 +140,9 @@ Shared server contract under `web/lib/platform/commands/runtime/destructive/`:
 
 `POST /api/admin/actions/execute` remains the operator/API route name. Dedicated
 `/api/admin/relationship-actions/execute` remains available. `/api/admin/mutations/execute`
-remains available and unchanged. Organization Commands product foundation ships at
-`/organization/commands` (product name **Commands**; `/configuration/commands` and
-`/settings/actions` redirect there). Exactly-once applies **per route invocation**,
+remains available and unchanged. Command capability diagnostics (internal only) remain at
+`/organization/commands`. `/settings/actions` redirects to developer Action Buttons CRUD
+(`/adminV2/settings/actions`). Exactly-once applies **per route invocation**,
 not distributed idempotency.
 
 ---
@@ -195,7 +194,10 @@ For compatibility, legacy child rules without timing are still downgraded to rec
 | Layer | Controls |
 |-------|----------|
 | **Capability Registry** | Whether a Command identity exists, maturity, and execution owner (honesty — not authorization) |
-| **Organization Command Catalog** | Org enablement / labels / availability (`action_definitions` + placements; product UI `/organization/commands`, P7 foundation) |
+| **Capability Registry** | Platform-owned Command identities and honesty | Code registry; not inventable by Surfaces/BOS |
+| **Process Command selection** | `command_set_v1` on Business Processes | Stages recommend/evaluate selected Commands only |
+| **Surface exposure** | Placements / Surfaces product | Where operators encounter effective Commands |
+| **Internal diagnostics** | `/organization/commands` | Read-only Capability Registry inspection — not org configuration |
 | **Business Process `command_set_v1`** | Which Commands the process selects (sole target process-wide authority; P6.S1) |
 | **Stage `action_catalog_v1`** | Stage recommendation / evaluation metadata for selected Commands only |
 | **Experience Builder** | Where actions appear on a layout surface (contact row, section, related list) |

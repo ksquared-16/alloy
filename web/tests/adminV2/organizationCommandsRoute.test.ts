@@ -1,5 +1,5 @@
 /**
- * P7/P8 — Commands product route shell and Action Buttons transition.
+ * Commands route — internal capability diagnostics (not operator org configuration).
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -12,39 +12,44 @@ function read(rel: string): string {
     return readFileSync(resolve(root, rel), "utf8");
 }
 
-describe("Organization Commands route foundation", () => {
+describe("Command capability diagnostics route", () => {
     it("resolves commands organization subpath to /organization/commands", () => {
         expect(adminSettingsSubpathHref("commands")).toBe("/organization/commands");
     });
 
-    it("ships /organization/commands page shell with Commands vocabulary", () => {
+    it("ships diagnostics shell — not organization configuration copy", () => {
         const page = read("app/adminV2/settings/organization/commands/page.tsx");
         expect(page).toContain("CommandsConfigurationPage");
-        expect(page).toContain("Organization Commands");
+        expect(page).toMatch(/diagnostics/i);
+        expect(page).not.toContain("Organization Commands");
         const client = read("components/adminV2/settings/commands/CommandsConfigurationPage.tsx");
-        expect(client).toContain('title="Commands"');
+        expect(client).toContain("Command capability diagnostics");
         expect(client).toContain("settings-commands-page");
+        expect(client).toContain("commands-diagnostics-banner");
         expect(client).toContain("commands-catalog-list");
-        expect(client).not.toContain("Action buttons");
         expect(client).not.toContain("Action Buttons");
+        expect(client).not.toContain("commands-org-enabled-toggle");
+        expect(client).not.toContain("Save label");
     });
 
-    it("ships workspace tabs for availability, processes, variants, and safety", () => {
+    it("keeps detail API for inspection without editable org controls", () => {
         const client = read("components/adminV2/settings/commands/CommandsConfigurationPage.tsx");
-        expect(client).toContain('id: "availability"');
-        expect(client).toContain('id: "processes"');
-        expect(client).toContain('id: "variants"');
-        expect(client).toContain('id: "safety"');
-        expect(client).toContain("commands-tab-");
         expect(client).toContain("/api/admin/commands/");
+        expect(client).toContain("commands-process-usage");
+        expect(client).toContain("commands-operational-exposure");
+        expect(client).toContain("commands-safety");
     });
 
-    it("rewrites /organization/commands and redirects Action Buttons + product alias", () => {
+    it("rewrites diagnostics route and sends /settings/actions to developer CRUD", () => {
         const cfg = read("next.config.ts");
         expect(cfg).toContain('source: "/organization/commands"');
         expect(cfg).toContain('destination: "/adminV2/settings/organization/commands"');
-        expect(cfg).toContain('source: "/settings/actions"');
-        expect(cfg).toContain('destination: "/organization/commands"');
+        expect(cfg).toContain(
+            '{ source: "/settings/actions", destination: "/adminV2/settings/actions", permanent: false }'
+        );
+        expect(cfg).not.toContain(
+            '{ source: "/settings/actions", destination: "/organization/commands", permanent: false }'
+        );
         expect(cfg).toContain('source: "/configuration/commands"');
     });
 });

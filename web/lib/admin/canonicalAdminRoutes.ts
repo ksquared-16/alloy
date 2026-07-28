@@ -57,7 +57,7 @@ export const CANONICAL_ORGANIZATION_ACCESS_HREF = `${CANONICAL_ORGANIZATION_BASE
 /** Canonical Organization Business Processes. */
 export const CANONICAL_ORGANIZATION_PROCESSES_HREF = `${CANONICAL_ORGANIZATION_BASE}/processes` as const;
 
-/** Canonical Organization Commands catalog. */
+/** Internal Command capability diagnostics route (`/organization/commands`) — not an org config product. */
 export const CANONICAL_ORGANIZATION_COMMANDS_HREF = `${CANONICAL_ORGANIZATION_BASE}/commands` as const;
 
 /** Canonical Organization Data Model (Entities, Fields, Statuses, Option Sets, Relationships, Calculations). */

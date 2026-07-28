@@ -19,17 +19,22 @@ real Organization Configuration UI.
 Corrective integration + live UI proof:
 `qa/missions/commands-ui-product-integration-correction-msn_188e8bea6fb6de28dd21.md`
 
-**Second honesty correction (same day) — product realization:**
+**Third honesty correction (same day) — product-boundary:**
 
-Route integration alone was still insufficient. The first Commands page exposed registry/placement structure (`Limited`, duplicate Availability rows, empty five-tab shell). Administrator product realization required a further pass:
+The standalone Organization Commands **configuration product is rejected**. Architecture delivery
+(Registry, Runtime, adapters, `command_set_v1`, safety, telemetry) remains certified.
+`/organization/commands` is internal diagnostics only; Operations sequence is Automation →
+Processes → Surfaces; `/settings/actions` → developer Action Buttons.
 
-`qa/missions/commands-product-realization-correction-msn_188e8bea6fb6de28dd21.md`
+Evidence: `qa/missions/commands-product-boundary-correction-msn_188e8bea6fb6de28dd21.md`
 
 ---
 
 ## Certification verdict
 
-**Mission implementation complete for approved P0–P10 scope**, with honest retained compatibility documented below. Nothing pushed.
+**Mission architecture scope (P0–P6, P9) remains certified.** Operator Organization Commands
+configuration product (P7–P8 as a peer org domain) is **not** certified — rejected at product boundary.
+Nothing pushed.
 
 | Area | Status |
 |------|--------|
@@ -39,36 +44,31 @@ Route integration alone was still insufficient. The first Commands page exposed 
 | Tour convergence | Certified |
 | Process `command_set_v1` authority | Certified |
 | Editors / Work Templates write/consume V1 | Certified |
-| `/organization/commands` product | Certified (admin product realization 2026-07-28) |
-| Operations nav: Commands → Automation → Processes → Surfaces | Certified |
-| Action Buttons operator path | Redirected to Commands |
+| `/organization/commands` as org configuration product | **Rejected** (diagnostics only) |
+| Operations nav: Automation → Processes → Surfaces | Certified (Commands removed) |
+| Action Buttons developer path | `/adminV2/settings/actions` (`/settings/actions` redirects there) |
 | `executeAdminAction` drain | Ledger + telemetry certified; branches intentionally retained |
 | No schema/migration invented | Certified |
 | No push | Certified |
 
 ---
 
-## Administrator walkthrough — `/organization/commands`
+## Diagnostics walkthrough — `/organization/commands` (internal only)
 
-1. Configuration mode → **Operations** → **Commands** (first Operations item).
-2. URL: `/organization/commands` (aliases: `/configuration/commands`, `/settings/actions` redirect here).
-3. Search / filter Available · Limited · Unavailable; Commands grouped by family.
-4. Select a Command:
-   - **Overview** — status, needs-attention reason, org label edit when org-owned
-   - **Availability** — operational contexts; toggle org placements
-   - **Business Processes** — processes that select this Command; link to Processes
-   - **Variants** — bounded overlays (never different executors)
-   - **Safety** — confirmation, preview, destructive class (platform-owned)
-5. Automations remain a separate Operations product (next nav item).
-6. Developer placement CRUD (if needed): `/adminV2/settings/actions` only.
+1. Not shown on `/organization` domain grid or ordinary Operations nav.
+2. URL: `/organization/commands` (alias `/configuration/commands`). Internal nav label: Command capability diagnostics.
+3. Read-only Capability Registry inspection; no organization policy edits.
+4. `/settings/actions` → `/adminV2/settings/actions` (developer CRUD).
 
 ---
 
 ## Operations hierarchy (shipped)
 
 ```text
-Commands → Automations → Business Processes → Surfaces
+Automation → Business Processes → Surfaces
 ```
+
+(Command capabilities remain platform-owned; Processes select; Surfaces expose; Automation may invoke.)
 
 ---
 

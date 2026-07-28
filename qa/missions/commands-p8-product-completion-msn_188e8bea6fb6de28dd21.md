@@ -5,20 +5,23 @@ Date: 2026-07-27
 
 ---
 
-## Honesty correction (2026-07-28) — product realization
+## Honesty correction (2026-07-28) — product-boundary
 
-Route + catalog foundation was real, but the first product shell was a **registry/placement inspector** (five tabs, duplicate Availability rows, `Limited` maturity jargon). That is **not** accepted administrator product.
+**Standalone Organization Commands configuration product is rejected.**
 
-Corrective pass evidence:
-`qa/missions/commands-product-realization-correction-msn_188e8bea6fb6de28dd21.md`
+Architecture (Capability Registry, Runtime, adapters, `command_set_v1`, safety, telemetry) remains.
+`/organization/commands` is **internal capability diagnostics only** — removed from Organization
+Configuration domain grid and ordinary Operations navigation. Sequence: Automation → Processes → Surfaces.
+`/settings/actions` → developer Action Buttons CRUD.
 
-Accepted shape: progressive disclosure; Supported / Needs attention / Not yet supported; grouped operational exposures; org-owned label + enable + placement toggles only; empty Variants hidden; compact Safety.
+Evidence: `qa/missions/commands-product-boundary-correction-msn_188e8bea6fb6de28dd21.md`
 
 ---
 
-## Outcome
+## Honesty correction (2026-07-28) — product realization (superseded for operator product)
 
-`/organization/commands` is a usable Organization Command catalog and **bounded org configuration** surface.
+Route + catalog foundation was real, but the first product shell was a **registry/placement inspector**.
+That operator product is now rejected at the product boundary (see above), not merely polished.
 
 Absorbed from Action Buttons (without dual operator products):
 
@@ -36,16 +39,11 @@ Added:
 
 ---
 
-## Administrator walkthrough
+## Administrator note (post product-boundary)
 
-1. Open Organization Configuration → **Commands** (`/organization/commands`).
-2. Search or filter by Supported / Needs attention / Not yet supported.
-3. Select a Command — progressive sections (not a forced five-tab shell).
-4. Organization settings: enable/disable and label when org-owned.
-5. Where operators encounter it: toggle grouped org contexts Shown/Hidden.
-6. Business Processes: see selection usage or empty state; link to Processes.
-7. Safety: platform-owned confirmation and destructive class (not editable).
-8. Legacy `/settings/actions` redirects here. Developer placement CRUD remains at `/adminV2/settings/actions`.
+Do **not** use `/organization/commands` as organization configuration. Use Business Processes for
+`command_set_v1`, Surfaces for exposure, Automation for invocation, and `/adminV2/settings/actions`
+for developer placement CRUD.
 
 ---
 

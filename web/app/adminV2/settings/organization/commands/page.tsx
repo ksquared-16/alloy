@@ -12,12 +12,15 @@ function firstParam(value: string | string[] | undefined): string | null {
     return value?.trim() || null;
 }
 
-/** Canonical Organization Commands — `/organization/commands` (product: Commands). */
-export default async function OrganizationCommandsPage({ searchParams }: PageProps) {
+/**
+ * Internal Command capability diagnostics — `/organization/commands`.
+ * Not an Organization Configuration product. Selection → Processes; exposure → Surfaces.
+ */
+export default async function OrganizationCommandsDiagnosticsPage({ searchParams }: PageProps) {
     const resolved = searchParams ? await searchParams : {};
     const initialCommandKey = firstParam(resolved.commandKey);
     return (
-        <Suspense fallback={<p className="p-4 text-sm text-alloy-midnight/55">Loading Commands…</p>}>
+        <Suspense fallback={<p className="p-4 text-sm text-alloy-midnight/55">Loading diagnostics…</p>}>
             <CommandsConfigurationPage initialCommandKey={initialCommandKey} />
         </Suspense>
     );

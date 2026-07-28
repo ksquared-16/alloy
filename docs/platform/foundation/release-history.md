@@ -15,9 +15,9 @@ supersedes: []
 
 ## 2026 H1 — Platform maturation
 
-### July 2026 — Organization Commands product foundation
+### July 2026 — Commands architecture + product-boundary correction
 
-**Local mission delivery (Slot 1 Commands); not yet merged to staging.** Operator-facing **Commands** catalog at `/organization/commands` (product alias `/configuration/commands`). Operations navigation order: Commands → Automation → Processes → Surfaces. Action Buttons (`/settings/actions`) redirects to Commands. Catalog projects Capability Registry honesty; detail workspace covers availability placements, Business Process usage via `command_set_v1`, variants, and platform-owned safety policy. Execution APIs remain `/api/admin/actions/*` during convergence.
+**Local mission delivery (Slot 1 Commands); not yet merged to staging.** Capability Registry, Command Runtime, domain adapters, destructive safety, `command_set_v1`, and related convergence are retained. A standalone **operator-facing Organization Commands configuration product was rejected**: most controls are platform-owned or belong to Processes / Surfaces / Automation. Normal Operations sequence is **Automation → Business Processes → Surfaces**. `/organization/commands` is retained only as **internal capability diagnostics** (read-only inspection). `/settings/actions` redirects to developer Action Buttons CRUD (`/adminV2/settings/actions`), not to diagnostics.
 
 ### July 2026 — Documentation Platform v1.0
 

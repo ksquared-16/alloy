@@ -1,7 +1,11 @@
 "use client";
 
+/**
+ * Internal Command capability diagnostics — not an Organization Configuration product.
+ * Capability selection → Business Processes; exposure → Surfaces; invocation → Automation.
+ */
+
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import SettingsConfigurationSurfaceShell from "@/components/adminV2/settings/configurationRuntime/SettingsConfigurationSurfaceShell";
 import {
@@ -16,7 +20,6 @@ import {
     humanFamily,
     safetySummary,
     type CommandProductSupportState,
-    type OperationalExposureGroup,
 } from "@/lib/platform/commands/commandProductPresentation";
 
 type DetailPayload = {
@@ -83,9 +86,6 @@ export default function CommandsConfigurationPage({
     const [detail, setDetail] = useState<DetailPayload | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailError, setDetailError] = useState<string | null>(null);
-    const [labelDraft, setLabelDraft] = useState("");
-    const [saving, setSaving] = useState(false);
-    const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
     const catalog = useMemo(() => listOrganizationCommandCatalog(), []);
     const selectedKey =
@@ -125,25 +125,21 @@ export default function CommandsConfigurationPage({
         let cancelled = false;
         setDetailLoading(true);
         setDetailError(null);
-        setSaveMessage(null);
         fetch(`/api/admin/commands/${encodeURIComponent(selectedKey)}`)
             .then(async (res) => {
                 if (!res.ok) {
                     const body = (await res.json().catch(() => ({}))) as { error?: string };
-                    throw new Error(body.error || `Failed to load Command (${res.status})`);
+                    throw new Error(body.error || `Failed to load capability (${res.status})`);
                 }
                 return res.json() as Promise<DetailPayload>;
             })
             .then((payload) => {
-                if (cancelled) return;
-                setDetail(payload);
-                const orgDef = payload.definitions.find((d) => d.orgOwned) ?? payload.definitions[0];
-                setLabelDraft(orgDef?.label ?? payload.command.operatorLabel);
+                if (!cancelled) setDetail(payload);
             })
             .catch((err: unknown) => {
                 if (cancelled) return;
                 setDetail(null);
-                setDetailError(err instanceof Error ? err.message : "Failed to load Command");
+                setDetailError(err instanceof Error ? err.message : "Failed to load capability");
             })
             .finally(() => {
                 if (!cancelled) setDetailLoading(false);
@@ -160,143 +156,30 @@ export default function CommandsConfigurationPage({
     }
 
     const orgOwnedDef = detail?.definitions.find((d) => d.orgOwned) ?? null;
-    const exposures: OperationalExposureGroup[] = useMemo(
+    const exposures = useMemo(
         () => groupOperationalExposures(detail?.placements ?? []),
         [detail?.placements]
     );
-    const editableExposures = exposures.filter((g) => g.orgEditable);
-    const systemExposures = exposures.filter((g) => !g.orgEditable);
     const variants = detail?.variants ?? [];
     const processUsage = detail?.processUsage ?? [];
     const safety = selected ? safetySummary(selected) : null;
 
-    async function saveOrgLabel() {
-        if (!orgOwnedDef) return;
-        const label = labelDraft.trim();
-        if (!label) return;
-        setSaving(true);
-        setSaveMessage(null);
-        try {
-            const res = await fetch(`/api/admin/action-definitions/${encodeURIComponent(orgOwnedDef.id)}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ label }),
-            });
-            if (!res.ok) {
-                const body = (await res.json().catch(() => ({}))) as { error?: string };
-                throw new Error(body.error || "Could not save label");
-            }
-            setDetail((prev) =>
-                prev
-                    ? {
-                          ...prev,
-                          definitions: prev.definitions.map((d) =>
-                              d.id === orgOwnedDef.id ? { ...d, label } : d
-                          ),
-                      }
-                    : prev
-            );
-            setSaveMessage("Label saved.");
-        } catch (err) {
-            setDetailError(err instanceof Error ? err.message : "Save failed");
-        } finally {
-            setSaving(false);
-        }
-    }
-
-    async function setOrgEnabled(nextActive: boolean) {
-        if (!orgOwnedDef) return;
-        setSaving(true);
-        setSaveMessage(null);
-        try {
-            const res = await fetch(`/api/admin/action-definitions/${encodeURIComponent(orgOwnedDef.id)}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ is_active: nextActive }),
-            });
-            if (!res.ok) {
-                const body = (await res.json().catch(() => ({}))) as { error?: string };
-                throw new Error(body.error || "Could not update enablement");
-            }
-            setDetail((prev) =>
-                prev
-                    ? {
-                          ...prev,
-                          definitions: prev.definitions.map((d) =>
-                              d.id === orgOwnedDef.id ? { ...d, isActive: nextActive } : d
-                          ),
-                      }
-                    : prev
-            );
-            setSaveMessage(nextActive ? "Command enabled for this organization." : "Command disabled for this organization.");
-        } catch (err) {
-            setDetailError(err instanceof Error ? err.message : "Update failed");
-        } finally {
-            setSaving(false);
-        }
-    }
-
-    async function toggleExposureGroup(group: OperationalExposureGroup) {
-        if (!group.orgEditable || group.orgPlacementIds.length === 0) return;
-        const nextActive = !group.enabled;
-        setSaving(true);
-        setSaveMessage(null);
-        try {
-            const results = await Promise.all(
-                group.orgPlacementIds.map((id) =>
-                    fetch(`/api/admin/action-placements/${encodeURIComponent(id)}`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ is_active: nextActive }),
-                    })
-                )
-            );
-            const failed = results.find((r) => !r.ok);
-            if (failed) {
-                const body = (await failed.json().catch(() => ({}))) as { error?: string };
-                throw new Error(body.error || "Could not update where this Command appears");
-            }
-            const idSet = new Set(group.orgPlacementIds);
-            setDetail((prev) =>
-                prev
-                    ? {
-                          ...prev,
-                          placements: prev.placements.map((p) =>
-                              idSet.has(p.id) ? { ...p, isActive: nextActive } : p
-                          ),
-                      }
-                    : prev
-            );
-            setSaveMessage("Where operators see this Command was updated.");
-        } catch (err) {
-            setDetailError(err instanceof Error ? err.message : "Update failed");
-        } finally {
-            setSaving(false);
-        }
-    }
-
     return (
         <SettingsConfigurationSurfaceShell
-            title="Commands"
-            subtitle="Configure which Alloy capabilities this organization uses — labels, enablement, and where operators encounter them."
+            title="Command capability diagnostics"
+            subtitle="Internal Capability Registry inspection. Not organization configuration — do not use this as an administrator workflow."
             testId="settings-commands-page"
         >
-            <div className="mb-3">
-                <Link
-                    href="/organization"
-                    className="text-sm font-medium text-alloy-midnight/70 underline-offset-2 hover:text-alloy-midnight hover:underline"
-                    data-testid="commands-back-to-organization"
-                >
-                    ← Organization Configuration
-                </Link>
+            <div
+                className="mb-4 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-sm text-amber-950"
+                data-testid="commands-diagnostics-banner"
+            >
+                <p className="font-medium">Internal diagnostics only</p>
+                <p className="mt-1 text-amber-950/80">
+                    Configure Command selection in Business Processes, exposure in Surfaces, and
+                    invocation in Automation. This page does not edit organization policy.
+                </p>
             </div>
-
-            <p className="mb-4 max-w-3xl text-sm text-alloy-midnight/60" data-testid="commands-product-intro">
-                Commands are governed business capabilities. Choose a Command to see whether Alloy
-                supports it, enable it for this organization when allowed, set the operator label, and
-                review where it appears. Business Processes select which Commands may run; this page
-                does not invent new Commands.
-            </p>
 
             <div className="grid min-h-[28rem] gap-4 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
                 <section
@@ -305,13 +188,13 @@ export default function CommandsConfigurationPage({
                 >
                     <div className="space-y-2 border-b border-alloy-midnight/10 p-3">
                         <label className="sr-only" htmlFor="commands-catalog-search">
-                            Search Commands
+                            Search capabilities
                         </label>
                         <input
                             id="commands-catalog-search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search Commands"
+                            placeholder="Search capabilities"
                             className="w-full rounded-lg border border-alloy-midnight/15 bg-white px-3 py-2 text-sm outline-none focus:border-alloy-midnight/35"
                         />
                         <div className="flex flex-wrap gap-1">
@@ -338,7 +221,7 @@ export default function CommandsConfigurationPage({
                             ))}
                         </div>
                         <p className="text-xs text-alloy-midnight/50">
-                            {filtered.length} {filtered.length === 1 ? "Command" : "Commands"}
+                            {filtered.length} {filtered.length === 1 ? "capability" : "capabilities"}
                         </p>
                     </div>
                     <ul className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -371,7 +254,7 @@ export default function CommandsConfigurationPage({
                         })}
                         {filtered.length === 0 ? (
                             <li className="px-3 py-6 text-sm text-alloy-midnight/50">
-                                No Commands match this search.
+                                No capabilities match this search.
                             </li>
                         ) : null}
                     </ul>
@@ -384,12 +267,11 @@ export default function CommandsConfigurationPage({
                     {!selected || !selectedSupport ? (
                         <div className="flex h-full min-h-[16rem] flex-col justify-center gap-2 text-sm text-alloy-midnight/55">
                             <p className="text-base font-medium text-alloy-midnight/80">
-                                Select a Command
+                                Select a capability
                             </p>
                             <p>
-                                Start with a Supported Command such as Create lead to configure
-                                organization settings. Use Needs attention or Not yet supported to see
-                                gaps honestly.
+                                Read-only inspection of Capability Registry support, process usage,
+                                and stored placements. No organization configuration is edited here.
                             </p>
                         </div>
                     ) : (
@@ -413,229 +295,149 @@ export default function CommandsConfigurationPage({
                             </header>
 
                             {detailLoading ? (
-                                <p className="text-sm text-alloy-midnight/55">Loading organization settings…</p>
+                                <p className="text-sm text-alloy-midnight/55">Loading diagnostics…</p>
                             ) : null}
                             {detailError ? (
                                 <p className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-950">
                                     {detailError}
                                 </p>
                             ) : null}
-                            {saveMessage ? (
-                                <p
-                                    className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-sm text-emerald-950"
-                                    data-testid="commands-save-message"
-                                >
-                                    {saveMessage}
-                                </p>
-                            ) : null}
 
-                            {/* Hold org sections until detail resolves — avoid false platform-owned flash */}
                             {!detailLoading && detail ? (
-                            <>
-                            {/* Organization settings */}
-                            <section
-                                className="space-y-3 rounded-lg border border-alloy-midnight/10 p-4"
-                                data-testid="commands-org-settings"
-                            >
-                                <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                    Organization settings
-                                </h3>
-                                {orgOwnedDef ? (
-                                    <>
-                                        <div className="flex flex-wrap items-center gap-3">
-                                            <span className="text-sm text-alloy-midnight/70">
-                                                Enabled for this organization
-                                            </span>
-                                            <button
-                                                type="button"
-                                                disabled={saving}
-                                                onClick={() => void setOrgEnabled(!orgOwnedDef.isActive)}
-                                                className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                                                    orgOwnedDef.isActive
-                                                        ? "bg-emerald-50 text-emerald-800"
-                                                        : "bg-stone-100 text-stone-600"
-                                                }`}
-                                                data-testid="commands-org-enabled-toggle"
-                                            >
-                                                {orgOwnedDef.isActive ? "Enabled" : "Disabled"}
-                                            </button>
-                                        </div>
-                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                            <label className="sr-only" htmlFor="commands-org-label">
-                                                Display label
-                                            </label>
-                                            <input
-                                                id="commands-org-label"
-                                                value={labelDraft}
-                                                onChange={(e) => setLabelDraft(e.target.value)}
-                                                className="flex-1 rounded-lg border border-alloy-midnight/15 px-3 py-2 text-sm"
-                                                maxLength={120}
-                                                aria-label="Organization Command label"
-                                            />
-                                            <button
-                                                type="button"
-                                                disabled={saving}
-                                                onClick={() => void saveOrgLabel()}
-                                                className="rounded-lg bg-alloy-midnight px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
-                                            >
-                                                Save label
-                                            </button>
-                                        </div>
-                                        <p className="text-xs text-alloy-midnight/50">
-                                            Operators see this label. Stable capability identity stays
-                                            system-owned.
-                                        </p>
-                                    </>
-                                ) : (
-                                    <p className="text-sm text-alloy-midnight/60">
-                                        Platform-owned Command. This organization has no editable overlay
-                                        yet — enablement and label stay with the platform default.
-                                    </p>
-                                )}
-                            </section>
-
-                            {/* Business Process usage */}
-                            <section
-                                className="space-y-2 rounded-lg border border-alloy-midnight/10 p-4"
-                                data-testid="commands-process-usage"
-                            >
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                        Business Process use
-                                    </h3>
-                                    <Link
-                                        href="/organization/processes"
-                                        className="text-xs font-medium text-alloy-midnight underline-offset-2 hover:underline"
+                                <>
+                                    <section
+                                        className="space-y-2 rounded-lg border border-alloy-midnight/10 p-4"
+                                        data-testid="commands-org-settings"
                                     >
-                                        Manage process selection
-                                    </Link>
-                                </div>
-                                {processUsage.length === 0 ? (
-                                    <p className="text-sm text-alloy-midnight/60">
-                                        Not currently used by a Business Process. Processes select which
-                                        Commands may run; stages only recommend from that set.
-                                    </p>
-                                ) : (
-                                    <ul className="space-y-2">
-                                        {processUsage.map((u) => (
-                                            <li
-                                                key={`${u.departmentId}:${u.processId}`}
-                                                className="rounded-md border border-alloy-midnight/10 px-3 py-2 text-sm"
-                                            >
-                                                <p className="font-medium">{u.processName}</p>
-                                                <p className="text-xs text-alloy-midnight/45">
-                                                    {u.departmentName}
-                                                </p>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </section>
-
-                            {/* Operational exposure */}
-                            <section
-                                className="space-y-3 rounded-lg border border-alloy-midnight/10 p-4"
-                                data-testid="commands-operational-exposure"
-                            >
-                                <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                    Where operators encounter it
-                                </h3>
-                                <p className="text-sm text-alloy-midnight/60">
-                                    Contexts are grouped so duplicate stored rows do not appear as
-                                    separate choices. Only organization-owned contexts can be toggled.
-                                </p>
-                                {editableExposures.length === 0 && systemExposures.length === 0 ? (
-                                    <p className="text-sm text-alloy-midnight/55">
-                                        No operational placements are configured for this Command yet.
-                                    </p>
-                                ) : null}
-                                {editableExposures.length > 0 ? (
-                                    <ul className="space-y-2">
-                                        {editableExposures.map((g) => (
-                                            <li
-                                                key={g.key}
-                                                className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-alloy-midnight/10 px-3 py-2"
-                                            >
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="text-sm font-medium text-alloy-midnight">
-                                                        {g.title}
-                                                    </p>
-                                                    <p className="text-xs text-alloy-midnight/50">
-                                                        {g.description}
-                                                    </p>
-                                                    {g.note ? (
-                                                        <p className="mt-1 text-[11px] text-alloy-midnight/45">
-                                                            {g.note}
-                                                        </p>
-                                                    ) : null}
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    disabled={saving}
-                                                    onClick={() => void toggleExposureGroup(g)}
-                                                    className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
-                                                        g.enabled
-                                                            ? "bg-emerald-50 text-emerald-800"
-                                                            : "bg-stone-100 text-stone-600"
-                                                    }`}
-                                                    data-testid={`commands-exposure-toggle-${g.key}`}
-                                                >
-                                                    {g.enabled ? "Shown" : "Hidden"}
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : null}
-                                {systemExposures.length > 0 ? (
-                                    <details className="rounded-md border border-dashed border-alloy-midnight/15 p-3">
-                                        <summary className="cursor-pointer text-xs font-medium text-alloy-midnight/55">
-                                            Platform defaults ({systemExposures.length})
-                                        </summary>
-                                        <ul className="mt-2 space-y-1 text-xs text-alloy-midnight/55">
-                                            {systemExposures.map((g) => (
-                                                <li key={g.key}>
-                                                    {g.title} — {g.enabled ? "active" : "inactive"}
+                                        <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                            Organization overlay (read-only)
+                                        </h3>
+                                        {orgOwnedDef ? (
+                                            <ul className="space-y-1 text-sm text-alloy-midnight/70">
+                                                <li>
+                                                    Stored label:{" "}
+                                                    <span className="font-medium text-alloy-midnight">
+                                                        {orgOwnedDef.label}
+                                                    </span>
                                                 </li>
-                                            ))}
-                                        </ul>
-                                    </details>
-                                ) : null}
-                            </section>
+                                                <li>
+                                                    Definition active:{" "}
+                                                    {orgOwnedDef.isActive ? "yes" : "no"}
+                                                </li>
+                                                <li className="text-xs text-alloy-midnight/50">
+                                                    Global org labels are not edited here. Process or
+                                                    surface context labels belong with those products;
+                                                    no new schema is invented on this route.
+                                                </li>
+                                            </ul>
+                                        ) : (
+                                            <p className="text-sm text-alloy-midnight/60">
+                                                No organization-owned definition overlay. Platform
+                                                default applies.
+                                            </p>
+                                        )}
+                                    </section>
 
-                            {/* Variants — only when present */}
-                            {variants.length > 0 ? (
-                                <section
-                                    className="space-y-2 rounded-lg border border-alloy-midnight/10 p-4"
-                                    data-testid="commands-variants"
-                                >
-                                    <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                        Variants
-                                    </h3>
-                                    <p className="text-sm text-alloy-midnight/60">
-                                        Variants adjust expression for the same Command. They never choose
-                                        a different executor.
-                                    </p>
-                                    <ul className="space-y-2">
-                                        {variants.map((v) => (
-                                            <li
-                                                key={v.variantKey}
-                                                className="rounded-md border border-alloy-midnight/10 px-3 py-2 text-sm"
-                                            >
-                                                <p className="font-medium">{v.label}</p>
-                                                {v.description ? (
-                                                    <p className="text-xs text-alloy-midnight/55">
-                                                        {v.description}
-                                                    </p>
-                                                ) : null}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </section>
-                            ) : null}
-                            </>
+                                    <section
+                                        className="space-y-2 rounded-lg border border-alloy-midnight/10 p-4"
+                                        data-testid="commands-process-usage"
+                                    >
+                                        <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                            Business Process selection (owned by Processes)
+                                        </h3>
+                                        {processUsage.length === 0 ? (
+                                            <p className="text-sm text-alloy-midnight/60">
+                                                Not currently selected by a Business Process via
+                                                command_set_v1.
+                                            </p>
+                                        ) : (
+                                            <ul className="space-y-2">
+                                                {processUsage.map((u) => (
+                                                    <li
+                                                        key={`${u.departmentId}:${u.processId}`}
+                                                        className="rounded-md border border-alloy-midnight/10 px-3 py-2 text-sm"
+                                                    >
+                                                        <p className="font-medium">{u.processName}</p>
+                                                        <p className="text-xs text-alloy-midnight/45">
+                                                            {u.departmentName}
+                                                        </p>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </section>
+
+                                    <section
+                                        className="space-y-2 rounded-lg border border-alloy-midnight/10 p-4"
+                                        data-testid="commands-operational-exposure"
+                                    >
+                                        <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                            Stored placements (owned by Surfaces)
+                                        </h3>
+                                        <p className="text-sm text-alloy-midnight/60">
+                                            Grouped for inspection. Exposure configuration belongs in
+                                            Surfaces — not editable here.
+                                        </p>
+                                        {exposures.length === 0 ? (
+                                            <p className="text-sm text-alloy-midnight/55">
+                                                No placement rows stored for this capability.
+                                            </p>
+                                        ) : (
+                                            <ul className="space-y-2">
+                                                {exposures.map((g) => (
+                                                    <li
+                                                        key={g.key}
+                                                        className="rounded-md border border-alloy-midnight/10 px-3 py-2 text-sm"
+                                                    >
+                                                        <p className="font-medium text-alloy-midnight">
+                                                            {g.title}
+                                                        </p>
+                                                        <p className="text-xs text-alloy-midnight/50">
+                                                            {g.description} ·{" "}
+                                                            {g.enabled ? "active" : "inactive"} ·{" "}
+                                                            {g.orgEditable
+                                                                ? "org-owned rows present"
+                                                                : "platform default"}
+                                                        </p>
+                                                        {g.note ? (
+                                                            <p className="mt-1 text-[11px] text-alloy-midnight/45">
+                                                                {g.note}
+                                                            </p>
+                                                        ) : null}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </section>
+
+                                    {variants.length > 0 ? (
+                                        <section
+                                            className="space-y-2 rounded-lg border border-alloy-midnight/10 p-4"
+                                            data-testid="commands-variants"
+                                        >
+                                            <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                                Variants (read-only)
+                                            </h3>
+                                            <ul className="space-y-2">
+                                                {variants.map((v) => (
+                                                    <li
+                                                        key={v.variantKey}
+                                                        className="rounded-md border border-alloy-midnight/10 px-3 py-2 text-sm"
+                                                    >
+                                                        <p className="font-medium">{v.label}</p>
+                                                        {v.description ? (
+                                                            <p className="text-xs text-alloy-midnight/55">
+                                                                {v.description}
+                                                            </p>
+                                                        ) : null}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </section>
+                                    ) : null}
+                                </>
                             ) : null}
 
-                            {/* Safety — compact always; emphasize when material */}
                             {safety ? (
                                 <section
                                     className={`space-y-2 rounded-lg border p-4 ${
@@ -646,7 +448,7 @@ export default function CommandsConfigurationPage({
                                     data-testid="commands-safety"
                                 >
                                     <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                        Safety
+                                        Safety (platform-owned)
                                     </h3>
                                     <ul className="space-y-1 text-sm text-alloy-midnight/70">
                                         <li>{safety.confirmation}</li>

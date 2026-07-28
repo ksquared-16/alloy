@@ -44,7 +44,6 @@ describe("Organization Configuration Runtime", () => {
             "access",
             "communications",
             "data-model",
-            "commands",
             "automation",
             "business-processes",
             "surfaces",

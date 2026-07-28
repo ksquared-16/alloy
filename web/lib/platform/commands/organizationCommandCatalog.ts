@@ -1,8 +1,8 @@
 /**
- * Organization Commands catalog projection (P7/P8).
+ * Capability Registry catalog projection for internal diagnostics.
  *
- * Read-only view of Platform Capability Registry for `/organization/commands`.
- * Does not invent Commands. Org overlays (labels, placements) load via detail API.
+ * Not an Organization Configuration product. Org overlays (labels, placements) load via detail API
+ * for inspection only — administrators configure selection in Business Processes and exposure in Surfaces.
  */
 
 import {

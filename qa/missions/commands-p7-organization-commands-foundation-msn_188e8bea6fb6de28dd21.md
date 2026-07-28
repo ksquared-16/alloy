@@ -6,16 +6,28 @@ Date: 2026-07-27
 
 ---
 
-## Outcome
+## Honesty correction (2026-07-28) — product-boundary
 
-Organization Commands product foundation:
+**Standalone Organization Commands configuration product is rejected.**
+
+P7 foundation (catalog projection, detail API, route shell) is retained only as
+**internal capability diagnostics**. Removed from ordinary Operations nav and from the
+Organization Configuration domain grid. `/settings/actions` → `/adminV2/settings/actions`.
+
+Evidence: `qa/missions/commands-product-boundary-correction-msn_188e8bea6fb6de28dd21.md`
+
+---
+
+## Outcome (historical — operator product later rejected)
+
+Organization Commands product foundation (later boundary-corrected):
 
 ```text
-Product name: Commands
-Live route: /organization/commands
+Product name: Commands (operator product rejected 2026-07-28)
+Live route: /organization/commands → internal diagnostics only
 Product alias: /configuration/commands → /organization/commands
-Action Buttons: /settings/actions → /organization/commands
-Operations nav: Commands → Automation → Processes → Surfaces
+Action Buttons: /settings/actions → /adminV2/settings/actions (developer CRUD)
+Operations nav: Automation → Processes → Surfaces (Commands removed)
 ```
 
 No schema migration. No execution changes. No dual equal operator config products.

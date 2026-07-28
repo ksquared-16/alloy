@@ -63,7 +63,7 @@ A business process defines:
 - **Required information & actions** — per-stage configuration
 - **Layout assignments** — published layouts per stage slot — see `../operator/business-process-layout-assignments.md`
 
-**Operations hierarchy (Commands mission):** Commands define capabilities → Automations may invoke/react to Commands → Business Processes select Commands → Stages recommend/evaluate selected Commands → Surfaces expose effective Commands. Organization Commands catalog: `/organization/commands` (product alias `/configuration/commands`). `command_set_v1` remains process selection authority independent of the catalog UI.
+**Operations hierarchy (Commands mission):** Commands define capabilities → Automations may invoke/react to Commands → Business Processes select Commands → Stages recommend/evaluate selected Commands → Surfaces expose effective Commands. There is **no** standalone Organization Commands configuration product. `/organization/commands` is internal capability diagnostics only. `command_set_v1` remains process selection authority.
 
 **Runtime consumption (P6.S2):** Current Work, process-aware stage evaluation, and optional BOS process filters resolve Commands through `projectProcessRuntimeCommands` → `resolveEffectiveBusinessProcessCommands`. **Authoring (P6.S3):** process saves stamp `command_set_v1`; Work Template options gate to process selection. Process Command picker UI remains P6.S4.
 

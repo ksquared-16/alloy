@@ -45,16 +45,14 @@ describe("organizationCommandCatalog", () => {
     });
 });
 
-describe("Operations nav — Commands before Automation", () => {
-    it("places Commands ahead of Automation, Processes, and Surfaces", () => {
+describe("Operations nav — Automation before Processes and Surfaces", () => {
+    it("places Automation ahead of Processes and Surfaces without Commands", () => {
         const ops = CONFIGURATION_MODE_NAV_GROUPS.find((g) => g.id === "operations");
         expect(ops).toBeTruthy();
         const labels = ops!.items.map((i) => i.label);
-        expect(labels[0]).toBe("Commands");
-        expect(labels.indexOf("Commands")).toBeLessThan(labels.indexOf("Automation"));
+        expect(labels).not.toContain("Commands");
+        expect(labels[0]).toBe("Automation");
         expect(labels.indexOf("Automation")).toBeLessThan(labels.indexOf("Processes"));
         expect(labels.indexOf("Processes")).toBeLessThan(labels.indexOf("Surfaces"));
-        expect(ops!.items[0]?.href).toBe("/organization/commands");
-        expect(ops!.items[0]?.testId).toBe("config-mode-nav-commands");
     });
 });

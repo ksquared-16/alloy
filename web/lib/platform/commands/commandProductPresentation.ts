@@ -1,5 +1,5 @@
 /**
- * Administrator-facing Commands product presentation (product realization).
+ * Capability presentation helpers for internal Command diagnostics.
  * Groups raw placements, maps support states, and keeps technical keys out of UI.
  */
 

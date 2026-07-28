@@ -20,7 +20,7 @@ Configuration control plane — configuration steers presentation within platfor
 | Fields | `/settings/fields` | Field registry, types, visibility |
 | Field grouping | `/settings/field-sections` | Section labels |
 | Surfaces | `/settings/surfaces` | Surface composition (drawer, queue row, headers) |
-| Commands | `/organization/commands` (product alias `/configuration/commands`) | Organization Command catalog and policy; Action Buttons (`/settings/actions`) redirects here |
+| Commands | Capability Registry (code) + process/surface ownership | Capabilities are platform-owned. Business Processes select via `command_set_v1`; Surfaces own exposure; Automation may invoke existing Commands. `/organization/commands` is **internal capability diagnostics only** — not an Organization Configuration product. Developer Action Buttons: `/adminV2/settings/actions` (`/settings/actions` redirects there). |
 
 Plus: statuses, business processes, placement priority, and organization configuration.
 

@@ -8,7 +8,6 @@
 
 import {
     CANONICAL_ORGANIZATION_FINANCIALS_HREF,
-    CANONICAL_ORGANIZATION_COMMANDS_HREF,
     CANONICAL_ORGANIZATION_PROGRAMS_HREF,
     CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF,
 } from "@/lib/admin/canonicalAdminRoutes";
@@ -34,7 +33,6 @@ export type OrganizationConfigurationDomainIcon =
     | "access"
     | "communications"
     | "data-model"
-    | "commands"
     | "business-processes"
     | "surfaces"
     | "automation"
@@ -278,37 +276,6 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         ownedConfiguration: ["Entities", "Fields", "Statuses", "Option sets and relationships"],
     },
     {
-        key: "commands",
-        label: "Commands",
-        description:
-            "Organization Command catalog and policy — what can run, what is unavailable, and how Commands relate to Business Processes.",
-        href: CANONICAL_ORGANIZATION_COMMANDS_HREF,
-        icon: "commands",
-        publisherLabel: "Organization",
-        configurationOwner: "Commands",
-        runtimeOwner: "Command Runtime",
-        consumers: ["Business Processes", "Surfaces", "Automation", "Operators"],
-        inheritance: {
-            kind: "availability",
-            path: ["platform", "organization"],
-            label: "Platform capabilities are enabled and shaped by the organization",
-        },
-        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
-        override: { state: "not_allowed", label: "Capability identity is system-owned" },
-        health: {
-            state: "not_assessed",
-            label: "Not assessed",
-            detail: "Command readiness remains owned by the Commands catalog.",
-        },
-        distributionMode: "inherit",
-        ownedConfiguration: [
-            "Organization Command enablement",
-            "Labels and variants",
-            "Operational availability",
-            "Safety policy presentation",
-        ],
-    },
-    {
         key: "automation",
         label: "Automation",
         description: "Reusable workflows, triggers, and registered actions.",
@@ -317,7 +284,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         publisherLabel: "Organization",
         configurationOwner: "Automation",
         runtimeOwner: "Workflow Runtime",
-        consumers: ["Business Processes", "Records", "Communications", "Commands"],
+        consumers: ["Business Processes", "Records", "Communications"],
         inheritance: {
             kind: "availability",
             path: ["platform", "organization", "location"],

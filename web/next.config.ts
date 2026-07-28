@@ -122,8 +122,12 @@ const nextConfig: NextConfig = {
       { source: "/settings/processes/:path*", destination: "/organization/processes", permanent: false },
       { source: "/settings/business-processes", destination: "/organization/processes", permanent: false },
       { source: "/settings/business-processes/:path*", destination: "/organization/processes", permanent: false },
-      { source: "/settings/actions", destination: "/organization/commands", permanent: false },
-      { source: "/settings/actions/:path*", destination: "/organization/commands", permanent: false },
+      /**
+       * Action Buttons developer CRUD — do not redirect to the rejected operator Commands product.
+       * `/organization/commands` remains an internal capability diagnostics route only.
+       */
+      { source: "/settings/actions", destination: "/adminV2/settings/actions", permanent: false },
+      { source: "/settings/actions/:path*", destination: "/adminV2/settings/actions", permanent: false },
       { source: "/configuration/commands", destination: "/organization/commands", permanent: false },
       { source: "/configuration/commands/:path*", destination: "/organization/commands", permanent: false },
       { source: "/settings/financials", destination: "/organization/financials", permanent: false },
