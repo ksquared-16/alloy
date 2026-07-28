@@ -21,6 +21,7 @@ import {
     compactSymbolicDefinition,
     plainLanguageDefinitionSummary,
 } from "@/lib/organizationCalculations/definitionSummary";
+import { markAsDeveloperTryDraftName } from "@/lib/organizationCalculations/operatorCollectionFilter";
 import {
     compilePivotBuilderDraft,
     listPivotValueChoices,
@@ -202,7 +203,7 @@ export default function ReadableDefinitionBuilder({
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    name: `${name.trim() || "Try"} — preview`,
+                    name: markAsDeveloperTryDraftName(name.trim() || "Try"),
                     description: "Temporary try-it draft",
                     expression_ast: expressionAst,
                 }),
@@ -270,7 +271,7 @@ export default function ReadableDefinitionBuilder({
                             />
                         </label>
                         <p className="config-typo-sublabel mt-1">
-                            Calculated for <span className="font-medium text-alloy-midnight">each room</span>
+                            For <span className="font-medium text-alloy-midnight">each room</span>
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -310,8 +311,8 @@ export default function ReadableDefinitionBuilder({
                         {(
                             [
                                 ["room_utilization", "Room utilization"],
-                                ["room_utilization_fte", "FTE room utilization"],
-                                ["equivalent_child_count", "Equivalent child count"],
+                                ["room_utilization_fte", "Full-time equivalent utilization"],
+                                ["equivalent_child_count", "Equivalent children"],
                             ] as const
                         ).map(([id, label]) => (
                             <button
@@ -335,7 +336,10 @@ export default function ReadableDefinitionBuilder({
                 <div className="space-y-3" data-testid="definition-build-column">
                     <section className="process-config-setup-card space-y-3 p-4" data-testid="definition-section-population">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                            Population · Who should count?
+                            Definition
+                        </p>
+                        <p className="text-sm text-alloy-midnight/70">
+                            For each <span className="font-semibold text-alloy-midnight">room</span>
                         </p>
                         <label className="flex items-center gap-2 text-sm">
                             <input
@@ -350,7 +354,7 @@ export default function ReadableDefinitionBuilder({
                                 }
                                 data-testid="definition-mode-fact"
                             />
-                            <span>Use an approved fact</span>
+                            <span>Count children from an approved fact</span>
                         </label>
                         <label className="flex items-center gap-2 text-sm">
                             <input
@@ -368,12 +372,12 @@ export default function ReadableDefinitionBuilder({
                                 }
                                 data-testid="definition-mode-population"
                             />
-                            <span>Convert to equivalent children</span>
+                            <span>Convert children into equivalents</span>
                         </label>
 
                         {draft.valueMode === "catalog_input" ?
                             <label className="block space-y-1">
-                                <span className="config-typo-field-label">Who should count?</span>
+                                <span className="config-typo-field-label">Count</span>
                                 <select
                                     className="config-runtime-input"
                                     value={draft.valueRef ?? ""}
@@ -394,13 +398,13 @@ export default function ReadableDefinitionBuilder({
                             </label>
                         :   <>
                                 {catalogLoading ?
-                                    <p className="text-xs text-alloy-midnight/50">Loading populations…</p>
+                                    <p className="text-xs text-alloy-midnight/50">Loading who should count…</p>
                                 : catalogError && populations.length === 0 ?
                                     <p className="text-sm text-amber-900" data-testid="definition-population-empty">
                                         {catalogError}
                                     </p>
                                 :   <label className="block space-y-1">
-                                        <span className="config-typo-field-label">Who should count?</span>
+                                        <span className="config-typo-field-label">Count</span>
                                         <select
                                             className="config-runtime-input"
                                             value={draft.populationVersionId ?? ""}
@@ -412,7 +416,7 @@ export default function ReadableDefinitionBuilder({
                                             }
                                             data-testid="definition-population-select"
                                         >
-                                            <option value="">Select population…</option>
+                                            <option value="">Select who should count…</option>
                                             {populations.map((p) => (
                                                 <option key={p.versionId} value={p.versionId}>
                                                     {p.label}
@@ -428,9 +432,6 @@ export default function ReadableDefinitionBuilder({
                                     >
                                         <p className="font-semibold text-alloy-midnight">{selectedPopulation.name}</p>
                                         <p className="mt-1">{selectedPopulation.membershipSummary}</p>
-                                        <p className="mt-1 text-alloy-midnight/45">
-                                            Exact version v{selectedPopulation.versionNumber}
-                                        </p>
                                     </div>
                                 :   null}
                             </>
@@ -443,10 +444,10 @@ export default function ReadableDefinitionBuilder({
                             data-testid="definition-section-equivalency"
                         >
                             <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                                Equivalency · How should they count?
+                                Treat each child as
                             </p>
                             {catalogLoading ?
-                                <p className="text-xs text-alloy-midnight/50">Loading equivalency definitions…</p>
+                                <p className="text-xs text-alloy-midnight/50">Loading equivalency…</p>
                             : compatibleEquivalencies.length === 0 ?
                                 <p className="text-sm text-amber-900" data-testid="definition-equivalency-empty">
                                     No published equivalency definitions are available.
@@ -497,9 +498,6 @@ export default function ReadableDefinitionBuilder({
                                             ))}
                                         </tbody>
                                     </table>
-                                    <p className="mt-1 text-[11px] text-alloy-midnight/45">
-                                        Exact version v{selectedEquivalency.versionNumber}
-                                    </p>
                                 </div>
                             :   null}
                         </section>
@@ -507,11 +505,11 @@ export default function ReadableDefinitionBuilder({
 
                     <section className="process-config-setup-card space-y-3 p-4" data-testid="definition-section-formula">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                            Calculation · How should Alloy calculate the answer?
+                            Compare and display
                         </p>
                         {draft.valueMode === "equivalent_count" ?
                             <p className="text-sm text-alloy-midnight/80">
-                                Use{" "}
+                                Start from{" "}
                                 <span className="font-semibold text-alloy-midnight">equivalent children</span>
                             </p>
                         :   null}
@@ -537,7 +535,7 @@ export default function ReadableDefinitionBuilder({
                         </label>
                         <label className="block space-y-1">
                             <span className="config-typo-field-label">
-                                {draft.operator === "Divide" ? "Divide by" : "Compare with"}
+                                {draft.operator === "Divide" ? "Compare against" : "Compare against"}
                             </span>
                             <select
                                 className="config-runtime-input"
@@ -550,7 +548,7 @@ export default function ReadableDefinitionBuilder({
                                 }
                                 data-testid="definition-compare-select"
                             >
-                                <option value="">None (value only)</option>
+                                <option value="">No comparison</option>
                                 {factChoices.map((c) => (
                                     <option key={c.ref} value={c.ref}>
                                         {c.label}
@@ -571,7 +569,7 @@ export default function ReadableDefinitionBuilder({
                                 }
                                 data-testid="definition-as-percentage"
                             />
-                            <span>Show the result as a percentage (× 100)</span>
+                            <span>Show as a percentage</span>
                         </label>
                     </section>
 

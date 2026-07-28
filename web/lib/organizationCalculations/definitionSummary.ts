@@ -25,10 +25,10 @@ export function plainLanguageDefinitionSummary(args: {
         if (draft.compareRef && draft.operator === "Divide") {
             const denom = catalogLabelForRef(draft.compareRef);
             return draft.asPercentage ?
-                    `This definition calculates utilization for ${subject} by converting ${who} into equivalent children using ${how}, dividing by ${denom.toLowerCase()}, and displaying the result as a percentage.`
-                :   `This definition calculates a ratio for ${subject} by converting ${who} into equivalent children using ${how} and dividing by ${denom.toLowerCase()}.`;
+                    `${capitalize(who)} is converted into equivalent children using ${how}, divided by ${denom.toLowerCase()}, and shown as a percentage for ${subject}.`
+                :   `${capitalize(who)} is converted into equivalent children using ${how} and divided by ${denom.toLowerCase()} for ${subject}.`;
         }
-        return `This definition calculates equivalent children for ${subject} by including ${who} and applying ${how}.`;
+        return `For ${subject}, include ${who} and treat each child using ${how}.`;
     }
 
     const value = draft.valueRef ? catalogLabelForRef(draft.valueRef) : "the selected value";
@@ -42,10 +42,15 @@ export function plainLanguageDefinitionSummary(args: {
             : draft.operator === "Use first available value" ? "using the first available of"
             : draft.operator.toLowerCase();
         return draft.asPercentage ?
-                `This definition calculates a percentage for ${subject} by ${op} ${value.toLowerCase()} and ${compare.toLowerCase()}, then multiplying by 100.`
-            :   `This definition calculates a result for ${subject} by ${op} ${value.toLowerCase()} and ${compare.toLowerCase()}.`;
+                `For ${subject}, ${op} ${value.toLowerCase()} and ${compare.toLowerCase()}, then show the result as a percentage.`
+            :   `For ${subject}, ${op} ${value.toLowerCase()} and ${compare.toLowerCase()}.`;
     }
-    return `This definition returns ${value.toLowerCase()} for ${subject}.`;
+    return `For ${subject}, return ${value.toLowerCase()}.`;
+}
+
+function capitalize(s: string): string {
+    if (!s) return s;
+    return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export function compactSymbolicDefinition(args: {

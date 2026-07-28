@@ -98,9 +98,9 @@ export default function OrgCalcPivotBuilder({
         <div className="space-y-3" data-testid="org-calc-pivot-builder">
             <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                    Calculated for
+                    Definition
                 </p>
-                <p className="mt-0.5 text-sm font-medium text-alloy-midnight">Each room</p>
+                <p className="mt-0.5 text-sm font-medium text-alloy-midnight">For each room</p>
             </div>
 
             <div className="rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.035] px-3 py-2.5 space-y-2.5">
@@ -109,7 +109,7 @@ export default function OrgCalcPivotBuilder({
                 </p>
 
                 <label className="block space-y-1">
-                    <span className="config-typo-field-label">Use</span>
+                    <span className="config-typo-field-label">Count</span>
                     <select
                         className="config-runtime-input"
                         disabled={disabled}
@@ -124,8 +124,8 @@ export default function OrgCalcPivotBuilder({
                         }}
                         data-testid="pivot-value-mode"
                     >
-                        <option value="catalog_input">Approved fact</option>
-                        <option value="equivalent_count">Population (equivalent count)</option>
+                        <option value="catalog_input">An approved fact</option>
+                        <option value="equivalent_count">Children in a population</option>
                     </select>
                 </label>
 
@@ -191,7 +191,7 @@ export default function OrgCalcPivotBuilder({
                 }
 
                 <label className="block space-y-1">
-                    <span className="config-typo-field-label">Calculate</span>
+                    <span className="config-typo-field-label">Then</span>
                     <select
                         className="config-runtime-input"
                         disabled={disabled}
@@ -210,7 +210,7 @@ export default function OrgCalcPivotBuilder({
                 </label>
 
                 <label className="block space-y-1">
-                    <span className="config-typo-field-label">Compare with</span>
+                    <span className="config-typo-field-label">Compare against</span>
                     <select
                         className="config-runtime-input"
                         disabled={disabled}
@@ -223,7 +223,7 @@ export default function OrgCalcPivotBuilder({
                         }
                         data-testid="pivot-compare-ref"
                     >
-                        <option value="">None (value only)</option>
+                        <option value="">No comparison</option>
                         {choices.map((c) => (
                             <option key={c.ref} value={c.ref}>
                                 {c.label}
