@@ -30,12 +30,16 @@ Evidence: `qa/missions/commands-product-boundary-correction-msn_188e8bea6fb6de28
 
 **Fourth honesty correction (2026-07-28) — contextual ownership acceptance:**
 
-Business Process Process Actions + `command_set_v1` runtime authority are **usable**.
-Surfaces **do not** yet provide Command exposure configuration. Contextual ownership is
-**not** certified complete. Recommend separate `Surface Command Exposure` slice; do not
-reopen `/organization/commands` as org configuration.
+Business Process Process Actions + `command_set_v1` runtime authority are **usable and accepted**
+as the process-context Command configuration owner (selection, labels, Focus Panel / Work Unit /
+Workspace exposure, stage restrictions). Surfaces **render** effective presentation; they do
+**not** independently configure Commands.
 
-Evidence: `qa/missions/commands-ownership-acceptance-msn_188e8bea6fb6de28dd21.md`
+A subsequent Surface Command Exposure attempt was **stopped and reverted** — do not create a
+second placement authority. Next mission: BOS Command Runtime Convergence.
+
+Evidence: `qa/missions/commands-ownership-acceptance-msn_188e8bea6fb6de28dd21.md`  
+Surface stop: `qa/missions/commands-surface-command-exposure-investigation-msn_188e8bea6fb6de28dd21.md`
 
 ---
 

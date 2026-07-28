@@ -8,16 +8,20 @@
 
 ---
 
-## Decision (stop rule)
+## Decision (stop rule) — amended 2026-07-28
 
-**Business Process ownership is real and usable** for curated Process Actions + runtime `command_set_v1` authority.  
-**Surface Command exposure configuration is absent** from `/organization/surfaces` (layout composition only).
+**Business Process ownership is real, usable, and accepted** for process-context Command
+configuration (selection, labels, Focus Panel / Work Unit / Workspace exposure, stage
+restrictions, Work Template constraints).
 
-Per decision rule: **do not certify contextual ownership complete.**  
-**Recommend a separate `Surface Command Exposure` realization slice.**  
+**Surfaces do not own Command configuration.** A Surface Command Exposure product slice was
+attempted and **stopped/reverted**. Surfaces render effective process/runtime presentation only.
+
+**Next mission:** BOS Command Runtime Convergence — BOS inherits effective Commands and invokes
+Command Runtime; Create Lead is reference behavior, not a special execution architecture.
+
 Do **not** reopen `/organization/commands` as org configuration.
-
-Architecture (Registry → Runtime → adapters → `command_set_v1` → BOS gating → safety) remains certified from prior mission delivery. This pass does **not** retract architecture certification.
+Do **not** reopen Surface Command Exposure as a second placement authority.
 
 ---
 
