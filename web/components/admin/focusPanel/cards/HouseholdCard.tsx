@@ -122,9 +122,16 @@ export default function HouseholdCard({
     const composer = useFocusPanelComposer();
     const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
     const composingHouseholdSurface = composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false;
+    // Surfaces composer session owns the nested Household config (draft/published seed).
+    // Always project through composer when present — do not fall back to a separate
+    // published-doc fetch that can lag or omit nestedSurfaces while the canvas is open.
+    // Live Work Unit has no composer → read published Focus Panel summary metadata.
     const nestedConfig = useMemo(
-        () => (composingHouseholdSurface ? composer?.configFor(HOUSEHOLD_SURFACE_ID) ?? null : readHouseholdNestedConfigFromDoc(publishedDoc)),
-        [composer, composingHouseholdSurface, publishedDoc],
+        () =>
+            composer?.enabled
+                ? composer.configFor(HOUSEHOLD_SURFACE_ID)
+                : readHouseholdNestedConfigFromDoc(publishedDoc),
+        [composer, publishedDoc],
     );
     const {
         state: disclosure,
