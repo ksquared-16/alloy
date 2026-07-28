@@ -390,6 +390,22 @@ function buildMenu() {
       ],
     },
     {
+      // Without an Edit menu the paste/copy/cut accelerators are never
+      // registered, so Cmd+V does nothing in text inputs on macOS.
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "pasteAndMatchStyle" },
+        { role: "delete" },
+        { role: "selectAll" },
+      ],
+    },
+    {
       label: "View",
       submenu: [
         {
