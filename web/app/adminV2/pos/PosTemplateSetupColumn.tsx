@@ -39,6 +39,8 @@ import { recommendSectionDisposition, type SectionDisposition } from "@/lib/pos/
 import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
+import ProcessingConceptReview from "./ProcessingConceptReview";
+import type { BusinessConceptCandidate, ProposalDecisionState } from "@/lib/pos/discovery/contracts";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 import { AlloyFieldLabel, AlloyTextInput } from "./ProcessingAlloyControls";
 import {
@@ -163,6 +165,10 @@ export default function PosTemplateSetupColumn({
     const [pendingSaveBusy, setPendingSaveBusy] = useState(false);
     const pendingSaveLockRef = useRef(false);
     const [phase, setPhase] = useState<"review" | "generate">("review");
+    // Configuration Discovery (FP16): concept-first review is the default entry; the detailed
+    // field/question review is a drill-down. Operator decisions on proposals are held here.
+    const [reviewMode, setReviewMode] = useState<"concepts" | "detailed">("concepts");
+    const [conceptDecisions, setConceptDecisions] = useState<Record<string, ProposalDecisionState>>({});
     const [dispositionOverrides, setDispositionOverrides] = useState<Record<string, SectionDisposition>>({});
     const [formName, setFormName] = useState("");
     const [creatingPhase, setCreatingPhase] = useState(0);
@@ -204,6 +210,15 @@ export default function PosTemplateSetupColumn({
         }
         return out;
     }, [reviewQuestions, dispositionOverrides, draft]);
+
+    // Configuration Discovery: concept lookup for the concept-first review (stable across renders).
+    const discovery = draft?.configuration_discovery ?? null;
+    const conceptById = useMemo(() => {
+        const m = new Map<string, BusinessConceptCandidate>();
+        for (const c of discovery?.concepts ?? []) m.set(c.id, c);
+        return m;
+    }, [discovery]);
+
     const autoDetectAttemptedRef = useRef<string | null>(null);
 
     const clearSelection = () => {
@@ -378,6 +393,19 @@ export default function PosTemplateSetupColumn({
     const textAvailable = draft ? draft.extracted_text_available : (detail.documentFormPreview?.extracted_text_available ?? null);
     const sectionCount = new Set(reviewQuestions.map((q) => q.section)).size;
     const activeFieldCount = reviewQuestions.filter((q) => !q.ignored).length;
+
+    const setConceptDecision = (proposalId: string, state: ProposalDecisionState) =>
+        setConceptDecisions((prev) => ({ ...prev, [proposalId]: state }));
+    const bulkAcceptHighConfidence = () => {
+        if (!discovery) return;
+        setConceptDecisions((prev) => {
+            const next = { ...prev };
+            for (const p of discovery.proposals) {
+                if (p.confidence.band === "high" && (next[p.id] ?? p.decision_state) === "proposed") next[p.id] = "accepted";
+            }
+            return next;
+        });
+    };
 
     const detectorWeak = (draft?.warnings ?? []).some((w) => /weak detection/i.test(w));
     const goodQuestions = reviewQuestions.filter((q) => !q.ignored && q.confidence !== "low").length;
@@ -880,8 +908,24 @@ export default function PosTemplateSetupColumn({
                     testId="processing-generate-anyway-confirm"
                 />
                 </>
+            ) : reviewMode === "concepts" && discovery && !created ? (
+                <ProcessingConceptReview
+                    discovery={discovery}
+                    conceptById={conceptById}
+                    decisions={conceptDecisions}
+                    onDecision={setConceptDecision}
+                    onBulkAcceptHighConfidence={bulkAcceptHighConfidence}
+                    onOpenDetailed={() => setReviewMode("detailed")}
+                />
             ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {discovery && !created ? (
+                <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-1.5">
+                    <button type="button" onClick={() => setReviewMode("concepts")} className="text-[11px] font-semibold text-alloy-bend-pine hover:underline" data-testid="concept-back">
+                        ← Back to concept review
+                    </button>
+                </div>
+            ) : null}
             <div className="flex min-h-0 flex-1 gap-3 overflow-hidden px-2 pb-2">
                 <WorkspaceZonePanel
                     title="Source document"

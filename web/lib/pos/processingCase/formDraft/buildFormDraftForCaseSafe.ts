@@ -25,6 +25,7 @@ import { detectDocumentStructure } from "../structure/detectDocumentStructure";
 import { extractPdfPositional } from "../structure/pdfPositionalExtract";
 import { detectLayoutStructure } from "../structure/detectLayoutStructure";
 import type { LayoutDocument } from "../structure/pdfLayoutTypes";
+import { discoverConfiguration } from "@/lib/pos/discovery/discoverConfiguration";
 import { buildFormDraftFromStructure } from "./buildFormDraftFromStructure";
 import { buildFormDraftFromAcroForm } from "./buildFormDraftFromAcroForm";
 import { deriveDocumentTitle } from "./deriveDocumentTitle";
@@ -119,7 +120,7 @@ export async function chooseDraftForCase(input: {
                 const structure = await timed("layout_detect", () => detectLayoutStructure(layout), (s) => `sections=${s.sections.length} fields=${s.sections.reduce((n, x) => n + x.fields.length, 0)}`);
                 const totalFields = structure.sections.reduce((n, s) => n + s.fields.length, 0);
                 if (totalFields > 0) {
-                    return buildFormDraftFromStructure({
+                    const draft = buildFormDraftFromStructure({
                         structure,
                         sourceDocumentId: input.sourceDocumentId,
                         extractedText: input.text.text,
@@ -127,6 +128,15 @@ export async function chooseDraftForCase(input: {
                         classificationKey: input.classificationKey,
                         extractedTextAvailable: input.text.available,
                     });
+                    // Configuration Discovery runs on the structure (which still carries choice options
+                    // and duplicate/output-copy flags the flat draft drops) — the concept-first review.
+                    const discovery = await timed(
+                        "configuration_discovery",
+                        () => discoverConfiguration({ structure, sourceDocumentId: input.sourceDocumentId }),
+                        (d) => `concepts=${d.concepts.length} proposals=${d.proposals.length}`
+                    );
+                    draft.configuration_discovery = discovery;
+                    return draft;
                 }
             }
         } catch (e) {

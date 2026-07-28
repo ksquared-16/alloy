@@ -91,6 +91,13 @@ export interface StoredFormDraftPreview {
         /** Whether OCR read a directly-uploaded image or a rasterized scanned PDF. */
         source_kind?: "image" | "scanned_pdf";
     } | null;
+    /**
+     * Configuration Discovery (POS-FP16): the concept-level operating-model proposal derived from the
+     * native-layout structure — business concepts + governed configuration proposals + summary. The
+     * concept-first review renders this; Forms is one consumer of the approved concepts. Present only
+     * for native-layout drafts. Operator decisions are layered on separately (never overwrite reruns).
+     */
+    configuration_discovery?: import("@/lib/pos/discovery/contracts").ConfigurationDiscoveryResult;
     generated_at: string;
     generator_version: string;
 }

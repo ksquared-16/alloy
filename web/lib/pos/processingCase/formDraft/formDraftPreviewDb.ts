@@ -113,6 +113,11 @@ export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftP
         },
         ...(Array.isArray(d.pdf_pages) ? { pdf_pages: d.pdf_pages as StoredFormDraftPreview["pdf_pages"] } : {}),
         ...(ocr ? { ocr } : {}),
+        // Configuration Discovery (FP16) — pass through the stored concept-level proposal as-is (it was
+        // produced by pure deterministic code; the concept-first review re-derives nothing).
+        ...(d.configuration_discovery && typeof d.configuration_discovery === "object" && !Array.isArray(d.configuration_discovery)
+            ? { configuration_discovery: d.configuration_discovery as StoredFormDraftPreview["configuration_discovery"] }
+            : {}),
         generated_at: typeof d.generated_at === "string" ? d.generated_at : "",
         generator_version: typeof d.generator_version === "string" ? d.generator_version : "unknown",
     };
