@@ -32,6 +32,15 @@ const HOME = os.homedir();
 const CLAUDE_KEYCHAIN_SERVICE = "Claude Code-credentials";
 const PROBE_TTL_MS = 25000; // cache auth/version probes; dashboard polls frequently
 
+// GUI-launched hosts (the Electron app) spawn this server with a truncated PATH
+// that omits ~/.local/bin — where cursor-agent and claude are installed — so every
+// provider probe and dispatch fails with a spurious "needs to reconnect". Ensure
+// the user's local bin dirs are on PATH for this process and everything it spawns.
+for (const dir of [join(HOME, ".local", "bin"), join(HOME, "bin")]) {
+  const parts = (process.env.PATH || "").split(":");
+  if (existsSync(dir) && !parts.includes(dir)) process.env.PATH = `${dir}:${process.env.PATH || ""}`;
+}
+
 const run = (bin, args, timeout = 8000) =>
   new Promise((res) => {
     let out = "", err = "", done = false;
