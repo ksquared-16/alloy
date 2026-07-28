@@ -1062,6 +1062,21 @@ export default function PosTemplateSetupColumn({
                             </div>
                         )}
                     </div>
+                    {busy ? (
+                        <div
+                            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/80 px-4 text-center backdrop-blur-[1px]"
+                            data-testid="processing-redetect-overlay"
+                            aria-live="polite"
+                            aria-busy
+                        >
+                            <span
+                                className="h-6 w-6 animate-spin rounded-full border-2 border-alloy-bend-pine/25 border-t-alloy-bend-pine"
+                                aria-hidden
+                            />
+                            <p className="text-[12px] font-semibold text-alloy-midnight">Re-detecting questions…</p>
+                            <p className="text-[11px] text-alloy-midnight/55">Reading the document again to refresh the detected fields.</p>
+                        </div>
+                    ) : null}
                 </WorkspaceZonePanel>
             </div>
 
