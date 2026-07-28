@@ -423,7 +423,10 @@ function resolveRunSlot(requested) {
   // Vacilando mission). A FREE slot (no worktree) is where a new mission goes —
   // Vacilando provisions a fresh worktree there at start (the launcher). Missions
   // never run in the champion and never co-tenant an occupied worktree.
-  const withWorktree = new Set(listSlotIdentities().filter((i) => i.ok && i.worktree_name).map((i) => i.slot));
+  // A slot with ANY registered worktree is occupied — even one whose identity is
+  // in conflict (wrong branch, missing worktree). Only a slot with no worktree at
+  // all is free. (listSlotIdentities already returns only slots that have one.)
+  const withWorktree = new Set(listSlotIdentities().map((i) => i.slot));
   const freeSlots = [1, 2, 3, 4, 5, 6].filter((n) => !withWorktree.has(n));
   const req = (typeof requested === "string" && /^-?\d+$/.test(requested)) ? Number(requested) : requested;
   if (Number.isInteger(req)) {
