@@ -621,7 +621,14 @@ export async function composeWorkUnitProvisioningAnswer(
     // U-O2 enrichment over the BOUNDED PAGE only — cost scales with what the operator can see.
     // Additive: the page in is the page out, in the same canonical order. Membership was decided
     // upstream by the projection and is never re-evaluated here.
-    const enriched = await enrichOperationalProjectionRows({
+    //
+    // CONCURRENCY (D1 §8 budget): the enrichment (queue-row CRM labels) and the commit-critical
+    // stage-work read are INDEPENDENT — enrichment adds contact labels to the visible rows, while
+    // stage-work reads the SUBJECT's tasks. The subject is resolved from the PAGE (pre-enrichment)
+    // and stage-work needs only subject + stage + config, so it never reads the enriched rows. They
+    // were serial (~680 ms + ~690 ms measured); kick BOTH off here and join below so composition is
+    // the max, not the sum. The subject-snapshot's enriched `primary_contact` is built AFTER the join.
+    const enrichedPromise = enrichOperationalProjectionRows({
         supabase: req.supabase,
         orgId: req.orgId,
         rows: page as unknown as EnrichableProjectionRow[],
@@ -632,24 +639,14 @@ export async function composeWorkUnitProvisioningAnswer(
             subject_grain: "case",
         },
     });
-    const rows: ProvisioningRow[] = enriched.map((r) => ({
-        id: String((r as Record<string, unknown>).id),
-        stageKey: strOrNull((r as Record<string, unknown>).stage_key),
-        statusKey: strOrNull((r as Record<string, unknown>).status_key),
-        updatedAt: strOrNull((r as Record<string, unknown>).updated_at),
-        title: strOrNull((r as Record<string, unknown>).name),
-        context: queueRowContextOf(r as Record<string, unknown>),
-    }));
+    void enrichedPromise.catch(() => {});
 
-    // Join: await the presentation branch that ran CONCURRENTLY with projection + enrichment above.
-    // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
-    const presentation = await presentationPromise;
-    timings.presentation_ms = now() - tPres;
-    // B: the actions projection ran concurrently above — join it here (no serial latency added).
-    const actionsProjection = await actionsProjectionPromise;
-
-    // ── U-O6 AUTHORITATIVE EMPTY — a workable place, never confused with error. ──
-    if (rows.length === 0) {
+    // ── U-O6 AUTHORITATIVE EMPTY — a workable place, never confused with error. Gated on the PAGE
+    //    (enrichment is 1:1, page in = page out), so it does not wait on enrichment. ──
+    if (page.length === 0) {
+        const presentation = await presentationPromise;
+        timings.presentation_ms = now() - tPres;
+        const actionsProjection = await actionsProjectionPromise;
         timings.composition_ms = now() - tComp;
         timings.total_ms = now() - t0;
         return {
@@ -671,7 +668,9 @@ export async function composeWorkUnitProvisioningAnswer(
         };
     }
 
-    // ── U-P4/U-O3 Record of Attention — from the SAME evaluated page. No second evaluator. ──
+    // ── U-P4/U-O3 Record of Attention — from the SAME evaluated page. No second evaluator. Resolved
+    //    from the PAGE (pre-enrichment) so the commit-critical stage-work read can start CONCURRENTLY
+    //    with enrichment above. ──
     const { strategy, source } = resolveSubjectStrategy(activeView);
     const subjectRows: OperationalSubjectQueueRow[] = page.map((r, i) => ({
         id: String((r as Record<string, unknown>).id),
@@ -713,20 +712,34 @@ export async function composeWorkUnitProvisioningAnswer(
     // Focus Panel commits WITH Header + Queue from the answer alone; the drawer VM only enriches the
     // surrounding Settlement cards afterward. Additive and non-fatal: any failure degrades to the
     // client drawer-VM load, never an operational error. `departmentMetadata` is already in hand.
-    let focusPanelStageWork: OpportunityStageWorkSlice | null = null;
-    try {
-        focusPanelStageWork = await resolveOpportunityStageWorkSlice({
-            supabase: req.supabase,
-            orgId: req.orgId,
-            opportunityId: chosen.entityId,
-            departmentId: wuRow.department_id ? String(wuRow.department_id) : null,
-            stageKey: stage.key,
-            stageLabel: stage.label,
-            departmentMetadata: deptRow?.metadata,
-        });
-    } catch {
-        /* stage-work is additive to the commit — never fail the operational answer on it */
-    }
+    // Kicked off CONCURRENTLY with enrichment (both need only data resolved above); joined below.
+    const focusPanelStageWorkPromise = resolveOpportunityStageWorkSlice({
+        supabase: req.supabase,
+        orgId: req.orgId,
+        opportunityId: chosen.entityId,
+        departmentId: wuRow.department_id ? String(wuRow.department_id) : null,
+        stageKey: stage.key,
+        stageLabel: stage.label,
+        departmentMetadata: deptRow?.metadata,
+    }).catch(() => null /* stage-work is additive to the commit — never fail the operational answer on it */);
+
+    // ── JOIN: enrichment (queue rows) + presentation + actions + stage-work, all kicked off above. ──
+    const enriched = await enrichedPromise;
+    const rows: ProvisioningRow[] = enriched.map((r) => ({
+        id: String((r as Record<string, unknown>).id),
+        stageKey: strOrNull((r as Record<string, unknown>).stage_key),
+        statusKey: strOrNull((r as Record<string, unknown>).status_key),
+        updatedAt: strOrNull((r as Record<string, unknown>).updated_at),
+        title: strOrNull((r as Record<string, unknown>).name),
+        context: queueRowContextOf(r as Record<string, unknown>),
+    }));
+    // Join: await the presentation branch that ran CONCURRENTLY with projection + enrichment above.
+    // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
+    const presentation = await presentationPromise;
+    timings.presentation_ms = now() - tPres;
+    // B: the actions projection ran concurrently above — join it here (no serial latency added).
+    const actionsProjection = await actionsProjectionPromise;
+    const focusPanelStageWork = await focusPanelStageWorkPromise;
 
     // A — COMMIT-CRITICAL SUBJECT SNAPSHOT. The default subject's Household + Children first-operational
     // identity, from data ALREADY resolved for its row: the enriched queue-row `primary_contact` and the
