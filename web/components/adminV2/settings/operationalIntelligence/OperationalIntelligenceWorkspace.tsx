@@ -45,7 +45,6 @@ import {
     ownershipLabel,
     type OiMeasurementRow,
 } from "@/lib/adminV2/settings/operationalIntelligence/oiMeasurementCollection";
-import { capacityRecipeFromProductTypeLabel } from "@/lib/adminV2/settings/operationalIntelligence/oiCapacityRecipeCopy";
 import type { OiOrgCalcMeasurement } from "@/lib/metrics/oiOrgCalcMeasurements";
 import OiFutureRoomCapacityBuilder from "@/components/adminV2/settings/operationalIntelligence/OiFutureRoomCapacityBuilder";
 import OiRoomUtilizationBuilder from "@/components/adminV2/settings/operationalIntelligence/OiRoomUtilizationBuilder";
@@ -368,14 +367,14 @@ function QuestionCard({
         <button
             type="button"
             onClick={onClick}
-            className="flex min-h-[7.5rem] flex-col justify-between rounded-lg border border-alloy-stone/25 bg-white p-3.5 text-left shadow-sm transition-colors hover:border-[#00a283]/40 hover:bg-[#00a283]/[0.03]"
+            className="flex min-h-[6.25rem] flex-col justify-between rounded-lg border border-alloy-stone/25 bg-white p-3 text-left transition-colors hover:border-[#00a283]/40 hover:bg-[#00a283]/[0.03]"
             data-testid={testId}
         >
             <div className="min-w-0">
                 <p className="text-[13px] font-semibold text-alloy-midnight">{title}</p>
                 <p className="mt-1 text-[12px] leading-snug text-alloy-midnight/60">{question}</p>
             </div>
-            <div className="mt-3 flex items-center justify-between gap-2">
+            <div className="mt-2.5 flex items-center justify-between gap-2">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
                     {statusLabel}
                 </span>
@@ -880,13 +879,16 @@ function OperationalIntelligenceInner() {
                                 </div>
                             </div>
                             {visibleOrgCalcs.map((m) => {
-                                const recipe = capacityRecipeFromProductTypeLabel(m.source.calculation_name);
+                                const unitLabel =
+                                    m.unit === "percent" ? "percent"
+                                    : m.unit === "children" ? "children"
+                                    : "seats";
                                 return (
                                     <ConfigurationQueueItem
                                         key={m.id}
                                         active={orgMeasurementId === m.id}
                                         title={m.name}
-                                        subtitle={`${recipe.sourceLine} · seats`}
+                                        subtitle={`${formatOiOrgCalcTargetLabel(m.target, m.unit)} · ${unitLabel}`}
                                         onClick={() => selectOrgCalc(m.id)}
                                         testId={`oi-org-calc-row-${m.id}`}
                                     />

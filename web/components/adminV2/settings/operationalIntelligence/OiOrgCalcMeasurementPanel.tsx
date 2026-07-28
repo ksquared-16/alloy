@@ -30,6 +30,21 @@ const TABS: Array<{ key: Tab; label: string }> = [
     { key: "settings", label: "Settings" },
 ];
 
+function measurementRecipeSentence(measurement: OiOrgCalcMeasurement): string {
+    const name = `${measurement.name} ${measurement.description ?? ""} ${measurement.source.calculation_name}`.toLowerCase();
+    if (measurement.unit === "percent" || name.includes("utilization")) {
+        if (name.includes("fte") || name.includes("equivalent") || name.includes("full-time")) {
+            return "Room utilization converts active children into full-time equivalents, divides by effective capacity, and shows a percentage.";
+        }
+        return "Room utilization divides active children by effective capacity and shows a percentage.";
+    }
+    if (measurement.unit === "children" || name.includes("equivalent child")) {
+        return "Equivalent children counts the selected population using your equivalency definition.";
+    }
+    return capacityRecipeFromProductTypeLabel(measurement.description ?? measurement.source.calculation_name)
+        .recipeSentence;
+}
+
 function healthLabel(h: OiOrgCalcHealth): string {
     if (h === "on_goal") return "On goal";
     if (h === "below_goal") return "Below range";
@@ -243,25 +258,35 @@ export default function OiOrgCalcMeasurementPanel({
         return <p className="config-typo-sublabel">Loading measurement…</p>;
     }
 
-    const recipe = capacityRecipeFromProductTypeLabel(
-        measurement.description ?? measurement.source.calculation_name,
-    );
+    const recipeSentence = measurementRecipeSentence(measurement);
     const calcHref = organizationCalculationLibraryHref({
         calculationId: measurement.source.calculation_id,
     });
 
     return (
-        <div className="min-w-0 space-y-3" data-testid="oi-org-calc-measurement">
-            <div className="process-config-setup-card p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                    Future Room Capacity
-                </p>
-                <h2 className="config-typo-workspace-title mt-1 text-xl" data-testid="oi-org-calc-selected-name">
-                    {measurement.name}
-                </h2>
-                <p className="config-typo-sublabel mt-1" data-testid="oi-org-calc-recipe-sentence">
-                    {recipe.recipeSentence}
-                </p>
+        <div className="min-w-0 space-y-2.5" data-testid="oi-org-calc-measurement">
+            <div className="process-config-setup-card p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                        <h2 className="text-lg font-semibold text-alloy-midnight" data-testid="oi-org-calc-selected-name">
+                            {measurement.name}
+                        </h2>
+                        <p className="config-typo-sublabel mt-0.5" data-testid="oi-org-calc-recipe-sentence">
+                            {recipeSentence}
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 text-[11px]">
+                        <span className="rounded border border-alloy-stone/20 bg-white px-2 py-0.5 font-semibold capitalize text-alloy-midnight/70">
+                            {measurement.status === "active" ? "Measuring" : measurement.status}
+                        </span>
+                        <span className="rounded border border-alloy-stone/20 bg-white px-2 py-0.5 font-semibold text-alloy-midnight/70">
+                            {formatOiOrgCalcTargetLabel(measurement.target, measurement.unit)}
+                        </span>
+                        <span className="rounded border border-alloy-stone/20 bg-white px-2 py-0.5 font-semibold text-alloy-midnight/70">
+                            {healthLabel(health)}
+                        </span>
+                    </div>
+                </div>
                 <ConfigWorkspaceTabBar
                     tabs={TABS}
                     activeSection={tab}
@@ -273,40 +298,38 @@ export default function OiOrgCalcMeasurementPanel({
             </div>
 
             {tab === "overview" ?
-                <div className="space-y-3" data-testid="oi-org-calc-overview">
-                    <ConfigWorkspaceCard testId="oi-org-calc-observe">
-                        <ConfigEditorSection
-                            title="Current answer"
-                            description="Choose a room and date to see how many seats are expected."
-                        >
-                            <div className="grid gap-2 sm:grid-cols-2">
-                                <label className="block space-y-1">
-                                    <span className="config-typo-field-label">Room</span>
-                                    <select
-                                        className="config-runtime-input"
-                                        value={roomId}
-                                        onChange={(e) => setRoomId(e.target.value)}
-                                        data-testid="oi-org-calc-room"
-                                    >
-                                        {rooms.map((r) => (
-                                            <option key={r.id} value={r.id}>
-                                                {r.siteLabel} / {r.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                                <label className="block space-y-1">
-                                    <span className="config-typo-field-label">Date</span>
-                                    <input
-                                        type="date"
-                                        className="config-runtime-input"
-                                        value={effectiveAt}
-                                        onChange={(e) => setEffectiveAt(e.target.value)}
-                                        data-testid="oi-org-calc-effective-at"
-                                    />
-                                </label>
-                            </div>
-                            <div className="mt-3">
+                <div className="space-y-2.5" data-testid="oi-org-calc-overview">
+                    <div className="process-config-setup-card space-y-3 p-4" data-testid="oi-org-calc-observe">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                            Current answer
+                        </p>
+                        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                            <label className="block space-y-1">
+                                <span className="config-typo-field-label">Room</span>
+                                <select
+                                    className="config-runtime-input"
+                                    value={roomId}
+                                    onChange={(e) => setRoomId(e.target.value)}
+                                    data-testid="oi-org-calc-room"
+                                >
+                                    {rooms.map((r) => (
+                                        <option key={r.id} value={r.id}>
+                                            {r.siteLabel} / {r.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="block space-y-1">
+                                <span className="config-typo-field-label">Date</span>
+                                <input
+                                    type="date"
+                                    className="config-runtime-input"
+                                    value={effectiveAt}
+                                    onChange={(e) => setEffectiveAt(e.target.value)}
+                                    data-testid="oi-org-calc-effective-at"
+                                />
+                            </label>
+                            <div className="flex items-end">
                                 <ConfigurationPrimaryButton
                                     className="config-primary-btn--sm"
                                     disabled={busy}
@@ -316,67 +339,45 @@ export default function OiOrgCalcMeasurementPanel({
                                     {busy ? "Checking…" : "Get answer"}
                                 </ConfigurationPrimaryButton>
                             </div>
-                            {observation ?
-                                <div
-                                    className="mt-4 space-y-2 rounded-md border border-alloy-stone/25 bg-white/70 p-3"
-                                    data-testid="oi-org-calc-observation"
-                                >
-                                    <p className="text-lg font-semibold text-alloy-midnight">
+                        </div>
+                        {observation ?
+                            <div
+                                className="rounded-md border border-alloy-stone/20 bg-white/80 p-3"
+                                data-testid="oi-org-calc-observation"
+                            >
+                                <div className="flex flex-wrap items-end justify-between gap-2">
+                                    <p className="text-2xl font-semibold tracking-tight text-alloy-midnight">
                                         {formatAnswerValue(observation.value, measurement.unit)}
                                     </p>
-                                    <p className="config-typo-sublabel">
+                                    <p className="text-sm text-alloy-midnight/65">
                                         {healthLabel(health)}
                                         {measurement.target ?
                                             ` · ${formatOiOrgCalcTargetLabel(measurement.target, measurement.unit)}`
                                         :   ""}
-                                        {" · "}
-                                        {observation.effective_at}
                                     </p>
-                                    {observation.unavailable_reason ?
-                                        <p className="text-sm text-amber-900" data-testid="oi-org-calc-unavailable">
-                                            {observation.unavailable_reason}
-                                        </p>
-                                    :   null}
-                                    {observation.explanation_summary.length > 0 ?
-                                        <details className="text-xs text-alloy-midnight/70">
-                                            <summary className="cursor-pointer font-medium text-[#007d68]">
-                                                How we got this number
-                                            </summary>
-                                            <ol className="mt-2 list-decimal space-y-1 pl-4">
-                                                {observation.explanation_summary.map((line) => (
-                                                    <li key={line}>{line}</li>
-                                                ))}
-                                            </ol>
-                                        </details>
-                                    :   null}
                                 </div>
-                            :   null}
-                        </ConfigEditorSection>
-                    </ConfigWorkspaceCard>
-
-                    <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-lg border border-alloy-stone/15 bg-white p-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                Status
+                                {observation.unavailable_reason ?
+                                    <p className="mt-2 text-sm text-amber-900" data-testid="oi-org-calc-unavailable">
+                                        {observation.unavailable_reason}
+                                    </p>
+                                :   null}
+                                {observation.explanation_summary.length > 0 ?
+                                    <details className="mt-2 text-xs text-alloy-midnight/70">
+                                        <summary className="cursor-pointer font-medium text-[#007d68]">
+                                            How we got this number
+                                        </summary>
+                                        <ol className="mt-2 list-decimal space-y-1 pl-4">
+                                            {observation.explanation_summary.map((line) => (
+                                                <li key={line}>{line}</li>
+                                            ))}
+                                        </ol>
+                                    </details>
+                                :   null}
+                            </div>
+                        :   <p className="text-sm text-alloy-midnight/55">
+                                Choose a room and date to see the current answer.
                             </p>
-                            <p className="mt-1 text-sm font-semibold capitalize">
-                                {measurement.status === "active" ? "Measuring" : measurement.status}
-                            </p>
-                        </div>
-                        <div className="rounded-lg border border-alloy-stone/15 bg-white p-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                Goal
-                            </p>
-                            <p className="mt-1 text-sm font-semibold">
-                                {formatOiOrgCalcTargetLabel(measurement.target, measurement.unit)}
-                            </p>
-                        </div>
-                        <div className="rounded-lg border border-alloy-stone/15 bg-white p-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                Health
-                            </p>
-                            <p className="mt-1 text-sm font-semibold">{healthLabel(health)}</p>
-                        </div>
+                        }
                     </div>
                 </div>
             : null}
@@ -492,7 +493,7 @@ export default function OiOrgCalcMeasurementPanel({
                             description="Future updates won’t change this measurement until you choose to use a newer definition."
                         >
                                     <p className="text-sm text-alloy-midnight" data-testid="oi-org-calc-source-line">
-                                        {recipe.recipeSentence}
+                                        {recipeSentence}
                                     </p>
                                     <p className="mt-3">
                                         <Link

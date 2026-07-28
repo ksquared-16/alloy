@@ -47,6 +47,10 @@ import {
     roomUtilizationPivotDraft,
     type PivotBuilderDraft,
 } from "@/lib/organizationCalculations/pivotBuilder";
+import {
+    filterOperatorCalculations,
+    isDeveloperCollectionMode,
+} from "@/lib/organizationCalculations/operatorCollectionFilter";
 
 type CalcListItem = {
     id: string;
@@ -101,7 +105,6 @@ type Mode = "home" | "collection" | "new" | "selected";
 const TABS: Array<{ key: WorkspaceTab; label: string }> = [
     { key: "overview", label: "Overview" },
     { key: "definition", label: "Definition" },
-    { key: "test", label: "Test" },
     { key: "versions", label: "Versions" },
     { key: "usage", label: "Where used" },
     { key: "lifecycle", label: "Lifecycle" },
@@ -262,21 +265,26 @@ export default function OrganizationCalculationsWorkspace({
     const setUrl = useCallback(
         (next: { calculationId?: string | null; view?: string | null }) => {
             if (embedded) {
-                router.replace(
-                    organizationCalculationLibraryHref({
-                        calculationId: next.calculationId,
-                        libraryView: next.view,
-                    }),
-                );
+                const href = organizationCalculationLibraryHref({
+                    calculationId: next.calculationId,
+                    libraryView: next.view,
+                });
+                // Preserve developer collection mode across library navigation.
+                const url = new URL(href, "http://local.invalid");
+                if (searchParams.get("developer") === "1") url.searchParams.set("developer", "1");
+                if (searchParams.get("dev") === "1") url.searchParams.set("dev", "1");
+                router.replace(`${url.pathname}?${url.searchParams.toString()}`);
                 return;
             }
             const params = new URLSearchParams();
             if (next.view) params.set("view", next.view);
             if (next.calculationId) params.set("calculationId", next.calculationId);
+            if (searchParams.get("developer") === "1") params.set("developer", "1");
+            if (searchParams.get("dev") === "1") params.set("dev", "1");
             const q = params.toString();
             router.replace(q ? `/organization/calculations?${q}` : "/organization/calculations");
         },
-        [router, embedded],
+        [router, embedded, searchParams],
     );
 
     const refresh = useCallback(async () => {
@@ -349,14 +357,17 @@ export default function OrganizationCalculationsWorkspace({
         return productTypeById(selected?.type_id) ?? ORG_CALC_PRODUCT_TYPES[0]!;
     }, [detail, selected]);
 
+    const developerMode = isDeveloperCollectionMode(searchParams);
+
     const visible = useMemo(() => {
         const q = search.trim().toLowerCase();
-        return calculations.filter((c) => {
+        const scoped = filterOperatorCalculations(calculations, { developerMode });
+        return scoped.filter((c) => {
             if (filter === "active" && c.lifecycle === "archived") return false;
             if (filter === "active" && c.lifecycle !== "published" && c.lifecycle !== "draft") return false;
             if (filter === "draft" && c.lifecycle !== "draft" && !c.has_draft) return false;
             if (filter === "archived" && c.lifecycle !== "archived") return false;
-            if (filter === "active" && c.lifecycle === "draft") return true; // drafts show in active list as draft status
+            if (filter === "active" && c.lifecycle === "draft") return true;
             if (!q) return true;
             return (
                 c.name.toLowerCase().includes(q)
@@ -364,19 +375,20 @@ export default function OrganizationCalculationsWorkspace({
                 || c.type_label.toLowerCase().includes(q)
             );
         });
-    }, [calculations, filter, search]);
+    }, [calculations, filter, search, developerMode]);
 
     const counts = useMemo(() => {
-        const active = calculations.filter((c) => c.lifecycle !== "archived").length;
-        const draft = calculations.filter((c) => c.lifecycle === "draft" || c.has_draft).length;
-        const archived = calculations.filter((c) => c.lifecycle === "archived").length;
-        const published = calculations.filter((c) => c.lifecycle === "published").length;
-        const recent = [...calculations]
+        const scoped = filterOperatorCalculations(calculations, { developerMode });
+        const active = scoped.filter((c) => c.lifecycle !== "archived").length;
+        const draft = scoped.filter((c) => c.lifecycle === "draft" || c.has_draft).length;
+        const archived = scoped.filter((c) => c.lifecycle === "archived").length;
+        const published = scoped.filter((c) => c.lifecycle === "published").length;
+        const recent = [...scoped]
             .filter((c) => c.lifecycle !== "archived")
             .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
             .slice(0, 5);
         return { active, draft, archived, published, recent };
-    }, [calculations]);
+    }, [calculations, developerMode]);
 
     const boundVersion = detail?.versions.find((v) => v.consumer_bindings?.runtime_surface) ?? null;
 
@@ -631,7 +643,8 @@ export default function OrganizationCalculationsWorkspace({
                         }}
                         onNew={mode === "new" ? () => undefined : openNew}
                         onArchived={() => openCollection("archived")}
-                        total={calculations.length}
+                        total={filterOperatorCalculations(calculations, { developerMode }).length}
+                        developerMode={developerMode}
                     />
                 }
             >
@@ -741,7 +754,8 @@ export default function OrganizationCalculationsWorkspace({
                         onSelect={selectCalc}
                         onNew={openNew}
                         onArchived={() => openCollection("archived")}
-                        total={calculations.length}
+                        total={filterOperatorCalculations(calculations, { developerMode }).length}
+                        developerMode={developerMode}
                     />
                 }
             >
@@ -962,6 +976,7 @@ function CollectionRail({
     onNew,
     onArchived,
     total,
+    developerMode,
 }: {
     items: CalcListItem[];
     filter: FilterKey;
@@ -973,18 +988,23 @@ function CollectionRail({
     onNew: () => void;
     onArchived: () => void;
     total: number;
+    developerMode?: boolean;
 }) {
     return (
         <div
-            className="flex h-full min-h-0 flex-col"
+            className="locations-collection-rail process-config-setup-card flex h-full min-h-0 flex-col overflow-hidden p-3"
             data-testid="organization-calculations-collection"
             data-collection="organization-calculations-list"
+            data-developer-mode={developerMode ? "1" : "0"}
         >
-            <div className="mb-3 flex items-start justify-between gap-2">
+            <div className="mb-2 flex items-start justify-between gap-2">
                 <div>
-                    <p className="config-typo-queue-section-label">Definitions</p>
-                    <p className="config-typo-sublabel mt-0.5" data-testid="organization-calculations-list">
+                    <p className="locations-collection-rail__title text-[15px] font-semibold text-alloy-midnight">
+                        Definitions
+                    </p>
+                    <p className="locations-collection-rail__count mt-0.5" data-testid="organization-calculations-list">
                         {total} total
+                        {developerMode ? " · Developer" : ""}
                     </p>
                 </div>
                 <ConfigurationPrimaryButton
@@ -1000,17 +1020,17 @@ function CollectionRail({
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-alloy-midnight/35" />
                 <input
                     className="config-runtime-input w-full pl-8 text-sm"
-                    placeholder="Search definitions"
+                    placeholder="Search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     data-testid="organization-calculations-search"
                 />
             </label>
 
-            <div className="mb-2 flex flex-wrap gap-1" role="tablist" aria-label="Filter calculations">
+            <div className="mb-2 flex flex-wrap gap-1" role="tablist" aria-label="Filter definitions">
                 {(
                     [
-                        ["active", "Active"],
+                        ["active", "Published"],
                         ["draft", "Draft"],
                         ["archived", "Archived"],
                     ] as const
@@ -1036,46 +1056,57 @@ function CollectionRail({
                 ))}
             </div>
 
-            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5">
+            <div className="locations-collection-rail__list min-h-0 flex-1 space-y-1 overflow-y-auto pr-0.5" role="listbox">
                 {items.length === 0 ?
                     <p className="config-typo-sublabel px-1 py-3">
-                        {filter === "archived" ? "Nothing has been archived." : "No calculations match this view."}
+                        {filter === "archived" ? "Nothing has been archived." : "No definitions match this view."}
                     </p>
                 :   items.map((c) => {
                         const selected = c.id === selectedId;
+                        const status =
+                            c.lifecycle === "archived" ? "Archived"
+                            : c.has_draft || c.lifecycle === "draft" ? "Draft"
+                            : "Published";
+                        const usage =
+                            c.consumer_count === 0 ?
+                                "Not used"
+                            :   `${c.consumer_count} use${c.consumer_count === 1 ? "" : "s"}`;
                         return (
                             <button
                                 key={c.id}
                                 type="button"
-                                className={`${QUEUE_ROW_CARD_SHELL_CLASS} relative min-h-[4.5rem] w-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-bend-pine ${
+                                role="option"
+                                aria-selected={selected}
+                                className={`${QUEUE_ROW_CARD_SHELL_CLASS} locations-collection-row relative w-full !px-2.5 !py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-bend-pine ${
                                     selected ? QUEUE_ROW_CARD_SELECTED_BORDER_CLASS : QUEUE_ROW_CARD_IDLE_BORDER_CLASS
                                 }`}
                                 onClick={() => onSelect(c.id)}
                                 data-testid={`organization-calculations-item-${c.id}`}
                             >
                                 {selected ? <span aria-hidden className={QUEUE_ROW_SELECTED_RAIL_CLASS} /> : null}
-                                <div className="px-3 py-2.5">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <p className="text-sm font-semibold text-alloy-midnight">{c.name}</p>
-                                        {c.has_draft || c.lifecycle === "draft" ?
-                                            <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
-                                                Draft
-                                            </span>
-                                        :   null}
-                                    </div>
-                                    <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-alloy-midnight/50">
-                                        {c.description?.trim() || c.type_label}
-                                    </p>
-                                    <p className="mt-1.5 text-[11px] text-alloy-midnight/45">
-                                        {c.type_label} · {c.status_label} · {c.version_label}
-                                        {" · "}
-                                        {c.consumer_count === 0 ?
-                                            "No usage"
-                                        :   `${c.consumer_count} use${c.consumer_count === 1 ? "" : "s"}`}
+                                <span className="locations-collection-row__body min-w-0 pl-1">
+                                    <span className="locations-collection-row__name flex items-center gap-2">
+                                        <span className="min-w-0 truncate text-[13px] font-semibold text-alloy-midnight">
+                                            {c.name}
+                                        </span>
+                                        <span
+                                            className={`locations-collection-row__status shrink-0 ${
+                                                status === "Published" ?
+                                                    "locations-collection-row__status--active"
+                                                : status === "Archived" ?
+                                                    "locations-collection-row__status--inactive"
+                                                :   ""
+                                            }`}
+                                        >
+                                            {status}
+                                        </span>
+                                    </span>
+                                    <span className="locations-collection-row__meta text-[11px] text-alloy-midnight/50">
+                                        {usage}
                                         {" · "}
                                         {formatUpdated(c.updated_at)}
-                                    </p>
-                                </div>
+                                    </span>
+                                </span>
                             </button>
                         );
                     })
@@ -1132,19 +1163,19 @@ function SelectedWorkspace({
 
     return (
         <div className="min-w-0" data-testid="organization-calculations-selected">
-            <div className="process-config-setup-card p-5">
+            <div className="process-config-setup-card p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
                             {productType.typeLabel}
                         </p>
                         <h2
-                            className="config-typo-workspace-title mt-1 text-xl text-alloy-midnight"
+                            className="config-typo-workspace-title mt-1 text-lg text-alloy-midnight"
                             data-testid="organization-calculations-selected-name"
                         >
                             {selected.name}
                         </h2>
-                        <p className="config-typo-sublabel mt-1">
+                        <p className="config-typo-sublabel mt-0.5">
                             {statusLabel(selected.lifecycle)}
                             {selected.version_label ? ` · ${selected.version_label}` : ""}
                             {selected.has_draft ? " · Draft in progress" : ""}
@@ -1183,26 +1214,29 @@ function SelectedWorkspace({
                 />
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-2.5 space-y-2.5">
                 {tab === "overview" ?
                     <OverviewPanel selected={selected} productType={productType} boundVersion={boundVersion} />
                 : null}
-                {tab === "definition" ?
-                    <DefinitionPanel selected={selected} productType={productType} />
-                : null}
-                {tab === "test" ?
-                    <TestPanel
-                        rooms={rooms}
-                        roomId={roomId}
-                        setRoomId={setRoomId}
-                        effectiveAt={effectiveAt}
-                        setEffectiveAt={setEffectiveAt}
-                        evalResult={evalResult}
-                        productType={productType}
-                        busy={busy}
-                        archived={archived}
-                        onEvaluate={onEvaluate}
-                    />
+                {tab === "definition" || tab === "test" ?
+                    <div
+                        className="grid gap-2.5 xl:grid-cols-2"
+                        data-testid="organization-calculations-definition-workspace"
+                    >
+                        <DefinitionPanel selected={selected} productType={productType} />
+                        <TestPanel
+                            rooms={rooms}
+                            roomId={roomId}
+                            setRoomId={setRoomId}
+                            effectiveAt={effectiveAt}
+                            setEffectiveAt={setEffectiveAt}
+                            evalResult={evalResult}
+                            productType={productType}
+                            busy={busy}
+                            archived={archived}
+                            onEvaluate={onEvaluate}
+                        />
+                    </div>
                 : null}
                 {tab === "versions" ?
                     <VersionsPanel

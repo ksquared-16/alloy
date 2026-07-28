@@ -343,9 +343,9 @@ export default function OiRoomUtilizationBuilder({ busy = false, onClose, onCrea
                             data-testid="oi-builder-count-headcount"
                         />
                         <span>
-                            <span className="font-medium text-alloy-midnight">Each child counts as 1</span>
+                            <span className="font-medium text-alloy-midnight">Every child counts equally</span>
                             <span className="mt-0.5 block text-xs text-alloy-midnight/55">
-                                Headcount ÷ effective capacity
+                                Each enrolled child counts as 1
                             </span>
                         </span>
                     </label>
@@ -361,22 +361,20 @@ export default function OiRoomUtilizationBuilder({ busy = false, onClose, onCrea
                             data-testid="oi-builder-count-fte"
                         />
                         <span>
-                            <span className="font-medium text-alloy-midnight">
-                                Convert schedules to full-time equivalents
-                            </span>
+                            <span className="font-medium text-alloy-midnight">Full-time equivalents</span>
                             <span className="mt-0.5 block text-xs text-alloy-midnight/55">
-                                Days-per-week weighting ÷ effective capacity
+                                Convert schedules using your equivalency definition
                             </span>
                         </span>
                     </label>
                 </div>
 
                 <div className="mt-3 rounded-lg border border-alloy-stone/15 bg-white/60 p-3 text-sm text-alloy-midnight/80">
-                    <p className="font-medium text-alloy-midnight">How it is calculated</p>
+                    <p className="font-medium text-alloy-midnight">Definition</p>
                     <p className="mt-1">
                         {countingMode === "fte" ?
-                            "Equivalent children ÷ effective capacity × 100"
-                        :   "Active enrolled children ÷ effective capacity × 100"}
+                            "Room utilization is calculated by converting active children into full-time equivalents, dividing by effective capacity, and displaying the result as a percentage."
+                        :   "Room utilization is calculated by counting active children equally, dividing by effective capacity, and displaying the result as a percentage."}
                     </p>
                     <p className="mt-2 text-xs text-alloy-midnight/55">
                         Not available when capacity is missing or zero. Never divides by zero.
