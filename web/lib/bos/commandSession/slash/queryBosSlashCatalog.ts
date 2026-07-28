@@ -122,7 +122,13 @@ export function queryBosSlashCatalog(
     const out: BosSlashCommandDescriptor[] = [];
     for (const actionKey of listBosCommandAdapterKeys()) {
         const { displayLabel, description, requiresEntityId } = describeCommand(actionKey);
-        const processOk = processContextKnown && processKeys!.has(actionKey);
+        // An ENTRY Command creates the record a process operates on, so an open process — and a
+        // stage action catalog, which governs actions ON an existing record — cannot be its
+        // precondition. Gating it there left Create Lead permanently gray in BOS while the
+        // workspace Actions rail offered the very same command. Entity-scoped Commands stay
+        // fail-closed exactly as before.
+        const isEntryCommand = !requiresEntityId;
+        const processOk = isEntryCommand || (processContextKnown && processKeys!.has(actionKey));
         let eligible = authorized && processOk;
         let ineligibleReason: string | undefined;
         if (!authorized) ineligibleReason = "You don’t have permission to run commands here.";
