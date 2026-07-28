@@ -15,12 +15,9 @@ import {
     type NestedSurfaceGroupConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
-    nestedSurfaceFieldKeysFromConfig,
     readNestedSurfaceConfigFromDoc,
+    nestedSurfaceFieldKeysFromConfig,
 } from "@/lib/adminV2/runtime/focusPanel/nestedSurfaceConfigReader";
-import {
-    readHouseholdNestedConfigFromDoc as readPublishedHouseholdNestedConfigFromDoc,
-} from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
 
 export type HouseholdContactDisplay = {
     showPhone: boolean;
@@ -91,8 +88,10 @@ function fieldModesToSets(
 
 /** Read published household detail surface config from the Focus Panel summary doc. */
 export function readHouseholdNestedConfigFromDoc(doc: LayoutDoc | null): NestedSurfaceConfig | null {
-    // Canonical identity path — do not use the generic nested reader here.
-    return readPublishedHouseholdNestedConfigFromDoc(doc);
+    // Prefer importing the canonical reader from householdNestedSurfaceConfig in
+    // card/runtime call sites. This re-export stays on the generic path to avoid a
+    // circular import with nestedSurfaceEditorModel → this module → identitySurfaceCompat.
+    return readNestedSurfaceConfigFromDoc(doc, HOUSEHOLD_SURFACE_ID);
 }
 
 /** Read published household contact surface config. */
