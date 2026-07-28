@@ -1,8 +1,10 @@
 # Unified Operational Intelligence Platform
 
-**Status:** Platform charter (design only — no implementation)  
+**Status:** Platform charter (accepted with OI Platform V1 freeze — 2026-07-28).  
 **Date:** 2026-07-28  
-**Slot context:** Slot 2 `org-calcs-integration` (architecture + measurements-first product accepted)  
+**Slot context:** Slot 2 `operational-intelligence-expansion`  
+**V1 certified:** [`docs/platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`](../../platform/milestones/Operational-Intelligence-Platform-V1-Certified.md)  
+**Phase 2:** Consumers present **Answers** — [`../operational-intelligence-expansion/PHASE-2-CONSUMPTION-MODEL.md`](../operational-intelligence-expansion/PHASE-2-CONSUMPTION-MODEL.md)  
 **Depends on (accepted, not redesign):**
 
 - Organization Calculations + exact-version binding  
@@ -10,7 +12,7 @@
 - Measurements-first product realization (`PRODUCT-REALIZATION-MEASUREMENTS-FIRST.md`)  
 - BOS as placement on registered commands / shared runtime (`docs/platform/modules/ai-platform.md`)
 
-**Non-goals:** Redesign OI UI. Redesign BOS chrome. New calculation engine. New measurement types beyond the accepted catalog framing.
+**Non-goals:** Redesign OI UI. Redesign BOS chrome. New calculation engine. New measurement types beyond the accepted catalog framing. Speculative platform primitives after V1 freeze.
 
 ---
 
@@ -476,7 +478,7 @@ Workspace / Planning / Dashboards
 
 1. Should Attention be a **shared feed** object (one API for OI + BOS), or is BOS a pure presenter of Measurement health queries?  
 2. Is **Confidence** mandatory before any Planning forecast appears in BOS, or only after first forecast ship?  
-3. For Room Workspace capacity chips: consumer of Future Room Capacity measurement, or separate binding that must still share observation API?  
+3. For Room Workspace capacity chips: consumer of Future Room Capacity **Answers**, or separate binding that must still share the Answer/observation API?
 4. May BOS ever open the Calculation library UI, or only guided “set up how it’s calculated”?  
 5. Should platform KPIs and org-calc measurements share one Attention policy engine from day one?
 

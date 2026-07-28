@@ -1,5 +1,9 @@
 # Operational Intelligence — Expansion scope honesty
 
+**V1 status:** FROZEN — [`docs/platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`](../../platform/milestones/Operational-Intelligence-Platform-V1-Certified.md).  
+**Operator spine:** Questions → Measurements → Definitions → Answers.  
+**Phase 2:** Consumers present Answers — [`PHASE-2-CONSUMPTION-MODEL.md`](./PHASE-2-CONSUMPTION-MODEL.md).
+
 ## Implemented (this sprint batch)
 
 | Question | Status |

@@ -1,13 +1,17 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 supersedes: []
 ---
 
 # Operational Intelligence Platform
 
-**Status:** Canonical platform module doc (Phase 0 MVP + Phase 1 expansion). **Amended 2026-07-27:** measurements remain downstream consumers of **published** Operational Calculation results (platform Definitions and Organization Calculations). OI owns targets, health, snapshots, and trends — not calculation math. See [`../core/operational-calculations.md`](../core/operational-calculations.md) §3.1.
+**Status:** Canonical platform module doc. **V1 FROZEN** — see [`../milestones/Operational-Intelligence-Platform-V1-Certified.md`](../milestones/Operational-Intelligence-Platform-V1-Certified.md).
+
+**Amended 2026-07-27:** measurements remain downstream consumers of **published** Operational Calculation results (platform Definitions and Organization Calculations). OI owns targets, health, snapshots, and trends — not calculation math. See [`../core/operational-calculations.md`](../core/operational-calculations.md) §3.1.
+
+**Amended 2026-07-28 (V1 closeout):** Product operator spine is **Questions → Measurements → Definitions → Answers**. External products consume **Answers** (Operational Answer Contract) — not Measurements as a presentation object. Phase 2 = consumer presentation; no speculative primitives.
 
 Alloy's measurement layer: **Events → Metrics → KPIs → Insights → Dashboards → Reports**.
 
