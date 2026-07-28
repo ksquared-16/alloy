@@ -28,6 +28,7 @@ function sampleChild(overrides: Partial<ChildrenEvidenceChild> = {}): ChildrenEv
         imageUrl: null,
         dobAge: "Apr 2, 2024 · 2y",
         program: "Pre-K",
+        location: null,
         room: "Pre-K",
         schedule: "Pre-K · Mon–Fri · Aug 24, 2026 · 8:30 AM–4:00 PM",
         teacher: null,
@@ -97,7 +98,7 @@ describe("children identity published config parity", () => {
         expect(refs.indexOf("inquiry_child.program")).toBeLessThan(refs.indexOf("inquiry_child.schedule_type"));
     });
 
-    it("links Program to Assignments when no primary assignment exists", () => {
+    it("makes Program editable when no primary assignment exists", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = addFieldToNestedGroup(config, "identity", "inquiry_child.program", { tier: "context_facts" });
         const vm = buildChildIdentityRecordVM({
@@ -112,9 +113,9 @@ describe("children identity published config parity", () => {
             canMutate: true,
         });
         const program = flatCells(vm).find((c) => c.fieldRef === "inquiry_child.program");
-        expect(program?.linked).toBe(true);
-        expect(program?.linkLabel).toMatch(/Set up in Assignments/i);
-        expect(program?.editable).toBe(false);
+        expect(program?.editable).toBe(true);
+        expect(program?.linked).toBe(false);
+        expect(program?.editControl?.kind).toBe("placement_select");
     });
 
     it("fills Program from evidence and links Change in Assignments when primary exists", () => {
@@ -135,5 +136,28 @@ describe("children identity published config parity", () => {
         expect(program?.linked).toBe(true);
         expect(program?.linkLabel).toMatch(/Change in Assignments/i);
         expect(program?.derivedSourceLabel).toMatch(/primary classroom/i);
+    });
+
+    it("displays Location as the site label, never the location_id UUID", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "identity", "inquiry_child.location_id", {
+            tier: "context_facts",
+        });
+        const uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        const vm = buildChildIdentityRecordVM({
+            config,
+            child: sampleChild({
+                location: "North Campus",
+                hasCommittedPrimaryAssignment: false,
+            }),
+            groupKey: "identity",
+            canMutate: true,
+        });
+        const location = flatCells(vm).find((c) => c.fieldRef === "inquiry_child.location_id");
+        expect(location?.value).toBe("North Campus");
+        expect(location?.value).not.toBe(uuid);
+        expect(String(location?.value ?? "")).not.toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+        );
     });
 });

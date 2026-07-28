@@ -18,7 +18,15 @@ import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPic
 export type IdentityFieldEditControl =
     | { kind: "text"; inputType: "text" | "email" | "tel" }
     | { kind: "date" }
-    | { kind: "select"; optionSetKey: string };
+    | { kind: "select"; optionSetKey: string }
+    /** Site-scoped program categories (`location_program_categories.id`). */
+    | { kind: "placement_select"; placement: "program"; siteLocationId?: string | null; programCategoryId?: string | null };
+
+const PROGRAM_PLACEMENT_SELECT_REFS = new Set([
+    "inquiry_child.program",
+    "inquiry_child.program_category_id",
+    "child.program",
+]);
 
 function childConfigKeyFromRef(fieldRef: string): string | null {
     const trimmed = fieldRef.trim();
@@ -47,6 +55,10 @@ export function resolveIdentityFieldEditControl(
 ): IdentityFieldEditControl {
     const trimmed = fieldRef.trim();
     if (!trimmed) return { kind: "text", inputType: "text" };
+
+    if (PROGRAM_PLACEMENT_SELECT_REFS.has(trimmed)) {
+        return { kind: "placement_select", placement: "program" };
+    }
 
     // Platform child-profile config (FC-CM-1) — gender is select / person_gender.
     const childKey = childConfigKeyFromRef(trimmed);

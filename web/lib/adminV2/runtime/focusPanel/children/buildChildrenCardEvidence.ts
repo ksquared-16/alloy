@@ -55,6 +55,15 @@ export type ChildrenEvidenceChild = {
     gender?: string | null;
     /** Age band label when present on the child row (computed / projected — read-only). */
     ageBand?: string | null;
+    /**
+     * Site / school location display label (never the raw `location_id` UUID).
+     * Sourced from inquiry-child `location_label` enrichment.
+     */
+    location?: string | null;
+    /** Site location id for placement-scoped Program selects. */
+    locationId?: string | null;
+    /** Stored program category FK — used when editing Program (select value). */
+    programCategoryId?: string | null;
     initial: string;
     /** Identity profile image (evidence model); null → initials fallback. */
     imageUrl: string | null;
@@ -184,11 +193,14 @@ export function buildChildrenCardEvidence(
             primaryAssignment?.program
             ?? trimOrNull(schedulingProjection?.child?.program)
             ?? trimOrNull(row.desired_program_label);
+        // Site name for Location fields — never expose the UUID storage key as display truth.
+        const location =
+            trimOrNull(row.location_label)
+            ?? trimOrNull((raw as { location_label?: unknown }).location_label);
         const room =
             primaryAssignment?.room
             ?? scheduleCompact.roomLabel
-            ?? trimOrNull(row.program_room_cohort_label)
-            ?? trimOrNull(row.location_label);
+            ?? trimOrNull(row.program_room_cohort_label);
         const schedule = scheduleCompact.scheduleLabel ?? trimOrNull(row.desired_schedule_label);
         const teacher = trimOrNull((row as { teacher_label?: unknown }).teacher_label);
         const startDateIso = trimOrNull(row.start_date)?.slice(0, 10) ?? null;
@@ -212,6 +224,8 @@ export function buildChildrenCardEvidence(
         const startsLabel = startDate ? `starts ${startDate}` : null;
         const detailValueByKey: Record<string, string | null> = {
             "inquiry_child.program": program,
+            "inquiry_child.location_id": location,
+            "child.location": location,
             "child.room": room,
             "inquiry_child.schedule_type": schedule,
             "inquiry_child.desired_schedule_type": schedule,
@@ -274,6 +288,13 @@ export function buildChildrenCardEvidence(
             imageUrl: resolveChildPhotoUrlFromRaw(raw),
             dobAge,
             program,
+            location,
+            locationId:
+                trimOrNull(row.location_id)
+                ?? trimOrNull((raw as { location_id?: unknown }).location_id),
+            programCategoryId:
+                trimOrNull(row.program_category_id)
+                ?? trimOrNull((raw as { program_category_id?: unknown }).program_category_id),
             room,
             schedule,
             teacher,

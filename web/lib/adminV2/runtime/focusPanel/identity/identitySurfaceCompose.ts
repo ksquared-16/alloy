@@ -134,6 +134,15 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
             : null,
     "inquiry_child.program": (subject) =>
         subject.kind === "child" && "program" in subject.value ? subject.value.program ?? null : null,
+    // Storage key is location_id; display value is always the site label (never the UUID).
+    "inquiry_child.location_id": (subject) =>
+        subject.kind === "child" && "location" in subject.value
+            ? (subject.value as { location?: string | null }).location ?? null
+            : null,
+    "child.location": (subject) =>
+        subject.kind === "child" && "location" in subject.value
+            ? (subject.value as { location?: string | null }).location ?? null
+            : null,
     "child.room": (subject) =>
         subject.kind === "child" && "room" in subject.value ? subject.value.room ?? null : null,
     "inquiry_child.schedule_type": (subject) =>

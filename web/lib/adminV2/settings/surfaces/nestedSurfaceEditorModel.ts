@@ -452,6 +452,15 @@ function defaultVisibilityForAddedField(
     fieldKey: string,
 ): SurfaceFieldVisibility {
     const contract = resolveIdentityFieldEditContract(fieldKey);
+    // Desired Program defaults to Editable — operators set it before Assignments exist.
+    if (
+        contract.canOfferEditable
+        && (fieldKey === "inquiry_child.program"
+            || fieldKey === "inquiry_child.program_category_id"
+            || fieldKey === "child.program")
+    ) {
+        return "editable";
+    }
     if (contract.canOfferEditable) {
         return defaultFieldVisibility(surfaceId, groupKey);
     }

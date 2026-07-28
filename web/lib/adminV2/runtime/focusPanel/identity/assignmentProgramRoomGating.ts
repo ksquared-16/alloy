@@ -1,11 +1,12 @@
 /**
  * When a primary operational assignment exists, Program/Room display derives from
- * the assignment and inquiry Program is not independently editable.
+ * the assignment classroom. Before that, Desired Program is independently editable
+ * (inquiry participation select). Room without a primary still routes to Assignments.
  */
 
 import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 
-const PROGRAM_FIELD_REFS = new Set(["inquiry_child.program", "inquiry_child.program_category_id"]);
+const PROGRAM_FIELD_REFS = new Set(["inquiry_child.program", "inquiry_child.program_category_id", "child.program"]);
 const ROOM_FIELD_REFS = new Set(["child.room", "inquiry_child.program_room_cohort_key"]);
 
 export function primaryAssignmentFromScheduling(
@@ -29,8 +30,16 @@ export function primaryAssignmentFromScheduling(
     };
 }
 
+export function isProgramIdentityFieldRef(fieldRef: string): boolean {
+    return PROGRAM_FIELD_REFS.has(fieldRef.trim());
+}
+
+export function isRoomIdentityFieldRef(fieldRef: string): boolean {
+    return ROOM_FIELD_REFS.has(fieldRef.trim());
+}
+
 export function assignmentOwnsProgramRoomField(fieldRef: string): boolean {
-    return PROGRAM_FIELD_REFS.has(fieldRef) || ROOM_FIELD_REFS.has(fieldRef);
+    return isProgramIdentityFieldRef(fieldRef) || isRoomIdentityFieldRef(fieldRef);
 }
 
 export function programRoomEditableWhenNoPrimaryAssignment(

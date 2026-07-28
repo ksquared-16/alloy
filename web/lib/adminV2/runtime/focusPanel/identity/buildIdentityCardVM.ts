@@ -32,7 +32,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompose";
 import { resolveIdentityFieldRows, type IdentityFieldRowInput } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows";
 import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
-import { isIdentityFieldInlineSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityInlineChildSave";
+import { isIdentityFieldSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
 import { resolveIdentityFieldLinkContract, normalizeIdentityFieldLinkTarget } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
@@ -44,7 +44,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
 import { composeContextCollectionRows } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import { resolveIdentityFieldEditControl } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldEditControl";
-import { assignmentOwnsProgramRoomField } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
+import { assignmentOwnsProgramRoomField, isProgramIdentityFieldRef, isRoomIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
 import { trimOrNull } from "@/lib/completion/valueEmpty";
 import {
     enabledEvidenceSections,
@@ -168,7 +168,7 @@ function buildRecordRows(args: {
             : resolveIdentityFieldValue(args.subject, placement.fieldRef);
         const saveSupported =
             args.isFieldSaveSupported?.(placement.fieldRef)
-            ?? isIdentityFieldInlineSaveSupported(placement.fieldRef);
+            ?? isIdentityFieldSaveSupported(placement.fieldRef);
         const linkContract = resolveIdentityFieldLinkContract(placement.fieldRef);
         const hasExplicitPolicy = Boolean(
             placement.policy
@@ -184,19 +184,32 @@ function buildRecordRows(args: {
             && "hasCommittedPrimaryAssignment" in args.subject.value
             && (args.subject.value as ChildrenEvidenceChild).hasCommittedPrimaryAssignment === true;
         const assignmentOwned = assignmentOwnsProgramRoomField(placement.fieldRef);
-        // Enrollment Program/Room default to Linked → Assignments (set up or change).
-        // Explicit Builder policy still wins (e.g. child_edit Editable for placement forms).
+        const isProgramField = isProgramIdentityFieldRef(placement.fieldRef);
+        const isRoomField = isRoomIdentityFieldRef(placement.fieldRef);
+        // Program: Editable before primary assignment (desired program select). Once a
+        // primary classroom exists, Assignments owns Program (derived / Linked).
+        // Room: Linked → Assignments (room is never a free inquiry dropdown here).
+        // Older configs authored Program as Linked — without a primary, that is treated
+        // as Editable so operators can set Desired Program from a dropdown.
         const effectivePolicy = (() => {
+            if (assignmentOwned && childHasPrimary) return "linked";
+            if (isProgramField && !childHasPrimary) {
+                if (policy === "read-only" || policy === "hidden") return policy;
+                return "editable";
+            }
             if (hasExplicitPolicy) return policy;
+            if (isRoomField) return "linked";
             if (assignmentOwned) return "linked";
             if (policy === "read-only" && linkContract.canOfferLinked) return "linked";
             return policy;
         })();
         const editableBase = args.canMutate && fieldIsSaveable(effectivePolicy) && saveSupported;
-        const editable = editableBase;
+        // Primary assignment locks Program/Room even if authored Editable.
+        const editable = editableBase && !(assignmentOwned && childHasPrimary);
         const linked =
             (fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked)
-            || (assignmentOwned && !hasExplicitPolicy && linkContract.canOfferLinked);
+            || (assignmentOwned && childHasPrimary && linkContract.canOfferLinked)
+            || (isRoomField && !hasExplicitPolicy && linkContract.canOfferLinked);
         const primaryRoomName =
             args.subject.kind === "child"
                 ? trimOrNull((args.subject.value as ChildrenEvidenceChild).room)
@@ -206,7 +219,7 @@ function buildRecordRows(args: {
                 ? `Determined by primary classroom: ${primaryRoomName}`
                 : assignmentOwned && childHasPrimary
                   ? "Determined by primary classroom"
-                  : assignmentOwned && !childHasPrimary
+                  : isRoomField && !childHasPrimary
                     ? "Set up in Assignments"
                     : null;
         const linkTarget = linked
@@ -241,17 +254,32 @@ function buildRecordRows(args: {
             linkLabel: linked
                 ? (childHasPrimary && derivedSourceLabel
                     ? "Change in Assignments"
-                    : assignmentOwned && !childHasPrimary
+                    : isRoomField && !childHasPrimary
                       ? "Set up in Assignments"
                       : linkContract.linkLabel)
                 : null,
             linkDestination: linked ? (linkTarget?.toCard ?? linkContract.destinationCard) : null,
             linkTarget,
             derivedSourceLabel,
-            editControl: resolveIdentityFieldEditControl(
-                placement.fieldRef,
-                args.tenantFieldDefinitions,
-            ),
+            editControl: (() => {
+                const control = resolveIdentityFieldEditControl(
+                    placement.fieldRef,
+                    args.tenantFieldDefinitions,
+                );
+                if (
+                    control.kind === "placement_select"
+                    && control.placement === "program"
+                    && args.subject.kind === "child"
+                ) {
+                    const child = args.subject.value as ChildrenEvidenceChild;
+                    return {
+                        ...control,
+                        siteLocationId: child.locationId ?? null,
+                        programCategoryId: child.programCategoryId ?? null,
+                    };
+                }
+                return control;
+            })(),
         });
     }
     return resolveIdentityFieldRows(inputs);
