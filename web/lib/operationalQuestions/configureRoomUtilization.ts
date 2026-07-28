@@ -36,8 +36,26 @@ const PRODUCT_TYPE_ID = "room_utilization_pct" as const;
 
 export async function configureRoomUtilizationMeasurement(
     supabase: SupabaseClient,
-    args: ConfigureRoomUtilizationArgs,
+    args: ConfigureRoomUtilizationArgs & {
+        /** headcount = occupancy.expected; fte = population×weighting equivalent */
+        countingMode?: "headcount" | "fte";
+    },
 ) {
+    const countingMode = args.countingMode ?? "headcount";
+    if (countingMode === "fte") {
+        const { configureRoomUtilizationFteMeasurement } = await import(
+            "@/lib/operationalQuestions/configurePopulationQuestions"
+        );
+        return configureRoomUtilizationFteMeasurement(supabase, {
+            orgId: args.orgId,
+            userId: args.userId,
+            name: args.name,
+            targetMinPct: args.targetMinPct,
+            targetMaxPct: args.targetMaxPct,
+            entryPoint: args.entryPoint,
+            reuseExisting: args.reuseExisting,
+        });
+    }
     const product = productTypeById(PRODUCT_TYPE_ID);
     if (!product) throw new Error("Room utilization recipe is not available");
 

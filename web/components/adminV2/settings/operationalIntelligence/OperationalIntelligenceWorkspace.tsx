@@ -56,10 +56,7 @@ import { findRoomUtilizationMeasurement } from "@/lib/operationalQuestions/answe
 import {
     FUTURE_ROOM_CAPACITY_QUESTION_KEY,
     ROOM_UTILIZATION_QUESTION_KEY,
-    ROOM_UTILIZATION_FTE_QUESTION_KEY,
-    EQUIVALENT_CHILD_COUNT_QUESTION_KEY,
 } from "@/lib/operationalQuestions/catalog";
-import { findMeasurementByQuestionKey } from "@/lib/operationalQuestions/answerMeasureQuestion";
 import { formatOiOrgCalcTargetLabel } from "@/lib/metrics/oiOrgCalcTargetFormat";
 
 type DetailRegion = "overview" | "target" | "history" | "lifecycle" | "provenance";
@@ -349,18 +346,20 @@ function AdvancedInternals({ canEdit }: { canEdit: boolean }) {
 }
 
 function questionCta(state: "start" | "measuring" | "needs_setup" | "needs_attention"): string {
-    return state === "measuring" || state === "needs_attention" ? "View answer" : "Start measuring";
+    return state === "measuring" || state === "needs_attention" ? "View answer →" : "Start measuring";
 }
 
-function QuestionRow({
+function QuestionCard({
     title,
     question,
+    statusLabel,
     cta,
     onClick,
     testId,
 }: {
     title: string;
     question: string;
+    statusLabel: string;
     cta: string;
     onClick: () => void;
     testId: string;
@@ -369,18 +368,28 @@ function QuestionRow({
         <button
             type="button"
             onClick={onClick}
-            className="flex w-full items-center justify-between gap-2 rounded-lg border border-[#00a283]/30 bg-[#00a283]/5 px-3 py-2.5 text-left"
+            className="flex min-h-[7.5rem] flex-col justify-between rounded-lg border border-alloy-stone/25 bg-white p-3.5 text-left shadow-sm transition-colors hover:border-[#00a283]/40 hover:bg-[#00a283]/[0.03]"
             data-testid={testId}
         >
             <div className="min-w-0">
                 <p className="text-[13px] font-semibold text-alloy-midnight">{title}</p>
-                <p className="mt-0.5 text-[11px] text-alloy-midnight/55">{question}</p>
+                <p className="mt-1 text-[12px] leading-snug text-alloy-midnight/60">{question}</p>
             </div>
-            <span className="shrink-0 rounded border border-[#00a283]/35 bg-white px-2 py-0.5 text-[10px] font-semibold text-[#007d68]">
-                {cta}
-            </span>
+            <div className="mt-3 flex items-center justify-between gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                    {statusLabel}
+                </span>
+                <span className="shrink-0 text-[11px] font-semibold text-[#007d68]">{cta}</span>
+            </div>
         </button>
     );
+}
+
+function questionStatusLabel(state: "start" | "measuring" | "needs_setup" | "needs_attention"): string {
+    if (state === "measuring") return "Measuring";
+    if (state === "needs_attention") return "Needs attention";
+    if (state === "needs_setup") return "Needs setup";
+    return "Not measuring";
 }
 
 function DomainHome({
@@ -392,10 +401,6 @@ function DomainHome({
     onOpenFutureRoomCapacity,
     roomUtilizationState,
     onOpenRoomUtilization,
-    roomUtilizationFteState,
-    onOpenRoomUtilizationFte,
-    equivalentChildCountState,
-    onOpenEquivalentChildCount,
     onSelectMeasurement,
 }: {
     activeMeasurements: OiOrgCalcMeasurement[];
@@ -406,64 +411,39 @@ function DomainHome({
     onOpenFutureRoomCapacity: () => void;
     roomUtilizationState: "start" | "measuring" | "needs_setup" | "needs_attention";
     onOpenRoomUtilization: () => void;
-    roomUtilizationFteState: "start" | "measuring" | "needs_setup" | "needs_attention";
-    onOpenRoomUtilizationFte: () => void;
-    equivalentChildCountState: "start" | "measuring" | "needs_setup" | "needs_attention";
-    onOpenEquivalentChildCount: () => void;
     onSelectMeasurement: (id: string) => void;
 }) {
     return (
-        <div className="space-y-3" data-testid="oi-domain-home">
-            <div className="process-config-setup-card p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                    Operational Intelligence
+        <div className="space-y-4" data-testid="oi-domain-home">
+            <div data-testid="oi-question-catalog">
+                <p className="config-typo-queue-section-label">Questions</p>
+                <p className="mt-0.5 text-sm text-alloy-midnight/60">
+                    Choose an operational question Alloy can answer.
                 </p>
-                <h2 className="config-typo-workspace-title mt-1 text-xl text-alloy-midnight">
-                    What do you want to know?
-                </h2>
-                <p className="config-typo-sublabel mt-1 max-w-2xl">
-                    Choose a question, configure how it is determined, and start measuring.
-                </p>
-            </div>
-
-            <div className="process-config-setup-card p-4" data-testid="oi-question-catalog">
-                <p className="config-typo-queue-section-label">Capacity</p>
-                <div className="mt-2 space-y-1.5">
-                    <QuestionRow
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <QuestionCard
                         title="Future Room Capacity"
                         question="How many seats will a room have on a future date?"
+                        statusLabel={questionStatusLabel(futureRoomCapacityState)}
                         cta={questionCta(futureRoomCapacityState)}
                         onClick={onOpenFutureRoomCapacity}
                         testId="oi-question-future-room-capacity"
                     />
-                    <QuestionRow
+                    <QuestionCard
                         title="Room Utilization"
                         question="How full is a room compared with its usable seats?"
+                        statusLabel={questionStatusLabel(roomUtilizationState)}
                         cta={questionCta(roomUtilizationState)}
                         onClick={onOpenRoomUtilization}
                         testId="oi-question-room-utilization"
                     />
-                    <QuestionRow
-                        title="Room Utilization (FTE)"
-                        question="How full using full-time equivalent children?"
-                        cta={questionCta(roomUtilizationFteState)}
-                        onClick={onOpenRoomUtilizationFte}
-                        testId="oi-question-room-utilization-fte"
-                    />
-                </div>
-                <p className="config-typo-queue-section-label mt-3">Population</p>
-                <div className="mt-2 space-y-1.5">
-                    <QuestionRow
-                        title="Equivalent Child Count"
-                        question="How many equivalent children are expected in this room?"
-                        cta={questionCta(equivalentChildCountState)}
-                        onClick={onOpenEquivalentChildCount}
-                        testId="oi-question-equivalent-child-count"
-                    />
                 </div>
             </div>
 
-            <div className="process-config-setup-card p-4" data-testid="oi-home-measuring-now">
+            <div
+                className="rounded-lg border border-alloy-stone/20 bg-white/80 p-3.5"
+                data-testid="oi-home-measuring-now"
+            >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <p className="config-typo-queue-section-label">What we are measuring</p>
@@ -498,7 +478,7 @@ function DomainHome({
                                     <button
                                         type="button"
                                         onClick={() => onSelectMeasurement(m.id)}
-                                        className="flex min-h-[3.25rem] w-full items-center justify-between gap-2 py-2.5 text-left hover:bg-alloy-stone/[0.04]"
+                                        className="flex min-h-[2.75rem] w-full items-center justify-between gap-2 py-2 text-left hover:bg-alloy-stone/[0.04]"
                                         data-testid={`oi-home-measurement-${m.id}`}
                                     >
                                         <div className="min-w-0">
@@ -517,6 +497,7 @@ function DomainHome({
         </div>
     );
 }
+
 
 function OperationalIntelligenceInner() {
     const searchParams = useSearchParams();
@@ -556,14 +537,6 @@ function OperationalIntelligenceInner() {
 
     const frcMeasurement = findFutureRoomCapacityMeasurement(orgCalcMeasurements);
     const roomUtilMeasurement = findRoomUtilizationMeasurement(orgCalcMeasurements);
-    const roomUtilFteMeasurement = findMeasurementByQuestionKey(
-        orgCalcMeasurements,
-        ROOM_UTILIZATION_FTE_QUESTION_KEY,
-    );
-    const equivalentChildMeasurement = findMeasurementByQuestionKey(
-        orgCalcMeasurements,
-        EQUIVALENT_CHILD_COUNT_QUESTION_KEY,
-    );
     const activeOrgCalcs = orgCalcMeasurements.filter((m) => m.status === "active");
 
     const builderQuestion =
@@ -662,34 +635,6 @@ function OperationalIntelligenceInner() {
         !roomUtilMeasurement ? "start"
         : roomUtilMeasurement.status !== "active" ? "needs_setup"
         : "measuring";
-    const roomUtilizationFteState: "start" | "measuring" | "needs_setup" | "needs_attention" =
-        !roomUtilFteMeasurement ? "start"
-        : roomUtilFteMeasurement.status !== "active" ? "needs_setup"
-        : "measuring";
-    const equivalentChildCountState: "start" | "measuring" | "needs_setup" | "needs_attention" =
-        !equivalentChildMeasurement ? "start"
-        : equivalentChildMeasurement.status !== "active" ? "needs_setup"
-        : "measuring";
-
-    const quickConfigure = async (questionKey: string) => {
-        const res = await fetch("/api/admin/operational-questions/configure", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                question_key: questionKey,
-                entry_point: "ui",
-                reuse_existing: true,
-                target_min_pct: 75,
-                target_max_pct: 95,
-            }),
-        });
-        const json = (await res.json()) as { measurement?: { id: string }; error?: string };
-        if (!res.ok || !json.measurement?.id) {
-            throw new Error(json.error ?? "Could not start measuring");
-        }
-        await reloadOrgCalcs();
-        selectOrgCalc(json.measurement.id, { activated: true });
-    };
 
     useEffect(() => {
         if (questionParam === FUTURE_ROOM_CAPACITY_QUESTION_KEY) {
@@ -714,26 +659,12 @@ function OperationalIntelligenceInner() {
                 setAddOpen(true);
                 setParams({ question: ROOM_UTILIZATION_QUESTION_KEY, add: "1", view: null });
             }
-            return;
-        }
-        if (questionParam === ROOM_UTILIZATION_FTE_QUESTION_KEY) {
-            if (orgMeasurementId) return;
-            if (roomUtilFteMeasurement) selectOrgCalc(roomUtilFteMeasurement.id);
-            else if (canMutate) void quickConfigure(ROOM_UTILIZATION_FTE_QUESTION_KEY).catch(() => undefined);
-            return;
-        }
-        if (questionParam === EQUIVALENT_CHILD_COUNT_QUESTION_KEY) {
-            if (orgMeasurementId) return;
-            if (equivalentChildMeasurement) selectOrgCalc(equivalentChildMeasurement.id);
-            else if (canMutate) void quickConfigure(EQUIVALENT_CHILD_COUNT_QUESTION_KEY).catch(() => undefined);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         questionParam,
         frcMeasurement?.id,
         roomUtilMeasurement?.id,
-        roomUtilFteMeasurement?.id,
-        equivalentChildMeasurement?.id,
         orgMeasurementId,
         canMutate,
     ]);
@@ -756,22 +687,6 @@ function OperationalIntelligenceInner() {
         setParams({ question: ROOM_UTILIZATION_QUESTION_KEY, add: "1", view: null });
     };
 
-    const openRoomUtilizationFte = () => {
-        if (roomUtilFteMeasurement) {
-            selectOrgCalc(roomUtilFteMeasurement.id);
-            return;
-        }
-        if (canMutate) void quickConfigure(ROOM_UTILIZATION_FTE_QUESTION_KEY).catch(() => undefined);
-    };
-
-    const openEquivalentChildCount = () => {
-        if (equivalentChildMeasurement) {
-            selectOrgCalc(equivalentChildMeasurement.id);
-            return;
-        }
-        if (canMutate) void quickConfigure(EQUIVALENT_CHILD_COUNT_QUESTION_KEY).catch(() => undefined);
-    };
-
     return (
         <div
             className="process-config-page min-h-0 flex-1"
@@ -782,13 +697,13 @@ function OperationalIntelligenceInner() {
             <ConfigurationContext
                 title="Operational Intelligence"
                 titleIcon={<Activity className="h-5 w-5" strokeWidth={2} />}
-                subtitle="What do you want to know about how the organization is running?"
+                subtitle="Questions Alloy can answer about how the organization is running."
                 testId="oi-configuration-context"
                 actions={null}
             />
 
             <div
-                className="mb-3 flex flex-wrap gap-1.5"
+                className="mb-3 flex flex-wrap items-end gap-1 border-b border-alloy-stone/20"
                 data-testid="oi-product-tabs"
                 role="tablist"
                 aria-label="Operational Intelligence sections"
@@ -838,10 +753,10 @@ function OperationalIntelligenceInner() {
                                     question: null,
                                 });
                             }}
-                            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                            className={`-mb-px whitespace-nowrap rounded-sm border-b-2 px-3 py-1.5 text-[12px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/35 ${
                                 active ?
-                                    "border-[#00a283]/45 bg-[#00a283]/10 text-[#007d68]"
-                                :   "border-alloy-stone/25 bg-white text-alloy-midnight/60"
+                                    "border-alloy-bend-pine font-semibold text-alloy-bend-pine"
+                                :   "border-transparent text-alloy-midnight/55 hover:text-alloy-midnight"
                             }`}
                             data-testid={`oi-tab-${t.key}`}
                         >
@@ -870,10 +785,6 @@ function OperationalIntelligenceInner() {
                     onOpenFutureRoomCapacity={openFutureRoomCapacity}
                     roomUtilizationState={roomUtilizationState}
                     onOpenRoomUtilization={openRoomUtilization}
-                    roomUtilizationFteState={roomUtilizationFteState}
-                    onOpenRoomUtilizationFte={openRoomUtilizationFte}
-                    equivalentChildCountState={equivalentChildCountState}
-                    onOpenEquivalentChildCount={openEquivalentChildCount}
                     onSelectMeasurement={(id) => selectOrgCalc(id)}
                 />
             : view === "builder" ?

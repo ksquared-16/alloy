@@ -75,9 +75,9 @@ function presentationForAnswer(answer: Omit<OperationalAnswer, "presentation_lin
     }
     if (answer.status === "answered" && answer.value != null) {
         lines.push(`${subject} is expected to have ${answer.value} seats available on ${date}.`);
-        if (answer.health === "on_goal" && answer.goal) {
+        if (answer.health === "on_goal" && answer.goal?.kind === "count_min") {
             lines.push(`That is on goal. Your minimum is ${answer.goal.value} seats.`);
-        } else if (answer.health === "below_goal" && answer.goal) {
+        } else if (answer.health === "below_goal" && answer.goal?.kind === "count_min") {
             lines.push(`That is below goal. Your minimum is ${answer.goal.value} seats.`);
         } else if (answer.health === "no_goal") {
             lines.push("No goal is set for this measurement yet.");

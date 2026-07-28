@@ -22,6 +22,7 @@ type BuilderProps = {
 export default function OiRoomUtilizationBuilder({ busy = false, onClose, onCreated }: BuilderProps) {
     const [name, setName] = useState("Room Utilization");
     const [showName, setShowName] = useState(false);
+    const [countingMode, setCountingMode] = useState<"headcount" | "fte">("headcount");
     const [rangeMin, setRangeMin] = useState("75");
     const [rangeMax, setRangeMax] = useState("95");
     const [skipGoal, setSkipGoal] = useState(false);
@@ -77,11 +78,90 @@ export default function OiRoomUtilizationBuilder({ busy = false, onClose, onCrea
                 published_version_id?: string | null;
             }>;
         };
+        const wantedType =
+            countingMode === "fte" ? "room_utilization_fte_pct" : "room_utilization_pct";
         const match = (listJson.calculations ?? []).find(
-            (c) => c.lifecycle === "published" && c.type_id === "room_utilization_pct" && c.published_version_id,
+            (c) => c.lifecycle === "published" && c.type_id === wantedType && c.published_version_id,
         );
         if (match?.published_version_id) {
             return { calculationId: match.id, versionId: match.published_version_id, reused: true };
+        }
+        if (countingMode === "fte") {
+            const [popRes, wgtRes] = await Promise.all([
+                fetch("/api/admin/organization-populations"),
+                fetch("/api/admin/organization-weightings"),
+            ]);
+            const popJson = (await popRes.json()) as {
+                populations?: Array<{
+                    lifecycle: string;
+                    published_version_id: string | null;
+                }>;
+            };
+            const wgtJson = (await wgtRes.json()) as {
+                weightings?: Array<{
+                    name: string;
+                    lifecycle: string;
+                    published_version_id: string | null;
+                }>;
+            };
+            const popVersion =
+                (popJson.populations ?? []).find((p) => p.lifecycle !== "archived" && p.published_version_id)
+                    ?.published_version_id ?? null;
+            const fteWeight =
+                (wgtJson.weightings ?? []).find(
+                    (w) =>
+                        w.lifecycle !== "archived"
+                        && w.published_version_id
+                        && /full-time|fte|equivalent|days/i.test(w.name),
+                ) ?? (wgtJson.weightings ?? []).find((w) => w.lifecycle !== "archived" && w.published_version_id);
+            if (!popVersion || !fteWeight?.published_version_id) {
+                throw new Error(
+                    "Publish a population and days-per-week weighting first (Calculation Library → suggested FTE setup).",
+                );
+            }
+            const { compilePivotBuilderDraft, roomUtilizationFtePivotDraft } = await import(
+                "@/lib/organizationCalculations/pivotBuilder"
+            );
+            const draft = roomUtilizationFtePivotDraft({
+                name: name.trim() || "Room Utilization",
+                populationVersionId: popVersion,
+                weightingVersionId: fteWeight.published_version_id,
+            });
+            const expressionAst = compilePivotBuilderDraft(draft);
+            const created = await fetch("/api/admin/organization-calculations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: name.trim() || "Room Utilization",
+                    description: "Full-time equivalent children ÷ effective capacity × 100",
+                    product_type_id: "room_utilization_fte_pct",
+                    expression_ast: expressionAst,
+                }),
+            });
+            const createdJson = (await created.json()) as {
+                calculation?: { id: string };
+                error?: string;
+            };
+            if (!created.ok || !createdJson.calculation) {
+                throw new Error(createdJson.error ?? "Could not set up FTE definition");
+            }
+            const pub = await fetch(
+                `/api/admin/organization-calculations/${createdJson.calculation.id}/publish`,
+                { method: "POST" },
+            );
+            const pubJson = (await pub.json()) as {
+                version?: { id: string };
+                publishedVersion?: { id: string };
+                calculation?: { published_version_id?: string | null };
+                error?: string;
+            };
+            if (!pub.ok) throw new Error(pubJson.error ?? "Could not publish FTE definition");
+            const versionId =
+                pubJson.version?.id
+                ?? pubJson.publishedVersion?.id
+                ?? pubJson.calculation?.published_version_id;
+            if (!versionId) throw new Error("No available FTE definition after setup");
+            return { calculationId: createdJson.calculation.id, versionId, reused: false };
         }
         const created = await fetch("/api/admin/organization-calculations", {
             method: "POST",
@@ -196,6 +276,7 @@ export default function OiRoomUtilizationBuilder({ busy = false, onClose, onCrea
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     question_key: "room_utilization",
+                    counting_mode: countingMode,
                     name: name.trim() || "Room Utilization",
                     target_min_pct: skipGoal ? null : min,
                     target_max_pct: skipGoal ? null : max,
@@ -246,10 +327,56 @@ export default function OiRoomUtilizationBuilder({ busy = false, onClose, onCrea
                 </p>
                 <p className="text-sm font-medium text-alloy-midnight">Each room</p>
 
+                <div className="mt-3 space-y-2" data-testid="oi-builder-counting-mode">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                        How should children count?
+                    </p>
+                    <label className="flex cursor-pointer gap-2 rounded-md border border-alloy-stone/20 bg-white/70 px-3 py-2 text-sm">
+                        <input
+                            type="radio"
+                            name="counting-mode"
+                            checked={countingMode === "headcount"}
+                            onChange={() => {
+                                setCountingMode("headcount");
+                                setTryResult(null);
+                            }}
+                            data-testid="oi-builder-count-headcount"
+                        />
+                        <span>
+                            <span className="font-medium text-alloy-midnight">Each child counts as 1</span>
+                            <span className="mt-0.5 block text-xs text-alloy-midnight/55">
+                                Headcount ÷ effective capacity
+                            </span>
+                        </span>
+                    </label>
+                    <label className="flex cursor-pointer gap-2 rounded-md border border-alloy-stone/20 bg-white/70 px-3 py-2 text-sm">
+                        <input
+                            type="radio"
+                            name="counting-mode"
+                            checked={countingMode === "fte"}
+                            onChange={() => {
+                                setCountingMode("fte");
+                                setTryResult(null);
+                            }}
+                            data-testid="oi-builder-count-fte"
+                        />
+                        <span>
+                            <span className="font-medium text-alloy-midnight">
+                                Convert schedules to full-time equivalents
+                            </span>
+                            <span className="mt-0.5 block text-xs text-alloy-midnight/55">
+                                Days-per-week weighting ÷ effective capacity
+                            </span>
+                        </span>
+                    </label>
+                </div>
+
                 <div className="mt-3 rounded-lg border border-alloy-stone/15 bg-white/60 p-3 text-sm text-alloy-midnight/80">
                     <p className="font-medium text-alloy-midnight">How it is calculated</p>
                     <p className="mt-1">
-                        Active enrolled children ÷ effective capacity × 100
+                        {countingMode === "fte" ?
+                            "Equivalent children ÷ effective capacity × 100"
+                        :   "Active enrolled children ÷ effective capacity × 100"}
                     </p>
                     <p className="mt-2 text-xs text-alloy-midnight/55">
                         Not available when capacity is missing or zero. Never divides by zero.

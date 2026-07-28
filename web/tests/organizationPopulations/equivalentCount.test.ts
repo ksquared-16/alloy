@@ -94,7 +94,7 @@ describe("equivalent count AST", () => {
 });
 
 describe("question catalog populations batch", () => {
-    it("includes FTE utilization and equivalent child count", () => {
+    it("retains FTE and equivalent keys for API/compat but hides from product catalog", () => {
         const keys = listOperationalQuestions().map((q) => q.key);
         expect(keys).toContain(ROOM_UTILIZATION_FTE_QUESTION_KEY);
         expect(keys).toContain(EQUIVALENT_CHILD_COUNT_QUESTION_KEY);

@@ -139,13 +139,13 @@ export async function configureRoomUtilizationFteMeasurement(
     }
 
     const measurement = createOiOrgCalcMeasurementDraft({
-        name: args.name?.trim() || "Room Utilization (FTE)",
+        name: args.name?.trim() || "Room Utilization",
         description: "How full is this room using full-time equivalent children?",
         userId: args.userId,
         source,
         unit: "percent",
         target,
-        question_key: "room_utilization_fte",
+        question_key: "room_utilization",
         entry_point: args.entryPoint,
     });
 
@@ -153,7 +153,7 @@ export async function configureRoomUtilizationFteMeasurement(
     const existing = parseOiOrgCalcMeasurements(metadata);
     const next = writeOiOrgCalcMeasurements(
         metadata,
-        [...retirePriorQuestion(existing, "room_utilization_fte"), measurement],
+        [...retirePriorQuestion(existing, "room_utilization"), measurement],
     );
     await saveOrgMetadata(supabase, args.orgId, next);
     return { measurement, population, weighting };

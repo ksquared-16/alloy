@@ -50,6 +50,8 @@ export async function POST(req: NextRequest) {
         const supabase = createAdminClient();
 
         if (questionKeyRaw === ROOM_UTILIZATION_QUESTION_KEY) {
+            const countingMode =
+                body.counting_mode === "fte" || body.countingMode === "fte" ? "fte" : "headcount";
             const result = await configureRoomUtilizationMeasurement(supabase, {
                 orgId: ctx.orgId,
                 userId: ctx.userId,
@@ -66,6 +68,7 @@ export async function POST(req: NextRequest) {
                     :   null,
                 entryPoint,
                 reuseExisting: body.reuse_existing !== false,
+                countingMode,
             });
             return NextResponse.json(result, { status: 201 });
         }

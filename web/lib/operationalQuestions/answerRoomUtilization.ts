@@ -5,7 +5,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildRoomUtilizationActions } from "@/lib/operationalQuestions/actions";
-import { ROOM_UTILIZATION_QUESTION_KEY } from "@/lib/operationalQuestions/catalog";
+import {
+    ROOM_UTILIZATION_FTE_QUESTION_KEY,
+    ROOM_UTILIZATION_QUESTION_KEY,
+} from "@/lib/operationalQuestions/catalog";
 import type {
     AnswerOperationalQuestionContext,
     OperationalAnswer,
@@ -24,7 +27,11 @@ export function findRoomUtilizationMeasurement(
     measurements: OiOrgCalcMeasurement[],
 ): OiOrgCalcMeasurement | null {
     const active = measurements.filter((m) => m.status === "active");
-    return active.find((m) => m.question_key === ROOM_UTILIZATION_QUESTION_KEY) ?? null;
+    return (
+        active.find((m) => m.question_key === ROOM_UTILIZATION_QUESTION_KEY)
+        ?? active.find((m) => m.question_key === ROOM_UTILIZATION_FTE_QUESTION_KEY)
+        ?? null
+    );
 }
 
 function healthLabel(
