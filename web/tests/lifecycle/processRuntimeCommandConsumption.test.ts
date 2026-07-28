@@ -46,7 +46,7 @@ describe("P6.S2 process runtime projection", () => {
             stageActionCatalog: enrollmentLeadProofActionCatalog(),
         });
         expect(projection.authority).toBe("command_set_v1");
-        expect(projection.selectedEnabledKeys.size).toBe(0);
+        expect(projection.selectedEnabledKeys.length).toBe(0);
         expect(projection.enforceAllowlist).toBe(true);
 
         const allowlist = buildProcessAwareActionAllowlist({

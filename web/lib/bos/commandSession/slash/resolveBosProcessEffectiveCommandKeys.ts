@@ -23,5 +23,5 @@ export function resolveBosProcessEffectiveCommandKeys(input: {
     if (input.runnableOnly) {
         return new Set(projection.runnableKeys);
     }
-    return projection.selectedEnabledKeys;
+    return new Set(projection.selectedEnabledKeys);
 }
