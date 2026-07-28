@@ -65,7 +65,7 @@ describe("Operational Intelligence Organization product", () => {
         expect(domain?.ownedConfiguration).toContain("Measurements");
     });
 
-    it("mounts the OI page and workspace product shell", () => {
+    it("mounts the OI page and measurements-first product shell", () => {
         const page = read("app/adminV2/settings/organization/operational-intelligence/page.tsx");
         expect(page).toContain("OperationalIntelligenceWorkspace");
         const workspace = read(
@@ -73,11 +73,14 @@ describe("Operational Intelligence Organization product", () => {
         );
         expect(workspace).toContain('title="Operational Intelligence"');
         expect(workspace).toContain("data-testid=\"operational-intelligence-organization-product\"");
-        expect(workspace).toContain("oi-surfaces-handoff");
+        expect(workspace).toContain("data-oi-v2-measurements-first=\"true\"");
+        expect(workspace).toContain("What do you want to know?");
+        expect(workspace).toContain("oi-home-add-measurement");
         expect(workspace).toContain("Manage presentation in Surfaces");
         expect(workspace).not.toContain('title="Operational Calculations"');
         expect(workspace).not.toContain("SourcesWorkspace");
-        expect(workspace).toContain("oi-chapter-diagnostics");
+        expect(workspace).not.toContain("enablement");
+        expect(workspace).toContain("OiOrgCalcAddWizard");
     });
 
     it("rewrites and redirects legacy routes to Operational Intelligence", () => {

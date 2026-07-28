@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * Selected Future Room Capacity measurement workspace.
- * Observe · Target · History · Source (exact-version rebind).
+ * Organization-backed measurement detail — operator language.
+ * Exact-version behavior preserved; engineering nouns stay one click deeper.
  */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
     ConfigurationPrimaryButton,
@@ -15,23 +16,25 @@ import {
     ConfigWorkspaceCard,
     ConfigWorkspaceTabBar,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import { CANONICAL_ORGANIZATION_CALCULATIONS_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import { capacityRecipeFromProductTypeLabel } from "@/lib/adminV2/settings/operationalIntelligence/oiCapacityRecipeCopy";
 import type { OiOrgCalcHealth, OiOrgCalcMeasurement, OiOrgCalcObservation } from "@/lib/metrics/oiOrgCalcMeasurements";
 
 type RoomOption = { id: string; label: string; siteLabel: string };
-type Tab = "overview" | "observe" | "target" | "history" | "source";
+type Tab = "overview" | "check" | "goal" | "history" | "source";
 
 const TABS: Array<{ key: Tab; label: string }> = [
     { key: "overview", label: "Overview" },
-    { key: "observe", label: "Observe" },
-    { key: "target", label: "Target" },
+    { key: "check", label: "Check a room" },
+    { key: "goal", label: "Goal" },
     { key: "history", label: "History" },
-    { key: "source", label: "Source" },
+    { key: "source", label: "How it’s calculated" },
 ];
 
 function healthLabel(h: OiOrgCalcHealth): string {
     if (h === "on_goal") return "On goal";
     if (h === "below_goal") return "Below goal";
-    if (h === "no_target") return "No target";
+    if (h === "no_target") return "No goal";
     return "Not available";
 }
 
@@ -54,6 +57,7 @@ export default function OiOrgCalcMeasurementPanel({
     const [health, setHealth] = useState<OiOrgCalcHealth>("not_available");
     const [targetDraft, setTargetDraft] = useState("");
     const [newerVersions, setNewerVersions] = useState<Array<{ id: string; version_number: number }>>([]);
+    const [showVersions, setShowVersions] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -143,13 +147,13 @@ export default function OiOrgCalcMeasurementPanel({
                 health?: OiOrgCalcHealth;
                 error?: string;
             };
-            if (!res.ok) throw new Error(friendlyError(json.error ?? "Observe failed"));
+            if (!res.ok) throw new Error(friendlyError(json.error ?? "Check failed"));
             setObservation(json.observation ?? null);
             setHealth(json.health ?? "not_available");
             await reload();
-            setTab("observe");
+            setTab("check");
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Observe failed");
+            setError(e instanceof Error ? e.message : "Check failed");
         } finally {
             setBusy(false);
         }
@@ -167,10 +171,9 @@ export default function OiOrgCalcMeasurementPanel({
                 }),
             });
             const json = (await res.json()) as { error?: string };
-            if (!res.ok) throw new Error(json.error ?? "Could not save target");
+            if (!res.ok) throw new Error(json.error ?? "Could not save goal");
             await reload();
             if (observation) {
-                // Refresh health against new target without new evaluate
                 setHealth(
                     observation.availability === "resolved" && observation.value != null ?
                         !targetDraft.trim() ? "no_target"
@@ -180,13 +183,13 @@ export default function OiOrgCalcMeasurementPanel({
                 );
             }
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Could not save target");
+            setError(e instanceof Error ? e.message : "Could not save goal");
         } finally {
             setBusy(false);
         }
     };
 
-    const rebind = async (versionId: string) => {
+    const useNewerVersion = async (versionId: string) => {
         setBusy(true);
         setError(null);
         try {
@@ -196,11 +199,11 @@ export default function OiOrgCalcMeasurementPanel({
                 body: JSON.stringify({ calculation_version_id: versionId }),
             });
             const json = (await res.json()) as { error?: string };
-            if (!res.ok) throw new Error(json.error ?? "Could not rebind");
+            if (!res.ok) throw new Error(json.error ?? "Could not switch versions");
             setObservation(null);
             await reload();
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Could not rebind");
+            setError(e instanceof Error ? e.message : "Could not switch versions");
         } finally {
             setBusy(false);
         }
@@ -210,18 +213,22 @@ export default function OiOrgCalcMeasurementPanel({
         return <p className="config-typo-sublabel">Loading measurement…</p>;
     }
 
+    const recipe = capacityRecipeFromProductTypeLabel(
+        measurement.description ?? measurement.source.calculation_name,
+    );
+    const calcHref = `${CANONICAL_ORGANIZATION_CALCULATIONS_HREF}?id=${measurement.source.calculation_id}`;
+
     return (
         <div className="min-w-0 space-y-3" data-testid="oi-org-calc-measurement">
             <div className="process-config-setup-card p-5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                    Organization calculation
+                    Measurement
                 </p>
                 <h2 className="config-typo-workspace-title mt-1 text-xl" data-testid="oi-org-calc-selected-name">
                     {measurement.name}
                 </h2>
                 <p className="config-typo-sublabel mt-1">
-                    {measurement.source.calculation_name} · Version {measurement.source.version_number} ·{" "}
-                    {measurement.unit}
+                    Calculated using: {recipe.sourceLine} · {measurement.unit}
                 </p>
                 <ConfigWorkspaceTabBar
                     tabs={TABS}
@@ -236,48 +243,58 @@ export default function OiOrgCalcMeasurementPanel({
             {tab === "overview" ?
                 <div className="grid gap-3 lg:grid-cols-2" data-testid="oi-org-calc-overview">
                     <ConfigWorkspaceCard>
-                        <p className="config-typo-queue-section-label">What it measures</p>
+                        <p className="config-typo-queue-section-label">What we measure</p>
                         <p className="mt-2 text-sm text-alloy-midnight">
                             {measurement.description
-                                ?? "Future room capacity from a published organization calculation."}
+                                ?? "How many seats a room is expected to have on a future date."}
                         </p>
                         <p className="config-typo-sublabel mt-3">
-                            Room + effective date · seats · exact published version
+                            Pick a room and date to get the current answer.
                         </p>
                     </ConfigWorkspaceCard>
                     <ConfigWorkspaceCard>
-                        <p className="config-typo-queue-section-label">Status</p>
+                        <p className="config-typo-queue-section-label">At a glance</p>
                         <dl className="mt-2 space-y-2 text-sm">
                             <div className="flex justify-between gap-2">
-                                <dt className="text-alloy-midnight/50">Lifecycle</dt>
-                                <dd className="font-medium capitalize">{measurement.status}</dd>
+                                <dt className="text-alloy-midnight/50">Status</dt>
+                                <dd className="font-medium capitalize">
+                                    {measurement.status === "active" ? "Measuring" : measurement.status}
+                                </dd>
                             </div>
                             <div className="flex justify-between gap-2">
-                                <dt className="text-alloy-midnight/50">Bound version</dt>
-                                <dd className="font-medium">v{measurement.source.version_number}</dd>
+                                <dt className="text-alloy-midnight/50">Current answer</dt>
+                                <dd className="font-medium">
+                                    {observation?.value != null ?
+                                        `${observation.value} seats`
+                                    :   "Check a room to see"}
+                                </dd>
                             </div>
                             <div className="flex justify-between gap-2">
-                                <dt className="text-alloy-midnight/50">Target</dt>
+                                <dt className="text-alloy-midnight/50">Goal</dt>
                                 <dd className="font-medium">
                                     {measurement.target ?
-                                        `Minimum ${measurement.target.value} seats`
+                                        `Warn below ${measurement.target.value} seats`
                                     :   "None"}
                                 </dd>
                             </div>
                             <div className="flex justify-between gap-2">
-                                <dt className="text-alloy-midnight/50">Latest health</dt>
+                                <dt className="text-alloy-midnight/50">Health</dt>
                                 <dd className="font-medium">{healthLabel(health)}</dd>
+                            </div>
+                            <div className="flex justify-between gap-2">
+                                <dt className="text-alloy-midnight/50">Source</dt>
+                                <dd className="font-medium text-right">{recipe.sourceLine}</dd>
                             </div>
                         </dl>
                     </ConfigWorkspaceCard>
                 </div>
             : null}
 
-            {tab === "observe" ?
+            {tab === "check" ?
                 <ConfigWorkspaceCard testId="oi-org-calc-observe">
                     <ConfigEditorSection
-                        title="Observe"
-                        description="Evaluate future room capacity for a room and date. Missing capacity is never treated as zero."
+                        title="Check a room"
+                        description="See how many seats this room is expected to have on a future date."
                     >
                         <div className="grid gap-2 sm:grid-cols-2">
                             <label className="block space-y-1">
@@ -296,7 +313,7 @@ export default function OiOrgCalcMeasurementPanel({
                                 </select>
                             </label>
                             <label className="block space-y-1">
-                                <span className="config-typo-field-label">Effective date</span>
+                                <span className="config-typo-field-label">Date</span>
                                 <input
                                     type="date"
                                     className="config-runtime-input"
@@ -313,7 +330,7 @@ export default function OiOrgCalcMeasurementPanel({
                                 onClick={() => void observe()}
                                 data-testid="oi-org-calc-run-observe"
                             >
-                                {busy ? "Evaluating…" : "Run observation"}
+                                {busy ? "Checking…" : "Check"}
                             </ConfigurationPrimaryButton>
                         </div>
                         {observation ?
@@ -327,8 +344,7 @@ export default function OiOrgCalcMeasurementPanel({
                                     :   `${observation.value} seats`}
                                 </p>
                                 <p className="config-typo-sublabel">
-                                    {healthLabel(health)} · version {observation.version_number} ·{" "}
-                                    {observation.effective_at}
+                                    {healthLabel(health)} · {observation.effective_at}
                                 </p>
                                 {observation.unavailable_reason ?
                                     <p className="text-sm text-amber-900" data-testid="oi-org-calc-unavailable">
@@ -336,11 +352,16 @@ export default function OiOrgCalcMeasurementPanel({
                                     </p>
                                 :   null}
                                 {observation.explanation_summary.length > 0 ?
-                                    <ol className="list-decimal space-y-1 pl-4 text-xs text-alloy-midnight/70">
-                                        {observation.explanation_summary.map((line) => (
-                                            <li key={line}>{line}</li>
-                                        ))}
-                                    </ol>
+                                    <details className="text-xs text-alloy-midnight/70">
+                                        <summary className="cursor-pointer font-medium text-[#007d68]">
+                                            How we got this number
+                                        </summary>
+                                        <ol className="mt-2 list-decimal space-y-1 pl-4">
+                                            {observation.explanation_summary.map((line) => (
+                                                <li key={line}>{line}</li>
+                                            ))}
+                                        </ol>
+                                    </details>
                                 :   null}
                             </div>
                         :   null}
@@ -348,17 +369,23 @@ export default function OiOrgCalcMeasurementPanel({
                 </ConfigWorkspaceCard>
             : null}
 
-            {tab === "target" ?
+            {tab === "goal" ?
                 <ConfigWorkspaceCard testId="oi-org-calc-target-panel">
-                    <ConfigEditorSection title="Target" description="Minimum future room capacity.">
+                    <ConfigEditorSection
+                        title="When should Alloy get your attention?"
+                        description="Warn when expected capacity drops below this number of seats."
+                    >
                         <label className="block max-w-xs space-y-1">
-                            <span className="config-typo-field-label">Minimum seats</span>
-                            <input
-                                className="config-runtime-input"
-                                value={targetDraft}
-                                onChange={(e) => setTargetDraft(e.target.value)}
-                                data-testid="oi-org-calc-target-input"
-                            />
+                            <span className="config-typo-field-label">Warn me when capacity is below</span>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    className="config-runtime-input"
+                                    value={targetDraft}
+                                    onChange={(e) => setTargetDraft(e.target.value)}
+                                    data-testid="oi-org-calc-target-input"
+                                />
+                                <span className="text-sm text-alloy-midnight/60">seats</span>
+                            </div>
                         </label>
                         <div className="mt-3">
                             <ConfigurationPrimaryButton
@@ -367,7 +394,7 @@ export default function OiOrgCalcMeasurementPanel({
                                 onClick={() => void saveTarget()}
                                 data-testid="oi-org-calc-save-target"
                             >
-                                Save target
+                                Save goal
                             </ConfigurationPrimaryButton>
                         </div>
                     </ConfigEditorSection>
@@ -378,20 +405,21 @@ export default function OiOrgCalcMeasurementPanel({
                 <ConfigWorkspaceCard testId="oi-org-calc-history">
                     <ConfigEditorSection
                         title="History"
-                        description="Stored observations from prior runs. No decorative charts from thin data."
+                        description="Prior answers for rooms and dates you’ve checked."
                     >
                         {history.length === 0 ?
-                            <p className="config-typo-sublabel">No observations yet. Run an observation to begin history.</p>
+                            <p className="config-typo-sublabel">
+                                No history yet. Check a room to begin.
+                            </p>
                         :   <div className="overflow-x-auto">
                                 <table className="min-w-full text-left text-xs">
                                     <thead className="text-alloy-midnight/45">
                                         <tr>
                                             <th className="py-1 pr-3 font-semibold">Room</th>
-                                            <th className="py-1 pr-3 font-semibold">Effective</th>
-                                            <th className="py-1 pr-3 font-semibold">Value</th>
-                                            <th className="py-1 pr-3 font-semibold">Availability</th>
-                                            <th className="py-1 pr-3 font-semibold">Version</th>
-                                            <th className="py-1 font-semibold">Evaluated</th>
+                                            <th className="py-1 pr-3 font-semibold">Date</th>
+                                            <th className="py-1 pr-3 font-semibold">Answer</th>
+                                            <th className="py-1 pr-3 font-semibold">Status</th>
+                                            <th className="py-1 font-semibold">Checked</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -407,7 +435,6 @@ export default function OiOrgCalcMeasurementPanel({
                                                         "Ready"
                                                     :   row.unavailable_reason ?? "Not available"}
                                                 </td>
-                                                <td className="py-1.5 pr-3">v{row.version_number}</td>
                                                 <td className="py-1.5">
                                                     {new Date(row.evaluated_at).toLocaleString()}
                                                 </td>
@@ -424,35 +451,59 @@ export default function OiOrgCalcMeasurementPanel({
             {tab === "source" ?
                 <ConfigWorkspaceCard testId="oi-org-calc-source">
                     <ConfigEditorSection
-                        title="Source binding"
-                        description="This measurement stays on the bound published version until you explicitly use a newer one."
+                        title="How this is calculated"
+                        description="Future updates won’t change this measurement until you choose to use a newer version."
                     >
                         <dl className="space-y-2 text-sm">
                             <div>
-                                <dt className="config-typo-field-label">Calculation</dt>
-                                <dd>{measurement.source.calculation_name}</dd>
+                                <dt className="config-typo-field-label">Calculated using</dt>
+                                <dd data-testid="oi-org-calc-source-line">{recipe.sourceLine}</dd>
                             </div>
                             <div>
-                                <dt className="config-typo-field-label">Bound version</dt>
+                                <dt className="config-typo-field-label">Current recipe in use</dt>
                                 <dd data-testid="oi-org-calc-bound-version">
                                     Version {measurement.source.version_number}
                                 </dd>
                             </div>
                         </dl>
-                        {newerVersions.length > 0 ?
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                {newerVersions.map((v) => (
-                                    <ConfigurationSecondaryButton
-                                        key={v.id}
-                                        disabled={busy}
-                                        onClick={() => void rebind(v.id)}
-                                        data-testid={`oi-org-calc-rebind-v${v.version_number}`}
-                                    >
-                                        Use newer version ({v.version_number})
-                                    </ConfigurationSecondaryButton>
-                                ))}
+                        <p className="mt-3 text-sm">
+                            <Link
+                                href={calcHref}
+                                className="font-semibold text-[#007d68] hover:underline"
+                                data-testid="oi-org-calc-open-definition"
+                            >
+                                Open calculation definition
+                            </Link>
+                            <span className="text-alloy-midnight/45"> — versions, where used, and library tools</span>
+                        </p>
+
+                        <button
+                            type="button"
+                            className="mt-3 text-xs font-semibold text-[#007d68] hover:underline"
+                            onClick={() => setShowVersions((v) => !v)}
+                            data-testid="oi-org-calc-toggle-versions"
+                        >
+                            {showVersions ? "Hide version options" : "Manage versions"}
+                        </button>
+
+                        {showVersions ?
+                            <div className="mt-3 space-y-2" data-testid="oi-org-calc-version-panel">
+                                {newerVersions.length > 0 ?
+                                    <div className="flex flex-wrap gap-2">
+                                        {newerVersions.map((v) => (
+                                            <ConfigurationSecondaryButton
+                                                key={v.id}
+                                                disabled={busy}
+                                                onClick={() => void useNewerVersion(v.id)}
+                                                data-testid={`oi-org-calc-rebind-v${v.version_number}`}
+                                            >
+                                                Use newer version ({v.version_number})
+                                            </ConfigurationSecondaryButton>
+                                        ))}
+                                    </div>
+                                :   <p className="config-typo-sublabel">No newer versions available.</p>}
                             </div>
-                        :   <p className="config-typo-sublabel mt-3">No newer published versions available.</p>}
+                        :   null}
                     </ConfigEditorSection>
                 </ConfigWorkspaceCard>
             : null}
