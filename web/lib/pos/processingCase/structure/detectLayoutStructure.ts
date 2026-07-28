@@ -279,7 +279,9 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
             }
 
             // --- signature line inside a signature section ---
-            const curSig: SectionAcc | null = state.cur;
+            // `as` (not just an annotation): the closure-mutated `state.cur` can be control-flow-narrowed
+            // to `never` at this read site depending on the wider type graph; the assertion is authoritative.
+            const curSig = state.cur as SectionAcc | null;
             if (curSig && curSig.kind === "signature" && BLANK_RE.test(t)) {
                 const sec = curSig;
                 if (/print\s+name/i.test(t)) {
@@ -320,7 +322,7 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
             // Inline blanks inside prose (the legal paragraph's child-name line) are stripped, not
             // promoted to fields, so the emergency-authorization paragraph is preserved as legal text.
             const proseLike = /[a-z]/.test(t) && t.split(/\s+/).length >= 4 && (/^[a-z]/.test(t) || /[.]$/.test(t) || !BLANK_RE.test(t));
-            const curProse: SectionAcc | null = state.cur;
+            const curProse = state.cur as SectionAcc | null;
             if (curProse && proseLike) {
                 curProse.staticLines.push(t.replace(BLANK_RE, " ").replace(/\s{2,}/g, " ").trim());
                 continue;
