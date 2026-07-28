@@ -24,8 +24,11 @@ export type OrganizationCommandCatalogEntry = {
     family: CapabilityFamily;
     maturity: CapabilityMaturity;
     catalogVisibility: CapabilityCatalogVisibility;
-    /** Honest operator-facing status — not executor jargon. */
-    statusLabel: "Available" | "Limited" | "Unavailable" | "Internal" | "Hidden";
+    /**
+     * Legacy catalog badge field — prefer `commandProductSupport()` for administrator UI.
+     * Kept for compatibility; values align with product support language (no "Limited").
+     */
+    statusLabel: "Supported" | "Needs attention" | "Not yet supported" | "Internal" | "Hidden";
     aliases: readonly string[];
     confirmationPolicy: CapabilityConfirmationPolicy;
     supportsPreview: boolean;
@@ -34,20 +37,24 @@ export type OrganizationCommandCatalogEntry = {
 };
 
 function statusLabelFor(cap: PlatformCapabilityDefinition): OrganizationCommandCatalogEntry["statusLabel"] {
+    // Product support first — hidden unavailable gaps still show as Not yet supported.
+    if (cap.maturity === "unavailable" || cap.maturity === "placeholder") {
+        return "Not yet supported";
+    }
     if (cap.catalogVisibility === "hidden") return "Hidden";
     if (cap.catalogVisibility === "internal_only") return "Internal";
-    if (cap.maturity === "unavailable" || cap.maturity === "placeholder") return "Unavailable";
+    if (cap.maturity === "executable" || cap.maturity === "adapted" || cap.maturity === "navigation_only") {
+        return "Supported";
+    }
+    if (cap.maturity === "legacy") return "Needs attention";
     if (
-        cap.maturity === "legacy" ||
-        cap.maturity === "navigation_only" ||
         cap.implementationStatus === "partial" ||
         cap.implementationStatus === "legacy" ||
         cap.implementationStatus === "missing"
     ) {
-        return "Limited";
+        return "Needs attention";
     }
-    if (cap.maturity === "executable" || cap.maturity === "adapted") return "Available";
-    return "Unavailable";
+    return "Not yet supported";
 }
 
 function toEntry(cap: PlatformCapabilityDefinition): OrganizationCommandCatalogEntry {
@@ -82,7 +89,9 @@ export function listOrganizationCommandCatalog(opts?: {
     const seen = new Set<string>();
 
     for (const cap of listPlatformCapabilities()) {
-        if (cap.catalogVisibility === "hidden" && !includeHidden) continue;
+        const honestGap =
+            cap.maturity === "unavailable" || cap.maturity === "placeholder";
+        if (cap.catalogVisibility === "hidden" && !includeHidden && !honestGap) continue;
         if (
             cap.maturity === "processing_only" ||
             cap.maturity === "workflow_only" ||
@@ -93,8 +102,7 @@ export function listOrganizationCommandCatalog(opts?: {
 
         const orgFacing = cap.catalogVisibility === "organization_command_catalog";
         const honestUnavailable =
-            (cap.maturity === "unavailable" || cap.maturity === "placeholder") &&
-            (orgFacing || cap.catalogVisibility === "hidden" || includeInternal);
+            honestGap && (orgFacing || cap.catalogVisibility === "hidden" || includeInternal);
         const internal = cap.catalogVisibility === "internal_only";
 
         if (!orgFacing && !honestUnavailable && !(includeInternal && internal)) continue;

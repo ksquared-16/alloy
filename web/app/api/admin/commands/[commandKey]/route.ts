@@ -30,6 +30,8 @@ type PlacementRow = {
     section_key: string | null;
     is_active: boolean;
     order_index: number;
+    department_id: string | null;
+    work_unit_id: string | null;
 };
 
 /**
@@ -99,7 +101,7 @@ export async function GET(
         const { data: placeRaw, error: pErr } = await supabase
             .from("action_placements")
             .select(
-                "id, org_id, action_definition_id, surface, slot, entity_type, section_key, is_active, order_index"
+                "id, org_id, action_definition_id, surface, slot, entity_type, section_key, is_active, order_index, department_id, work_unit_id"
             )
             .or(`org_id.is.null,org_id.eq.${ctx.orgId}`)
             .in("action_definition_id", defIds)
@@ -119,6 +121,8 @@ export async function GET(
             sectionKey: p.section_key ? String(p.section_key) : null,
             isActive: Boolean(p.is_active),
             orderIndex: Number(p.order_index) || 0,
+            departmentId: p.department_id ? String(p.department_id) : null,
+            workUnitId: p.work_unit_id ? String(p.work_unit_id) : null,
         }));
     }
 

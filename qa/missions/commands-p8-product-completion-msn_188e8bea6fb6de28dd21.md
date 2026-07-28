@@ -5,35 +5,47 @@ Date: 2026-07-27
 
 ---
 
+## Honesty correction (2026-07-28) — product realization
+
+Route + catalog foundation was real, but the first product shell was a **registry/placement inspector** (five tabs, duplicate Availability rows, `Limited` maturity jargon). That is **not** accepted administrator product.
+
+Corrective pass evidence:
+`qa/missions/commands-product-realization-correction-msn_188e8bea6fb6de28dd21.md`
+
+Accepted shape: progressive disclosure; Supported / Needs attention / Not yet supported; grouped operational exposures; org-owned label + enable + placement toggles only; empty Variants hidden; compact Safety.
+
+---
+
 ## Outcome
 
-`/organization/commands` is a usable Organization Command catalog and policy console.
+`/organization/commands` is a usable Organization Command catalog and **bounded org configuration** surface.
 
 Absorbed from Action Buttons (without dual operator products):
 
-- Org placement enable/disable
-- Org-owned label edit
-- Operational context listing (surface/slot)
+- Org placement enable/disable (grouped contexts)
+- Org-owned label edit + enablement
+- Operational context listing (human surfaces, deduped)
 
 Added:
 
-- Family grouping + status filter
-- Business Process usage (selection authority)
-- Variants read from `metadata.command_config.variants`
-- Safety panel (confirmation / preview / destructive class)
+- Product support filters (not maturity jargon)
+- Business Process usage (selection authority) + manage link
+- Variants only when present (`metadata.command_config.variants`)
+- Compact Safety (confirmation / preview / destructive class)
 - Detail API `GET /api/admin/commands/[commandKey]`
 
 ---
 
 ## Administrator walkthrough
 
-1. Open Configuration → Operations → **Commands** (`/organization/commands`).
-2. Search or filter by Available / Limited / Unavailable.
-3. Select a Command — workspace tabs: Overview, Availability, Business Processes, Variants, Safety.
-4. Availability: toggle organization placements Enabled/Disabled.
-5. Business Processes: see which processes select the Command; link to Processes.
-6. Safety: platform-owned confirmation and destructive class (not editable).
-7. Legacy `/settings/actions` redirects here. Developer placement CRUD remains at `/adminV2/settings/actions`.
+1. Open Organization Configuration → **Commands** (`/organization/commands`).
+2. Search or filter by Supported / Needs attention / Not yet supported.
+3. Select a Command — progressive sections (not a forced five-tab shell).
+4. Organization settings: enable/disable and label when org-owned.
+5. Where operators encounter it: toggle grouped org contexts Shown/Hidden.
+6. Business Processes: see selection usage or empty state; link to Processes.
+7. Safety: platform-owned confirmation and destructive class (not editable).
+8. Legacy `/settings/actions` redirects here. Developer placement CRUD remains at `/adminV2/settings/actions`.
 
 ---
 

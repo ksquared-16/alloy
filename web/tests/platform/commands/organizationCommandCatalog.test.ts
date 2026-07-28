@@ -9,15 +9,26 @@ import {
 import { CONFIGURATION_MODE_NAV_GROUPS } from "@/lib/adminV2/configurationModeNav";
 
 describe("organizationCommandCatalog", () => {
-    it("lists organization_command_catalog rows with honest status labels", () => {
+    it("lists organization Commands with product support labels", () => {
         const rows = listOrganizationCommandCatalog();
         expect(rows.length).toBeGreaterThan(0);
         for (const row of rows) {
-            expect(row.catalogVisibility).toBe("organization_command_catalog");
-            expect(["Available", "Limited", "Unavailable"]).toContain(row.statusLabel);
+            expect(["Supported", "Needs attention", "Not yet supported"]).toContain(row.statusLabel);
             expect(row.canonicalCommandKey.length).toBeGreaterThan(0);
             expect(row.operatorLabel.length).toBeGreaterThan(0);
         }
+        const orgFacing = rows.filter((r) => r.catalogVisibility === "organization_command_catalog");
+        expect(orgFacing.length).toBeGreaterThan(0);
+    });
+
+    it("surfaces honest not-yet-supported gaps without inventing executors", () => {
+        const gaps = listOrganizationCommandCatalog().filter(
+            (r) => r.statusLabel === "Not yet supported"
+        );
+        expect(gaps.length).toBeGreaterThan(0);
+        expect(gaps.every((r) => r.maturity === "unavailable" || r.maturity === "placeholder")).toBe(
+            true
+        );
     });
 
     it("does not invent Commands outside the capability registry projection", () => {

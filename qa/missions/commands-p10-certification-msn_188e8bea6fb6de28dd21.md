@@ -19,6 +19,12 @@ real Organization Configuration UI.
 Corrective integration + live UI proof:
 `qa/missions/commands-ui-product-integration-correction-msn_188e8bea6fb6de28dd21.md`
 
+**Second honesty correction (same day) — product realization:**
+
+Route integration alone was still insufficient. The first Commands page exposed registry/placement structure (`Limited`, duplicate Availability rows, empty five-tab shell). Administrator product realization required a further pass:
+
+`qa/missions/commands-product-realization-correction-msn_188e8bea6fb6de28dd21.md`
+
 ---
 
 ## Certification verdict
@@ -33,7 +39,7 @@ Corrective integration + live UI proof:
 | Tour convergence | Certified |
 | Process `command_set_v1` authority | Certified |
 | Editors / Work Templates write/consume V1 | Certified |
-| `/organization/commands` product | Certified (usable) |
+| `/organization/commands` product | Certified (admin product realization 2026-07-28) |
 | Operations nav: Commands → Automation → Processes → Surfaces | Certified |
 | Action Buttons operator path | Redirected to Commands |
 | `executeAdminAction` drain | Ledger + telemetry certified; branches intentionally retained |
