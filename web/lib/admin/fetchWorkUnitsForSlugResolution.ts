@@ -73,21 +73,28 @@ export async function fetchWorkUnitsForSlugResolution(params: {
             dim
         );
 
-    const { data: directData, error: directErr } = await base().eq("key", platformKey);
-    if (directErr) throw directErr;
-    const directRows = mapRows(directData);
-    if (directRows.length) {
-        return { rows: directRows, strategy: "direct" };
-    }
-
+    // Direct + lifecycle are two `key`-equality reads on the SAME table — merge them into ONE `.in(key)`
+    // read and split by priority in-memory (direct exact-key wins, else lifecycle). Removes one serial
+    // round-trip from the commit-critical route-identity resolve (measured: fetchWorkUnits was ~1150 ms /
+    // 3 serial reads on a lifecycle slug that misses both targeted reads). org_scan stays a MISS-ONLY
+    // fallback, so this is never more reads than before and preserves scalability (no always-org scan).
     const stageKeys = operatorStageKeysForPipelineQueueKey(platformKey);
     const lifecycleWuKeys = [
         ...new Set(stageKeys.map((stage) => lifecycleStageWorkUnitKey(stage).toLowerCase())),
     ];
+    const candidateKeys = [...new Set([platformKey, ...lifecycleWuKeys])];
+    const { data: candidateData, error: candidateErr } = await base().in("key", candidateKeys);
+    if (candidateErr) throw candidateErr;
+    const candidateRows = mapRows(candidateData);
+
+    const directRows = candidateRows.filter((r) => r.key === platformKey);
+    if (directRows.length) {
+        return { rows: directRows, strategy: "direct" };
+    }
     if (lifecycleWuKeys.length) {
-        const { data: lifecycleData, error: lifecycleErr } = await base().in("key", lifecycleWuKeys);
-        if (lifecycleErr) throw lifecycleErr;
-        const lifecycleRows = mapRows(lifecycleData);
+        const lifecycleRows = candidateRows.filter(
+            (r) => typeof r.key === "string" && lifecycleWuKeys.includes(r.key.toLowerCase()),
+        );
         if (lifecycleRows.length) {
             return { rows: lifecycleRows, strategy: "lifecycle" };
         }
