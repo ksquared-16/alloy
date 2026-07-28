@@ -77,23 +77,16 @@ describe("Focus Panel Universal Card presentation", () => {
         expect(keys).not.toContain("health");
     });
 
-    it("Core Four footprints drive cell widths (no flat span:1)", () => {
-        const { grid } = deriveOpportunityFocusPanelPresentation({
-            mode: "summary",
-            displayVm: baseVm,
-            record: {},
-            title: "Smith Family",
-            perspective: null,
-            statusLabel: "New",
-        });
-        const spanByKey = new Map(
-            grid.rows.flatMap((row) => row.cells.map((c) => [c.key, c.span] as const)),
-        );
-        expect(spanByKey.get("household")).toBe(2); // wide
-        expect(spanByKey.get("children")).toBe(2); // wide
-        expect(spanByKey.get("readiness_kpi")).toBe(1); // medium
-        expect(spanByKey.get("current_work")).toBe(1); // narrow
-    });
+    // REMOVED: "Core Four footprints drive cell widths (no flat span:1)".
+    //
+    // It asserted SYSTEM5_CARD_FOOTPRINT -> `span` for mode "summary", via the retired
+    // `SUMMARY_GRID`. Those spans never reached the DOM: Summary renders from the active
+    // LayoutDoc's 12-column `focusPanelLayout` grid (published lanes), where cell `span` is inert
+    // — browser-measured as uniform 6/12 lanes, 427px each. The test therefore locked a width
+    // authority the runtime does not use, and `readiness_kpi` is not in the Summary composition
+    // at all. Summary composition is asserted where it actually lives, in
+    // `focusPanelSummaryDefaultComposition.test.ts`; `span` emphasis is asserted for Work — its
+    // one live consumer — in `focusPanelWorkCompositionParity.test.ts`.
 
     it("hides primary next action card when header action is present", () => {
         const { cards } = deriveOpportunityFocusPanelPresentation({
