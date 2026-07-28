@@ -39,10 +39,14 @@ import {
     statusLabel,
     type OrgCalcProductTypeId,
 } from "@/lib/organizationCalculations/productCatalog";
-import { compilePivotBuilderDraft, type PivotBuilderDraft } from "@/lib/organizationCalculations/pivotBuilder";
-import OrgCalcPivotBuilder, {
-    defaultPivotDraftForProduct,
-} from "@/components/adminV2/settings/organizationCalculations/OrgCalcPivotBuilder";
+import ReadableDefinitionBuilder, {
+    applyDefinitionSuggestion,
+} from "@/components/adminV2/settings/organizationCalculations/ReadableDefinitionBuilder";
+import {
+    compilePivotBuilderDraft,
+    roomUtilizationPivotDraft,
+    type PivotBuilderDraft,
+} from "@/lib/organizationCalculations/pivotBuilder";
 
 type CalcListItem = {
     id: string;
@@ -206,7 +210,7 @@ export default function OrganizationCalculationsWorkspace({
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [pivotDraft, setPivotDraft] = useState<PivotBuilderDraft>(() =>
-        defaultPivotDraftForProduct("capacity_lowest_physical_licensed"),
+        roomUtilizationPivotDraft("Room utilization"),
     );
 
     // Survive Fast Refresh / soft-nav remounts during New Calculation.
@@ -405,10 +409,10 @@ export default function OrganizationCalculationsWorkspace({
             /* ignore */
         }
         setWizardStepState(1);
-        setProductTypeId("capacity_lowest_physical_licensed");
-        const t = ORG_CALC_PRODUCT_TYPES[0]!;
-        setName(t.title);
-        setDescription(t.summary);
+        setProductTypeId("room_utilization_pct");
+        setName("Room utilization");
+        setDescription("");
+        setPivotDraft(roomUtilizationPivotDraft("Room utilization"));
         setError(null);
         setSelectedId(null);
         setMode("new");
@@ -583,14 +587,16 @@ export default function OrganizationCalculationsWorkspace({
                     Overview
                 </ConfigurationSecondaryButton>
             :   null}
-            <ConfigurationPrimaryButton
-                className="config-primary-btn--sm inline-flex items-center gap-1"
-                onClick={openNew}
-                data-testid="organization-calculations-new"
-            >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                New definition
-            </ConfigurationPrimaryButton>
+            {mode !== "new" ?
+                <ConfigurationPrimaryButton
+                    className="config-primary-btn--sm inline-flex items-center gap-1"
+                    onClick={openNew}
+                    data-testid="organization-calculations-new"
+                >
+                    <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                    New definition
+                </ConfigurationPrimaryButton>
+            :   null}
         </div>
     );
 
@@ -606,26 +612,95 @@ export default function OrganizationCalculationsWorkspace({
                 loadError={loadError}
             />
         : mode === "new" ?
-            <NewCalculationWizard
-                productTypeId={productTypeId}
-                setProductTypeId={(id) => {
-                    setProductTypeId(id);
-                    const t = productTypeById(id)!;
-                    setName(t.title);
-                    setDescription(t.summary);
-                    setPivotDraft(defaultPivotDraftForProduct(id));
-                }}
-                name={name}
-                setName={setName}
-                description={description}
-                setDescription={setDescription}
-                pivotDraft={pivotDraft}
-                setPivotDraft={setPivotDraft}
-                busy={busy}
-                error={error}
-                onCancel={() => openCollection("active")}
-                onSave={() => void createDraft()}
-            />
+            <ConfigurationShell
+                testId="organization-calculations-shell-new"
+                queueColumn={
+                    <CollectionRail
+                        items={visible}
+                        filter={filter}
+                        setFilter={(f) => {
+                            setFilter(f);
+                            setUrl({ view: f === "archived" ? "archived" : "collection" });
+                        }}
+                        search={search}
+                        setSearch={setSearch}
+                        selectedId={null}
+                        onSelect={(id) => {
+                            setMode("collection");
+                            selectCalc(id);
+                        }}
+                        onNew={mode === "new" ? () => undefined : openNew}
+                        onArchived={() => openCollection("archived")}
+                        total={calculations.length}
+                    />
+                }
+            >
+                <ReadableDefinitionBuilder
+                    name={name}
+                    setName={setName}
+                    draft={pivotDraft}
+                    onChange={setPivotDraft}
+                    busy={busy}
+                    error={error}
+                    onCancel={() => openCollection("active")}
+                    onSave={() => void createDraft()}
+                    onApplySuggestion={(id) => {
+                        void (async () => {
+                            const [popRes, wgtRes] = await Promise.all([
+                                fetch("/api/admin/organization-populations"),
+                                fetch("/api/admin/organization-weightings"),
+                            ]);
+                            const popJson = (await popRes.json()) as {
+                                populations?: Array<{
+                                    id: string;
+                                    name: string;
+                                    lifecycle: string;
+                                    published_version_id: string | null;
+                                    versions: Array<{
+                                        id: string;
+                                        version_number: number;
+                                        immutable: boolean;
+                                        predicate: string;
+                                        membership_summary: string;
+                                    }>;
+                                }>;
+                            };
+                            const wgtJson = (await wgtRes.json()) as {
+                                weightings?: Array<{
+                                    id: string;
+                                    name: string;
+                                    key?: string;
+                                    lifecycle: string;
+                                    published_version_id: string | null;
+                                    versions: Array<{
+                                        id: string;
+                                        version_number: number;
+                                        immutable: boolean;
+                                        scheme: "unweighted" | "days_per_week";
+                                        factors: Record<string, number>;
+                                        full_time_days: number;
+                                        summary: string;
+                                    }>;
+                                }>;
+                            };
+                            const { mapPublishedPopulations, mapPublishedWeightings } = await import(
+                                "@/lib/organizationCalculations/definitionCatalog"
+                            );
+                            const pops = mapPublishedPopulations(popJson.populations ?? []);
+                            const wgts = mapPublishedWeightings(wgtJson.weightings ?? []);
+                            const fte =
+                                wgts.find((w) => /full-time|fte|equivalent/i.test(w.name)) ?? wgts[0] ?? null;
+                            const applied = applyDefinitionSuggestion(id, {
+                                populationVersionId: pops[0]?.versionId ?? null,
+                                weightingVersionId: wgts[0]?.versionId ?? null,
+                                fteWeightingVersionId: fte?.versionId ?? null,
+                            });
+                            setName(applied.name);
+                            setPivotDraft(applied.draft);
+                        })();
+                    }}
+                />
+            </ConfigurationShell>
         :   <ConfigurationShell
                 testId="organization-calculations-shell"
                 queueColumn={
@@ -981,137 +1056,6 @@ function CollectionRail({
                         );
                     })
                 }
-            </div>
-        </div>
-    );
-}
-
-function NewCalculationWizard({
-    productTypeId,
-    setProductTypeId,
-    name,
-    setName,
-    description,
-    setDescription,
-    pivotDraft,
-    setPivotDraft,
-    busy,
-    error,
-    onCancel,
-    onSave,
-}: {
-    productTypeId: OrgCalcProductTypeId;
-    setProductTypeId: (id: OrgCalcProductTypeId) => void;
-    name: string;
-    setName: (v: string) => void;
-    description: string;
-    setDescription: (v: string) => void;
-    pivotDraft: PivotBuilderDraft;
-    setPivotDraft: (d: PivotBuilderDraft) => void;
-    busy: boolean;
-    error: string | null;
-    onCancel: () => void;
-    onSave: () => void;
-}) {
-    return (
-        <div className="mx-auto max-w-2xl space-y-4" data-testid="organization-calculations-new-wizard">
-            <div className="process-config-setup-card p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                    New reusable definition
-                </p>
-                <h2 className="config-typo-workspace-title mt-1 text-xl">Build how the answer is calculated</h2>
-                <p className="config-typo-sublabel mt-1">
-                    Choose approved facts and a calculation. Alloy compiles a governed definition — no formulas or SQL.
-                </p>
-            </div>
-
-            <ConfigWorkspaceCard testId="organization-calculations-wizard-info">
-                <ConfigEditorSection title="Name">
-                    <label className="block space-y-1">
-                        <span className="config-typo-field-label">Name</span>
-                        <input
-                            className="config-runtime-input"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            data-testid="organization-calculations-name"
-                        />
-                    </label>
-                    <label className="mt-3 block space-y-1">
-                        <span className="config-typo-field-label">Description</span>
-                        <textarea
-                            className="config-runtime-input min-h-[4rem]"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            data-testid="organization-calculations-description"
-                        />
-                    </label>
-                </ConfigEditorSection>
-            </ConfigWorkspaceCard>
-
-            <ConfigWorkspaceCard testId="organization-calculations-wizard-preset">
-                <ConfigEditorSection
-                    title="Start from"
-                    description="Optional presets fill the builder. You can still change every field."
-                >
-                    <div className="space-y-2">
-                        {ORG_CALC_PRODUCT_TYPES.map((t) => (
-                            <label
-                                key={t.id}
-                                className={`flex cursor-pointer gap-3 rounded-md border px-3 py-3 ${
-                                    productTypeId === t.id ?
-                                        "border-[#00a283]/50 bg-[#00a283]/5"
-                                    :   "border-alloy-stone/30 hover:border-alloy-stone/50"
-                                }`}
-                            >
-                                <input
-                                    type="radio"
-                                    className="mt-1"
-                                    name="product-type"
-                                    checked={productTypeId === t.id}
-                                    onChange={() => setProductTypeId(t.id)}
-                                    data-testid={`organization-calculations-type-${t.id}`}
-                                />
-                                <span>
-                                    <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">
-                                        {t.typeLabel}
-                                    </span>
-                                    <span className="block text-sm font-semibold text-alloy-midnight">{t.title}</span>
-                                    <span className="config-typo-sublabel mt-0.5 block">{t.summary}</span>
-                                </span>
-                            </label>
-                        ))}
-                    </div>
-                </ConfigEditorSection>
-            </ConfigWorkspaceCard>
-
-            <ConfigWorkspaceCard testId="organization-calculations-wizard-build">
-                <ConfigEditorSection title="Build">
-                    <OrgCalcPivotBuilder
-                        draft={pivotDraft}
-                        onChange={setPivotDraft}
-                        disabled={busy}
-                    />
-                </ConfigEditorSection>
-            </ConfigWorkspaceCard>
-
-            {error ?
-                <p className="text-sm text-red-800" role="alert" data-testid="organization-calculations-error">
-                    {error}
-                </p>
-            :   null}
-
-            <div className="flex flex-wrap gap-2">
-                <ConfigurationSecondaryButton onClick={onCancel} disabled={busy}>
-                    Cancel
-                </ConfigurationSecondaryButton>
-                <ConfigurationPrimaryButton
-                    className="config-primary-btn--sm"
-                    onClick={onSave}
-                    disabled={busy || !name.trim()}
-                    data-testid="organization-calculations-create"
-                >
-                    {busy ? "Saving…" : "Save draft"}
-                </ConfigurationPrimaryButton>
             </div>
         </div>
     );
