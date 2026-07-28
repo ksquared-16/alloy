@@ -27,8 +27,14 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRuntime";
+import { seedOpportunityStageWork } from "@/lib/adminV2/viewModel/drawer/opportunity/stageWork/opportunityStageWorkResource";
 import { prepareOperationalDestination } from "@/lib/runtime/prep/prepareOperationalDestination";
 import { prefetchWorkUnitProvisioning } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
+import {
+    beginWorkUnitPrimaryReveal,
+    endWorkUnitPrimaryReveal,
+    isWorkUnitPrimaryRevealActive,
+} from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 
 /**
@@ -47,6 +53,12 @@ import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 function prewarmSubjectDestination(target: string, lens: string | null, subjectId: string): void {
     const id = subjectId.trim();
     if (!id || !target) return;
+    // AMPLIFICATION FIX: this warms NEIGHBOUR queue-row subjects (provisioning + VM). While the
+    // primary Work Unit reveal is in progress, that speculative work saturates the (remote) DB and
+    // inflates the selected subject's own reveal — measured as the 8–10s Focus Panel gap. Skip it
+    // during the reveal; neighbours warm normally on the next intent (hover/idle) once the panel is
+    // meaningful. The selected subject's own load never comes through here.
+    if (isWorkUnitPrimaryRevealActive()) return;
     void prefetchWorkUnitProvisioning(target, { lens: lens ?? null, subject: id });
     void prewarmRecordWork(id);
 }
@@ -72,6 +84,28 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         [focus.current],
     );
 
+    // CP-2 — reuse, don't re-fetch. The committed answer already carries the selected subject's stage-work
+    // (`focusPanelStageWork`); seed it into the stage-work cache under the SAME (opp/dept/stage) key the
+    // drawer VM builds, so the VM's completion consumes it warm and the duplicate `/stage-work` request
+    // never fires on the cold reveal. Render-phase (like the provisioning seed) so it lands before the
+    // descendant Focus Panel's VM-completion effect. Idempotent + key-parity-safe (a miss just falls back
+    // to the fetch — no wrong data). Only the default/committed subject matches; a later row switch keys
+    // differently and fetches normally.
+    useMemo(() => {
+        const snap = focus.current?.snapshot;
+        if (snap?.terminal === "operational" && snap.focusPanelStageWork && snap.recordOfAttention) {
+            seedOpportunityStageWork(
+                {
+                    opportunityId: snap.recordOfAttention.id,
+                    departmentId: snap.workUnit.departmentId,
+                    stageKey: snap.currentBusinessState.stageKey,
+                    stageLabel: snap.currentBusinessState.stageLabel,
+                },
+                snap.focusPanelStageWork,
+            );
+        }
+    }, [focus.current]);
+
     // D5 SETTLEMENT — the operator is already working; this fills the reserved KPI values AFTER commit.
     // It cannot gate or reconstruct: `operationalModel` above is composed and renderable without it,
     // and this only overlays values into already-laid-out slots. Returns `operationalModel` unchanged
@@ -82,6 +116,30 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         () => (operationalModel ? mergeWorkUnitSettlement(operationalModel, settlement) : null),
         [operationalModel, settlement],
     );
+
+    // AMPLIFICATION FIX: mark the primary reveal ACTIVE the instant a Work Unit commits — BEFORE the
+    // commit-critical provisioning + its answer-triggered neighbour/view prewarm storm — so that
+    // speculative work defers instead of saturating the DB and inflating the selected reveal. The
+    // window is ended when the selected subject's VM is applied (useRecordWorkRuntime, every path).
+    const committedRevealKey = focus.current
+        ? `${focus.current.ref.target ?? ""}::${focus.current.ref.subject ?? ""}`
+        : null;
+    useEffect(() => {
+        if (committedRevealKey) beginWorkUnitPrimaryReveal();
+    }, [committedRevealKey]);
+
+    // Arm the reveal window at Work Unit surface MOUNT — before the sibling-view answer prewarm's idle
+    // callback can fire — so the EXISTING reveal gate defers it instead of losing the race to it (the
+    // commit-time arm above lands after the prewarm). Controlled same-process A/B (dev, slot3, 6 interleaved
+    // warm runs, mount-arm ON vs OFF): median warm first-meaningful 7445 ms → 6599 ms (−11%), and — the
+    // clearer signal — the OFF condition's pathological slow-tail (10.3 s / 11.4 s reveals when the prewarm
+    // won the race) disappears (ON caps at 7.1 s; range 5669–11350 → 5621–7125). The window still ENDS on the
+    // selected VM apply (useRecordWorkRuntime, every path); the unmount release covers a navigate-away before
+    // commit so speculative prewarm is never pinned.
+    useEffect(() => {
+        beginWorkUnitPrimaryReveal();
+        return () => endWorkUnitPrimaryReveal();
+    }, []);
 
     // SUBJECT OWNERSHIP — settled, and worth recording because the wrong shape was tried twice.
     // The Focus Panel once read its subject from AdminDrawerContext, making the drawer a SECOND

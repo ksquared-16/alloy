@@ -96,6 +96,14 @@
   from { opacity: 0; transform: translateX(-24px); }
   to   { opacity: 1; transform: translateX(0); }
 }
+/* Thinking — a calm, continuous "considering" motion for the shared Alloy loader. Each dot
+   breathes on a slow sine, staggered so a soft light travels across the three (a settled thought
+   forming, never a discrete loading step). Opacity-only = low visual weight; loops with
+   `--motion-ease-move` so departure and arrival are equally gentle. Reads as thinking, not waiting. */
+@keyframes motion-thinking-breath {
+  0%, 100% { opacity: 0.26; }
+  50%      { opacity: 0.9; }
+}
 
 /* Choreography utilities — apply one; never a raw duration/easing. */
 .motion-reveal      { animation: motion-reveal-in var(--motion-standard) var(--motion-ease-enter) both; }
@@ -129,6 +137,8 @@
                                    color var(--motion-instant) var(--motion-ease-move),
                                    box-shadow var(--motion-instant) var(--motion-ease-move); }
 .motion-control:active { transform: scale(0.98); }
+/* Thinking dot — the continuous loader breath. Stagger via inline animation-delay per dot. */
+.motion-thinking-dot { animation: motion-thinking-breath 1.6s var(--motion-ease-move) infinite; }
 
 /* Accessibility: reduced motion collapses choreography to opacity-only,
    preserving continuity (the crossfade) while removing translate/scale/spring. */
@@ -150,6 +160,8 @@
   .motion-control { transition-duration: 1ms; }
   .motion-press:active,
   .motion-control:active { transform: none; }
+  /* Reduced motion: dots hold at a steady, quiet opacity — presence without pulsing. */
+  .motion-thinking-dot { animation: none; opacity: 0.5; }
 }
 
 body {

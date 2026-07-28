@@ -14,10 +14,29 @@ import { normalizeToCanonicalAdminPath } from "@/lib/admin/canonicalAdminRoutes"
 import { normalizeOperatorPathname } from "@/lib/admin/canonicalOperatorRoutes";
 import { isConfigurationSoftNavEligibleHref } from "@/lib/configRuntime/configurationContinuity";
 
-export const DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS = 3000;
+/**
+ * The floor is a GENUINELY-HUNG detector, not a slow-nav detector. A soft nav that is merely slow
+ * (a heavy server render — dynamic layout, cold data) is still progressing and MUST NOT be reloaded:
+ * reloading it just restarts the same slow work AND throws away the retained shell — the operator
+ * experiences it as an "unexpected reload". So the threshold sits well beyond any legitimate nav:
+ * fast navigations (the common case) never approach it, and it fires only when a nav has plainly
+ * died and will never reach its target. (Was 3s, which guillotined normal-but-slow navigations.)
+ */
+export const DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS = 15000;
 
 /** Monotonic generation — a newer soft nav supersedes older watchdogs so they never fire late. */
 let softNavGeneration = 0;
+
+/** The single armed watchdog timer, so a newer nav CANCELS the prior one outright (no stale timers
+ * accumulate). Generation still guards a fire; this just means a superseded timer never even runs. */
+let activeTimerHandle: ReturnType<typeof setTimeout> | null = null;
+let activeTimerClear: ((handle: ReturnType<typeof setTimeout>) => void) | null = null;
+
+function cancelActiveReloadFloorTimer(): void {
+    if (activeTimerHandle != null && activeTimerClear) activeTimerClear(activeTimerHandle);
+    activeTimerHandle = null;
+    activeTimerClear = null;
+}
 
 /** Canonicalize workspace OR configuration paths for stall comparison. */
 export function normalizeSoftNavReloadPathname(pathname: string): string {
@@ -65,7 +84,13 @@ export function armSoftNavReloadFloor(
     const myGeneration = ++softNavGeneration;
     const setT = deps.setTimeoutFn ?? ((cb, ms) => setTimeout(cb, ms));
     const clearT = deps.clearTimeoutFn ?? ((h) => clearTimeout(h));
+    const timeoutMs = deps.timeoutMs ?? DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS;
+    // A newer navigation OWNS the floor — cancel the prior watchdog's timer outright so stale timers
+    // never accumulate (defense-in-depth alongside the generation guard below).
+    cancelActiveReloadFloorTimer();
     const handle = setT(() => {
+        activeTimerHandle = null;
+        activeTimerClear = null;
         if (
             shouldFireReloadFloor({
                 currentPathname: deps.getPathname(),
@@ -73,13 +98,33 @@ export function armSoftNavReloadFloor(
                 superseded: myGeneration !== softNavGeneration,
             })
         ) {
+            // Attribution: a floor fire IS the "unexpected reload". It was silent, so an operator
+            // reload could never be traced. Surface it (dev/staging) with the stalled target + budget
+            // so a genuine hang is distinguishable from a threshold that needs tuning.
+            if (typeof console !== "undefined" && process.env.NODE_ENV !== "production") {
+                console.warn("[soft-nav-reload-floor] fired — soft nav never reached target", {
+                    target: targetPathname,
+                    current: deps.getPathname(),
+                    timeout_ms: timeoutMs,
+                });
+            }
             deps.reload();
         }
-    }, deps.timeoutMs ?? DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS);
-    return () => clearT(handle);
+    }, timeoutMs);
+    activeTimerHandle = handle;
+    activeTimerClear = clearT;
+    return () => {
+        clearT(handle);
+        if (activeTimerHandle === handle) {
+            activeTimerHandle = null;
+            activeTimerClear = null;
+        }
+    };
 }
 
 /** Test-only reset. */
 export function resetSoftNavGenerationForTests(): void {
     softNavGeneration = 0;
+    activeTimerHandle = null;
+    activeTimerClear = null;
 }

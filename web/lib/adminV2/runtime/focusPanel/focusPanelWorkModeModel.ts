@@ -19,7 +19,7 @@
  * the SAME order with the SAME geometry — only each cell's `readiness` (and thus its content) differs.
  */
 
-import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { OperationalContext, OperationalSubjectRef } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { FocusPanelCardModel, FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
@@ -46,8 +46,16 @@ export type FocusPanelWorkModeModel = {
     /** Diagnostic provenance. The grid renders identically regardless of this. */
     source: FocusPanelWorkModeSource;
     mode: FocusPanelMode;
-    /** Committed subject identity (Record of Attention). */
-    subject: { id: string; type: "opportunity"; label: string };
+    /**
+     * Committed subject identity (Record of Attention). Grain-agnostic PLATFORM contract: the subject
+     * `type` is generic (`OperationalSubjectRef.type: string` — the same shape cards already consume via
+     * `context.subject`), NOT the `"opportunity"` literal. Domain producers supply their concrete type
+     * (the opportunity composers supply `"opportunity"`); a second surface (e.g. a `child` subject —
+     * `SECOND-SURFACE-CERTIFICATION-DESIGN.md`) supplies its own without any platform-layer change. No
+     * runtime branches on this `type` (only `.id` is read); guards that DO test it (BillingPreview,
+     * Scheduling) already compare against `"opportunity"` and correctly yield null for other subjects.
+     */
+    subject: OperationalSubjectRef;
     /** The forward, card-facing contract. Cards consume THIS — never a drawer VM. */
     context: OperationalContext;
     /** Per-configured-card display model (tier/span/insight/status). Keyed by canonical card id. */

@@ -17,7 +17,7 @@
 
 import { NULL_BILLING_SIGNAL, type OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { COMMIT_CRITICAL_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards";
-import type { FocusPanelSubjectSnapshot } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -45,8 +45,12 @@ export type FocusPanelWorkModeFromAnswerInput = {
     situation: { stageKey: string; stageLabel: string; purpose: string | null } | null;
     /** Truthful primary Action (U-O5). */
     primaryAction: { actionRef: string; label: string } | null;
-    /** Commit-critical Household + Children snapshot (answer-owned). Null → those cards reserve. */
-    subjectSnapshot: FocusPanelSubjectSnapshot | null;
+    /**
+     * Commit-critical subject identity truth bindings (answer-owned, DOMAIN-declared). Opaque here: the
+     * builder spreads these into `context.truth` without knowing any specific key. Null → the
+     * identity-owning cards reserve (the drawer VM fills them). See {@link SubjectIdentityTruth}.
+     */
+    subjectIdentityTruth: SubjectIdentityTruth | null;
 };
 
 /** A real, authoritative-fields-only OperationalContext from the committed answer. No placeholder data. */
@@ -68,20 +72,11 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
             ...(input.statusKey ? { status_key: input.statusKey } : {}),
             ...(input.statusLabel ? { _status_display: input.statusLabel } : {}),
             ...(input.stageWorkRuntime ? { _stage_work_runtime: input.stageWorkRuntime } : {}),
-            // A — commit-critical Household + Children content (the evidence builders read these keys),
-            // so those cards render MEANINGFUL at commit, not blank. Deeper family detail is Settlement.
-            ...(input.subjectSnapshot?.primaryContact.name
-                ? { "person.primary_contact_name": input.subjectSnapshot.primaryContact.name }
-                : {}),
-            ...(input.subjectSnapshot?.primaryContact.phone
-                ? { "person.primary_phone": input.subjectSnapshot.primaryContact.phone }
-                : {}),
-            ...(input.subjectSnapshot?.primaryContact.email
-                ? { "person.primary_email": input.subjectSnapshot.primaryContact.email }
-                : {}),
-            ...(input.subjectSnapshot?.inquiryChildren != null
-                ? { _inquiry_children: input.subjectSnapshot.inquiryChildren }
-                : {}),
+            // A — commit-critical subject identity truth. The DOMAIN composer declared these bindings
+            // (which keys, from which entity); the platform builder forwards them OPAQUELY — it names no
+            // domain truth key. The evidence builders read whatever keys the domain supplied; a second
+            // surface supplies its own. Deeper detail = Settlement.
+            ...(input.subjectIdentityTruth ?? {}),
         },
         signals: {
             // Current Work data lives in `stageWorkRuntime` (below); the work SUMMARY rollup is a

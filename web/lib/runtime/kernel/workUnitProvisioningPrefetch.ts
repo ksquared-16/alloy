@@ -83,6 +83,52 @@ export function prefetchWorkUnitProvisioning(
     return promise;
 }
 
+/**
+ * INTERNAL seed primitive (RA-3). Writes a server-composed answer into the SAME cache K2 consumes.
+ * It takes a raw URL key deliberately — but it is **module-private** so no layer outside the kernel can
+ * hand-build (and thus drift) that key: `seedProvisioningForRoute` is the SOLE public seed seam, and it
+ * derives the key here via `provisioningAnswerUrl` (the one key builder). Key parity with K2's consume
+ * is therefore a structural in-kernel invariant, not a convention callers must honor.
+ *
+ * It is NOT a new cache, endpoint, or contract: identical key + identical `Promise<ProvisioningAnswer>`
+ * entry shape as an intent prefetch — only a different WARM SOURCE (server, not hover). The caller passes
+ * an already-committable answer (`operational` | `empty`); a gate failure / `error` terminal is filtered
+ * to `null` at the compose boundary and never reaches here. Idempotent: it will not clobber a still-fresh
+ * entry for the same URL (so a Strict-Mode double-invoke, or an intent prefetch that already warmed this
+ * URL, wins/stays), and it is a no-op on the server (the cache is browser-side).
+ */
+function seedProvisioning(
+    url: string,
+    answer: ProvisioningAnswer | null,
+    now: number = Date.now(),
+): void {
+    if (typeof window === "undefined" || answer == null || answer.terminal === "error") return;
+    const existing = cache.get(url);
+    if (existing && isFresh(existing, now)) return; // never clobber a fresher warm entry
+    cache.set(url, { promise: Promise.resolve(answer), startedAt: now });
+    logCurrentWorkInit("provisioning.seed", { cacheKey: url, cache: "seed", preloadSource: "seed", note: "server-composed answer seeded" });
+}
+
+/** A route's attention identity — the coordinates the kernel keys its cache on. */
+export type ProvisioningRouteIdentity = { target: string; lens?: string | null; subject?: string | null };
+
+/**
+ * THE CANONICAL SERVER→KERNEL PRELOAD SEAM for the provisioning cache (RA-1).
+ *
+ * Callers (the RSC route layout / `ProvisioningAnswerSeed`) hand the kernel a ROUTE IDENTITY + the
+ * server-composed answer; the kernel derives K2's cache key itself (`provisioningAnswerUrl`). No other
+ * layer needs to know — or can drift from — the key scheme. Key parity with K2's consume is therefore an
+ * in-kernel invariant (both go through `provisioningAnswerUrl`), guarded by the seed-contract unit test.
+ */
+export function seedProvisioningForRoute(
+    route: ProvisioningRouteIdentity,
+    answer: ProvisioningAnswer | null,
+    now: number = Date.now(),
+): void {
+    if (!route.target) return;
+    seedProvisioning(provisioningAnswerUrl(route.target, route.lens ?? null, route.subject ?? null), answer, now);
+}
+
 export type ProvisioningFetchResult =
     | { ok: true; answer: ProvisioningAnswer }
     | { ok: false; status: number };

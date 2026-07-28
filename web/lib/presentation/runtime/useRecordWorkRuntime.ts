@@ -54,6 +54,10 @@ import { OPPORTUNITY_QUEUE_UPDATED_EVENT, parseOpportunityQueueUpdatedDetail } f
 import { fetchOpportunityDrawerHeaderActionsFromRecord } from "@/lib/admin/opportunityDrawerHeaderActionsPrefetch";
 import { patchOpportunityDrawerVmDisplayRecord } from "@/lib/adminV2/viewModel/drawer/vmRuntime/patchOpportunityDrawerVmDisplayRecord";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import {
+    beginWorkUnitPrimaryReveal,
+    endWorkUnitPrimaryReveal,
+} from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
 
 export type RecordWorkRuntimeState = {
     displayVm: OpportunityDrawerViewModel | null;
@@ -198,6 +202,13 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         const gen = ++fetchGenRef.current;
         setColdLoading(!displayVm);
         setError(null);
+        // AMPLIFICATION FIX: mark the primary reveal ACTIVE so the prewarm scheduler DEFERS speculative
+        // neighbour/related prewarm until the selected subject is meaningful — the scheduler's own law
+        // ("prewarm must never compete with the primary reveal") was dead code (no caller). Without
+        // this, adjacent-subject VM prewarms fire concurrently with the selected reveal and saturate
+        // the DB, inflating the selected panel's own requests. `endWorkUnitPrimaryReveal` is called on
+        // EVERY completion path below + in cleanup, so prewarm can never stall.
+        beginWorkUnitPrimaryReveal();
         logCurrentWorkInit("recordRuntime.fetch.start", {
             subjectId: validSubject,
             runtimeId: runtimeIdRef.current,
@@ -210,16 +221,18 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         logDrawerVmRuntime("cold_fetch_start", { opportunity_id: validSubject, runtime: "opportunity", hold_prior: Boolean(displayVm) });
 
         void loadOpportunityDrawerViaViewModel(validSubject, null).then(async (result) => {
-            if (gen !== fetchGenRef.current) return; // superseded by a newer subject — never lands
+            if (gen !== fetchGenRef.current) return; // superseded by a newer subject — never lands (its begin owns the reveal)
             if (!result.ok) {
                 setColdLoading(false);
                 setError(formatLoadError(result));
                 logDrawerVmRuntime("cold_fetch_error", { opportunity_id: validSubject, reason: result.reason });
+                endWorkUnitPrimaryReveal(); // reveal failed — release prewarm (no displayVm change to trigger cleanup)
                 return;
             }
             if (!isOpportunityDrawerViewModelPreload(result.preload)) {
                 setColdLoading(false);
                 setError("vm_preload_missing");
+                endWorkUnitPrimaryReveal();
                 return;
             }
             // ATOMIC COMPLETE REVEAL (Kelly): resolve the deferred stage-work BEFORE applying, so the
@@ -238,6 +251,9 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             });
             applyVm(completeVm, "cold_fetch");
         });
+        // On success, applyVm changes displayVm → this effect re-runs → this cleanup ends the reveal
+        // (flushing deferred prewarm). Also covers subject swap + unmount. Idempotent.
+        return () => endWorkUnitPrimaryReveal();
     }, [validSubject, displayVm, applyVm]);
 
     const patchDisplayRecord = useCallback(

@@ -9,7 +9,7 @@ describe("resolveCreatedRecordProcessContextHref", () => {
                 workUnitKey: "pipeline",
                 workViewId: "fresh_prospects",
             }),
-        ).toBe("/workspace/work-unit/fresh-prospects/opp-1");
+        ).toBe("/workspace/work-unit/fresh-prospects?subject_id=opp-1");
     });
 
     it("falls back to work unit key when no Work View match", () => {
@@ -19,6 +19,6 @@ describe("resolveCreatedRecordProcessContextHref", () => {
                 workUnitKey: "pipeline",
                 workViewId: null,
             }),
-        ).toBe("/workspace/work-unit/pipeline/opp-1");
+        ).toBe("/workspace/work-unit/pipeline?subject_id=opp-1");
     });
 });

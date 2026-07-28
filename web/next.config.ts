@@ -276,10 +276,8 @@ const nextConfig: NextConfig = {
        */
       { source: "/workspace", destination: "/adminV2/workspace" },
       { source: "/workspace/work-unit/:workUnitSlug", destination: "/adminV2/workspace/work-unit/:workUnitSlug" },
-      {
-        source: "/workspace/work-unit/:workUnitSlug/:recordId",
-        destination: "/adminV2/workspace/work-unit/:workUnitSlug/:recordId",
-      },
+      // RA-2: the legacy `/:recordId` path form is retired — a selected record is the `?subject_id`
+      // query, which rides along the base rewrite above. No path-recordId rewrite.
       /**
        * Legacy `/admin/*` (non-settings) rewrites to `app/adminV2/*`.
        * Settings hub is served via `/settings` rewrite above.
