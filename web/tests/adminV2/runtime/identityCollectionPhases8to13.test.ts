@@ -146,11 +146,13 @@ describe("identity field layout runtime parity (Phases 8–9)", () => {
 });
 
 describe("identity edit capability contract (Phase 10)", () => {
-    it("hides Editable for computed age_band and offers it for program", () => {
+    it("hides Editable for computed age_band and offers Linked for program", () => {
         expect(resolveIdentityFieldEditContract("child.age_band").canOfferEditable).toBe(false);
         expect(identityFieldVisibilityOptionsForBuilder("child.age_band")).not.toContain("editable");
-        expect(resolveIdentityFieldEditContract("inquiry_child.program").canOfferEditable).toBe(true);
-        expect(identityFieldVisibilityOptionsForBuilder("inquiry_child.program")).toContain("editable");
+        // Program is Assignments-owned — Builder offers Linked, not Editable.
+        expect(resolveIdentityFieldEditContract("inquiry_child.program").canOfferEditable).toBe(false);
+        expect(identityFieldVisibilityOptionsForBuilder("inquiry_child.program")).toContain("linked");
+        expect(identityFieldVisibilityOptionsForBuilder("inquiry_child.program")).not.toContain("editable");
     });
 
     it("rejects unsupported editable configs at publish validation", () => {

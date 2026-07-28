@@ -18,8 +18,13 @@ export function primaryAssignmentFromScheduling(
     if (!primary) return null;
     const status = scheduling.status;
     if (status !== "scheduled" && status !== "proposed" && status !== "upcoming-only") return null;
+    // Prefer assignment room.program; fall back to subject program from placement.
+    const program =
+        primary.room.program?.trim()
+        || scheduling.child.program?.trim()
+        || null;
     return {
-        program: primary.room.program?.trim() || null,
+        program,
         room: primary.room.name?.trim() || null,
     };
 }

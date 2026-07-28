@@ -318,9 +318,13 @@ export function mergeInquiryChildIntoFocusPanelTruth(
         const r = raw as Record<string, unknown>;
         const rowId = trimId(r.id);
         const rowPersonId = trimId(r.person_id);
-        if (rowId !== targetId && rowPersonId !== targetId) return raw;
+        const rowMemberId = trimId(r.customer_member_id);
+        if (rowId !== targetId && rowPersonId !== targetId && rowMemberId !== targetId) return raw;
 
         const next: Record<string, unknown> = { ...r };
+        // Keep person_id on the inquiry row when a photo bind supplies it — needed for
+        // subsequent avatar edit/remove without re-resolving.
+        if (personId && !trimId(next.person_id)) next.person_id = personId;
         if (identity.first_name !== undefined) next.first_name = identity.first_name;
         if (identity.last_name !== undefined) next.last_name = identity.last_name;
         if (identity.dob !== undefined) {

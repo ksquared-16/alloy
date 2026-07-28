@@ -127,17 +127,10 @@ function buildRecordRows(args: {
 }): ReturnType<typeof resolveIdentityFieldRows> {
     const group = args.config.groups.find((g) => g.key === args.groupKey);
     if (!group) return [];
-    let placements = placementsForIdentityGroupPurpose(args.config, args.groupKey, args.purpose);
-    if (args.editGroupKey && args.editGroupKey !== args.groupKey) {
-        const editPlacements = placementsForIdentityGroupPurpose(args.config, args.editGroupKey, args.purpose);
-        const seen = new Set(placements.map((placement) => `${placement.tier}:${placement.fieldRef}`));
-        for (const placement of editPlacements) {
-            const key = `${placement.tier}:${placement.fieldRef}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            placements.push(placement);
-        }
-    }
+    // Display membership is the authored group only. `editGroupKey` inherits
+    // editability/link policy — it must not inject child_edit / contact_edit fields
+    // into the published Focus surface (that leaked Start date and scrambled order).
+    const placements = placementsForIdentityGroupPurpose(args.config, args.groupKey, args.purpose);
     const inputs: IdentityFieldRowInput[] = [];
     for (const placement of placements) {
         const policy = resolveIdentityFieldPolicy({
@@ -191,22 +184,19 @@ function buildRecordRows(args: {
             && "hasCommittedPrimaryAssignment" in args.subject.value
             && (args.subject.value as ChildrenEvidenceChild).hasCommittedPrimaryAssignment === true;
         const assignmentOwned = assignmentOwnsProgramRoomField(placement.fieldRef);
-        // Enrollment Program/Room: editable when no primary classroom determines them;
-        // otherwise derived (read-only) with optional Assignments link — never unexplained "Linked".
+        // Enrollment Program/Room default to Linked → Assignments (set up or change).
+        // Explicit Builder policy still wins (e.g. child_edit Editable for placement forms).
         const effectivePolicy = (() => {
             if (hasExplicitPolicy) return policy;
-            if (assignmentOwned && childHasPrimary) return "read-only";
-            if (assignmentOwned && !childHasPrimary) return "editable";
+            if (assignmentOwned) return "linked";
             if (policy === "read-only" && linkContract.canOfferLinked) return "linked";
             return policy;
         })();
         const editableBase = args.canMutate && fieldIsSaveable(effectivePolicy) && saveSupported;
-        const editable =
-            editableBase
-            && !(childHasPrimary && assignmentOwned);
+        const editable = editableBase;
         const linked =
             (fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked)
-            || (assignmentOwned && childHasPrimary && linkContract.canOfferLinked);
+            || (assignmentOwned && !hasExplicitPolicy && linkContract.canOfferLinked);
         const primaryRoomName =
             args.subject.kind === "child"
                 ? trimOrNull((args.subject.value as ChildrenEvidenceChild).room)
@@ -216,7 +206,9 @@ function buildRecordRows(args: {
                 ? `Determined by primary classroom: ${primaryRoomName}`
                 : assignmentOwned && childHasPrimary
                   ? "Determined by primary classroom"
-                  : null;
+                  : assignmentOwned && !childHasPrimary
+                    ? "Set up in Assignments"
+                    : null;
         const linkTarget = linked
             ? normalizeIdentityFieldLinkTarget(placement.linkTarget, placement.fieldRef)
                 ?? linkContract.defaultTarget
@@ -247,7 +239,11 @@ function buildRecordRows(args: {
             editable,
             linked,
             linkLabel: linked
-                ? (derivedSourceLabel ? "Change in Assignments" : linkContract.linkLabel)
+                ? (childHasPrimary && derivedSourceLabel
+                    ? "Change in Assignments"
+                    : assignmentOwned && !childHasPrimary
+                      ? "Set up in Assignments"
+                      : linkContract.linkLabel)
                 : null,
             linkDestination: linked ? (linkTarget?.toCard ?? linkContract.destinationCard) : null,
             linkTarget,
