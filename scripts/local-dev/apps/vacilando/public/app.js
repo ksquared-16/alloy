@@ -1519,8 +1519,8 @@ function opFooter(c, id) {
   // UNDERSTANDING: the operator simply answers Director's questions — they do not
   // rewrite the objective. The answer continues the conversation.
   if (stage === "understanding") {
-    return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director…" value="${esc(state._cvReply || "")}" />
-      <button class="btn go sm" data-cvanswer="${id}">Answer</button></div>`;
+    return `<div class="cvcompose big"><input id="cv-reply" class="cv-reply" placeholder="Message Director…" value="${esc(state._cvReply || "")}" />
+      <button class="btn go" data-cvanswer="${id}">Send</button></div>`;
   }
   // Needs-operator during execution: the answer STEERS the running work.
   if (acts.includes("reply")) {
@@ -1564,15 +1564,11 @@ const STAGE_TONE = { understanding: "run", preparing: "ok", launching: "run", ex
 // preparation. Each question says why it matters, whether it blocks, and what it tests.
 function understandingPanel(c) {
   const o = c.operations, qs = o.questions || [];
-  const items = qs.map((q) => `<div class="uq${q.blocks ? " blocks" : ""}">
-    <div class="uq-q">${esc(q.question)}</div>
-    <div class="uq-meta"><span class="uq-badge${q.blocks ? " blocks" : ""}">${q.blocks ? "needs an answer" : "worth confirming"}</span>${q.tests ? `<span class="uq-tests">tests ${esc(q.tests)}</span>` : ""}</div>
-    ${q.why ? `<div class="uq-why">${esc(q.why)}</div>` : ""}
-  </div>`).join("");
   const n = qs.length;
+  // The questions now live IN the conversation thread (left). Here we only say what
+  // this stage means, so there's no duplicate list to hunt.
   return `<div class="opband run"><span class="opstate run">Understanding</span>
-    <p class="opsum">${n ? `Director is still understanding this work — it has ${n} ${n === 1 ? "question" : "questions"} before it prepares anything. Answer below and it will continue.` : "Director is still understanding this work."}</p>
-    <div class="uqlist">${items || `<span class="muted">Working it through…</span>`}</div></div>`;
+    <p class="opsum">${n ? `Director has ${n} ${n === 1 ? "question" : "questions"} in the conversation — answer ${n === 1 ? "it" : "them"} and it will prepare the work.` : "Director is still understanding this work."}</p></div>`;
 }
 
 function conversationWorkspace(id) {
@@ -1584,7 +1580,8 @@ function conversationWorkspace(id) {
 
   // LEFT — the conversation, as a dialogue, with the stage-aware next-action footer.
   const bubbles = c.messages.map((msg) => `<div class="cvmsg ${msg.from}"><div class="cvbub">${esc(msg.text)}</div></div>`).join("");
-  const left = `<div class="cvcol cvhistory"><div class="cvcol-h">Conversation</div><div class="cvthread">${bubbles}</div>${opFooter(c, id)}</div>`;
+  const qbubbles = (stage === "understanding" ? (o?.questions || []) : []).map((q) => `<div class="cvmsg director q${q.blocks ? " blocks" : ""}"><div class="cvbub"><span class="qbadge">${q.blocks ? "needs an answer" : "worth confirming"}</span>${esc(q.question)}${q.why ? `<div class="qwhy">${esc(q.why)}</div>` : ""}</div></div>`).join("");
+  const left = `<div class="cvcol cvhistory"><div class="cvcol-h">Conversation</div><div class="cvthread">${bubbles}${qbubbles}</div>${opFooter(c, id)}</div>`;
 
   // CENTER — gated by stage: while Director is still Understanding, it shows the
   // OPEN QUESTIONS and nothing else; preparation artifacts appear only afterward.

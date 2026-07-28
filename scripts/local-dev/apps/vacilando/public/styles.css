@@ -662,3 +662,13 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .ophase.pending{color:var(--muted,#8a7f6d)}
 .oarrow{color:var(--muted,#b3a894);font-size:11px}
 .objnext{margin-top:8px;font-size:13px;display:flex;align-items:center;gap:8px}
+
+/* Chat: Director's questions in-thread + a prominent compose box */
+.cvmsg.director.q .cvbub{border:1.5px solid var(--accent,#c2703f);background:rgba(194,112,63,.06)}
+.cvmsg.director.q.blocks .cvbub{border-color:#c2703f;background:rgba(194,112,63,.10)}
+.qbadge{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#a75a2e;font-weight:700;margin-bottom:5px}
+.qwhy{margin-top:6px;font-size:12px;color:var(--muted,#8a7f6d)}
+.cvcompose.big{position:sticky;bottom:0;gap:8px;padding:12px;margin-top:10px;background:var(--panel,#fbf7f0);border:1.5px solid var(--accent,#c2703f);border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.cvcompose.big .cv-reply{flex:1;font-size:15px;padding:12px 14px;border-radius:9px;border:1px solid var(--line,#e3d9c9)}
+.cvcompose.big .cv-reply:focus{outline:none;border-color:var(--accent,#c2703f)}
+.cvcompose.big .btn.go{padding:11px 20px;font-size:14px}
