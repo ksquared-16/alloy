@@ -88,6 +88,9 @@ function fieldModesToSets(
 
 /** Read published household detail surface config from the Focus Panel summary doc. */
 export function readHouseholdNestedConfigFromDoc(doc: LayoutDoc | null): NestedSurfaceConfig | null {
+    // Prefer importing the canonical reader from householdNestedSurfaceConfig in
+    // card/runtime call sites. This re-export stays on the generic path to avoid a
+    // circular import with nestedSurfaceEditorModel → this module → identitySurfaceCompat.
     return readNestedSurfaceConfigFromDoc(doc, HOUSEHOLD_SURFACE_ID);
 }
 

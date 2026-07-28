@@ -33,7 +33,6 @@ import {
 import { readFocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
 import type { FocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
-import { addCardToGrid, buildPublishedLayoutFromGrid } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import type { CardCompositionPreference } from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
 import type { FocusPanelGridRow } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -44,7 +43,6 @@ import {
     type FocusPanelCardVisibility,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardVisibility";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
-import { publishedLayoutReadingOrder } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 
 /** Card MODEL map keyed by card TYPE — the resolved body's derived models. */
 export type FocusPanelCardModelMap = Map<FocusPanelCardKey, FocusPanelCardModel>;
@@ -92,30 +90,12 @@ export function deriveFocusPanelSummaryCompositionInputs(
         }
     }
 
-    // Phase 2: Assignments belongs in the enrollment Visible composition even when an
-    // older published layout still marks scheduling as Linked (navigable-only).
-    if (visibilityByCardKey.get("scheduling") === "linked") {
-        visibilityByCardKey.set("scheduling", "visible");
-        for (let i = linkedCardKeys.length - 1; i >= 0; i--) {
-            if (linkedCardKeys[i] === "scheduling") linkedCardKeys.splice(i, 1);
-        }
-    }
-
+    // Honor authored visibility: Linked cards (including Assignments/`scheduling`) stay
+    // navigable-only and must not occupy initial Focus Panel settle geometry.
     const grid = deriveFocusPanelGridFromLayoutDoc(activeDoc);
     const instanceMap = activeDoc ? deriveFocusPanelInstanceMap(activeDoc) : new Map();
     const rawPublishedLayout = readFocusPanelPublishedLayout(activeDoc);
-    let publishedLayout = filterPublishedLayoutToVisibleCards(rawPublishedLayout, visibilityByCardKey);
-
-    // If Assignments was Linked-only on an older publish, visibility alone is not enough —
-    // ensure it occupies grid geometry so it renders in the Focus Panel Work surface.
-    if (
-        visibilityByCardKey.get("scheduling") === "visible"
-        && publishedLayout?.grid
-        && !publishedLayoutReadingOrder(publishedLayout).includes("scheduling")
-    ) {
-        const nextGrid = addCardToGrid(publishedLayout.grid, "scheduling", { colSpan: 6 });
-        publishedLayout = buildPublishedLayoutFromGrid(nextGrid);
-    }
+    const publishedLayout = filterPublishedLayoutToVisibleCards(rawPublishedLayout, visibilityByCardKey);
 
     const cellResolution = new Map<
         string,

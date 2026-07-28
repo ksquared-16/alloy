@@ -172,10 +172,17 @@ export function FocusPanelSummaryDocProvider({
         [businessProcessKey, workViewId, stageKey, statusKey],
     );
     const fetched = usePublishedFocusPanelSummaryDocForScope(enabled, ctx);
-    const value = useMemo(
-        () => (!fetched.loaded && seed ? { doc: seed.doc, loaded: true } : fetched),
-        [fetched, seed],
-    );
+    const value = useMemo(() => {
+        // While the scope fetch is in flight, the commit-critical seed is the answer.
+        if (!fetched.loaded && seed) return { doc: seed.doc, loaded: true };
+        // If the fetch settles empty but provisioning already resolved a published doc,
+        // keep the seed — dropping it would strip nestedSurfaces (Household/Children)
+        // and reflow composition away from the committed publish.
+        if (fetched.loaded && fetched.doc == null && seed?.doc != null) {
+            return { doc: seed.doc, loaded: true };
+        }
+        return fetched;
+    }, [fetched, seed]);
     return createElement(FocusPanelSummaryDocContext.Provider, { value }, children);
 }
 
