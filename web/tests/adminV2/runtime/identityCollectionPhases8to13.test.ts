@@ -146,13 +146,25 @@ describe("identity field layout runtime parity (Phases 8–9)", () => {
 });
 
 describe("identity edit capability contract (Phase 10)", () => {
-    it("hides Editable for computed age_band and offers Linked for program", () => {
+    it("offers Editable and Linked for Program; Linked-only for schedule", () => {
         expect(resolveIdentityFieldEditContract("child.age_band").canOfferEditable).toBe(false);
         expect(identityFieldVisibilityOptionsForBuilder("child.age_band")).not.toContain("editable");
-        // Program is Assignments-owned — Builder offers Linked, not Editable.
-        expect(resolveIdentityFieldEditContract("inquiry_child.program").canOfferEditable).toBe(false);
-        expect(identityFieldVisibilityOptionsForBuilder("inquiry_child.program")).toContain("linked");
-        expect(identityFieldVisibilityOptionsForBuilder("inquiry_child.program")).not.toContain("editable");
+        // Desired Program: Editable before assignment, Linked once Assignments owns it.
+        expect(resolveIdentityFieldEditContract("inquiry_child.program").canOfferEditable).toBe(true);
+        expect(identityFieldVisibilityOptionsForBuilder("inquiry_child.program")).toEqual([
+            "editable",
+            "linked",
+            "read-only",
+            "hidden",
+        ]);
+        expect(identityFieldVisibilityOptionsForBuilder("inquiry_child.schedule_type")).toEqual([
+            "linked",
+            "read-only",
+            "hidden",
+        ]);
+        expect(identityFieldVisibilityOptionsForBuilder("inquiry_child.schedule_type")).not.toContain(
+            "editable",
+        );
     });
 
     it("rejects unsupported editable configs at publish validation", () => {

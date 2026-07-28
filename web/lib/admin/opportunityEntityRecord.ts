@@ -615,6 +615,7 @@ export async function overlayProcessDraftParticipation(
       start_date: normalizeIsoDateOnly(f.startDate) ?? c.start_date,
       program_category_id: f.programCategoryId ?? c.program_category_id,
       location_id: f.siteLocationId ?? c.location_id,
+      location_label: f.siteLocationLabel ?? c.location_label,
       _operational_facts_source: "process_instance" as const,
     };
   });

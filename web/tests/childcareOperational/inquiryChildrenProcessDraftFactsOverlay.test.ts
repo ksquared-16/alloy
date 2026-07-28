@@ -60,6 +60,21 @@ describe("resolveProcessDraftFactsForChildren", () => {
         expect(supabase.ocmAccess()).toBe(0);
     });
 
+    it("surfaces location-only Create Lead participation with the site label (not UUID)", async () => {
+        const siteId = "550e8400-e29b-41d4-a716-446655440099";
+        const supabase = mockSupabase({
+            process_instances: [pi("child-A", { location_id: siteId })],
+            locations: [{ id: siteId, label: "North Campus" }],
+        });
+        const map = await resolveProcessDraftFactsForChildren(supabase.client, ORG, OPP, [
+            { customerMemberId: "child-A" },
+        ]);
+        const f = map.get("child-A")!;
+        expect(f.siteLocationId).toBe(siteId);
+        expect(f.siteLocationLabel).toBe("North Campus");
+        expect(f.siteLocationLabel).not.toBe(siteId);
+    });
+
     it("humanizes a non-uuid room key when no location matches", async () => {
         const supabase = mockSupabase({ process_instances: [pi("child-A", { program_room_cohort_key: "infant_room", start_date: "2026-09-01" })] });
         const map = await resolveProcessDraftFactsForChildren(supabase.client, ORG, OPP, [{ customerMemberId: "child-A" }]);

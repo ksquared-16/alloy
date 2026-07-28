@@ -17,6 +17,7 @@ import {
 import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { useOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
+import { useOperationalPlacementOptions } from "@/lib/childcareOperational/useOperationalPlacementOptions";
 import type { IdentityFieldCellVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import {
     resolveIdentityFieldEditControl,
@@ -91,21 +92,41 @@ function IdentityInlineEditInput({
     const optionSetKeys =
         editControl.kind === "select" && inlineEdit.isEditing ? [editControl.optionSetKey] : [];
     const { optionsBySetKey } = useOptionSetSelectOptions(optionSetKeys);
+    const siteLocationId =
+        editControl.kind === "placement_select" ? (editControl.siteLocationId ?? "").trim() : "";
+    const programCategoryId =
+        editControl.kind === "placement_select" ? (editControl.programCategoryId ?? "").trim() : "";
+    const placement = useOperationalPlacementOptions(siteLocationId, programCategoryId);
     const selectOptions =
-        editControl.kind === "select" ? (optionsBySetKey[editControl.optionSetKey] ?? []) : [];
+        editControl.kind === "select"
+            ? (optionsBySetKey[editControl.optionSetKey] ?? [])
+            : editControl.kind === "placement_select"
+              ? (placement.programCategoryIdOptions ?? placement.programOptions)
+              : [];
 
     // Display may store the option label; `<select>` values are keys — map label → value on edit.
     const selectValue = useMemo(() => {
-        if (editControl.kind !== "select") return controlledDraft;
+        if (editControl.kind !== "select" && editControl.kind !== "placement_select") {
+            return controlledDraft;
+        }
         const raw = controlledDraft.trim();
-        if (!raw) return "";
+        if (!raw) {
+            // Prefer stored FK when display value is the label or empty.
+            if (editControl.kind === "placement_select" && programCategoryId) return programCategoryId;
+            return "";
+        }
         if (selectOptions.some((o) => o.value === raw)) return raw;
         const byLabel = selectOptions.find((o) => o.label === raw);
         return byLabel?.value ?? raw;
-    }, [controlledDraft, editControl.kind, selectOptions]);
+    }, [controlledDraft, editControl.kind, selectOptions, programCategoryId]);
 
     useEffect(() => {
-        if (editControl.kind !== "select" || !inlineEdit.isEditing) return;
+        if (
+            (editControl.kind !== "select" && editControl.kind !== "placement_select")
+            || !inlineEdit.isEditing
+        ) {
+            return;
+        }
         if (selectValue === controlledDraft) return;
         if (shared) {
             inlineEdit.onDraftChange?.(selectValue);
@@ -124,7 +145,7 @@ function IdentityInlineEditInput({
     };
 
     let control: ReactNode;
-    if (editControl.kind === "select") {
+    if (editControl.kind === "select" || editControl.kind === "placement_select") {
         const useAlloySelect =
             cell.fieldRef === "child.gender"
             || cell.fieldRef.endsWith(".gender")
@@ -132,9 +153,9 @@ function IdentityInlineEditInput({
             || cell.fieldRef.includes("program")
             || cell.fieldRef.includes("room")
             || cell.fieldRef.includes("schedule");
-        // Disable only while busy saving — not while options load. A stuck/cancelled
-        // option fetch previously left Gender permanently disabled with only Select….
-        const selectDisabled = Boolean(inlineEdit.busy);
+        const selectDisabled =
+            Boolean(inlineEdit.busy)
+            || (editControl.kind === "placement_select" && placement.programDisabled);
         control = useAlloySelect ? (
             <AlloySelect
                 value={selectValue}
@@ -260,11 +281,15 @@ export default function IdentityFieldValue({
     useEffect(() => {
         if (shared) return;
         if (!inlineEdit?.isEditing) return;
-        setDraft(cell.value ?? "");
-        if (editControl.kind === "select") return;
+        const seed =
+            editControl.kind === "placement_select" && editControl.programCategoryId?.trim()
+                ? editControl.programCategoryId.trim()
+                : (cell.value ?? "");
+        setDraft(seed);
+        if (editControl.kind === "select" || editControl.kind === "placement_select") return;
         inputRef.current?.focus();
         inputRef.current?.select();
-    }, [inlineEdit?.isEditing, cell.value, shared, editControl.kind]);
+    }, [inlineEdit?.isEditing, cell.value, shared, editControl]);
 
     const Icon = resolveIcon(cell.icon);
     const showLabel = cell.labelMode !== "hidden";

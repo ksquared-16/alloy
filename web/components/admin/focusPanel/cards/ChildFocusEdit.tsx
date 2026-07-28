@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 
 import IdentityAvatarEditable from "@/components/admin/focusPanel/identity/IdentityAvatarEditable";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { EditableCardStatus } from "@/lib/experience/editing/EditableCardStatus";
 import { editableCardIsSaving, type EditableCardState } from "@/lib/experience/editing/editableCardRuntime";
 import { useEditableCardRuntime } from "@/lib/experience/editing/useEditableCardRuntime";
@@ -26,6 +27,7 @@ import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nested
 import { groupShowAvatarForNestedGroup } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { FocusPanelPhotoSaveResult, FocusPanelSaveResult } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { ChildFocusSavePatch } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
+import { useOperationalPlacementOptions } from "@/lib/childcareOperational/useOperationalPlacementOptions";
 
 const SAVED_BEAT_MS = 900;
 
@@ -198,6 +200,8 @@ export default function ChildFocusEdit({
                         row={row}
                         draft={draft}
                         locked={locked}
+                        locationId={seed.row.location_id?.trim() || null}
+                        locationLabel={seed.row.location_label?.trim() || null}
                         onChange={setField}
                     />
                 ))}
@@ -236,13 +240,23 @@ function ChildFocusEditRow({
     row,
     draft,
     locked,
+    locationId,
+    locationLabel,
     onChange,
 }: {
     row: ChildFocusEditFieldRow;
     draft: ChildFocusEditValues;
     locked: boolean;
+    locationId: string | null;
+    /** Site display name — never show raw location_id UUID to operators. */
+    locationLabel: string | null;
     onChange: (key: keyof ChildFocusEditValues, value: string) => void;
 }) {
+    const placement = useOperationalPlacementOptions(
+        locationId ?? "",
+        draft.program_category_id,
+    );
+
     if (row.unsupported) {
         return (
             <div
@@ -259,22 +273,65 @@ function ChildFocusEditRow({
     if (!row.valueKey) return null;
 
     const readOnly = !row.editable;
+    const isLocation = row.valueKey === "location_id";
+    const isProgram = row.valueKey === "program_category_id";
+    const displayValue = isLocation ? (locationLabel ?? "") : draft[row.valueKey];
+    const locationLocked = isLocation;
+
+    if (isProgram && !readOnly) {
+        const options = placement.programCategoryIdOptions ?? placement.programOptions;
+        return (
+            <label
+                className="alloy-os-card-edit__row"
+                data-child-edit-field={row.configKey}
+            >
+                <span className="alloy-os-card-edit__label">{row.label}</span>
+                <AlloySelect
+                    value={draft.program_category_id}
+                    onChange={(next) => onChange("program_category_id", next)}
+                    options={options}
+                    disabled={locked || placement.programDisabled}
+                    aria-label={row.label}
+                    testId="child-edit-program_category_id"
+                />
+            </label>
+        );
+    }
+
     return (
         <label
             className="alloy-os-card-edit__row"
             data-child-edit-field={row.configKey}
-            data-child-edit-readonly={readOnly ? "true" : undefined}
+            data-child-edit-readonly={readOnly || locationLocked ? "true" : undefined}
         >
             <span className="alloy-os-card-edit__label">{row.label}</span>
             <input
                 className="alloy-os-card-edit__input"
                 data-testid={`child-edit-${row.valueKey}`}
-                type={row.inputType}
-                value={draft[row.valueKey]}
-                disabled={locked || readOnly}
-                readOnly={readOnly}
-                onChange={(e) => onChange(row.valueKey!, e.target.value)}
+                type={isLocation || isProgram ? "text" : row.inputType}
+                value={
+                    isProgram
+                        ? (optionsLabel(placement.programCategoryIdOptions ?? placement.programOptions, draft.program_category_id)
+                            || draft.program_category_id)
+                        : displayValue
+                }
+                disabled={locked || readOnly || locationLocked || isProgram}
+                readOnly={readOnly || locationLocked || isProgram}
+                placeholder={isLocation && !locationLabel ? "Not set" : undefined}
+                onChange={(e) => {
+                    if (locationLocked || isProgram) return;
+                    onChange(row.valueKey!, e.target.value);
+                }}
             />
         </label>
     );
+}
+
+function optionsLabel(
+    options: ReadonlyArray<{ value: string; label: string }>,
+    value: string,
+): string {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    return options.find((o) => o.value === trimmed)?.label ?? "";
 }

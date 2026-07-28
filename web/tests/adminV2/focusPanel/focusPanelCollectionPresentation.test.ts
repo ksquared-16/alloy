@@ -126,4 +126,30 @@ describe("buildChildrenCardEvidence enrollment overlay", () => {
         expect(evidence.children[0]?.schedule).toBe("M-F");
         expect(evidence.children[0]?.name).toBe("Sam");
     });
+
+    it("maps location_label onto Location display and never uses location_id as the value", () => {
+        const withSite = {
+            ...context,
+            truth: {
+                _inquiry_children: [
+                    {
+                        id: "cm-1",
+                        display_name: "Sam",
+                        first_name: "Sam",
+                        last_name: "Lee",
+                        is_active: true,
+                        location_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                        location_label: "North Campus",
+                        desired_program_label: "Preschool",
+                        desired_schedule_label: "M-F",
+                        start_date: "2026-09-01",
+                    },
+                ],
+            },
+        } as unknown as OperationalContext;
+        const evidence = buildChildrenCardEvidence(withSite);
+        expect(evidence.children[0]?.location).toBe("North Campus");
+        expect(evidence.children[0]?.location).not.toBe(evidence.children[0]?.id);
+        expect(evidence.children[0]?.room).toBeNull();
+    });
 });
