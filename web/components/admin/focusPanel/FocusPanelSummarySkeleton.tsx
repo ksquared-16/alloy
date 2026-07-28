@@ -97,6 +97,11 @@ export default function FocusPanelSummarySkeleton({ mode }: { mode: FocusPanelMo
             <FocusPanelCardGrid
                 rows={inputs.gridRows}
                 publishedLayout={inputs.publishedLayout}
+                // MUST match the resolved body (`OpportunityFocusPanelModeGrid`). Without this the
+                // pending surface plans `published-grid` while the body plans `published-lanes` —
+                // a strategy swap (different DOM + geometry) on settle, the exact reflow this
+                // component exists to prevent.
+                preferLanesFromGrid={Boolean(inputs.publishedLayout?.grid)}
                 composeCards={inputs.composeCards}
                 compositionOverrides={inputs.compositionOverrides}
                 renderCell={() => <ReservedSettlementRegion />}

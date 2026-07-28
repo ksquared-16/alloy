@@ -48,7 +48,11 @@ describe("FocusPanelSummarySkeleton (pending Focus Panel)", () => {
         it("matches the resolved grid render strategy for the same doc", () => {
             const strategyMatch = render().match(/data-fp-render-strategy="([^"]+)"/);
             expect(strategyMatch?.[1]).toBeTruthy();
-            expect(strategyMatch?.[1]).toContain("composed"); // default doc → composed, never legacy grid
+            // The resolved body (`OpportunityFocusPanelModeGrid`) passes
+            // `preferLanesFromGrid = Boolean(publishedLayout?.grid)`, so a grid-bearing doc plans
+            // `published-lanes`. The pending skeleton MUST plan the SAME strategy — `published-grid`
+            // here would mean the surface changes DOM structure + geometry on settle.
+            expect(strategyMatch?.[1]).toBe("published-lanes");
         });
     });
 
