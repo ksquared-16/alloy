@@ -1445,12 +1445,12 @@ function opFooter(c, id) {
   // UNDERSTANDING: the operator simply answers Director's questions — they do not
   // rewrite the objective. The answer continues the conversation.
   if (stage === "understanding") {
-    return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director…" />
+    return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director…" value="${esc(state._cvReply || "")}" />
       <button class="btn go sm" data-cvanswer="${id}">Answer</button></div>`;
   }
   // Needs-operator during execution: the answer STEERS the running work.
   if (acts.includes("reply")) {
-    return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director to continue this work…" />
+    return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director to continue this work…" value="${esc(state._cvReply || "")}" />
       <button class="btn go sm" data-cvsteer="${id}">Send</button>${acts.includes("stop") ? `<button class="btn warn sm" data-dstop="${id}">Stop</button>` : ""}</div>`;
   }
   // A "Needs Product Decisions" send-back needs a capability-level DECISION.
@@ -1605,10 +1605,11 @@ async function convMissionAct(action, id, okMsg) {
 // The answer is recorded and the conversation continues — no objective rewriting.
 async function answerDirector(id) {
   const el2 = document.getElementById("cv-reply");
-  const text = (el2?.value || "").trim();
+  const text = ((el2?.value || state._cvReply || "")).trim();
   if (!text) { toast("err", "Type your answer to Director"); return; }
   const { data } = await api("/api/missions/answer", { mission_id: id, answer: text });
   if (!data.ok) { toast("err", "Couldn't send that", data.detail || data.error); return; }
+  state._cvReply = ""; // consumed — don't let it pre-fill the next question
   await fetchConversations(); await fetchConversation(id);
   toast("ok", data.verdict?.verdict === "Ready" ? "Director has what it needs — preparing the work" : "Answer sent", "");
 }
@@ -1616,10 +1617,11 @@ async function answerDirector(id) {
 // the authoritative objective (recompiled), not a side decision.
 async function reframeWork(id) {
   const el2 = document.getElementById("cv-reply");
-  const text = (el2?.value || "").trim();
+  const text = ((el2?.value || state._cvReply || "")).trim();
   if (!text) { toast("err", "Describe what this mission should do"); return; }
   const { data } = await api("/api/missions/reframe", { mission_id: id, direction: text });
   if (!data.ok) { toast("err", "Couldn't set the objective", data.detail || data.error); return; }
+  state._cvReply = ""; // consumed
   await fetchConversations(); await fetchConversation(id);
   toast("ok", "Objective updated", data.diff?.verdict_change || (data.package ? "v" + data.package.version : ""));
 }
@@ -1627,8 +1629,9 @@ async function reframeWork(id) {
 // than recording a product decision.
 async function steerWork(id) {
   const el2 = document.getElementById("cv-reply");
-  const text = (el2?.value || "").trim();
+  const text = ((el2?.value || state._cvReply || "")).trim();
   if (!text) { toast("err", "Type your answer to Director"); return; }
+  state._cvReply = ""; // consumed
   await missionAct("steer", id, { instruction: text }, "Sent — Director is continuing the work");
   await fetchConversations(); await fetchConversation(id);
 }
