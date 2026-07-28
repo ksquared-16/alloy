@@ -8,7 +8,7 @@ import {
     type SectionDispositionInput,
 } from "@/lib/pos/processingCase/formDraft/buildManualFormDraft";
 import { SECTION_DISPOSITIONS, type SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
-import { dbStoreFormDraftPreview, stampFormDraftPreview } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
+import { dbStoreFormDraftPreview, stampFormDraftPreview, parseStoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
 import { ocrProvenanceFromDocument } from "@/lib/pos/processingCase/formDraft/ocrDraftProvenance";
 
 export const dynamic = "force-dynamic";
@@ -136,10 +136,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const generatedFormName =
             typeof body.form_name === "string" && body.form_name.trim() ? body.form_name.trim() : null;
 
+        // Preserve Configuration Discovery across the operator-review save so the generated form
+        // retains source→discovery→binding lineage (FP16). The operator's bindings live in `fields`;
+        // the discovery record explains where each concept came from and how it was matched.
+        const { data: caseMetaRow } = await supabase
+            .from("processing_cases")
+            .select("metadata")
+            .eq("org_id", ctx.orgId)
+            .eq("id", caseId)
+            .maybeSingle();
+        const priorDiscovery = parseStoredFormDraftPreview((caseMetaRow as { metadata?: unknown } | null)?.metadata)?.configuration_discovery;
+
         const draft = stampFormDraftPreview({
             ...buildManualFormDraft({ title, sourceDocumentId, fields, sectionDispositions }),
             ...(generatedFormName ? { generated_form_name: generatedFormName } : {}),
             ...(ocr ? { ocr } : {}),
+            ...(priorDiscovery ? { configuration_discovery: priorDiscovery } : {}),
         });
         const stored = await dbStoreFormDraftPreview(supabase, { orgId: ctx.orgId, caseId, draft });
         return jsonData({ caseId, form_draft_preview: stored });

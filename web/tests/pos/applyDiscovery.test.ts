@@ -54,7 +54,8 @@ describe("M5C — apply approved configuration", () => {
         const childName = discovery.proposals.find((p) => /Child's Name/.test(discovery.concepts.find((c) => c.id === p.candidate_id)!.label))!;
         const applied = result.results.find((r) => r.proposal_id === childName.id);
         expect(applied?.outcome).toBe("applied");
-        expect((applied?.bound_field_ids ?? []).length).toBeGreaterThan(0);
+        // exactly ONE field bound — the page-4 classroom-copy "Child's Name" is NOT bound.
+        expect((applied?.bound_field_ids ?? []).length).toBe(1);
         // the binding is written onto the draft (drives the published form)
         const boundField = updatedDraft.fields.find((f) => applied!.bound_field_ids!.includes(f.id));
         expect(boundField?.field_source).toEqual(expect.objectContaining({ entity_type: "customer_member", field_key: "display_name" }));
