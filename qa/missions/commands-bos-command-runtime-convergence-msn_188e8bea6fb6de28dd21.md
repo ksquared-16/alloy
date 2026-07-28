@@ -139,20 +139,42 @@ command_set_v1 → stage → WT → capability support → subject validity → 
 
 ---
 
-## Immediate generalization increments (planned)
+## Immediate generalization increments
 
-1. Wire live BOS discovery to `resolveBosProcessEffectiveCommandKeys` (department → process).
-2. Remove Surface/placement as BOS eligibility (do not pass `placedActionKeys` as authority).
-3. Introduce adapter registry beyond `create_lead`.
-4. Shared invoke helper → same execute route / Runtime.
-5. Prove mutation + relationship + confirmation Commands with thin adapters or generic preparation where possible.
-6. Coverage ledger for all Commands.
+### Done
+1. Wire live BOS discovery to `resolveBosProcessEffectiveCommandKeys` (department → process) — `5750a475b`
+2. Surface/placement no longer gates BOS eligibility
+
+### In progress / next
+3. Shared invoke helper → same execute route / Runtime (`executePlatformCommandViaActionsApi`)
+4. Introduce adapter registry beyond `create_lead`
+5. Prove mutation + relationship + confirmation Commands with thin adapters or generic preparation
+6. Coverage ledger for all Commands
 
 ---
 
-## Regression after Surface stop
+## BOS Command contract (derived, v0)
 
-```text
-Commands + process authority + BOS slash + Surfaces UI
-→ 29 files / 292 passed
-```
+Universal (session + Runtime):
+
+| Field | Source today |
+|-------|----------------|
+| commandKey | RegisteredAction / capability key |
+| label | registry `defaultLabel` / catalog operatorLabel |
+| eligible | process-effective ∩ adapter-ready ∩ authorized |
+| ineligibleReason | slash descriptor |
+| preparation | per-adapter (`BosCommandAdapter`) |
+| preview / confirmation | session phases + Runtime confirmation policy |
+| invoke | `executePlatformCommandViaActionsApi` → execute route → `executeCommandInvocation` |
+| result | `ActionResult` / `BosCommandExecutionResult` |
+
+Command-specific (adapters):
+
+| Concern | Owner |
+|---------|-------|
+| Intake / required fields | Create Lead conversation intake adapter (and future adapters) |
+| Household / Processing review | Create Lead domain |
+| Subject resolution | Command / entity context |
+| Destructive confirm copy | Runtime destructive policy + adapter preview |
+
+Do not hardcode per-Command branches in `AICommandSurfaceShell` beyond adapter dispatch.
