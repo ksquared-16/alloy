@@ -16,6 +16,14 @@ import {
     QUEUE_ROW_SELECTED_RAIL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
 import { cadenceLabel, type BillingCadence } from "@/lib/commercial/billingCadences";
+import {
+    chargeTimingSummary,
+    EVENT_TRIGGER_OPTIONS,
+    readChargeTiming,
+    SCHEDULED_FREQUENCY_OPTIONS,
+    writeChargeTimingMetadata,
+    type ChargeTimingMode,
+} from "@/lib/commercial/chargeTiming";
 import { organizationFinancialsChapterHref } from "@/lib/commercial/commercialChapterRoutes";
 import {
     activeCategories,
@@ -212,6 +220,17 @@ function CatalogItemsWorkspace({
         : "All programs";
     const locationSummary = selected ? productLocationSummary(selected, locationOptions) : "—";
     const locationPriceOverrideCount = selected ? Object.keys(readLocationPrices(selected.metadata)).length : 0;
+    const selectedChargeTiming = selected
+        ? (() => {
+              const timing = readChargeTiming(selected.metadata);
+              return chargeTimingSummary({
+                  mode: timing.mode,
+                  cadenceKey: selected.cadence_key,
+                  eventTrigger: timing.eventTrigger,
+                  cadenceLabel: selected.cadence_key ? cadenceLabel(selected.cadence_key, cadences) : null,
+              });
+          })()
+        : null;
 
     const setActive = async (isActive: boolean) => {
         if (!selected) return;
@@ -395,9 +414,7 @@ function CatalogItemsWorkspace({
                                                     <p className="mt-1 text-sm text-alloy-midnight/55">
                                                         {typeLabel(selected.commercial_type)}
                                                         {" · "}
-                                                        {selected.cadence_key
-                                                            ? cadenceLabel(selected.cadence_key, cadences)
-                                                            : "One-time"}
+                                                        {selectedChargeTiming ?? "—"}
                                                         {" · "}
                                                         {locationSummary}
                                                     </p>
@@ -460,11 +477,9 @@ function CatalogItemsWorkspace({
                                             <p className="text-lg font-semibold text-alloy-midnight">
                                                 {formatAmount(selected.amount_cents)}
                                             </p>
-                                            {selected.cadence_key ?
-                                                <p className="mt-1 text-sm text-alloy-midnight/55">
-                                                    {cadenceLabel(selected.cadence_key, cadences)}
-                                                </p>
-                                            :   <p className="mt-1 text-sm text-alloy-midnight/55">One-time</p>}
+                                            {selectedChargeTiming ?
+                                                <p className="mt-1 text-sm text-alloy-midnight/55">{selectedChargeTiming}</p>
+                                            :   null}
                                             {selected.commercial_type === "deposit" && depositBehavior(selected) ?
                                                 <p className="mt-3 text-sm text-alloy-midnight/65">
                                                     Due: {depositBehavior(selected)?.due_timing ?? "At enrollment"}
@@ -683,7 +698,7 @@ function CatalogItemDialog({
     locations,
     categories,
     programs,
-    cadences,
+    cadences: _cadences,
     onCategoryCreated,
     onClose,
     onSaved,
@@ -707,12 +722,23 @@ function CatalogItemDialog({
     );
     const initialPrices = useMemo(() => (product ? readLocationPrices(product.metadata) : {}), [product]);
 
+    const initialChargeTiming = useMemo(
+        () => (product ? readChargeTiming(product.metadata) : { mode: "scheduled" as ChargeTimingMode, eventTrigger: null }),
+        [product],
+    );
+
     const [step, setStep] = useState(0);
     const [name, setName] = useState(product?.name ?? "");
     const [commercialType, setCommercialType] = useState<CommercialType | "">(product?.commercial_type ?? "");
     const [categoryId, setCategoryId] = useState(product?.category_id ?? "");
     const [progKey, setProgKey] = useState(product?.program_key ?? "");
-    const [feeFreq, setFeeFreq] = useState(product?.commercial_type === "fee" ? product.cadence_key ?? "" : "");
+    const [chargeTimingMode, setChargeTimingMode] = useState<ChargeTimingMode>(initialChargeTiming.mode);
+    const [eventTrigger, setEventTrigger] = useState(initialChargeTiming.eventTrigger ?? "late_pickup");
+    const [feeFreq, setFeeFreq] = useState(
+        product?.commercial_type === "fee" && initialChargeTiming.mode === "scheduled"
+            ? product.cadence_key ?? ""
+            : "",
+    );
     const [addonFreq, setAddonFreq] = useState(
         product?.commercial_type === "addon" ? product.cadence_key ?? "monthly" : "monthly",
     );
@@ -745,11 +771,6 @@ function CatalogItemDialog({
         return active;
     }, [categories, categoryId]);
 
-    const activeCadences = useMemo(
-        () => cadences.filter((row) => row.metadata?.active !== false && row.metadata?.is_active !== false),
-        [cadences],
-    );
-
     const createCategory = async () => {
         const label = window.prompt("New category name");
         if (!label?.trim()) return;
@@ -775,11 +796,11 @@ function CatalogItemDialog({
 
     const canAdvance = (index: number): boolean => {
         if (index === 0) {
-            return (
-                name.trim().length > 0 &&
-                !!commercialType &&
-                (commercialType !== "addon" || addonFreq.trim().length > 0)
-            );
+            if (!(name.trim().length > 0 && !!commercialType)) return false;
+            if (commercialType === "deposit") return true;
+            if (chargeTimingMode === "event_driven") return eventTrigger.trim().length > 0;
+            if (commercialType === "addon") return addonFreq.trim().length > 0;
+            return true;
         }
         if (index === 1) {
             return locationMode === "all" || selectedLocationIds.length > 0;
@@ -800,7 +821,9 @@ function CatalogItemDialog({
         setError(null);
         try {
             const cadence_key =
-                commercialType === "fee" ? feeFreq || null
+                commercialType === "deposit" ? null
+                : chargeTimingMode === "event_driven" ? null
+                : commercialType === "fee" ? feeFreq || null
                 : commercialType === "addon" ? addonFreq
                 : null;
             const behavior = buildBehavior(commercialType, {
@@ -818,6 +841,12 @@ function CatalogItemDialog({
                 mode: locationMode,
                 locationIds: locationMode === "selected" ? selectedLocationIds : [],
             });
+            if (commercialType === "fee" || commercialType === "addon") {
+                metadata = writeChargeTimingMetadata(metadata, {
+                    mode: chargeTimingMode,
+                    eventTrigger: chargeTimingMode === "event_driven" ? eventTrigger : null,
+                });
+            }
             if (locationMode === "selected" && setLocationPricesNow) {
                 const nextPrices: Record<string, LocationPriceOverride> = {};
                 for (const locationId of selectedLocationIds) {
@@ -982,48 +1011,87 @@ function CatalogItemDialog({
                                     ))}
                                 </select>
                             </label>
-                            {commercialType === "fee" ?
-                                <>
-                                    <label>
-                                        <span className="config-typo-field-label">Billing frequency</span>
-                                        <select
-                                            value={feeFreq}
-                                            onChange={(event) => setFeeFreq(event.target.value)}
-                                            className="config-runtime-select mt-1"
-                                        >
-                                            <option value="">One-time</option>
-                                            {activeCadences.map((c) => (
-                                                <option key={c.item_key} value={c.item_key}>
-                                                    {c.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
-                                    <label className="flex items-center gap-2 text-sm">
-                                        <input
-                                            type="checkbox"
-                                            checked={feeRequired}
-                                            onChange={(event) => setFeeRequired(event.target.checked)}
-                                        />
-                                        Required fee
-                                    </label>
-                                </>
-                            :   null}
-                            {commercialType === "addon" ?
-                                <label>
-                                    <span className="config-typo-field-label">Billing frequency *</span>
-                                    <select
-                                        value={addonFreq}
-                                        onChange={(event) => setAddonFreq(event.target.value)}
-                                        className="config-runtime-select mt-1"
-                                    >
-                                        {activeCadences.map((c) => (
-                                            <option key={c.item_key} value={c.item_key}>
-                                                {c.label}
-                                            </option>
+                            {commercialType === "fee" || commercialType === "addon" ?
+                                <fieldset data-testid="catalog-dialog-charge-timing">
+                                    <legend className="config-typo-field-label">Charge timing *</legend>
+                                    <p className="mt-1 text-xs text-alloy-midnight/50">
+                                        Scheduled uses a billing frequency. Event-driven fires from an operational
+                                        trigger.
+                                    </p>
+                                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                        {(
+                                            [
+                                                { key: "scheduled" as const, label: "Scheduled", hint: "Monthly, annual, per session…" },
+                                                { key: "event_driven" as const, label: "Event-driven", hint: "Late pickup, returned payment…" },
+                                            ] as const
+                                        ).map((opt) => (
+                                            <button
+                                                key={opt.key}
+                                                type="button"
+                                                onClick={() => setChargeTimingMode(opt.key)}
+                                                className={`rounded-md border px-3 py-2 text-left text-sm ${
+                                                    chargeTimingMode === opt.key
+                                                        ? "border-alloy-bend-pine bg-alloy-bend-pine/5"
+                                                        : "border-alloy-stone/25"
+                                                }`}
+                                                data-testid={`catalog-dialog-timing-${opt.key}`}
+                                            >
+                                                <span className="block font-medium">{opt.label}</span>
+                                                <span className="block text-[11px] text-alloy-midnight/50">{opt.hint}</span>
+                                            </button>
                                         ))}
-                                    </select>
-                                </label>
+                                    </div>
+                                    {chargeTimingMode === "scheduled" ?
+                                        <label className="mt-3 block">
+                                            <span className="config-typo-field-label">
+                                                {commercialType === "addon" ? "Billing frequency *" : "Billing frequency"}
+                                            </span>
+                                            <select
+                                                value={commercialType === "addon" ? addonFreq : feeFreq}
+                                                onChange={(event) => {
+                                                    if (commercialType === "addon") setAddonFreq(event.target.value);
+                                                    else setFeeFreq(event.target.value);
+                                                }}
+                                                className="config-runtime-select mt-1"
+                                                data-testid="catalog-dialog-frequency"
+                                            >
+                                                {(commercialType === "fee"
+                                                    ? SCHEDULED_FREQUENCY_OPTIONS
+                                                    : SCHEDULED_FREQUENCY_OPTIONS.filter((o) => o.key !== "")
+                                                ).map((c) => (
+                                                    <option key={c.key || "one-time"} value={c.key}>
+                                                        {c.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </label>
+                                    :   <label className="mt-3 block">
+                                            <span className="config-typo-field-label">Event trigger *</span>
+                                            <select
+                                                value={eventTrigger}
+                                                onChange={(event) => setEventTrigger(event.target.value)}
+                                                className="config-runtime-select mt-1"
+                                                data-testid="catalog-dialog-event-trigger"
+                                            >
+                                                {EVENT_TRIGGER_OPTIONS.map((opt) => (
+                                                    <option key={opt.key} value={opt.key}>
+                                                        {opt.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </label>
+                                    }
+                                    {commercialType === "fee" ?
+                                        <label className="mt-3 flex items-center gap-2 text-sm">
+                                            <input
+                                                type="checkbox"
+                                                checked={feeRequired}
+                                                onChange={(event) => setFeeRequired(event.target.checked)}
+                                            />
+                                            Required fee
+                                        </label>
+                                    :   null}
+                                </fieldset>
                             :   null}
                         </div>
                     : step === 1 ?

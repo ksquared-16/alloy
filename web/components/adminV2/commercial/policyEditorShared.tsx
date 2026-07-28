@@ -1,8 +1,9 @@
 "use client";
 
 import {
+    COMMERCIAL_POLICY_CATEGORY_LABELS,
     COMMERCIAL_POLICY_REGISTRY,
-    COMMERCIAL_POLICY_TYPES,
+    commercialPolicyTypesByCategory,
     commercialPolicyValueSummary,
     type CommercialPolicyType,
     type PolicyField,
@@ -28,10 +29,10 @@ export type VariantLite = { id: string; label: string; offering_id: string };
 export type PolicyScopeType = "org" | "location" | "program" | "offering" | "variant";
 
 export const POLICY_SCOPE_OPTIONS: { value: PolicyScopeType; label: string; hint: string }[] = [
-    { value: "org", label: "Whole organization", hint: "Applies everywhere" },
-    { value: "program", label: "One program", hint: "Applies to a program" },
-    { value: "offering", label: "One Tuition Plan", hint: "Applies to a Tuition Plan" },
-    { value: "variant", label: "One Enrollment Commitment", hint: "Applies to a specific enrollment commitment" },
+    { value: "org", label: "Whole organization", hint: "Applied across the organization" },
+    { value: "program", label: "One program", hint: "Applied to a single program" },
+    { value: "offering", label: "One Tuition Plan", hint: "Applied to a Tuition Plan" },
+    { value: "variant", label: "One Enrollment Commitment", hint: "Applied to a specific enrollment commitment" },
 ];
 
 const inputCls =
@@ -227,49 +228,65 @@ export function PolicyEditorForm({
             <h3 className="text-sm font-semibold text-alloy-midnight">{form.id ? "Edit policy" : "New policy"}</h3>
 
             {!form.id ?
-                <div className="mt-3">
-                    <span className={labelCls}>Policy type</span>
-                    <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {COMMERCIAL_POLICY_TYPES.map((t) => (
-                            <button
-                                key={t}
-                                type="button"
-                                onClick={() =>
-                                    setForm({
-                                        ...emptyPolicyForm(t),
-                                        scope_type: form.scope_type,
-                                        location_id: form.location_id,
-                                        program_key: form.program_key,
-                                        offering_id: form.offering_id,
-                                        variant_id: form.variant_id,
-                                        locationMode: form.locationMode,
-                                        locationIds: form.locationIds,
-                                    })
-                                }
-                                className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-                                    form.policy_type === t
-                                        ? "border-alloy-bend-pine bg-alloy-bend-pine/5 text-alloy-midnight"
-                                        : "border-alloy-stone/25 text-alloy-midnight/70 hover:border-alloy-bend-pine/40"
-                                }`}
-                            >
-                                <span className="block font-medium">{COMMERCIAL_POLICY_REGISTRY[t].label}</span>
-                            </button>
-                        ))}
-                    </div>
+                <div className="mt-3 space-y-4" data-testid="policy-editor-type-groups">
+                    <p className="text-xs text-alloy-midnight/55">
+                        Choose a specialized policy type. Name it for the rule it describes (e.g. Registration Fee
+                        Waiver), not a generic “policy.”
+                    </p>
+                    {commercialPolicyTypesByCategory().map((group) => (
+                        <div key={group.category}>
+                            <div className="mb-1.5">
+                                <span className={labelCls}>{group.label}</span>
+                                <p className="text-[11px] text-alloy-midnight/45">{group.help}</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                {group.types.map((t) => (
+                                    <button
+                                        key={t}
+                                        type="button"
+                                        onClick={() =>
+                                            setForm({
+                                                ...emptyPolicyForm(t),
+                                                scope_type: form.scope_type,
+                                                location_id: form.location_id,
+                                                program_key: form.program_key,
+                                                offering_id: form.offering_id,
+                                                variant_id: form.variant_id,
+                                                locationMode: form.locationMode,
+                                                locationIds: form.locationIds,
+                                            })
+                                        }
+                                        className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                                            form.policy_type === t
+                                                ? "border-alloy-bend-pine bg-alloy-bend-pine/5 text-alloy-midnight"
+                                                : "border-alloy-stone/25 text-alloy-midnight/70 hover:border-alloy-bend-pine/40"
+                                        }`}
+                                        data-testid={`policy-editor-type-${t}`}
+                                    >
+                                        <span className="block font-medium">{COMMERCIAL_POLICY_REGISTRY[t].label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             :   null}
             <p className="mt-2 text-xs text-alloy-midnight/50">
+                <span className="font-medium text-alloy-midnight/60">
+                    {COMMERCIAL_POLICY_CATEGORY_LABELS[def.category]}
+                </span>
+                {" · "}
                 {def.description} <span className="italic text-alloy-midnight/40">e.g. {def.example}</span>
             </p>
 
             <div className="mt-3">
                 <label className={labelCls}>
-                    Name <span className="text-alloy-midnight/35">(optional)</span>
+                    Rule name <span className="text-alloy-midnight/35">(recommended)</span>
                 </label>
                 <input
                     value={form.label}
                     onChange={(e) => setForm({ ...form, label: e.target.value })}
-                    placeholder="e.g. Staff family discount"
+                    placeholder="e.g. Registration Fee Waiver"
                     className={inputCls}
                     data-testid="policy-editor-label"
                 />
@@ -289,7 +306,11 @@ export function PolicyEditorForm({
             :   null}
 
             <div className="mt-4 border-t border-alloy-stone/15 pt-3">
-                <label className={labelCls}>Where does it apply?</label>
+                <label className={labelCls}>Applied to</label>
+                <p className="mb-1.5 text-[11px] text-alloy-midnight/45">
+                    Which commercial object this rule attaches to. Fees and add-ons as direct targets come later;
+                    use Program or Tuition Plan for product-scoped rules today.
+                </p>
                 <select
                     value={form.scope_type}
                     onChange={(e) =>

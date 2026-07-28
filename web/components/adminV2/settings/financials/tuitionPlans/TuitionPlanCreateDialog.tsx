@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
@@ -10,13 +10,14 @@ import {
     type LocationApplicabilityMode,
 } from "@/components/adminV2/settings/configurationRuntime/LocationMultiSelect";
 import { GlCodeSelect } from "@/components/adminV2/settings/configurationRuntime/GlCodeSelect";
-import { ATTENDANCE_TYPE_LABELS, type AttendanceType } from "@/lib/programs/programOfferings";
+import { ATTENDANCE_TYPE_LABELS, type AttendanceType, type ProgramOffering } from "@/lib/programs/programOfferings";
 import type { ProgramOfferingVariant } from "@/lib/programs/programOfferingVariants";
 import { autoVariantLabel } from "@/lib/programs/programOfferingVariants";
 import { cadenceLabel, type BillingCadence } from "@/lib/commercial/billingCadences";
 import { formatRateCents, parseDollarsToCents } from "@/lib/commercial/tuitionRates";
 import { todayIso } from "@/lib/financials/tuitionPlans/tuitionPlanMetadata";
 import type { CreateTuitionPlanInput } from "@/lib/financials/tuitionPlans/tuitionPlanClient";
+import { occupiedCareFormatsForProgram } from "@/lib/financials/tuitionPlans/occupiedCareFormats";
 
 const CARE_FORMATS = Object.entries(ATTENDANCE_TYPE_LABELS) as [AttendanceType, string][];
 
@@ -45,6 +46,7 @@ export function TuitionPlanCreateDialog({
     existingVariants,
     dayCommitments,
     locations,
+    offerings,
     busy,
     error,
     onCancel,
@@ -56,6 +58,7 @@ export function TuitionPlanCreateDialog({
     existingVariants: ProgramOfferingVariant[];
     dayCommitments: number[];
     locations: { id: string; name: string }[];
+    offerings?: ProgramOffering[];
     busy: boolean;
     error: string | null;
     onCancel: () => void;
@@ -71,6 +74,17 @@ export function TuitionPlanCreateDialog({
     const [effectiveDate, setEffectiveDate] = useState(todayIso());
     const [locationMode, setLocationMode] = useState<LocationApplicabilityMode>("all");
     const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+
+    const occupiedCareFormats = useMemo(
+        () => occupiedCareFormatsForProgram(offerings ?? [], programKey),
+        [offerings, programKey],
+    );
+
+    useEffect(() => {
+        if (!occupiedCareFormats.has(careFormat)) return;
+        const next = CARE_FORMATS.find(([value]) => !occupiedCareFormats.has(value))?.[0];
+        if (next) setCareFormat(next);
+    }, [careFormat, occupiedCareFormats]);
 
     const suggestedDays = useMemo(
         () => deriveDefaultDayCounts(existingVariants, dayCommitments),
@@ -92,7 +106,14 @@ export function TuitionPlanCreateDialog({
     };
 
     const canAdvance = (): boolean => {
-        if (step === 0) return name.trim().length > 0 && programKey.trim().length > 0 && billingFrequencyKey.trim().length > 0;
+        if (step === 0) {
+            return (
+                name.trim().length > 0
+                && programKey.trim().length > 0
+                && billingFrequencyKey.trim().length > 0
+                && !occupiedCareFormats.has(careFormat)
+            );
+        }
         if (step === 1) return selectedDays.size > 0;
         if (step === 2) {
             return [...selectedDays].every((day) => parseDollarsToCents(prices[day] ?? "") != null);
@@ -155,100 +176,127 @@ export function TuitionPlanCreateDialog({
                     :   null}
 
                     {step === 0 ?
-                        <div className="grid gap-3">
-                            <label>
-                                <span className="config-typo-field-label">Plan name *</span>
-                                <input
-                                    value={name}
-                                    onChange={(event) => setName(event.target.value)}
-                                    className="config-runtime-input mt-1"
-                                    data-testid="tuition-create-name"
-                                    autoFocus
+                        <div className="space-y-4">
+                            <section className="space-y-3 border-b border-alloy-stone/15 pb-4">
+                                <h3 className="text-sm font-semibold text-alloy-midnight">Identity</h3>
+                                <label>
+                                    <span className="config-typo-field-label">Plan name *</span>
+                                    <input
+                                        value={name}
+                                        onChange={(event) => setName(event.target.value)}
+                                        className="config-runtime-input mt-1"
+                                        data-testid="tuition-create-name"
+                                        autoFocus
+                                    />
+                                </label>
+                            </section>
+                            <section className="space-y-3 border-b border-alloy-stone/15 pb-4">
+                                <h3 className="text-sm font-semibold text-alloy-midnight">Program</h3>
+                                <label>
+                                    <span className="config-typo-field-label">Program *</span>
+                                    <select
+                                        value={programKey}
+                                        onChange={(event) => setProgramKey(event.target.value)}
+                                        className="config-runtime-select mt-1"
+                                        data-testid="tuition-create-program"
+                                    >
+                                        {programs.map((program) => (
+                                            <option key={program.key} value={program.key}>
+                                                {program.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                            </section>
+                            <section className="space-y-3 border-b border-alloy-stone/15 pb-4">
+                                <h3 className="text-sm font-semibold text-alloy-midnight">Care Format</h3>
+                                <p className="text-xs text-alloy-midnight/50">
+                                    One Tuition Plan per care format within a program.
+                                </p>
+                                <label>
+                                    <span className="config-typo-field-label">Care format</span>
+                                    <select
+                                        value={careFormat}
+                                        onChange={(event) => setCareFormat(event.target.value as AttendanceType)}
+                                        className="config-runtime-select mt-1"
+                                        data-testid="tuition-create-care-format"
+                                    >
+                                        {CARE_FORMATS.map(([value, label]) => {
+                                            const taken = occupiedCareFormats.has(value);
+                                            return (
+                                                <option key={value} value={value} disabled={taken}>
+                                                    {taken ? `${label} (already used)` : label}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                </label>
+                            </section>
+                            <section className="space-y-3 border-b border-alloy-stone/15 pb-4">
+                                <h3 className="text-sm font-semibold text-alloy-midnight">Billing Frequency</h3>
+                                <label>
+                                    <span className="config-typo-field-label">Billing Frequency *</span>
+                                    <select
+                                        value={billingFrequencyKey}
+                                        onChange={(event) => setBillingFrequencyKey(event.target.value)}
+                                        className="config-runtime-select mt-1"
+                                        data-testid="tuition-create-frequency"
+                                    >
+                                        {cadences.map((cadence) => (
+                                            <option key={cadence.item_key} value={cadence.item_key}>
+                                                {cadenceLabel(cadence.item_key, cadences)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                            </section>
+                            <section className="space-y-3 border-b border-alloy-stone/15 pb-4">
+                                <h3 className="text-sm font-semibold text-alloy-midnight">Revenue Mapping</h3>
+                                <GlCodeSelect
+                                    value={revenueCategoryId || null}
+                                    onChange={(nextRevenueCategoryId) =>
+                                        setRevenueCategoryId(nextRevenueCategoryId ?? "")
+                                    }
+                                    testId="tuition-create-gl"
+                                    label="Revenue GL"
                                 />
-                            </label>
-                            <label>
-                                <span className="config-typo-field-label">Program *</span>
-                                <select
-                                    value={programKey}
-                                    onChange={(event) => setProgramKey(event.target.value)}
-                                    className="config-runtime-select mt-1"
-                                    data-testid="tuition-create-program"
-                                >
-                                    {programs.map((program) => (
-                                        <option key={program.key} value={program.key}>
-                                            {program.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label>
-                                <span className="config-typo-field-label">Care format</span>
-                                <select
-                                    value={careFormat}
-                                    onChange={(event) => setCareFormat(event.target.value as AttendanceType)}
-                                    className="config-runtime-select mt-1"
-                                    data-testid="tuition-create-care-format"
-                                >
-                                    {CARE_FORMATS.map(([value, label]) => (
-                                        <option key={value} value={value}>
-                                            {label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label>
-                                <span className="config-typo-field-label">Billing Frequency *</span>
-                                <select
-                                    value={billingFrequencyKey}
-                                    onChange={(event) => setBillingFrequencyKey(event.target.value)}
-                                    className="config-runtime-select mt-1"
-                                    data-testid="tuition-create-frequency"
-                                >
-                                    {cadences.map((cadence) => (
-                                        <option key={cadence.item_key} value={cadence.item_key}>
-                                            {cadenceLabel(cadence.item_key, cadences)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <GlCodeSelect
-                                value={revenueCategoryId || null}
-                                onChange={(nextRevenueCategoryId) =>
-                                    setRevenueCategoryId(nextRevenueCategoryId ?? "")
-                                }
-                                testId="tuition-create-gl"
-                                label="Revenue GL"
-                            />
-                            <label>
-                                <span className="config-typo-field-label">Status</span>
-                                <select
-                                    value={status}
-                                    onChange={(event) => setStatus(event.target.value as "active" | "draft")}
-                                    className="config-runtime-select mt-1"
-                                    data-testid="tuition-create-status"
-                                >
-                                    <option value="active">Active</option>
-                                    <option value="draft">Draft</option>
-                                </select>
-                            </label>
-                            <label>
-                                <span className="config-typo-field-label">Effective date</span>
-                                <input
-                                    type="date"
-                                    value={effectiveDate}
-                                    onChange={(event) => setEffectiveDate(event.target.value)}
-                                    className="config-runtime-input mt-1"
-                                    data-testid="tuition-create-effective-date"
+                            </section>
+                            <section className="space-y-3 border-b border-alloy-stone/15 pb-4">
+                                <h3 className="text-sm font-semibold text-alloy-midnight">Location Scope</h3>
+                                <LocationMultiSelect
+                                    locations={locations}
+                                    mode={locationMode}
+                                    selectedIds={selectedLocationIds}
+                                    onModeChange={setLocationMode}
+                                    onSelectedIdsChange={setSelectedLocationIds}
+                                    testId="tuition-create-locations"
                                 />
-                            </label>
-                            <LocationMultiSelect
-                                locations={locations}
-                                mode={locationMode}
-                                selectedIds={selectedLocationIds}
-                                onModeChange={setLocationMode}
-                                onSelectedIdsChange={setSelectedLocationIds}
-                                testId="tuition-create-locations"
-                            />
+                            </section>
+                            <section className="space-y-3">
+                                <h3 className="text-sm font-semibold text-alloy-midnight">Status</h3>
+                                <label>
+                                    <span className="config-typo-field-label">Status</span>
+                                    <select
+                                        value={status}
+                                        onChange={(event) => setStatus(event.target.value as "active" | "draft")}
+                                        className="config-runtime-select mt-1"
+                                        data-testid="tuition-create-status"
+                                    >
+                                        <option value="active">Active</option>
+                                        <option value="draft">Draft</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span className="config-typo-field-label">Effective date</span>
+                                    <input
+                                        type="date"
+                                        value={effectiveDate}
+                                        onChange={(event) => setEffectiveDate(event.target.value)}
+                                        className="config-runtime-input mt-1"
+                                        data-testid="tuition-create-effective-date"
+                                    />
+                                </label>
+                            </section>
                         </div>
                     : step === 1 ?
                         <div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
+import { operatorFriendlyCommercialError } from "@/lib/commercial/operatorFriendlyCommercialError";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +100,12 @@ export async function PATCH(
         .single();
 
     if (updateErr) {
-        return NextResponse.json({ error: updateErr.message }, { status: 500 });
+        return NextResponse.json(
+            {
+                error: operatorFriendlyCommercialError(updateErr.message, "Could not update GL code."),
+            },
+            { status: updateErr.code === "23505" ? 409 : 500 },
+        );
     }
     try {
         await emitEvent({

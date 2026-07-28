@@ -16,6 +16,7 @@ import {
     QUEUE_ROW_SELECTED_RAIL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
 import {
+    COMMERCIAL_POLICY_CATEGORY_LABELS,
     COMMERCIAL_POLICY_REGISTRY,
     commercialPolicyValueSummary,
     type CommercialPolicyType,
@@ -49,6 +50,11 @@ const SCOPE_LABEL: Record<string, string> = {
 
 function policyTypeLabel(type: string): string {
     return COMMERCIAL_POLICY_REGISTRY[type as CommercialPolicyType]?.label ?? "Policy";
+}
+
+function policyCategoryLabel(type: string): string {
+    const def = COMMERCIAL_POLICY_REGISTRY[type as CommercialPolicyType];
+    return def ? COMMERCIAL_POLICY_CATEGORY_LABELS[def.category] : "Policy";
 }
 
 export default function PoliciesConfigurationPage({
@@ -231,8 +237,9 @@ export default function PoliciesConfigurationPage({
         <div data-testid="policies-configuration-page">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-alloy-midnight/55 max-w-xl">
-                    How operational and contractual events affect financial execution — discounts, proration, waivers,
-                    and review rules.
+                    Policies are named rules that modify commercial pricing and billing behavior. Commercial products
+                    reference them — they do not embed duplicated logic. Prefer names like “Registration Fee Waiver,”
+                    not “Registration Fee Policy.”
                 </p>
                 <ConfigurationPrimaryButton className="gap-1" onClick={openCreate} data-testid="policies-new">
                     <Plus className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
@@ -291,7 +298,7 @@ export default function PoliciesConfigurationPage({
                                                     {row.label || policyTypeLabel(row.policy_type)}
                                                 </span>
                                                 <span className="locations-collection-row__place">
-                                                    {policyTypeLabel(row.policy_type)}
+                                                    {policyCategoryLabel(row.policy_type)} · {policyTypeLabel(row.policy_type)}
                                                 </span>
                                                 <span className="locations-collection-row__meta text-alloy-midnight/50">
                                                     {row.is_active ? "Active" : "Inactive"}
@@ -371,6 +378,10 @@ export default function PoliciesConfigurationPage({
                                             </p>
                                             <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
                                                 <div>
+                                                    <dt className="text-[11px] font-medium text-alloy-midnight/40">Category</dt>
+                                                    <dd className="mt-0.5">{policyCategoryLabel(selected.policy_type)}</dd>
+                                                </div>
+                                                <div>
                                                     <dt className="text-[11px] font-medium text-alloy-midnight/40">Type</dt>
                                                     <dd className="mt-0.5">{policyTypeLabel(selected.policy_type)}</dd>
                                                 </div>
@@ -379,7 +390,7 @@ export default function PoliciesConfigurationPage({
                                                     <dd className="mt-0.5">{selected.is_active ? "Active" : "Inactive"}</dd>
                                                 </div>
                                                 <div>
-                                                    <dt className="text-[11px] font-medium text-alloy-midnight/40">Applies to</dt>
+                                                    <dt className="text-[11px] font-medium text-alloy-midnight/40">Applied to</dt>
                                                     <dd className="mt-0.5">{scopeLabel}</dd>
                                                 </div>
                                                 <div>
