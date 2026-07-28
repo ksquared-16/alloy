@@ -642,7 +642,7 @@ export default function PosTemplateSetupColumn({
         if (shouldAutoDetect) {
             return (
                 <ProcessingNativeFormCreatingState
-                    phaseIndex={0}
+                    mode="detecting"
                     error={err}
                     onRetry={err ? () => void handleDetect() : undefined}
                 />
@@ -716,6 +716,7 @@ export default function PosTemplateSetupColumn({
 
             {creating ? (
                 <ProcessingNativeFormCreatingState
+                    mode="creating"
                     phaseIndex={creatingPhase}
                     error={err}
                     onRetry={err ? () => void handleCreate() : undefined}
