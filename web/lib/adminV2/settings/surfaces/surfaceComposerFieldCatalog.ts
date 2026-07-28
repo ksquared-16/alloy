@@ -105,11 +105,9 @@ export function hubEntitiesForPickerNamespaces(
     for (const ns of namespaces) {
         switch (ns) {
             case "person":
-            case "contact":
                 hubs.add("person");
                 break;
             case "child":
-            case "customer_member":
             case "inquiry_child":
                 hubs.add("inquiry_child");
                 break;
@@ -120,8 +118,9 @@ export function hubEntitiesForPickerNamespaces(
             case "queue_row":
                 hubs.add("opportunity");
                 break;
-            case "location":
-                hubs.add("location");
+            case "concept":
+            case "person_child_relationship":
+                // No dedicated Settings hub — relationship fields come from person hub when present.
                 break;
             default:
                 break;
