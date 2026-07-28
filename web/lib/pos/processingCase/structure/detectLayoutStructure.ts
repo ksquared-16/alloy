@@ -163,14 +163,16 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
     const pageHeadings: Map<number, Set<string>> = new Map();
 
     const sections: SectionAcc[] = [];
-    let cur: SectionAcc | null = null;
+    // Holder object (not a bare `let`) so the current section reads as `SectionAcc | null` at every
+    // use site — a bare closure-mutated local gets narrowed to `never` by control-flow analysis.
+    const state: { cur: SectionAcc | null } = { cur: null };
     const pushSection = (title: string, page: number, kind: SectionAcc["kind"]): SectionAcc => {
         const acc: SectionAcc = { title, page, fields: [], staticLines: [], duplicate: false, kind };
         sections.push(acc);
-        cur = acc;
+        state.cur = acc;
         return acc;
     };
-    const ensureSection = (page: number): SectionAcc => cur ?? pushSection("Form questions", page, "fields");
+    const ensureSection = (page: number): SectionAcc => state.cur ?? pushSection("Form questions", page, "fields");
 
     const isSectionHeading = (l: LayoutLine): boolean => {
         const t = l.text.trim();
@@ -187,7 +189,7 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
         // Section context does not leak across a page break — a blank-bearing line at the top of a
         // new page (e.g. page 4's "Date of Enrollment") must not be absorbed by the previous page's
         // signature block. Each page's content re-establishes its own section from its own headings.
-        cur = null;
+        state.cur = null;
         const headingsThisPage = new Set<string>();
         pageHeadings.set(page.page, headingsThisPage);
         // Does this page look like an output/duplicate copy? (explicit marker on any heading)
@@ -277,8 +279,9 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
             }
 
             // --- signature line inside a signature section ---
-            if (cur?.kind === "signature" && BLANK_RE.test(t)) {
-                const sec = cur;
+            const curSig: SectionAcc | null = state.cur;
+            if (curSig && curSig.kind === "signature" && BLANK_RE.test(t)) {
+                const sec = curSig;
                 if (/print\s+name/i.test(t)) {
                     sec.fields.push({ label: "Print Name", suggested_type: "text", required: false, confidence: "high", evidence: "Signature block", page: page.page });
                 } else {
@@ -317,8 +320,9 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
             // Inline blanks inside prose (the legal paragraph's child-name line) are stripped, not
             // promoted to fields, so the emergency-authorization paragraph is preserved as legal text.
             const proseLike = /[a-z]/.test(t) && t.split(/\s+/).length >= 4 && (/^[a-z]/.test(t) || /[.]$/.test(t) || !BLANK_RE.test(t));
-            if (cur && proseLike) {
-                cur.staticLines.push(t.replace(BLANK_RE, " ").replace(/\s{2,}/g, " ").trim());
+            const curProse: SectionAcc | null = state.cur;
+            if (curProse && proseLike) {
+                curProse.staticLines.push(t.replace(BLANK_RE, " ").replace(/\s{2,}/g, " ").trim());
                 continue;
             }
         }
@@ -355,8 +359,12 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
         }));
         // Skip a wholly-empty non-static section.
         if (fields.length === 0 && !staticText) continue;
+        // A duplicate/output-copy page reuses page-1 headings verbatim ("Parent or Guardian #1", …).
+        // Give those a distinct "(Classroom Copy)" title so the read-only disposition of the copy never
+        // bleeds onto the real page-1 section of the same name (the review UI groups sections by title).
+        const title = s.duplicate && !/\bcopy\b/i.test(s.title) ? `${s.title} (Classroom Copy)` : s.title;
         out.push({
-            title: s.title,
+            title,
             confidence: "high",
             fields,
             ...(disposition ? { disposition } : {}),

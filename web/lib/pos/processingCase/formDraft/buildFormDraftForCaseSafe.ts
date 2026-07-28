@@ -87,11 +87,15 @@ export async function chooseDraftForCase(input: {
     });
 
     const isPdf = !!input.pdfBytes && looksLikePdfBytes(input.pdfBytes, input.mimeType);
+    // PDF parsers (pdf-lib / pdf.js) take ownership of the typed array and DETACH its underlying
+    // ArrayBuffer, so a second consumer of the same bytes sees length 0. Hand every consumer its own
+    // `.slice()` copy from the still-intact download.
+    const pdfCopy = (): Uint8Array => (input.pdfBytes as Uint8Array).slice();
 
     // PRIMARY — real PDF AcroForm widget fields.
     if (isPdf && input.pdfBytes) {
         try {
-            const acro = await timed("acroform", () => input.extractAcroForm(input.pdfBytes as Uint8Array), (a) => `fields=${a.fields.length}`);
+            const acro = await timed("acroform", () => input.extractAcroForm(pdfCopy()), (a) => `fields=${a.fields.length}`);
             if (acro.has_acroform && acro.fields.length > 0) {
                 return buildFormDraftFromAcroForm({
                     acroform: acro,
@@ -110,7 +114,7 @@ export async function chooseDraftForCase(input: {
     if (isPdf && input.pdfBytes) {
         try {
             const extractPos = input.extractPositional ?? extractPdfPositional;
-            const layout = await timed("positional_extract", () => extractPos(input.pdfBytes as Uint8Array), (l) => `pages=${l.pageCount} ok=${l.ok}`);
+            const layout = await timed("positional_extract", () => extractPos(pdfCopy()), (l) => `pages=${l.pageCount} ok=${l.ok}${l.reason ? ` reason=${l.reason}` : ""}`);
             if (layout.ok && layout.pages.length > 0) {
                 const structure = await timed("layout_detect", () => detectLayoutStructure(layout), (s) => `sections=${s.sections.length} fields=${s.sections.reduce((n, x) => n + x.fields.length, 0)}`);
                 const totalFields = structure.sections.reduce((n, s) => n + s.fields.length, 0);
