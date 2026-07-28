@@ -51,6 +51,20 @@ export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftP
         : {};
     const fields = d.fields as StoredFormDraftPreview["fields"];
     const sections = d.sections as StoredFormDraftPreview["sections"];
+    // OCR provenance: round-trip so the create path can stamp source→OCR→published lineage.
+    const rawOcr = d.ocr && typeof d.ocr === "object" && !Array.isArray(d.ocr) ? (d.ocr as Record<string, unknown>) : null;
+    const ocr =
+        rawOcr && rawOcr.derived === true
+            ? {
+                  derived: true as const,
+                  method: typeof rawOcr.method === "string" ? rawOcr.method : "ocr",
+                  confidence: typeof rawOcr.confidence === "number" ? rawOcr.confidence : 0,
+                  low_confidence: rawOcr.low_confidence === true,
+                  ...(rawOcr.source_kind === "image" || rawOcr.source_kind === "scanned_pdf"
+                      ? { source_kind: rawOcr.source_kind as "image" | "scanned_pdf" }
+                      : {}),
+              }
+            : null;
     return {
         ...(typeof d.generated_form_name === "string" && d.generated_form_name.trim()
             ? { generated_form_name: d.generated_form_name.trim() }
@@ -69,6 +83,7 @@ export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftP
             field_count: typeof diag.field_count === "number" ? diag.field_count : fields.length,
         },
         ...(Array.isArray(d.pdf_pages) ? { pdf_pages: d.pdf_pages as StoredFormDraftPreview["pdf_pages"] } : {}),
+        ...(ocr ? { ocr } : {}),
         generated_at: typeof d.generated_at === "string" ? d.generated_at : "",
         generator_version: typeof d.generator_version === "string" ? d.generator_version : "unknown",
     };

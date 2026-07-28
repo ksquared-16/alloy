@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, FolderPlus, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronUp, FolderPlus, GripVertical, RotateCcw } from "lucide-react";
 import ProcessingAlloyDialog from "./ProcessingAlloyDialog";
 import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import type { ProcessingFolderDefinition } from "@/lib/pos/processingFolderModel";
@@ -13,12 +13,29 @@ export default function ProcessingManageFoldersDialog({
     open: boolean;
     onClose: () => void;
 }) {
-    const { folders, addFolder, updateFolder, reorderFolder, hideFolder, resetFolders } = useProcessingFolders();
+    const { folders, addFolder, updateFolder, reorderFolder, reorderFolders, hideFolder, resetFolders } =
+        useProcessingFolders();
     const [label, setLabel] = useState("");
     const [description, setDescription] = useState("");
     const [err, setErr] = useState<string | null>(null);
+    const [dragId, setDragId] = useState<string | null>(null);
+    const [overId, setOverId] = useState<string | null>(null);
 
     const editable = folders.filter((f) => !f.isSystem || f.scopes.includes("category"));
+
+    function handleDropOn(targetId: string) {
+        const sourceId = dragId;
+        setDragId(null);
+        setOverId(null);
+        if (!sourceId || sourceId === targetId) return;
+        const ids = editable.map((f) => f.id);
+        const from = ids.indexOf(sourceId);
+        const to = ids.indexOf(targetId);
+        if (from === -1 || to === -1) return;
+        ids.splice(from, 1);
+        ids.splice(to, 0, sourceId);
+        reorderFolders(ids);
+    }
 
     function handleAdd() {
         setErr(null);
@@ -91,6 +108,7 @@ export default function ProcessingManageFoldersDialog({
                     </div>
                 </div>
 
+                <p className="text-[11px] text-alloy-midnight/45">Drag folders by the handle to reorder them.</p>
                 <ul className="max-h-[320px] space-y-2 overflow-y-auto">
                     {editable.map((folder) => (
                         <FolderRow
@@ -99,6 +117,15 @@ export default function ProcessingManageFoldersDialog({
                             onRename={(next) => updateFolder(folder.id, { label: next })}
                             onHide={() => hideFolder(folder.id)}
                             onMove={(dir) => reorderFolder(folder.id, dir)}
+                            isDragging={dragId === folder.id}
+                            isDropTarget={overId === folder.id && dragId !== null && dragId !== folder.id}
+                            onDragStartRow={() => setDragId(folder.id)}
+                            onDragEnterRow={() => setOverId(folder.id)}
+                            onDragEndRow={() => {
+                                setDragId(null);
+                                setOverId(null);
+                            }}
+                            onDropRow={() => handleDropOn(folder.id)}
                         />
                     ))}
                 </ul>
@@ -112,17 +139,53 @@ function FolderRow({
     onRename,
     onHide,
     onMove,
+    isDragging,
+    isDropTarget,
+    onDragStartRow,
+    onDragEnterRow,
+    onDragEndRow,
+    onDropRow,
 }: {
     folder: ProcessingFolderDefinition;
     onRename: (label: string) => void;
     onHide: () => void;
     onMove: (dir: "up" | "down") => void;
+    isDragging: boolean;
+    isDropTarget: boolean;
+    onDragStartRow: () => void;
+    onDragEnterRow: () => void;
+    onDragEndRow: () => void;
+    onDropRow: () => void;
 }) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(folder.label);
 
     return (
-        <li className="flex items-start gap-2 rounded-xl border border-alloy-stone/15 bg-white p-3 shadow-sm">
+        <li
+            onDragOver={(e) => {
+                e.preventDefault();
+                onDragEnterRow();
+            }}
+            onDrop={(e) => {
+                e.preventDefault();
+                onDropRow();
+            }}
+            className={`flex items-start gap-2 rounded-xl border bg-white p-3 shadow-sm transition-colors ${
+                isDropTarget ? "border-alloy-bend-pine ring-1 ring-alloy-bend-pine/40" : "border-alloy-stone/15"
+            } ${isDragging ? "opacity-50" : ""}`}
+            data-testid={`manage-folders-row-${folder.id}`}
+        >
+            <button
+                type="button"
+                draggable
+                onDragStart={onDragStartRow}
+                onDragEnd={onDragEndRow}
+                aria-label="Drag to reorder"
+                className="mt-0.5 shrink-0 cursor-grab rounded p-1 text-alloy-midnight/30 hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight/60 active:cursor-grabbing"
+                data-testid={`manage-folders-drag-${folder.id}`}
+            >
+                <GripVertical className="h-3.5 w-3.5" />
+            </button>
             <div className="min-w-0 flex-1">
                 {editing && !folder.isSystem ? (
                     <input

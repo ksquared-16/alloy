@@ -10,58 +10,143 @@
 
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
 import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
-import type { StoredFormDraftPreview } from "./types";
+import type { DraftFormField, StoredFormDraftPreview } from "./types";
 import {
     PROCESSING_NEEDS_DESTINATION_DESCRIPTION,
     UNRESOLVED_AT_GENERATE_EVIDENCE,
 } from "./questionResolutionModel";
+import type { SectionDisposition } from "./sectionDisposition";
 
+/** Map one detected draft field to a valid FormSchemaV1 field, preserving canonical binding. */
+function mapDraftField(f: DraftFormField): FormField {
+    const unresolvedAtGenerate = f.evidence === UNRESOLVED_AT_GENERATE_EVIDENCE;
+    // Persist canonical binding: operator-reviewed binding wins; otherwise auto-suggest
+    // from the label/type so generated forms prefill + drive guided intake by default.
+    const field_source = unresolvedAtGenerate
+        ? undefined
+        : f.field_source ?? suggestFieldBinding(f.label, f.type)?.field_source;
+    const description = f.description ?? (unresolvedAtGenerate ? PROCESSING_NEEDS_DESTINATION_DESCRIPTION : undefined);
+    const base = {
+        id: f.id,
+        label: f.label,
+        required: f.required,
+        ...(description ? { description } : {}),
+        ...(f.layout_width ? { layout_width: f.layout_width } : {}),
+        ...(field_source ? { field_source } : {}),
+    };
+    switch (f.type) {
+        case "number":
+            return { ...base, type: "number" };
+        case "date":
+            return { ...base, type: "date" };
+        case "boolean":
+            return { ...base, type: "boolean" };
+        case "file_ref":
+            return { ...base, type: "file_ref" };
+        case "signature":
+            return { ...base, type: "signature" };
+        case "text":
+        default:
+            return { ...base, type: "text" };
+    }
+}
+
+function sectionHasType(fields: FormField[], type: FormField["type"]): boolean {
+    return fields.some((f) => f.type === type);
+}
+
+/**
+ * Convert a draft form preview into a real `FormSchemaV1`, honouring each section's operator-classified
+ * disposition. Preserved static/consent text becomes a `text_block`; acknowledgement/upload/signature/
+ * initials dispositions emit the appropriate control when the section doesn't already contain one. NO new
+ * form system — every construct is an existing FormSchemaV1 field type, so the result validates.
+ */
 export function draftFormToFormSchemaV1(draft: StoredFormDraftPreview): FormSchemaV1 {
-    const fields: FormField[] = draft.fields.map((f) => {
-        const unresolvedAtGenerate = f.evidence === UNRESOLVED_AT_GENERATE_EVIDENCE;
-        // Persist canonical binding: operator-reviewed binding wins; otherwise auto-suggest
-        // from the label/type so generated forms prefill + drive guided intake by default.
-        const field_source = unresolvedAtGenerate
-            ? undefined
-            : f.field_source ?? suggestFieldBinding(f.label, f.type)?.field_source;
-        const description =
-            f.description ??
-            (unresolvedAtGenerate ? PROCESSING_NEEDS_DESTINATION_DESCRIPTION : undefined);
-        const base = {
-            id: f.id,
-            label: f.label,
-            required: f.required,
-            ...(description ? { description } : {}),
-            ...(f.layout_width ? { layout_width: f.layout_width } : {}),
-            ...(field_source ? { field_source } : {}),
-        };
-        switch (f.type) {
-            case "number":
-                return { ...base, type: "number" };
-            case "date":
-                return { ...base, type: "date" };
-            case "boolean":
-                return { ...base, type: "boolean" };
-            case "file_ref":
-                return { ...base, type: "file_ref" };
-            case "signature":
-                return { ...base, type: "signature" };
-            case "text":
-            default:
-                return { ...base, type: "text" };
-        }
-    });
+    const detectedById = new Map<string, FormField>();
+    for (const f of draft.fields) detectedById.set(f.id, mapDraftField(f));
 
-    const sections: FormSection[] = draft.sections.map((s) => ({
-        id: s.id,
-        title: s.title,
-        field_ids: s.field_ids,
-    }));
+    const outFields: FormField[] = [];
+    const outSections: FormSection[] = [];
+    const usedIds = new Set<string>();
+    let synth = 0;
+    const synthId = (kind: string) => `disp_${kind}_${(synth += 1)}`;
+
+    for (const s of draft.sections) {
+        const disposition: SectionDisposition = s.disposition ?? "fields";
+        const ids: string[] = [];
+
+        // 1. Preserve instructional / consent prose as a static text_block (never dropped).
+        const carriesStatic =
+            disposition === "static_reference" ||
+            disposition === "acknowledgement" ||
+            disposition === "generated" ||
+            disposition === "signature" ||
+            disposition === "initials" ||
+            disposition === "upload";
+        if (carriesStatic && s.static_text && s.static_text.trim()) {
+            const id = synthId("text");
+            outFields.push({ id, type: "text_block", label: s.title || "Information", required: false, content: s.static_text.trim() });
+            ids.push(id);
+        }
+
+        // 2. Keep detected fields for dispositions that still collect them.
+        const keepsDetectedFields =
+            disposition === "fields" || disposition === "signature" || disposition === "upload" || disposition === "generated";
+        const detectedInSection: FormField[] = [];
+        if (keepsDetectedFields) {
+            for (const fid of s.field_ids) {
+                const mapped = detectedById.get(fid);
+                if (mapped) {
+                    outFields.push(mapped);
+                    ids.push(mapped.id);
+                    usedIds.add(fid);
+                    detectedInSection.push(mapped);
+                }
+            }
+        } else {
+            // Static/acknowledgement sections drop field prompts (they were prose, not inputs).
+            for (const fid of s.field_ids) usedIds.add(fid);
+        }
+
+        // 3. Emit the disposition's required control when the section doesn't already contain one.
+        if (disposition === "acknowledgement") {
+            const id = synthId("ack");
+            outFields.push({ id, type: "boolean", label: "I acknowledge the above", required: true });
+            ids.push(id);
+        } else if (disposition === "upload" && !sectionHasType(detectedInSection, "file_ref")) {
+            const id = synthId("upload");
+            outFields.push({ id, type: "file_ref", label: s.title || "Upload document", required: true });
+            ids.push(id);
+        } else if ((disposition === "signature" || disposition === "initials") && !sectionHasType(detectedInSection, "signature")) {
+            const id = synthId("sig");
+            outFields.push({
+                id,
+                type: "signature",
+                label: disposition === "initials" ? s.title || "Initials" : s.title || "Signature",
+                required: true,
+                signature: { require_acknowledgment: disposition === "signature" },
+            });
+            ids.push(id);
+        }
+
+        outSections.push({ id: s.id, title: s.title, field_ids: ids });
+    }
+
+    // Safety: any detected field not referenced by a section still ships (appended to the last section).
+    const orphans = draft.fields.filter((f) => !usedIds.has(f.id)).map((f) => detectedById.get(f.id)!).filter(Boolean);
+    if (orphans.length > 0) {
+        for (const o of orphans) outFields.push(o);
+        if (outSections.length > 0) {
+            outSections[outSections.length - 1]!.field_ids.push(...orphans.map((o) => o.id));
+        } else {
+            outSections.push({ id: "section_1", title: draft.title || "Section", field_ids: orphans.map((o) => o.id) });
+        }
+    }
 
     return {
         schema_version: 1,
         title: draft.generated_form_name?.trim() || draft.title || "Untitled form",
-        sections,
-        fields,
+        sections: outSections,
+        fields: outFields,
     };
 }

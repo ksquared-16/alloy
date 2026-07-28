@@ -313,6 +313,8 @@ export function useProcessingFormApi() {
                 publishedVersionId?: string | null;
                 locationId?: string;
                 locationName?: string;
+                /** Rotate to a fresh token, deactivating any prior link for this scope. */
+                regenerate?: boolean;
             }
         ): Promise<ProcessingMintedPublicLink> => {
             const publicSlug = resolveProcessingPublicSlug(args.formKey, args.formName, args.existingMeta);
@@ -323,6 +325,9 @@ export function useProcessingFormApi() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     metadata,
+                    // Idempotent, retrievable distribution create — reuse existing links per scope.
+                    distribution: true,
+                    ...(args.regenerate ? { regenerate: true } : {}),
                     ...(args.publishedVersionId ? { pinned_form_definition_version_id: args.publishedVersionId } : {}),
                     ...(args.locationId
                         ? {

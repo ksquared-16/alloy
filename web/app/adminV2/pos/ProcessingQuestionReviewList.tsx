@@ -22,7 +22,28 @@ import {
     detectedInputFormatLabel,
     normalizeFieldValue,
 } from "@/lib/pos/processingCase/formDraft/fieldNormalization";
+import { SECTION_DISPOSITIONS, type SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
 import { AlloyFieldLabel, AlloySelect, AlloyTextInput } from "./ProcessingAlloyControls";
+
+/** Operator-facing disposition labels (product language, not internal keys). */
+const DISPOSITION_LABEL: Record<SectionDisposition, string> = {
+    fields: "Digital fields",
+    generated: "Generated document",
+    static_reference: "Static reference (read-only)",
+    acknowledgement: "Acknowledgement",
+    upload: "Upload request",
+    signature: "Signature",
+    initials: "Initials",
+};
+
+const DISPOSITION_OPTIONS = SECTION_DISPOSITIONS.map((d) => ({ value: d, label: DISPOSITION_LABEL[d] }));
+
+/** Translate confidence into clear operator language (numeric detail stays supporting, not primary). */
+const CONFIDENCE_TONE: Record<string, { label: string; cls: string }> = {
+    high: { label: "High confidence", cls: "text-alloy-bend-pine" },
+    medium: { label: "Review recommended", cls: "text-amber-700" },
+    low: { label: "Needs attention", cls: "text-red-700" },
+};
 
 function resolvedFieldSource(question: ReviewQuestionInput) {
     const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
@@ -79,6 +100,18 @@ const TYPE_LABEL: Record<string, string> = {
     file_ref: "File upload",
 };
 
+/** Field types an operator can assign before the form is created (config-free draft types). */
+const EDITABLE_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
+    { value: "text", label: "Text" },
+    { value: "date", label: "Date" },
+    { value: "number", label: "Number" },
+    { value: "boolean", label: "Checkbox" },
+    { value: "file_ref", label: "File upload" },
+    { value: "signature", label: "Signature" },
+];
+
+type SectionInfo = { disposition: SectionDisposition; recommended: SectionDisposition; confidence: "high" | "medium" | "low" };
+
 type Props = {
     questions: ReviewQuestionInput[];
     selectedId: string | null;
@@ -92,6 +125,10 @@ type Props = {
     onIgnore: (id: string) => void;
     onRemove: (id: string) => void;
     onStartMapping: (id: string) => void;
+    /** Per-section disposition + recommendation/confidence, keyed by section title. */
+    sectionInfo?: Record<string, SectionInfo>;
+    /** Operator changed a section's disposition. Disabled once the form is created. */
+    onSectionDisposition?: (title: string, disposition: SectionDisposition) => void;
 };
 
 export function ProcessingQuestionReviewList({
@@ -107,6 +144,8 @@ export function ProcessingQuestionReviewList({
     onIgnore,
     onRemove,
     onStartMapping,
+    sectionInfo,
+    onSectionDisposition,
 }: Props) {
     const activeCount = questions.filter((q) => !q.ignored).length;
     const sections = questions.reduce<Array<{ title: string; questions: ReviewQuestionInput[] }>>((acc, q) => {
@@ -134,6 +173,38 @@ export function ProcessingQuestionReviewList({
                                 {section.questions.filter((q) => !q.ignored).length}
                             </span>
                         </div>
+                        {(() => {
+                            const info = sectionInfo?.[section.title];
+                            const tone = CONFIDENCE_TONE[info?.confidence ?? "medium"];
+                            const disposition = info?.disposition ?? "fields";
+                            return (
+                                <div
+                                    className="mb-1.5 flex flex-wrap items-center gap-2 rounded-md bg-alloy-stone/[0.04] px-1.5 py-1"
+                                    data-testid={`section-disposition-row-${section.title}`}
+                                >
+                                    <span className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                        This section is
+                                    </span>
+                                    <AlloySelect
+                                        value={disposition}
+                                        onChange={(value) => onSectionDisposition?.(section.title, value as SectionDisposition)}
+                                        options={DISPOSITION_OPTIONS}
+                                        disabled={created || !onSectionDisposition}
+                                        testId={`section-disposition-${section.title}`}
+                                    />
+                                    {tone ? (
+                                        <span className={`text-[9px] font-semibold ${tone.cls}`} data-testid={`section-confidence-${section.title}`}>
+                                            {tone.label}
+                                        </span>
+                                    ) : null}
+                                    {info && info.disposition !== info.recommended ? (
+                                        <span className="text-[9px] text-alloy-midnight/35">
+                                            (Alloy suggested {DISPOSITION_LABEL[info.recommended]})
+                                        </span>
+                                    ) : null}
+                                </div>
+                            );
+                        })()}
                         <ol className="divide-y divide-alloy-stone/[0.08]">
                             {section.questions.map((q) => {
                                 const sel = selectedId === q.id;
@@ -295,7 +366,12 @@ function ReviewQuestionInspector({
     return (
         <div className="mt-1.5 space-y-2 border-t border-alloy-stone/[0.08] pt-1.5" data-testid={`review-inspector-${question.id}`}>
             <InspectorRow label="Answer type">
-                <span className="text-[10px] text-alloy-midnight/70">{TYPE_LABEL[question.type] ?? question.type}</span>
+                <AlloySelect
+                    value={EDITABLE_TYPE_OPTIONS.some((o) => o.value === question.type) ? question.type : "text"}
+                    onChange={(value) => onUpdate(question.id, { type: value })}
+                    options={EDITABLE_TYPE_OPTIONS}
+                    testId={`review-type-${question.id}`}
+                />
             </InspectorRow>
 
             <InspectorRow label="Store answer in">

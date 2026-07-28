@@ -43,6 +43,16 @@ export interface DraftFormSection {
     description?: string;
     /** Ordered ids into the flat `fields[]` (mirrors FormSchemaV1 section.field_ids). */
     field_ids: string[];
+    /**
+     * Operator-classified intent of this section (Phase 7 §3). Defaults to a recommendation from
+     * `recommendSectionDisposition`; the operator confirms/overrides before publish. Omitted === "fields".
+     */
+    disposition?: import("./sectionDisposition").SectionDisposition;
+    /**
+     * Preserved instructional / consent / signature prose that field-extraction alone would discard.
+     * Carried into the published form as a `text_block` so the document's meaning is never lost.
+     */
+    static_text?: string | null;
 }
 
 /** Debug visibility into what Alloy saw — so operators can understand zero-field results. */
@@ -68,6 +78,19 @@ export interface StoredFormDraftPreview {
     diagnostics: FormDraftDiagnostics;
     /** PDF page dimensions + text context for the review schematic (AcroForm drafts only). */
     pdf_pages?: import("../structure/pdfAcroForm").PdfPageContext[];
+    /**
+     * OCR provenance when the draft was built from OCR text (scanned / image source). Preserved into the
+     * published form for source→OCR→correction→published lineage, and drives the OCR-derived review state.
+     */
+    ocr?: {
+        derived: true;
+        method: string;
+        /** Overall confidence 0–100. */
+        confidence: number;
+        low_confidence: boolean;
+        /** Whether OCR read a directly-uploaded image or a rasterized scanned PDF. */
+        source_kind?: "image" | "scanned_pdf";
+    } | null;
     generated_at: string;
     generator_version: string;
 }

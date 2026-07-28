@@ -6,6 +6,7 @@ import {
     getProcessingFoldersSnapshot,
     hideProcessingFolder,
     reorderProcessingFolder,
+    reorderProcessingFolders,
     resetProcessingFolders,
     saveProcessingFolders,
     subscribeProcessingFolders,
@@ -34,6 +35,7 @@ export function useProcessingFolders(orgId?: string | null) {
         updateFolder: (id: string, patch: Parameters<typeof updateProcessingFolder>[1]) =>
             updateProcessingFolder(id, patch, orgId),
         reorderFolder: (id: string, direction: "up" | "down") => reorderProcessingFolder(id, direction, orgId),
+        reorderFolders: (orderedIds: string[]) => reorderProcessingFolders(orderedIds, orgId),
         hideFolder: (id: string) => hideProcessingFolder(id, orgId),
         resetFolders: () => resetProcessingFolders(orgId),
         saveFolders: (next: ProcessingFolderDefinition[]) => saveProcessingFolders(next, orgId),

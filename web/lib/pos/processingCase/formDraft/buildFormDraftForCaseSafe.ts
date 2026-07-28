@@ -25,6 +25,7 @@ import { detectDocumentStructure } from "../structure/detectDocumentStructure";
 import { buildFormDraftFromStructure } from "./buildFormDraftFromStructure";
 import { buildFormDraftFromAcroForm } from "./buildFormDraftFromAcroForm";
 import { deriveDocumentTitle } from "./deriveDocumentTitle";
+import { ocrProvenanceFromDocument } from "./ocrDraftProvenance";
 import { dbStoreFormDraftPreview, stampFormDraftPreview } from "./formDraftPreviewDb";
 import type { StoredFormDraftPreview } from "./types";
 
@@ -103,11 +104,16 @@ export async function buildFormDraftForCaseSafe(
 
         const { data: docRow } = await supabase
             .from("documents")
-            .select("original_filename, title, doc_type")
+            .select("original_filename, title, doc_type, extraction_provider, metadata")
             .eq("org_id", args.orgId)
             .eq("id", source.source_id)
             .maybeSingle();
-        const doc = (docRow ?? {}) as { original_filename?: string | null; title?: string | null };
+        const doc = (docRow ?? {}) as {
+            original_filename?: string | null;
+            title?: string | null;
+            extraction_provider?: string | null;
+            metadata?: Record<string, unknown> | null;
+        };
 
         // Classification (for title fallback) lives on the case_type.
         const { data: caseRow } = await supabase
@@ -137,6 +143,10 @@ export async function buildFormDraftForCaseSafe(
         if (!textResult.available && textResult.reason && draft.fields.length === 0) {
             draft.warnings = [...new Set([...draft.warnings, `text_unavailable:${textResult.reason}`])];
         }
+        // OCR provenance: when the document's text was OCR-derived, mark the draft so the review shows
+        // "Detected using OCR" + confidence, and the published form retains source→OCR→published lineage.
+        const ocr = ocrProvenanceFromDocument(doc);
+        if (ocr) draft.ocr = ocr;
 
         return await dbStoreFormDraftPreview(supabase, { orgId: args.orgId, caseId: args.caseId, draft });
     } catch (e) {

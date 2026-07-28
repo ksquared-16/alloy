@@ -3,6 +3,7 @@
 import { Layers, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import ProcessingPacketBuilder from "./ProcessingPacketBuilder";
+import PosPacketsPanel from "./PosPacketsPanel";
 
 type PacketDef = {
     id: string;
@@ -49,7 +50,9 @@ export default function ProcessingPacketsStudio() {
     const [loaded, setLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [search, setSearch] = useState("");
-    const [creating, setCreating] = useState(false);
+    // The single packet CREATOR is the requirement-responsibility composer. The older blank-definition
+    // create path is retired; this Studio remains the definition MANAGER (list / open / edit / archive).
+    const [composing, setComposing] = useState(false);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -72,30 +75,6 @@ export default function ProcessingPacketsStudio() {
         if (!loaded) void load();
     }, [loaded, load]);
 
-    const createPacket = useCallback(async () => {
-        if (creating) return;
-        setCreating(true);
-        setError(null);
-        try {
-            const res = await fetch("/api/admin/forms/packet-definitions", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: "Untitled packet", description: null }),
-            });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Create failed");
-            const id = (json as { data?: { id: string } }).data?.id;
-            if (id) {
-                setLoaded(false);
-                setSelectedPacketDefId(id);
-            }
-        } catch (e) {
-            setError((e as Error).message);
-        } finally {
-            setCreating(false);
-        }
-    }, [creating]);
-
     const handleBack = useCallback(() => {
         setSelectedPacketDefId(null);
         setLoaded(false);
@@ -103,6 +82,11 @@ export default function ProcessingPacketsStudio() {
 
     if (selectedPacketDefId) {
         return <ProcessingPacketBuilder packetDefId={selectedPacketDefId} onBack={handleBack} />;
+    }
+
+    // Create = the requirement-responsibility composer (single creator).
+    if (composing) {
+        return <PosPacketsPanel embedded composerOnly onClose={() => setComposing(false)} onCreated={() => setLoaded(false)} />;
     }
 
     const q = search.trim().toLowerCase();
@@ -122,8 +106,7 @@ export default function ProcessingPacketsStudio() {
                     />
                     <button
                         type="button"
-                        onClick={() => void createPacket()}
-                        disabled={creating}
+                        onClick={() => setComposing(true)}
                         className="ml-auto inline-flex items-center gap-1 rounded-lg bg-alloy-bend-pine px-3 py-2 text-[12px] font-semibold text-white hover:bg-alloy-bend-pine/90 disabled:opacity-60"
                         data-testid="packets-studio-new-packet"
                     >
@@ -161,9 +144,9 @@ export default function ProcessingPacketsStudio() {
                         </p>
                         <button
                             type="button"
-                            onClick={() => void createPacket()}
-                            disabled={creating}
+                            onClick={() => setComposing(true)}
                             className="mt-4 rounded-lg bg-alloy-bend-pine px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+                            data-testid="packets-studio-empty-new-packet"
                         >
                             + New packet
                         </button>
