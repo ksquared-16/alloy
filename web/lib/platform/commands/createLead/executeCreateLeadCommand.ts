@@ -37,7 +37,10 @@ export async function executeCreateLeadCommand(
         departmentId: input.departmentId,
         workUnitId: input.workUnitId,
         surface: input.surface ?? "work_unit",
-        origin: "bos",
+        origin:
+            (input.surface ?? "").includes("bos") || input.surface === "bos_recommendations"
+                ? "bos"
+                : "operator_ui",
         networkErrorMessage:
             "I couldn’t reach the server to create the lead. Check your connection and try again.",
         failureErrorMessage:

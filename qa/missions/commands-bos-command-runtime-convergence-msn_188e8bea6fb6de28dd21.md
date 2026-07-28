@@ -3,10 +3,10 @@
 **Mission:** BOS Command Runtime Convergence  
 **Worktree:** `/Users/Kelly/Code/alloy-worktrees/wt1-commands-system-inventory`  
 **Branch:** `agent/cursor/1-commands-system-inventory`  
-**Staging:** already reconciled at `df12fca95` (0 behind `origin/staging` as of this audit)  
+**Staging:** reconciled twice — `df12fca95` (Phase 7) then `eddefb49b` (Runtime V1 perf/registry; 0 behind `origin/staging`)  
 **Surface Command Exposure:** stopped/reverted (`ea10ed500`); BP Process Actions remain exposure owner  
 **Date:** 2026-07-28  
-**Scope:** Discovery only — map before generalizing
+**Scope:** Discovery + first convergence increments
 
 ---
 

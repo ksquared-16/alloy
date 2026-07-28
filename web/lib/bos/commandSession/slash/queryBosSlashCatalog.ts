@@ -12,13 +12,14 @@
 
 import { getRegisteredAction, listRegisteredActionKeys } from "@/lib/adminV2/actions/actionRegistry";
 import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
+import { listBosCommandAdapterKeys } from "@/lib/bos/commandSession/adapters/bosCommandAdapterRegistry";
 import type { BosSlashCommandDescriptor } from "@/lib/bos/commandSession/types";
 
 /**
  * Commands that have a BOS command-session adapter today.
- * Expand only when an adapter ships — other bosProposalSupport keys stay hidden.
+ * Sourced from the adapter registry — expand only when an adapter ships.
  */
-export const BOS_SLASH_SESSION_ADAPTER_KEYS = ["create_lead"] as const;
+export const BOS_SLASH_SESSION_ADAPTER_KEYS = listBosCommandAdapterKeys() as readonly string[];
 
 export type QueryBosSlashCatalogInput = {
     /** Raw composer text (may include leading `/`). */
@@ -78,7 +79,7 @@ export function queryBosSlashCatalog(
     void input.placedActionKeys;
     const processKeys = asKeySet(input.processEffectiveCommandKeys);
     const processContextKnown = processKeys != null;
-    const adapterReady = new Set<string>(BOS_SLASH_SESSION_ADAPTER_KEYS);
+    const adapterReady = new Set<string>(listBosCommandAdapterKeys());
 
     const out: BosSlashCommandDescriptor[] = [];
     for (const actionKey of listRegisteredActionKeys()) {
