@@ -170,6 +170,8 @@ export default function PosTemplateSetupColumn({
     // field/question review is a drill-down. Operator decisions on proposals are held here.
     const [reviewMode, setReviewMode] = useState<"concepts" | "detailed">("concepts");
     const [conceptDecisions, setConceptDecisions] = useState<Record<string, ProposalDecisionState>>({});
+    const [applying, setApplying] = useState(false);
+    const [applicationCounts, setApplicationCounts] = useState<Record<string, number> | null>(null);
     const [dispositionOverrides, setDispositionOverrides] = useState<Record<string, SectionDisposition>>({});
     const [formName, setFormName] = useState("");
     const [creatingPhase, setCreatingPhase] = useState(0);
@@ -436,6 +438,40 @@ export default function PosTemplateSetupColumn({
         decisionsDirtyRef.current = true;
         setConceptDecisions((prev) => ({ ...prev, [proposalId]: state }));
     };
+    const applyConfiguration = async () => {
+        if (!caseId || !discovery) return;
+        setApplying(true);
+        try {
+            // Persist decisions first so the server applies exactly what the operator sees.
+            const records = toDecisionRecords(discovery, conceptDecisions, "operator", new Date().toISOString());
+            await fetch(`/api/admin/processing/cases/${caseId}/form-draft/discovery-decisions`, {
+                method: "PUT",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ decisions: records }),
+            });
+            // Accepting a new-field proposal is the operator's explicit confirmation to create it.
+            const confirmedNewFields = discovery.proposals
+                .filter((p) => p.disposition === "create_proposed_field" && (conceptDecisions[p.id] ?? p.decision_state) === "accepted")
+                .map((p) => p.id);
+            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/apply-discovery`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ confirmedNewFields }),
+            });
+            const body = (await res.json().catch(() => ({}))) as { data?: { application?: { counts?: Record<string, number> } }; error?: string };
+            if (res.ok) {
+                setApplicationCounts(body.data?.application?.counts ?? null);
+                await reload();
+            } else {
+                setErr(body.error || "Couldn't apply the configuration.");
+            }
+        } finally {
+            setApplying(false);
+        }
+    };
+
     const bulkAcceptHighConfidence = () => {
         if (!discovery) return;
         decisionsDirtyRef.current = true;
@@ -957,6 +993,9 @@ export default function PosTemplateSetupColumn({
                     onDecision={setConceptDecision}
                     onBulkAcceptHighConfidence={bulkAcceptHighConfidence}
                     onOpenDetailed={() => setReviewMode("detailed")}
+                    onApply={applyConfiguration}
+                    applying={applying}
+                    applicationCounts={applicationCounts}
                 />
             ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
