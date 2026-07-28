@@ -67,6 +67,12 @@ describe("M5C — apply approved configuration", () => {
         expect(rel.length).toBe(3);
         expect(rel.some((r) => r.provider_ref === "person.contact_role.emergency_contacts")).toBe(true);
         expect(rel.some((r) => r.provider_ref === "person.contact_role.authorized_pickups")).toBe(true);
+        // each carries the canonical apply command (relationshipExecutionAdapter) for submission-time write
+        const emergency = rel.find((r) => r.provider_ref === "person.contact_role.emergency_contacts");
+        expect(emergency?.relationship_apply?.command_key).toBe("add_emergency_contact");
+        expect(emergency?.relationship_apply?.role_key).toBe("emergency_contact");
+        const pickup = rel.find((r) => r.provider_ref === "person.contact_role.authorized_pickups");
+        expect(pickup?.relationship_apply?.command_key).toBe("add_authorized_pickup");
     });
 
     it("requires explicit confirmation before creating a new field", () => {

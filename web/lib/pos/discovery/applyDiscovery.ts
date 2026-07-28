@@ -23,6 +23,7 @@
 
 import type { StoredFormDraftPreview, DraftFormField } from "@/lib/pos/processingCase/formDraft/types";
 import { canonicalCollectionProviderForRole } from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
+import { relationshipDefinitionForRole } from "@/lib/fields/collection/relationshipCollectionDefinitions";
 import type { ConfigurationDiscoveryResult, ConfigurationProposal, ProposalDecisionState } from "./contracts";
 import { proposalIdentity, semanticConceptIdentity } from "./reconciliation";
 
@@ -44,6 +45,10 @@ export interface AppliedProposalResult {
     bound_field_ids?: string[];
     /** For relationships: the collection provider projected through. */
     provider_ref?: string;
+    /** For relationships: the canonical apply command + scope executed at Processing/submission time
+     *  (relationshipExecutionAdapter → executeRelationshipAction) — config-apply binds the form; the
+     *  Person create/link + role assignment happens when a response is committed. */
+    relationship_apply?: { command_key: string; role_key: string; default_scope: string };
     /** For new fields: the prepared definition awaiting Field System creation. */
     prepared_field?: { entity_type: string; field_key: string; data_type: string };
 }
@@ -183,13 +188,22 @@ export function applyDiscovery(input: ApplyInput): ApplyOutput {
             }
 
             case "relationship_binding": {
-                const provider = p.target_relationship_role ? canonicalCollectionProviderForRole(p.target_relationship_role) : undefined;
-                if (!provider) {
-                    record("failed", `No canonical collection provider for role ${p.target_relationship_role}.`);
+                const role = p.target_relationship_role ?? "";
+                const provider = role ? canonicalCollectionProviderForRole(role) : undefined;
+                const def = role ? relationshipDefinitionForRole(role) : undefined;
+                if (!provider || !def) {
+                    record("failed", `No configured relationship definition/provider for role ${role}.`);
                     break;
                 }
                 ledger.add(identity);
-                record("applied", `Projected ${label} through the ${provider.label} collection provider (role ${p.target_relationship_role}).`, { provider_ref: provider.refKey });
+                record(
+                    "applied",
+                    `Projected ${label} through the ${provider.label} collection provider (role ${role}); at submission it applies via "${def.apply_command_key}".`,
+                    {
+                        provider_ref: provider.refKey,
+                        relationship_apply: { command_key: def.apply_command_key, role_key: def.operational_role_key, default_scope: def.scopes[0] ?? "this_child" },
+                    },
+                );
                 break;
             }
 
