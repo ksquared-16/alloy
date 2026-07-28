@@ -79,11 +79,12 @@ function parseNameFromFragment(fragment: string): { first_name: string; last_nam
     const trimmed = fragment.trim();
     if (!trimmed) return null;
 
-    const withoutDates = stripDateTokensFromFragment(trimmed);
-    // Strip gender tokens (girl/boy/…) BEFORE name splitting so "Caitlyn Girl" parses as first "Caitlyn"
-    // (not last name "Girl"); the parent surname is then inferred downstream.
-    const { name: withoutGender, gender } = stripGenderFromName(withoutDates);
-    const split = splitPersonName(withoutGender);
+    // Strip gender tokens (girl/boy/…) FIRST — before date stripping — so a trailing "Girl" is captured
+    // as gender (female) rather than being swallowed by the greedy "DOB …" date strip, AND so it never
+    // becomes the child's last name ("Caitlyn Girl" -> first "Caitlyn"; surname inferred downstream).
+    const { name: withoutGender, gender } = stripGenderFromName(trimmed);
+    const withoutDates = stripDateTokensFromFragment(withoutGender);
+    const split = splitPersonName(withoutDates);
     if (split) {
         return {
             first_name: split.first,
@@ -93,7 +94,7 @@ function parseNameFromFragment(fragment: string): { first_name: string; last_nam
         };
     }
 
-    const firstOnly = withoutGender.match(/^([A-Za-z][\w'\-]+)/);
+    const firstOnly = withoutDates.match(/^([A-Za-z][\w'\-]+)/);
     if (firstOnly?.[1]) {
         return {
             first_name: firstOnly[1],

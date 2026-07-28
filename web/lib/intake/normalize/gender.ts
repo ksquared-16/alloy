@@ -22,32 +22,26 @@ const GENDER_WORDS: Record<string, ParsedGender> = {
     "m": "male",
 };
 
-// A standalone gender word (word-boundaried). Kept conservative: only whole tokens, never substrings
-// of a name (so "Mary" / "Manny" are safe — we match on exact lowercased tokens, and single-letter
-// f/m only when isolated).
+// A standalone gender WORD (word-boundaried). Conservative: only whole tokens, never substrings of a
+// name (so "Mary"/"Manny" are safe). Single letters (f/m) are intentionally NOT stripped from names —
+// they collide with middle initials ("John F Smith").
 const GENDER_TOKEN_RE = /\b(girls?|boys?|female|male|daughter|son)\b/gi;
-const SINGLE_LETTER_GENDER_RE = /(?:^|\s)([fm])(?=\s|$)/gi;
 
 /** Extract a gender from free text (first match wins). Does not mutate input. */
 export function detectGender(text: string): ParsedGender {
-    const lower = text.toLowerCase();
-    const wordMatch = lower.match(GENDER_TOKEN_RE);
+    const wordMatch = text.match(GENDER_TOKEN_RE);
     if (wordMatch && wordMatch[0]) return GENDER_WORDS[wordMatch[0].toLowerCase()] ?? null;
     return null;
 }
 
 /**
  * Strip gender tokens from a NAME fragment and report the gender found.
- * "Caitlyn Girl" → { name: "Caitlyn", gender: "female" }. Single-letter f/m stripped only when isolated.
+ * "Caitlyn Girl" → { name: "Caitlyn", gender: "female" }.
  */
 export function stripGenderFromName(fragment: string): { name: string; gender: ParsedGender } {
     let gender: ParsedGender = null;
-    let name = fragment.replace(GENDER_TOKEN_RE, (m) => {
+    const name = fragment.replace(GENDER_TOKEN_RE, (m) => {
         gender = gender ?? GENDER_WORDS[m.toLowerCase()] ?? null;
-        return " ";
-    });
-    name = name.replace(SINGLE_LETTER_GENDER_RE, (whole, letter: string) => {
-        gender = gender ?? GENDER_WORDS[letter.toLowerCase()] ?? null;
         return " ";
     });
     return { name: name.replace(/\s+/g, " ").trim(), gender };
