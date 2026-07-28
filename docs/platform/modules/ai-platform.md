@@ -66,6 +66,9 @@ BOS is a **placement**, not a separate command system. A BOS recommendation invo
 same registered Operational Command as any other surface; its context resolution is
 `bos_proposal` (BOS proposes a subject/payload, the operator confirms — never a silent
 assumption). One capability, many placements, one runtime — see `invocationContext.ts`.
+When a Business Process context is available, BOS slash discovery may optionally filter by
+process-effective Command keys (`resolveBosProcessEffectiveCommandKeys`) so BOS cannot invent
+an unselected process Command; authorization remains deferred to invocation.
 
 BOS is the eventual primary interface, but it must use the same runtime as manual UI.
 Manual UI matters because it teaches the command model:

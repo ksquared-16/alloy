@@ -21,6 +21,12 @@ export type QueryBosSlashCatalogInput = {
      * When provided, slash results must also be in this set.
      */
     placedActionKeys?: readonly string[] | null;
+    /**
+     * Optional process-effective Command keys (P6.S2).
+     * When provided, slash results must also be process-selected.
+     * Does not invent process selection — callers resolve via projectProcessRuntimeCommands.
+     */
+    processEffectiveCommandKeys?: ReadonlySet<string> | readonly string[] | null;
     /** When false, mark descriptors ineligible. */
     authorized?: boolean;
 };
@@ -57,6 +63,14 @@ export function queryBosSlashCatalog(
         input.placedActionKeys == null
             ? null
             : new Set(input.placedActionKeys.map((k) => k.trim()).filter(Boolean));
+    const processKeys =
+        input.processEffectiveCommandKeys == null
+            ? null
+            : input.processEffectiveCommandKeys instanceof Set
+              ? input.processEffectiveCommandKeys
+              : new Set(
+                    [...input.processEffectiveCommandKeys].map((k) => k.trim()).filter(Boolean)
+                );
     const adapterReady = new Set<string>(BOS_SLASH_SESSION_ADAPTER_KEYS);
 
     const out: BosSlashCommandDescriptor[] = [];
@@ -69,11 +83,13 @@ export function queryBosSlashCatalog(
         const displayLabel = action.defaultLabel?.trim() || actionKey.replace(/_/g, " ");
         const hasAdapter = adapterReady.has(actionKey);
         const placedOk = placed == null || placed.has(actionKey);
-        let eligible = authorized && hasAdapter && placedOk;
+        const processOk = processKeys == null || processKeys.has(actionKey);
+        let eligible = authorized && hasAdapter && placedOk && processOk;
         let ineligibleReason: string | undefined;
         if (!authorized) ineligibleReason = "You don’t have permission to run commands here.";
         else if (!hasAdapter) ineligibleReason = "This command isn’t available in BOS yet.";
         else if (!placedOk) ineligibleReason = "This command isn’t available in this workspace.";
+        else if (!processOk) ineligibleReason = "This command isn’t selected for this process.";
 
         // Round 2 product scope: hide non-adapter commands entirely (don’t clutter /).
         if (!hasAdapter) continue;

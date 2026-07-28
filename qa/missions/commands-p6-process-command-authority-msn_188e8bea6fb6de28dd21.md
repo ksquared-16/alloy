@@ -147,13 +147,13 @@ Production `npm run typecheck`: **pass**. `typecheck:tests`: deferred (machine p
 
 | Slice | Focus |
 |-------|-------|
-| P6.S2 | Derive `command_set_v1` for live processes from union |
-| P6.S3 | Switch `resolveCanonicalWorkTemplateActionOptions` to command_set authority; orphan rejection |
+| P6.S2 | Runtime consumer cutover — **shipped** (see below) |
+| P6.S3 | Switch editor / Work Template authoring to command_set; orphan rejection on write |
 | P6.S4 | Process editor UX bound to Org Catalog ∩ Capability ∩ command_set |
 
 ---
 
-## Confirmations
+## Confirmations (P6.S1)
 
 - No schema / migration
 - No API rename
@@ -162,3 +162,64 @@ Production `npm run typecheck`: **pass**. `typecheck:tests`: deferred (machine p
 - No Surface redesign
 - No operator behavior change (proof is additive)
 - No push
+
+---
+
+# P6.S2 — Business Process Runtime Command Consumption
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Commit focus | Runtime **read** authority only |
+| Projection | `web/lib/lifecycle/processRuntimeCommandProjection.ts` |
+| Stage evaluation | `evaluateStageActionsForProcess.ts` |
+| BOS | `processEffectiveCommandKeys` on slash + `resolveBosProcessEffectiveCommandKeys` |
+
+## Runtime consumer inventory
+
+| Consumer | Previous read source | Disposition |
+| -------- | -------------------- | ----------- |
+| Current Work allowlist (`contextAllowedActionKeys`) | Stage catalog ∪ WT refs | **Cut over** via process-aware allowlist |
+| Current Work catalog fallback (`actionsFromCatalog`) | Stage catalog invents helpful/comms | **Cut over** — catalog filtered to process-selected |
+| Published stage inputs | Catalog only | **Cut over** — attaches process + `commandProjection` |
+| Stage action evaluator | Keys + catalog only | **Cut over** via `evaluateStageActionsForProcess` |
+| BOS slash discovery | Registry + placements | **Cut over** optional process-effective filter |
+| `resolveCanonicalWorkTemplateActionOptions` | Catalog ∪ placements | **P6.S3 writer** (unchanged) |
+| `resolveActionsForContext` | DB placements | Retain (org chrome availability) |
+| Process transitions | Operating plan edges | Unrelated |
+
+## Behavior-equivalence matrix
+
+| Consumer | Previous | New | Result parity | Intentional difference |
+| -------- | -------- | --- | ------------- | ---------------------- |
+| Current Work | Stage catalog ∪ WT refs | Selected ∩ stage catalog ∪ explicit WT refs | Equivalent when V1 ≡ legacy migrate | Explicit-empty V1 enforces empty allowlist |
+| Catalog fallback | All stage candidates | Process-selected candidates only | Honesty | Stage orphans no longer invent helpful actions |
+| Stage evaluation | Any resolved keys | Selected keys; orphans unavailable | Equivalent for selected | Unselected diagnosed |
+| BOS | Placements only | + optional process-effective keys | Additive gate | Cannot propose unselected / empty-V1 |
+| WT editor options | Unchanged | Unchanged | — | P6.S3 |
+
+## Ordering rule
+
+```text
+process command_set_v1 / legacy migrate order
+→ stage recommendation order for stage-presented subsets
+→ canonical key / intent alias expansion for allowlists
+```
+
+## Explicit-empty V1
+
+`enforceAllowlist=true` → empty selected set blocks Current Work header classification and BOS process-aware eligibility. No legacy fallback.
+
+## P6.S3 authoring boundary (unchanged)
+
+- Business Process editor writes
+- Work Template option authoring (`resolveCanonicalWorkTemplateActionOptions`)
+- Publish validation for newly authored `command_set_v1`
+
+## Tests
+
+`processRuntimeCommandConsumption.test.ts` + P6.S1 + Commands + stage evaluator: **23 files / 256 passed**.
+
+Pre-existing unrelated: `currentWorkOperationalSurface` enrollment fixture `showOutcomeCompletion` (fails without P6.S2 changes).
+
+Production typecheck: **pass**. `typecheck:tests`: deferred under pressure.

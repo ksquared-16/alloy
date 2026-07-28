@@ -117,6 +117,9 @@ disabled**. No Delete Lead / Make Primary / Cancel Tour production cutover in P4
   hosted on lifecycle builder process JSON. Effective resolver + legacy compatibility precedence.
   Stage `action_catalog_v1` is recommendation/evaluation only. Enrollment Lead proof only;
   editor authority switch and full migration remain later P6 slices. Automations product not shipped.
+- **P6.S2:** Runtime consumers (Current Work allowlist/catalog fallback, process-aware stage
+  evaluation, optional BOS process-effective slash filter) read through
+  `projectProcessRuntimeCommands`. Editors / Work Template authoring unchanged until P6.S3.
 
 ### Destructive / replacement Command policy (P4.S1)
 

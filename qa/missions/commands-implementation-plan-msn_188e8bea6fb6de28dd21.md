@@ -10,7 +10,7 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress (mission evidence, not this planning doc’s original scope):** P0 → P5 Tour certified → **P6.S1 Business Process `command_set_v1` authority**. Next: P6.S2 derive / P6.S3 resolver switch.
+**Implementation progress (mission evidence, not this planning doc’s original scope):** P0 → P5 Tour certified → P6.S1 `command_set_v1` → **P6.S2 runtime consumer cutover**. Next: P6.S3 editor/authoring authority switch.
 
 ---
 
@@ -342,8 +342,8 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 | ID | Title |
 |----|-------|
 | **P6.S1** | `command_set_v1` types + parse/write + selection/effective resolvers + Enrollment Lead proof (**shipped**) |
-| **P6.S2** | Derive migration from existing candidates |
-| **P6.S3** | Resolver authority switch |
+| **P6.S2** | Runtime consumer cutover through effective projection (**shipped**; original plan title was derive-migration) |
+| **P6.S3** | Editor / Work Template authoring authority switch + orphan rejection |
 | **P6.S4** | Process editor UX bound to catalog |
 
 ### P7 — Config foundation (5)

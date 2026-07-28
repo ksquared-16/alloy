@@ -106,6 +106,10 @@ A Stage defines:
 | `entry_conditions` | Conditions that place a subject in this stage |
 | `exit_conditions` | Conditions that move a subject out |
 | `candidate_actions` | Ordered list of actions with recommendation levels (**recommendation/evaluation only** once `command_set_v1` is present — cannot create process selection) |
+
+**Runtime (P6.S2):** Operators and BOS process-aware discovery consume Commands via
+`projectProcessRuntimeCommands` / `resolveEffectiveBusinessProcessCommands`. Stage evaluation
+wrappers diagnose unselected references. Editors still author legacy-compatible catalogs until P6.S3.
 | `surface_refs` | `queue_surface_key`, `focus_surface_key`, `header_surface_key` |
 | `readiness_expectations` | What must be true for subjects at this stage |
 | `operating_plan` | Purpose, expected work, success criteria |

@@ -422,3 +422,15 @@ HMAC-SHA256 compact claims; TTL + version; no DB store; not an idempotency key.
 | Proof | Enrollment Lead fixture — behavior-equivalent selection |
 | Editor / WT options switch | Deferred P6.S3 |
 | Automation / Commands UI | Not shipped |
+
+---
+
+# P6.S2 — Runtime Command Consumption
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p6-process-command-authority-msn_188e8bea6fb6de28dd21.md` (P6.S2) |
+| Projection | `projectProcessRuntimeCommands` |
+| Consumers | Current Work, process-aware stage evaluation, optional BOS process filter |
+| Editor / WT authoring | Unchanged (P6.S3) |
