@@ -576,14 +576,25 @@ async function refreshDisk({ act = false } = {}) {
  * unchanged: the worker still may not push/merge/promote, and consequential
  * actions still preview→confirm. Never rubber-stamps judgment.
  */
+const autoResumeTries = new Map(); // mission_id -> resume attempts (in-memory, resets on restart)
 function conductorTick() {
   try {
     for (const m of readMissions(null, 200)) {
-      if (m.status !== "waiting_for_acceptance" || !m.capability_id) continue;
+      if (!m.capability_id) continue;
       const obj = readObjective(m.capability_id);
       if (!obj || obj.mode !== "autonomous") continue;
-      const ev = directorEvaluate({ mission_id: m.mission_id });
-      if (ev?.result?.gate === "pass") directorAccept({ mission_id: m.mission_id, confirm: true });
+      // A finished phase whose gate fully passes → auto-accept (advances the objective).
+      if (m.status === "waiting_for_acceptance") {
+        const ev = directorEvaluate({ mission_id: m.mission_id });
+        if (ev?.result?.gate === "pass") directorAccept({ mission_id: m.mission_id, confirm: true });
+        continue;
+      }
+      // A RESUMABLE inactivity timeout is a technical hiccup, not a decision —
+      // self-heal by resuming (capped) rather than pulling the operator in.
+      if (m.status === "interrupted" && m.error_code === "timeout" && m.provider_session_id) {
+        const tries = autoResumeTries.get(m.mission_id) || 0;
+        if (tries < 3) { autoResumeTries.set(m.mission_id, tries + 1); directorSteer({ mission_id: m.mission_id, instruction: "Continue where you left off; complete the mission.", confirm: true }); }
+      }
     }
   } catch { /* best-effort; the operator path always still works */ }
 }
