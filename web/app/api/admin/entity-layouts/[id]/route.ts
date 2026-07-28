@@ -79,7 +79,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             );
         }
 
-        const patch: { name?: string; doc?: LayoutDoc } = {};
+        const patch: { name?: string; doc?: LayoutDoc; expectedUpdatedAt?: string | null } = {};
         if (typeof body.name === "string") patch.name = body.name.trim();
         if (body.doc !== undefined) {
             const parsed = parseLayoutDoc(body.doc, { inferSurfaceKey: true });
@@ -88,19 +88,33 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             }
             patch.doc = parsed.doc;
         }
+        if (body.expectedUpdatedAt !== undefined) {
+            patch.expectedUpdatedAt =
+                body.expectedUpdatedAt === null || typeof body.expectedUpdatedAt === "string"
+                    ? (body.expectedUpdatedAt as string | null)
+                    : undefined;
+        }
         if (patch.name === undefined && patch.doc === undefined) {
             return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
         }
 
-        const updated = await updateDraft(supabase, id, patch);
-        logAdminAudit({
-            entity: "entity_layouts",
-            id,
-            changed_fields: Object.keys(patch),
-            actor_user_id: ctx.userId,
-            role: ctx.role,
-        });
-        return NextResponse.json(updated);
+        try {
+            const updated = await updateDraft(supabase, id, patch);
+            logAdminAudit({
+                entity: "entity_layouts",
+                id,
+                changed_fields: Object.keys(patch).filter((k) => k !== "expectedUpdatedAt"),
+                actor_user_id: ctx.userId,
+                role: ctx.role,
+            });
+            return NextResponse.json(updated);
+        } catch (e) {
+            const err = e as Error & { code?: string };
+            if (err.code === "STALE_LAYOUT_WRITE") {
+                return NextResponse.json({ error: err.message, code: "STALE_LAYOUT_WRITE" }, { status: 409 });
+            }
+            throw e;
+        }
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 400 });
     }

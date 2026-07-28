@@ -28,10 +28,14 @@ export const FOCUS_PANEL_SUMMARY_SURFACE_NAME = "Enrollment Focus Panel Summary"
 /** Window event fired after a publish so open runtime surfaces refresh. */
 export const FOCUS_PANEL_SUMMARY_PUBLISHED_EVENT = "adminv2:focus-panel-summary-published";
 
+/** Window event fired after a nested-surface draft save so the parent composer can rehydrate. */
+export const FOCUS_PANEL_SUMMARY_NESTED_SAVED_EVENT = "adminv2:focus-panel-summary-nested-saved";
+
 export type FocusPanelSummaryRecordRef = {
     id: string;
     version: number;
     doc: LayoutDoc;
+    updatedAt?: string | null;
 };
 
 export type FocusPanelSummaryLayoutState = {
@@ -72,6 +76,7 @@ async function createFocusPanelSummaryDraft(doc: LayoutDoc, name: string): Promi
 /**
  * Save the working doc as a draft. Forks the published row to a new draft when
  * no draft exists yet, so publishing never mutates the live row in place.
+ * Passes expectedUpdatedAt so a slower prior request cannot overwrite a newer edit.
  */
 export async function saveFocusPanelSummaryDraft(
     state: FocusPanelSummaryLayoutState,
@@ -79,11 +84,15 @@ export async function saveFocusPanelSummaryDraft(
     name: string = FOCUS_PANEL_SUMMARY_SURFACE_NAME,
 ): Promise<EntityLayoutRecord> {
     if (state.draft) {
-        return patchEntityLayoutDraft(state.draft.id, name, doc);
+        return patchEntityLayoutDraft(state.draft.id, name, doc, {
+            expectedUpdatedAt: state.draft.updatedAt ?? null,
+        });
     }
     if (state.published) {
         const forked = await duplicateEntityLayoutDraft(state.published.id, name);
-        return patchEntityLayoutDraft(forked.id, name, doc);
+        return patchEntityLayoutDraft(forked.id, name, doc, {
+            expectedUpdatedAt: forked.updatedAt ?? null,
+        });
     }
     return createFocusPanelSummaryDraft(doc, name);
 }

@@ -13,11 +13,12 @@
  * @see focusPanelSummaryLayoutService.ts
  */
 
-import type { LayoutDoc } from "@/lib/layout/layoutV2";
+import type { LayoutDoc, EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import {
     loadFocusPanelSummaryLayout,
     saveFocusPanelSummaryDraft,
     publishFocusPanelSummary,
+    FOCUS_PANEL_SUMMARY_NESTED_SAVED_EVENT,
     type FocusPanelSummaryLayoutState,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryLayoutService";
 import { buildFocusPanelSummaryDefaultDoc } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
@@ -61,10 +62,11 @@ export async function loadNestedSurfaceConfig(surfaceId: string): Promise<Nested
 }
 
 /**
- * Persist a nested surface config into the FP summary doc metadata and publish.
- * Returns the published record id.
+ * Persist a nested surface config into the FP summary draft (does not auto-publish).
+ * Publishing remains an explicit Focus Panel Summary / nested Publish action so
+ * draft edits cannot race a silent publish over newer composition state.
  */
-export async function saveNestedSurfaceConfig(surfaceId: string, config: NestedSurfaceConfig): Promise<void> {
+export async function saveNestedSurfaceConfig(surfaceId: string, config: NestedSurfaceConfig): Promise<EntityLayoutRecord> {
     assertNestedSurfaceEditableContract(config);
     const state = await loadFocusPanelSummaryLayout();
     const base = baseDocFrom(state);
@@ -79,7 +81,23 @@ export async function saveNestedSurfaceConfig(surfaceId: string, config: NestedS
         },
     };
     const draft = await saveFocusPanelSummaryDraft(state, nextDoc);
-    await publishFocusPanelSummary(draft.id);
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(
+            new CustomEvent(FOCUS_PANEL_SUMMARY_NESTED_SAVED_EVENT, {
+                detail: { surfaceId, draftId: draft.id, doc: draft.doc },
+            }),
+        );
+    }
+    return draft;
+}
+
+/** Persist nested surface config and publish the Focus Panel Summary draft. */
+export async function saveAndPublishNestedSurfaceConfig(
+    surfaceId: string,
+    config: NestedSurfaceConfig,
+): Promise<EntityLayoutRecord> {
+    const draft = await saveNestedSurfaceConfig(surfaceId, config);
+    return publishFocusPanelSummary(draft.id);
 }
 
 /** Validate all nested surfaces on a Focus Panel summary doc before publish. */
