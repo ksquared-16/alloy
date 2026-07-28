@@ -1016,10 +1016,10 @@ function CollectionRail({
                 </ConfigurationPrimaryButton>
             </div>
 
-            <label className="relative mb-2 block">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-alloy-midnight/35" />
+            <label className="programs-collection-controls__search-wrap mb-2 block">
+                <Search className="programs-collection-controls__search-icon" aria-hidden />
                 <input
-                    className="config-runtime-input w-full pl-8 text-sm"
+                    className="programs-collection-controls__search"
                     placeholder="Search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -1085,10 +1085,10 @@ function CollectionRail({
                             >
                                 {selected ? <span aria-hidden className={QUEUE_ROW_SELECTED_RAIL_CLASS} /> : null}
                                 <span className="locations-collection-row__body min-w-0 pl-1">
-                                    <span className="locations-collection-row__name flex items-center gap-2">
-                                        <span className="min-w-0 truncate text-[13px] font-semibold text-alloy-midnight">
-                                            {c.name}
-                                        </span>
+                                    <span className="block text-[13px] font-semibold leading-snug text-alloy-midnight [overflow-wrap:anywhere]">
+                                        {c.name}
+                                    </span>
+                                    <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-alloy-midnight/50">
                                         <span
                                             className={`locations-collection-row__status shrink-0 ${
                                                 status === "Published" ?
@@ -1100,11 +1100,12 @@ function CollectionRail({
                                         >
                                             {status}
                                         </span>
-                                    </span>
-                                    <span className="locations-collection-row__meta text-[11px] text-alloy-midnight/50">
-                                        {usage}
-                                        {" · "}
-                                        {formatUpdated(c.updated_at)}
+                                        <span aria-hidden>·</span>
+                                        <span>
+                                            {usage}
+                                            {" · "}
+                                            {formatUpdated(c.updated_at)}
+                                        </span>
                                     </span>
                                 </span>
                             </button>
