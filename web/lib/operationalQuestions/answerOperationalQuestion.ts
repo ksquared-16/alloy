@@ -1,20 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     FUTURE_ROOM_CAPACITY_QUESTION_KEY,
+    ROOM_UTILIZATION_QUESTION_KEY,
     getOperationalQuestion,
 } from "@/lib/operationalQuestions/catalog";
 import { answerFutureRoomCapacity } from "@/lib/operationalQuestions/answerFutureRoomCapacity";
+import { answerRoomUtilization } from "@/lib/operationalQuestions/answerRoomUtilization";
 import type {
     AnswerOperationalQuestionContext,
     OperationalAnswer,
     OperationalQuestionDefinition,
+    OperationalQuestionKey,
 } from "@/lib/operationalQuestions/types";
 
-export { FUTURE_ROOM_CAPACITY_QUESTION_KEY };
+export { FUTURE_ROOM_CAPACITY_QUESTION_KEY, ROOM_UTILIZATION_QUESTION_KEY };
 
 /**
  * Shared strategy dispatch — UI and BOS must call this (or the HTTP wrapper).
- * Does not calculate capacity; Measure strategy uses existing observation services.
+ * Does not calculate capacity/utilization; Measure strategy uses existing observation services.
  */
 export async function answerOperationalQuestion(
     supabase: SupabaseClient,
@@ -47,12 +50,17 @@ export async function answerOperationalQuestion(
         };
     }
 
-    if (question.answer_strategy === "measure" && question.key === FUTURE_ROOM_CAPACITY_QUESTION_KEY) {
-        return answerFutureRoomCapacity(supabase, question, ctx);
+    if (question.answer_strategy === "measure") {
+        if (question.key === FUTURE_ROOM_CAPACITY_QUESTION_KEY) {
+            return answerFutureRoomCapacity(supabase, question, ctx);
+        }
+        if (question.key === ROOM_UTILIZATION_QUESTION_KEY) {
+            return answerRoomUtilization(supabase, question, ctx);
+        }
     }
 
     return {
-        question_key: question.key,
+        question_key: question.key as OperationalQuestionKey,
         question_title: question.title,
         strategy: question.answer_strategy,
         status: "invalid_context",
@@ -62,7 +70,7 @@ export async function answerOperationalQuestion(
         effective_date: null,
         answered_at: null,
         availability: "unknown",
-        availability_reason: "This answer strategy is not implemented in the proving slice.",
+        availability_reason: "This answer strategy is not implemented yet.",
         goal: null,
         health: null,
         source_summary: null,
@@ -71,7 +79,7 @@ export async function answerOperationalQuestion(
         history_available: false,
         measurement_id: null,
         actions: [],
-        presentation_lines: ["This question isn’t available in the proving slice yet."],
+        presentation_lines: ["This question isn’t available yet."],
     };
 }
 

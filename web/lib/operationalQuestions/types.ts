@@ -1,13 +1,13 @@
 /**
- * Operational Question Platform — shared types for the Future Room Capacity proving slice.
+ * Operational Question Platform — shared types for Measure-strategy questions.
  * @see docs/sprints/07_2026/operational-calculations-product-realization/OPERATIONAL-QUESTION-PLATFORM.md
  */
 
-export type OperationalQuestionKey = "future_room_capacity";
+export type OperationalQuestionKey = "future_room_capacity" | "room_utilization";
 
 export type OperationalAnswerStrategy = "measure" | "plan" | "workspace" | "recommend";
 
-export type OperationalQuestionCategory = "Capacity";
+export type OperationalQuestionCategory = "Capacity" | "Compliance";
 
 export type OperationalAnswerStatus =
     | "answered"
@@ -24,7 +24,9 @@ export type OperationalQuestionActionKey =
     | "explain_answer"
     | "use_newer_source_version"
     | "start_measuring"
-    | "continue_setup";
+    | "continue_setup"
+    | "review_children"
+    | "review_capacity";
 
 export type OperationalQuestionAction = {
     key: OperationalQuestionActionKey;
@@ -32,6 +34,12 @@ export type OperationalQuestionAction = {
     /** Relative admin href or null when BOS/UI handles inline */
     href: string | null;
 };
+
+export type OperationalQuestionUnit = "seats" | "percent";
+
+export type OperationalQuestionBosCapabilityKey =
+    | "operational_question_future_room_capacity"
+    | "operational_question_room_utilization";
 
 export type OperationalQuestionDefinition = {
     key: OperationalQuestionKey;
@@ -41,20 +49,36 @@ export type OperationalQuestionDefinition = {
     category: OperationalQuestionCategory;
     answer_strategy: OperationalAnswerStrategy;
     required_context: readonly ("organization" | "room" | "effective_date")[];
-    unit: "seats";
+    unit: OperationalQuestionUnit;
     owner: "operational_intelligence";
     ui_route: string;
-    bos_capability_key: "operational_question_future_room_capacity";
+    bos_capability_key: OperationalQuestionBosCapabilityKey;
     primary_actions: readonly OperationalQuestionActionKey[];
+    /** Goal semantics advertised for UI/BOS configure flows */
+    goal_kind: "count_min" | "rate_range";
 };
 
-export type OperationalAnswerGoal = {
-    kind: "count_min";
-    value: number;
-    label: string;
-} | null;
+export type OperationalAnswerGoal =
+    | {
+          kind: "count_min";
+          value: number;
+          label: string;
+      }
+    | {
+          kind: "rate_range";
+          min: number;
+          max: number;
+          label: string;
+      }
+    | null;
 
-export type OperationalAnswerHealth = "on_goal" | "below_goal" | "not_available" | "no_goal" | null;
+export type OperationalAnswerHealth =
+    | "on_goal"
+    | "below_goal"
+    | "above_goal"
+    | "not_available"
+    | "no_goal"
+    | null;
 
 export type OperationalAnswer = {
     question_key: OperationalQuestionKey;
@@ -62,7 +86,7 @@ export type OperationalAnswer = {
     strategy: OperationalAnswerStrategy;
     status: OperationalAnswerStatus;
     value: number | null;
-    unit: "seats" | null;
+    unit: OperationalQuestionUnit | null;
     subject: {
         room_id: string | null;
         room_label: string | null;

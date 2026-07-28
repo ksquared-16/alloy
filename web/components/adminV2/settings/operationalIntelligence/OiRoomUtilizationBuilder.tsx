@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Inline Future Room Capacity builder — configure an answer, not a calculation.
+ * Inline Room Utilization builder — configure healthy range + try, then start measuring.
  * Uses the same configure contract as BOS (`/api/admin/operational-questions/configure`).
  */
 
@@ -10,12 +10,6 @@ import {
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import {
-    CAPACITY_RECIPES,
-    capacityRecipeById,
-    type CapacityRecipeCopy,
-} from "@/lib/adminV2/settings/operationalIntelligence/oiCapacityRecipeCopy";
-import type { OrgCalcProductTypeId } from "@/lib/organizationCalculations/productCatalog";
 
 type RoomOption = { id: string; label: string; siteLabel: string };
 
@@ -25,29 +19,23 @@ type BuilderProps = {
     onCreated: (measurementId: string) => void;
 };
 
-export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onCreated }: BuilderProps) {
-    const [name, setName] = useState("Future Room Capacity");
+export default function OiRoomUtilizationBuilder({ busy = false, onClose, onCreated }: BuilderProps) {
+    const [name, setName] = useState("Room Utilization");
     const [showName, setShowName] = useState(false);
-    const [recipeId, setRecipeId] = useState<OrgCalcProductTypeId>("capacity_lowest_physical_licensed");
-    const [targetMin, setTargetMin] = useState("18");
+    const [rangeMin, setRangeMin] = useState("75");
+    const [rangeMax, setRangeMax] = useState("95");
     const [skipGoal, setSkipGoal] = useState(false);
     const [rooms, setRooms] = useState<RoomOption[]>([]);
     const [roomId, setRoomId] = useState("");
-    const [effectiveAt, setEffectiveAt] = useState(() => {
-        const d = new Date();
-        d.setDate(d.getDate() + 30);
-        return d.toISOString().slice(0, 10);
-    });
+    const [effectiveAt, setEffectiveAt] = useState(() => new Date().toISOString().slice(0, 10));
     const [tryResult, setTryResult] = useState<{
         value: number | null;
         unavailable: string | null;
-        onGoal: boolean | null;
+        health: "below" | "on" | "above" | null;
     } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [reuseNote, setReuseNote] = useState<string | null>(null);
-
-    const recipe: CapacityRecipeCopy = capacityRecipeById(recipeId) ?? CAPACITY_RECIPES[0]!;
 
     useEffect(() => {
         void (async () => {
@@ -75,8 +63,11 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
         })();
     }, []);
 
-    /** Ensure a published definition exists for try-it only (reuses when possible). */
-    const ensurePublishedForTry = async (): Promise<{ calculationId: string; versionId: string; reused: boolean }> => {
+    const ensurePublishedForTry = async (): Promise<{
+        calculationId: string;
+        versionId: string;
+        reused: boolean;
+    }> => {
         const listRes = await fetch("/api/admin/organization-calculations");
         const listJson = (await listRes.json()) as {
             calculations?: Array<{
@@ -87,7 +78,7 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
             }>;
         };
         const match = (listJson.calculations ?? []).find(
-            (c) => c.lifecycle === "published" && c.type_id === recipeId && c.published_version_id,
+            (c) => c.lifecycle === "published" && c.type_id === "room_utilization_pct" && c.published_version_id,
         );
         if (match?.published_version_id) {
             return { calculationId: match.id, versionId: match.published_version_id, reused: true };
@@ -96,9 +87,9 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                name: `${name.trim() || "Future Room Capacity"} — ${recipe.title}`,
-                description: recipe.summary,
-                product_type_id: recipeId,
+                name: name.trim() || "Room Utilization",
+                description: "Active enrolled children divided by effective capacity, shown as a percentage.",
+                product_type_id: "room_utilization_pct",
             }),
         });
         const createdJson = (await created.json()) as {
@@ -106,7 +97,7 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
             error?: string;
         };
         if (!created.ok || !createdJson.calculation) {
-            throw new Error(createdJson.error ?? "Could not set up how capacity is determined");
+            throw new Error(createdJson.error ?? "Could not set up utilization definition");
         }
         const pub = await fetch(
             `/api/admin/organization-calculations/${createdJson.calculation.id}/publish`,
@@ -127,6 +118,16 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
         return { calculationId: createdJson.calculation.id, versionId, reused: false };
     };
 
+    const rangeHealth = (value: number): "below" | "on" | "above" | null => {
+        if (skipGoal) return null;
+        const min = Number(rangeMin);
+        const max = Number(rangeMax);
+        if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+        if (value < min) return "below";
+        if (value > max) return "above";
+        return "on";
+    };
+
     const runTry = async () => {
         if (!roomId || !effectiveAt) {
             setError("Choose a room and date to try.");
@@ -137,9 +138,7 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
         setTryResult(null);
         try {
             const source = await ensurePublishedForTry();
-            setReuseNote(
-                source.reused ? "Using an existing organization definition." : null,
-            );
+            setReuseNote(source.reused ? "Using an existing organization definition." : null);
             const res = await fetch(`/api/admin/organization-calculations/${source.calculationId}/evaluate`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -153,7 +152,7 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
                 evaluation?: {
                     status?: string;
                     value?: number | null;
-                    warnings?: Array<{ message?: string }>;
+                    warnings?: Array<{ message?: string; code?: string }>;
                 };
                 error?: string;
             };
@@ -162,19 +161,18 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
             const status = json.evaluation?.status;
             const warn = json.evaluation?.warnings?.[0]?.message ?? null;
             if (status === "resolved" && value != null) {
-                const goal = skipGoal || !targetMin.trim() ? null : Number(targetMin);
                 setTryResult({
                     value,
                     unavailable: null,
-                    onGoal: goal != null && Number.isFinite(goal) ? value >= goal : null,
+                    health: rangeHealth(value),
                 });
             } else {
                 setTryResult({
                     value: null,
                     unavailable:
                         warn?.trim()
-                        || "Required capacity information isn’t configured for this room.",
-                    onGoal: null,
+                        || "Utilization is not available (missing capacity, zero capacity, or occupancy source).",
+                    health: null,
                 });
             }
         } catch (e) {
@@ -188,14 +186,19 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
         setSaving(true);
         setError(null);
         try {
+            const min = Number(rangeMin);
+            const max = Number(rangeMax);
+            if (!skipGoal && (Number.isNaN(min) || Number.isNaN(max) || min > max)) {
+                throw new Error("Enter a valid healthy range (minimum ≤ maximum).");
+            }
             const res = await fetch("/api/admin/operational-questions/configure", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    question_key: "future_room_capacity",
-                    product_type_id: recipeId,
-                    name: name.trim() || "Future Room Capacity",
-                    target_min_seats: skipGoal || !targetMin.trim() ? null : Number(targetMin),
+                    question_key: "room_utilization",
+                    name: name.trim() || "Room Utilization",
+                    target_min_pct: skipGoal ? null : min,
+                    target_max_pct: skipGoal ? null : max,
                     entry_point: "ui",
                     reuse_existing: true,
                 }),
@@ -219,17 +222,17 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
     return (
         <div
             className="process-config-setup-card space-y-5 p-5"
-            data-testid="oi-frc-inline-builder"
-            data-oi-builder="future_room_capacity"
+            data-testid="oi-room-utilization-inline-builder"
+            data-oi-builder="room_utilization"
         >
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
                         Start measuring
                     </p>
-                    <h2 className="mt-1 text-xl font-semibold text-alloy-midnight">Future Room Capacity</h2>
+                    <h2 className="mt-1 text-xl font-semibold text-alloy-midnight">Room Utilization</h2>
                     <p className="mt-1 text-sm text-alloy-midnight/65">
-                        How many seats will this room have on a future date?
+                        How full is this room compared with the seats it can use?
                     </p>
                 </div>
                 <ConfigurationSecondaryButton onClick={onClose} disabled={disabled} data-testid="oi-builder-cancel">
@@ -241,31 +244,17 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
                     Measure for
                 </p>
-                <p className="text-sm font-medium text-alloy-midnight">Room</p>
+                <p className="text-sm font-medium text-alloy-midnight">Each room</p>
 
-                <label className="mt-3 block space-y-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                        How should Alloy determine capacity?
-                    </span>
-                    <select
-                        className="config-runtime-input mt-1"
-                        value={recipeId}
-                        onChange={(e) => {
-                            setRecipeId(e.target.value as OrgCalcProductTypeId);
-                            setTryResult(null);
-                        }}
-                        data-testid="oi-builder-recipe"
-                    >
-                        {CAPACITY_RECIPES.map((r) => (
-                            <option key={r.id} value={r.id}>
-                                {r.title}
-                            </option>
-                        ))}
-                    </select>
-                    <p className="text-xs text-alloy-midnight/60" data-testid="oi-builder-recipe-sentence">
-                        {recipe.recipeSentence}
+                <div className="mt-3 rounded-lg border border-alloy-stone/15 bg-white/60 p-3 text-sm text-alloy-midnight/80">
+                    <p className="font-medium text-alloy-midnight">How it is calculated</p>
+                    <p className="mt-1">
+                        Active enrolled children ÷ effective capacity × 100
                     </p>
-                </label>
+                    <p className="mt-2 text-xs text-alloy-midnight/55">
+                        Not available when capacity is missing or zero. Never divides by zero.
+                    </p>
+                </div>
 
                 <div className="pt-1">
                     {showName ?
@@ -299,20 +288,28 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
                             onChange={(e) => setSkipGoal(!e.target.checked)}
                             data-testid="oi-builder-goal-toggle"
                         />
-                        <span className="font-medium text-alloy-midnight">Goal</span>
+                        <span className="font-medium text-alloy-midnight">Healthy range</span>
                     </label>
                     {!skipGoal ?
                         <label className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                            <span className="text-alloy-midnight/70">Warn me when capacity is below</span>
+                            <span className="text-alloy-midnight/70">Healthy between</span>
                             <input
-                                className="config-runtime-input w-20"
-                                value={targetMin}
-                                onChange={(e) => setTargetMin(e.target.value)}
-                                data-testid="oi-builder-goal-input"
+                                className="config-runtime-input w-16"
+                                value={rangeMin}
+                                onChange={(e) => setRangeMin(e.target.value)}
+                                data-testid="oi-builder-goal-min"
                             />
-                            <span className="text-alloy-midnight/60">seats</span>
+                            <span className="text-alloy-midnight/60">%</span>
+                            <span className="text-alloy-midnight/70">and</span>
+                            <input
+                                className="config-runtime-input w-16"
+                                value={rangeMax}
+                                onChange={(e) => setRangeMax(e.target.value)}
+                                data-testid="oi-builder-goal-max"
+                            />
+                            <span className="text-alloy-midnight/60">%</span>
                         </label>
-                    :   <p className="mt-1 text-xs text-alloy-midnight/55">No warning goal for now.</p>}
+                    :   <p className="mt-1 text-xs text-alloy-midnight/55">No healthy range for now.</p>}
                 </div>
             </section>
 
@@ -359,14 +356,18 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
                         data-testid="oi-builder-try-result"
                     >
                         <p className="text-lg font-semibold text-alloy-midnight">
-                            {tryResult.value == null ? "Not available" : `${tryResult.value} seats`}
+                            {tryResult.value == null ?
+                                "Not available"
+                            :   `${Math.round(tryResult.value * 10) / 10}%`}
                         </p>
                         {tryResult.unavailable ?
                             <p className="mt-1 text-sm text-amber-900">{tryResult.unavailable}</p>
-                        : tryResult.onGoal === true ?
+                        : tryResult.health === "on" ?
                             <p className="mt-1 text-sm text-alloy-midnight/70">On goal</p>
-                        : tryResult.onGoal === false ?
-                            <p className="mt-1 text-sm text-amber-900">Below goal</p>
+                        : tryResult.health === "below" ?
+                            <p className="mt-1 text-sm text-amber-900">Below range</p>
+                        : tryResult.health === "above" ?
+                            <p className="mt-1 text-sm text-amber-900">Above range</p>
                         :   null}
                         {reuseNote ?
                             <p className="mt-2 text-[11px] text-alloy-midnight/45" data-testid="oi-builder-reuse-note">
@@ -386,7 +387,7 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
                     {saving ? "Starting…" : "Start measuring"}
                 </ConfigurationPrimaryButton>
                 <p className="text-xs text-alloy-midnight/50">
-                    Alloy will reuse an existing definition when one already matches, or create one for you.
+                    Alloy will reuse an existing utilization definition when one already matches.
                 </p>
             </div>
 

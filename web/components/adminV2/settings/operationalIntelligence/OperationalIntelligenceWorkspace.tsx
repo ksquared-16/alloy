@@ -48,10 +48,16 @@ import {
 import { capacityRecipeFromProductTypeLabel } from "@/lib/adminV2/settings/operationalIntelligence/oiCapacityRecipeCopy";
 import type { OiOrgCalcMeasurement } from "@/lib/metrics/oiOrgCalcMeasurements";
 import OiFutureRoomCapacityBuilder from "@/components/adminV2/settings/operationalIntelligence/OiFutureRoomCapacityBuilder";
+import OiRoomUtilizationBuilder from "@/components/adminV2/settings/operationalIntelligence/OiRoomUtilizationBuilder";
 import OiOrgCalcMeasurementPanel from "@/components/adminV2/settings/operationalIntelligence/OiOrgCalcMeasurementPanel";
 import OrganizationCalculationsWorkspace from "@/components/adminV2/settings/organizationCalculations/OrganizationCalculationsWorkspace";
 import { findFutureRoomCapacityMeasurement } from "@/lib/operationalQuestions/answerFutureRoomCapacity";
-import { FUTURE_ROOM_CAPACITY_QUESTION_KEY } from "@/lib/operationalQuestions/catalog";
+import { findRoomUtilizationMeasurement } from "@/lib/operationalQuestions/answerRoomUtilization";
+import {
+    FUTURE_ROOM_CAPACITY_QUESTION_KEY,
+    ROOM_UTILIZATION_QUESTION_KEY,
+} from "@/lib/operationalQuestions/catalog";
+import { formatOiOrgCalcTargetLabel } from "@/lib/metrics/oiOrgCalcTargetFormat";
 
 type DetailRegion = "overview" | "target" | "history" | "lifecycle" | "provenance";
 type WorkspaceView = "questions" | "measurements" | "calculations" | "advanced" | "builder";
@@ -346,6 +352,8 @@ function DomainHome({
     onOpenMeasurements,
     futureRoomCapacityState,
     onOpenFutureRoomCapacity,
+    roomUtilizationState,
+    onOpenRoomUtilization,
     onSelectMeasurement,
 }: {
     activeMeasurements: OiOrgCalcMeasurement[];
@@ -354,10 +362,16 @@ function DomainHome({
     onOpenMeasurements: () => void;
     futureRoomCapacityState: "start" | "measuring" | "needs_setup" | "needs_attention";
     onOpenFutureRoomCapacity: () => void;
+    roomUtilizationState: "start" | "measuring" | "needs_setup" | "needs_attention";
+    onOpenRoomUtilization: () => void;
     onSelectMeasurement: (id: string) => void;
 }) {
     const frcCta =
         futureRoomCapacityState === "measuring" || futureRoomCapacityState === "needs_attention" ?
+            "View answer"
+        :   "Start measuring";
+    const utilCta =
+        roomUtilizationState === "measuring" || roomUtilizationState === "needs_attention" ?
             "View answer"
         :   "Start measuring";
 
@@ -381,27 +395,50 @@ function DomainHome({
                 <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
                     Capacity
                 </p>
-                <button
-                    type="button"
-                    onClick={onOpenFutureRoomCapacity}
-                    className="mt-2 w-full rounded-xl border border-[#00a283]/35 bg-[#00a283]/5 px-4 py-3 text-left"
-                    data-testid="oi-question-future-room-capacity"
-                >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                            <p className="text-sm font-semibold text-alloy-midnight">Future Room Capacity</p>
-                            <p className="mt-0.5 text-xs text-alloy-midnight/60">
-                                How many seats will a room have on a future date?
-                            </p>
+                <div className="mt-2 space-y-2">
+                    <button
+                        type="button"
+                        onClick={onOpenFutureRoomCapacity}
+                        className="w-full rounded-xl border border-[#00a283]/35 bg-[#00a283]/5 px-4 py-3 text-left"
+                        data-testid="oi-question-future-room-capacity"
+                    >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                                <p className="text-sm font-semibold text-alloy-midnight">Future Room Capacity</p>
+                                <p className="mt-0.5 text-xs text-alloy-midnight/60">
+                                    How many seats will a room have on a future date?
+                                </p>
+                            </div>
+                            <span
+                                className="rounded-full border border-[#00a283]/40 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#007d68]"
+                                data-testid="oi-question-future-room-capacity-state"
+                            >
+                                {frcCta}
+                            </span>
                         </div>
-                        <span
-                            className="rounded-full border border-[#00a283]/40 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#007d68]"
-                            data-testid="oi-question-future-room-capacity-state"
-                        >
-                            {frcCta}
-                        </span>
-                    </div>
-                </button>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onOpenRoomUtilization}
+                        className="w-full rounded-xl border border-[#00a283]/35 bg-[#00a283]/5 px-4 py-3 text-left"
+                        data-testid="oi-question-room-utilization"
+                    >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                                <p className="text-sm font-semibold text-alloy-midnight">Room Utilization</p>
+                                <p className="mt-0.5 text-xs text-alloy-midnight/60">
+                                    How full is a room compared with its usable seats?
+                                </p>
+                            </div>
+                            <span
+                                className="rounded-full border border-[#00a283]/40 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#007d68]"
+                                data-testid="oi-question-room-utilization-state"
+                            >
+                                {utilCta}
+                            </span>
+                        </div>
+                    </button>
+                </div>
             </div>
 
             <div className="process-config-setup-card p-5" data-testid="oi-home-measuring-now">
@@ -427,15 +464,15 @@ function DomainHome({
                 {activeMeasurements.length === 0 ?
                     <p className="mt-3 text-sm text-alloy-midnight/55" data-testid="oi-home-no-measurements">
                         Nothing is being measured yet.
-                        {canMutate ? " Start with Future Room Capacity above." : ""}
+                        {canMutate ? " Start with a Capacity question above." : ""}
                     </p>
                 :   <ul className="mt-3 space-y-2">
                         {activeMeasurements.map((m) => {
                             const recipe = capacityRecipeFromProductTypeLabel(
                                 m.description ?? m.source.calculation_name,
                             );
-                            const goal =
-                                m.target ? `Warn below ${m.target.value}` : "No goal";
+                            const goal = formatOiOrgCalcTargetLabel(m.target, m.unit);
+                            const unitLabel = m.unit === "percent" ? "percent" : "seats";
                             return (
                                 <li key={m.id}>
                                     <button
@@ -446,7 +483,10 @@ function DomainHome({
                                     >
                                         <p className="text-sm font-semibold text-alloy-midnight">{m.name}</p>
                                         <p className="mt-0.5 text-xs text-alloy-midnight/55">
-                                            {recipe.sourceLine} · {goal} · seats
+                                            {m.unit === "percent" ?
+                                                "Occupied ÷ effective capacity"
+                                            :   recipe.sourceLine}{" "}
+                                            · {goal} · {unitLabel}
                                         </p>
                                     </button>
                                 </li>
@@ -496,7 +536,13 @@ function OperationalIntelligenceInner() {
     }, [reloadOrgCalcs]);
 
     const frcMeasurement = findFutureRoomCapacityMeasurement(orgCalcMeasurements);
+    const roomUtilMeasurement = findRoomUtilizationMeasurement(orgCalcMeasurements);
     const activeOrgCalcs = orgCalcMeasurements.filter((m) => m.status === "active");
+
+    const builderQuestion =
+        questionParam === ROOM_UTILIZATION_QUESTION_KEY ?
+            ROOM_UTILIZATION_QUESTION_KEY
+        :   FUTURE_ROOM_CAPACITY_QUESTION_KEY;
 
     const view: WorkspaceView =
         tabParam === "diagnostics" || viewParam === "advanced" ? "advanced"
@@ -585,20 +631,37 @@ function OperationalIntelligenceInner() {
         !frcMeasurement ? "start"
         : frcMeasurement.status !== "active" ? "needs_setup"
         : "measuring";
+    const roomUtilizationState: "start" | "measuring" | "needs_setup" | "needs_attention" =
+        !roomUtilMeasurement ? "start"
+        : roomUtilMeasurement.status !== "active" ? "needs_setup"
+        : "measuring";
 
     useEffect(() => {
-        if (questionParam !== FUTURE_ROOM_CAPACITY_QUESTION_KEY) return;
-        if (orgMeasurementId) return;
-        if (frcMeasurement) {
-            selectOrgCalc(frcMeasurement.id);
+        if (questionParam === FUTURE_ROOM_CAPACITY_QUESTION_KEY) {
+            if (orgMeasurementId) return;
+            if (frcMeasurement) {
+                selectOrgCalc(frcMeasurement.id);
+                return;
+            }
+            if (canMutate) {
+                setAddOpen(true);
+                setParams({ question: FUTURE_ROOM_CAPACITY_QUESTION_KEY, add: "1", view: null });
+            }
             return;
         }
-        if (canMutate) {
-            setAddOpen(true);
-            setParams({ question: FUTURE_ROOM_CAPACITY_QUESTION_KEY, add: "1", view: null });
+        if (questionParam === ROOM_UTILIZATION_QUESTION_KEY) {
+            if (orgMeasurementId) return;
+            if (roomUtilMeasurement) {
+                selectOrgCalc(roomUtilMeasurement.id);
+                return;
+            }
+            if (canMutate) {
+                setAddOpen(true);
+                setParams({ question: ROOM_UTILIZATION_QUESTION_KEY, add: "1", view: null });
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [questionParam, frcMeasurement?.id, orgMeasurementId, canMutate]);
+    }, [questionParam, frcMeasurement?.id, roomUtilMeasurement?.id, orgMeasurementId, canMutate]);
 
     const openFutureRoomCapacity = () => {
         if (frcMeasurement) {
@@ -607,6 +670,15 @@ function OperationalIntelligenceInner() {
         }
         openAdd();
         setParams({ question: FUTURE_ROOM_CAPACITY_QUESTION_KEY, add: "1", view: null });
+    };
+
+    const openRoomUtilization = () => {
+        if (roomUtilMeasurement) {
+            selectOrgCalc(roomUtilMeasurement.id);
+            return;
+        }
+        openAdd();
+        setParams({ question: ROOM_UTILIZATION_QUESTION_KEY, add: "1", view: null });
     };
 
     return (
@@ -705,6 +777,8 @@ function OperationalIntelligenceInner() {
                     onOpenMeasurements={() => setParams({ view: "measurements", activated: null, add: null })}
                     futureRoomCapacityState={futureRoomCapacityState}
                     onOpenFutureRoomCapacity={openFutureRoomCapacity}
+                    roomUtilizationState={roomUtilizationState}
+                    onOpenRoomUtilization={openRoomUtilization}
                     onSelectMeasurement={(id) => selectOrgCalc(id)}
                 />
             : view === "builder" ?
@@ -717,14 +791,24 @@ function OperationalIntelligenceInner() {
                     >
                         ← Questions
                     </button>
-                    <OiFutureRoomCapacityBuilder
-                        busy={!canMutate}
-                        onClose={closeAdd}
-                        onCreated={(id) => {
-                            setAddOpen(false);
-                            void reloadOrgCalcs().then(() => selectOrgCalc(id, { activated: true }));
-                        }}
-                    />
+                    {builderQuestion === ROOM_UTILIZATION_QUESTION_KEY ?
+                        <OiRoomUtilizationBuilder
+                            busy={!canMutate}
+                            onClose={closeAdd}
+                            onCreated={(id) => {
+                                setAddOpen(false);
+                                void reloadOrgCalcs().then(() => selectOrgCalc(id, { activated: true }));
+                            }}
+                        />
+                    :   <OiFutureRoomCapacityBuilder
+                            busy={!canMutate}
+                            onClose={closeAdd}
+                            onCreated={(id) => {
+                                setAddOpen(false);
+                                void reloadOrgCalcs().then(() => selectOrgCalc(id, { activated: true }));
+                            }}
+                        />
+                    }
                 </div>
             : view === "calculations" ?
                 <div data-testid="oi-calculation-library-view">

@@ -221,6 +221,26 @@ export const BOS_CAPABILITY_REGISTRY: readonly BosCapabilityDefinition[] = [
             "web/app/api/admin/operational-questions/",
         ],
     },
+    {
+        capability_key: "operational_question_room_utilization",
+        label: "Room Utilization",
+        domain: "operational",
+        proposal_mode: "none",
+        apply_policy: "human_approved_operational_api",
+        default_risk_level: "low",
+        requires_human_approval: false,
+        legacy_agent_keys: [],
+        read_classes: ["resolver_entity", "workspace_metadata"],
+        write_class: "operational_api",
+        org_policy_features: [],
+        propose_permission_keys: [],
+        apply_permission_keys: [],
+        apply_route_family: "/api/admin/operational-questions",
+        source_modules: [
+            "web/lib/operationalQuestions/",
+            "web/app/api/admin/operational-questions/",
+        ],
+    },
 ] as const;
 
 const REGISTRY_BY_KEY: ReadonlyMap<BosCapabilityKey, BosCapabilityDefinition> = new Map(
