@@ -1,46 +1,78 @@
-# Browser QA — BOS Command Runtime Convergence
+# Browser QA — BOS Command Runtime Convergence (promotion pass)
 
 Mission: `msn_188e8bea6fb6de28dd21`  
 Date: 2026-07-28  
-Worktree: `wt1-commands-system-inventory` / port 3011
+HEAD: `15e936584`  
+Worktree: `wt1-commands-system-inventory` / port **3011**
 
-## Record creation (Create Lead)
+## Classification
 
-**Owner accepted** as reference implementation. No Create Lead polish in this closeout.
+**ENVIRONMENT-BLOCKED** — interactive browser certification could not complete.
 
-## Automated family proofs (shared bridge)
+No product or Command Runtime defect was observed as the cause. Automated shared-bridge proofs remain the promotion evidence for mutation / relationship / confirmation / authority families.
 
-Vitest `tests/bos/commandSession/representativeBosAdapters.test.ts`:
+---
 
-| Family | Command | Proof |
-|--------|---------|-------|
-| Mutation | `update_lead_status` | Adapter calls `executePlatformCommandViaActionsApi` exactly once with `origin:"bos"`; no `/mutations/execute` |
-| Relationship | `add_parent_guardian` | Same bridge; payload includes `source_customer_id` + `create_person_draft` |
-| Confirmation | `cancel_tour` | Same bridge with `previewToken` + `confirmation.confirmed` |
-| Authority | slash catalog | Unselected adapter-ready keys ineligible; fail closed without process keys |
+## Stabilization attempted (Step 1)
 
-Production `npm run typecheck` green.
+| Action | Result |
+|--------|--------|
+| `alloy-worker-pause` slots 2, 3, 4 | Applied; slots 3/4 stayed paused |
+| Slot 2 | **Repeatedly resumed by another agent** (next-server reappeared within minutes after pause) |
+| `alloy-worker-doctor 1 --recover` | Cleared stale PID files |
+| Removed proven-stale empty `.next/dev/lock` | Done |
+| `alloy-dev-start wt1-commands-system-inventory` | Reaches **Ready** + `GET /login 200` |
+| Stability | Listener dies within seconds–tens of seconds after Ready under memory pressure |
 
-## Interactive browser (localhost:3011)
+### Exact env evidence
 
-**Blocked in this closeout session** by unstable Next.js ownership on slot 1:
+See `qa/missions/commands-bos-browser-env-block-msn_188e8bea6fb6de28dd21.txt`.
 
-- Toolkit `alloy-dev-start` starts cleanly, then the listener repeatedly dies / restarts under concurrent sibling Next servers (slots 2/4) and memory pressure.
-- Cursor browser tabs that previously held auth (`/organization/processes`) fell to `chrome-error://chromewebdata/` when 3011 dropped.
-- Re-auth + end-to-end UI walks for mutation / relationship / cancel could not be completed without a stable listener.
+Observed peaks:
 
-### Operator checklist (when 3011 is healthy)
+- Free Mach pages ~**3547–5982** (~55–90 MiB) while wt2 Next was running concurrently.
+- After pause of wt2: free pages briefly ~**136k–185k**, enough for one Ready+200 cycle.
+- Same process then exits with **no product error** in the Next log (log ends at Ready / login 200; next line is a new start or silence).
+- Cursor IDE browser navigations to `http://127.0.0.1:3011/*` returned `chrome-error://chromewebdata/` whenever the listener was down (and could not complete an authenticated session while it flickered).
 
-1. Open a Business Process work unit with an opportunity focused (GlobalAssistant context).
-2. Ensure process `command_set_v1` includes the Commands under test.
-3. Slash `/` — confirm Create Lead / Update Lead Status / Add Parent Guardian / Cancel Tour appear only when selected.
-4. **Mutation:** `/update-lead-status` → choose status → Review → Confirm → verify status change via Mutation Runtime (one network call to `/api/admin/actions/execute`).
-5. **Relationship:** `/add-parent-guardian` → enter name → Review → Confirm → guardian linked.
-6. **Confirmation:** open lead with active tour → `/cancel-tour` → Review (server preview) → Confirm cancel → booking canceled.
-7. **Authority:** with process that excludes `cancel_tour`, slash entry shows ineligible / not inventable.
-8. Narrow layout: generic session body remains usable in compact BOS.
+Screenshots: **none captured** — no stable authenticated AdminV2 surface was reachable long enough to exercise BOS.
 
-## Verdict for certification
+---
 
-Architecture + shared Runtime bridge + honest ledger + automated family proofs: **done**.  
-Interactive browser walks: **pending stable localhost** (operator checklist above). Owner Create Lead acceptance stands for record-creation family.
+## Narrow checklist status
+
+| Family | Planned | Result |
+|--------|---------|--------|
+| Create Lead regression | Basic only | **Not re-run in browser** (owner-accepted; env blocked) |
+| Mutation `update_lead_status` | Discover → input → confirm once → reload | **Environment-blocked** |
+| Relationship `add_parent_guardian` | Discover → inputs → confirm once → reload | **Environment-blocked** |
+| Confirmation `cancel_tour` | Preview → confirm → cancel; reject missing token | **Environment-blocked** (automated adapter test covers missing token + single bridge invoke) |
+| Authority rejection | Unselected Command not inventable | **Environment-blocked** in UI; **automated** slash catalog tests prove ineligible + fail-closed |
+
+Operator checklist (unchanged) remains in prior section of this mission’s QA notes for a healthy :3011.
+
+---
+
+## Automated promotion evidence (retained)
+
+Focused suite (43/43):
+
+- `tests/bos/commandSession/representativeBosAdapters.test.ts` — exactly-once bridge; no private mutation/relationship/tour cancel URLs
+- `tests/bos/commandSession/slash/queryBosSlashCatalog.test.ts` — process gate / unselected ineligible
+- `tests/bos/commandSession/bosCommandSessionHostDispatch.test.ts`
+- `tests/platform/commands/executePlatformCommandViaActionsApi.test.ts`
+- `tests/lifecycle/processRuntimeCommandConsumption.test.ts`
+- `tests/platform/commands/commandRuntimeExecutionGate.test.ts`
+- `tests/platform/commands/prepareCommandInvocation.test.ts`
+
+Commands runtime folder: **250 passed**, **2 failed** in unrelated `createLeadSuccessRefresh.test.ts` (see promotion report).
+
+Production `npm run typecheck`: **exit 0**.
+
+---
+
+## Defects found
+
+**None** in BOS Command Runtime Convergence product code during this pass.
+
+No code fixes applied. No adapter expansion.
