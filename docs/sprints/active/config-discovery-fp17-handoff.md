@@ -29,7 +29,8 @@ npx tsc --noEmit -p tsconfig.build.json          # production typecheck (clean-c
 ```
 - **vitest needs an arm64 rolldown binding.** If vitest errors with `rolldown-binding.darwin-arm64.node` missing:
   `npm install --no-save "@rolldown/binding-darwin-arm64@$(node -e "console.log(require('rolldown/package.json').version)")"`
-- **Pre-existing failures — DO NOT CHASE** (proven identical on the clean reconciled base, unrelated to this work): `tests/pos/formDraft.test.ts > deriveDocumentTitle`, `tests/pos/questionResolutionModel.test.ts > storage summary`, and **8 `tests/fields/` failures** (dataModel*, canonicalDataProviderRegistry, childcareFieldCatalogDoctrine, surfaceOperationalFieldConsumerConvergence) — all from staging's 180 commits. When reporting results, exclude these and say so.
+- **Pre-existing failures — DO NOT CHASE.** Running `tests/fields/ tests/forms/ tests/pos/` yields **34 failing tests across 21 files** on the clean reconciled base — all from staging's 180 commits, none related to this work. (An earlier revision of this handoff said "~10"; that undercounted because it never baselined `tests/forms/`, which contributes ~24 on its own — PacketReviewRollupView, formLifecycleWorkspace, outcomeConfigPresentation, distributionPresentation, formsWorkspaceShell, etc.)
+- **Method for proving no regression** (use this, don't eyeball counts): `git stash push -u`, run the suites, `sort` the `FAIL` lines to a file; `git stash pop`, re-run, `diff` the two. Identical set = no new failures. Verified this way for both commits below.
 
 ## The acceptance fixture
 
@@ -54,7 +55,8 @@ npx tsc --noEmit -p tsconfig.build.json          # production typecheck (clean-c
 - `form-draft/save` route **preserves `configuration_discovery`** (was dropped) so lineage survives generate→publish.
 
 **FP17 (relationship collections from configuration) — slices 1–2b:**
-- **Slice 1** `web/lib/fields/collection/relationshipCollectionDefinitions.ts` — ONE table-shaped definition registry (future `relationship_collection_definitions` DB rows). `canonicalCollectionProviderRegistry.ts` now **derives** the 3 relationship providers from it (`deriveRelationshipCollectionProviders`); children/household.members stay **native** (documented). Proven **byte-identical** to prior hand-authored defs; a new role (physician) = one row, no provider code. `classifyCollectionProvider()`, definition-driven `canonicalCollectionProviderForRole()`.
+- **Slice 1** `web/lib/fields/relationship/relationshipDefinitions.ts` — the CANONICAL definition registry (future `relationship_definitions` DB rows). `canonicalCollectionProviderRegistry.ts` **derives** the 3 relationship providers from it (`deriveRelationshipCollectionProviders`, `relationshipCollectionProjection`); children/household.members stay **native** (documented rule). Proven **byte-identical** to prior hand-authored defs. `classifyCollectionProvider()`, definition-driven `canonicalCollectionProviderForRole()`.
+  - **Renamed `7f7d35bd3`** (Kelly's architectural clarification): was `fields/collection/relationshipCollectionDefinitions.ts` — a canonical model living inside a *consumer's* folder, named as if collections owned it. `RELATIONSHIP_COLLECTION_DEFINITIONS`→`RELATIONSHIP_DEFINITIONS`, `RelationshipCollectionDefinition`→`RelationshipDefinition`, `providerFromRelationshipDefinition`→`relationshipCollectionProjection`. **The Relationship Model is canonical; a collection is ONE projection of it.**
 - **Slice 2** `canonicalCollectionResolver.ts` — `authorized_pickup` + any future role resolves **generically from `person_child_relationship_roles`** by role key (`resolveViaCanonicalPersonChildRoles`). Parents/emergency keep legacy path (byte-identical). Certified: empty/resolved/invalid-context/org-isolation.
 - **Slice 2b** `applyDiscovery.ts` — relationship results carry the canonical `apply_command_key` (`add_emergency_contact`/`add_authorized_pickup`) + role + scope → the submission-time write path.
 
@@ -71,9 +73,24 @@ npx tsc --noEmit -p tsconfig.build.json          # production typecheck (clean-c
 2. **Risk posture:** additive + byte-identical, then widen.
 3. **Sequencing:** backend-first vertical slices, continuous across turns.
 
+## Architecture (read before touching relationship code)
+
+`docs/platform/core/data/relationship-model.md` now carries the canonical layering, the
+native-vs-configured rule, and an **audited conformance ledger**. The short version:
+
+> Entity Model → **Relationship Definitions (canonical owner)** → Configuration Model →
+> Relationship Collection **Projection** → Forms · Conversation Runtime · Configuration Discovery ·
+> Processing · BOS · APIs. **No consumer may become the owner.**
+
+The future-proof test — "adding Physician is ONE definition row, with no edit to any consumer" —
+**does not hold yet.** 12 gap classes are catalogued in that ledger with file references; gaps 2, 3, 6
+and 13 are now CLOSED. Gap #1 (the closed `PERSON_CHILD_OPERATIONAL_ROLE_KEYS` union) is a
+compile-time block and gap #9 (`householdRelationshipSectionDefinitions.ts`) is a live *second*
+definition registry. Work the ledger, not ad-hoc greps.
+
 ## NEXT (in order) — remaining mission scope
 
-1. **Widen Forms projection** to the derived collectable set (the 3 hardcoded ref/role allowlists above + `FormsRelationshipRoleKey`). Additive; prove existing forms unaffected.
+1. ~~**Widen Forms projection**~~ **DONE `c2b8c5f52`** — derived from `collectableRelationshipDefinitions()`; closed ledger gaps 2/3/6/13 and fixed a live defect (emergency_contacts + authorized_pickups were registered providers Forms could never bind, and their submissions were rejected as `unsupported_item_entity`). Regression test: `tests/fields/formsRelationshipProjectionWidening.test.ts`.
 2. **Real Field-System field creation** for confirmed new fields: validate key uniqueness + label similarity + owner/type/options/sensitivity → create via the canonical Field System service → store the field-definition id → bind form question(s) → idempotent retry → surface applied/conflicted/failed in `ProcessingConceptReview`.
 3. **Real relationship-write proof** via `executeRelationshipAction`: guardian + emergency + authorized_pickup; one Person holding multiple roles; **no duplicate Person**; no duplicate relationship on retry; child/household scope isolation.
 4. **Concept-review UX completion (M5D):** choose-another-existing-field, field-catalog search, similarity candidates, edit new-field owner/type/options, reclassify between dispositions, undo, ignore-with-reason, **distinct** pending/accepted/changed/stale/applied/conflicted/failed chips, resolve-stale-after-rerun, application-result review. "Accepted" ≠ "Applied" must stay visible.
