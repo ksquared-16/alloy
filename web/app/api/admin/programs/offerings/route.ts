@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import type { ProgramOffering, AttendanceType, OfferingStatus } from "@/lib/programs/programOfferings";
+import { operatorFriendlyProgramOfferingError } from "@/lib/programs/operatorFriendlyProgramOfferingError";
 
 const VALID_ATTENDANCE_TYPES = new Set<AttendanceType>([
     "full_time", "part_time", "drop_in", "hourly", "before_school", "after_school", "custom",
@@ -139,13 +140,19 @@ export async function POST(request: NextRequest) {
         .single();
 
     if (error) {
-        if (error.code === "23505") {
-            return NextResponse.json(
-                { error: "An offering with this attendance type already exists for this program" },
-                { status: 409 },
-            );
-        }
-        return NextResponse.json({ error: error.message }, { status: 400 });
+        return NextResponse.json(
+            {
+                error: operatorFriendlyProgramOfferingError(
+                    error.code === "23505" ? "program_offerings_unique" : error.message,
+                    {
+                        programLabel: program_key,
+                        careFormat: attendance_type,
+                        planName: label,
+                    },
+                ),
+            },
+            { status: error.code === "23505" ? 409 : 400 },
+        );
     }
 
     const offering = mapRow(data as Record<string, unknown>);
