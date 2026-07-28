@@ -168,7 +168,7 @@ const COMPUTED_FIELDS: ComputedFieldDefinition[] = [
         label: "Full name",
         entity_type: "customer_member",
         settings_entity: "inquiry_child",
-        section_key: "child_profile",
+        section_key: "profile",
         description: "Child display name composed from preferred, first, and last name.",
         field_type: "text",
         ownership: "computed",
