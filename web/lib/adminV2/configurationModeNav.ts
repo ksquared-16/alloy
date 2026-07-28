@@ -3,7 +3,10 @@
  * Settings Home and sidebar share this IA (Organization · Data Model · Operations · Business).
  * @see docs/system/configuration-ownership-doctrine.md
  */
-import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    adminSettingsSubpathHref,
+    CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF,
+} from "@/lib/admin/canonicalAdminRoutes";
 import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
 
 const settings = adminSettingsSubpathHref;
@@ -114,9 +117,9 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
                 testId: "config-mode-nav-relationships",
             },
             {
-                href: dataModelSectionHref("calculations"),
-                label: "Operational Calculations",
-                description: "Metrics, formulas, targets, and derived values.",
+                href: CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF,
+                label: "Operational Intelligence",
+                description: "Measurements, goals, health, lifecycle, and history.",
                 icon: "analytics",
                 testId: "config-mode-nav-analytics",
             },
@@ -270,6 +273,18 @@ export function configurationModeNavItemActive(
             || p.startsWith("/settings/layouts")
         );
     }
+    if (hrefPath === "/organization/operational-intelligence") {
+        return (
+            p === "/organization/operational-intelligence"
+            || p.startsWith("/organization/operational-intelligence")
+            || p === "/settings/calculations"
+            || p.startsWith("/settings/calculations")
+            || p === "/settings/analytics"
+            || p.startsWith("/settings/analytics")
+            || p === "/settings/kpis"
+            || p.startsWith("/settings/kpis")
+        );
+    }
     if (hrefPath === "/organization/data-model" || hrefPath.includes("/settings/entities")) {
         const onDataModel =
             p === "/organization/data-model"
@@ -284,10 +299,6 @@ export function configurationModeNavItemActive(
             || p.startsWith("/settings/option-sets")
             || p === "/settings/relationships"
             || p.startsWith("/settings/relationships")
-            || p === "/settings/calculations"
-            || p.startsWith("/settings/calculations")
-            || p === "/settings/analytics"
-            || p.startsWith("/settings/analytics")
             || p === settings("entity-labels")
             || p.startsWith(`${settings("entity-labels")}/`)
             || p === settings("label-entities")

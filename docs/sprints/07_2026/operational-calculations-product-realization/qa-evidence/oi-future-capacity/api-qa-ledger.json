@@ -1,0 +1,40 @@
+{
+  "base": "http://127.0.0.1:3014",
+  "startedAt": "2026-07-28T02:56:37.181Z",
+  "steps": [
+    {
+      "step": "create_measurement",
+      "id": "2aee0a9d-3104-4701-870a-e587b02ff993",
+      "version": 1
+    },
+    {
+      "step": "observe_room1",
+      "availability": "not_available",
+      "value": null,
+      "health": "not_available",
+      "version": 1
+    },
+    {
+      "step": "observe_room2",
+      "availability": "not_available"
+    },
+    {
+      "step": "invalid_room",
+      "status": 404
+    },
+    {
+      "step": "still_bound_v1",
+      "version_id": "0823b87e-94dd-4826-a330-d32b44ed2f2f"
+    },
+    {
+      "step": "rebind_v2",
+      "version": 2
+    },
+    {
+      "step": "history_count",
+      "count": 2
+    }
+  ],
+  "finishedAt": "2026-07-28T02:57:10.081Z",
+  "ok": true
+}

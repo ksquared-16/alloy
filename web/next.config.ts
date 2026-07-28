@@ -168,7 +168,7 @@ const nextConfig: NextConfig = {
       { source: "/settings/statuses", destination: "/organization/data-model?section=statuses", permanent: false },
       { source: "/settings/option-sets", destination: "/organization/data-model?section=option-sets", permanent: false },
       { source: "/settings/relationships", destination: "/organization/data-model?section=relationships", permanent: false },
-      { source: "/settings/calculations", destination: "/organization/data-model?section=calculations", permanent: false },
+      { source: "/settings/calculations", destination: "/organization/operational-intelligence", permanent: false },
       { source: "/settings/data-model", destination: "/organization/data-model", permanent: false },
       { source: "/settings/data-model/:path*", destination: "/organization/data-model", permanent: false },
       /**
