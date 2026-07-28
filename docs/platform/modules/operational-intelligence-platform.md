@@ -40,6 +40,8 @@ Reports are a byproduct of the measurement system — not the foundation.
 
 > **Path B (2026-07-27).** Organization Calculations author **read-only derived truth** via a typed AST over approved platform functions ([`../core/operational-calculations.md`](../core/operational-calculations.md) §3.1). Operational Intelligence does **not** author those calculations. When a measurement is bound to a published calculation, OI still owns only accountability overlays (targets/health/history).
 
+> **Future Room Capacity proving slice (2026-07-27).** Organization-owned measurements may bind an **exact published Organization Calculation version** (`org_settings.metadata.oi_org_calc_measurements`). Publishing calculation v2 does not move the binding; administrators rebind explicitly. Observations evaluate on demand via the existing room evaluator and append capped history in metadata — they never invent zeros for missing capacity.
+
 ---
 
 ## Computation kinds

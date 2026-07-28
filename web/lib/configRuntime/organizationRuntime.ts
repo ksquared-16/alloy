@@ -353,8 +353,8 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
     {
         key: "operational-intelligence",
         label: "Operational Intelligence",
-        description: "Shared calculations, metrics, targets, and indicator placement.",
-        href: "/settings/calculations",
+        description: "What the organization measures — goals, health, lifecycle, and history.",
+        href: "/organization/operational-intelligence",
         icon: "intelligence",
         publisherLabel: "Organization",
         configurationOwner: "Operational Intelligence",
