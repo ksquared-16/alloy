@@ -103,12 +103,16 @@ disabled**. No Delete Lead / Make Primary / Cancel Tour production cutover in P4
   Archive / cancel tour / withdraw remain commit-disabled. **P4.S4:** `archive_lead` certified
   Disposition B (unavailable — no production executor; not adapted).
 - **P5.S1:** `reschedule_tour` — Tour adapter → `rescheduleTourBooking` (exact key; `tour_domain`
-  owner remains globally false). Direct booking reschedule route unchanged. `cancel_tour` still
-  commit-disabled. Automations may later invoke the same Command / react to Tour domain events;
-  Automations do not own Tour mutation execution.
+  owner remains globally false). Direct booking reschedule route unchanged. Automations may later
+  invoke the same Command / react to Tour domain events; Automations do not own Tour mutation
+  execution.
 - **P5.S2:** `cancel_tour` — destructive preview + strong confirm → `cancelTourBooking`. Direct
   `POST .../bookings/:id/cancel` remains compatibility (Option A). Recovery: schedule a new Tour
-  (`reopen_tour` unavailable). Complete / no-show remain uncut.
+  (`reopen_tour` unavailable).
+- **P5.S3:** `complete_tour` and `no_show_tour` (alias `mark_tour_no_show`) — Tour terminal adapter →
+  `markTourBookingCompleted` / `markTourBookingNoShow`. Distinct capability, event, and BP
+  integration identities retained. Direct complete/no-show routes unchanged. `schedule_tour`
+  remains uncut; `reopen_tour` unavailable.
 
 ### Destructive / replacement Command policy (P4.S1)
 

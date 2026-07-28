@@ -72,7 +72,7 @@ describe("P5.S2 cancel_tour gate", () => {
         expect(isDestructiveFacadeCommitAllowlisted("cancel_tour")).toBe(true);
         expect(assertDestructiveCommitAllowed({ capabilityKey: "cancel_tour" }).allowed).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("cancel_tour")).toBe(true);
-        expect(isCommandRuntimeFacadeExecutionSupported("complete_tour")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("schedule_tour")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("reopen_tour")).toBe(false);
     });
 });

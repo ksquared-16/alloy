@@ -234,7 +234,10 @@ export async function POST(request: NextRequest) {
                         : result.executionOwner === "tour_domain"
                           ? result.ok && "cancelTourResult" in result && result.cancelTourResult
                               ? "cancel_tour"
-                              : "tour_reschedule"
+                              : result.canonicalCapabilityKey === "complete_tour" ||
+                                  result.canonicalCapabilityKey === "no_show_tour"
+                                ? "tour_terminal"
+                                : "tour_reschedule"
                           : "registered_action";
 
             logCommandExecutePathDiagnostic({

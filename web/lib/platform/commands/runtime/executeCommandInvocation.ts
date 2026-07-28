@@ -51,6 +51,10 @@ import {
     executeRescheduleTourViaAdapter,
     type TourExecutionDeps,
 } from "@/lib/platform/commands/runtime/adapters/tourExecutionAdapter";
+import {
+    executeTourTerminalTransitionViaAdapter,
+    type TourTerminalExecutionDeps,
+} from "@/lib/platform/commands/runtime/adapters/tourTerminalTransitionAdapter";
 import type {
     CommandExecutionFailureStatus,
     CommandExecutionResult,
@@ -84,7 +88,8 @@ export type ExecuteCommandInvocationOptions = {
         PrimaryContactReplacementDeps &
         DeleteLeadAdapterDeps &
         CancelTourAdapterDeps &
-        TourExecutionDeps;
+        TourExecutionDeps &
+        TourTerminalExecutionDeps;
 };
 
 function createDelegationGuard(invocationId: string): InvocationDelegationGuard {
@@ -1054,6 +1059,93 @@ export async function executeCommandInvocation(
                 {
                     code: "delegated_tour_reschedule",
                     message: `booking=${adapted.result.tour_result.booking_id}`,
+                },
+            ],
+        };
+    }
+
+    // ── Tour domain terminal transitions (P5.S3 complete / no_show) ───────────
+    if (
+        isTourDomainFacadeSupported(capability.canonicalCommandKey) &&
+        (capability.canonicalCommandKey === "complete_tour" ||
+            capability.canonicalCommandKey === "no_show_tour") &&
+        capability.executionOwner === "tour_domain"
+    ) {
+        const adapted = await executeTourTerminalTransitionViaAdapter({
+            capability,
+            commandKey: invocation.commandKey,
+            invocation,
+            executionSubject: { entityType, entityId },
+            mode: request.mode,
+            supabase: server.supabase,
+            orgId: server.orgId,
+            userId: server.userId,
+            invocationId,
+            guard,
+            deps,
+        });
+
+        if (!adapted.ok) {
+            return fail({
+                status:
+                    adapted.code === "invalid_inputs"
+                        ? "invalid"
+                        : adapted.code === "booking_not_found"
+                          ? "unavailable"
+                          : adapted.code === "transition_not_allowed"
+                            ? "blocked"
+                            : adapted.delegated
+                              ? "failed"
+                              : "blocked",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "tour_domain",
+                code: adapted.code,
+                operatorMessage: adapted.operatorMessage,
+                delegated: adapted.delegated,
+            });
+        }
+
+        if ("preview" in adapted && adapted.preview) {
+            return {
+                ok: true,
+                status: "previewed",
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "tour_domain",
+                invocationId,
+                tourPreview: adapted.preview,
+                diagnostics: [
+                    {
+                        code: "tour_terminal_preview",
+                        message: `transition=${adapted.preview.summary.transition}`,
+                    },
+                ],
+            };
+        }
+
+        if (!("result" in adapted) || !adapted.result) {
+            return fail({
+                status: "failed",
+                invocationId,
+                canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+                executionOwner: "tour_domain",
+                code: "tour_adapter_incomplete",
+                operatorMessage: "Tour adapter returned an incomplete result.",
+                delegated: adapted.delegated,
+            });
+        }
+
+        return {
+            ok: true,
+            status: "committed",
+            canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
+            executionOwner: "tour_domain",
+            invocationId,
+            tourResult: adapted.result,
+            diagnostics: [
+                {
+                    code: "delegated_tour_terminal",
+                    message: `transition=${adapted.result.tour_result.transition} booking=${adapted.result.tour_result.booking_id}`,
                 },
             ],
         };

@@ -283,7 +283,7 @@ describe("POST /api/admin/actions/execute Relationship Runtime cutover (P3.S1)",
     it("keeps unadapted Relationship / Tour / Processing on compatibility path", async () => {
         for (const key of [
             "add_family_member",
-            "complete_tour",
+            "schedule_tour",
             "processing.create_lead",
         ]) {
             vi.clearAllMocks();

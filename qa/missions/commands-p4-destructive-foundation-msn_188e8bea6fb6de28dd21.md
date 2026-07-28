@@ -262,10 +262,10 @@ Focused Commands + Disposition B + delete domain + createLeadRequirednessParity 
 | `archive_lead` | archive | no | no | none (stub) | **explicit unavailable (B)** |
 | `cancel_tour` | cancel | yes | **yes (P5.S2)** | `cancelTourBooking` | migrated |
 | `withdraw_child` | withdraw | policy only | no | none / future | deferred |
-| `complete_tour` | — | no | no | Tour domain | later |
+| `complete_tour` | — | no | no | Tour domain | **migrated P5.S3** |
 | `no_show_tour` | — | no | no | Tour domain | later |
 | `reopen_tour` | — | no | no | none | unavailable |
 
 **P4 exit:** Replacement proven. Hard deletion proven. Archive explicit Disposition B. Tour cancel migrated in P5.S2. Withdrawal deferred. No silent executable destructive identities.
 
-**P5 handoff:** Tour reschedule (P5.S1) and cancel (P5.S2) shipped. Remaining: complete/no-show/schedule_tour; reopen unavailable. Restore/Archive Lead product remains future work.
+**P5 handoff:** Tour reschedule (P5.S1), cancel (P5.S2), and complete/no-show (P5.S3) shipped. Remaining: `schedule_tour` cutover; reopen unavailable. Restore/Archive Lead product remains future work.

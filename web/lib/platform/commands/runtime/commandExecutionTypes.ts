@@ -12,6 +12,7 @@ import type { MakePrimaryReplacementResult } from "@/lib/platform/commands/runti
 import type { DeleteLeadReplacementResult } from "@/lib/platform/commands/runtime/adapters/deleteLeadAdapter";
 import type { CancelTourResult } from "@/lib/platform/commands/runtime/adapters/cancelTourAdapter";
 import type { TourRescheduleResult } from "@/lib/platform/commands/runtime/adapters/tourExecutionAdapter";
+import type { TourTerminalResult } from "@/lib/platform/commands/runtime/adapters/tourTerminalTransitionAdapter";
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 
 export type CommandExecutionMode = "preview" | "execute";
@@ -93,8 +94,8 @@ export type CommandExecutionResult =
           deleteLeadResult?: DeleteLeadReplacementResult;
           /** Destructive cancel result (P5.S2 cancel_tour). */
           cancelTourResult?: CancelTourResult;
-          /** Tour-domain result (P5.S1 reschedule_tour). */
-          tourResult?: TourRescheduleResult;
+          /** Tour-domain result (P5.S1 reschedule / P5.S3 terminal). */
+          tourResult?: TourRescheduleResult | TourTerminalResult;
           /** Lightweight non-destructive preview summary (Tour P5.S1). */
           tourPreview?: {
               kind: "tour";

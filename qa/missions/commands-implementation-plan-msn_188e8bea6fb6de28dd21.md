@@ -10,7 +10,7 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → … → P5.S1 reschedule → **P5.S2 cancel_tour destructive cutover**. Next: complete/no-show / schedule_tour as needed.
+**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → … → P5.S1 reschedule → P5.S2 cancel → **P5.S3 complete/no-show**. P5 Tour phase certified. Next: `schedule_tour` / process catalog (P6) as needed.
 
 ---
 
@@ -333,9 +333,9 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 |----|-------|
 | **P5.S1** | Tour authority map + `reschedule_tour` facade cutover (**shipped**) |
 | **P5.S2** | Cancel via Runtime + preview + confirm (**shipped**) |
-| **P5.S3** | Lifecycle bar stops raw cancel POST |
+| **P5.S3** | Complete + no-show terminal transitions (**shipped**; original plan title differs) |
 | **P5.S4** | `reopen_tour` contract-only registration |
-| **P5.S5** | Tour family manual cert |
+| **P5.S5** | Tour family manual cert (**covered by P5 phase certification in evidence**) |
 
 ### P6 — Process catalog (4)
 

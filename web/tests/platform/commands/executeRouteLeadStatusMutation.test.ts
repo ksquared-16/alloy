@@ -198,10 +198,10 @@ describe("POST /api/admin/actions/execute Lead Status Mutation cutover (P2.S1)",
         expect(executeAdminAction).not.toHaveBeenCalled();
     });
 
-    it("keeps tour-domain complete_tour on compatibility path", async () => {
+    it("keeps tour-domain schedule_tour on compatibility path", async () => {
         await POST(
             jsonReq({
-                action_key: "complete_tour",
+                action_key: "schedule_tour",
                 entity_type: "opportunity",
                 entity_id: "opp-1",
                 payload: {},

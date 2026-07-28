@@ -33,8 +33,8 @@ Verified code truth for identities classified in this slice. Planning ledger (~8
 | `schedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Not RegisteredAction |
 | `reschedule_tour` | same | adapted | tour_domain | organization_command_catalog | yes | **P5.S1** | Facade → `rescheduleTourBooking`; direct POST reschedule remains |
 | `cancel_tour` | same | adapted | tour_domain | organization_command_catalog | yes | **P5.S2** | Destructive facade → `cancelTourBooking`; direct POST cancel remains |
-| `complete_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | |
-| `no_show_tour` | same | adapted | tour_domain | organization_command_catalog | yes | P5 | Alias `mark_tour_no_show` |
+| `complete_tour` | same | adapted | tour_domain | organization_command_catalog | yes | **P5.S3** | Facade → `markTourBookingCompleted`; direct POST complete remains |
+| `no_show_tour` | same | adapted | tour_domain | organization_command_catalog | yes | **P5.S3** | Alias `mark_tour_no_show` → canonical; facade → `markTourBookingNoShow` |
 | `reopen_tour` | same | unavailable | none | hidden | n/a | P5 contract | Execute deferred |
 | `delete_lead` | same | adapted | admin_action | internal_only | yes | **P4.S3** | **delete** hard-delete cutover → `executeDeleteOpportunityLead`; direct POST delete remains |
 | `archive_lead` | same | unavailable | none | hidden | n/a | **P4.S4 B** | Explicit unavailable — Manage stub only; no executor; not alias of close/delete |
@@ -375,7 +375,7 @@ HMAC-SHA256 compact claims; TTL + version; no DB store; not an idempotency key.
 |-------|-------|
 | Date | 2026-07-27 |
 | Evidence | `qa/missions/commands-p5-tour-convergence-msn_188e8bea6fb6de28dd21.md` |
-| Facade | **Enabled** for `reschedule_tour` only (`TOUR_DOMAIN_FACADE_COMMAND_KEYS`) |
+| Facade | **Enabled** for `reschedule_tour` (+ terminals in P5.S3) |
 | Domain | `rescheduleTourBooking` (unchanged) |
 | Direct API | Compatibility retained |
 | Cancel | Still destructive commit-disabled |
@@ -393,3 +393,17 @@ HMAC-SHA256 compact claims; TTL + version; no DB store; not an idempotency key.
 | Domain | `cancelTourBooking` (unchanged) |
 | Direct API | Compatibility retained |
 | Recovery | schedule_new; reopen unavailable |
+
+---
+
+# P5.S3 — Complete Tour and Mark No-show
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p5-tour-convergence-msn_188e8bea6fb6de28dd21.md` (P5.S3 + phase certification) |
+| Facade | **Enabled** for `complete_tour`, `no_show_tour` (`mark_tour_no_show` alias) |
+| Domain | `markTourBookingCompleted` / `markTourBookingNoShow` (unchanged) |
+| Direct APIs | Compatibility retained |
+| Reopen / schedule_tour | Unavailable / deferred |
+| Automation | Documented consumer/invoker only — not implemented |

@@ -101,7 +101,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
             "totally_unknown_xyz",
             "send_message_placeholder",
             "add_family_member",
-            "complete_tour",
+            "schedule_tour",
             "open_record",
             "processing.create_lead",
             "mark_lost",

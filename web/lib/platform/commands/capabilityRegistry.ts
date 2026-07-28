@@ -471,10 +471,13 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         maturity: "adapted",
         executionOwner: "tour_domain",
         catalogVisibility: "organization_command_catalog",
-        supportedSubjects: ["opportunity"],
-        supportsPreview: false,
+        supportedSubjects: ["opportunity", "tour_booking"],
+        supportsPreview: true,
         confirmationPolicy: "domain_owned",
         implementationStatus: "production",
+        reason:
+            "P5.S3: facade → markTourBookingCompleted (confirmed|rescheduled only). " +
+            "Direct POST .../bookings/:id/complete remains compatibility (Option A).",
     }),
     def({
         capabilityKey: "no_show_tour",
@@ -484,11 +487,14 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         maturity: "adapted",
         executionOwner: "tour_domain",
         catalogVisibility: "organization_command_catalog",
-        supportedSubjects: ["opportunity"],
-        supportsPreview: false,
+        supportedSubjects: ["opportunity", "tour_booking"],
+        supportsPreview: true,
         confirmationPolicy: "domain_owned",
         compatibilityAliases: ["mark_tour_no_show"],
         implementationStatus: "production",
+        reason:
+            "P5.S3: facade → markTourBookingNoShow. Alias mark_tour_no_show → no_show_tour. " +
+            "Direct POST .../bookings/:id/no-show remains compatibility (Option A).",
     }),
     def({
         capabilityKey: "reopen_tour",

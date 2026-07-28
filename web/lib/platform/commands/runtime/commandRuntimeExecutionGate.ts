@@ -123,16 +123,26 @@ export function isDestructiveReplacementFacadeSupported(commandKey: string): boo
 }
 
 /**
- * Tour-domain facade — exact keys only (P5.S1: reschedule_tour).
+ * Tour-domain facade — exact keys only.
+ * P5.S1: reschedule_tour
+ * P5.S3: complete_tour, no_show_tour (alias mark_tour_no_show)
  * Owner `tour_domain` remains globally false.
  */
-export const TOUR_DOMAIN_FACADE_COMMAND_KEYS = ["reschedule_tour"] as const;
+export const TOUR_DOMAIN_FACADE_COMMAND_KEYS = [
+    "reschedule_tour",
+    "complete_tour",
+    "no_show_tour",
+] as const;
 
 export type TourDomainFacadeCommandKey = (typeof TOUR_DOMAIN_FACADE_COMMAND_KEYS)[number];
 
 export function isTourDomainFacadeSupported(commandKey: string): boolean {
     const key = (commandKey ?? "").trim();
-    return (TOUR_DOMAIN_FACADE_COMMAND_KEYS as readonly string[]).includes(key);
+    if (!key) return false;
+    const resolved = tryResolvePlatformCapability(key);
+    const canonical =
+        resolved.status === "known" ? resolved.capability.canonicalCommandKey : key;
+    return (TOUR_DOMAIN_FACADE_COMMAND_KEYS as readonly string[]).includes(canonical);
 }
 
 /**
