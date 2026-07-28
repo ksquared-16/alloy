@@ -73,9 +73,9 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
             ...(input.statusLabel ? { _status_display: input.statusLabel } : {}),
             ...(input.stageWorkRuntime ? { _stage_work_runtime: input.stageWorkRuntime } : {}),
             // A — commit-critical subject identity truth. The DOMAIN composer declared these bindings
-            // (which keys, from which entity); the platform builder forwards them OPAQUELY — it does not
-            // know Household/Children or any `person.*`/`_inquiry_children` key. The evidence builders read
-            // whatever keys the domain supplied; a second surface supplies its own. Deeper detail = Settlement.
+            // (which keys, from which entity); the platform builder forwards them OPAQUELY — it names no
+            // domain truth key. The evidence builders read whatever keys the domain supplied; a second
+            // surface supplies its own. Deeper detail = Settlement.
             ...(input.subjectIdentityTruth ?? {}),
         },
         signals: {
