@@ -2,13 +2,13 @@ import type { OiOrgCalcTarget } from "@/lib/metrics/oiOrgCalcMeasurements";
 
 export function formatOiOrgCalcTargetLabel(
     target: OiOrgCalcTarget | null | undefined,
-    unit: "seats" | "percent" = "seats",
+    unit: "seats" | "percent" | "children" = "seats",
 ): string {
     if (!target) return "No goal";
     if (target.kind === "count_min") {
-        return unit === "percent" ?
-            `Warn below ${target.value}%`
-        :   `Warn below ${target.value} seats`;
+        if (unit === "percent") return `Warn below ${target.value}%`;
+        if (unit === "children") return `Warn below ${target.value} children`;
+        return `Warn below ${target.value} seats`;
     }
     return `Healthy between ${target.min}% and ${target.max}%`;
 }

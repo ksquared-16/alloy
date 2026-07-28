@@ -6,6 +6,7 @@ import {
 } from "@/lib/operationalQuestions/catalog";
 import { answerFutureRoomCapacity } from "@/lib/operationalQuestions/answerFutureRoomCapacity";
 import { answerRoomUtilization } from "@/lib/operationalQuestions/answerRoomUtilization";
+import { answerMeasureQuestionByKey } from "@/lib/operationalQuestions/answerMeasureQuestion";
 import type {
     AnswerOperationalQuestionContext,
     OperationalAnswer,
@@ -15,10 +16,6 @@ import type {
 
 export { FUTURE_ROOM_CAPACITY_QUESTION_KEY, ROOM_UTILIZATION_QUESTION_KEY };
 
-/**
- * Shared strategy dispatch — UI and BOS must call this (or the HTTP wrapper).
- * Does not calculate capacity/utilization; Measure strategy uses existing observation services.
- */
 export async function answerOperationalQuestion(
     supabase: SupabaseClient,
     questionKey: string,
@@ -57,6 +54,7 @@ export async function answerOperationalQuestion(
         if (question.key === ROOM_UTILIZATION_QUESTION_KEY) {
             return answerRoomUtilization(supabase, question, ctx);
         }
+        return answerMeasureQuestionByKey(supabase, question, ctx);
     }
 
     return {

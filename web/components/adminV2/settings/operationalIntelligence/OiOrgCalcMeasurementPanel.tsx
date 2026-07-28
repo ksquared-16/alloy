@@ -38,9 +38,10 @@ function healthLabel(h: OiOrgCalcHealth): string {
     return "Not available";
 }
 
-function formatAnswerValue(value: number | null, unit: "seats" | "percent"): string {
+function formatAnswerValue(value: number | null, unit: "seats" | "percent" | "children"): string {
     if (value == null) return "Not available";
     if (unit === "percent") return `${Math.round(value * 10) / 10}%`;
+    if (unit === "children") return `${Math.round(value * 1000) / 1000} children`;
     return `${value} seats`;
 }
 

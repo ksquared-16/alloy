@@ -1,13 +1,16 @@
 /**
  * Operational Question Platform — shared types for Measure-strategy questions.
- * @see docs/sprints/07_2026/operational-calculations-product-realization/OPERATIONAL-QUESTION-PLATFORM.md
  */
 
-export type OperationalQuestionKey = "future_room_capacity" | "room_utilization";
+export type OperationalQuestionKey =
+    | "future_room_capacity"
+    | "room_utilization"
+    | "room_utilization_fte"
+    | "equivalent_child_count";
 
 export type OperationalAnswerStrategy = "measure" | "plan" | "workspace" | "recommend";
 
-export type OperationalQuestionCategory = "Capacity" | "Compliance";
+export type OperationalQuestionCategory = "Capacity" | "Population" | "Compliance";
 
 export type OperationalAnswerStatus =
     | "answered"
@@ -31,15 +34,16 @@ export type OperationalQuestionActionKey =
 export type OperationalQuestionAction = {
     key: OperationalQuestionActionKey;
     label: string;
-    /** Relative admin href or null when BOS/UI handles inline */
     href: string | null;
 };
 
-export type OperationalQuestionUnit = "seats" | "percent";
+export type OperationalQuestionUnit = "seats" | "percent" | "children";
 
 export type OperationalQuestionBosCapabilityKey =
     | "operational_question_future_room_capacity"
-    | "operational_question_room_utilization";
+    | "operational_question_room_utilization"
+    | "operational_question_room_utilization_fte"
+    | "operational_question_equivalent_child_count";
 
 export type OperationalQuestionDefinition = {
     key: OperationalQuestionKey;
@@ -54,7 +58,6 @@ export type OperationalQuestionDefinition = {
     ui_route: string;
     bos_capability_key: OperationalQuestionBosCapabilityKey;
     primary_actions: readonly OperationalQuestionActionKey[];
-    /** Goal semantics advertised for UI/BOS configure flows */
     goal_kind: "count_min" | "rate_range";
 };
 
@@ -103,7 +106,6 @@ export type OperationalAnswer = {
     history_available: boolean;
     measurement_id: string | null;
     actions: OperationalQuestionAction[];
-    /** Operator-facing conversational lines (BOS); UI may ignore */
     presentation_lines: string[];
 };
 
@@ -112,8 +114,6 @@ export type AnswerOperationalQuestionContext = {
     roomId?: string | null;
     roomLabel?: string | null;
     effectiveAt?: string | null;
-    /** When true, persist observation history (Measure strategy). Default true for answer requests with room+date. */
     persistHistory?: boolean;
-    /** Audit only — must not change answer semantics */
     entryPoint?: "ui" | "bos" | "api" | "test";
 };

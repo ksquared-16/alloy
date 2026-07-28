@@ -39,7 +39,7 @@ export type OiOrgCalcMeasurement = {
     status: OiOrgCalcMeasurementStatus;
     source: OiOrgCalcSourceBinding;
     subject_grain: "room";
-    unit: "seats" | "percent";
+    unit: "seats" | "percent" | "children";
     output_type: "numeric";
     target: OiOrgCalcTarget | null;
     /** Operational Question Platform key when created via question flow (optional for legacy). */
@@ -133,7 +133,10 @@ export function parseOiOrgCalcMeasurements(metadata: unknown): OiOrgCalcMeasurem
                 version_number: typeof source.version_number === "number" ? source.version_number : 0,
             },
             subject_grain: "room",
-            unit: raw.unit === "percent" ? "percent" : "seats",
+            unit:
+                raw.unit === "percent" ? "percent"
+                : raw.unit === "children" ? "children"
+                : "seats",
             output_type: "numeric",
             target,
             question_key: typeof raw.question_key === "string" ? raw.question_key : null,
@@ -190,7 +193,7 @@ export function createOiOrgCalcMeasurementDraft(args: {
     target?: OiOrgCalcTarget | null;
     question_key?: string | null;
     entry_point?: string | null;
-    unit?: "seats" | "percent";
+    unit?: "seats" | "percent" | "children";
 }): OiOrgCalcMeasurement {
     const now = new Date().toISOString();
     const id =
