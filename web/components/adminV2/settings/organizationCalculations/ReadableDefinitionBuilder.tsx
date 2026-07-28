@@ -10,12 +10,12 @@ import {
     ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
-    compatibleWeightingsForPopulation,
-    formatWeightingTable,
+    compatibleEquivalenciesForPopulation,
+    formatEquivalencyTable,
     mapPublishedPopulations,
-    mapPublishedWeightings,
+    mapPublishedEquivalencies,
     type PublishedPopulationOption,
-    type PublishedWeightingOption,
+    type PublishedEquivalencyOption,
 } from "@/lib/organizationCalculations/definitionCatalog";
 import {
     compactSymbolicDefinition,
@@ -76,7 +76,7 @@ export default function ReadableDefinitionBuilder({
     onApplySuggestion,
 }: ReadableDefinitionBuilderProps) {
     const [populations, setPopulations] = useState<PublishedPopulationOption[]>([]);
-    const [weightings, setWeightings] = useState<PublishedWeightingOption[]>([]);
+    const [equivalencies, setEquivalencies] = useState<PublishedEquivalencyOption[]>([]);
     const [catalogError, setCatalogError] = useState<string | null>(null);
     const [catalogLoading, setCatalogLoading] = useState(true);
     const [rooms, setRooms] = useState<RoomOption[]>([]);
@@ -89,12 +89,12 @@ export default function ReadableDefinitionBuilder({
     const factChoices = useMemo(() => listPivotValueChoices(), []);
     const selectedPopulation =
         populations.find((p) => p.versionId === draft.populationVersionId) ?? null;
-    const compatibleWeightings = useMemo(
-        () => compatibleWeightingsForPopulation(weightings, draft.populationVersionId),
-        [weightings, draft.populationVersionId],
+    const compatibleEquivalencies = useMemo(
+        () => compatibleEquivalenciesForPopulation(equivalencies, draft.populationVersionId),
+        [equivalencies, draft.populationVersionId],
     );
-    const selectedWeighting =
-        compatibleWeightings.find((w) => w.versionId === draft.weightingVersionId) ?? null;
+    const selectedEquivalency =
+        compatibleEquivalencies.find((w) => w.versionId === draft.weightingVersionId) ?? null;
 
     useEffect(() => {
         let cancelled = false;
@@ -111,19 +111,20 @@ export default function ReadableDefinitionBuilder({
                     error?: string;
                 };
                 const wgtJson = (await wgtRes.json()) as {
-                    weightings?: Parameters<typeof mapPublishedWeightings>[0];
+                    weightings?: Parameters<typeof mapPublishedEquivalencies>[0];
+                    equivalencies?: Parameters<typeof mapPublishedEquivalencies>[0];
                     error?: string;
                 };
                 if (!popRes.ok) throw new Error(popJson.error ?? "Could not load populations");
-                if (!wgtRes.ok) throw new Error(wgtJson.error ?? "Could not load weightings");
+                if (!wgtRes.ok) throw new Error(wgtJson.error ?? "Could not load equivalency definitions");
                 if (cancelled) return;
                 const pops = mapPublishedPopulations(popJson.populations ?? []);
-                const wgts = mapPublishedWeightings(wgtJson.weightings ?? []);
+                const eqs = mapPublishedEquivalencies(wgtJson.equivalencies ?? wgtJson.weightings ?? []);
                 setPopulations(pops);
-                setWeightings(wgts);
+                setEquivalencies(eqs);
                 setCatalogError(
-                    pops.length === 0 || wgts.length === 0 ?
-                        "Publish at least one population and one weighting to build equivalent-count definitions."
+                    pops.length === 0 || eqs.length === 0 ?
+                        "Publish at least one population and one equivalency definition to build equivalent-children definitions."
                     :   null,
                 );
 
@@ -135,8 +136,8 @@ export default function ReadableDefinitionBuilder({
                         next.populationVersionId = pops[0].versionId;
                         changed = true;
                     }
-                    if (!next.weightingVersionId && wgts[0]) {
-                        next.weightingVersionId = wgts[0].versionId;
+                    if (!next.weightingVersionId && eqs[0]) {
+                        next.weightingVersionId = eqs[0].versionId;
                         changed = true;
                     }
                     if (changed) onChange(next);
@@ -182,14 +183,14 @@ export default function ReadableDefinitionBuilder({
     const plain = plainLanguageDefinitionSummary({
         draft,
         population: selectedPopulation,
-        weighting: selectedWeighting,
+        weighting: selectedEquivalency,
     });
     const compact = compactSymbolicDefinition({
         draft,
         population: selectedPopulation,
-        weighting: selectedWeighting,
+        weighting: selectedEquivalency,
     });
-    const weightRows = formatWeightingTable(selectedWeighting);
+    const weightRows = formatEquivalencyTable(selectedEquivalency);
 
     const runTry = async () => {
         if (!roomId || !effectiveAt) return;
@@ -362,12 +363,12 @@ export default function ReadableDefinitionBuilder({
                                         populationVersionId:
                                             draft.populationVersionId ?? populations[0]?.versionId ?? null,
                                         weightingVersionId:
-                                            draft.weightingVersionId ?? weightings[0]?.versionId ?? null,
+                                            draft.weightingVersionId ?? equivalencies[0]?.versionId ?? null,
                                     })
                                 }
                                 data-testid="definition-mode-population"
                             />
-                            <span>Use a population (equivalent count)</span>
+                            <span>Convert to equivalent children</span>
                         </label>
 
                         {draft.valueMode === "catalog_input" ?
@@ -439,19 +440,19 @@ export default function ReadableDefinitionBuilder({
                     {draft.valueMode === "equivalent_count" ?
                         <section
                             className="process-config-setup-card space-y-3 p-4"
-                            data-testid="definition-section-weighting"
+                            data-testid="definition-section-equivalency"
                         >
                             <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                                Weighting · How should each child count?
+                                Equivalency · How should they count?
                             </p>
                             {catalogLoading ?
-                                <p className="text-xs text-alloy-midnight/50">Loading weightings…</p>
-                            : compatibleWeightings.length === 0 ?
-                                <p className="text-sm text-amber-900" data-testid="definition-weighting-empty">
-                                    No published weightings are available.
+                                <p className="text-xs text-alloy-midnight/50">Loading equivalency definitions…</p>
+                            : compatibleEquivalencies.length === 0 ?
+                                <p className="text-sm text-amber-900" data-testid="definition-equivalency-empty">
+                                    No published equivalency definitions are available.
                                 </p>
                             :   <label className="block space-y-1">
-                                    <span className="config-typo-field-label">How should each child count?</span>
+                                    <span className="config-typo-field-label">How should scheduled children count?</span>
                                     <select
                                         className="config-runtime-input"
                                         value={draft.weightingVersionId ?? ""}
@@ -461,10 +462,10 @@ export default function ReadableDefinitionBuilder({
                                                 weightingVersionId: e.target.value || null,
                                             })
                                         }
-                                        data-testid="definition-weighting-select"
+                                        data-testid="definition-equivalency-select"
                                     >
-                                        <option value="">Select weighting…</option>
-                                        {compatibleWeightings.map((w) => (
+                                        <option value="">Select how children should count…</option>
+                                        {compatibleEquivalencies.map((w) => (
                                             <option key={w.versionId} value={w.versionId}>
                                                 {w.label}
                                             </option>
@@ -472,19 +473,19 @@ export default function ReadableDefinitionBuilder({
                                     </select>
                                 </label>
                             }
-                            {selectedWeighting ?
+                            {selectedEquivalency ?
                                 <div
                                     className="rounded-md border border-alloy-forge/10 bg-white/70 px-3 py-2"
-                                    data-testid="definition-weighting-detail"
+                                    data-testid="definition-equivalency-detail"
                                 >
                                     <p className="text-sm font-semibold text-alloy-midnight">
-                                        {selectedWeighting.name}
+                                        {selectedEquivalency.name}
                                     </p>
                                     <table className="mt-2 w-full text-left text-xs">
                                         <thead className="text-alloy-midnight/45">
                                             <tr>
-                                                <th className="py-1 font-semibold">Schedule</th>
-                                                <th className="py-1 font-semibold">Equivalent value</th>
+                                                <th className="py-1 font-semibold">Attendance</th>
+                                                <th className="py-1 font-semibold">Counts as</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -497,7 +498,7 @@ export default function ReadableDefinitionBuilder({
                                         </tbody>
                                     </table>
                                     <p className="mt-1 text-[11px] text-alloy-midnight/45">
-                                        Exact version v{selectedWeighting.versionNumber}
+                                        Exact version v{selectedEquivalency.versionNumber}
                                     </p>
                                 </div>
                             :   null}
@@ -506,10 +507,16 @@ export default function ReadableDefinitionBuilder({
 
                     <section className="process-config-setup-card space-y-3 p-4" data-testid="definition-section-formula">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                            Calculation · What should Alloy do with the result?
+                            Calculation · How should Alloy calculate the answer?
                         </p>
+                        {draft.valueMode === "equivalent_count" ?
+                            <p className="text-sm text-alloy-midnight/80">
+                                Use{" "}
+                                <span className="font-semibold text-alloy-midnight">equivalent children</span>
+                            </p>
+                        :   null}
                         <label className="block space-y-1">
-                            <span className="config-typo-field-label">Calculation</span>
+                            <span className="config-typo-field-label">Then</span>
                             <select
                                 className="config-runtime-input"
                                 value={draft.operator}

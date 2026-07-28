@@ -84,6 +84,8 @@ describe("definitionCatalog", () => {
                     scheme: "days_per_week" as const,
                     factors: { "5": 1, "4": 0.8, "3": 0.6, "2": 0.4, "1": 0.2 },
                     full_time_days: 5,
+                    full_time_hours: null,
+                    session_basis: "days_per_week" as const,
                     summary: "FTE",
                 },
             ],
@@ -101,6 +103,8 @@ describe("definitionCatalog", () => {
                     scheme: "unweighted" as const,
                     factors: {},
                     full_time_days: 5,
+                    full_time_hours: null,
+                    session_basis: null,
                     summary: "1.0",
                 },
             ],
@@ -140,8 +144,8 @@ describe("definitionCatalog", () => {
     it("formats weighting table for days-per-week", () => {
         const wgt = mapPublishedWeightings(weightings)[0]!;
         const rows = formatWeightingTable(wgt);
-        expect(rows[0]).toEqual({ schedule: "5 days per week", value: "1.00" });
-        expect(rows.find((r) => r.schedule.startsWith("3"))?.value).toBe("0.60");
+        expect(rows[0]).toEqual({ schedule: "5 days", value: "1" });
+        expect(rows.find((r) => r.schedule.startsWith("3"))?.value).toBe("0.6");
     });
 
     it("compiles exact-version payload for FTE draft", () => {
@@ -173,6 +177,7 @@ describe("definitionSummary", () => {
             label: "Children · v1",
         };
         const weighting = {
+            equivalencyId: "w",
             weightingId: "w",
             versionId: "wgt-v1",
             versionNumber: 1,
@@ -180,8 +185,11 @@ describe("definitionSummary", () => {
             scheme: "days_per_week" as const,
             factors: { "5": 1 },
             fullTimeDays: 5,
+            fullTimeHours: null,
+            sessionBasis: "days_per_week" as const,
             summary: "fte",
             label: "FTE · v1",
+            strategyLabel: "Days or sessions",
         };
         const draft = roomUtilizationFtePivotDraft({
             populationVersionId: "pop-v1",

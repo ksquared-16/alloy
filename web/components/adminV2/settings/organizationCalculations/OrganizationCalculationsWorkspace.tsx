@@ -666,6 +666,24 @@ export default function OrganizationCalculationsWorkspace({
                                 }>;
                             };
                             const wgtJson = (await wgtRes.json()) as {
+                                equivalencies?: Array<{
+                                    id: string;
+                                    name: string;
+                                    key?: string;
+                                    lifecycle: string;
+                                    published_version_id: string | null;
+                                    versions: Array<{
+                                        id: string;
+                                        version_number: number;
+                                        immutable: boolean;
+                                        scheme: string;
+                                        factors: Record<string, number>;
+                                        full_time_days: number;
+                                        full_time_hours?: number | null;
+                                        session_basis?: "days_per_week" | "attendance_type" | null;
+                                        summary: string;
+                                    }>;
+                                }>;
                                 weightings?: Array<{
                                     id: string;
                                     name: string;
@@ -676,20 +694,26 @@ export default function OrganizationCalculationsWorkspace({
                                         id: string;
                                         version_number: number;
                                         immutable: boolean;
-                                        scheme: "unweighted" | "days_per_week";
+                                        scheme: string;
                                         factors: Record<string, number>;
                                         full_time_days: number;
                                         summary: string;
                                     }>;
                                 }>;
                             };
-                            const { mapPublishedPopulations, mapPublishedWeightings } = await import(
+                            const { mapPublishedPopulations, mapPublishedEquivalencies } = await import(
                                 "@/lib/organizationCalculations/definitionCatalog"
                             );
                             const pops = mapPublishedPopulations(popJson.populations ?? []);
-                            const wgts = mapPublishedWeightings(wgtJson.weightings ?? []);
+                            const wgts = mapPublishedEquivalencies(
+                                (wgtJson.equivalencies ?? wgtJson.weightings ?? []) as Parameters<
+                                    typeof mapPublishedEquivalencies
+                                >[0],
+                            );
                             const fte =
-                                wgts.find((w) => /full-time|fte|equivalent/i.test(w.name)) ?? wgts[0] ?? null;
+                                wgts.find((w) =>
+                                    /days per week|full-time|fte|equivalent|session/i.test(w.name),
+                                ) ?? wgts[0] ?? null;
                             const applied = applyDefinitionSuggestion(id, {
                                 populationVersionId: pops[0]?.versionId ?? null,
                                 weightingVersionId: wgts[0]?.versionId ?? null,

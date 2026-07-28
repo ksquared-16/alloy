@@ -12,7 +12,8 @@ import {
     parseOrganizationPopulations,
 } from "@/lib/organizationPopulations/persist";
 import type { PopulationVersion } from "@/lib/organizationPopulations/types";
-import { applyWeightingFactor } from "@/lib/organizationWeightings/apply";
+import { applyEquivalency } from "@/lib/organizationWeightings/apply";
+import { buildEquivalentCountExplanation } from "@/lib/organizationWeightings/explain";
 import {
     findWeightingVersion,
     parseOrganizationWeightings,
@@ -25,6 +26,7 @@ export type PopulationMemberPreview = {
     agreement_id: string;
     days_per_week: number;
     schedule_type_key: string;
+    /** Contribution toward Equivalent Count (“counts as”). */
     weight: number;
 };
 
@@ -34,6 +36,8 @@ export type EquivalentCountResult = {
     members: PopulationMemberPreview[];
     population: { id: string; name: string; version_number: number };
     weighting: { id: string; name: string; version_number: number };
+    /** Alias for product language */
+    equivalency: { id: string; name: string; version_number: number };
     explanationLines: string[];
     resolution: InputResolution;
 };
@@ -60,7 +64,7 @@ function membersForExpectedInRoom(args: {
     roomLocationId: string;
     effectiveAt: string;
     weighting: WeightingVersion;
-}): PopulationMemberPreview[] {
+}): { members: PopulationMemberPreview[]; unavailableReason: string | null } {
     const seen = new Set<string>();
     const members: PopulationMemberPreview[] = [];
     for (const e of args.entries) {
@@ -70,19 +74,40 @@ function membersForExpectedInRoom(args: {
         seen.add(e.customerMemberId);
         const pattern = args.patternsById.get(e.schedulePatternId);
         const days = pattern?.weekdays?.length ?? 0;
-        const weight = applyWeightingFactor(args.weighting, {
+        const applied = applyEquivalency(args.weighting, {
             daysPerWeek: days,
             scheduleTypeKey: e.scheduleTypeKey,
         });
+        if (!applied.ok) {
+            return { members: [], unavailableReason: applied.reason };
+        }
         members.push({
             customer_member_id: e.customerMemberId,
             agreement_id: e.agreementId,
             days_per_week: days,
             schedule_type_key: e.scheduleTypeKey,
-            weight,
+            weight: applied.value,
         });
     }
-    return members;
+    return { members, unavailableReason: null };
+}
+
+function emptyResult(args: {
+    population: { id: string; name: string; version_number: number };
+    weighting: { id: string; name: string; version_number: number };
+    explanationLines: string[];
+    resolution: InputResolution;
+}): EquivalentCountResult {
+    return {
+        value: 0,
+        memberCount: 0,
+        members: [],
+        population: args.population,
+        weighting: args.weighting,
+        equivalency: args.weighting,
+        explanationLines: args.explanationLines,
+        resolution: args.resolution,
+    };
 }
 
 export async function resolveEquivalentCountForRoom(
@@ -101,10 +126,7 @@ export async function resolveEquivalentCountForRoom(
     const popHit = findPopulationVersion(populations, args.populationVersionId);
     const wgtHit = findWeightingVersion(weightings, args.weightingVersionId);
     if (!popHit) {
-        return {
-            value: 0,
-            memberCount: 0,
-            members: [],
+        return emptyResult({
             population: { id: "", name: "Unknown", version_number: 0 },
             weighting: { id: "", name: "Unknown", version_number: 0 },
             explanationLines: ["Population version is not available for this organization."],
@@ -113,74 +135,59 @@ export async function resolveEquivalentCountForRoom(
                 upstreamStatus: "not_configured",
                 note: "Population version not found",
             },
-        };
+        });
     }
     if (!wgtHit) {
-        return {
-            value: 0,
-            memberCount: 0,
-            members: [],
+        return emptyResult({
             population: {
                 id: popHit.population.id,
                 name: popHit.population.name,
                 version_number: popHit.version.version_number,
             },
             weighting: { id: "", name: "Unknown", version_number: 0 },
-            explanationLines: ["Weighting version is not available for this organization."],
+            explanationLines: ["Equivalency definition is not available for this organization."],
             resolution: {
                 value: null,
                 upstreamStatus: "not_configured",
-                note: "Weighting version not found",
+                note: "Equivalency version not found",
             },
-        };
+        });
     }
+    const popMeta = {
+        id: popHit.population.id,
+        name: popHit.population.name,
+        version_number: popHit.version.version_number,
+    };
+    const eqMeta = {
+        id: wgtHit.weighting.id,
+        name: wgtHit.weighting.name,
+        version_number: wgtHit.version.version_number,
+    };
     if (!popHit.version.immutable || !wgtHit.version.immutable) {
-        return {
-            value: 0,
-            memberCount: 0,
-            members: [],
-            population: {
-                id: popHit.population.id,
-                name: popHit.population.name,
-                version_number: popHit.version.version_number,
-            },
-            weighting: {
-                id: wgtHit.weighting.id,
-                name: wgtHit.weighting.name,
-                version_number: wgtHit.version.version_number,
-            },
-            explanationLines: ["Only published population and weighting versions can be evaluated."],
+        return emptyResult({
+            population: popMeta,
+            weighting: eqMeta,
+            explanationLines: ["Only published population and equivalency versions can be evaluated."],
             resolution: {
                 value: null,
                 upstreamStatus: "incomplete",
-                note: "Draft population/weighting versions cannot back answers",
+                note: "Draft population/equivalency versions cannot back answers",
             },
-        };
+        });
     }
 
     const siteLocationId = await resolveRoomSiteId(supabase, args.orgId, args.roomLocationId);
     if (!siteLocationId) {
-        return {
-            value: 0,
-            memberCount: 0,
-            members: [],
-            population: {
-                id: popHit.population.id,
-                name: popHit.population.name,
-                version_number: popHit.version.version_number,
-            },
-            weighting: {
-                id: wgtHit.weighting.id,
-                name: wgtHit.weighting.name,
-                version_number: wgtHit.version.version_number,
-            },
+        return emptyResult({
+            population: popMeta,
+            weighting: eqMeta,
             explanationLines: ["Room site is required to resolve population membership."],
             resolution: {
                 value: null,
                 upstreamStatus: "incomplete",
                 note: "Room site missing",
             },
-        };
+        });
     }
 
     const loaded = await loadOperationalExpectationInputs(supabase, {
@@ -206,64 +213,60 @@ export async function resolveEquivalentCountForRoom(
 
     const predicate = popHit.version.predicate;
     if (predicate !== "expected_in_room_on_date") {
-        return {
-            value: 0,
-            memberCount: 0,
-            members: [],
-            population: {
-                id: popHit.population.id,
-                name: popHit.population.name,
-                version_number: popHit.version.version_number,
-            },
-            weighting: {
-                id: wgtHit.weighting.id,
-                name: wgtHit.weighting.name,
-                version_number: wgtHit.version.version_number,
-            },
+        return emptyResult({
+            population: popMeta,
+            weighting: eqMeta,
             explanationLines: [`Unsupported population predicate: ${predicate}`],
             resolution: {
                 value: null,
                 upstreamStatus: "not_configured",
                 note: "Unsupported population predicate",
             },
-        };
+        });
     }
 
-    const members = membersForExpectedInRoom({
+    const resolved = membersForExpectedInRoom({
         entries,
         patternsById,
         roomLocationId: args.roomLocationId,
         effectiveAt: args.effectiveAt,
         weighting: wgtHit.version,
     });
+    if (resolved.unavailableReason) {
+        return emptyResult({
+            population: popMeta,
+            weighting: eqMeta,
+            explanationLines: [resolved.unavailableReason],
+            resolution: {
+                value: null,
+                upstreamStatus: "incomplete",
+                note: resolved.unavailableReason,
+            },
+        });
+    }
+    const members = resolved.members;
     const value = members.reduce((sum, m) => sum + m.weight, 0);
     const rounded = Math.round(value * 1000) / 1000;
 
-    const explanationLines = [
-        `Population “${popHit.population.name}” v${popHit.version.version_number}: ${members.length} matching children.`,
-        `Weighting “${wgtHit.weighting.name}” v${wgtHit.version.version_number}: ${wgtHit.version.summary}.`,
-        `Equivalent count = ${rounded}.`,
-    ];
+    const explanationLines = buildEquivalentCountExplanation({
+        populationName: popHit.population.name,
+        strategy: wgtHit.version,
+        equivalentValue: rounded,
+        memberCount: members.length,
+    });
 
     return {
         value: rounded,
         memberCount: members.length,
         members,
-        population: {
-            id: popHit.population.id,
-            name: popHit.population.name,
-            version_number: popHit.version.version_number,
-        },
-        weighting: {
-            id: wgtHit.weighting.id,
-            name: wgtHit.weighting.name,
-            version_number: wgtHit.version.version_number,
-        },
+        population: popMeta,
+        weighting: eqMeta,
+        equivalency: eqMeta,
         explanationLines,
         resolution: {
             value: rounded,
             upstreamStatus: "resolved",
-            note: explanationLines.join(" "),
+            note: explanationLines.join(" · "),
         },
     };
 }

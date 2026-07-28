@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Builder V3 — Population / Weighting / Compare composer.
+ * Builder V3 — Population / Equivalency / Compare composer.
  */
 
 import { useMemo } from "react";
@@ -151,7 +151,7 @@ export default function OrgCalcPivotBuilder({
                             </select>
                         </label>
                         <label className="block space-y-1">
-                            <span className="config-typo-field-label">Count as</span>
+                            <span className="config-typo-field-label">How should they count?</span>
                             <select
                                 className="config-runtime-input"
                                 disabled={disabled}
@@ -161,7 +161,7 @@ export default function OrgCalcPivotBuilder({
                                 }
                                 data-testid="pivot-weighting-version"
                             >
-                                <option value="">Select weighting…</option>
+                                <option value="">How should they count…</option>
                                 {weightings.map((w) => (
                                     <option key={w.versionId} value={w.versionId}>
                                         {w.label}

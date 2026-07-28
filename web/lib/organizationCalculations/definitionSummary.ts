@@ -4,29 +4,31 @@
 
 import type { PivotBuilderDraft } from "@/lib/organizationCalculations/pivotBuilder";
 import type {
+    PublishedEquivalencyOption,
     PublishedPopulationOption,
-    PublishedWeightingOption,
 } from "@/lib/organizationCalculations/definitionCatalog";
 import { catalogLabelForRef } from "@/lib/organizationCalculations/catalog";
 
 export function plainLanguageDefinitionSummary(args: {
     draft: PivotBuilderDraft;
     population: PublishedPopulationOption | null;
-    weighting: PublishedWeightingOption | null;
+    weighting: PublishedEquivalencyOption | null;
+    equivalency?: PublishedEquivalencyOption | null;
 }): string {
-    const { draft, population, weighting } = args;
+    const { draft, population } = args;
+    const equivalency = args.equivalency ?? args.weighting;
     const subject = "each room";
 
     if (draft.valueMode === "equivalent_count") {
         const who = population?.name ?? "the selected population";
-        const how = weighting?.name ?? "the selected weighting";
+        const how = equivalency?.name ?? "the selected equivalency";
         if (draft.compareRef && draft.operator === "Divide") {
             const denom = catalogLabelForRef(draft.compareRef);
             return draft.asPercentage ?
-                    `This definition calculates utilization for ${subject} by converting ${who} using ${how}, dividing by ${denom.toLowerCase()}, and displaying the result as a percentage.`
-                :   `This definition calculates a ratio for ${subject} by converting ${who} using ${how} and dividing by ${denom.toLowerCase()}.`;
+                    `This definition calculates utilization for ${subject} by converting ${who} into equivalent children using ${how}, dividing by ${denom.toLowerCase()}, and displaying the result as a percentage.`
+                :   `This definition calculates a ratio for ${subject} by converting ${who} into equivalent children using ${how} and dividing by ${denom.toLowerCase()}.`;
         }
-        return `This definition calculates an equivalent count for ${subject} by including ${who} and applying ${how}.`;
+        return `This definition calculates equivalent children for ${subject} by including ${who} and applying ${how}.`;
     }
 
     const value = draft.valueRef ? catalogLabelForRef(draft.valueRef) : "the selected value";
@@ -49,13 +51,15 @@ export function plainLanguageDefinitionSummary(args: {
 export function compactSymbolicDefinition(args: {
     draft: PivotBuilderDraft;
     population: PublishedPopulationOption | null;
-    weighting: PublishedWeightingOption | null;
+    weighting: PublishedEquivalencyOption | null;
+    equivalency?: PublishedEquivalencyOption | null;
 }): string {
-    const { draft, population, weighting } = args;
+    const { draft, population } = args;
+    const equivalency = args.equivalency ?? args.weighting;
     const left =
         draft.valueMode === "equivalent_count" ?
-            population && weighting ?
-                `Equivalent(${population.name} × ${weighting.name})`
+            population && equivalency ?
+                `Equivalent children (${population.name} · ${equivalency.name})`
             :   "Equivalent children"
         : draft.valueRef ?
             catalogLabelForRef(draft.valueRef)

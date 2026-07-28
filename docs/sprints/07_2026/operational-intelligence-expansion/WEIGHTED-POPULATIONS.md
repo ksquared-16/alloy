@@ -1,9 +1,12 @@
 # Operational Intelligence — Weighted Populations foundation
 
+> **Superseded naming:** product language is now **Equivalency** — see
+> [`EQUIVALENCY-ENGINE.md`](./EQUIVALENCY-ENGINE.md).
+
 ## Platform additions
 
 ```text
-Facts → Populations → Weightings → Equivalent Counts → Calculations → Measurements → Answers
+Facts → Populations → Equivalency Definitions → Equivalent Counts → Calculations → Measurements → Answers
 ```
 
 | Primitive | Persistence | Versioning |

@@ -1,7 +1,14 @@
 /**
- * Published population / weighting options for the definition builder.
+ * Published population / equivalency options for the definition builder.
  * Exact-version identity only — never silently follows “latest”.
  */
+
+import {
+    strategyOperatorLabel,
+    strategyShortLabel,
+    type EquivalencyStrategyId,
+} from "@/lib/organizationWeightings/types";
+import { formatEquivalencyDefinitionLines } from "@/lib/organizationWeightings/explain";
 
 export type PublishedPopulationOption = {
     populationId: string;
@@ -13,17 +20,25 @@ export type PublishedPopulationOption = {
     label: string;
 };
 
-export type PublishedWeightingOption = {
+export type PublishedEquivalencyOption = {
+    equivalencyId: string;
+    /** @deprecated Use equivalencyId */
     weightingId: string;
     versionId: string;
     versionNumber: number;
     name: string;
-    scheme: "unweighted" | "days_per_week";
+    scheme: EquivalencyStrategyId;
     factors: Record<string, number>;
     fullTimeDays: number;
+    fullTimeHours: number | null;
+    sessionBasis: "days_per_week" | "attendance_type" | null;
     summary: string;
     label: string;
+    strategyLabel: string;
 };
+
+/** @deprecated Use PublishedEquivalencyOption */
+export type PublishedWeightingOption = PublishedEquivalencyOption;
 
 export function mapPublishedPopulations(
     populations: Array<{
@@ -58,8 +73,8 @@ export function mapPublishedPopulations(
     return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function mapPublishedWeightings(
-    weightings: Array<{
+export function mapPublishedEquivalencies(
+    rows: Array<{
         id: string;
         name: string;
         lifecycle: string;
@@ -68,19 +83,22 @@ export function mapPublishedWeightings(
             id: string;
             version_number: number;
             immutable: boolean;
-            scheme: "unweighted" | "days_per_week";
+            scheme: EquivalencyStrategyId;
             factors: Record<string, number>;
             full_time_days: number;
+            full_time_hours?: number | null;
+            session_basis?: "days_per_week" | "attendance_type" | null;
             summary: string;
         }>;
     }>,
-): PublishedWeightingOption[] {
-    const out: PublishedWeightingOption[] = [];
-    for (const w of weightings) {
+): PublishedEquivalencyOption[] {
+    const out: PublishedEquivalencyOption[] = [];
+    for (const w of rows) {
         if (w.lifecycle === "archived" || !w.published_version_id) continue;
         const version = w.versions.find((v) => v.id === w.published_version_id && v.immutable);
         if (!version) continue;
         out.push({
+            equivalencyId: w.id,
             weightingId: w.id,
             versionId: version.id,
             versionNumber: version.version_number,
@@ -88,33 +106,66 @@ export function mapPublishedWeightings(
             scheme: version.scheme,
             factors: version.factors,
             fullTimeDays: version.full_time_days,
+            fullTimeHours: version.full_time_hours ?? null,
+            sessionBasis: version.session_basis ?? null,
             summary: version.summary,
             label: `${w.name} · v${version.version_number}`,
+            strategyLabel: strategyShortLabel(version.scheme),
         });
     }
     return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Weightings compatible with a population (V1: all published weightings are compatible). */
-export function compatibleWeightingsForPopulation(
-    weightings: PublishedWeightingOption[],
+/** @deprecated Use mapPublishedEquivalencies */
+export const mapPublishedWeightings = mapPublishedEquivalencies;
+
+/** Equivalencies compatible with a population (V1: all published). */
+export function compatibleEquivalenciesForPopulation(
+    equivalencies: PublishedEquivalencyOption[],
     _populationVersionId: string | null | undefined,
-): PublishedWeightingOption[] {
-    return weightings;
+): PublishedEquivalencyOption[] {
+    return equivalencies;
 }
 
-export function formatWeightingTable(weighting: PublishedWeightingOption | null): Array<{
+/** @deprecated Use compatibleEquivalenciesForPopulation */
+export const compatibleWeightingsForPopulation = compatibleEquivalenciesForPopulation;
+
+export function formatEquivalencyTable(equivalency: PublishedEquivalencyOption | null): Array<{
     schedule: string;
     value: string;
 }> {
-    if (!weighting) return [];
-    if (weighting.scheme === "unweighted") {
+    if (!equivalency) return [];
+    if (equivalency.scheme === "unweighted") {
         return [{ schedule: "Each matching child", value: "1.0" }];
     }
-    return Object.entries(weighting.factors)
-        .sort(([a], [b]) => Number(b) - Number(a))
-        .map(([days, factor]) => ({
-            schedule: `${days} day${days === "1" ? "" : "s"} per week`,
-            value: Number(factor).toFixed(2),
-        }));
+    if (equivalency.scheme === "weekly_hours") {
+        const hours = equivalency.fullTimeHours ?? 50;
+        return [{ schedule: "Scheduled weekly hours", value: `÷ ${hours}` }];
+    }
+    const asVersion = {
+        scheme: equivalency.scheme,
+        factors: equivalency.factors,
+        full_time_days: equivalency.fullTimeDays,
+        full_time_hours: equivalency.fullTimeHours,
+        session_basis: equivalency.sessionBasis,
+        unmatched_policy: "proportional" as const,
+        id: equivalency.versionId,
+        version_number: equivalency.versionNumber,
+        immutable: true,
+        summary: equivalency.summary,
+        published_at: null,
+        created_at: "",
+    };
+    return formatEquivalencyDefinitionLines(asVersion).map((line) => {
+        const [left, right] = line.split(" = ");
+        return { schedule: left ?? line, value: right ?? "" };
+    });
+}
+
+/** @deprecated Use formatEquivalencyTable */
+export const formatWeightingTable = formatEquivalencyTable;
+
+export function equivalencyChoicePrompt(option: PublishedEquivalencyOption | null): string {
+    if (!option) return "How should scheduled children count?";
+    return strategyOperatorLabel(option.scheme);
 }
