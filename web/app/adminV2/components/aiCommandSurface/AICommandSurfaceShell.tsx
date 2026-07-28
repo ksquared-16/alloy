@@ -44,6 +44,7 @@ import {
   queryBosSlashCatalog,
 } from "@/lib/bos/commandSession/slash";
 import type { BosSlashCommandDescriptor } from "@/lib/bos/commandSession/types";
+import { useBosProcessEffectiveCommandKeys } from "@/app/adminV2/components/aiCommandSurface/commandSession/useBosProcessEffectiveCommandKeys";
 import {
   JobLayoutOperationalProposalCard,
   type JobLayoutCardUiState,
@@ -677,10 +678,17 @@ export default function AICommandSurfaceShell({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [commandText, setCommandText] = useState("");
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const workspaceDepartmentId =
+    globalAssistant?.workspaceScope?.department_id?.trim() || null;
+  const { keys: processEffectiveCommandKeys } =
+    useBosProcessEffectiveCommandKeys(workspaceDepartmentId);
   const slashItems = useMemo(() => {
     if (!isBosSlashComposerQuery(commandText)) return [];
-    return queryBosSlashCatalog({ query: commandText });
-  }, [commandText]);
+    return queryBosSlashCatalog({
+      query: commandText,
+      processEffectiveCommandKeys,
+    });
+  }, [commandText, processEffectiveCommandKeys]);
   useEffect(() => {
     setSlashActiveIndex(0);
   }, [commandText]);

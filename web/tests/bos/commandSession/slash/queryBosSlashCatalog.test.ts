@@ -12,35 +12,53 @@ describe("queryBosSlashCatalog", () => {
         expect(queryBosSlashCatalog({ query: "create lead" })).toEqual([]);
     });
 
-    it("lists Create Lead from the registered action registry", () => {
+    it("lists Create Lead from the registered action registry when process-selected", () => {
         expect(BOS_SLASH_SESSION_ADAPTER_KEYS).toContain("create_lead");
-        const items = queryBosSlashCatalog({ query: "/" });
+        const items = queryBosSlashCatalog({
+            query: "/",
+            processEffectiveCommandKeys: new Set(["create_lead"]),
+        });
         expect(items.some((i) => i.actionKey === "create_lead" && i.eligible)).toBe(true);
-        expect(items.every((i) => BOS_SLASH_SESSION_ADAPTER_KEYS.includes(i.actionKey as "create_lead"))).toBe(
-            true
-        );
+        expect(
+            items.every((i) => BOS_SLASH_SESSION_ADAPTER_KEYS.includes(i.actionKey as "create_lead"))
+        ).toBe(true);
     });
 
     it("typeahead filters Create Lead", () => {
-        const items = queryBosSlashCatalog({ query: "/cre" });
+        const items = queryBosSlashCatalog({
+            query: "/cre",
+            processEffectiveCommandKeys: new Set(["create_lead"]),
+        });
         expect(items).toHaveLength(1);
         expect(items[0]?.actionKey).toBe("create_lead");
         expect(items[0]?.displayLabel).toBe("Create Lead");
         expect(items[0]?.token).toBe("create-lead");
     });
 
-    it("respects placedActionKeys when provided", () => {
-        const blocked = queryBosSlashCatalog({
+    it("does not use Surface placement as BOS eligibility", () => {
+        const items = queryBosSlashCatalog({
             query: "/",
             placedActionKeys: ["confirm_tour"],
+            processEffectiveCommandKeys: new Set(["create_lead"]),
         });
-        expect(blocked.find((i) => i.actionKey === "create_lead")?.eligible).toBe(false);
+        expect(items.find((i) => i.actionKey === "create_lead")?.eligible).toBe(true);
+    });
 
-        const allowed = queryBosSlashCatalog({
+    it("fails closed without process-effective keys", () => {
+        const unknown = queryBosSlashCatalog({ query: "/" });
+        expect(unknown.find((i) => i.actionKey === "create_lead")?.eligible).toBe(false);
+        expect(unknown.find((i) => i.actionKey === "create_lead")?.ineligibleReason).toMatch(
+            /Business Process/i
+        );
+
+        const empty = queryBosSlashCatalog({
             query: "/",
-            placedActionKeys: ["create_lead"],
+            processEffectiveCommandKeys: new Set(),
         });
-        expect(allowed.find((i) => i.actionKey === "create_lead")?.eligible).toBe(true);
+        expect(empty.find((i) => i.actionKey === "create_lead")?.eligible).toBe(false);
+        expect(empty.find((i) => i.actionKey === "create_lead")?.ineligibleReason).toMatch(
+            /selected for this process/i
+        );
     });
 
     it("does not invent a hardcoded catalog detached from the registry", () => {
@@ -54,5 +72,6 @@ describe("queryBosSlashCatalog", () => {
         expect(src).toContain("listRegisteredActionKeys");
         expect(src).toContain("getRegisteredAction");
         expect(src).toContain("bosProposalSupport");
+        expect(src).toContain("processEffectiveCommandKeys");
     });
 });
