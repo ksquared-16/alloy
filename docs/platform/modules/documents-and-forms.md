@@ -90,6 +90,28 @@ Overview is not a dashboard. It answers: *What am I trying to accomplish?*
 
 The uploaded PDF is evidence. The generated native form is the source of truth.
 
+### Document import is the front end of governed Configuration Discovery
+
+**Durable decision (canonical owner: this document).** Document import is not merely a form
+generator — it is the front end of Alloy's governed **Configuration Discovery** capability. An
+imported document is read as a layered pipeline of explicit, versioned contracts:
+
+1. **Source extraction** — native text WITH geometry (position, font, page), no OCR for native-text PDFs.
+2. **Document structure** — headings, labels, answer regions, choice/repeated groups, signatures, output-copy regions.
+3. **Semantic structure** — instruction / field / static-legal / acknowledgement / signature / conditional / repeated-person / output roles.
+4. **Business concepts** — the operational meaning (child identity, guardian relationship, immunization requirement, emergency authorization, …).
+5. **Configuration Discovery** — for each concept, a governed proposal: **reuse a canonical field, reuse an existing configured field, propose a NEW configurable field, bind a relationship, an upload/acknowledgement/signature requirement, static content, or an output binding.** Discovery **proposes; it never silently creates or mutates configuration.** Matching reuses the platform's own vocabularies (`FormFieldSource`, `canonicalBindingSuggestions`, the operational relationship role keys, the frozen requirement model) — no parallel storage, no duplicate canonical fields.
+6. **Form + requirement projection** — approved concepts project into form sections/questions (bound to canonical fields), requirements, and dispositions. **Forms are one consumer of the approved concepts, not the owner of the concepts.**
+
+The operator reviews at the **concept level** ("what this document configures"), not by reconstructing
+raw questions. Operator approval is **mandatory**; new fields are proposals until explicitly approved.
+Every proposal is explainable and confidence-banded. A deterministic import never requires an LLM.
+
+Code: `web/lib/pos/discovery/*` (contracts + concept discovery + matching), consuming the native-layout
+detector (`web/lib/pos/processingCase/structure/detectLayoutStructure.ts`). See also
+`core/configuration-ownership-and-inheritance.md` and `modules/configuration-platform.md` for the
+canonical Field System that Discovery binds into.
+
 ### Work pipeline
 
 Import Form → Review Alloy's understanding → Generate native form → Studio Builder.
