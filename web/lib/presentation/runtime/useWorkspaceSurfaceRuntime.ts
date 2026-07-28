@@ -168,8 +168,11 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         };
     }, [orgId]);
 
-    // Default department for org-level workspace actions (Create Lead) — the first process's dept.
-    const defaultDepartmentId = cards[0]?.departmentId ?? null;
+    // Default department for org-level workspace actions (Create Lead). Implied ONLY when the org
+    // has a single process — "first by sort order" is a config artifact, not operator intent, and
+    // asserting it silently books the lead against the wrong department. With several processes the
+    // workspace names none and the server resolves the create-lead entry department (or asks).
+    const defaultDepartmentId = cards.length === 1 ? (cards[0]?.departmentId ?? null) : null;
 
     // ── Work View counts: canonical-location totals (ONE count source) ─────────────────
     // Each configured view's nav entry carries its canonical location (host work unit +
