@@ -28,12 +28,22 @@ Processes → Surfaces; `/settings/actions` → developer Action Buttons.
 
 Evidence: `qa/missions/commands-product-boundary-correction-msn_188e8bea6fb6de28dd21.md`
 
+**Fourth honesty correction (2026-07-28) — contextual ownership acceptance:**
+
+Business Process Process Actions + `command_set_v1` runtime authority are **usable**.
+Surfaces **do not** yet provide Command exposure configuration. Contextual ownership is
+**not** certified complete. Recommend separate `Surface Command Exposure` slice; do not
+reopen `/organization/commands` as org configuration.
+
+Evidence: `qa/missions/commands-ownership-acceptance-msn_188e8bea6fb6de28dd21.md`
+
 ---
 
 ## Certification verdict
 
 **Mission architecture scope (P0–P6, P9) remains certified.** Operator Organization Commands
 configuration product (P7–P8 as a peer org domain) is **not** certified — rejected at product boundary.
+**Contextual ownership (BP + Surfaces) is not certified complete** — Surface Command Exposure gap.
 Nothing pushed.
 
 | Area | Status |
@@ -45,6 +55,7 @@ Nothing pushed.
 | Process `command_set_v1` authority | Certified |
 | Editors / Work Templates write/consume V1 | Certified |
 | `/organization/commands` as org configuration product | **Rejected** (diagnostics only) |
+| Contextual ownership (BP + Surface Command exposure) | **Not complete** — Surfaces lack exposure UI; see ownership-acceptance |
 | Operations nav: Automation → Processes → Surfaces | Certified (Commands removed) |
 | Action Buttons developer path | `/adminV2/settings/actions` (`/settings/actions` redirects there) |
 | `executeAdminAction` drain | Ledger + telemetry certified; branches intentionally retained |
