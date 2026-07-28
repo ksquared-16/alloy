@@ -401,6 +401,14 @@ export default function IdentityFieldValue({
                     ) : null}
                 </span>
             )}
+            {cell.derivedSourceLabel ? (
+                <span
+                    className="identity-field-value__derived"
+                    data-identity-derived-source={cell.fieldRef}
+                >
+                    {cell.derivedSourceLabel}
+                </span>
+            ) : null}
         </div>
     );
 }

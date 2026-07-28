@@ -45,6 +45,10 @@ import {
     normalizeFieldVisibility,
     type SurfaceFieldVisibility,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import {
+    COMPUTED_DISPLAY_OFFERED_REFS,
+    RELATIONSHIP_SCOPED_DISPLAY_REFS,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldPickerParity";
 import type { NestedSurfaceFieldLayoutWidth, NestedSurfaceFieldDropZone } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import {
     chunkNestedSurfaceFieldsForHalfRowLayout,
@@ -461,7 +465,9 @@ function patchGroupWithField(
             ...(group.fieldPolicies ?? {}),
             [fieldKey]:
                 group.fieldPolicies?.[fieldKey]
-                ?? defaultFieldVisibility(config.surfaceId, groupKey),
+                ?? (COMPUTED_DISPLAY_OFFERED_REFS.has(fieldKey) || RELATIONSHIP_SCOPED_DISPLAY_REFS.has(fieldKey)
+                    ? "read-only"
+                    : defaultFieldVisibility(config.surfaceId, groupKey)),
         },
         fieldPlacements: seedFieldPlacementForAdd(config.surfaceId, group, fieldKey, storageTier),
     };

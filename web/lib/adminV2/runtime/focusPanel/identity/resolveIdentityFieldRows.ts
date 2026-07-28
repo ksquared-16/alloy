@@ -21,6 +21,7 @@ export type IdentityFieldRowInput = {
     linkLabel?: string | null;
     linkDestination?: IdentityFieldCellVM["linkDestination"];
     linkTarget?: IdentityFieldCellVM["linkTarget"];
+    derivedSourceLabel?: string | null;
     editControl?: IdentityFieldCellVM["editControl"];
 };
 
@@ -67,6 +68,7 @@ export function resolveIdentityFieldRows(
                 linkLabel: input.linkLabel ?? null,
                 linkDestination: input.linkDestination ?? null,
                 linkTarget: input.linkTarget ?? null,
+                derivedSourceLabel: input.derivedSourceLabel ?? null,
                 hideWhenEmpty: input.placement.hideWhenEmpty ?? false,
                 width,
                 editControl: input.editControl,
