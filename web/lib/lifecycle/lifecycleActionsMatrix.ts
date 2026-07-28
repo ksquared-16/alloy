@@ -284,9 +284,6 @@ export async function saveLifecycleActionsMatrix(
         const rawPlacementIds = Array.isArray(row.placement_ids)
             ? row.placement_ids.map((p) => String(p ?? "").trim()).filter(Boolean)
             : [];
-        if (!rawPlacementIds.length) {
-            throw new Error(`Select at least one placement for ${base.label}`);
-        }
 
         // Normalize legacy ids onto the canonical set (department_rail → Workspace,
         // drawer → Focus Panel Manage) and drop deprecated ones (queue_row), de-duping.
@@ -301,8 +298,6 @@ export async function saveLifecycleActionsMatrix(
         const placements = placementIds
             .map((id) => lifecyclePlacementById(id))
             .filter((p): p is NonNullable<typeof p> => !!p);
-
-        if (!placements.length) throw new Error(`Select at least one placement for ${base.label}`);
 
         const { scope, operatorStages } = resolveScopeAndStages(row.stage_restrictions ?? [], allStageKeys);
         const displayOrder =
@@ -319,20 +314,24 @@ export async function saveLifecycleActionsMatrix(
             primaryRecordLabel
         );
 
-        await deactivateBuilderPlacementsForDefinition(supabase, orgId, defId);
+        // Surface Command Exposure owns operator placement toggles. Process Actions may still
+        // pass placement_ids for compatibility clients; when omitted, leave Surfaces placements.
+        if (placements.length > 0) {
+            await deactivateBuilderPlacementsForDefinition(supabase, orgId, defId);
 
-        for (const placement of placements) {
-            const { error: insErr } = await supabase.from("action_placements").insert({
-                org_id: orgId,
-                action_definition_id: defId,
-                surface: placement.surface,
-                slot: placement.slot,
-                entity_type: "opportunity",
-                order_index: displayOrder,
-                condition_config: conditionConfig,
-                is_active: true,
-            });
-            if (insErr) throw new Error(insErr.message);
+            for (const placement of placements) {
+                const { error: insErr } = await supabase.from("action_placements").insert({
+                    org_id: orgId,
+                    action_definition_id: defId,
+                    surface: placement.surface,
+                    slot: placement.slot,
+                    entity_type: "opportunity",
+                    order_index: displayOrder,
+                    condition_config: conditionConfig,
+                    is_active: true,
+                });
+                if (insErr) throw new Error(insErr.message);
+            }
         }
         saved += 1;
     }

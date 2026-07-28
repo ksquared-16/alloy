@@ -1,10 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-    LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS,
-    type LifecycleBaseActionKey,
-} from "@/lib/lifecycle/lifecycleStageBaseActions";
+import { type LifecycleBaseActionKey } from "@/lib/lifecycle/lifecycleStageBaseActions";
 import { LIFECYCLE_STAGE_ORDER, LIFECYCLE_STAGE_LABELS } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import type { LifecycleActionsMatrixRow } from "@/lib/lifecycle/lifecycleActionsMatrix";
@@ -106,18 +103,6 @@ export default function LifecycleActionsMatrix({
         []
     );
 
-    const togglePlacement = useCallback((baseKey: LifecycleBaseActionKey, placementId: string) => {
-        setRows((prev) =>
-            prev.map((r) => {
-                if (r.base_action_key !== baseKey) return r;
-                const next = new Set(r.placement_ids);
-                if (next.has(placementId)) next.delete(placementId);
-                else next.add(placementId);
-                return { ...r, placement_ids: next };
-            })
-        );
-    }, []);
-
     const toggleStageRestriction = useCallback((baseKey: LifecycleBaseActionKey, stage: LifecycleOperatorStage) => {
         setRows((prev) =>
             prev.map((r) => {
@@ -153,9 +138,6 @@ export default function LifecycleActionsMatrix({
         try {
             for (const row of rows) {
                 if (!row.enabled) continue;
-                if (!row.placement_ids.size) {
-                    throw new Error(`Select at least one placement for ${row.default_label}.`);
-                }
                 if (row.restrictStages && !row.stage_restrictions.size) {
                     throw new Error(
                         `Select stages to restrict ${row.default_label}, or leave stage restrictions off for all stages.`
@@ -205,25 +187,24 @@ export default function LifecycleActionsMatrix({
                 <header className="border-b border-alloy-forge/8 px-3 py-2.5">
                     <h3 className="text-sm font-semibold text-alloy-midnight">Process Actions</h3>
                     <p className="mt-1 text-[11px] leading-relaxed text-alloy-midnight/60">
-                        Configure which actions are available in this process and where they appear. Stage
-                        restrictions are optional.
+                        Enable Commands for this process, set display labels, and optional stage
+                        restrictions. Where Commands appear for operators is configured in{" "}
+                        <a href="/organization/surfaces" className="font-medium text-alloy-pine underline-offset-2 hover:underline">
+                            Surfaces → Commands
+                        </a>
+                        .
                     </p>
                 </header>
             ) : null}
 
             <div className="overflow-x-auto px-2 py-2">
-                <table className="w-full min-w-[720px] border-collapse text-[11px]">
+                <table className="w-full min-w-[560px] border-collapse text-[11px]">
                     <thead>
                         <tr className="text-left text-alloy-midnight/55">
                             <th className="px-2 py-1.5 font-medium">Order</th>
                             <th className="px-2 py-1.5 font-medium">Action</th>
                             <th className="px-2 py-1.5 font-medium">Enabled</th>
                             <th className="px-2 py-1.5 font-medium">Display label</th>
-                            {LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS.map((p) => (
-                                <th key={p.id} className="px-2 py-1.5 font-medium whitespace-nowrap">
-                                    {p.label}
-                                </th>
-                            ))}
                             <th className="px-2 py-1.5 font-medium">Stage restrictions</th>
                         </tr>
                     </thead>
@@ -272,11 +253,6 @@ export default function LifecycleActionsMatrix({
                                         onChange={(e) =>
                                             updateRow(row.base_action_key, {
                                                 enabled: e.target.checked,
-                                                placement_ids: e.target.checked
-                                                    ? row.placement_ids.size
-                                                        ? row.placement_ids
-                                                        : new Set(["overflow"])
-                                                    : new Set(),
                                             })
                                         }
                                         data-testid={`lifecycle-actions-matrix-enabled-${row.base_action_key}`}
@@ -292,17 +268,6 @@ export default function LifecycleActionsMatrix({
                                         data-testid={`lifecycle-actions-matrix-label-${row.base_action_key}`}
                                     />
                                 </td>
-                                {LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS.map((p) => (
-                                    <td key={p.id} className="px-2 py-2 text-center">
-                                        <input
-                                            type="checkbox"
-                                            checked={row.placement_ids.has(p.id)}
-                                            disabled={!row.enabled || !row.saveable}
-                                            onChange={() => togglePlacement(row.base_action_key, p.id)}
-                                            data-testid={`lifecycle-actions-matrix-placement-${row.base_action_key}-${p.id}`}
-                                        />
-                                    </td>
-                                ))}
                                 <td className="px-2 py-2">
                                     <label className="flex items-center gap-1.5 text-[10px] text-alloy-midnight/60">
                                         <input

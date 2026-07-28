@@ -109,15 +109,16 @@ describe("Surfaces product UI — landing tiles → Collection → Selected Surf
         expect(shell).toContain("SurfacesCategoryNav");
     });
 
-    it("Selected Surface workspace starts on Edit (builder) — no Overview tab", () => {
+    it("Selected Surface workspace starts on Edit (builder) — Commands tab for exposure", () => {
         const tabKeys = SURFACE_WORKSPACE_TABS.map((t) => t.key);
-        expect(tabKeys).toEqual(["edit", "assignments", "versions", "health", "history"]);
+        expect(tabKeys).toEqual(["edit", "commands", "assignments", "versions", "health", "history"]);
         expect(tabKeys).not.toContain("overview");
-        expect(shell).toContain("SURFACE_WORKSPACE_TABS");
+        expect(shell).toContain("surfaceWorkspaceTabsForSection");
         expect(shell).toContain("SURFACE_WORKSPACE_DEFAULT_TAB");
         expect(shell).toContain("ConfigWorkspaceTabBar");
         expect(shell).toContain('testIdPrefix="surfaces-tab"');
         expect(shell).toContain("setTabState(SURFACE_WORKSPACE_DEFAULT_TAB)");
+        expect(shell).toContain("SurfaceCommandExposureEditor");
         expect(shell).not.toContain("SurfacesOverviewPanel");
         expect(shell).toContain("syncSurfacesUrl");
     });
