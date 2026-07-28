@@ -146,18 +146,52 @@ command_set_v1 → stage → WT → capability support → subject validity → 
 2. Surface/placement no longer gates BOS eligibility
 3. Shared invoke helper → `executePlatformCommandViaActionsApi` + BOS `origin: "bos"` — `558604814`
 4. Adapter registry (`bosCommandAdapterRegistry`) + draft coverage ledger — `70f213b84`
+5. Representative adapters: `update_lead_status`, `add_parent_guardian`, `cancel_tour` + generic session body + capability-backed slash discovery
+6. Coverage ledger complete (honest dispositions for all Capability Registry keys)
 
-### Remaining (audit follow-up)
-5. Register representative Commands (mutation / relationship / confirmation) on shared bridge — expand registry beyond `create_lead`
-6. Keep coverage ledger honest as adapters ship
-7. Align Conversation Intake naming with Conversation Runtime vocabulary (do **not** merge Participant/packet Runtime into BOS)
-8. Browser QA proofs + full Commands/BOS regression + certify
+### Conversation Runtime (deferred — not this mission)
+- Create Lead keeps `ConversationIntakeAdapter` (bounded)
+- Do **not** merge Participant/packet Runtime into BOS
+- Universal Conversation Runtime remains a separate mission
 
 **Audit honesty (from [Audit BOS Create Lead](63cc1549-cc30-4a19-892a-afd80b6bddda)):**
-- Mutation path already converged — no private BOS write path
-- BOS confirmation UX is client-side; durable create still waits on Processing IdentityReviewPanel commit
-- Server confirm token for non-destructive RegisteredActions is weak — do not overclaim
+- Mutation path converged — no private BOS write path
+- Create Lead durable create still waits on Processing IdentityReviewPanel commit
+- `cancel_tour` uses server preview tokens (strong confirm)
 - `ConversationIntakeAdapter` ≠ Participant Runtime
+
+---
+
+## Canonical architecture (certified)
+
+```text
+Business Process (command_set_v1)
+        ↓
+Effective Commands
+        ↓
+BOS (slash / session)  — cannot invent unselected Commands
+        ↓
+Preparation Adapter (bosCommandAdapterRegistry)
+        ↓
+executePlatformCommandViaActionsApi
+        ↓
+POST /api/admin/actions/execute
+        ↓
+executeCommandInvocation (Command Runtime)
+        ↓
+Domain executor (RegisteredAction / Mutation / Relationship / Tour)
+        ↓
+Events / Result
+```
+
+### Family proofs
+
+| Family | Command | Preparation model |
+|--------|---------|-------------------|
+| Record creation | `create_lead` | create_lead_conversation_intake (accepted reference) |
+| Existing-record mutation | `update_lead_status` | generic_payload_fields |
+| Relationship | `add_parent_guardian` | relationship_subject |
+| Confirmation-governed | `cancel_tour` | confirmation_only (+ server preview token) |
 
 ---
 
@@ -167,8 +201,8 @@ Universal (session + Runtime):
 
 | Field | Source today |
 |-------|----------------|
-| commandKey | RegisteredAction / capability key |
-| label | registry `defaultLabel` / catalog operatorLabel |
+| commandKey | Capability / RegisteredAction key |
+| label | Capability `operatorLabel` / adapter registry |
 | eligible | process-effective ∩ adapter-ready ∩ authorized |
 | ineligibleReason | slash descriptor |
 | preparation | per-adapter (`BosCommandAdapter`) |
@@ -180,9 +214,10 @@ Command-specific (adapters):
 
 | Concern | Owner |
 |---------|-------|
-| Intake / required fields | Create Lead conversation intake adapter (and future adapters) |
+| Intake / required fields | Per-adapter preparation (Create Lead conversation intake remains Create-Lead-specific) |
 | Household / Processing review | Create Lead domain |
-| Subject resolution | Command / entity context |
-| Destructive confirm copy | Runtime destructive policy + adapter preview |
+| Subject resolution | Active GlobalAssistant entity + adapter enrichment |
+| Destructive confirm | Runtime destructive policy + preview token |
 
 Do not hardcode per-Command branches in `AICommandSurfaceShell` beyond adapter dispatch.
+Host dispatches: `create_lead` → Create Lead body; other registry keys → `GenericBosCommandSessionBody`.

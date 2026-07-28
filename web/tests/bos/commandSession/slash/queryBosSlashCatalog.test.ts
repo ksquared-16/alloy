@@ -12,15 +12,30 @@ describe("queryBosSlashCatalog", () => {
         expect(queryBosSlashCatalog({ query: "create lead" })).toEqual([]);
     });
 
-    it("lists Create Lead from the registered action registry when process-selected", () => {
-        expect(BOS_SLASH_SESSION_ADAPTER_KEYS).toContain("create_lead");
+    it("lists adapter-ready Commands when process-selected", () => {
+        expect(BOS_SLASH_SESSION_ADAPTER_KEYS).toEqual(
+            expect.arrayContaining([
+                "create_lead",
+                "update_lead_status",
+                "add_parent_guardian",
+                "cancel_tour",
+            ])
+        );
         const items = queryBosSlashCatalog({
             query: "/",
-            processEffectiveCommandKeys: new Set(["create_lead"]),
+            processEffectiveCommandKeys: new Set([
+                "create_lead",
+                "update_lead_status",
+                "add_parent_guardian",
+                "cancel_tour",
+            ]),
         });
         expect(items.some((i) => i.actionKey === "create_lead" && i.eligible)).toBe(true);
+        expect(items.some((i) => i.actionKey === "update_lead_status" && i.eligible)).toBe(true);
+        expect(items.some((i) => i.actionKey === "add_parent_guardian" && i.eligible)).toBe(true);
+        expect(items.some((i) => i.actionKey === "cancel_tour" && i.eligible)).toBe(true);
         expect(
-            items.every((i) => BOS_SLASH_SESSION_ADAPTER_KEYS.includes(i.actionKey as "create_lead"))
+            items.every((i) => BOS_SLASH_SESSION_ADAPTER_KEYS.includes(i.actionKey))
         ).toBe(true);
     });
 
@@ -61,7 +76,18 @@ describe("queryBosSlashCatalog", () => {
         );
     });
 
-    it("does not invent a hardcoded catalog detached from the registry", () => {
+    it("marks unselected Commands ineligible even when adapter-ready", () => {
+        const items = queryBosSlashCatalog({
+            query: "/",
+            processEffectiveCommandKeys: new Set(["create_lead"]),
+        });
+        expect(items.find((i) => i.actionKey === "cancel_tour")?.eligible).toBe(false);
+        expect(items.find((i) => i.actionKey === "cancel_tour")?.ineligibleReason).toMatch(
+            /selected for this process/i
+        );
+    });
+
+    it("discovers from adapter registry + capability labels (not RegisteredAction alone)", () => {
         const src = require("node:fs").readFileSync(
             require("node:path").resolve(
                 __dirname,
@@ -69,9 +95,9 @@ describe("queryBosSlashCatalog", () => {
             ),
             "utf8"
         );
-        expect(src).toContain("listRegisteredActionKeys");
-        expect(src).toContain("getRegisteredAction");
-        expect(src).toContain("bosProposalSupport");
+        expect(src).toContain("listBosCommandAdapterKeys");
+        expect(src).toContain("getPlatformCapability");
         expect(src).toContain("processEffectiveCommandKeys");
+        expect(src).not.toContain("listRegisteredActionKeys");
     });
 });

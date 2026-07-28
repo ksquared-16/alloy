@@ -32,6 +32,8 @@ export type BosInputValueState =
 export type BosCommandExecutionKind =
     | "processing_intake"
     | "direct_registered_execute"
+    /** Facade-backed Commands that are not RegisteredActions (mutation / relationship / tour). */
+    | "direct_runtime_execute"
     | "assist_proposal";
 
 export type BosCommandPlacement =
@@ -113,6 +115,8 @@ export type BosCommandPreview = {
     destination: { workUnitLabel?: string; stageLabel?: string };
     generatedAt: string;
     draftFingerprint: string;
+    /** Destructive preview correlation token (e.g. cancel_tour). */
+    previewToken?: string;
 };
 
 export type BosCommandConfirmation = {
