@@ -20,6 +20,8 @@ const EXPECTED_AUDITED_KEYS: BosCapabilityKey[] = [
     "agent_v1_record_overview_layout",
     "agent_v2_field_visibility",
     "packet_review_insight",
+    "operational_question_future_room_capacity",
+    "operational_question_room_utilization",
 ];
 
 describe("bosCapabilityRegistry", () => {

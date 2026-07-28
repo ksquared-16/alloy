@@ -24,7 +24,28 @@ describe("oiOrgCalcMeasurements", () => {
         expect(m.subject_grain).toBe("room");
         expect(m.unit).toBe("seats");
         expect(m.source.calculation_version_id).toBe("v1");
-        expect(m.target?.value).toBe(18);
+        expect(m.target?.kind === "count_min" ? m.target.value : null).toBe(18);
+    });
+
+    it("round-trips percent + rate_range goals", () => {
+        const m = createOiOrgCalcMeasurementDraft({
+            name: "Room Utilization",
+            userId: null,
+            unit: "percent",
+            source: {
+                type: "organization_calculation",
+                calculation_id: "c1",
+                calculation_version_id: "v1",
+                calculation_name: "Util",
+                version_number: 1,
+            },
+            target: { kind: "rate_range", min: 75, max: 95 },
+            question_key: "room_utilization",
+        });
+        const meta = writeOiOrgCalcMeasurements({}, [m]);
+        const parsed = parseOiOrgCalcMeasurements(meta);
+        expect(parsed[0]?.unit).toBe("percent");
+        expect(parsed[0]?.target).toEqual({ kind: "rate_range", min: 75, max: 95 });
     });
 
     it("round-trips through org_settings metadata", () => {

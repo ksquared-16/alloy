@@ -25,7 +25,8 @@ describe("Operational Question catalog", () => {
         expect(q!.answer_strategy).toBe("measure");
         expect(q!.category).toBe("Capacity");
         expect(q!.question.toLowerCase()).toContain("seats");
-        expect(listOperationalQuestions()).toHaveLength(1);
+        expect(listOperationalQuestions().length).toBeGreaterThanOrEqual(1);
+        expect(listOperationalQuestions().some((q) => q.key === FUTURE_ROOM_CAPACITY_QUESTION_KEY)).toBe(true);
     });
 
     it("unknown question returns null", () => {

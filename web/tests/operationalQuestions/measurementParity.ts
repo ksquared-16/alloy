@@ -25,7 +25,7 @@ export function snapshotMeasurementParity(m: OiOrgCalcMeasurement): MeasurementP
         version_number: m.source.version_number,
         subject_grain: m.subject_grain,
         unit: m.unit,
-        goal_value: m.target?.value ?? null,
+        goal_value: m.target?.kind === "count_min" ? m.target.value : null,
         status: m.status,
     };
 }
