@@ -407,3 +407,18 @@ HMAC-SHA256 compact claims; TTL + version; no DB store; not an idempotency key.
 | Direct APIs | Compatibility retained |
 | Reopen / schedule_tour | Unavailable / deferred |
 | Automation | Documented consumer/invoker only — not implemented |
+
+---
+
+# P6.S1 — Business Process Command Set Authority
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-27 |
+| Evidence | `qa/missions/commands-p6-process-command-authority-msn_188e8bea6fb6de28dd21.md` |
+| Contract | `command_set_v1` on `LifecycleBuilderProcessRecord` |
+| Resolvers | `resolveBusinessProcessCommandSelection` + `resolveEffectiveBusinessProcessCommands` |
+| Compatibility | V1 present → sole; else deterministic legacy migrate |
+| Proof | Enrollment Lead fixture — behavior-equivalent selection |
+| Editor / WT options switch | Deferred P6.S3 |
+| Automation / Commands UI | Not shipped |

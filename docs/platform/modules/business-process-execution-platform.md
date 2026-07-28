@@ -84,7 +84,8 @@ A Business Process defines:
 | `label` | Operator-facing name (e.g. "Enrollment Process") |
 | `entity_types` | Which entity types are subjects |
 | `stages` | Ordered list of stage configs |
-| `candidate_actions` | Process-wide action set (each stage refines) |
+| `command_set_v1` | **Sole target process-wide Command selection** (P6.S1). Typed Capability keys + enabled/variant/policy metadata. Legacy stage catalogs remain compatibility inputs until migrated. |
+| `candidate_actions` | **Legacy / doctrinal alias** for process-wide selection — prefer `command_set_v1` in code |
 | `surface_refs` | Default surface references |
 
 A Business Process does **not** own status values. It does not define allowed statuses. Status is an entity field; the process is an operational context.
@@ -104,7 +105,7 @@ A Stage defines:
 | `grain` | `family \| child \| household \| case` |
 | `entry_conditions` | Conditions that place a subject in this stage |
 | `exit_conditions` | Conditions that move a subject out |
-| `candidate_actions` | Ordered list of actions with recommendation levels |
+| `candidate_actions` | Ordered list of actions with recommendation levels (**recommendation/evaluation only** once `command_set_v1` is present — cannot create process selection) |
 | `surface_refs` | `queue_surface_key`, `focus_surface_key`, `header_surface_key` |
 | `readiness_expectations` | What must be true for subjects at this stage |
 | `operating_plan` | Purpose, expected work, success criteria |

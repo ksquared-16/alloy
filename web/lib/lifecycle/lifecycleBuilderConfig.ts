@@ -26,6 +26,10 @@ import type { EnrollmentManualTransitionPolicyV1 } from "@/lib/admin/enrollmentS
 import { parseEnrollmentManualTransitionPolicy } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
 import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 import { parseStageActionCatalogV1, type StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
+import {
+    parseProcessCommandSetV1OrNull,
+    type BusinessProcessCommandSetV1,
+} from "@/lib/lifecycle/processCommandSetV1";
 import { parseParticipationConfigV1, type ParticipationConfigV1 } from "@/lib/process/participationConfig";
 import {
     parseStageGrain,
@@ -79,6 +83,12 @@ export type LifecycleBuilderProcessRecord = {
     primary_entity: LifecyclePrimaryEntityKey;
     sort_order: number;
     is_active: boolean;
+    /**
+     * Sole target process-wide Command selection authority (P6.S1).
+     * When absent, resolveBusinessProcessCommandSelection uses legacy compatibility.
+     * Stage action_catalog_v1 remains recommendation/evaluation only.
+     */
+    command_set_v1?: BusinessProcessCommandSetV1;
     /** Tracks and split rules — template-defined, stored as generic metadata. */
     tracks_v1?: ProcessTracksV1;
     /** Manual Change Enrollment Status transition policy. */
@@ -185,6 +195,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
         }
         stages.sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));
         const tracks_v1 = parseProcessTracksV1(row.tracks_v1) ?? undefined;
+        const command_set_v1 = parseProcessCommandSetV1OrNull(row.command_set_v1) ?? undefined;
         const manualPolicy = parseEnrollmentManualTransitionPolicy(row.manual_status_transition_policy_v1);
         const workViews = parseWorkViewsV1(row.work_views_v1);
         const participation = parseParticipationConfigV1(row.participation_v1) ?? undefined;
@@ -195,6 +206,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             primary_entity: row.primary_entity === "opportunity" ? "opportunity" : "opportunity",
             sort_order: typeof row.sort_order === "number" ? row.sort_order : processes.length,
             is_active: row.is_active !== false,
+            ...(command_set_v1 ? { command_set_v1 } : {}),
             ...(tracks_v1 ? { tracks_v1 } : {}),
             ...(manualPolicy ? { manual_status_transition_policy_v1: manualPolicy } : {}),
             ...(workViews ? { work_views_v1: workViews } : {}),

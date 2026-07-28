@@ -10,7 +10,7 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress (mission evidence, not this planning doc’s original scope):** P0.S1 → … → P5.S1 reschedule → P5.S2 cancel → **P5.S3 complete/no-show**. P5 Tour phase certified. Next: `schedule_tour` / process catalog (P6) as needed.
+**Implementation progress (mission evidence, not this planning doc’s original scope):** P0 → P5 Tour certified → **P6.S1 Business Process `command_set_v1` authority**. Next: P6.S2 derive / P6.S3 resolver switch.
 
 ---
 
@@ -341,7 +341,7 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 
 | ID | Title |
 |----|-------|
-| **P6.S1** | `command_set_v1` types + parse/write |
+| **P6.S1** | `command_set_v1` types + parse/write + selection/effective resolvers + Enrollment Lead proof (**shipped**) |
 | **P6.S2** | Derive migration from existing candidates |
 | **P6.S3** | Resolver authority switch |
 | **P6.S4** | Process editor UX bound to catalog |

@@ -113,6 +113,10 @@ disabled**. No Delete Lead / Make Primary / Cancel Tour production cutover in P4
   `markTourBookingCompleted` / `markTourBookingNoShow`. Distinct capability, event, and BP
   integration identities retained. Direct complete/no-show routes unchanged. `schedule_tour`
   remains uncut; `reopen_tour` unavailable.
+- **P6.S1:** Business Process `command_set_v1` — typed process-wide Command selection authority
+  hosted on lifecycle builder process JSON. Effective resolver + legacy compatibility precedence.
+  Stage `action_catalog_v1` is recommendation/evaluation only. Enrollment Lead proof only;
+  editor authority switch and full migration remain later P6 slices. Automations product not shipped.
 
 ### Destructive / replacement Command policy (P4.S1)
 
@@ -182,10 +186,15 @@ For compatibility, legacy child rules without timing are still downgraded to rec
 
 | Layer | Controls |
 |-------|----------|
-| **Business Process** | Which actions are available for a stage/process (DB placements + lifecycle builder matrix) |
+| **Capability Registry** | Whether a Command identity exists, maturity, and execution owner (honesty — not authorization) |
+| **Organization Command Catalog** | Org enablement / labels / availability rows (`action_definitions` + placements today; `/configuration/commands` is P7) |
+| **Business Process `command_set_v1`** | Which Commands the process selects (sole target process-wide authority; P6.S1) |
+| **Stage `action_catalog_v1`** | Stage recommendation / evaluation metadata for selected Commands only |
 | **Experience Builder** | Where actions appear on a layout surface (contact row, section, related list) |
 | **BOS** | Command-session placement for registered commands (Create Lead V1: Conversation + Form over one draft → `executeCreateLeadCommand`) |
-| **Executors** | Perform durable writes (admin execute, relationship wizard, dedicated modals) |
+| **Command Runtime / Executors** | Invocation governance and durable writes |
+
+Legacy note: DB placements + lifecycle builder matrix remain **compatibility / availability** inputs until process migration completes; they are not equal process-wide selection authorities once `command_set_v1` is present.
 
 The **same canonical action key** may launch from:
 
