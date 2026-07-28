@@ -44,9 +44,10 @@ describe("Organization Configuration Runtime", () => {
             "access",
             "communications",
             "data-model",
+            "commands",
+            "automation",
             "business-processes",
             "surfaces",
-            "automation",
             "operational-intelligence",
         ]);
         expect(domains.some((domain) => domain.key === "programs")).toBe(false);

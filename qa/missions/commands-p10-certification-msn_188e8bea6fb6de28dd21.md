@@ -8,6 +8,19 @@ Final HEAD: `4d0260d46`
 
 ---
 
+## Honesty correction (2026-07-28)
+
+**Prior P10 certification is retracted** for operator product integration claims.
+
+What was true: route, catalog, runtime, process authority, Action Buttons redirect.  
+What was false: Commands appearing on `/organization` and the operational domain order in the
+real Organization Configuration UI.
+
+Corrective integration + live UI proof:
+`qa/missions/commands-ui-product-integration-correction-msn_188e8bea6fb6de28dd21.md`
+
+---
+
 ## Certification verdict
 
 **Mission implementation complete for approved P0–P10 scope**, with honest retained compatibility documented below. Nothing pushed.

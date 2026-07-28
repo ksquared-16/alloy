@@ -10,7 +10,7 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress:** **P0–P10 certified** (local mission). Awaiting owner promotion — not pushed.
+**Implementation progress:** P0–P10 runtime/route work retained; **Organization Configuration UI product integration corrected** (Commands on `/organization` domain grid). Not pushed.
 
 ### Autonomous execution ledger
 
@@ -20,7 +20,8 @@
 | P7 foundation | `1f0f049b3` | organizationCommandCatalog + organizationCommandsRoute + P6 authoring (15) | pass | Commands shell + Ops nav + Action Buttons redirect | `/adminV2/settings/actions` developer | P8 |
 | P8 product completion | `b3c3ddbf3` | commandsProductCompletion + route + catalog + authoring (20) | pass | Detail workspace, usage, variants, safety, placement toggle | actions APIs + developer Action defs | P9 |
 | P9 drain ledger | `905652666` | executeAdminActionFallbackDrain + execute route suites (28) | pass | Fallback dispositions + in-process counter | Intentional compatibility keys | P10 |
-| P10 certification | *(this commit)* | Commands suite 245 passed | prod pass; tests graph residual fails | Closeout evidence + doctrine sync | Intentional compat + telemetry | Owner promotion |
+| P10 certification | `4d0260d46` | Commands suite 245 | prod pass | **Partial — route/runtime certified; org grid integration incomplete** | Intentional compat | Corrective UI |
+| **UI product integration correction** | *(this commit)* | organizationCommandsIntegration + related (26) | pending | Commands on `/organization` grid; operational order | Developer actions path | Owner promotion |
 
 
 ---

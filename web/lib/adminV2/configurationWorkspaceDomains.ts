@@ -157,18 +157,23 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
     {
         id: "operations",
         label: "Operations",
-        description: "Processes owns when operators use actions.",
+        description: "Commands define capabilities; Automation, Processes, and related operational configuration.",
         items: [
             {
-                href: settings("processes"),
-                label: "Processes",
-                description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.businessProcessesSpine,
+                href: "/organization/commands",
+                label: "Commands",
+                description: "Organization Command catalog and policy.",
                 emphasis: true,
             },
             {
                 href: "/admin/workflows",
                 label: "Automation",
                 description: "Workflow triggers and automated changes.",
+            },
+            {
+                href: settings("processes"),
+                label: "Processes",
+                description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.businessProcessesSpine,
             },
             {
                 href: settings("placement-priority"),

@@ -64,6 +64,15 @@ vitest: organizationCommandCatalog.test.ts + organizationCommandsRoute.test.ts +
 
 ---
 
+## Honesty correction (2026-07-28)
+
+P7 delivered route + sidebar entry. **It did not register Commands on the `/organization`
+domain grid** (`organizationConfigurationDomains`). Operator product integration completed in
+corrective commit — see
+`qa/missions/commands-ui-product-integration-correction-msn_188e8bea6fb6de28dd21.md`.
+
+---
+
 ## Checkpoint
 
 ```text

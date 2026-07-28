@@ -57,6 +57,9 @@ export const CANONICAL_ORGANIZATION_ACCESS_HREF = `${CANONICAL_ORGANIZATION_BASE
 /** Canonical Organization Business Processes. */
 export const CANONICAL_ORGANIZATION_PROCESSES_HREF = `${CANONICAL_ORGANIZATION_BASE}/processes` as const;
 
+/** Canonical Organization Commands catalog. */
+export const CANONICAL_ORGANIZATION_COMMANDS_HREF = `${CANONICAL_ORGANIZATION_BASE}/commands` as const;
+
 /** Canonical Organization Data Model (Entities, Fields, Statuses, Option Sets, Relationships, Calculations). */
 export const CANONICAL_ORGANIZATION_DATA_MODEL_HREF = `${CANONICAL_ORGANIZATION_BASE}/data-model` as const;
 

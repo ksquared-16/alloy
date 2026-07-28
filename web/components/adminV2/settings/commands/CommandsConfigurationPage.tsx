@@ -247,7 +247,16 @@ export default function CommandsConfigurationPage({
             subtitle="Organization Command catalog — enablement, availability, process use, and safety policy."
             testId="settings-commands-page"
         >
-            <div className="grid min-h-[28rem] gap-4 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <Link
+                                href="/organization"
+                                className="text-sm font-medium text-alloy-midnight/70 underline-offset-2 hover:text-alloy-midnight hover:underline"
+                                data-testid="commands-back-to-organization"
+                            >
+                                ← Organization Configuration
+                            </Link>
+                        </div>
+                        <div className="grid min-h-[28rem] gap-4 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
                 <section
                     className="flex min-h-0 flex-col rounded-xl border border-alloy-midnight/10 bg-white"
                     data-testid="commands-catalog-list"

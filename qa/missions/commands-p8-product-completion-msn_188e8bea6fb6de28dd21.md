@@ -47,6 +47,14 @@ organizationCommandsRoute.test.ts
 
 ---
 
+## Honesty correction (2026-07-28)
+
+P8 completed the Commands **workspace** on `/organization/commands`. Entry from the real
+Organization Configuration domain grid was missing until the corrective integration commit.
+Screenshots of integrated product: `qa/missions/commands-ui-proof/`.
+
+---
+
 ## Checkpoint
 
 ```text
