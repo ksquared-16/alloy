@@ -201,6 +201,26 @@ export const BOS_CAPABILITY_REGISTRY: readonly BosCapabilityDefinition[] = [
             "web/app/api/admin/forms/packet-sessions/[packetSessionId]/review-insight/route.ts",
         ],
     },
+    {
+        capability_key: "operational_question_future_room_capacity",
+        label: "Future Room Capacity",
+        domain: "operational",
+        proposal_mode: "none",
+        apply_policy: "human_approved_operational_api",
+        default_risk_level: "low",
+        requires_human_approval: false,
+        legacy_agent_keys: [],
+        read_classes: ["resolver_entity", "workspace_metadata"],
+        write_class: "operational_api",
+        org_policy_features: [],
+        propose_permission_keys: [],
+        apply_permission_keys: [],
+        apply_route_family: "/api/admin/operational-questions",
+        source_modules: [
+            "web/lib/operationalQuestions/",
+            "web/app/api/admin/operational-questions/",
+        ],
+    },
 ] as const;
 
 const REGISTRY_BY_KEY: ReadonlyMap<BosCapabilityKey, BosCapabilityDefinition> = new Map(
