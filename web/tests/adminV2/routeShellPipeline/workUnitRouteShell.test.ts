@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -106,13 +106,15 @@ describe("work-unit route shell", () => {
         expect(operator.shell.breadcrumbs.some((b) => b.label === "Enrollment")).toBe(false);
     });
 
-    it("slug layout keeps work-unit host mounted across record segment", () => {
+    it("slug layout mounts the seed-only work-unit host; the legacy record segment is retired", () => {
         const layout = read("app/adminV2/workspace/work-unit/[workUnitSlug]/layout.tsx");
         const page = read("app/adminV2/workspace/work-unit/[workUnitSlug]/page.tsx");
-        const recordPage = read("app/adminV2/workspace/work-unit/[workUnitSlug]/[recordId]/page.tsx");
         expect(layout).toContain("WorkUnitSlugRouteHost");
         expect(page).toMatch(/return null/);
-        expect(recordPage).toMatch(/return null/);
+        // RA-2: the `/:recordId` path route is retired — a selected record is the `?subject_id` subject.
+        expect(existsSync(join(webRoot, "app/adminV2/workspace/work-unit/[workUnitSlug]/[recordId]"))).toBe(
+            false,
+        );
     });
 
     it("page has single WorkspaceChrome owner (no WorkUnitWorkspaceColdShell early return)", () => {

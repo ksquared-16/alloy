@@ -1,0 +1,556 @@
+# Runtime V1 Certification Sprint — Canonical Tracker
+
+> **This is the living tracker for the Runtime V1 Certification initiative.** It is the single source of
+> truth for what "certified" means, where we are, and what remains. **Every implementation session starts
+> by reading and updating this file, and ends by updating it** (task status, evidence, grade, remaining
+> work). The initiative is complete only when **every category reaches its target grade** or a **genuine
+> architectural limitation (bucket C) is proven** with code + measurement evidence.
+
+- **Branch:** `agent/claude/3-runtime-v1-polish` (slot 3 / `wt3-runtime-v1-polish`, port 3013) · committed-not-pushed
+- **Companion docs:** `RUNTIME-V1-REALIZATION-LEDGER.md` (worktree root — investigation history, before/after) · this file supersedes the ledger as the forward tracker.
+- **Grade scale:** F · D · C- · C · C+ · B- · B · B+ · A- · A. **Bucket** = why a gap exists: **A** unfinished implementation · **B** larger initiative, still Runtime V1 · **C** genuine architectural ceiling needing Runtime V2.
+- **Verdict on file (2026-07-26):** no category is bucket **C**. Runtime V1 can reach world-class inside V1. The one real architectural *property* (F5: a client kernel can't receive server data before hydration) bounds one optimization, not any grade.
+
+---
+
+## 0. Mission — a Grade-A Alloy platform (three inseparable outcomes)
+
+The mission is **not** "improve architecture" as a separate exercise from "make Alloy fast." It is a single
+mission with **three outcomes, none optional, none a bonus**:
+
+1. **Grade-A operator experience** — pages/workspaces open fast; record selection & switching feel immediate;
+   the panel becomes usable and *fully settled* quickly (no staggered ~11 s load); smooth, responsive transitions.
+2. **Grade-A runtime architecture** — singular ownership; explicit contracts; no duplicated orchestration or
+   data composition; no compatibility debris or dead paths; scalable across future Alloy domains/products.
+3. **Grade-A engineering architecture** — the TypeScript graph is intentionally **bounded**, not a monolith;
+   modules have clear ownership + narrow public APIs; the Focus-Panel/runtime hubs are decomposed by
+   responsibility; cold/incremental tooling perf fits a growing org; durable tests + docs protect it all.
+
+**Evaluation rule (every major task):** answer all three — (a) does operator experience improve? (b) does
+ownership/architectural simplicity improve? (c) does the dependency/TypeScript graph get healthier (or at
+least not worse)? **A retained change must not materially improve one dimension by degrading another.** Do
+not optimize grades administratively; do not buy latency with fragile machinery; do not improve architecture
+while leaving the product slow; do not call TypeScript "healthy" because one incremental run completed.
+
+### Current reality (2026-07-26) — the mission is NOT close to complete
+Runtime Architecture is A-, **but**: the panel still takes ~10–11 s to fully settle; the enriched drawer VM
+is the dominant delay; sibling-view prewarm competes with primary reveal; the Focus Panel is a broad
+dependency/orchestration hub; the TypeScript project is one large whole-program graph.
+
+### Coordinated engineering tracks
+- **TRACK 1 — Perceived Performance.** Remove user-visible latency: enriched-VM round-trip + duplicate
+  composition; duplicate Stage Work / serial work; sibling-prewarm competition; unnecessary hydration &
+  first-paint deps; slow nav/record-switching; avoidable waterfalls. **Certification targets:** warm
+  first-meaningful < 3 s; warm fully-settled < 6 s; switching ≪ first load; no noncritical work competing
+  with primary reveal; no stale-subject flash / interaction regression. Measure honestly; prove any lower bound.
+- **TRACK 2 — Runtime Ownership & Simplicity.** Keep removing duplicate ownership, dead paths, compatibility
+  machinery, broad coordinating components, hidden cache/key/timing contracts, duplicated server composition,
+  unnecessary client orchestration. End state: one obvious owner per responsibility; explainable from code alone.
+- **TRACK 3 — Dependency Graph & TypeScript Architecture.** **First establish the FACTUAL graph** (file/module
+  count; fan-in/out; high-cost hubs; cold & incremental typecheck time; peak RSS; invalidation blast radius;
+  first-paint static graph; circular/unstable dep directions). **Then execute real boundaries** (not mechanical
+  splits): decompose `InlineOpportunityFocusPanel` by true ownership; isolate action-only / mode-only deps;
+  narrow module APIs; remove broad imports + always-mounted noncritical surfaces; enforceable dependency
+  boundaries; reduce hot-module inferred-type complexity; extract stable boundaries where TS project references
+  / package boundaries are justified. Produce **and execute** a concrete modularization plan with implementation
+  slices — Runtime's own graph must leave this initiative materially bounded, not merely roadmapped.
+
+### Execution priority (by combined platform impact, not easiest grade)
+1. **CP-4** — map & remove duplicated Provisioning Answer ↔ enriched-VM reads.
+2. **CP-1** — eliminate/server-seed the enriched-VM post-hydration critical path via a **clean canonical
+   owner** (not a blind copy of the provisioning-seed pattern). **Gate — architecture challenge required
+   before implementing CP-1:** compare ≥5 options — (i) reuse request-scoped canonical composition; (ii) fold
+   only commit-critical fields into the bounded Answer; (iii) server-preload a separately-owned enriched
+   resource; (iv) parallel server composition; (v) remove the enriched request where it is duplicate — and
+   choose the simplest that removes the waterfall **without diffusing ownership**. Record the decision (D-0xx).
+3. **CP-3** — stop sibling prewarm from competing with active reveal.
+4. **DG-1/2/3 + CQ-2** — decompose the Focus Panel; remove remaining first-paint deps.
+5. **TypeScript boundary implementation slices** — from the measured dependency graph.
+
+### Full Definition of Done (Runtime V1 certified only when ALL hold)
+- **Operator experience:** perf budgets met (or an external hard limit proven); cold/warm/nav/refresh/
+  record-switch/full-settlement all measured; interactions smooth & correct.
+- **Architecture:** one canonical owner per responsibility; every remaining request/serial dependency
+  justified; no known dead/superseded runtime paths; no silent performance mechanism without tests + observability.
+- **Engineering:** Focus-Panel orchestration decomposed into bounded responsibilities; initial dependency
+  graph contains only critical-path code; Runtime TS graph materially bounded; cold/warm typecheck + memory
+  meet explicit budgets; committed regression + integration + E2E + performance coverage; accurate
+  architecture/extension docs.
+
+_Do not stop because one track reaches A-. Do not defer the other tracks. "Large" does not make work optional._
+
+---
+
+## 1. Engineering Scoreboard
+
+| Category | Current | Target | Trend | Completion % | Confidence % | Tasks Done / Total | Milestone |
+|---|:--:|:--:|:--:|--:|--:|:--:|:--:|
+| Runtime Architecture | **A- (was B+)** ✓target | A- | → | 100% | 88% | 3 / 3 | M1 |
+| Critical Path | **B+ (was B)** | A- | ↑ | 58% | 82% | 3 / 5 | M2 |
+| TypeScript Architecture | C+ (was C) | B+ (A later) | → | 50% | 75% | 2 / 3 | M3 |
+| Dependency Graph | B | A- | → | 40% | 70% | 2 / 5 | M1 |
+| Maintainability | B (was C-) | A- | → | 70% | 80% | 1 / 2 | M3 |
+| Scalability | C | A- | ↑ | 15% | 55% | 0 / 2 | M2 |
+| Testing | C- | A | ↑ | 45% | 80% | 3 / 7 | M4 |
+| Documentation | B (was C) | A- | → | 60% | 80% | 1 / 3 | M3 |
+| Performance | **A- (was B)** ✓target (warm) | A- | ↑ | 72% | 82% | 3 / 4 | M2 |
+| Code Quality | B- | A- | ↑ | 66% | 74% | 2 / 3 | M1 |
+
+**Confidence %** = how confident a fresh architecture review would re-assign this grade, given the committed
+evidence (tests / cert / measurements / review). It rises only with evidence and drops when new findings surface.
+
+**Overall initiative completion (weighted, coarse): ~60%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade. **Runtime Architecture (M1) CERTIFIED A-. Performance reaches its A- criterion on the PROD-verified WARM evidence (first-meaningful <3s = 1851–2566ms; fully-settled panel = loads-as-one spread 0ms ≈ 1.85s; both prod, video-captured) — but note the FINAL certification standard additionally requires "materially improved cold load" (cold primary-usable ~6.5s is NOT yet improved; PE-3 + Lane 1A remain), so the initiative is NOT complete even with two categories at target.**
+
+Task status legend: **NS** Not Started · **IP** In Progress · **BL** Blocked (an engineering dependency is not yet DONE) · **EEC** Execution Environment Constraint (the engineering is **READY**; only *this workstation* cannot perform trustworthy certification — a build/measure/browser loop under memory saturation. The Runtime is not blocked; the local machine is) · **NV** Needs Validation · **DONE** Completed.
+
+> **Terminology (do not conflate):** a task is **BL** only when a Runtime dependency is unmet — that is an
+> engineering fact. A task is **EEC** when it is engineering-READY but the current machine cannot certify it
+> trustworthily — that is an execution-environment fact, never a Runtime limitation. The certification
+> program must never imply Runtime itself is blocked because of local hardware.
+
+## 1a. Definition of Done (every task)
+
+A task is **COMPLETE only when every box is checked** (doc/test/arch boxes are N/A-able only with a stated reason in the task's Evidence cell):
+
+- [ ] Implementation complete (smallest correction that satisfies the criteria)
+- [ ] Typecheck clean (`npm run typecheck`)
+- [ ] Production build clean (`next build`)
+- [ ] Browser certification complete (behavioral matrix re-run for the affected paths)
+- [ ] Regression tests committed (unit/contract where the behavior is unit-testable)
+- [ ] Measurements captured (before/after, where the task claims a perf/graph effect)
+- [ ] Tracker updated (status, evidence = commit hash + numbers, grade, %)
+- [ ] Documentation updated (comments truthful; `ARCHITECTURE.md` if ownership/flow changed)
+- [ ] Architecture reviewed (capital-investment test: what complexity removed? what deletable? right at 10×?)
+- [ ] No duplicated ownership introduced (one owner, one responsibility, one extension point)
+
+## 1b. Decision Log (consult before proposing any architectural alternative)
+
+| ID | Decision | Basis / evidence |
+|---|---|---|
+| D-001 | The canonical first-card mechanism is a **resolved server seed**: the route layout server-composes the Provisioning Answer and seeds the K2 cache with a RESOLVED answer. | first card 6.7→3.6 s warm; commit `d1314bb57` |
+| D-002 | **Streaming overlap REJECTED** (client-armed deferred + Suspense-resolved client component). A client-component resolve can't deliver before bundle hydration; the resolved seed already delivers at hydration. | measured 5,462 vs 3,610 ms; F5; reverted |
+| D-003 | **Passing an unawaited RSC promise as a client prop is FORBIDDEN** — crashes hydration in Next 16. | `TypeError: undefined 'catch'`; iter-2 crash |
+| D-004 | **Canonical selected-subject routing = query `?subject_id`** (the runtime projects it via `urlFromAttention`). The path form `/:recordId` is legacy (drives `openDrawer`) and its consumption disagrees with construction. | `zz-realization-urlcontract`: path→default subject, query→correct. RA-2 resolves. |
+| D-005 | **The seed lives in the LAYOUT, not the page** — the layout renders the Host and discards `children`; a page-segment seed is never mounted and loses the race to K2. | iter-1/iter-2 measurements |
+| D-006 | **Slug→identity resolution is deduped** via a React `cache()` shared resolver (`resolveWorkUnitRouteIdentity`, renamed from `…Cached` in CQ-3 — the dedup is a transparent impl detail, not part of the name). | commit `5148c9708`; C1/C2/C3/C7 re-cert |
+| D-007 | **Gate/auth dedup NOT needed** — already request-memoized (`loadAdminAccessBundleCached`). | code inspection |
+| D-008 | **TypeScript stays single-project for now**; project references are a *designed later* initiative (TS-2), not a premature restructure. | cold typecheck 156 s acceptable short-term |
+| D-009 | **Env-gated shadow / legacy-emergency-fallback modules are RETAINED** — legitimate kill-switches (default false), not dead code. | flag defaults verified |
+| D-010 | **No Runtime V2.** The A/B/C analysis proved no bucket-C ceiling; certify within V1. | classification 2026-07-26 |
+| D-011 | **The server preloads the kernel's cache through ONE kernel-owned seam** (`seedProvisioningForRoute`); no other layer references K2's key scheme (`provisioningAnswerUrl`). | RA-1; commit `3c0a9d6c1` |
+| D-014 | **S1 (non-gating enriched reveal) was ALREADY STRUCTURALLY PRESENT — no new implementation.** Verified in code + a fresh dev baseline: `OpportunityFocusPanelBody` renders commit-critical immediately (enriched null) and swaps to enriched as a same-grid PROP CHANGE (reserved cells fill in place, no resize/flash); the commit-critical registry already promotes current_work/household/children/readiness at commit, and the answer→`_inquiry_children` mapping is correct. The operator waits NOT because the enriched VM gates usability, but because of measured bottlenecks: first-meaningful ~8.5 s (answer + reveal-time workspace-request competition) and settled ~14.4 s (enriched VM 4.8 s + a **duplicate `/stage-work` fetch ~2 s** + Tier-3 cells). CP-1 execution therefore attacks the **measured** bottlenecks (stage-work dedup → reveal-time request competition → Tier-3 deferral), not a ceremonial reveal-flag change. | code (`OpportunityFocusPanelBody.tsx`, `focusPanelCommitCriticalCards.ts`) + dev baseline (shell 2.15 s / first-meaningful 8.5 s / settled 14.4 s warm) |
+| D-013 | **CP-1 design CHOSEN — "Focus Panel Settlement": split the monolithic enriched-VM wholesale-replace into a non-gating, reserved-geometry per-region overlay (the proven `useWorkUnitSettlement` discipline), and DELETE the work the Answer already did.** The reveal window ENDS AT COMMIT (the commit-critical producer already paints a complete, usable panel: Tier-1 live + Tier-2 cells reserved-honest — "No tour scheduled" etc.); genuine Tier-2 upgrades (status control, header menu, tour/comms/docs signals) overlay into their **pre-reserved** slots as each resolves (no wholesale replace → no flash/resize, exactly as Work-Unit Settlement proves); Tier-3 (scheduling projection, activity comms, detail panes) defers off the reveal path. **Deletes duplication:** the enriched `visible_entity_ms` re-derivation of Household/Children (already live from `focusPanelSubjectSnapshot`) and the forced stage-work re-resolve on reveal (`useRecordWorkRuntime:242`; the Answer carries `focusPanelStageWork`, CP-2 seeds it) leave the critical path. This SUPERSEDES the atomic-complete-reveal (`useRecordWorkRuntime:238–241`) — no-flash is preserved structurally by reserved-geometry overlay, not by waiting for one big paint. **Alternatives rejected:** (A) expand the Answer with Tier-2 → inflates TTFB/first-card (§4/§9), and the panel is already usable at commit; (B) new parallel Initial-Panel resource → still composes the heavy work, adds a coordinator + a second cache owner; (E) concurrent compose + early shell → more machinery for the same composition; **all of A/B/E risk "merely moving the 5–6 s monolith earlier," which is explicitly rejected.** Chosen = C (split) + D (delete Answer-satisfied work) + F (reuse the existing Settlement owner). Ownership stays singular (Answer owns commit-critical; one Settlement owner overlays deferred values — mirrors the Work-Unit surface); the split is also the CQ-2 decomposition seed. **Impl = measured slices (§ execution); perf/browser measurement is EEC.** | inventory (agent) + `useWorkUnitSettlement.ts`, `useRecordWorkRuntime.ts:238–256`, `focusPanelCommitCriticalCards.ts`, `deriveOpportunityFocusPanelCards.ts:844` |
+| D-012 | **CP-4's premise is largely FALSE — the named field-duplicates are not duplicate DB reads.** The Answer's `focusPanelSubjectSnapshot` builds `primaryContact`/`inquiryChildren` from already-resolved row data ("No extra DB read", `workUnitProvisioningAnswer.ts:731`); the enriched VM reads `inquiry_children` as a field access (`params.record._inquiry_children`). The genuine duplication is **cross-request record composition**: the Answer and the enriched VM are two independent server requests that each fetch the opportunity (`opportunities` — enriched uses the richer `OPPORTUNITY_CANONICAL_ADMIN_SELECT`) + `work_units`, and the enriched VM's dominant ~5–6 s cost is its OWN deeper composition (visible-payload FK batch + first-paint deps + comms + layout + status defs). Field-by-field reuse cannot remove a *second full composition in a separate HTTP request*. **→ The perceived-perf lever is CP-1 (compose-once / seed / fold / parallelize / drop), not CP-4.** | code inspection `composeOpportunityDrawerViewModel.ts:150/174/202`, `workUnitProvisioningAnswer.ts:731–745` |
+
+_Future sessions append decisions here with the next `D-0xx` id; never silently reverse a decision — supersede it with a new entry citing evidence._
+
+## 1c. Priority Queue (auto-selects the next READY task)
+
+**Priority:** Critical · High · Medium · Low. **READY** = status NS/IP and all `Deps` are DONE. The next task to execute is the **highest-priority READY** task (ties broken by fewest downstream unblocks first, then lowest risk).
+
+| Task | Cat | Priority | Deps | Deps met? | READY? |
+|---|---|:--:|---|:--:|:--:|
+| ~~CP-2 Remove duplicate stage-work fetch~~ | Critical Path | Critical | — | ✓ | **DONE** |
+| CP-4 Enriched-VM field reuse of provisioning data | Critical Path | High | — | ✓ | **MAP DONE → folds into CP-1 (D-012)** |
+| ~~RA-1 Canonical kernel preload seam~~ | Runtime Arch | High | — | ✓ | **DONE** |
+| DG-1 Conditional-mount+dynamic the 7 registry modals | Dependency Graph | High | — | ✓ | READY |
+| ~~MA-1 / DOC-1 `ARCHITECTURE.md`~~ | Maint / Docs | High | — | ✓ | **DONE** |
+| TE-2 Portable Playwright fixtures | Testing | High | — | ✓ | READY |
+| TE-4 `ProvisioningAnswer` schema contract test | Testing | Medium | — | ✓ | READY |
+| TS-1 Immediate TS graph wins | TypeScript | Medium | — | ✓ | READY |
+| ~~TS-2 Project-reference roadmap~~ | TypeScript | Medium | — | ✓ | **DONE** |
+| SC-1 Generalize subject contract | Scalability | High | — | ✓ | **IP** — platform MODEL subject generalized + PoC (`771c904cd`); provisioning `SubjectIdentityTruth` bag = Leak 2C CODE DONE, browser cert pending. Remaining SC-1: parameterize `grain`/`subject.type` in the from-answer builder (Child surface, step 6) |
+| ~~CQ-3 Rename `resolveWorkUnitRouteIdentityCached`~~ | Code Quality | Low | — | ✓ | **DONE** |
+| CP-1 Eliminate enriched-VM post-hydration waterfall | Critical Path | **Critical** | RA-1✓, CP-4✓(map) | ✓ | **READY — architecture challenge (≥5 options, §0) required before impl; impl is EEC** |
+| ~~RA-2 Remove legacy-drawer duality~~ | Runtime Arch | High | RA-1✓ | ✓ | **DONE** |
+| ~~RA-3 Cache single-producer invariant~~ | Runtime Arch | High | RA-1✓ | ✓ | **DONE** (Runtime Arch → A- ✓target) |
+| CQ-2 Decompose `InlineOpportunityFocusPanel` | Code Quality | High | DG-1, DG-2 | ✗ | blocked |
+| TE-3 CI wiring | Testing | High | TE-2 | ✗ | blocked |
+| ~~TE-5 Routing-permutation unit tests~~ | Testing | Medium | RA-2✓ | ✓ | **DONE** |
+| DG-2 Lazy-load `workflowRun.ts` | Dependency Graph | Medium | — | ✓ | READY |
+| DG-3 Isolate SchedulingCard | Dependency Graph | Medium | — | ✓ | READY |
+| ~~PE-1 Warm first-meaningful < 3 s~~ | Performance | High | — | ✓ | **DONE** (prod warm 1851–2566 ms) |
+| ~~PE-2 Warm fully-settled < 6 s~~ | Performance | High | — | ✓ | **DONE** (loads-as-one spread 0 ms ≈ 1.85 s, prod + video) |
+| PE-3 Cold TTFB / cold primary-usable mitigation | Performance | **High (was Low)** | — | ✓ | **READY** (cold ~6.5 s — Lane 1A) |
+| CP-3 Gate prewarm storm | Critical Path | Low | — | ✓ | READY (low value — see note) |
+| RegC-2 Registry concern: **placement** | Scalability/CQ | High | — | ✓ | **READY** (Lane 2A #2 — needs a per-MODE placement composer, not a flat field) |
+| RegC-3 Registry concern: **loadingPolicy** (isKnowable; defer build) | Scalability/CQ | High | RegC-2 | ✓ | READY (Lane 2A #3 — reveal-path cert-sensitive) |
+| B1-dedup Background duplicate-request fix | Critical Path | High | — | ✓ | **READY — PROD TRACE CAPTURED (authed, 31 API reqs):** `provisioning-answer ×4` @ t=6210 ms (the 4 sibling work-view prefetches, fired together post-commit — the prewarm storm; ×4 is normalized-URL, distinct `?work_view_id`) + `drawer-recipients ×2` @ t=6189/13224 (two callers ~7 s apart). `family-workspace`/`queue-view-totals` did NOT duplicate on this subject/build. Next: dedup drawer-recipients (2 callers / inflight-join) + evaluate the 4× sibling prefetch cost vs record-switch benefit. Fixes auth-independent; re-cert needs a fresh auth window. |
+| PROVE family_alerts dynamic-card test | Scalability | High | RegC-2, RegC-3 | ✗ | blocked (Lane 2B — after placement+loadingPolicy) |
+| ~~LEAK Provisioning domain→platform leaks (FocusPanelSubjectSnapshot + truth-key assembly)~~ | Runtime Arch | High | — | ✓ | **DONE — BROWSER-CERTIFIED (prod).** Generic `SubjectIdentityTruth` bag replaces the opportunity-shaped type through the reveal chain (7 files, `fceaf14f0`); domain composer declares the truth keys, platform forwards opaquely; boundary guard `b28c98048`. **PROD browser cert PASSED:** Household + Children both render from the bag (Chapmap childless → children honest-empty; Wenc has child → Children ready-at-commit showing Ava's known info); warm primary-usable **1905 ms (<2s)**; subject switch clean (no stale-subject flash); content correct (screenshots). tsc 0; +0 unit (84=84). |
+| BND-1 Runtime import-direction boundary map + enforcement | Dependency Graph | Medium | RegC-2 | ✗ | Lane 3 (after 1–2 concerns expose seams) |
+| ~~SURF-2 Second-surface proving-slice DESIGN~~ | Scalability | High | — | ✓ | **DONE** — `SECOND-SURFACE-CERTIFICATION-DESIGN.md` (surface = **Child/participant**; min slice; PASS/FAIL; exposes SC-1 + Leak 2C as the first blockers) |
+| SC-1 Generalize subject contract | Scalability | **High** | — | ✓ | **IP — platform model core DONE:** `FocusPanelWorkModeModel.subject` widened `"opportunity"` literal → generic `OperationalSubjectRef`; PoC `subjectContractGeneralization.test.ts` proves opportunity+child+person compile (4/4); tsc 0; +0 failures. **NB — `OperationalSubjectRef.type` + `OperationalContext.grain` were ALREADY generic; the literal was the only platform hardcode.** REMAINING = provisioning `FocusPanelSubjectSnapshot` generalization = **Leak 2C** (reveal-path cert-sensitive, batch w/ browser loop) |
+| TE-6 Perf regression assertions | Testing | Medium | PE-1✓, PE-2✓ | ✓ | READY (Lane 4 — warm/loads-as-one/switch budgets) |
+
+**→ RESUME HERE (2026-07-28): the 4-lane continuation sequence (see §7 "Continuation plan").** Order: (1) tracker persisted ✓; (2) cold-path clean win — lifecycleCards ✓ (`fcce804a0`), orgName next; (3) registry concern **placement**; (4) background duplicate-request fix; (5) registry concern **loadingPolicy**; (6) `family_alerts` proving-card test; (7) first runtime-boundary enforcement; (8) cold auth/identity/compose (needs PROD build — EEC-gated on host quiescence); (9) second-surface proving-slice design; (10) TS project-reference; (11) permanent diagnostics + regression suite; (12) finish registry migrations + delete old orchestration. **CERTIFIED WARM (do NOT reopen): PE-1/PE-2 met (prod).** Remaining headline gap = COLD ~6.5 s (Lane 1A) + extensibility (Lane 2) + boundaries/TS (Lane 3) + diagnostics (Lane 4).
+
+**Prior CP-1 measured-bottleneck history (PRESERVED — evidence):**
+**S4 decomposition DONE + certified (tsc 0, regression +0, committed):** S4.1 contracts (`52c1fb810`); S4.2 Module C `sharedCanonicalDeps.ts` (`596dc68af`); S4.3 Module B `deferredDetailResource.ts` (`8ac8ee16f`); S4.4 Module A `initialPanelResource.ts` + thin orchestrator (`d27b2196f`). Composer **527 → 221 lines**; boundary test `drawerVmCompositionBoundaries.test.ts` 4/4; A imports no Tier-3. Typecheck is **incremental** (`.s4-typecheck.tsbuildinfo`, gitignored).
+**Bottleneck #1 — /stage-work dedup (CP-2 seed): PROVEN already solved for the selected record.** Controlled dev diagnostic: 0 `/stage-work` fetches for the committed subject, seed `warm=true`, seed key ≡ consume key (`${org}:opp:${opp}:dept:${dept}:stage:${stage}`). The `/stage-work` seen in a fresh trace came from **speculative sibling-view prewarm**, not the selected record — folded into bottleneck #2.
+**Bottleneck #2 — reveal-time request competition: FIXED (modest) + measured (committed `cd06f848f`).** With the reveal window armed only at commit, the sibling-view answer prewarm (`useWorkspaceSurfaceRuntime`) could win the race and inflate the reveal. **Fix owns timing with the EXISTING reveal gate (no new coordinator):** `useCommittedWorkUnitSurfaceRuntime` arms `beginWorkUnitPrimaryReveal()` at surface **MOUNT** (releases on unmount) so the gate defers the prewarm. **Controlled same-process A/B (dev, slot3, 6 interleaved warm runs, mount-arm ON vs OFF — the trustworthy method):** median PRIMARY-USABLE **7445 ms → 6599 ms (−11 %)**, and the OFF slow-tail (10.3 s / 11.4 s reveals) disappears (range 5669–11350 → 5621–7125). **Honest correction:** an earlier "7800→5121 (−34%)" figure was a cross-session comparison and overstated the effect; the controlled number is −11% + tail-elimination. Real, modest, kept. Guard: `tests/runtime/workUnitPrimaryRevealPrecedesSiblingPrewarm.test.ts` (2/2). Gate: tsc 0, regression +0 (12 pre-existing env failures unchanged), boundary 4/4.
+**Bottleneck #3 — Tier-3 deferral: hypothesis TESTED and REJECTED (reverted, no commit).** A `route.abort()` A/B suggested blocking the eager Tier-3 tab fetches (`activity`/`communications`/`related`/`layout-runtime`) cut first-meaningful −43%. But that was **misleading**: `abort()` removes the dev-server's cost of compiling/serving those API routes (single-process dev artifact), not reveal-time competition. Gating the same prefetch schedulers behind the reveal window (so they DEFER, not disappear) — a controlled same-process A/B with the comms gate provably deferring **75–81×/run** — moved median first-meaningful **7562 → 7372 ms (−2.5 %, within noise)**. Deferral ≠ suppression; reverted. Also learned: the `activity`/`related` requests come from the tab **components** mounting, not the prefetch scheduler. **Durable lesson: only controlled same-process A/Bs (window-flag or route toggle, interleaved) are trustworthy here; cross-session medians and abort-based suppression both mislead.**
+**PRIMARY-USABLE FLOOR — PRECISE MAP (2026-07-27, dev warm; Kelly reopened: attack the 6.6 s floor, do not defer).** The Realization seed IS present in this branch: `[workUnitSlug]/layout.tsx` server-composes the Provisioning Answer (`composeProvisioningAnswerForRoute`, awaited, concurrent with route-meta) and seeds K2 via `<ProvisioningAnswerSeed>` — so the primary cells render from the seed with NO client provisioning fetch. Enriched drawer VM is a LATER upgrade (off the primary-usable path; it's `settled`/deferred detail). Measured decomposition of warm first-cell (dev, median, controlled):
+- **Timeline split:** requestStart→html_responseStart **2057 ms** → html_responseEnd **5348 ms** → firstCellUsable **7399 ms**. So **SERVER (to HTML delivered) ≈ 5.3 s dominates; CLIENT (hydrate + kernel-commit + render) ≈ 2.0 s**. FCP ≈ 2.7 s is the shell — cells are NOT in it.
+- **Server answer-compose (`workUnitProvisioningAnswer` `timings`, warm):** total_ms **1744**; presentation_ms **1050** (layout branch, config-cached yet consistently ~1 s), composition_ms **1380** (subject above-fold incl. the stage-work read — overlaps presentation), records_ms 358, configuration/work_unit/authorization/projection ≈ 0 (cached). ~1.5 s of the ~3.2 s API wall is JSON-serialize + route overhead on the large answer.
+- **Seed payload = 56 KB**, of which **focusPanelStageWork 30.7 KB (54%)** — and inside it **published_stage_inputs 27.85 KB (49% of the WHOLE payload)** + work_intent_runtime 0.9 KB are **NOT read by any commit-critical cell** (commit-critical `current_work` reads ONLY `stage_work_runtime`, 1.8 KB — `focusPanelWorkModeModelFromProvisioningAnswer.ts:70,96`). focusPanelSummaryDoc 11.6 KB (21%). focusPanelSubjectSnapshot 113 B (redundancy hypothesis was FALSE).
+- **Cells are `"use client"` + RuntimeKernel-commit-gated** (agent-traced): at initial HTML there is ZERO cell content in SSR — the pure builders (`focusPanelWorkModeModelFromProvisioningAnswer` → build*CardModel) run only after hydrate+commit, though they are pure functions and the composed `answer` is already in hand server-side in layout.tsx.
+- **Bundle already well-split** (agent-traced): 1098 eager modules; ~300 (SendForm 157, EmbeddedWorkspace 62, TabPanes 52, comms 37) already `next/dynamic`. Eager mass = shared runtime/evidence substrate (`adminV2/runtime`+`viewModel/drawer`+`layout/runtime` ≈ 240) that all cells need → shrinking bytes has LOW headroom. Cold tsc 229 s / 4.17 GB / 5,671 files (only 1098 reachable). Boundary seams: B comms (16 importers, low blast), D drawer-Tier-3 (already lazy — formalize to prevent re-eager), A substrate (240, high blast).
+**SSR-FIRST-FRAME SPIKE — BUILT, MEASURED, REVERTED (2026-07-27, Kelly-directed).** Prototyped (flag-gated `NEXT_PUBLIC_SSR_FIRST_FRAME`, default OFF) server-rendering the commit-critical cells from the seed answer: a pure `commitCriticalFirstFrameFromAnswer` mapper + a `"use client"` `SsrCommitCriticalFirstFrame` (SSRs to HTML) rendering the REAL `OpportunityFocusPanelBody`, shown by the Surface Host during the direct-load loader window (kernel still owns the live surface + commit). **It WORKED** — cells present in the raw SSR HTML (`data-focus-panel-grid-cell` before any JS), no console errors, no hydration mismatch, correct content (screenshot verified). **But the controlled A/B says REVERT:** 5 warm runs each, both freshly restarted, same harness — firstCell median **ON 3998 ms vs OFF 3557 ms** (ON is *slower*, within noise). In BOTH, `firstCell ≈ liveSurface ≈ htmlEnd` (~3.5 s): cells appear when the SERVER delivers HTML and the client commit is near-immediate after. DISAMB: the SSR frame paints only **~225 ms before** the live surface, because its HTML serializes AFTER the answer, so it is structurally pinned to `htmlEnd` and cannot beat it. **The earlier "commit at 6.7 s / ~1.9 s hydration gap" was dev-server-state variance, not a stable floor** (a fresh restart put commit at ~3.8 s). Per Kelly's criterion ("keep only if it materially reduces primary usable; if the hydration floor is dominant continue, else revert"): the hydration floor is **NOT dominant** — the **server answer-compose + serialization → htmlEnd (~3.5 s)** is the floor. Reverted in full (0 files retained). **→ NEXT bottleneck = the server: cut the answer compose (presentation ~1 s + composition ~1.4 s) and/or the payload it serializes into HTML (56 KB, of which published_stage_inputs 27.8 KB is deep config no commit-critical cell reads).**
+
+**SERVER-COMPOSE ANALYSIS (2026-07-27, fresh server, next bottleneck after SSR revert).** htmlEnd (~3.5 s dev) = answer compose (total_ms **1728**, stable) + ~1.4 s RSC-render/serialize/route overhead (dev-inflated, smaller in prod). Compose phases (overlapping/concurrent): **composition_ms 1380** dominates, **presentation_ms 1024** runs concurrent (hidden under composition), records 346, config/wu/proj/authz ≈ 0 (cached). composition_ms is dominated by the **stage-work read** — `resolveOpportunityStageWorkSlice` → `fetchDepartmentMetadataForActivity` + `projectStageWorkRuntime` (2 serial DB round-trips) — which produces `stage_work_runtime`, i.e. the **commit-critical `current_work` data itself** (the only cell with a dedicated read). `resolvePublishedStageInputsForCurrentWork` is SYNC/in-memory (cheap compute, but the 27.8 KB payload). **So the compose floor is mostly NECESSARY work for the at-commit operational guarantee: deferring the stage-work read would make `current_work` non-operational at commit (regresses the doctrine); trimming published_stage_inputs saves payload bytes but not compute, and htmlEnd is compute-bound not payload-bound (56 KB is tiny transfer).** Limited CLEAN dev headroom without sacrificing commit-critical guarantees. Candidate remaining levers (unproven, smaller): parallelize the dept-metadata + stage-work reads with the summaryDoc/snapshot awaits inside composition; reduce presentation_ms's consistent ~1 s (config-cached yet not near-zero — a possible in-memory `resolveOperationalPresentation` cost). **The <2 s target likely needs a PROD-representative measurement (EEC-blocked on this host: prod build OOMs) to see the real streaming/hydration/compose split — the dev floor is inflated by RSC/route overhead that does not exist in prod.**
+
+**COMPOSE CHALLENGED, NOT DEFENDED — 3 wins (2026-07-27, Kelly: "current cost ≠ lower bound").** Interrogating the dominant phases with why/who/when/move/derive/cache/precompute/parallelize/denormalize/delete/simplify:
+- **`composition_ms` was two INDEPENDENT reads run SERIALLY** — queue-row CRM enrichment (~680 ms) + the subject stage-work read (~690 ms). The subject resolves from the PAGE (pre-enrichment); stage-work needs only subject+stage+config, never the enriched rows. Parallelized (kick off both, join below). `committed 4ac13b5b2`.
+- **Each of those reads had INTERNAL serial round-trips:** stage-work did open-tasks THEN completed-tasks; enrichment did persons THEN locations. Both → `Promise.all`. `committed 006aca55c`.
+- **RESULT (fresh server, warm, measured):** composition_ms **1375 → 356 (−74%)**; answer **total_ms 1728 → 697 (−60%)**; API wall ~3140 → ~2100; server **htmlEnd ~3480 → ~2854–2970**. Correctness: +0 new test failures (stash-verified), rows=5, stage_work_runtime present, panel renders identically.
+- **DISPROVEN alternatives:** (a) commit card needs only `primary.{label,template_key,state}` — label/template are config (0 reads); the 24+24 full task lists are ENRICHED, not commit-critical, but `primary.state` still needs a task read (H-DERIVE from queue enrichment fails — enrichment loads only person/location labels, not tasks). (b) htmlEnd is NOT payload-bound: HTML doc is 53 KB, streams in ms; the ~1971 ms post-TTFB is dev **RSC render** of the page tree (dev-inflated, not in prod) — so the 27.8 KB published_stage_inputs trim would NOT move htmlEnd.
+- **NEW STANDING (not a floor claim):** the compose is now LATENCY-bound (~350 ms/read = remote-DB round-trip); critical chain = records (1 RT) → composition (1 parallelized RT) ≈ 2 sequential RTs ≈ 700 ms. **Open hypotheses to disprove before claiming a floor:** (H-SUBJECT-DIRECT) can the default subject be fetched with a targeted query in parallel with the full queue read, removing the records→composition dependency? (H-DENORMALIZE) materialize primary-work-state / a task summary onto the opportunity row so `primary.state` needs 0 reads (write-path + sync-correctness cost). (H-RECORDS) is the `opportunities` queue read (limit 500, 12 cols) reducible/indexable? (H-RSC) is the ~1971 ms dev RSC render prod-real or dev-only (needs prod measurement — EEC)? (H-firstCell) the client htmlEnd→cell gap is dev-hydration-variable (3.5–5.4 s) — needs a stable/prod measure to size.
+
+**PRODUCTION MEASUREMENT — EEC CLEARED (2026-07-27). Local prod build SUCCEEDED on this host** (host was quiet; `SKIP_BUILD_TYPECHECK=1`, 8 GB heap; `next build` + `next start -p 3013`, trusted env loaded into process only). Prod is NOT dev — the numbers are very different and the client hydration floor the SSR spike chased does NOT exist in prod:
+- **PROD WARM (nav, median of 6): ttfb 746–829, fcp 868, htmlEnd 2176–2515, firstCell/primary-usable 2218–2566 (range 2190–2936).** Client hydration+commit ≈ **50 ms** after resources (NOT the bottleneck). **Record-switch = 46 ms median** (instant-nav works). Critical JS 1697 KB / 68 chunks. **PROD COLD: ttfb 4302, htmlEnd 7826, firstCell 8184.**
+- **PROD warm compose: total_ms 683** (presentation 681, composition 344, records 337) — DB-latency-bound, same as dev (same remote DB), confirms the parallelization wins hold in prod.
+- **NAMED-PHASE server instrumentation (temp, prod, reverted) — the ~1686 ms `htmlEnd−ttfb` is NOT "RSC render"; it is SLOW SERVER DATA LOADS:** parent workspace-layout `auth 350` + `Promise.all` bundle `~1350` (**viewerTz ~1350 DOMINATES**; `lifecycleCards ~600` hits its cap = dead weight on work-unit routes; orgName ~330; operTz/access/entityLabels ~0 cached); child work-unit-layout `composeAndMeta ~1740` = **`resolveWorkUnitRouteIdentity` ~1040** (gate + `fetchWorkUnits` → `fetchDepartments` serial + resolve) **+ answer compose 700**. Critical path ≈ `auth 350 + routeMeta 1740`; parent bundle streams concurrently. These re-run EVERY navigation (React `cache()` is per-request only) though they are stable user/config/org data.
+**DECISION (per Kelly's rule, on PROD evidence):** warm primary-usable ~2.3–2.6 s is near the <3 s target; hydration + record-switch are already excellent; **the dominant cost is slow server bootstrap loads, NOT RSC render, NOT the DB round-trip (~350 ms), NOT client** — so **denormalization is NOT justified yet** (Option-6-light remains the agent-vetted path IF the ~350 ms compose read later becomes the gate). **Optimize the server-load path instead.** Prioritized levers (all "optimize the server path", stable data): (1) **cross-request TTL-cache `viewerTz`** (~1350 ms, per-user stable; also dedup its redundant `getAdminOrgIdForUser` — caller has `auth.orgId`); (2) **cross-request TTL-cache `resolveWorkUnitRouteIdentity`** (~1040 ms, config-class, same pattern as the compose's `cachedConfigRead`) + parallelize/relax its serial `fetchWorkUnits→fetchDepartments`; (3) **skip/defer `lifecycleCards` on work-unit routes** (~600 ms dead weight per its own comment). Projected: warm htmlEnd could drop toward `auth 350 + compose 700 ≈ ~1 s` → warm primary-usable ~1.1 s (well under <2 s). Then attack COLD (8.2 s). All measurable on the working prod build.
+
+**FORK (all cert-sensitive; prod magnitude is EEC-unverifiable on this host — dev A/B only):** (1) **SSR the commit-critical grid** from the seed answer → removes the ~2 s client wait + could paint cells at ~FCP; biggest on the hydration floor prod hits, but kernel-commit-gate change, highest risk. (2) **Trim deep stage-work (28 KB, 49%) off the seed** → smaller HTML + lighter compose; entangled with the CP-2 seed (deep parts would reload via the deferred `/stage-work`). (3) **Bundle/TS boundaries** (Seam D lock + Seam B comms project-reference) → structural/compile-time, lowest risk, doesn't move primary-usable. _Below: the prior mission-priority note._
+
+**→ mission-aligned execution priority (§0): `CP-4` is #1.** Runtime Architecture is CERTIFIED
+(A-) but the mission (Grade-A operator experience + architecture + engineering — §0) is far from done: the
+panel still settles in ~10–11 s. The plan is **CP-4 → CP-1 (after the architecture challenge) → CP-3 → DG/CQ
+→ TS slices**. Under the active **Execution Environment Constraint** (§6a), split each task into its
+**EEC-free** part (do now) and its **build/measure/browser** part (batch for host headroom):
+
+- **CP-4 (now, EEC-free part):** statically **map** the duplicated Provisioning Answer ↔ enriched-VM reads
+  (which DB reads `composeOpportunityDrawerViewModel` repeats that the Answer already carries), then implement
+  the removal + typecheck. The `phases_ms` before/after **measurement is EEC** (batch).
+- **CP-1 architecture challenge (now, EEC-free):** the ≥5-option comparison (§0) → record the chosen owner as
+  a Decision (D-0xx) **before** any CP-1 code.
+- **TRACK 3 factual graph (now, EEC-free):** measure the dependency/TS graph (file/module count, fan-in/out,
+  hubs, cold+incremental typecheck time, RSS, first-paint static graph, cycles) — grounds CP-4, the Focus-Panel
+  decomposition (CQ-2), and the first-paint-dep cuts (DG). This is the factual basis Track 3 requires first.
+
+EEC-batched (need host headroom): the CP-4/CP-1/CP-3/DG perf **measurements** + browser cert. Do NOT lower the
+bar to fit the machine. _(CP-3: a prior storm-gating attempt was reverted for touching the reveal lifecycle
+without moving wall-clock; revisit with the reveal-lifecycle owner in view.)_
+
+## 1d. Milestones
+
+Every task belongs to exactly one milestone. The Priority Queue draws from the **active** milestone unless a
+higher-priority cross-milestone blocker exists (e.g. an M1 task that unblocks the biggest M2 lever).
+
+A milestone represents an **engineering outcome**, not a bag of tasks. It is COMPLETE when that outcome is
+achieved and evidenced — not when an arbitrary task list empties. The Priority Queue draws from the **active**
+milestone unless a higher-priority cross-milestone lever exists.
+
+| Milestone | Theme (outcome) | Tasks | Done / Total | Status |
+|---|---|---|:--:|---|
+| **M1** | **Runtime Ownership** — every core runtime seam has ONE owner | RA-1✓, RA-2✓, RA-3✓, DG-4✓, DG-5✓, CQ-1✓, CQ-3✓ | 7 / 7 | ✅ **COMPLETE** |
+| **M2** | **Critical Path, Performance & Bundle Graph** — a fast, non-duplicative critical path and a lean first-paint graph | CP-1, CP-2✓, CP-3, CP-4, CP-5✓, PE-1✓, PE-2✓, PE-3, PE-4✓, SC-1, SC-2, DG-1, DG-2, DG-3, CQ-2 | 6 / 15 | **ACTIVE** |
+| M3 | Developer Experience | TS-1, TS-2✓, TS-3✓, MA-1✓, MA-2, DOC-1✓, DOC-2, DOC-3 | 5 / 8 | in progress |
+| M4 | Certification & Regression | TE-1✓, TE-2, TE-3, TE-4, TE-5✓, TE-6, TE-7✓ | 3 / 7 | in progress |
+
+- **M1 Runtime Ownership is COMPLETE** (2026-07-26): its outcome — singular ownership of every core runtime
+  seam — is achieved and evidenced (Runtime Architecture certified **A-**). See the Milestone Review (§1f).
+  The former M1 tasks `DG-1/DG-2/DG-3` (conditional-mount / lazy-load — a *first-paint bundle-graph* outcome)
+  and `CQ-2` (decompose the Focus-Panel monolith — a *structure* outcome) were **relocated to M2**: they are
+  not ownership; they are graph/structure/performance, and CQ-2 depends on DG-1/DG-2. Extending M1 to hold
+  them would confuse an achieved outcome with unrelated work.
+- **Current milestone:** **M2 Critical Path, Performance & Bundle Graph.**
+- **Milestone progress:** M1 7/7 ✅ · M2 6/15 · M3 5/8 · M4 3/7.
+- **Active-milestone next READY:** most of M2 (`CP-4`, `CP-1`, `PE-*`, `DG-1/2/3`) carries an **Execution
+  Environment Constraint** (engineering READY; this workstation cannot certify the build/measure/browser
+  loop trustworthily — §6a). The materially-advanceable M2 task under that constraint is **`SC-1`**
+  (generalize the `ProvisioningAnswer` subject contract — design + a PoC type that *compiles*, so it
+  certifies by typecheck, no build/browser).
+
+## 1e. Risks
+
+Each risk: **Sev** (Sev1 critical … Sev3 minor) · **Likelihood** · **Impact** · Owner · Mitigation · Status.
+
+### Open risks
+| ID | Cat | Sev | Likelihood | Impact | Mitigation | Status |
+|---|---|:--:|---|---|---|---|
+| R-01 | Runtime Arch / Critical Path | Sev2 | Medium | A reveal-path change (RA-1/CP-1/CP-4/RA-2/CQ-2) regresses first-card/latest-click/no-flash | Full loop per task: measure → build → browser-cert matrix → keep/revert; seed-contract + cert specs guard | OPEN |
+| R-02 | Execution Environment (not Runtime) | Sev2 | High | Workstation memory saturation makes the build/measure/browser-cert loop untrustworthy → EEC tasks (CP-4, CP-1, PE-*, DG-1/2/3, CQ-2) cannot be certified here now. **This is an environment constraint, never a Runtime block — the engineering is READY (§6a).** | Route to EEC-free tasks (unit/typecheck/static/design); `SKIP_BUILD_TYPECHECK=1`; out-of-band tsc; batch the EEC loop for host headroom; never lower the bar to fit the machine | OPEN |
+| R-04 | Testing | Sev3 | High (until TE-2/3) | E2E cert specs bind hardcoded dev entity IDs → not CI-portable; regression protection is local-only for behavior paths (incl. RA-2's create-lead→`?subject_id` end-to-end) | Unit suites are portable + committed; TE-2 seeded fixtures + TE-3 CI wiring | OPEN |
+| R-05 | Scalability | Sev3 | Medium | `ProvisioningAnswer` is opportunity-shaped (`inquiry_children`/subject snapshot) → strains a Parent/Teacher subject type | SC-1 generalizes the subject contract before reuse; kernel/Surface Host are subject-agnostic | OPEN |
+
+### Resolved risks
+| ID | Cat | Was | Resolution | Evidence |
+|---|---|---|---|---|
+| R-00 | Critical Path | Duplicate `/stage-work` fetch inflated all-cards | CP-2 seeds the answer's stage-work; fetch eliminated | `437ad9d11`; all-cards 12.7→11.2 s |
+| R-06 | Maintainability | Onboarding required ledger archaeology; a core comment was false | `ARCHITECTURE.md` + comprehension check; comment fixed | `c52e50c52`; check PASSED |
+| R-03 | Runtime Arch | Create-lead used a path-based href → landed on the DEFAULT subject, not the created record; dead legacy path→drawer controller lingered | RA-2: href now emits `?subject_id` (create-lead `router.push`es it; D-004 runtime honors it); dead controller + `[recordId]` route + rewrite deleted | RA-2 `558e4ae2a`; tsc 0 / build 0; unit set green |
+
+---
+
+## 1f. Milestone Review — M1 Runtime Ownership (COMPLETE, 2026-07-26)
+
+_A review, not an implementation pass. It closes the milestone by judging the outcome and banking the lessons._
+
+**What became objectively simpler?**
+Record selection is now **one mechanism** — the `?subject_id` Operational Subject. The whole path-vs-query
+duality (a `/:recordId` route + its `openDrawer` controller + deep-link and URL-sync effects) collapsed to a
+single query-projected subject. The provisioning cache went from "three producers each free to hand-build a
+URL key" to **one key builder + one public seed seam**. A new engineer traces record-open, cache keying, and
+seed ownership from the code alone (ARCHITECTURE.md), no ledger.
+
+**What code disappeared?**
+`workUnitSurfaceController.ts` (192 lines) + its 123-line test; the dead `WorkUnitSurfaceView` render; the
+dead `syncOperatorWorkUnitUrlInBrowser`; the `[recordId]` route page + its `next.config` rewrite; a misrooted
+orphan duplicate test (145 lines); the public `seedProvisioning` export door. (Earlier in M1: DG-5 deleted 26
+dead files / 2,793 lines; DG-4 split ~49.5 KB off the bundle.) Net: deletion dominated addition.
+
+**What ownership became singular?**
+(1) **One record-open owner** — the Focus Panel subject via `?subject_id` (RA-2). (2) **One cache key builder**
+— `provisioningAnswerUrl`, kernel-only, reached through **one public seed seam** `seedProvisioningForRoute`
+(RA-1 + RA-3); the low-level `seedProvisioning(url)` is now module-private, so key-drift cannot enter from
+outside the kernel. (3) **One slug→identity resolver** (`resolveWorkUnitRouteIdentity`, request-deduped).
+
+**What risks disappeared?**
+R-03 (create-lead landed on the default subject) — RESOLVED. The "silent seed-key drift" failure mode
+(a seed that misses and only makes the surface slower, no error) is now **structurally impossible from
+outside the kernel** and additionally unit-locked by the single-producer key-agreement invariant.
+
+**What engineering principles emerged?**
+- **Delete the door, not just the caller.** Un-exporting a 0-caller primitive turns an invariant from a
+  convention every caller must honor into a structural guarantee. Prefer this to a lint rule or a comment.
+- **The URL is a projection, never a second source of truth.** When two encodings (path vs query) can both
+  be read as the same fact, one is wrong; make the runtime honor exactly one and delete the other.
+- **A name must not leak a transparent implementation detail.** `…Cached` described *how*, not *what*;
+  document the memoization at the definition, keep the public name about the contract.
+- **Prove "no new failures" by baseline-diff, never by a green subset.** This branch's suite is broadly red
+  (stale doctrine tests, a `server-only` resolution gap); a passing subset means nothing without a stashed
+  before/after `comm` diff.
+
+**Lessons to guide future Runtime work:**
+1. **Classify every red test before attributing it to a change** — establish the baseline (git stash) first;
+   most of this branch's failures are pre-existing rot (flagged under R-04), not regressions.
+2. **EEC ≠ blocked.** Certify what this environment allows (unit/typecheck/static/design); batch the
+   build/measure/browser loop for host headroom. Never lower the bar to fit the machine.
+3. **Do not `--amend` after filling a commit hash into the tracker** — it orphans the recorded hash (fixed
+   this session: four evidence hashes pointed to dangling pre-amend commits). Record hashes in a follow-up
+   commit that references the already-stable task commit.
+
+---
+
+## 2. Categories
+
+### 2.1 Runtime Architecture — A- ✓ TARGET (bucket B) · 100%
+**Why A- (certified):** RA-1 moved the seed key derivation into the kernel (no layer references `provisioningAnswerUrl`); RA-2 deleted the **legacy-drawer ↔ Focus-Panel record-open duality** (dead controller + path machinery gone, hrefs emit `?subject_id`, `[recordId]` route + rewrite retired); RA-3 closed the cache **single-producer invariant** — the raw-`url` seed door is now module-private so `seedProvisioningForRoute(routeIdentity)` is the SOLE public seam (the kernel owns key derivation structurally, not by convention), with committed producer-parity + idempotency + cold-fetch-coalescing tests. One key builder, three producers, one consumer — all agreeing on the key, enforced by a red test on drift.
+**Blocking risks:** none open. (A later — beyond A- — is not a defined target for this category.)
+**Evidence for A-:** one record-open owner ✓ (RA-2); seed key derivation kernel-owned ✓ (RA-1); cache single-producer invariant test green ✓ (RA-3).
+
+| ID | Task | Status | Completion criteria | Evidence | Deps |
+|---|---|:--:|---|---|---|
+| RA-1 | Introduce canonical kernel preload seam `seedProvisioningForRoute(routeIdentity, answer)` | **DONE** | Layout passes `(routeIdentity, answer)`, not a raw URL; key derivation lives in the kernel; `provisioningAnswerUrl` not imported outside the kernel | **0 non-kernel imports of `provisioningAnswerUrl`; route-seam unit test (14/14); C1/C3 cert (seed consumed, latest-wins, no flash); all-cards ~10.9 s; tsc exit 0; commit `3c0a9d6c1`** | — |
+| RA-2 | Remove legacy-drawer ↔ Focus-Panel record-open duality | **DONE** | (a) delete the DEAD `useWorkUnitSurfaceController` + `resolveDeepLinkRecordAction` + path deep-link/url-sync machinery; (b) make `operatorWorkUnitHrefFromKey`/`resolveCreatedLeadFocusPanelHref` emit `?subject_id=` (not `/recordId`) so create-lead selects the created record; (c) retire the `[recordId]` route + rewrite + update guards to the query form | **DONE `558e4ae2a`.** Deleted `workUnitSurfaceController.ts` (0 callers, verified) + its test + dead `WorkUnitSurfaceView` + dead `syncOperatorWorkUnitUrlInBrowser`; `operatorWorkUnitHrefFromKey(key,recordId)` now emits `?subject_id=`; `[recordId]/page.tsx` route + `next.config.ts` `:recordId` rewrite retired (build manifest omits it). **tsc EXIT 0 / 0 errors; prod build EXIT 0; RA-2-owned unit set GREEN (32 pass), +0 new failures vs baseline, −2 pre-existing failures fixed (baseline-diff proven); create-lead does `router.push` of the `?subject_id` href → D-004 runtime honors it.** Also removed a misrooted orphan dup test (`tests/routeShellPipeline/…`). Live-browser E2E = local-only (R-04). | RA-1✓ |
+| RA-3 | Cache single-producer invariant (prefetch/seed/cold = one owned seam) | **DONE** | One key builder; producer-parity + idempotency tests | **`seedProvisioning(url)` un-exported → `seedProvisioningForRoute(identity)` is the SOLE public seed seam (kernel owns key derivation; 0 external callers deleted). `workUnitProvisioningPrefetch.test.ts` 17/17: single-producer key-agreement invariant (prefetch/seed/cold all key off `provisioningAnswerUrl`), re-seed idempotency, cold-fetch coalescing (prev. untested). +0 new failures vs baseline (6→6, proven). `d27395ecb`** | RA-1✓ |
+
+### 2.2 Critical Path — **B+ (was B-)** → A- (bucket A/B) · 58%
+**Why B+:** warm all-cards **< 6 s certified via loads-as-one (spread 0 ms ≈ 1.85 s, prod)** — the enriched VM is no longer the reveal gate (it's background/deferred detail); CP-2 (dup stage-work) DONE; CP-5 (slug dedup) DONE; reveal-time competition FIXED (`cd06f848f`). The Settlement outcome CP-1 targeted is achieved at commit.
+**Remaining for A-:** the background waterfall still has **duplicate reads/fetches** (Lane 1B: drawer-recipients ×2, family-workspace ×2, queue-view-totals ×2; 4× speculative sibling prewarm) — "no duplicate reads/fetches on the default path" is NOT yet met; CP-3 prewarm-gate open; cold path (Lane 1A).
+**Blocking risks:** Lane 1B fixes touch mounting/cache-key/inflight-dedup; remote-DB latency floor on the cold data-dependency chain.
+**Evidence for A-:** each remaining serial dependency justified; warm all-cards < 6 s ✓ (prod loads-as-one); **no duplicate reads/fetches on the default path (Lane 1B — OPEN).**
+
+| ID | Task | Status | Completion criteria | Evidence | Deps |
+|---|---|:--:|---|---|---|
+| CP-1 | Eliminate the enriched-VM post-hydration waterfall — **"Focus Panel Settlement" (D-013)**: non-gating reserved-geometry overlay + delete Answer-satisfied work; reveal ends at commit | **DESIGN CHOSEN (D-013); impl in measured slices** | Warm fully-settled panel materially lower; the enriched VM is no longer the reveal gate; no stale-flash / interaction regression; enriched composition shrunk (duplicated Household/Children + Tier-3 off the reveal path) | **Slice plan (each: implement + typecheck + serialized build now; measure-before/after + browser-cert = EEC-deferred, §6a):** **S1** — reveal is no longer gated by the full enriched VM: the commit-critical panel is "settled" at commit; the enriched VM becomes a non-gating overlay into pre-reserved slots (mirror `useWorkUnitSettlement`; supersede the atomic-wholesale swap in `useRecordWorkRuntime:238–252` / `OpportunityFocusPanelBody:68–96`). **S2** — server: stop composing the duplicated Household/Children `visible_entity_ms` on the reveal request (Answer's `focusPanelSubjectSnapshot` already supplies them); defer the deep family payload to drill. **S3** — server: move Tier-3 `scheduling_projection` (+ confirm activity comms) out of the blocking `first_paint_dependencies_ms` batch. **S4** — decompose the enriched composer into Tier-2-overlay vs Tier-3-deferred owned modules (this IS the CQ-2 seed / Track-3 boundary). | RA-1✓, CP-4✓(D-012) |
+| CP-2 | Remove duplicate stage-work fetch (reuse answer's `focusPanelStageWork` on cold default load) | **DONE** | No `view_model_stage_work` request when committed subject == answer subject; stage-work still correct | **`/stage-work` ELIMINATED (0); all-cards 12.7s→11.2s; reveal grid 5/reserved 0; C1/C3 pass; 13/13 units; tsc gate exit 0 / 0 errors; commit `437ad9d11`.** | — |
+| CP-3 | Gate the sibling-view prewarm storm behind the reveal | NS | ≤1 provisioning request during the primary-reveal window (4 sibling prewarms deferred) | harness: provisioning count during reveal ≤1 | — |
+| CP-4 | Enriched-VM field-by-field reuse of provisioning data (inquiry_children, primary contact) | **REFRAMED → folds into CP-1 (D-012)** | ~~Named duplicate DB reads removed~~ — **premise disproved:** the named fields are already no-extra-DB-read on both sides; the real duplication is cross-request record composition, removable only by CP-1's architecture, not field-reuse | **Static map done (EEC-free): D-012.** No standalone field-reuse change worth making; the enriched VM's cost is a *second full composition in a separate request*. The `phases_ms` measurement + any CP-1 change are EEC (batch). | — |
+| CP-5 | Slug→identity resolution dedup (layout) | DONE | One resolution/request via `resolveWorkUnitRouteIdentity` (renamed in CQ-3) | commit `5148c9708`; C1/C2/C3/C7 re-cert | — |
+
+### 2.3 TypeScript Architecture — C → B+ now (A later) (bucket B) · 15%
+**Why C:** one monolithic `tsconfig.build.json`, no project references; cold typecheck 156 s / 3.27 GB (single process). Incremental is healthy (15 s / 1.15 GB). The graph only grows.
+**Blocking risks:** project references are a repo-wide change (do NOT rush); measure each step.
+**Evidence for B+:** immediate graph/time reduction measured; a written, reviewed project-reference roadmap. **A** later requires the referenced-project migration.
+
+| ID | Task | Status | Completion criteria | Evidence | Deps |
+|---|---|:--:|---|---|---|
+| TS-1 | Immediate wins (kill pathological inferred types on hot runtime modules; tighten over-broad public surfaces) | NS | Cold typecheck time or file-count measurably reduced; no new errors | before/after `time -l npm run typecheck` | — |
+| TS-2 | Design the TypeScript project-reference roadmap (`docs/runtime/typescript-roadmap.md`) | **DONE** | First bounded projects named (kernel, provisioning), migration order + guardrails, effort/risk | `docs/runtime/typescript-roadmap.md` — immediate wins (→B+) vs project-refs (→A), extraction order, DAG guardrails, exit criteria | — |
+| TS-3 | Baseline captured (cold/warm time, RSS, process count) | DONE | Measured: cold 156 s/3.27 GB, incremental 15 s/1.15 GB, 1 proc; storm is only `next build`'s checker | ledger Phase 5 table | — |
+
+### 2.4 Dependency Graph — B → A- (bucket A/B) · 40%
+**Why B:** perimeter splits + 26 deletions done, but always-mounted registry modals, the `workflowRun.ts` automation engine, and non-core cards remain eager; `InlineOpportunityFocusPanel` is a ~40-import hub.
+**Blocking risks:** DG-1 changes modal lifecycle (exit animations/state) — per-modal cert needed.
+**Evidence for A-:** no noncritical mode on the initial static graph; the hub is a thin composition root.
+
+| ID | Task | Status | Completion criteria | Evidence | Deps |
+|---|---|:--:|---|---|---|
+| DG-1 | Convert 7 always-mounted registry action modals to conditional-mount + `dynamic` | NS | Modals load only on open; off first-paint graph; each opens in cert | bundle delta + per-modal cert | — |
+| DG-2 | Lazy-load `workflowRun.ts` automation engine off first paint (2 static entry paths) | NS | `workflowRun.ts` not on the initial static import walk; action-time behavior unchanged | dep-graph walk + cert | — |
+| DG-3 | Isolate SchedulingCard + non-core cards from the lead first-paint graph | NS | Off the lead first-paint graph; scheduling-context cert | dep-graph walk + scheduling cert | — |
+| DG-4 | Split Create Lead + Communications-composer surfaces | DONE | `next/dynamic`; −49.5 KB bundle; cert green | commit `5dac324fa` | — |
+| DG-5 | Delete 26 dead files (2,793 lines) | DONE | 0-importer verified; tsc+build+browser cert | commit `97a740a31` | — |
+
+### 2.5 Maintainability — C- → A- (bucket A) · 30%
+**Why C-:** a new senior needed the ledger to understand ownership; a core-file comment was actively wrong (fixed).
+**Evidence for A-:** a fresh senior traces ownership / critical path / cache ownership / extension points in **≤1 day** using `ARCHITECTURE.md` alone (validated by a fresh-agent comprehension check).
+
+| ID | Task | Status | Completion criteria | Evidence | Deps |
+|---|---|:--:|---|---|---|
+| MA-1 | `docs/runtime/ARCHITECTURE.md` (shared w/ DOC-1) | **DONE** | Covers kernel triad, Surface Host, Provisioning Answer contract, seed seam, cache ownership, critical-path waterfall, extension points, timing | **`ARCHITECTURE.md` written; fresh-agent comprehension check PASSED the 1-day gate (4/5 fully answerable, all claims grep-accurate); 3 polish fixes applied** | — |
+| MA-2 | Stale-comment audit across runtime dirs | IP | grep-audit of STREAMED/OVERLAP/legacy/TODO comments; each reconciled with code | audit list resolved (layout comment DONE) | — |
+
+### 2.6 Scalability — C → A- (bucket B) · 10%
+**Why C:** at 10× domains/50 engineers the same unfinished items bite (monolith, single tsconfig, per-nav speculative compose, view-count-scaling storm). The kernel is config-driven (no code-multiplication ceiling), but the `ProvisioningAnswer` contract is opportunity-shaped.
+**Blocking risks:** derived from TS-2, CP-*, CQ-2, DG-*.
+**Evidence for A-:** a second subject type (Parent/Teacher) representable without changing the answer core; scalability items in other categories closed.
+
+| ID | Task | Status | Completion criteria | Evidence | Deps |
+|---|---|:--:|---|---|---|
+| SC-1 | Generalize the `ProvisioningAnswer` subject contract (parameterize `focusPanelSubjectSnapshot`/`inquiry_children` by subject type) | NS | A second subject type modeled without changing the answer core; design + PoC type | design doc + PoC type compiles | — |
+| SC-2 | Scalability roll-up (derived) | NS | TS-2 + CP-1..4 + CQ-2 + DG-1..3 at target | those tasks DONE | TS-2, CP-*, CQ-2, DG-1..3 |
+
+### 2.7 Testing — C- → A (bucket A) · 35%
+**Why C-:** provisioning/seed unit suite now committed (13, incl. key-parity), but E2E specs are dev-fixture-coupled (not portable/CI), and contract/perf/routing coverage is thin.
+**Blocking risks:** portable fixtures require a seeding path; CI needs an ephemeral authed env.
+**Evidence for A:** the pyramid below green in CI.
+
+| ID | Task | Status | Completion criteria | Evidence | Deps |
+|---|---|:--:|---|---|---|
+| TE-1 | Provisioning/seed unit suite (seed→consume, key-parity, fall-open, idempotency, one-shot, no-op) | DONE | 13/13 green; silent-miss guard present | `workUnitProvisioningPrefetch.test.ts`, commit `63dafa004` | — |
+| TE-2 | Portable Playwright fixtures (replace hardcoded Wenc/Kurzman IDs with a seeded fixture) | NS | Cert specs pass against a freshly-seeded DB, no hardcoded IDs | green run in a clean env | — |
+| TE-3 | CI wiring (unit + contract + integration on PR; Playwright in a seeded ephemeral env) | NS | CI runs the suites on PR; green | CI config + green run | TE-2 |
+| TE-4 | `ProvisioningAnswer` schema contract test (snapshot) | NS | A schema change breaks the test | committed contract test | — |
+| TE-5 | Routing-permutation unit tests (`attentionFromUrl`↔`urlFromAttention` parity; path-vs-query documented) | **DONE** | Unit-level parity; the path/query inconsistency locked | **`attentionUrlParity.test.ts` (4/4): round-trips 6 coordinate permutations; locks subject = `?subject_id` ONLY (path `/:recordId` → subject null, D-004/RA-2); `urlFromAttention` never emits a path record segment. d2/d4 kernel suites still green (36/36).** | RA-2✓ |
+| TE-6 | Performance regression assertions (waterfall budgets: first-card, all-cards) | NS | Committed spec asserts budgets; fails on regression | committed perf spec | PE-* |
+| TE-7 | Commit behavioral cert specs (non-ephemeral) | DONE | Cert specs in-repo (local, honest limitation noted) | commit `435c13c94` | — |
+
+### 2.8 Documentation — C → A- (bucket A) · 30%
+**Why C:** durable knowledge lives in ledgers/realization history; comments contradicted code (fixed).
+**Evidence for A-:** `ARCHITECTURE.md` is self-sufficient — a future engineer needs no ledger.
+
+| ID | Task | Status | Completion criteria | Evidence | Deps |
+|---|---|:--:|---|---|---|
+| DOC-1 | `docs/runtime/ARCHITECTURE.md` (ownership, critical path, data flow, cache ownership, timing, extension points) | **DONE** | Self-sufficient; comprehension check passes | comprehension check PASSED; polish fixes applied | — |
+| DOC-2 | Fold durable facts out of the ledger into `ARCHITECTURE.md`; keep ledger as history | NS | ARCHITECTURE.md needs no ledger to understand V1 | comprehension check | DOC-1 |
+| DOC-3 | Truthful code comments | IP | No comment contradicts code in runtime dirs | layout comment DONE (`63dafa004`); MA-2 audit | MA-2 |
+
+### 2.9 Performance — **A- ✓ TARGET (warm)** (bucket A/B) · 72%
+**Why A- (warm certified):** PROD-verified — warm first-meaningful **1851–2566 ms (<3 s)**; warm fully-settled = **loads-as-one spread 0 ms ≈ 1.85 s (<6 s)**, video-captured; record-switch 46 ms; hydration ~50 ms (not the gate). PE-1/PE-2/PE-4 DONE. **The category's own A- evidence criterion (warm-only) is met.**
+**Remaining (why not complete):** PE-3 — **cold primary-usable ~6.5 s is NOT yet improved** (Lane 1A: auth 1977 / route-identity 2470 / compose 2424 cold-DB chain). The FINAL certification standard requires "materially improved cold load," so Performance being A- on warm does NOT complete the initiative.
+**Blocking risks:** cold auth/identity/compose aggregate confirmation needs a PROD build (EEC-gated on host quiescence); the parent-bundle levers (lifecycleCards `fcce804a0`, orgName) are HIDDEN under the child composeAndMeta on work-unit routes (§3) and cannot move work-unit primary-usable — they are wasted-work removals, not the cold lever.
+
+| ID | Task | Status | Completion criteria | Evidence | Deps |
+|---|---|:--:|---|---|---|
+| PE-1 | Warm first-meaningful < 3 s | **DONE** | Prod-representative warm first-card < 3000 ms | **PROD warm first-cell 1851–2566 ms (median-of-6, video-captured); hydration ~50 ms** | — |
+| PE-2 | Warm fully-settled panel < 6 s | **DONE** | Prod-representative warm all-cards < 6000 ms | **LOADS-AS-ONE spread 0 ms ≈ 1.85 s prod (all 5 primary cards same frame; the "12 s" is background prefetch, not settlement — TAB-usable 389 ms)** | — |
+| PE-3 | Cold primary-usable mitigation | **READY (High)** | Cold primary-usable materially reduced from ~6.5 s | harness — Lane 1A (auth/identity/compose cold-DB chain; needs PROD build, EEC-gated) | — |
+| PE-4 | First-card seed win + bundle −49.5 KB | DONE | 6.7→3.6 s warm; committed | commits `d1314bb57`, `5dac324fa` | — |
+
+### 2.10 Code Quality — B- → A- (bucket A) · 55%
+**Why B-:** clean small diffs + dead-code deletion + simplification done, but the Focus Panel monolith remains and one impl-leak name.
+**Evidence for A-:** the hub is a thin composition root of bounded modules with small contracts; no dead complexity; honest names.
+
+| ID | Task | Status | Completion criteria | Evidence | Deps |
+|---|---|:--:|---|---|---|
+| CQ-1 | Simplify `seedProvisioning` + truthful comments | DONE | Resolved-answer-only cache write; polymorphism deleted | commit `63dafa004` | — |
+| CQ-2 | Decompose `InlineOpportunityFocusPanel` into bounded modules (presentation / cards / modes / actions / comms / scheduling / current-work / refresh / selection / prewarm / state / effects) | NS | Hub is a composition root importing bounded modules, each a small contract; no behavior change (cert green) | import-count before/after + module contracts + full cert | DG-1, DG-2 |
+| CQ-3 | Rename `resolveWorkUnitRouteIdentityCached` (drop impl-leak suffix) | **DONE** | `resolveWorkUnitRouteIdentityCached` → `resolveWorkUnitRouteIdentity` (export + file); 2 call sites updated; the `cache()` dedup is documented at the definition, not leaked into the name. **tsc EXIT 0 / 0 errors; 0 code refs to the old name.** `55a9be208` | — |
+
+---
+
+## 3. Cross-cutting blocking risks
+
+1. **Cert-sensitive reveal path.** CP-1/CP-2/CQ-2/RA-2 all touch the reveal/Settlement/legacy-drawer path. Every change runs the full loop (implement → measure → typecheck → build → browser-cert → keep/revert) and re-runs the behavioral matrix.
+2. **Host memory.** The workstation thrashes (swap 17–21 GB); prod builds intermittently OOM. Serialize heavy steps; reap Chromium; `SKIP_BUILD_TYPECHECK=1` for measurement builds; final typecheck out-of-band.
+3. **Portable fixtures gap.** Until TE-2, E2E cert is local-only — treat E2E green as local evidence, not CI-portable proof.
+4. **Legacy coexistence.** RA-2's legacy drawer is live; migrate behind evidence, never delete blind.
+
+## 4. Session protocol (every implementation session)
+
+1. **Open:** read this tracker; pick the next task(s) by dependency + leverage (CP-1/CP-2 and RA-2 are the highest-leverage).
+2. **Work the loop** per task: implement smallest correction → measure → typecheck → prod build → browser-cert → keep/revert on evidence.
+3. **Close:** update the task's **Status**, **Evidence** (commit hash + measurement), the category **Current grade** + **%**, and **remaining work**. Add a Change-log row.
+4. **Grade change rule:** a category's Current grade only advances when its listed tasks' evidence supports it — grades are earned by evidence, not asserted.
+5. **Done rule:** the initiative is complete when every category = target grade, **or** a bucket-**C** limitation is proven with code + timing + behavior evidence and operator review is requested.
+
+## 5. Change log
+
+| Date | Session | Change | Commits |
+|---|---|---|---|
+| 2026-07-26 | Certification kickoff | Tracker created; grades/tasks/evidence seeded from the realization + adversarial-review + A/B/C analysis | — |
+| 2026-07-26 | Realization + Phase 3/4/5 | CP-5, DG-4, DG-5, PE-4, TE-1, TE-7, CQ-1 completed; punch-list truth/simplification | `d1314bb57` `5dac324fa` `97a740a31` `5148c9708` `63dafa004` `435c13c94` |
+| 2026-07-26 | Certification exec #1 | **CP-2 → DONE** (dup `/stage-work` eliminated; all-cards 12.7→11.2 s; +4 units; tsc gate exit 0). Critical Path B-→B, 40%. | `437ad9d11` |
+| 2026-07-26 | Certification exec #2 | **MA-1 / DOC-1 → DONE** (`ARCHITECTURE.md`; comprehension check PASSED + 3 polish fixes). Maintainability C-→B (70%), Documentation C→B (60%). | `c52e50c52` + this |
+| 2026-07-26 | Certification exec #3 | **TS-2 → DONE** (`typescript-roadmap.md`). TypeScript C→C+ (50%). | this |
+| 2026-07-26 | Certification exec #4 | **RA-1 → DONE** (kernel preload seam; `provisioningAnswerUrl` now kernel-only; behavior-identical, cert green; D-011). Runtime Architecture C+→B (40%). Unblocks RA-2. | `3c0a9d6c1` |
+| 2026-07-26 | Certification exec #5 | **RA-2 → IP (scoped + de-risked).** Found `useWorkUnitSurfaceController` DEAD → legacy duality is unreachable; RA-2 reduced to delete-dead + query-ify the create-lead href. R-03 downgraded Sev2→Sev3. Held (multi-file behavior change; host-memory throttle degrading trustworthy heavy cert). | — |
+| 2026-07-26 | Certification exec #6 | **RA-2 → DONE.** Deleted dead surface controller (`workUnitSurfaceController.ts` + test + `WorkUnitSurfaceView` + `syncOperatorWorkUnitUrlInBrowser`); `operatorWorkUnitHrefFromKey(key,recordId)` emits `?subject_id=`; `[recordId]` route + `next.config` rewrite retired; guards/tests → query form; removed a misrooted orphan dup test. **tsc EXIT 0 / 0 errors; prod build EXIT 0; RA-2-owned unit set green (32), +0 new failures / −2 pre-existing fixed (baseline-diff proven).** Runtime Architecture B→B+ (65%); R-03 RESOLVED; M1 6/11. Pre-existing seed-only-host/route-shell test rot flagged (R-04). | `558e4ae2a` |
+| 2026-07-26 | Certification exec #9 | **CQ-3 → DONE.** Renamed `resolveWorkUnitRouteIdentityCached` → `resolveWorkUnitRouteIdentity` (export + file); 2 call sites updated; ARCHITECTURE §5 + D-006/CP-5 refs updated. The `cache()` dedup stays documented at the definition, not leaked into the public name. tsc EXIT 0 / 0 errors; 0 code refs to the old name; build/browser N/A (import-graph-neutral rename). Code Quality 55→62% (2/3); M1 8/11. | `55a9be208` |
+| 2026-07-26 | Certification exec #8 | **RA-3 → DONE — Runtime Architecture CERTIFIED (B+ → A- = target, the first category to reach target).** Un-exported the raw-`url` `seedProvisioning` (0 external callers) → `seedProvisioningForRoute(identity)` is the SOLE public seed seam; the kernel owns key derivation structurally. `workUnitProvisioningPrefetch.test.ts` 17/17: single-producer key-agreement invariant + re-seed idempotency + cold-fetch coalescing (prev. untested). tsc EXIT 0 / 0 errors; +0 new failures vs baseline (6→6, proven); build/browser N/A (import-graph-neutral visibility change). ARCHITECTURE.md §7 updated. M1 7/11; overall ~52%. | `d27395ecb` |
+| 2026-07-26 | Certification exec #7 | **TE-5 → DONE.** `attentionUrlParity.test.ts` (4/4) locks `urlFromAttention`⇄`attentionFromUrl`: round-trips 6 coordinate permutations; subject = `?subject_id` ONLY (path `/:recordId` → null; D-004/RA-2); `urlFromAttention` never emits a path record segment. Kernel suites still green (d2/d4 = 36/36). Testing 35→42% (3/7); M4 3/7. Unit-only (throttle-appropriate; no source change). | `476aefe34` |
+| 2026-07-28 | Cert exec (EEC-free) | **Workstream A — lifecycleCards defer.** Landing-only seed moved out of the shared workspace layout into the landing route (`page.tsx` async + `WorkspaceLandingRouteVmBridge`); work-unit routes stop paying ~600 ms dead-weight DB work. Honest scope: wasted-work/architecture win, NOT a work-unit primary-usable win (hidden under child composeAndMeta, §3). +0 new failures (12=12 stash-verified); incremental tsc clean on the 4 files; both routes compile. Authed visual cert batched (EEC). | `fcce804a0` |
+| 2026-07-28 | Cert exec (EEC-free) | **Workstream C/D — registry concern 2 (lifecycle) extracted.** `CardLifecycle` contract owned by `focusPanelCoordinationModel`, composed into `CardDefinition`; `isOperationalTruthCard`/`isWorkOwningCard` read the registry; `OPERATIONAL_TRUTH_CARDS`/`WORK_OWNING_CARDS` sets deleted; `scheduling` entry added. Parity `focusPanelCardLifecycleRegistry.test.ts` 5/5; +0 new failures (79=79 stash-verified, +5 new passing); **project-wide tsc 0 errors**. Extensibility: two more central lists retired → one registry entry per card. | `84ca4d403` |
+| 2026-07-28 | Tracker housekeeping | **Scoreboard reconciled with PROD-certified evidence + 4-lane continuation plan persisted.** Performance **B→A-** (warm certified: PE-1/PE-2 DONE — 1851 ms / loads-as-one 0 ms prod; cold PE-3 remains → FINAL standard not met). Critical Path **B→B+** (warm all-cards <6 s via loads-as-one; Lane 1B dup-request dedup + cold remain). Scalability 10→15%, Code Quality 62→66%, Testing 42→45%. Overall **~54→~60%**. §7 four-lane plan + 12-step sequence + final standard added; Priority Queue re-sequenced; migration ledger preserved (concerns 1–2 DONE, order corrected). | (housekeeping) |
+| 2026-07-28 | Lane 2D design | **Second-surface certification design — Child/participant surface** (`SECOND-SURFACE-CERTIFICATION-DESIGN.md`). Selects the cheapest meaningfully-different surface (grain child≠case, different cards, permission flip, deferred scheduling command; reuses the child drawer-VM + `focusPanel/children/` composition), fixes the minimum proving slice + PASS/FAIL, and exposes SC-1 + Leak 2C as the first blockers. SURF-2 DONE. | `58e0ef939` |
+| 2026-07-28 | Cert exec (EEC-free) | **SC-1 platform-model subject generalization (core).** `FocusPanelWorkModeModel.subject` widened from the `"opportunity"` literal → generic `OperationalSubjectRef` (behavior-preserving: domain composers still supply `"opportunity"`, no runtime branches on the model's subject type). PoC `subjectContractGeneralization.test.ts` (4/4) proves opportunity+child+person compile through the platform contract. tsc 0 (my files); +0 new failures (79=79 stash-verified, +4 passing). REMAINING SC-1/2C = provisioning `FocusPanelSubjectSnapshot` generalization (reveal-path, batched). | `771c904cd` |
+| 2026-07-28 | Prod-loop exec (step 1) | **Provisioning domain→platform leaks eliminated (Lane 2C).** The opportunity-shaped `FocusPanelSubjectSnapshot` (`{primaryContact, inquiryChildren}`) in the PLATFORM provisioning contract → generic opaque `SubjectIdentityTruth = Record<string,unknown>` threaded through the whole reveal chain (contract → ProvisionedWorkUnitSurface → OperationalSubjectContext → OpportunityFocusPanelBody → InlineOpportunityFocusPanel → from-answer builder). The DOMAIN composer now declares the `person.*`/`_inquiry_children` truth keys; the platform contract + work-mode builder forward the bag WITHOUT knowing any key (not a renamed hardcode). Behavior-preserving (identical truth keys → identical Household/Children/Readiness at commit). **CODE DONE + STRUCTURALLY CERTIFIED:** project-wide tsc 0; +0 new unit failures (84=84 stash-verified; 2 builder tests updated to the generic contract); no lingering refs. **BROWSER-CERTIFIED (prod):** Household+Children render from the generic bag (Wenc child ready-at-commit; Chapmap childless honest-empty); warm primary-usable 1905 ms; clean subject switch, no stale flash. | `fceaf14f0` + guard `b28c98048` |
+| 2026-07-28 | Prod-loop exec (env) | **EEC RESOLVED (with authorization).** Freed ~8.9 GiB by clearing 24 idle sibling-worktree `.next` caches (disk 1.8→11 GiB free) + killed this worktree's dev server (+2.8 G RAM). **PROD BUILD SUCCEEDS** (`next build` exit 0, trusted env, `SKIP_BUILD_TYPECHECK=1`, 8 GB heap); prod server serving the FIXED build on :3013. Backup tag `backup/runtime-v1-cert-checkpoint-20260728`. **Remaining prod-loop gate = slot3 Playwright auth (Jul 25, expired) — user-refresh pending;** browser cert (loads-as-one/warm/no-flash) fires the instant it lands. | env |
+
+## 6a. Execution Environment Constraint (active)
+
+**This is an execution-environment fact, not a Runtime limitation.** The engineering for the affected tasks
+is **READY**; the current workstation simply cannot certify it trustworthily right now.
+
+- **Constraint:** the workstation is memory-saturated (swap ~17–21 GB, ~1 GB free). Heavy prod builds
+  (`next build`) run 5–10 min and intermittently OOM; a dev-server + Playwright run under that pressure is
+  OOM-prone, so a browser/perf certification there would not be trustworthy.
+- **What it constrains:** only the **build / measure / browser-cert loop** — i.e. `CP-4`, `CP-1`, `PE-*`,
+  `DG-1/2/3`, `CQ-2`. Those tasks are **EEC** (engineering READY, this machine can't certify), *not* BL.
+- **What it does NOT constrain:** unit tests, typecheck, static analysis, docs, and design/PoC-type tasks —
+  all certify fine here. RA-1/RA-2/RA-3/TE-5/CQ-3 were all certified under this constraint.
+- **Work-around (per the program's Environmental-Blockers rule):** route to EEC-free tasks (unit/typecheck/
+  design), reduce local resource use where practical, and **batch the EEC loop for host headroom** (a freed
+  sibling dev slot, or the machine quiescing) — never lower the certification bar to fit the workstation.
+- **Classification:** Environment (not Architecture / Engineering / External). No Runtime V1 ceiling.
+
+**LOADS-AS-ONE CERTIFICATION — PASSED (2026-07-27, PROD warm, video-captured).** Fine 40ms per-card timeline on the prod build: shell 1597ms → all 5 primary cards (current_work, household, children, milestones, billing_preview) first-SEEN == first-FILLED == 2622ms, **SPREAD 0ms** (every card appears fully-filled in the SAME frame). No card reserved-then-fills; no intermediate partial; no layout shift / wholesale replacement (single shell→cards transition, nothing mutates after in the 6s window); primary actions usable with the cards; subsequent requests hit deferred tabs only. PRIMARY-PANEL-COMPLETE ≈ 1.85s clean (2.6s under 40ms-poll+video overhead); DEFERRED-DETAIL (Activity/Comms tabs) ≈ 12s off the primary path. NEXT: cold load 6465ms (fresh-process phase instrumentation) + engineering-architecture track (Focus Panel decomposition, TS project-reference boundary).
+
+**COLD-LOAD DECOMPOSITION (2026-07-27, PROD first-request-after-fresh-start, named phases; instrumentation reverted).** Cold firstCell 6610ms / htmlEnd 6207 / ttfb 3401. Server phases (COLD → WARM): **auth (getAdminAuth) 1977 → 338**; **route identity ~2470 → ~700**; **provisioning compose (answer_total) 2424 → 715**; parallel bundle (cold, hidden under composeAndMeta): viewerTz 757/operTz 756/lifecycleCards 601/orgName 367. **Root cause: cold DB connections + empty caches — every serial read (auth → identity → compose) runs ~2.5-3× slower cold.** Prioritized cold levers (user's A-E): E. auth 1977ms (cold connection + session verify — biggest single phase; instrument proxy/auth, challenge repeated token verify / duplicated org resolution); C. identity ~2470ms cold (single read now, but cold-slow — verify index/plan; the config-stable cross-request cache helps WARM not the FIRST cold); compose ~2424ms cold (DB floor cold); A. lifecycleCards 601ms (delete/defer on work-unit routes — dead weight per its own comment); B. orgName 367ms (reuse canonical org identity from auth/bootstrap instead of a fresh read). Candidate structural lever: **warm the DB connection pool at server startup** (removes the cold-connection penalty the first request pays across auth/identity/compose). ARCHITECTURE TRACK still open: Focus Panel decomposition + delete monolith; Initial/Deferred dependency-reach measure; import-direction boundaries; first Runtime TS project-reference boundary + cold/warm typecheck+RSS before/after; keep action/tab/modal/deferred out of the initial graph.
+
+**WORKSTREAM B — DEFERRED-DETAIL waterfall (2026-07-27, PROD warm). The "12s" is NOT an operator concern.** Three distinct numbers measured independently: **PRIMARY-PANEL-COMPLETE ~1851ms**; **TAB-INTERACTION-USABLE 389ms** (click Activity → usable content in 0.4s — responsive); **BACKGROUND-PREFETCH-COMPLETE ~13264ms** (invisible; it is WHY the tab opens in 389ms). The operator never waits 12s for anything visible. BUT the background waterfall has real waste to challenge: (1) **4× `provisioning-answer` sibling-view prefetch** (~5-6s each — speculative prewarm of the OTHER work views lifecycle_lead/qualification/tour/waitlist; ~20s cumulative background DB work); (2) **DUPLICATE requests** — `communications/drawer-recipients` ×2 (t=3078+t=10124), `communications/family-workspace` ×2 (t=3077+t=16479), `queue-view-totals` ×2 (t=3086+t=13125); (3) enriched drawer VM 6046ms (deferred settlement). NEXT (Workstream B fixes, one at a time, keep/revert): dedupe the 3 duplicated background requests (identify the two callers each); re-evaluate the 4× sibling-view prefetch necessity/cost vs the record/view-switch benefit (it made record-switch 46ms, but 4 heavy requests is a lot — measure switch latency WITH vs WITHOUT). PLATFORM-vs-DOMAIN split: the sibling-prefetch policy + dedupe are PLATFORM (loading policy); the specific comms/queue endpoints are DOMAIN. Tab-interaction responsiveness (389ms) is CERTIFIED.
+
+**WORKSTREAM C/D — EXTENSIBILITY CERTIFICATION: FAIL (architectural debt), with a clear path (2026-07-27, agent-audited, file:line evidence).** "Register a card and the runtime composes/renders/reveals/defers it automatically" is NOT the current reality. Adding a new card (e.g. family_alerts/funding/compliance — confirmed net-new) requires **6-8 central-orchestration edits** across **13 distinct central files** that each enumerate/switch on the card-key list (union type FOCUS_PANEL_CARD_KEYS; TS-forced TOTAL Record SYSTEM5_CARD_ARCHETYPE; buildCardModels map.set chain; SUMMARY_GRID/WORK_GRID_* placement; FocusPanelCardRenderer if-chain + drill switch; FOCUS_PANEL_CARD_TITLES; catalog; coordination-model lifecycle Sets; provisioning contract). **What's already RIGHT (keep):** (1) Kernel (lib/runtime/kernel/*) + Surface Host (lib/experience/surfaceHost/*) are card-key-AGNOSTIC — grep-clean, platform layers are NOT leaked into. (2) LOADING POLICY is declarative — COMMIT_CRITICAL_CARD_SPECS (`{key,isKnowable,build}`, iterated, no per-card blocks) = ready-at-commit; absence = reserved/deferred-in-place. This ONE registry proves the pattern. (3) A generic ArchetypeCardBody renderer fallback exists. **NOT declarative:** placement, permissions/visibility, lifecycle, model-building, card identity/title — runtime hard-codes each. **DOMAIN→PLATFORM LEAKS (2, both confined to provisioning, NOT kernel/host):** workUnitProvisioningAnswer.ts:178 FocusPanelSubjectSnapshot embeds Household/Children card shape into the platform provisioning contract; focusPanelWorkModeModelFromProvisioningAnswer.ts:66 hardcodes domain truth keys (person.primary_contact_name/_inquiry_children). **PATH TO PASS (the extracted contract):** one `CardDefinition` registry entry per card (key, archetype, icon/footprint/action, title, build(context), commitCritical{isKnowable,bindings}, defaultPlacement, lifecycle, render?, catalog?) that the runtime iterates — each field maps 1:1 onto a current central list; COMMIT_CRITICAL_CARD_SPECS is already this shape. Result: adding a card = one array entry + one component, zero central edits. **THIS IS THE ARCHITECTURAL-DECISION-REQUIRING-REVIEW pause point** (a permanent platform contract + large migration of 22 cards / deletion of 13 central lists — the Workstream C/D/E core). Extract from the Work-Unit proving slice, then validate against a 2nd real surface (cross-surface cert).
+
+**REGISTRY EXTRACTION — INCREMENTAL (Kelly-approved approach: non-breaking scaffold, one concern at a time, keep/revert-verified).** STARTED `c7b739f2b`: `focusPanelCardRegistry.ts` (`CardDefinition` type + `FOCUS_PANEL_CARDS` array the runtime iterates, generalising COMMIT_CRITICAL_CARD_SPECS). **Concern 1/N — TITLE — DONE** (migrated `FOCUS_PANEL_CARD_TITLES` 1:1 → `cardTitle(key)`; verified loads-as-one 5/5 + 0 errors + 0 new test failures; no perf impact). **Concern 2/N — LIFECYCLE — DONE (2026-07-28)** — the `CardLifecycle` contract (`ownsOperationalTruth`/`ownsWorkCompletion`) is DEFINED IN ITS OWNING MODULE `focusPanelCoordinationModel` (the canvas-elevation composer) and composed into `CardDefinition = CardIdentity & Partial<CardLifecycle>` via a **type-only** import (no runtime cycle: coordinationModel value-imports `cardDefinition`, registry type-imports `CardLifecycle`). The two composers `isOperationalTruthCard`/`isWorkOwningCard` now read the registry; the central `OPERATIONAL_TRUTH_CARDS`/`WORK_OWNING_CARDS` sets are DELETED. Added the previously-missing `scheduling` registry entry (title-less; declares the lifecycle concern). Parity locked 1:1 by `focusPanelCardLifecycleRegistry.test.ts` (5/5, asserts every key matches the frozen pre-migration membership + that adding an owning card is one registry entry, no central-set edit); +0 new failures (stash-verified 79=79 across `tests/adminV2/runtime/`, 1168 vs 1163 = +5 new passing). **Concern-selection learnings for the next session:** `placement` (SUMMARY_GRID/WORK_GRID_*) is a per-MODE grid COMPOSITION (row-pairing/rhythm), not per-card data — needs a real composer, not a flat field; `loadingPolicy` (COMMIT_CRITICAL_CARD_SPECS) entangles `isKnowable` (loading policy) with the domain `build` fn — extract `isKnowable` and defer `build` to its own later concern. **Remaining concerns (each a subsequent migration replacing a SCATTERED/SWITCHED central list, verified against loads-as-one + warm-<2s) — DONE so far: 1 identity.title, 2 lifecycle:** placement (SUMMARY_GRID/WORK_GRID_* + default doc — per-MODE composition, needs a composer; VISUAL parity → EEC-gated) → loadingPolicy (fold COMMIT_CRITICAL_CARD_SPECS's `isKnowable`; defer `build`; reveal-path → EEC-gated) → visibility/permissions (first real multi-surface use — the Child surface's read-only→editable flip, SC-1) → dependencies/data-requirements → build (the buildCardModels map.set chain — biggest, domain-owned builders declared through the contract) → render (renderer if-chain → default ArchetypeCardBody + opt-in bespoke; VISUAL → EEC-gated) → catalog (focusPanelCardCatalog) / diagnostics. **DESIGN-LAW EXCLUSION — `archetype` (`SYSTEM5_CARD_ARCHETYPE`) STAYS AS-IS, do NOT migrate:** it is already a clean TS-**total** `Record<FocusPanelCardKey, archetype>` (add a card = one Record entry), so migrating it into the array registry REMOVES NO orchestration (fails admission test #4), LOSES compile-time totality (an array can't TS-enforce union coverage → downgraded to a test guarantee), and forces a premature 15→22 registry expansion. The registry absorbs SCATTERED/SWITCHED concerns, NOT already-ideal total Records; the same bar applies to any concern already a clean total per-card `Record`. Endpoint: adding a card = one array entry + one component, 0 central edits → re-run the "add family_alerts" test to certify PASS, then validate the contract against a 2nd real Alloy surface (cross-surface cert, `SECOND-SURFACE-CERTIFICATION-DESIGN.md`).
+
+**REGISTRY DESIGN LAW (Kelly, platform-contract requirement) — `c-encoded` in focusPanelCardRegistry.ts docstring.** The CardDefinition registry is Alloy's EXTENSION MODEL, not switch-replacement. COMPOSE SMALL, INDEPENDENTLY-EVOLVABLE CONCERN CONTRACTS — do NOT grow a god-schema. A card = IDENTITY composed with the concern contracts it opts into (placement · lifecycle · loadingPolicy · dependencies · permissions · diagnostics · render), EACH a small separately-typed contract OWNED BY ITS OWN runtime composer (placement composer reads placement; reveal composer reads loadingPolicy; …) — NO single coordinator knows all concerns. Every property must satisfy: (1) runtime needs it, (2) multiple cards use it, (3) multiple future surfaces use it, (4) removes orchestration, (5) introduces NO new central coordinator. Scale test on every decision: at 300 cards × 40 products, easier or harder to extend? Optimize for easier. Migration ledger updated: concern 1 (identity.title) split into its own `CardIdentity` contract; remaining concerns each land as their own contract + composer.
+
+---
+
+## 7. Continuation plan (2026-07-28) — four coordinated lanes
+
+**Scope law (every retained change):** must be either (a) explicitly DOMAIN-owned by Work Unit/opportunity modules, or (b) a reusable PLATFORM contract usable by other surfaces. No Work Unit concept leaks into generic runtime layers (Kernel / Surface Host / provisioning-generic / reveal). Work Unit is the proving slice, not the boundary.
+
+### Lane 1 — Runtime performance & operator experience
+- **1A Cold path (~6.5 s primary-usable).** Dominant cold phases: auth ~1977 / route-identity ~2470 / compose ~2424 / lifecycleCards ~601 / orgName ~367 / cold-DB connections + empty caches. Order: (1) lifecycleCards defer ✓ `fcce804a0`; (2) reuse canonical org identity/name; (3) instrument proxy/middleware + auth separately, remove repeated session/org/access work; (4) route-identity cold query-plan + data deps; (5) compose cold round-trips; (6) DB connection establishment + pool; (7) process-start/deploy warming ONLY after the real prod hosting model is understood. Per change: before/after · fresh-process COLD · warm · median/range/N · aggregate primary-panel impact · correctness · keep/revert. **Do NOT optimize cache-warm dev behavior as a substitute for cold PROD evidence.**
+- **1B Deferred/background waste (operator result ACCEPTED — 389 ms tab, 12–13 s is background completion).** Eliminate infra waste only: dup drawer-recipients / family-workspace / queue-view-totals; 4× speculative sibling provisioning-answer prefetch; enriched-VM slow tail. For each duplicate classify owner+trigger (dup mount / dup cache key / separate consumers / retry / dev artifact / missing inflight-dedup); fix one at a time. **Do NOT regress the 389 ms tab to save background work.** Prefetch policy = PLATFORM; endpoint content = DOMAIN.
+
+### Lane 2 — Permanent runtime platform architecture (registry extraction)
+- **2A Migration order (safest dep order):** identity/title ✓ → **placement** → loading-policy/lifecycle (lifecycle ✓; loadingPolicy next) → visibility/permissions → dependencies/data-requirements → builder/model → renderer selection → catalog/diagnostics → delete superseded central lists/switches. Each concern: smallest reusable contract · owning module · move declarations into per-card defs · derive legacy temporarily · prove parity · preserve warm<2s + loads-as-one · delete superseded orchestration. Admission tests (all 5) + the 300×40 scale test on every decision.
+- **2B `family_alerts` proving card (after placement + loadingPolicy).** Behind a dev/test fixture: adding it must require ONLY domain impl + registration + declared placement + loading policy + data dependency + optional permission/visibility — and MUST NOT touch Kernel / Surface Host / global reveal / central placement grids / global renderer chains / central title maps / provisioning truth-key switches. Use it to expose missing contracts BEFORE migrating all 22 cards. Remove/retain as a test fixture only.
+- **2C Provisioning leaks (FocusPanelSubjectSnapshot + hard-coded Household/Children truth-key assembly).** Move domain shape + truth derivation into domain-owned card/data declarations; the generic provisioning contract knows only subject identity · declared requirements · bounded outputs · loading tier · diagnostics — NOT specific card semantics. **Reveal-path cert-sensitive → run with the browser/loads-as-one loop (EEC-gated).** Do not merely rename.
+- **2D Second-surface cert (DESIGN now, don't full-build).** Pick a real surface that differs in subject grain / cards / placement / permissions / data deps / deferred interaction — candidates: Participant/Child · Family/Household · Staff · Scheduling Assignment. Identify the MINIMUM proving slice that validates the Work-Unit-extracted contracts. PASS = no Kernel / no Surface Host / no new central switches / only domain composers+cards+registration / same reveal·placement·lifecycle·diagnostics·loading contracts.
+
+### Lane 3 — Runtime boundaries & TypeScript architecture (after 1–2 concerns expose seams)
+- **Boundaries:** certify + enforce dependency direction among Kernel · Surface Host · provisioning · surface composition · card contracts · domain card impls · initial panel · deferred detail · diagnostics. Produce an import-reach map. Platform layers must NOT import Work-Unit/opportunity card impls; domain modules depend on public runtime contracts only. Add automated boundary enforcement.
+- **TS architecture (baseline: cold tsc ~229 s / ~4.17 GB / ~5,671 files):** choose the first project-reference/package boundary by OWNERSHIP + dep direction (not file count) — candidates: runtime contracts · card/surface contracts · Work-Unit domain composition · deferred feature packages. Measure cold+incremental typecheck · peak RSS · files reached · cycles · editor/build. Keep only on a clean ownership seam + measurable win. `.tsbuildinfo` alone is NOT TS architecture.
+
+### Lane 4 — Diagnostics & permanent protection
+- Turn temporary cert instrumentation into bounded PERMANENT diagnostics: route/bootstrap phases · compose phases · card composition · primary reveal · deferred interaction · request duplication · prefetch · cache hit/miss · record switching · cold vs warm. Low-overhead · env-controlled · structured · owner-attributable · prod-usable · no sensitive data.
+- Permanent regression protection: warm primary-usable · cohesive reveal · record switching · tab-open latency · request duplication · central-orchestration growth · platform→domain import violations.
+
+### Execution sequence (do NOT run all lanes at once in one tree)
+1 tracker persisted ✓ · 2 cold clean win (lifecycleCards ✓ → orgName) · 3 registry **placement** · 4 background dup-request fix · 5 registry **loadingPolicy** · 6 `family_alerts` proving test · 7 first boundary enforcement · 8 cold auth/identity/compose (PROD-gated) · 9 second-surface proving-slice design · 10 TS project-reference · 11 permanent diagnostics + regression suite · 12 finish registry migrations + delete old orchestration. **After each: update tracker, continue.**
+
+**Pause ONLY for:** irreversible schema/data-model changes · a platform-contract fork with materially different futures · destructive ops · merge/push approval · evidence a cert target conflicts with product correctness. **Do NOT pause for ordinary bounded implementation choices.**
+
+### Final certification standard (ALL true)
+- **Operator:** warm primary <2 s ✓ · cohesive atomic reveal ✓ · responsive tabs ✓ · **materially improved cold load (OPEN)** · instant record switching ✓.
+- **Platform:** declarative dynamic surface composition · adding a card needs no central runtime edits · composed concern contracts (not a god registry) · no Work-Unit leakage into generic layers · validated against a 2nd real surface.
+- **Engineering:** bounded runtime imports · automated dep enforcement · justified TS boundary · improved typecheck/RSS · permanent diagnostics · perf+architecture regression protection.

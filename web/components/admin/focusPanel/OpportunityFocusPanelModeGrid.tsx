@@ -1,11 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
-import OpportunityFocusPanelEmbeddedWorkspace from "@/components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace";
+// Activity cockpit is rendered ONLY when `mode === "activity"` (an operator interaction, never the
+// first-paint mode). Statically importing it pulled the whole Communications stack (~1.4k-line
+// CommunicationsDrawerSection + messaging composer/threads + tab panes) into the initial Work Unit
+// chunk, where it must download+hydrate before the first provisioning request can fire. Load it on
+// demand so it leaves the first-paint critical path; the Activity data cache is prewarmed separately
+// (focusPanelActivityPrewarm), so the switch stays fast.
+const OpportunityFocusPanelEmbeddedWorkspace = dynamic(
+    () => import("@/components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace"),
+    { ssr: false },
+);
 import { resolveFocusPanelModeGrid } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { cardTitle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import {
     deriveFocusPanelGridFromLayoutDoc,
     deriveFocusPanelInstanceMap,
@@ -43,23 +54,9 @@ import type { DrawerTabKey } from "@/lib/entityPresentation";
 const FOCUS_PANEL_DEPTH_MS = 240;
 
 /** Operator-facing identity for a configured card, shown while its settlement detail prepares. */
-const FOCUS_PANEL_CARD_TITLES: Partial<Record<FocusPanelCardKey, string>> = {
-    current_work: "What's Next",
-    household: "Household",
-    children: "Children",
-    milestones: "Milestones",
-    readiness_kpi: "Readiness",
-    health: "Enrollment Health",
-    tour_summary: "Tour",
-    communications: "Communications",
-    documents: "Documents",
-    attention: "Why Now",
-    billing_preview: "Billing Preview",
-    required_information: "Required Information",
-    current_mission: "Current Mission",
-    timeline: "Timeline",
-    notes: "Notes",
-};
+// Card titles are declared in the Focus Panel card REGISTRY (the extensibility contract, Workstream C/D)
+// — `cardTitle(key)`. The former local `FOCUS_PANEL_CARD_TITLES` map migrated there 1:1 (incl. the
+// `milestones` card staging added — carried into the registry so its title survives the migration).
 
 /**
  * RESERVED cell — a configured card whose SETTLEMENT detail has not yet arrived. It holds the cell's
@@ -68,25 +65,36 @@ const FOCUS_PANEL_CARD_TITLES: Partial<Record<FocusPanelCardKey, string>> = {
  * shows the card's IDENTITY (title) and a compact preparing state, so the committed panel reads as a
  * complete surface whose secondary detail is settling — not a loading placeholder.
  */
-function ReservedFocusPanelCell({ typeKey }: { typeKey: FocusPanelCardKey }) {
-    const title = FOCUS_PANEL_CARD_TITLES[typeKey];
+function ReservedFocusPanelCell({ typeKey, settled }: { typeKey: FocusPanelCardKey; settled?: boolean }) {
+    const title = cardTitle(typeKey);
+    // CALM NEUTRAL HOLD (Kelly). Not a loading placeholder and not a "Preparing…" spinner: the cell
+    // shows the card's IDENTITY plus a quiet, STATIC content hint (no pulse — Settlement fills it in
+    // place). It reads as a settled part of the surface whose detail is arriving, so the two-phase
+    // reveal is barely perceptible and never chatters. The panel already owns the aria-busy state, so
+    // the hold is aria-hidden rather than announcing per cell.
+    //
+    // `settled` = the card RESOLVED as not-applicable to this record. It is NOT loading, so it must
+    // NOT show the content hint (that reads as a card that loads forever). It keeps the cell (stable
+    // composition, no reflow) but renders as a quiet resolved-empty state, not a settling reserve.
     return (
         <div
             className="alloy-os-ucard"
-            data-focus-panel-cell-reserved="true"
-            data-focus-panel-cell-preparing={typeKey}
-            style={{ minHeight: "7.5rem", padding: "0.875rem" }}
+            data-focus-panel-cell-reserved={settled ? undefined : "true"}
+            data-focus-panel-cell-not-applicable={settled ? "true" : undefined}
+            data-focus-panel-cell-preparing={settled ? undefined : typeKey}
+            style={{ minHeight: "7.5rem", padding: "0.875rem", opacity: settled ? 0.72 : undefined }}
         >
             {title ? (
-                <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-alloy-muted">
-                        {title}
-                    </span>
-                    <span className="text-[11px] text-alloy-midnight/35" role="status" aria-live="polite">
-                        Preparing…
-                    </span>
-                </div>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-alloy-muted">
+                    {title}
+                </span>
             ) : null}
+            {settled ? null : (
+                <div className="mt-3 space-y-2" aria-hidden="true">
+                    <span className="block h-2 w-1/2 rounded-full bg-alloy-stone/12" />
+                    <span className="block h-2 w-1/3 rounded-full bg-alloy-stone/[0.08]" />
+                </div>
+            )}
         </div>
     );
 }
@@ -549,7 +557,13 @@ export default function OpportunityFocusPanelModeGrid({
                     const readiness = cardReadiness.get(typeKey) ?? "reserved";
                     const baseModel = cards.get(typeKey);
                     if (readiness !== "ready" || !baseModel) {
-                        return <ReservedFocusPanelCell typeKey={typeKey} />;
+                        // Once the ENRICHED VM has landed (`source === "drawer_vm"`) settlement is done:
+                        // any card still not ready — `not_applicable`, or simply never produced for this
+                        // record (e.g. milestones on a lead) — is RESOLVED-empty, not loading. Before
+                        // that (commit-critical answer), a not-ready card is genuinely still settling →
+                        // the calm reserve. This stops a resolved card from appearing to load forever.
+                        const settled = model.source === "drawer_vm" || readiness === "not_applicable";
+                        return <ReservedFocusPanelCell typeKey={typeKey} settled={settled} />;
                     }
                     const cardModel = composeEffectiveCardModel(baseModel, resolution?.config ?? null, record);
                     const receded = mode === "work" && workflowActive && typeKey === "work_launcher";

@@ -7,7 +7,7 @@ describe("resolveCreatedLeadFocusPanelHref", () => {
             recordId: "opp-1",
             currentWorkUnitKey: "new_leads",
         });
-        expect(href).toBe("/workspace/work-unit/new-leads/opp-1");
+        expect(href).toBe("/workspace/work-unit/new-leads?subject_id=opp-1");
     });
 
     it("never returns a legacy drawer / adminV2 drawer route", () => {
@@ -27,7 +27,7 @@ describe("resolveCreatedLeadFocusPanelHref", () => {
             currentWorkUnitKey: "needs_attention",
         });
         // `new_lead`-owning work unit wins over the current work unit.
-        expect(href).toBe("/workspace/work-unit/new-lead/opp-1");
+        expect(href).toBe("/workspace/work-unit/new-lead?subject_id=opp-1");
     });
 
     it("falls back safely to the operator workspace when no work unit resolves", () => {

@@ -22,7 +22,7 @@ import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntim
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
 import type {
-    FocusPanelSubjectSnapshot,
+    SubjectIdentityTruth,
     FocusPanelSummaryDocProjection,
 } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 
@@ -86,7 +86,7 @@ export type OperationalSubject = {
      * the answer so those cards render MEANINGFUL at commit rather than blank reserved cells. Null when
      * the answer did not resolve it (the cards reserve; the drawer VM fills them).
      */
-    subjectSnapshot: FocusPanelSubjectSnapshot | null;
+    subjectIdentityTruth: SubjectIdentityTruth | null;
     /**
      * A — the published Summary composition for the committed scope, carried by the answer so the
      * committed panel presents the PUBLISHED composition immediately (no default-doc first frame, no
@@ -98,7 +98,7 @@ export type OperationalSubject = {
 
 const EMPTY: OperationalSubject = {
     subjectId: null, entityType: null, identitySeed: null, situation: null, decision: null, action: null,
-    stageWorkRuntime: null, publishedStageInputs: null, workIntentRuntime: null, subjectSnapshot: null,
+    stageWorkRuntime: null, publishedStageInputs: null, workIntentRuntime: null, subjectIdentityTruth: null,
     summaryDocSeed: null,
 };
 const Ctx = createContext<OperationalSubject>(EMPTY);
@@ -113,7 +113,7 @@ export function OperationalSubjectProvider({
     stageWorkRuntime,
     publishedStageInputs,
     workIntentRuntime,
-    subjectSnapshot,
+    subjectIdentityTruth,
     summaryDocSeed,
     children,
 }: {
@@ -125,7 +125,7 @@ export function OperationalSubjectProvider({
     stageWorkRuntime?: StageWorkRuntimeProjection | null;
     publishedStageInputs?: PublishedStageInputsForCurrentWork | null;
     workIntentRuntime?: WorkIntentRuntimeProjection | null;
-    subjectSnapshot?: FocusPanelSubjectSnapshot | null;
+    subjectIdentityTruth?: SubjectIdentityTruth | null;
     summaryDocSeed?: FocusPanelSummaryDocProjection | null;
     children: ReactNode;
 }) {
@@ -140,10 +140,10 @@ export function OperationalSubjectProvider({
             stageWorkRuntime: stageWorkRuntime ?? null,
             publishedStageInputs: publishedStageInputs ?? null,
             workIntentRuntime: workIntentRuntime ?? null,
-            subjectSnapshot: subjectSnapshot ?? null,
+            subjectIdentityTruth: subjectIdentityTruth ?? null,
             summaryDocSeed: summaryDocSeed ?? null,
         }),
-        [subjectId, identitySeed, situation, decision, action, stageWorkRuntime, publishedStageInputs, workIntentRuntime, subjectSnapshot, summaryDocSeed],
+        [subjectId, identitySeed, situation, decision, action, stageWorkRuntime, publishedStageInputs, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

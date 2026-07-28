@@ -1,13 +1,6 @@
 import "server-only";
 
-import { createAdminClient } from "@/lib/supabaseAdmin";
-import { loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
-import {
-    fetchDepartmentsForSlugResolution,
-    fetchWorkUnitsForSlugResolution,
-} from "@/lib/admin/fetchWorkUnitsForSlugResolution";
-import { resolveWorkUnitByRouteSlug } from "@/lib/admin/resolveWorkUnitByRouteSlug";
-import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
+import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteIdentity";
 import type { WorkUnitSlugRouteCacheEntry } from "@/lib/admin/workUnitSlugRouteCache";
 
 /**
@@ -26,10 +19,9 @@ export async function loadWorkUnitSlugRouteMetaServer(
 ): Promise<WorkUnitSlugRouteCacheEntry | null> {
     try {
         const slug = typeof workUnitSlug === "string" ? workUnitSlug.trim() : "";
-        const platformKey = workUnitRouteSlugToKey(slug);
-        if (!platformKey) return null;
-
-        const gate = await loadAdminRouteGate();
+        // Request-memoized (Phase 3 dedup): shares ONE slug→identity resolution with the layout's
+        // provisioning seed (`composeProvisioningAnswerForRoute`) instead of repeating the DB reads.
+        const { gate, resolution, departments } = await resolveWorkUnitRouteIdentity(slug);
         if (!gate.ok) return null;
         if (
             gate.dim.departmentScope === "restricted" &&
@@ -37,28 +29,10 @@ export async function loadWorkUnitSlugRouteMetaServer(
         ) {
             return null;
         }
+        // not_found / ambiguous / unresolved → defer to the client fallback (it renders the precise message).
+        if (!resolution || resolution.status !== "resolved") return null;
 
-        const supabase = createAdminClient();
-        const { rows: workUnits } = await fetchWorkUnitsForSlugResolution({
-            supabase,
-            orgId: gate.orgId,
-            dim: gate.dim,
-            platformKey,
-        });
-
-        // Department metadata carries the configured Work Views (`work_views_v1`) that the
-        // resolver's `work_view` slug kind matches against (candidate departments only).
-        const departments = await fetchDepartmentsForSlugResolution({
-            supabase,
-            orgId: gate.orgId,
-            departmentIds: workUnits.map((row) => row.department_id),
-        });
-
-        const result = resolveWorkUnitByRouteSlug({ slug, workUnits, departments });
-        // not_found / ambiguous → defer to the client fallback (it renders the precise message).
-        if (result.status !== "resolved") return null;
-
-        const { match } = result;
+        const { match } = resolution;
         return {
             routeSlug: match.routeSlug,
             departmentId: match.departmentId,

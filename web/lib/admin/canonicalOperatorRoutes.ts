@@ -9,12 +9,18 @@ import { workUnitKeyToRouteSlug } from "@/lib/admin/workUnitRouteSlug";
 /** Operator landing — daily work home (Phase G). */
 export const OPERATOR_WORKSPACE_HREF = CANONICAL_OPERATOR_BASE;
 
-/** Build `/workspace/work-unit/:slug` from platform key (`new_leads` → `new-leads`). */
+/**
+ * Build `/workspace/work-unit/:slug` from platform key (`new_leads` → `new-leads`).
+ *
+ * A selected record is carried as the canonical `?subject_id=` query — the runtime's Operational
+ * Subject seam (`attentionFromUrl`/`urlFromAttention`). The legacy `/:recordId` path form is retired
+ * (RA-2): it drove the legacy drawer and selected the DEFAULT subject rather than the requested record.
+ */
 export function operatorWorkUnitHrefFromKey(platformKey: string, recordId?: string | null): string {
     const slug = workUnitKeyToRouteSlug(platformKey);
     const base = `${CANONICAL_OPERATOR_WORK_UNIT_PREFIX}/${encodeURIComponent(slug)}`;
     const record = typeof recordId === "string" ? recordId.trim() : "";
-    return record ? `${base}/${encodeURIComponent(record)}` : base;
+    return record ? `${base}?subject_id=${encodeURIComponent(record)}` : base;
 }
 
 /**
@@ -30,7 +36,7 @@ export function operatorWorkUnitHrefFromWorkViewSlug(workViewId: string): string
  * Resolve where "Open Lead" sends the operator after Create Lead success.
  *
  * Canonical destination is the Work Unit Focus Panel for the new record
- * (`/workspace/work-unit/:slug/:recordId`) — never the legacy adminV2 drawer. Precedence:
+ * (`/workspace/work-unit/:slug?subject_id=:recordId`) — never the legacy adminV2 drawer. Precedence:
  *   1. `owningWorkUnitKey` — the work unit that owns the new lead's status (status-aware), when known.
  *   2. `currentWorkUnitKey` — the work unit the lead was created in.
  *   3. Operator workspace home — safe fallback when no work unit can be resolved (record still

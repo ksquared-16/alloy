@@ -16,6 +16,7 @@
  */
 
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import { cardDefinition } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
@@ -140,40 +141,35 @@ export function isElevatedLevel(level: FocusPanelPerspectiveLevel): boolean {
 }
 
 /**
- * Operational-truth cards OWN editable truth (Household, Children, and — as they
- * land — Billing, Schedule, Staff, Documents, Communications). When they go deeper
- * than Evidence they become the centered Focus Card (elevate + recede the rest).
+ * LIFECYCLE concern contract — owned by this coordination / canvas-elevation composer (Runtime V1
+ * Certification, card-registry design law: compose small, independently-evolvable concern contracts,
+ * each defined in its owning module). A card OPTS IN to elevation ownership; the two composers below
+ * read it from the card registry, so which cards own truth / work is declared ONCE per card (its
+ * registry entry) instead of in central membership sets here.
  *
- * Diagnostic cards (Readiness) do NOT own truth: they diagnose or route. Work-owning
- * cards (Current Work) own completion interaction and may elevate to Focus. Truth cards
- * own entity fields. This is the canvas rule, not a new primitive.
+ * Operational-truth cards OWN editable truth (Household, Children, Billing, Scheduling, Documents,
+ * Communications). When they go deeper than Evidence they become the centered Focus Card (elevate +
+ * recede the rest). Diagnostic cards (Readiness) do NOT own truth: they diagnose or route. Work-owning
+ * cards (Current Work) own stage-work completion and may elevate to Focus. This is the canvas rule,
+ * not a new primitive.
  *
  * @see docs/sprints/archive/06_2026/focus-panel-canvas-finalization
  */
-const OPERATIONAL_TRUTH_CARDS: ReadonlySet<FocusPanelCardKey> = new Set<FocusPanelCardKey>([
-    "household",
-    "children",
-    "billing_preview",
-    "scheduling",
-    "documents",
-    "communications",
-]);
+export type CardLifecycle = {
+    /** Owns editable entity truth → may elevate into a centered Focus Card. */
+    ownsOperationalTruth?: boolean;
+    /** Owns stage-work completion inside Focus (the centered Focus Card, Slice A). */
+    ownsWorkCompletion?: boolean;
+};
 
-/**
- * Work-owning cards own stage-work completion. Current Work elevates as a centered Focus
- * Card (Slice A) — the same activeDepth/elevatedCellKey path the operational-truth cards
- * use — instead of the legacy full-canvas workspace replace.
- */
-const WORK_OWNING_CARDS: ReadonlySet<FocusPanelCardKey> = new Set<FocusPanelCardKey>(["current_work"]);
-
-/** True when this card may elevate into a centered Focus Card. */
+/** True when this card may elevate into a centered Focus Card (declared via the registry lifecycle concern). */
 export function isOperationalTruthCard(card: FocusPanelCardKey): boolean {
-    return OPERATIONAL_TRUTH_CARDS.has(card);
+    return cardDefinition(card)?.ownsOperationalTruth === true;
 }
 
-/** True when this card owns stage work completion inside Focus. */
+/** True when this card owns stage work completion inside Focus (declared via the registry lifecycle concern). */
 export function isWorkOwningCard(card: FocusPanelCardKey): boolean {
-    return WORK_OWNING_CARDS.has(card);
+    return cardDefinition(card)?.ownsWorkCompletion === true;
 }
 
 /**

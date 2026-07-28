@@ -1,10 +1,10 @@
 /**
- * Surface Host render decision (Phase 2B Step 3 — canonical).
+ * Surface Host render decision (canonical).
  *
- * The Surface Host is now the ONE renderer of the work-unit surface: whenever the URL is a work
- * unit, the Host mounts it via `useWorkUnitSurfaceController`, and `WorkUnitSlugRouteHost` is the
- * seed-only route. No flag, no parallel route-render/host-render modes — one execution path, so
- * exactly one controller runs the identity / deep-link / URL-sync effects.
+ * The Surface Host is the ONE renderer of the work-unit surface, committed from focus: whenever the
+ * current surface is a work unit, the Host mounts it, and `WorkUnitSlugRouteHost` is the seed-only
+ * route. No flag, no parallel route-render/host-render modes — one execution path. The selected record
+ * is the Operational Subject carried by `?subject_id`; there is no path-`:recordId` deep-link owner.
  */
 
 import type { SurfaceRef } from "@/lib/experience/surfaceHost/surfaceRef";

@@ -177,19 +177,19 @@ const EMPTY_ACTIONS_PROJECTION: WorkUnitActionsProjection = {
 };
 
 /**
- * COMMIT-CRITICAL SUBJECT SNAPSHOT (A — preparation completeness). The default subject's
- * first-operational relationship identity — primary contact reachability + the children roster —
- * carried in the answer so the committed Focus Panel renders Household + Children as MEANINGFUL cards
- * at commit, not blank reserved rectangles. Sourced entirely from data the composer already resolved
- * for the subject row (enriched primary contact + the row's `metadata.inquiry_children`) — NO extra
- * DB read. Deeper family (secondary parents, emergency, address) + per-child settlement detail remain
- * Settlement (the drawer VM fills them in place).
+ * COMMIT-CRITICAL SUBJECT IDENTITY TRUTH (A — preparation completeness) — a GENERIC, domain-declared
+ * bag of committed-subject truth bindings (`key → value`), carried in the answer so the committed panel
+ * renders its identity-owning cards MEANINGFUL at commit, not blank reserved rectangles.
+ *
+ * PLATFORM/DOMAIN SEAM: this platform type is OPAQUE — the platform provisioning contract and the
+ * platform work-mode builder forward this bag into `context.truth` WITHOUT knowing any specific key.
+ * The DOMAIN composer (the opportunity answer builder in this file) declares WHICH keys it carries
+ * (e.g. `person.primary_contact_name`, `_inquiry_children`); those Household/Children semantics live in
+ * the domain, never in a platform type or a platform builder. A second surface declares its own
+ * bindings the same way — with no change to any platform layer. Sourced entirely from data the composer
+ * already resolved for the subject row (NO extra DB read); deeper detail remains Settlement.
  */
-export type FocusPanelSubjectSnapshot = {
-    primaryContact: { name: string | null; phone: string | null; email: string | null };
-    /** Raw `opportunity.metadata.inquiry_children` — the Children card's `truth._inquiry_children`. */
-    inquiryChildren: unknown;
-};
+export type SubjectIdentityTruth = Record<string, unknown>;
 
 /**
  * COMMIT-CRITICAL PUBLISHED SUMMARY COMPOSITION (A — the committed panel must present the PUBLISHED
@@ -207,7 +207,7 @@ export type ProvisioningAnswer =
           terminal: "operational";
           /** U-P1 authorization + canonical identifiers. */
           orgId: string;
-          workUnit: { id: string; key: string; name: string };
+          workUnit: { id: string; key: string; name: string; departmentId: string | null };
           /** U-O1 Business Process identity required for orientation. */
           businessProcess: { key: string; name: string };
           /** U-P2 active lens + its set. */
@@ -242,8 +242,8 @@ export type ProvisioningAnswer =
            * unresolved (degrades to the drawer-VM load; never an operational failure).
            */
           focusPanelStageWork: OpportunityStageWorkSlice | null;
-          /** A — commit-critical Household + Children snapshot (see {@link FocusPanelSubjectSnapshot}). */
-          focusPanelSubjectSnapshot: FocusPanelSubjectSnapshot | null;
+          /** A — commit-critical subject identity truth bindings, domain-declared + opaque to the platform (see {@link SubjectIdentityTruth}). */
+          subjectIdentityTruth: SubjectIdentityTruth | null;
           /** A — the published Summary composition for the committed scope (see {@link FocusPanelSummaryDocProjection}). */
           focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null;
           /**
@@ -423,7 +423,14 @@ export async function composeWorkUnitProvisioningAnswer(
     if (wuLookup.error) return fail("records_unavailable", `work unit lookup failed: ${wuLookup.error}`);
     const wuRow = wuLookup.row;
     if (!wuRow) return fail("work_unit_not_found", `no work unit "${req.workUnitSlug}" in this tenant`);
-    const workUnit = { id: String(wuRow.id), key: String(wuRow.key), name: String(wuRow.name) };
+    const workUnit = {
+        id: String(wuRow.id),
+        key: String(wuRow.key),
+        name: String(wuRow.name),
+        // Carried so the client can seed the stage-work cache with a key that matches the drawer VM's
+        // (org/opp/dept/stage) — reusing the answer's `focusPanelStageWork` instead of re-fetching it.
+        departmentId: wuRow.department_id ? String(wuRow.department_id) : null,
+    };
 
     // ── COLD-PATH PARALLELISM: the operational records depend ONLY on work_unit.id (available now), not on
     //    configuration, queue-layout, or presentation. Kick the fetch off here so it overlaps that whole
@@ -629,7 +636,14 @@ export async function composeWorkUnitProvisioningAnswer(
     // U-O2 enrichment over the BOUNDED PAGE only — cost scales with what the operator can see.
     // Additive: the page in is the page out, in the same canonical order. Membership was decided
     // upstream by the projection and is never re-evaluated here.
-    const enriched = await enrichOperationalProjectionRows({
+    //
+    // CONCURRENCY (D1 §8 budget): the enrichment (queue-row CRM labels) and the commit-critical
+    // stage-work read are INDEPENDENT — enrichment adds contact labels to the visible rows, while
+    // stage-work reads the SUBJECT's tasks. The subject is resolved from the PAGE (pre-enrichment)
+    // and stage-work needs only subject + stage + config, so it never reads the enriched rows. They
+    // were serial (~680 ms + ~690 ms measured); kick BOTH off here and join below so composition is
+    // the max, not the sum. The subject-snapshot's enriched `primary_contact` is built AFTER the join.
+    const enrichedPromise = enrichOperationalProjectionRows({
         supabase: req.supabase,
         orgId: req.orgId,
         rows: page as unknown as EnrichableProjectionRow[],
@@ -640,24 +654,14 @@ export async function composeWorkUnitProvisioningAnswer(
             subject_grain: "case",
         },
     });
-    const rows: ProvisioningRow[] = enriched.map((r) => ({
-        id: String((r as Record<string, unknown>).id),
-        stageKey: strOrNull((r as Record<string, unknown>).stage_key),
-        statusKey: strOrNull((r as Record<string, unknown>).status_key),
-        updatedAt: strOrNull((r as Record<string, unknown>).updated_at),
-        title: strOrNull((r as Record<string, unknown>).name),
-        context: queueRowContextOf(r as Record<string, unknown>),
-    }));
+    void enrichedPromise.catch(() => {});
 
-    // Join: await the presentation branch that ran CONCURRENTLY with projection + enrichment above.
-    // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
-    const presentation = await presentationPromise;
-    timings.presentation_ms = now() - tPres;
-    // B: the actions projection ran concurrently above — join it here (no serial latency added).
-    const actionsProjection = await actionsProjectionPromise;
-
-    // ── U-O6 AUTHORITATIVE EMPTY — a workable place, never confused with error. ──
-    if (rows.length === 0) {
+    // ── U-O6 AUTHORITATIVE EMPTY — a workable place, never confused with error. Gated on the PAGE
+    //    (enrichment is 1:1, page in = page out), so it does not wait on enrichment. ──
+    if (page.length === 0) {
+        const presentation = await presentationPromise;
+        timings.presentation_ms = now() - tPres;
+        const actionsProjection = await actionsProjectionPromise;
         timings.composition_ms = now() - tComp;
         timings.total_ms = now() - t0;
         return {
@@ -679,7 +683,9 @@ export async function composeWorkUnitProvisioningAnswer(
         };
     }
 
-    // ── U-P4/U-O3 Record of Attention — from the SAME evaluated page. No second evaluator. ──
+    // ── U-P4/U-O3 Record of Attention — from the SAME evaluated page. No second evaluator. Resolved
+    //    from the PAGE (pre-enrichment) so the commit-critical stage-work read can start CONCURRENTLY
+    //    with enrichment above. ──
     const { strategy, source } = resolveSubjectStrategy(activeView);
     const subjectRows: OperationalSubjectQueueRow[] = page.map((r, i) => ({
         id: String((r as Record<string, unknown>).id),
@@ -721,36 +727,57 @@ export async function composeWorkUnitProvisioningAnswer(
     // Focus Panel commits WITH Header + Queue from the answer alone; the drawer VM only enriches the
     // surrounding Settlement cards afterward. Additive and non-fatal: any failure degrades to the
     // client drawer-VM load, never an operational error. `departmentMetadata` is already in hand.
-    let focusPanelStageWork: OpportunityStageWorkSlice | null = null;
-    try {
-        focusPanelStageWork = await resolveOpportunityStageWorkSlice({
-            supabase: req.supabase,
-            orgId: req.orgId,
-            opportunityId: chosen.entityId,
-            departmentId: wuRow.department_id ? String(wuRow.department_id) : null,
-            stageKey: stage.key,
-            stageLabel: stage.label,
-            departmentMetadata: deptRow?.metadata,
-        });
-    } catch {
-        /* stage-work is additive to the commit — never fail the operational answer on it */
-    }
+    // Kicked off CONCURRENTLY with enrichment (both need only data resolved above); joined below.
+    const focusPanelStageWorkPromise = resolveOpportunityStageWorkSlice({
+        supabase: req.supabase,
+        orgId: req.orgId,
+        opportunityId: chosen.entityId,
+        departmentId: wuRow.department_id ? String(wuRow.department_id) : null,
+        stageKey: stage.key,
+        stageLabel: stage.label,
+        departmentMetadata: deptRow?.metadata,
+    }).catch(() => null /* stage-work is additive to the commit — never fail the operational answer on it */);
 
-    // A — COMMIT-CRITICAL SUBJECT SNAPSHOT. The default subject's Household + Children first-operational
-    // identity, from data ALREADY resolved for its row: the enriched queue-row `primary_contact` and the
-    // row's `metadata.inquiry_children`. No extra DB read. Lets the committed Focus Panel render Household
-    // and Children as MEANINGFUL cards, not blank reserved rectangles.
+    // ── JOIN: enrichment (queue rows) + presentation + actions + stage-work, all kicked off above. ──
+    const enriched = await enrichedPromise;
+    const rows: ProvisioningRow[] = enriched.map((r) => ({
+        id: String((r as Record<string, unknown>).id),
+        stageKey: strOrNull((r as Record<string, unknown>).stage_key),
+        statusKey: strOrNull((r as Record<string, unknown>).status_key),
+        updatedAt: strOrNull((r as Record<string, unknown>).updated_at),
+        title: strOrNull((r as Record<string, unknown>).name),
+        context: queueRowContextOf(r as Record<string, unknown>),
+    }));
+    // Join: await the presentation branch that ran CONCURRENTLY with projection + enrichment above.
+    // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
+    const presentation = await presentationPromise;
+    timings.presentation_ms = now() - tPres;
+    // B: the actions projection ran concurrently above — join it here (no serial latency added).
+    const actionsProjection = await actionsProjectionPromise;
+    const focusPanelStageWork = await focusPanelStageWorkPromise;
+
+    // A — COMMIT-CRITICAL SUBJECT IDENTITY TRUTH (DOMAIN-owned key declaration). The opportunity domain
+    // composer declares WHICH truth bindings the committed Household + Children cards read
+    // (`person.primary_contact_name` / `_phone` / `_email`, `_inquiry_children`) — these Household/Children
+    // semantics live HERE, in the domain, and the platform contract/builder forward the bag opaquely.
+    // Sourced from data ALREADY resolved for the subject row (enriched queue-row `primary_contact` + the
+    // row's `metadata.inquiry_children`) — no extra DB read. Empty/absent bindings → the bag is null and
+    // those cards reserve (the drawer VM fills them). A second surface declares its own keys the same way.
     const chosenRowContext = (rows.find((r) => r.id === chosen.entityId)?.context ?? {}) as Record<string, unknown>;
     const chosenPrimaryContact = (chosenRowContext.primary_contact ?? {}) as Record<string, unknown>;
     const subjectMetadata = (subjectRow as Record<string, unknown>).metadata as Record<string, unknown> | null | undefined;
-    const focusPanelSubjectSnapshot: FocusPanelSubjectSnapshot = {
-        primaryContact: {
-            name: strOrNull(chosenPrimaryContact.display_name),
-            phone: strOrNull(chosenPrimaryContact.phone),
-            email: strOrNull(chosenPrimaryContact.email),
-        },
-        inquiryChildren: subjectMetadata?.inquiry_children ?? null,
+    const primaryContactName = strOrNull(chosenPrimaryContact.display_name);
+    const primaryContactPhone = strOrNull(chosenPrimaryContact.phone);
+    const primaryContactEmail = strOrNull(chosenPrimaryContact.email);
+    const inquiryChildren = subjectMetadata?.inquiry_children ?? null;
+    const subjectIdentityTruthBindings: SubjectIdentityTruth = {
+        ...(primaryContactName ? { "person.primary_contact_name": primaryContactName } : {}),
+        ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),
+        ...(primaryContactEmail ? { "person.primary_email": primaryContactEmail } : {}),
+        ...(inquiryChildren != null ? { _inquiry_children: inquiryChildren } : {}),
     };
+    const subjectIdentityTruth: SubjectIdentityTruth | null =
+        Object.keys(subjectIdentityTruthBindings).length ? subjectIdentityTruthBindings : null;
 
     // A — the published Summary composition for the committed scope. Selected with the SAME axes the
     // client doc provider sends (`workViewId` + committed stage; Business Process / status stay
@@ -794,7 +821,7 @@ export async function composeWorkUnitProvisioningAnswer(
             workTemplateKey: template.template_key,
         },
         focusPanelStageWork,
-        focusPanelSubjectSnapshot,
+        subjectIdentityTruth,
         focusPanelSummaryDoc,
         presentation,
         settlement,

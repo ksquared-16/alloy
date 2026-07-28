@@ -28,9 +28,13 @@ function input(overrides: Partial<FocusPanelWorkModeFromAnswerInput> = {}): Focu
         publishedStageInputs: null,
         situation: { stageKey: "lead", stageLabel: "New Lead", purpose: "Reach the family" },
         primaryAction: { actionRef: "contact_family", label: "Contact Family" },
-        subjectSnapshot: {
-            primaryContact: { name: "Taryn Wenc", phone: "(408) 885-9652", email: "tarynw@hotmail.com" },
-            inquiryChildren: [{ display_name: "Ava Wenc", outcome_status_key: "new", age: "3" }],
+        // Generic subject identity truth bag (as the DOMAIN composer declares it) — the platform builder
+        // spreads it into context.truth opaquely; it no longer knows the primaryContact/inquiryChildren shape.
+        subjectIdentityTruth: {
+            "person.primary_contact_name": "Taryn Wenc",
+            "person.primary_phone": "(408) 885-9652",
+            "person.primary_email": "tarynw@hotmail.com",
+            _inquiry_children: [{ display_name: "Ava Wenc", outcome_status_key: "new", age: "3" }],
         },
         ...overrides,
     };
@@ -92,7 +96,7 @@ describe("focusPanelWorkModeModelFromProvisioningAnswer (A — commit-critical p
     });
 
     it("reserves Household + Children + Readiness when the answer carries no subject snapshot (honest, not fabricated)", () => {
-        const model = focusPanelWorkModeModelFromProvisioningAnswer(input({ subjectSnapshot: null }));
+        const model = focusPanelWorkModeModelFromProvisioningAnswer(input({ subjectIdentityTruth: null }));
         expect(model.cardReadiness.get("household")).toBeUndefined();
         expect(model.cardReadiness.get("children")).toBeUndefined();
         expect(model.cardReadiness.get("readiness_kpi")).toBeUndefined();
