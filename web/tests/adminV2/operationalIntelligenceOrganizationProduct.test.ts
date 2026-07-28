@@ -81,6 +81,8 @@ describe("Operational Intelligence Organization product", () => {
         expect(workspace).not.toContain("SourcesWorkspace");
         expect(workspace).not.toContain("enablement");
         expect(workspace).toContain("OiOrgCalcAddWizard");
+        expect(workspace).toContain("oi-question-future-room-capacity");
+        expect(workspace).toContain("What do you want to know?");
     });
 
     it("rewrites and redirects legacy routes to Operational Intelligence", () => {
