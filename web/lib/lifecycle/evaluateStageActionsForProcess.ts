@@ -32,9 +32,10 @@ function isSelected(
     key: string
 ): boolean {
     const trimmed = key.trim();
+    const selectedEnabled = new Set(projection.selectedEnabledKeys);
     return (
-        projection.selectedEnabledKeys.has(trimmed) ||
-        projection.selectedEnabledKeys.has(normalizeActionRefToIntentKey(trimmed))
+        selectedEnabled.has(trimmed) ||
+        selectedEnabled.has(normalizeActionRefToIntentKey(trimmed))
     );
 }
 

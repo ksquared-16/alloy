@@ -45,8 +45,15 @@ export type ProcessRuntimeCommandProjection = {
     /** Enforce empty allowlists (no unrestricted fallback). */
     enforceAllowlist: boolean;
     commands: readonly ProcessRuntimeCommandProjectionRow[];
-    /** Enabled process-selected keys in process order (+ intent aliases). */
-    selectedEnabledKeys: ReadonlySet<string>;
+    /**
+     * Enabled process-selected keys in process order (+ intent aliases).
+     * SERIALIZATION-SAFE: this is an array, NOT a Set. This projection is embedded in
+     * `publishedStageInputs` and JSON-serialized into the provisioning answer seed;
+     * `JSON.stringify(new Set([...]))` yields `{}` (contents lost), which made client
+     * consumers throw `selectedEnabledKeys.has is not a function`. Consumers build a
+     * local Set for membership lookups.
+     */
+    selectedEnabledKeys: readonly string[];
     /** Stage-recommended among selected (presentation order). */
     stageRecommendedKeys: readonly string[];
     stageOrphanKeys: readonly string[];
@@ -143,7 +150,7 @@ export function projectProcessRuntimeCommands(input: {
         commandSetPresent,
         enforceAllowlist: commandSetPresent,
         commands: rows,
-        selectedEnabledKeys: expandKeyAliases(selectedEnabled),
+        selectedEnabledKeys: [...expandKeyAliases(selectedEnabled)],
         stageRecommendedKeys,
         stageOrphanKeys: effective.stageOrphans.map((o) => o.canonicalCapabilityKey),
         runnableKeys,
@@ -168,14 +175,12 @@ export function buildProcessAwareActionAllowlist(input: {
     const projection = input.projection;
 
     if (projection) {
+        const selectedEnabled = new Set(projection.selectedEnabledKeys);
         for (const candidate of input.stageActionCatalog?.candidate_actions ?? []) {
             const key = candidate.action_key.trim();
             if (!key) continue;
             const intent = normalizeActionRefToIntentKey(key);
-            if (
-                projection.selectedEnabledKeys.has(key) ||
-                projection.selectedEnabledKeys.has(intent)
-            ) {
+            if (selectedEnabled.has(key) || selectedEnabled.has(intent)) {
                 keys.add(key);
                 keys.add(intent);
             }
@@ -213,14 +218,15 @@ export function filterStageCatalogToProcessSelection(
 ): StageActionCatalogV1 | null {
     if (!catalog) return null;
     if (!projection) return catalog;
+    const selectedEnabled = new Set(projection.selectedEnabledKeys);
     return {
         version: 1,
         candidate_actions: catalog.candidate_actions.filter((row) => {
             const key = row.action_key.trim();
             if (!key) return false;
             return (
-                projection.selectedEnabledKeys.has(key) ||
-                projection.selectedEnabledKeys.has(normalizeActionRefToIntentKey(key))
+                selectedEnabled.has(key) ||
+                selectedEnabled.has(normalizeActionRefToIntentKey(key))
             );
         }),
     };
@@ -233,8 +239,9 @@ export function isProcessSelectedCapability(
     if (!projection) return true; // no process context → do not invent a gate
     const key = capabilityKey.trim();
     if (!key) return false;
+    const selectedEnabled = new Set(projection.selectedEnabledKeys);
     return (
-        projection.selectedEnabledKeys.has(key) ||
-        projection.selectedEnabledKeys.has(normalizeActionRefToIntentKey(key))
+        selectedEnabled.has(key) ||
+        selectedEnabled.has(normalizeActionRefToIntentKey(key))
     );
 }
