@@ -558,9 +558,10 @@ export function accept({ mission_id, confirm }) {
   try {
     const cap = mission.capability_id ? getCapability(mission.capability_id) : null;
     if (cap && result.gate !== "fail") {
-      // If this was the audit/plan mission, adopt the phases it produced — the plan
-      // becomes the script the conductor sequences. Implement missions don't re-adopt.
-      if (!pkg.implement_phase) {
+      // If this was the audit/plan mission (not an "— implement:" phase), adopt the
+      // phases it produced — the plan becomes the script the conductor sequences.
+      const isImplement = /—\s*implement:/i.test(String(mission.intent || pkg.title || ""));
+      if (!isImplement) {
         try { const rep = readLatestReport(mission_id); if (rep?.implementation_phases?.length) adoptPhases(cap, rep.implementation_phases); } catch { /* plan without structured phases → spine stays as-is */ }
       }
       const adv = advanceOnAccept(cap, { mission_id });
