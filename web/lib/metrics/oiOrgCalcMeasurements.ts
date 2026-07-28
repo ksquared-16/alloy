@@ -35,6 +35,10 @@ export type OiOrgCalcMeasurement = {
     unit: "seats";
     output_type: "numeric";
     target: OiOrgCalcTarget | null;
+    /** Operational Question Platform key when created via question flow (optional for legacy). */
+    question_key?: string | null;
+    /** Audit only — ui | bos | api; must not affect answer semantics. */
+    entry_point?: string | null;
     created_at: string;
     updated_at: string;
     created_by: string | null;
@@ -115,6 +119,8 @@ export function parseOiOrgCalcMeasurements(metadata: unknown): OiOrgCalcMeasurem
             unit: "seats",
             output_type: "numeric",
             target,
+            question_key: typeof raw.question_key === "string" ? raw.question_key : null,
+            entry_point: typeof raw.entry_point === "string" ? raw.entry_point : null,
             created_at: typeof raw.created_at === "string" ? raw.created_at : new Date().toISOString(),
             updated_at: typeof raw.updated_at === "string" ? raw.updated_at : new Date().toISOString(),
             created_by: typeof raw.created_by === "string" ? raw.created_by : null,
@@ -165,6 +171,8 @@ export function createOiOrgCalcMeasurementDraft(args: {
     userId: string | null;
     source: OiOrgCalcSourceBinding;
     target?: OiOrgCalcTarget | null;
+    question_key?: string | null;
+    entry_point?: string | null;
 }): OiOrgCalcMeasurement {
     const now = new Date().toISOString();
     const id =
@@ -182,6 +190,8 @@ export function createOiOrgCalcMeasurementDraft(args: {
         unit: "seats",
         output_type: "numeric",
         target: args.target ?? null,
+        question_key: args.question_key ?? null,
+        entry_point: args.entry_point ?? null,
         created_at: now,
         updated_at: now,
         created_by: args.userId,

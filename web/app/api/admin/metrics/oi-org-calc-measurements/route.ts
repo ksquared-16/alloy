@@ -102,6 +102,8 @@ export async function POST(req: NextRequest) {
                 targetMin != null && !Number.isNaN(targetMin) ?
                     { kind: "count_min", value: targetMin }
                 :   null,
+            question_key: typeof body.question_key === "string" ? body.question_key.trim() : null,
+            entry_point: typeof body.entry_point === "string" ? body.entry_point.trim() : null,
         });
 
         const metadata = await loadOrgMetadata(supabase, ctx.orgId);
