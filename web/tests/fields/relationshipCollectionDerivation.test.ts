@@ -12,12 +12,12 @@ import { describe, it, expect } from "vitest";
 import {
     listCanonicalCollectionProviders,
     deriveRelationshipCollectionProviders,
-    providerFromRelationshipDefinition,
+    relationshipCollectionProjection,
     canonicalCollectionProviderForRole,
     classifyCollectionProvider,
     type CanonicalCollectionProviderDefinition,
 } from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
-import { relationshipDefinitionForRole, type RelationshipCollectionDefinition } from "@/lib/fields/collection/relationshipCollectionDefinitions";
+import { relationshipDefinitionForRole, type RelationshipDefinition } from "@/lib/fields/relationship/relationshipDefinitions";
 
 // The exact providers that were hand-authored before derivation (byte-identical target).
 const EXPECTED: Record<string, CanonicalCollectionProviderDefinition> = {
@@ -78,15 +78,18 @@ describe("POS-FP17 — relationship collection provider derivation", () => {
 
     it("a NEW collectable role produces a valid provider WITHOUT new provider code", () => {
         // A future definition row (e.g. physician) — one row, no per-role provider code.
-        const physician: RelationshipCollectionDefinition = {
+        const physician: RelationshipDefinition = {
             definition_key: "physicians", provider_ref: "person.contact_role.physicians", collection_ref: "physicians",
             label: "Physicians", help_text: "The child's physicians.", item_entity_type: "person", source_entity_type: "customer",
             provider_role_key: "physician", required_context_keys: ["customer_id"], active_only: false, ordering_policy: "display_name",
+            // NOTE: borrows an existing operational role key because the role vocabulary
+            // (PERSON_CHILD_OPERATIONAL_ROLE_KEYS) is still a closed platform constant. That closed
+            // union is a tracked conformance gap — see docs/platform/core/data/relationship-model.md.
             operational_role_key: "communication_recipient", target_entity_type: "person", direction: "anchor_to_target",
             cardinality: "many", collectable: true, scopes: ["this_child"], nested_field_keys: ["full_name", "phone"],
             create_link_policy: "create_or_link", apply_command_key: "link_existing_person", responsibility_default: "either_guardian", native: false,
         };
-        const provider = providerFromRelationshipDefinition(physician);
+        const provider = relationshipCollectionProjection(physician);
         expect(provider.providerKind).toBe("relationship_role");
         expect(provider.refKey).toBe("person.contact_role.physicians");
         expect(provider.relationshipRoleKey).toBe("physician");

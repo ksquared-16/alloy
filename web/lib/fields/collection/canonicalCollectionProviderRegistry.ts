@@ -3,13 +3,19 @@
  *
  * Defines whole-collection provider metadata. Consumer modules (Forms, Queue Rows,
  * Processing) derive authoring enablement and presentation separately.
+ *
+ * ARCHITECTURE: this registry is a PROJECTION, not an owner. The canonical truth for configured
+ * relationships is `@/lib/fields/relationship/relationshipDefinitions` (the future
+ * `relationship_definitions` table). A collection is ONE projection of a relationship definition —
+ * Forms, Conversation Runtime, Configuration Discovery, Processing and BOS must all resolve back to
+ * the same definitions rather than treating this registry as a second source of truth.
  */
 
 import {
-    RELATIONSHIP_COLLECTION_DEFINITIONS,
+    RELATIONSHIP_DEFINITIONS,
     relationshipDefinitionForRole,
-    type RelationshipCollectionDefinition,
-} from "@/lib/fields/collection/relationshipCollectionDefinitions";
+    type RelationshipDefinition,
+} from "@/lib/fields/relationship/relationshipDefinitions";
 
 export type CanonicalCollectionProviderKind = "household_membership" | "relationship_role" | "document" | "communication" | "work";
 
@@ -68,16 +74,32 @@ const HOUSEHOLD_MEMBERS: CanonicalCollectionProviderDefinition = {
 const RESOLVER_OWNER = "web/lib/fields/relationship/canonicalCollectionResolver.ts";
 
 /**
- * NATIVE STRUCTURAL COLLECTIONS (documented native exceptions). `children` and `household.members`
- * are foundational household-membership collections that resolve directly off `customer_members` —
- * they are NOT role-derived relationship projections, so they stay native rather than deriving from a
- * relationship definition. Every other relationship-role collection is DERIVED from configuration
- * (`RELATIONSHIP_COLLECTION_DEFINITIONS`) — no hand-authored per-role provider.
+ * NATIVE STRUCTURAL COLLECTIONS — the documented exception to "every collection projects a
+ * relationship definition".
+ *
+ * `children` and `household.members` stay native because they are not relationship EDGES at all.
+ * They enumerate the household's own structural membership, resolving directly off `customer_members`
+ * (the household composition itself), and they carry no operational role, no role grouping, no apply
+ * command, and no scope choice — the three things a relationship definition exists to declare. A
+ * relationship definition answers "who is related to this child, in what role, and what command
+ * writes it"; household membership answers "what is this household made of". Modelling membership as
+ * a role-bearing relationship would invent a fictional role ("is_child_of_household") and route
+ * household composition through the relationship write path, which is not where it lives.
+ *
+ * The rule: a collection is native ONLY if it enumerates structural membership of the anchor entity
+ * and has no operational role. Everything else — physician, attorney, case worker, therapist, foster
+ * parent, sponsor, and the three shipped roles — is a CONFIGURED relationship and must be one row in
+ * `RELATIONSHIP_DEFINITIONS`, never a hand-authored provider here. This list is closed by design;
+ * adding to it requires the same justification above.
  */
 const NATIVE_PROVIDERS: readonly CanonicalCollectionProviderDefinition[] = [CHILDREN, HOUSEHOLD_MEMBERS];
 
-/** Derive the collection provider for one relationship definition (generic — no per-role code). */
-export function providerFromRelationshipDefinition(def: RelationshipCollectionDefinition): CanonicalCollectionProviderDefinition {
+/**
+ * Project ONE relationship definition into its collection provider — generic, no per-role code.
+ * This is the projection seam: the definition owns the semantics, this function owns only the
+ * collection-shaped view of them.
+ */
+export function relationshipCollectionProjection(def: RelationshipDefinition): CanonicalCollectionProviderDefinition {
     return {
         refKey: def.provider_ref,
         collectionRef: def.collection_ref,
@@ -96,7 +118,7 @@ export function providerFromRelationshipDefinition(def: RelationshipCollectionDe
 
 /** All configured relationship-role collection providers, derived from definitions (not hand-authored). */
 export function deriveRelationshipCollectionProviders(): CanonicalCollectionProviderDefinition[] {
-    return RELATIONSHIP_COLLECTION_DEFINITIONS.map(providerFromRelationshipDefinition);
+    return RELATIONSHIP_DEFINITIONS.map(relationshipCollectionProjection);
 }
 
 const REGISTRY: readonly CanonicalCollectionProviderDefinition[] = [...NATIVE_PROVIDERS, ...deriveRelationshipCollectionProviders()];
@@ -138,13 +160,13 @@ export function canonicalCollectionProviderForRole(operationalRoleKey: string): 
 }
 
 /** The relationship definition behind a registered relationship-role provider (native providers → undefined). */
-export function relationshipDefinitionForProvider(refKey: string): RelationshipCollectionDefinition | undefined {
-    return RELATIONSHIP_COLLECTION_DEFINITIONS.find((d) => d.provider_ref === refKey.trim());
+export function relationshipDefinitionForProvider(refKey: string): RelationshipDefinition | undefined {
+    return RELATIONSHIP_DEFINITIONS.find((d) => d.provider_ref === refKey.trim());
 }
 
 /** Classify a provider: native structural collection vs configured relationship projection. */
 export function classifyCollectionProvider(refKey: string): "native_structural" | "configured_relationship" | "unknown" {
-    if (RELATIONSHIP_COLLECTION_DEFINITIONS.some((d) => d.provider_ref === refKey.trim())) return "configured_relationship";
+    if (RELATIONSHIP_DEFINITIONS.some((d) => d.provider_ref === refKey.trim())) return "configured_relationship";
     if (refKey.trim() === "children" || refKey.trim() === "household.members") return "native_structural";
     return "unknown";
 }
