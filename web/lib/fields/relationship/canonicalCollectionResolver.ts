@@ -20,6 +20,7 @@ import {
     collectRolePersonCandidates,
 } from "@/lib/fields/relationship/relationshipRoleCandidateAdapters";
 import { resolvePrimaryContactAuthority } from "@/lib/fields/relationship/primaryContactAuthority";
+import { findCanonicalCollectionProvider } from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
 
 export type CanonicalCollectionResolveContext = {
     orgId: string;
@@ -173,6 +174,83 @@ async function resolveParentsGuardiansCollection(
     });
 }
 
+/**
+ * Canonical operational role key → the forms role filter the candidate adapter understands.
+ * `authorized_pickup` has no forms-role filter yet, so its read-resolution is reported as pending
+ * (application uses the relationship WRITE service, which supports the role directly).
+ */
+const OPERATIONAL_TO_FORMS_ROLE: Record<string, "parents" | "emergency" | "billing"> = {
+    parents: "parents",
+    parent: "parents",
+    guardian: "parents",
+    emergency_contact: "emergency",
+    billing_contact: "billing",
+};
+
+/**
+ * Generic relationship-role collection resolution (emergency contacts, and any future registered
+ * role with a forms-role filter). Household-scoped, person items. Reuses the same candidate adapter
+ * as parents/guardians so there is one resolution path, not a per-role copy.
+ */
+async function resolveRelationshipRoleCollectionGeneric(
+    supabase: SupabaseClient,
+    context: CanonicalCollectionResolveContext,
+    provider: NonNullable<ReturnType<typeof findCanonicalCollectionProvider>>,
+): Promise<CanonicalCollectionResolution> {
+    const customerId = trim(context.customerId);
+    if (!customerId) {
+        return baseResolution("invalid_context", { reason: `${provider.label} collection requires household (customer_id) context.` });
+    }
+    const formsRole = OPERATIONAL_TO_FORMS_ROLE[provider.relationshipRoleKey ?? ""];
+    if (!formsRole) {
+        return baseResolution("unsupported", {
+            reason: `${provider.label} read-resolution is pending; application uses the canonical relationship write service (role "${provider.relationshipRoleKey}").`,
+        });
+    }
+    const dataBag = await loadRelationshipResolutionDataBag(
+        supabase,
+        context.orgId,
+        {
+            organizationId: context.orgId,
+            relationshipId: provider.refKey,
+            source: { entityType: "customer", recordId: customerId },
+            customerMemberId: trim(context.customerMemberId) ?? null,
+        },
+        customerId,
+    );
+    const personIds = collectRolePersonCandidates(formsRole, {
+        customerId,
+        customerMemberId: trim(context.customerMemberId),
+        data: dataBag,
+        excludePrimaryPersonId: null,
+    });
+    if (personIds.length === 0) return baseResolution("empty");
+
+    const { data: personRows, error } = await supabase
+        .from("persons")
+        .select(PERSON_CANONICAL_IDENTITY_SELECT)
+        .eq("org_id", context.orgId)
+        .in("id", personIds);
+    if (error) return baseResolution("unavailable", { reason: `Unable to load ${provider.label}.` });
+
+    const byId = new Map<string, Record<string, unknown>>();
+    for (const row of personRows ?? []) {
+        const rec = row as Record<string, unknown>;
+        const id = trim(rec.id);
+        if (id) byId.set(id, rec);
+    }
+    const items: CanonicalCollectionItem[] = [];
+    const seen = new Set<string>();
+    for (const personId of personIds) {
+        if (seen.has(personId)) continue;
+        seen.add(personId);
+        const rec = byId.get(personId);
+        if (rec) items.push({ item_id: personId, item_entity_type: "person", record: rec });
+    }
+    if (items.length === 0) return baseResolution("empty");
+    return baseResolution("resolved", { items: sortByDisplayName(items, "display_name") });
+}
+
 /** Resolve a canonical whole-collection provider to stable items. */
 export async function resolveCanonicalCollection(
     supabase: SupabaseClient,
@@ -233,6 +311,12 @@ export async function resolveCanonicalCollection(
         }
         if (items.length === 0) return baseResolution("empty");
         return baseResolution("resolved", { items: sortByDisplayName(items, "display_name") });
+    }
+
+    // Generic relationship-role providers (emergency contacts, authorized pickups, …) — one path.
+    const provider = findCanonicalCollectionProvider(ref);
+    if (provider?.providerKind === "relationship_role") {
+        return resolveRelationshipRoleCollectionGeneric(supabase, context, provider);
     }
 
     return baseResolution("unsupported", {
