@@ -37,7 +37,7 @@
 ## Validation
 
 - Unit/regression: `tests/operationalQuestions`, oiOrgCalc, organizationCalculations, OI adminV2 — **39 passed**
-- Production typecheck: **deferred** — machine had concurrent stale `tsc` processes; re-run `cd web && npm run typecheck` when clear
+- Production typecheck: **pass** (`npm run typecheck`, EXIT:0)
 - Authenticated UI + BOS browser QA: **deferred** (localhost :3012 responds; full cookie session QA not re-run in this pass)
 
 ## Scope honesty
