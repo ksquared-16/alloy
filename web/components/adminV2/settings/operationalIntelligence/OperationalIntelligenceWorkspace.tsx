@@ -49,6 +49,8 @@ import { capacityRecipeFromProductTypeLabel } from "@/lib/adminV2/settings/opera
 import type { OiOrgCalcMeasurement } from "@/lib/metrics/oiOrgCalcMeasurements";
 import OiOrgCalcAddWizard from "@/components/adminV2/settings/operationalIntelligence/OiOrgCalcAddWizard";
 import OiOrgCalcMeasurementPanel from "@/components/adminV2/settings/operationalIntelligence/OiOrgCalcMeasurementPanel";
+import { findFutureRoomCapacityMeasurement } from "@/lib/operationalQuestions/answerFutureRoomCapacity";
+import { FUTURE_ROOM_CAPACITY_QUESTION_KEY } from "@/lib/operationalQuestions/catalog";
 
 type DetailRegion = "overview" | "target" | "history" | "lifecycle" | "provenance";
 type WorkspaceView = "home" | "measurements" | "advanced";
@@ -336,13 +338,23 @@ function DomainHome({
     canMutate,
     onAdd,
     onOpenMeasurements,
+    futureRoomCapacityState,
+    onOpenFutureRoomCapacity,
 }: {
     orgCalcCount: number;
     needsAttentionCount: number;
     canMutate: boolean;
     onAdd: () => void;
     onOpenMeasurements: () => void;
+    futureRoomCapacityState: "start" | "measuring" | "needs_setup" | "needs_attention";
+    onOpenFutureRoomCapacity: () => void;
 }) {
+    const frcLabel =
+        futureRoomCapacityState === "measuring" ? "Measuring"
+        : futureRoomCapacityState === "needs_attention" ? "Needs attention"
+        : futureRoomCapacityState === "needs_setup" ? "Needs setup"
+        : "Start measuring";
+
     return (
         <div className="space-y-4" data-testid="oi-domain-home">
             <div className="process-config-setup-card p-6">
@@ -374,6 +386,31 @@ function DomainHome({
                         Current measurements
                     </button>
                 </div>
+            </div>
+
+            <div className="process-config-setup-card p-5" data-testid="oi-question-catalog">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Capacity</p>
+                <button
+                    type="button"
+                    onClick={onOpenFutureRoomCapacity}
+                    className="mt-2 w-full rounded-xl border border-[#00a283]/35 bg-[#00a283]/5 px-4 py-3 text-left"
+                    data-testid="oi-question-future-room-capacity"
+                >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                            <p className="text-sm font-semibold text-alloy-midnight">Future Room Capacity</p>
+                            <p className="mt-0.5 text-xs text-alloy-midnight/60">
+                                How many seats will a room have on a future date?
+                            </p>
+                        </div>
+                        <span
+                            className="rounded-full border border-alloy-stone/25 bg-white px-2 py-0.5 text-[10px] font-semibold text-alloy-midnight/70"
+                            data-testid="oi-question-future-room-capacity-state"
+                        >
+                            {frcLabel}
+                        </span>
+                    </div>
+                </button>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
@@ -422,10 +459,12 @@ function OperationalIntelligenceInner() {
     const regionParam = searchParams.get("region");
     const justActivated = searchParams.get("activated") === "1";
     const addParam = searchParams.get("add") === "1";
+    const questionParam = searchParams.get("question");
 
     const view: WorkspaceView =
         tabParam === "diagnostics" || viewParam === "advanced" ? "advanced"
-        : viewParam === "measurements" || measurementParam || orgMeasurementId ? "measurements"
+        : viewParam === "measurements" || measurementParam || orgMeasurementId || questionParam === FUTURE_ROOM_CAPACITY_QUESTION_KEY
+            ? "measurements"
         : "home";
 
     const [query, setQuery] = useState("");
@@ -523,6 +562,31 @@ function OperationalIntelligenceInner() {
     }, [addParam]);
 
     const activeOrg = orgCalcMeasurements.find((m) => m.id === orgMeasurementId) ?? null;
+    const frcMeasurement = findFutureRoomCapacityMeasurement(orgCalcMeasurements);
+    const futureRoomCapacityState: "start" | "measuring" | "needs_setup" | "needs_attention" =
+        !frcMeasurement ? "start"
+        : frcMeasurement.status !== "active" ? "needs_setup"
+        : "measuring";
+
+    useEffect(() => {
+        if (questionParam !== FUTURE_ROOM_CAPACITY_QUESTION_KEY) return;
+        if (orgMeasurementId) return;
+        if (frcMeasurement) {
+            selectOrgCalc(frcMeasurement.id);
+            return;
+        }
+        if (canMutate) setAddOpen(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [questionParam, frcMeasurement?.id, orgMeasurementId, canMutate]);
+
+    const openFutureRoomCapacity = () => {
+        if (frcMeasurement) {
+            selectOrgCalc(frcMeasurement.id);
+            return;
+        }
+        openAdd();
+        setParams({ question: FUTURE_ROOM_CAPACITY_QUESTION_KEY, add: "1", view: null });
+    };
 
     return (
         <div
@@ -566,6 +630,8 @@ function OperationalIntelligenceInner() {
                     canMutate={canMutate}
                     onAdd={openAdd}
                     onOpenMeasurements={() => setParams({ view: "measurements", activated: null })}
+                    futureRoomCapacityState={futureRoomCapacityState}
+                    onOpenFutureRoomCapacity={openFutureRoomCapacity}
                 />
             : view === "advanced" ?
                 <div className="space-y-3">

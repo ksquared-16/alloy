@@ -284,6 +284,8 @@ export default function OiOrgCalcAddWizard({ busy, onClose, onCreated, initialSt
                     calculation_id: source.calculationId,
                     calculation_version_id: source.versionId,
                     target_min_seats: skipGoal || !targetMin.trim() ? null : Number(targetMin),
+                    question_key: "future_room_capacity",
+                    entry_point: "ui",
                 }),
             });
             const json = (await res.json()) as { measurement?: { id: string }; error?: string };
