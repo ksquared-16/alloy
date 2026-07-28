@@ -74,10 +74,43 @@ const PARENTS_GUARDIANS: CanonicalCollectionProviderDefinition = {
     relationshipRoleKey: "parents",
 };
 
+const EMERGENCY_CONTACTS: CanonicalCollectionProviderDefinition = {
+    refKey: "person.contact_role.emergency_contacts",
+    collectionRef: "emergency_contacts",
+    label: "Emergency Contacts",
+    itemEntityType: "person",
+    providerKind: "relationship_role",
+    sourceEntityType: "customer",
+    requiredContextKeys: ["customer_id"],
+    resolverOwner: "web/lib/fields/relationship/canonicalCollectionResolver.ts",
+    activeOnly: false,
+    itemIdentityField: "id",
+    orderingPolicy: "display_name",
+    // Canonical operational role key (person_child_relationship_roles) — NOT a document-specific key.
+    relationshipRoleKey: "emergency_contact",
+};
+
+const AUTHORIZED_PICKUPS: CanonicalCollectionProviderDefinition = {
+    refKey: "person.contact_role.authorized_pickups",
+    collectionRef: "authorized_pickups",
+    label: "Authorized Pickup People",
+    itemEntityType: "person",
+    providerKind: "relationship_role",
+    sourceEntityType: "customer",
+    requiredContextKeys: ["customer_id"],
+    resolverOwner: "web/lib/fields/relationship/canonicalCollectionResolver.ts",
+    activeOnly: false,
+    itemIdentityField: "id",
+    orderingPolicy: "display_name",
+    relationshipRoleKey: "authorized_pickup",
+};
+
 const REGISTRY: readonly CanonicalCollectionProviderDefinition[] = [
     CHILDREN,
     HOUSEHOLD_MEMBERS,
     PARENTS_GUARDIANS,
+    EMERGENCY_CONTACTS,
+    AUTHORIZED_PICKUPS,
 ];
 
 const BY_REF = new Map(REGISTRY.map((p) => [p.refKey, p]));
@@ -100,4 +133,17 @@ export function collectionItemEntityTypeForProvider(refKey: string): string | un
 
 export function isRegisteredCanonicalCollectionProvider(refKey: string): boolean {
     return BY_REF.has(refKey.trim());
+}
+
+/**
+ * Map a canonical operational relationship ROLE key (person_child_relationship_roles: parent,
+ * guardian, emergency_contact, authorized_pickup, …) to the collection provider that owns it.
+ * parent/guardian both resolve to the parents/guardians provider (its filter spans both). Used by
+ * Configuration Discovery application to project a relationship concept through the canonical
+ * provider instead of flat fields.
+ */
+export function canonicalCollectionProviderForRole(operationalRoleKey: string): CanonicalCollectionProviderDefinition | undefined {
+    const r = operationalRoleKey.trim();
+    if (r === "parent" || r === "guardian") return BY_REF.get("person.contact_role.parents");
+    return REGISTRY.find((p) => p.providerKind === "relationship_role" && p.relationshipRoleKey === r);
 }
