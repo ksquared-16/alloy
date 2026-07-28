@@ -16,6 +16,7 @@ const OpportunityFocusPanelEmbeddedWorkspace = dynamic(
     { ssr: false },
 );
 import { resolveFocusPanelModeGrid } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { cardTitle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import {
     deriveFocusPanelGridFromLayoutDoc,
     deriveFocusPanelInstanceMap,
@@ -53,22 +54,8 @@ import type { DrawerTabKey } from "@/lib/entityPresentation";
 const FOCUS_PANEL_DEPTH_MS = 240;
 
 /** Operator-facing identity for a configured card, shown while its settlement detail prepares. */
-const FOCUS_PANEL_CARD_TITLES: Partial<Record<FocusPanelCardKey, string>> = {
-    current_work: "What's Next",
-    household: "Household",
-    children: "Children",
-    readiness_kpi: "Readiness",
-    health: "Enrollment Health",
-    tour_summary: "Tour",
-    communications: "Communications",
-    documents: "Documents",
-    attention: "Why Now",
-    billing_preview: "Billing Preview",
-    required_information: "Required Information",
-    current_mission: "Current Mission",
-    timeline: "Timeline",
-    notes: "Notes",
-};
+// Card titles are declared in the Focus Panel card REGISTRY (the extensibility contract, Workstream C/D)
+// — `cardTitle(key)`. The former local `FOCUS_PANEL_CARD_TITLES` map migrated there 1:1.
 
 /**
  * RESERVED cell — a configured card whose SETTLEMENT detail has not yet arrived. It holds the cell's
@@ -78,7 +65,7 @@ const FOCUS_PANEL_CARD_TITLES: Partial<Record<FocusPanelCardKey, string>> = {
  * complete surface whose secondary detail is settling — not a loading placeholder.
  */
 function ReservedFocusPanelCell({ typeKey, settled }: { typeKey: FocusPanelCardKey; settled?: boolean }) {
-    const title = FOCUS_PANEL_CARD_TITLES[typeKey];
+    const title = cardTitle(typeKey);
     // CALM NEUTRAL HOLD (Kelly). Not a loading placeholder and not a "Preparing…" spinner: the cell
     // shows the card's IDENTITY plus a quiet, STATIC content hint (no pulse — Settlement fills it in
     // place). It reads as a settled part of the surface whose detail is arriving, so the two-phase
