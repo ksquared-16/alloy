@@ -33,7 +33,7 @@ describe("CP-1 — primary record reveal precedes speculative sibling-view prewa
         // A mount-scoped effect: begin on mount, release on unmount. Locks the ordering vs the
         // sibling prewarm's idle callback — arming only on the committed key is too late (measured).
         expect(committed).toMatch(
-            /useEffect\(\(\)\s*=>\s*\{\s*beginWorkUnitPrimaryReveal\(\);\s*return\s*\(\)\s*=>\s*endWorkUnitPrimaryReveal\(\);\s*\}\s*,\s*\[\s*\]\s*\)/s,
+            /useEffect\(\(\)\s*=>\s*\{\s*beginWorkUnitPrimaryReveal\(\);\s*return\s*\(\)\s*=>\s*endWorkUnitPrimaryReveal\(\);\s*\}\s*,\s*\[\s*\]\s*\)/,
         );
     });
 
