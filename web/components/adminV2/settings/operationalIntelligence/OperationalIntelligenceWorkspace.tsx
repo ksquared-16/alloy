@@ -47,13 +47,13 @@ import {
 } from "@/lib/adminV2/settings/operationalIntelligence/oiMeasurementCollection";
 import { capacityRecipeFromProductTypeLabel } from "@/lib/adminV2/settings/operationalIntelligence/oiCapacityRecipeCopy";
 import type { OiOrgCalcMeasurement } from "@/lib/metrics/oiOrgCalcMeasurements";
-import OiOrgCalcAddWizard from "@/components/adminV2/settings/operationalIntelligence/OiOrgCalcAddWizard";
+import OiFutureRoomCapacityBuilder from "@/components/adminV2/settings/operationalIntelligence/OiFutureRoomCapacityBuilder";
 import OiOrgCalcMeasurementPanel from "@/components/adminV2/settings/operationalIntelligence/OiOrgCalcMeasurementPanel";
 import { findFutureRoomCapacityMeasurement } from "@/lib/operationalQuestions/answerFutureRoomCapacity";
 import { FUTURE_ROOM_CAPACITY_QUESTION_KEY } from "@/lib/operationalQuestions/catalog";
 
 type DetailRegion = "overview" | "target" | "history" | "lifecycle" | "provenance";
-type WorkspaceView = "home" | "measurements" | "advanced";
+type WorkspaceView = "home" | "measurements" | "advanced" | "builder";
 
 const SURFACES_OI_HREF = `${CANONICAL_ORGANIZATION_SURFACES_HREF}?section=operational-intelligence`;
 
@@ -333,27 +333,26 @@ function AdvancedInternals({ canEdit }: { canEdit: boolean }) {
 }
 
 function DomainHome({
-    orgCalcCount,
+    activeMeasurements,
     needsAttentionCount,
     canMutate,
-    onAdd,
     onOpenMeasurements,
     futureRoomCapacityState,
     onOpenFutureRoomCapacity,
+    onSelectMeasurement,
 }: {
-    orgCalcCount: number;
+    activeMeasurements: OiOrgCalcMeasurement[];
     needsAttentionCount: number;
     canMutate: boolean;
-    onAdd: () => void;
     onOpenMeasurements: () => void;
     futureRoomCapacityState: "start" | "measuring" | "needs_setup" | "needs_attention";
     onOpenFutureRoomCapacity: () => void;
+    onSelectMeasurement: (id: string) => void;
 }) {
-    const frcLabel =
-        futureRoomCapacityState === "measuring" ? "Measuring"
-        : futureRoomCapacityState === "needs_attention" ? "Needs attention"
-        : futureRoomCapacityState === "needs_setup" ? "Needs setup"
-        : "Start measuring";
+    const frcCta =
+        futureRoomCapacityState === "measuring" || futureRoomCapacityState === "needs_attention" ?
+            "View answer"
+        :   "Start measuring";
 
     return (
         <div className="space-y-4" data-testid="oi-domain-home">
@@ -363,33 +362,18 @@ function DomainHome({
                 </p>
                 <h2 className="mt-1 text-2xl font-semibold text-alloy-midnight">What do you want to know?</h2>
                 <p className="mt-2 max-w-2xl text-sm text-alloy-midnight/65">
-                    Measure the operational questions that help you run the center — capacity, goals, and health —
-                    without needing to understand how the numbers are calculated.
+                    Choose a question Alloy can answer. Configure how it is determined, try it, and start measuring —
+                    without leaving Operational Intelligence.
                 </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                    {canMutate ?
-                        <button
-                            type="button"
-                            onClick={onAdd}
-                            className="rounded-md bg-[#00a283] px-3 py-2 text-sm font-semibold text-white"
-                            data-testid="oi-home-add-measurement"
-                        >
-                            + Add measurement
-                        </button>
-                    :   null}
-                    <button
-                        type="button"
-                        onClick={onOpenMeasurements}
-                        className="rounded-md border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight"
-                        data-testid="oi-home-view-measurements"
-                    >
-                        Current measurements
-                    </button>
-                </div>
             </div>
 
             <div className="process-config-setup-card p-5" data-testid="oi-question-catalog">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Capacity</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                    Questions Alloy can answer
+                </p>
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                    Capacity
+                </p>
                 <button
                     type="button"
                     onClick={onOpenFutureRoomCapacity}
@@ -404,43 +388,65 @@ function DomainHome({
                             </p>
                         </div>
                         <span
-                            className="rounded-full border border-alloy-stone/25 bg-white px-2 py-0.5 text-[10px] font-semibold text-alloy-midnight/70"
+                            className="rounded-full border border-[#00a283]/40 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#007d68]"
                             data-testid="oi-question-future-room-capacity-state"
                         >
-                            {frcLabel}
+                            {frcCta}
                         </span>
                     </div>
                 </button>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-                <button
-                    type="button"
-                    onClick={onOpenMeasurements}
-                    className="rounded-xl border border-alloy-stone/15 bg-white p-4 text-left"
-                    data-testid="oi-home-card-current"
-                >
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                        Current measurements
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums">{orgCalcCount}</p>
-                    <p className="mt-1 text-xs text-alloy-midnight/55">Organization measurements you turned on</p>
-                </button>
-                <div className="rounded-xl border border-alloy-stone/15 bg-white p-4" data-testid="oi-home-card-attention">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                        Needs attention
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums">{needsAttentionCount}</p>
-                    <p className="mt-1 text-xs text-alloy-midnight/55">Goals that are below target or missing data</p>
+            <div className="process-config-setup-card p-5" data-testid="oi-home-measuring-now">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                            What we are measuring
+                        </p>
+                        <p className="mt-0.5 text-xs text-alloy-midnight/55">
+                            Active measurement instances for this organization
+                            {needsAttentionCount > 0 ? ` · ${needsAttentionCount} need attention` : ""}
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onOpenMeasurements}
+                        className="rounded-md border border-alloy-stone/25 bg-white px-3 py-1.5 text-xs font-semibold text-alloy-midnight"
+                        data-testid="oi-home-view-measurements"
+                    >
+                        Browse all
+                    </button>
                 </div>
-                <div className="rounded-xl border border-alloy-stone/15 bg-white p-4" data-testid="oi-home-card-changed">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                        Recently changed
+                {activeMeasurements.length === 0 ?
+                    <p className="mt-3 text-sm text-alloy-midnight/55" data-testid="oi-home-no-measurements">
+                        Nothing is being measured yet.
+                        {canMutate ? " Start with Future Room Capacity above." : ""}
                     </p>
-                    <p className="mt-1 text-sm font-medium text-alloy-midnight/70">
-                        Open a measurement to review history
-                    </p>
-                </div>
+                :   <ul className="mt-3 space-y-2">
+                        {activeMeasurements.map((m) => {
+                            const recipe = capacityRecipeFromProductTypeLabel(
+                                m.description ?? m.source.calculation_name,
+                            );
+                            const goal =
+                                m.target ? `Warn below ${m.target.value}` : "No goal";
+                            return (
+                                <li key={m.id}>
+                                    <button
+                                        type="button"
+                                        onClick={() => onSelectMeasurement(m.id)}
+                                        className="w-full rounded-lg border border-alloy-stone/15 bg-white px-3 py-2.5 text-left hover:border-[#00a283]/35"
+                                        data-testid={`oi-home-measurement-${m.id}`}
+                                    >
+                                        <p className="text-sm font-semibold text-alloy-midnight">{m.name}</p>
+                                        <p className="mt-0.5 text-xs text-alloy-midnight/55">
+                                            {recipe.sourceLine} · {goal} · seats
+                                        </p>
+                                    </button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                }
             </div>
         </div>
     );
@@ -460,12 +466,6 @@ function OperationalIntelligenceInner() {
     const justActivated = searchParams.get("activated") === "1";
     const addParam = searchParams.get("add") === "1";
     const questionParam = searchParams.get("question");
-
-    const view: WorkspaceView =
-        tabParam === "diagnostics" || viewParam === "advanced" ? "advanced"
-        : viewParam === "measurements" || measurementParam || orgMeasurementId || questionParam === FUTURE_ROOM_CAPACITY_QUESTION_KEY
-            ? "measurements"
-        : "home";
 
     const [query, setQuery] = useState("");
     const [healthFilter, setHealthFilter] = useState<"all" | "off_target" | "healthy" | "insufficient">("all");
@@ -487,6 +487,15 @@ function OperationalIntelligenceInner() {
     useEffect(() => {
         void reloadOrgCalcs().catch(() => undefined);
     }, [reloadOrgCalcs]);
+
+    const frcMeasurement = findFutureRoomCapacityMeasurement(orgCalcMeasurements);
+    const activeOrgCalcs = orgCalcMeasurements.filter((m) => m.status === "active");
+
+    const view: WorkspaceView =
+        tabParam === "diagnostics" || viewParam === "advanced" ? "advanced"
+        : addOpen && !orgMeasurementId ? "builder"
+        : viewParam === "measurements" || measurementParam || orgMeasurementId ? "measurements"
+        : "home";
 
     const rows = useMemo(() => buildOiMeasurementRows(snapshot), [snapshot]);
     const filtered = useMemo(
@@ -537,6 +546,7 @@ function OperationalIntelligenceInner() {
     };
 
     const selectOrgCalc = (id: string, opts?: { activated?: boolean }) => {
+        setAddOpen(false);
         setParams({
             orgMeasurement: id,
             measurement: null,
@@ -544,6 +554,7 @@ function OperationalIntelligenceInner() {
             tab: null,
             activated: opts?.activated ? "1" : null,
             add: null,
+            question: null,
         });
     };
 
@@ -562,7 +573,6 @@ function OperationalIntelligenceInner() {
     }, [addParam]);
 
     const activeOrg = orgCalcMeasurements.find((m) => m.id === orgMeasurementId) ?? null;
-    const frcMeasurement = findFutureRoomCapacityMeasurement(orgCalcMeasurements);
     const futureRoomCapacityState: "start" | "measuring" | "needs_setup" | "needs_attention" =
         !frcMeasurement ? "start"
         : frcMeasurement.status !== "active" ? "needs_setup"
@@ -575,7 +585,10 @@ function OperationalIntelligenceInner() {
             selectOrgCalc(frcMeasurement.id);
             return;
         }
-        if (canMutate) setAddOpen(true);
+        if (canMutate) {
+            setAddOpen(true);
+            setParams({ question: FUTURE_ROOM_CAPACITY_QUESTION_KEY, add: "1", view: null });
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questionParam, frcMeasurement?.id, orgMeasurementId, canMutate]);
 
@@ -604,11 +617,17 @@ function OperationalIntelligenceInner() {
                     canMutate ?
                         <button
                             type="button"
-                            onClick={openAdd}
+                            onClick={() => {
+                                if (frcMeasurement) {
+                                    selectOrgCalc(frcMeasurement.id);
+                                    return;
+                                }
+                                openAdd();
+                            }}
                             className="rounded-md border border-alloy-juniper/30 bg-alloy-juniper/10 px-2.5 py-1.5 text-xs font-semibold text-alloy-juniper"
                             data-testid="oi-add-measurement"
                         >
-                            + Add measurement
+                            {frcMeasurement ? "View Future Room Capacity" : "Start measuring"}
                         </button>
                     :   null
                 }
@@ -625,14 +644,33 @@ function OperationalIntelligenceInner() {
 
             {view === "home" ?
                 <DomainHome
-                    orgCalcCount={orgCalcMeasurements.filter((m) => m.status === "active").length}
+                    activeMeasurements={activeOrgCalcs}
                     needsAttentionCount={attentionCount}
                     canMutate={canMutate}
-                    onAdd={openAdd}
-                    onOpenMeasurements={() => setParams({ view: "measurements", activated: null })}
+                    onOpenMeasurements={() => setParams({ view: "measurements", activated: null, add: null })}
                     futureRoomCapacityState={futureRoomCapacityState}
                     onOpenFutureRoomCapacity={openFutureRoomCapacity}
+                    onSelectMeasurement={(id) => selectOrgCalc(id)}
                 />
+            : view === "builder" ?
+                <div className="space-y-3" data-testid="oi-builder-view">
+                    <button
+                        type="button"
+                        className="text-xs font-semibold text-[#007d68] hover:underline"
+                        onClick={closeAdd}
+                        data-testid="oi-builder-back-home"
+                    >
+                        ← What do you want to know?
+                    </button>
+                    <OiFutureRoomCapacityBuilder
+                        busy={!canMutate}
+                        onClose={closeAdd}
+                        onCreated={(id) => {
+                            setAddOpen(false);
+                            void reloadOrgCalcs().then(() => selectOrgCalc(id, { activated: true }));
+                        }}
+                    />
+                </div>
             : view === "advanced" ?
                 <div className="space-y-3">
                     <button
@@ -729,10 +767,11 @@ function OperationalIntelligenceInner() {
                             data-testid="oi-post-activation"
                         >
                             <p className="text-sm font-semibold text-alloy-midnight">
-                                {activeOrg.name} is now being measured.
+                                Future Room Capacity is now being measured.
                             </p>
                             <p className="mt-1 text-xs text-alloy-midnight/65">
-                                Future updates won’t change this measurement until you choose to use a newer version.
+                                Check another room below anytime. Change the goal or how capacity is determined in
+                                Settings.
                             </p>
                             <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
                                 <button
@@ -740,22 +779,14 @@ function OperationalIntelligenceInner() {
                                     className="text-[#007d68] hover:underline"
                                     onClick={() => setParams({ activated: null, orgMeasurement: activeOrg.id })}
                                 >
-                                    Check a room
-                                </button>
-                                <span className="text-alloy-midnight/30">·</span>
-                                <button
-                                    type="button"
-                                    className="text-[#007d68] hover:underline"
-                                    onClick={openAdd}
-                                >
-                                    Add another measurement
+                                    Continue on Overview
                                 </button>
                                 <span className="text-alloy-midnight/30">·</span>
                                 <Link
                                     href={`${CANONICAL_ORGANIZATION_CALCULATIONS_HREF}?id=${activeOrg.source.calculation_id}`}
                                     className="text-[#007d68] hover:underline"
                                 >
-                                    Manage how it’s calculated
+                                    Advanced · Calculation library
                                 </Link>
                             </div>
                         </div>
@@ -790,22 +821,14 @@ function OperationalIntelligenceInner() {
                     Advanced tools
                 </button>
                 {" · "}
-                <Link href={CANONICAL_ORGANIZATION_CALCULATIONS_HREF} className="hover:underline">
+                <Link
+                    href={CANONICAL_ORGANIZATION_CALCULATIONS_HREF}
+                    className="hover:underline"
+                    data-testid="oi-open-calculation-library"
+                >
                     Calculation library
                 </Link>
             </p>
-
-            {addOpen ?
-                <OiOrgCalcAddWizard
-                    busy={false}
-                    onClose={closeAdd}
-                    onCreated={(id) => {
-                        closeAdd();
-                        void reloadOrgCalcs();
-                        selectOrgCalc(id, { activated: true });
-                    }}
-                />
-            : null}
         </div>
     );
 }

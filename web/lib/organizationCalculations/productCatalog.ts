@@ -39,7 +39,7 @@ export const ORG_CALC_PRODUCT_TYPES: readonly OrgCalcProductType[] = [
         id: "capacity_operational_with_fallback",
         typeLabel: "Operational capacity",
         title: "Operational seats when available",
-        summary: "Uses the room’s operational seats when set. If not set, uses physical seats.",
+        summary: "Uses the room’s operational seats when set. If operational seats are not set, use physical seats.",
         outputLabel: "Effective seats",
         units: "seats",
         inputLabels: ["Operational seats", "Physical seats"],

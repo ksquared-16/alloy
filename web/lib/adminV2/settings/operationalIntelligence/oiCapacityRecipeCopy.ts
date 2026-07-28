@@ -7,25 +7,30 @@ import type { OrgCalcProductTypeId } from "@/lib/organizationCalculations/produc
 
 export type CapacityRecipeCopy = {
     id: OrgCalcProductTypeId;
-    /** Card title on “How should capacity be determined?” */
+    /** Short choice label in the recipe control */
     title: string;
     /** One-sentence explanation */
     summary: string;
-    /** Source line on measurement overview */
+    /** Readable recipe sentence on overview / builder */
+    recipeSentence: string;
+    /** Compact source line */
     sourceLine: string;
 };
 
 export const CAPACITY_RECIPES: readonly CapacityRecipeCopy[] = [
     {
         id: "capacity_lowest_physical_licensed",
-        title: "Lowest of physical and licensed seats",
+        title: "Lower of physical and licensed seats",
         summary: "Uses whichever is smaller for the room: physical seats or licensed seats.",
-        sourceLine: "Lowest of physical and licensed seats",
+        recipeSentence: "Capacity is the lower of physical seats and licensed seats.",
+        sourceLine: "Lower of physical and licensed seats",
     },
     {
         id: "capacity_operational_with_fallback",
         title: "Operational seats when available",
-        summary: "Uses the room’s operational seats when set. If not set, uses physical seats.",
+        summary: "Uses the room’s operational seats when set. If operational seats are not set, use physical seats.",
+        recipeSentence:
+            "Capacity uses operational seats when set; if operational seats are not set, use physical seats.",
         sourceLine: "Operational seats when available",
     },
 ] as const;
@@ -38,7 +43,9 @@ export function capacityRecipeById(id: string | null | undefined): CapacityRecip
 export function capacityRecipeFromProductTypeLabel(typeLabel: string | null | undefined): CapacityRecipeCopy {
     const t = String(typeLabel ?? "").toLowerCase();
     if (t.includes("operational") || t.includes("when available")) return CAPACITY_RECIPES[1]!;
-    if (t.includes("lowest") || t.includes("physical and licensed")) return CAPACITY_RECIPES[0]!;
+    if (t.includes("lowest") || t.includes("lower of") || t.includes("physical and licensed")) {
+        return CAPACITY_RECIPES[0]!;
+    }
     if (t.includes("capacity_operational")) return CAPACITY_RECIPES[1]!;
     return CAPACITY_RECIPES[0]!;
 }
