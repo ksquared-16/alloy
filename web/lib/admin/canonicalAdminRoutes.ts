@@ -67,9 +67,23 @@ export const CANONICAL_ORGANIZATION_DATA_MODEL_HREF = `${CANONICAL_ORGANIZATION_
 export const CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF =
     `${CANONICAL_ORGANIZATION_BASE}/operational-intelligence` as const;
 
-/** Canonical Organization Calculations (Path B — org-authored governed AST compositions). */
+/** Compatibility path — redirects into Operational Intelligence Calculation Library. */
 export const CANONICAL_ORGANIZATION_CALCULATIONS_HREF =
     `${CANONICAL_ORGANIZATION_BASE}/calculations` as const;
+
+/** OI-embedded Calculation Library (preferred product URL). */
+export function organizationCalculationLibraryHref(opts?: {
+    calculationId?: string | null;
+    libraryView?: string | null;
+    step?: string | number | null;
+}): string {
+    const params = new URLSearchParams();
+    params.set("view", "calculations");
+    if (opts?.calculationId) params.set("calculationId", opts.calculationId);
+    if (opts?.libraryView) params.set("libraryView", opts.libraryView);
+    if (opts?.step != null && opts.step !== "") params.set("step", String(opts.step));
+    return `${CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF}?${params.toString()}`;
+}
 
 /**
  * Settings subpaths that have been productized under `/organization/{slug}`.

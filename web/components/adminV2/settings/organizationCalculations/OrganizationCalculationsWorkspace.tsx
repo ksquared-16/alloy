@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * Organization Calculations V1 — administrator product.
- * Collection → Selected workspace (Overview / Definition / Test / Versions / Usage / Lifecycle).
- * Guided New Calculation. No engineering internals in the normal UI.
+ * Organization Calculation Library — reusable definitions.
+ * Mounted standalone (compat redirect) or embedded in Operational Intelligence.
+ * Collection → Selected workspace (Overview / Definition / Test / Versions / Where used / Lifecycle).
  */
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Calculator, Plus, Search } from "lucide-react";
@@ -27,6 +28,10 @@ import {
     QUEUE_ROW_CARD_SHELL_CLASS,
     QUEUE_ROW_SELECTED_RAIL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
+import {
+    CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF,
+    organizationCalculationLibraryHref,
+} from "@/lib/admin/canonicalAdminRoutes";
 import {
     ORG_CALC_PRODUCT_TYPES,
     inferProductTypeFromAst,
@@ -90,7 +95,7 @@ const TABS: Array<{ key: WorkspaceTab; label: string }> = [
     { key: "definition", label: "Definition" },
     { key: "test", label: "Test" },
     { key: "versions", label: "Versions" },
-    { key: "usage", label: "Usage" },
+    { key: "usage", label: "Where used" },
     { key: "lifecycle", label: "Lifecycle" },
 ];
 
@@ -109,11 +114,18 @@ function humanEvalStatus(status: string): string {
     return status;
 }
 
-export default function OrganizationCalculationsWorkspace() {
+export type OrganizationCalculationsWorkspaceProps = {
+    /** When true, render inside Operational Intelligence without a second product shell. */
+    embedded?: boolean;
+};
+
+export default function OrganizationCalculationsWorkspace({
+    embedded = false,
+}: OrganizationCalculationsWorkspaceProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const urlId = searchParams.get("calculationId");
-    const urlView = searchParams.get("view"); // home | archived | new | collection
+    const urlId = searchParams.get("calculationId") || searchParams.get("id");
+    const urlView = embedded ? searchParams.get("libraryView") : searchParams.get("view");
     const urlStepRaw = Number(searchParams.get("step") || "1");
     const urlStep = (urlStepRaw === 2 || urlStepRaw === 3 || urlStepRaw === 4 ? urlStepRaw : 1) as 1 | 2 | 3 | 4;
 
@@ -124,7 +136,12 @@ export default function OrganizationCalculationsWorkspace() {
     const [filter, setFilter] = useState<FilterKey>(urlView === "archived" ? "archived" : "active");
     const [search, setSearch] = useState("");
     const [mode, setMode] = useState<Mode>(
-        urlView === "new" ? "new" : urlId ? "selected" : urlView === "archived" ? "collection" : "home",
+        urlView === "new" ? "new"
+        : urlId ? "selected"
+        : urlView === "archived" ? "collection"
+        : embedded ? "collection"
+        : urlView === "home" ? "home"
+        : "collection",
     );
 
     // Keep workspace mode aligned with the URL (collection → object → workspace).
@@ -153,9 +170,9 @@ export default function OrganizationCalculationsWorkspace() {
         }
         if (urlView === "home") {
             setSelectedId(null);
-            setMode("home");
+            setMode(embedded ? "collection" : "home");
         }
-    }, [urlView, urlId]);
+    }, [urlView, urlId, embedded]);
 
     // New calculation wizard — step is URL-backed so remounts / Fast Refresh keep place.
     const [wizardStep, setWizardStepState] = useState<1 | 2 | 3 | 4>(urlView === "new" ? urlStep : 1);
@@ -165,12 +182,21 @@ export default function OrganizationCalculationsWorkspace() {
     const setWizardStep = useCallback(
         (next: 1 | 2 | 3 | 4) => {
             setWizardStepState(next);
+            if (embedded) {
+                router.replace(
+                    organizationCalculationLibraryHref({
+                        libraryView: "new",
+                        step: next > 1 ? next : null,
+                    }),
+                );
+                return;
+            }
             const params = new URLSearchParams();
             params.set("view", "new");
             if (next > 1) params.set("step", String(next));
             router.replace(`/organization/calculations?${params.toString()}`);
         },
-        [router],
+        [router, embedded],
     );
     const [productTypeId, setProductTypeId] = useState<OrgCalcProductTypeId>("capacity_lowest_physical_licensed");
     const [name, setName] = useState("");
@@ -224,13 +250,22 @@ export default function OrganizationCalculationsWorkspace() {
 
     const setUrl = useCallback(
         (next: { calculationId?: string | null; view?: string | null }) => {
+            if (embedded) {
+                router.replace(
+                    organizationCalculationLibraryHref({
+                        calculationId: next.calculationId,
+                        libraryView: next.view,
+                    }),
+                );
+                return;
+            }
             const params = new URLSearchParams();
             if (next.view) params.set("view", next.view);
             if (next.calculationId) params.set("calculationId", next.calculationId);
             const q = params.toString();
             router.replace(q ? `/organization/calculations?${q}` : "/organization/calculations");
         },
-        [router],
+        [router, embedded],
     );
 
     const refresh = useCallback(async () => {
@@ -528,7 +563,7 @@ export default function OrganizationCalculationsWorkspace() {
 
     const contextActions = (
         <div className="flex flex-wrap gap-2">
-            {mode !== "home" ?
+            {!embedded && mode !== "home" ?
                 <ConfigurationSecondaryButton onClick={openHome} data-testid="organization-calculations-home">
                     Overview
                 </ConfigurationSecondaryButton>
@@ -539,114 +574,142 @@ export default function OrganizationCalculationsWorkspace() {
                 data-testid="organization-calculations-new"
             >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                New calculation
+                New definition
             </ConfigurationPrimaryButton>
         </div>
     );
 
+    const libraryBody =
+        mode === "home" && !embedded ?
+            <DomainHome
+                counts={counts}
+                recent={counts.recent}
+                onNew={openNew}
+                onBrowse={() => openCollection("active")}
+                onArchived={() => openCollection("archived")}
+                onSelect={selectCalc}
+                loadError={loadError}
+            />
+        : mode === "new" ?
+            <NewCalculationWizard
+                step={wizardStep}
+                setStep={setWizardStep}
+                productTypeId={productTypeId}
+                setProductTypeId={(id) => {
+                    setProductTypeId(id);
+                    const t = productTypeById(id)!;
+                    setName(t.title);
+                    setDescription(t.summary);
+                }}
+                name={name}
+                setName={setName}
+                description={description}
+                setDescription={setDescription}
+                busy={busy}
+                error={error}
+                onCancel={() => openCollection("active")}
+                onSave={() => void createDraft()}
+            />
+        :   <ConfigurationShell
+                testId="organization-calculations-shell"
+                queueColumn={
+                    <CollectionRail
+                        items={visible}
+                        filter={filter}
+                        setFilter={(f) => {
+                            setFilter(f);
+                            if (f === "archived") setUrl({ view: "archived", calculationId: selectedId });
+                        }}
+                        search={search}
+                        setSearch={setSearch}
+                        selectedId={selectedId}
+                        onSelect={selectCalc}
+                        onNew={openNew}
+                        onArchived={() => openCollection("archived")}
+                        total={calculations.length}
+                    />
+                }
+            >
+                {!selectedId || !selected ?
+                    <ConfigurationEmptyState
+                        testId="organization-calculations-empty-selection"
+                        title={visible.length === 0 ? "No definitions yet" : "Select a definition"}
+                        description={
+                            visible.length === 0 ?
+                                "Create a reusable definition for how operational answers are calculated."
+                            :   "Choose a definition to review, test, publish, or see where it is used."
+                        }
+                        actions={
+                            <ConfigurationPrimaryButton
+                                className="config-primary-btn--sm"
+                                onClick={openNew}
+                                data-testid="organization-calculations-empty-add"
+                            >
+                                New definition
+                            </ConfigurationPrimaryButton>
+                        }
+                    />
+                :   <SelectedWorkspace
+                        selected={selected}
+                        detail={detail}
+                        productType={productType}
+                        tab={tab}
+                        setTab={setTab}
+                        rooms={rooms}
+                        roomId={roomId}
+                        setRoomId={setRoomId}
+                        effectiveAt={effectiveAt}
+                        setEffectiveAt={setEffectiveAt}
+                        evalResult={evalResult}
+                        boundVersion={boundVersion}
+                        busy={busy}
+                        error={error}
+                        onPublish={() => void publish()}
+                        onFork={() => void forkDraft()}
+                        onBind={(id) => void bindVersion(id)}
+                        onArchive={() => void archive()}
+                        onRestore={() => void restore()}
+                        onEvaluate={() => void evaluate()}
+                    />
+                }
+            </ConfigurationShell>;
+
+    if (embedded) {
+        return (
+            <div
+                className="min-h-0 flex-1 space-y-3"
+                data-testid="organization-calculations-product"
+                data-oi-embedded-library="true"
+            >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 className="text-lg font-semibold text-alloy-midnight">Calculation Library</h2>
+                        <p className="mt-0.5 text-sm text-alloy-midnight/60">
+                            Reusable definitions that determine how operational answers are calculated.
+                        </p>
+                    </div>
+                    {contextActions}
+                </div>
+                {loadError ?
+                    <p className="text-sm text-red-800" role="alert">
+                        {loadError}
+                    </p>
+                :   null}
+                {libraryBody}
+            </div>
+        );
+    }
+
     return (
         <div className="process-config-page min-h-0 flex-1" data-testid="organization-calculations-product">
             <ConfigurationContext
-                title="Calculations"
-                subtitle="Reusable business calculations for your organization."
+                title="Calculation Library"
+                subtitle="Reusable definitions that determine how operational answers are calculated."
                 titleIcon={<Calculator className="h-5 w-5" strokeWidth={2} />}
                 actions={contextActions}
                 testId="organization-calculations-context"
             >
-                {mode === "home" ?
-                    <DomainHome
-                        counts={counts}
-                        recent={counts.recent}
-                        onNew={openNew}
-                        onBrowse={() => openCollection("active")}
-                        onArchived={() => openCollection("archived")}
-                        onSelect={selectCalc}
-                        loadError={loadError}
-                    />
-                : mode === "new" ?
-                    <NewCalculationWizard
-                        step={wizardStep}
-                        setStep={setWizardStep}
-                        productTypeId={productTypeId}
-                        setProductTypeId={(id) => {
-                            setProductTypeId(id);
-                            const t = productTypeById(id)!;
-                            setName(t.title);
-                            setDescription(t.summary);
-                        }}
-                        name={name}
-                        setName={setName}
-                        description={description}
-                        setDescription={setDescription}
-                        busy={busy}
-                        error={error}
-                        onCancel={() => openCollection("active")}
-                        onSave={() => void createDraft()}
-                    />
-                :   <ConfigurationShell
-                        testId="organization-calculations-shell"
-                        queueColumn={
-                            <CollectionRail
-                                items={visible}
-                                filter={filter}
-                                setFilter={(f) => {
-                                    setFilter(f);
-                                    if (f === "archived") setUrl({ view: "archived", calculationId: selectedId });
-                                }}
-                                search={search}
-                                setSearch={setSearch}
-                                selectedId={selectedId}
-                                onSelect={selectCalc}
-                                onNew={openNew}
-                                onArchived={() => openCollection("archived")}
-                                total={calculations.length}
-                            />
-                        }
-                    >
-                        {!selectedId || !selected ?
-                            <ConfigurationEmptyState
-                                testId="organization-calculations-empty-selection"
-                                title={visible.length === 0 ? "No calculations yet" : "Select a calculation"}
-                                description={
-                                    visible.length === 0 ?
-                                        "Create your first calculation to define how your organization derives capacity."
-                                    :   "Choose a calculation from the list to review, test, publish, or manage usage."
-                                }
-                                actions={
-                                    <ConfigurationPrimaryButton
-                                        className="config-primary-btn--sm"
-                                        onClick={openNew}
-                                        data-testid="organization-calculations-empty-add"
-                                    >
-                                        New calculation
-                                    </ConfigurationPrimaryButton>
-                                }
-                            />
-                        :   <SelectedWorkspace
-                                selected={selected}
-                                detail={detail}
-                                productType={productType}
-                                tab={tab}
-                                setTab={setTab}
-                                rooms={rooms}
-                                roomId={roomId}
-                                setRoomId={setRoomId}
-                                effectiveAt={effectiveAt}
-                                setEffectiveAt={setEffectiveAt}
-                                evalResult={evalResult}
-                                boundVersion={boundVersion}
-                                busy={busy}
-                                error={error}
-                                onPublish={() => void publish()}
-                                onFork={() => void forkDraft()}
-                                onBind={(id) => void bindVersion(id)}
-                                onArchive={() => void archive()}
-                                onRestore={() => void restore()}
-                                onEvaluate={() => void evaluate()}
-                            />
-                        }
-                    </ConfigurationShell>
-                }
+                {libraryBody}
             </ConfigurationContext>
         </div>
     );
@@ -690,11 +753,10 @@ function DomainHome({
                     Organization
                 </p>
                 <h2 className="config-typo-workspace-title mt-1 text-xl text-alloy-midnight">
-                    What business calculations exist here?
+                    Reusable definitions
                 </h2>
                 <p className="config-typo-sublabel mt-1.5 max-w-2xl">
-                    Calculations define how your organization derives numbers from approved capacity data—published once,
-                    reused where work happens.
+                    These definitions determine how measurements and operational answers are calculated.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                     <ConfigurationPrimaryButton
@@ -702,10 +764,10 @@ function DomainHome({
                         onClick={onNew}
                         data-testid="organization-calculations-home-new"
                     >
-                        New calculation
+                        New definition
                     </ConfigurationPrimaryButton>
                     <ConfigurationSecondaryButton onClick={onBrowse} data-testid="organization-calculations-home-browse">
-                        Browse calculations
+                        Browse definitions
                     </ConfigurationSecondaryButton>
                     <ConfigurationSecondaryButton
                         onClick={onArchived}
@@ -737,11 +799,11 @@ function DomainHome({
                 {recent.length === 0 ?
                     <ConfigurationEmptyState
                         testId="organization-calculations-home-empty"
-                        title="No calculations yet"
-                        description="Create your first calculation to get started."
+                        title="No definitions yet"
+                        description="Create your first reusable definition to get started."
                         actions={
                             <ConfigurationPrimaryButton className="config-primary-btn--sm" onClick={onNew}>
-                                New calculation
+                                New definition
                             </ConfigurationPrimaryButton>
                         }
                     />
@@ -805,7 +867,7 @@ function CollectionRail({
         >
             <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
-                    <p className="config-typo-queue-section-label">Calculations</p>
+                    <p className="config-typo-queue-section-label">Definitions</p>
                     <p className="config-typo-sublabel mt-0.5" data-testid="organization-calculations-list">
                         {total} total
                     </p>
@@ -823,7 +885,7 @@ function CollectionRail({
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-alloy-midnight/35" />
                 <input
                     className="config-runtime-input w-full pl-8 text-sm"
-                    placeholder="Search calculations"
+                    placeholder="Search definitions"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     data-testid="organization-calculations-search"
@@ -940,11 +1002,11 @@ function NewCalculationWizard({
         <div className="mx-auto max-w-2xl space-y-4" data-testid="organization-calculations-new-wizard">
             <div className="process-config-setup-card p-5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                    New calculation
+                    New definition
                 </p>
-                <h2 className="config-typo-workspace-title mt-1 text-xl">Create a calculation</h2>
+                <h2 className="config-typo-workspace-title mt-1 text-xl">Create a reusable definition</h2>
                 <p className="config-typo-sublabel mt-1">
-                    Step {step} of 4 — choose a type, describe the business meaning, confirm inputs, then save a draft.
+                    Step {step} of 4 — choose how capacity is determined, name it, confirm what’s needed, then save a draft.
                 </p>
             </div>
 
@@ -1226,7 +1288,14 @@ function SelectedWorkspace({
                     />
                 : null}
                 {tab === "usage" ?
-                    <UsagePanel boundVersion={boundVersion} detail={detail} busy={busy} archived={archived} onBind={onBind} />
+                    <UsagePanel
+                        boundVersion={boundVersion}
+                        detail={detail}
+                        busy={busy}
+                        archived={archived}
+                        onBind={onBind}
+                        calculationId={selected.id}
+                    />
                 : null}
                 {tab === "lifecycle" ?
                     <LifecyclePanel
@@ -1560,16 +1629,74 @@ function UsagePanel({
     busy,
     archived,
     onBind,
+    calculationId,
 }: {
     boundVersion: VersionRow | null;
     detail: DetailPayload | null;
     busy: boolean;
     archived: boolean;
     onBind: (id: string) => void;
+    calculationId: string;
 }) {
+    const [measurements, setMeasurements] = useState<
+        Array<{ id: string; name: string; question_key?: string | null; status: string }>
+    >([]);
+
+    useEffect(() => {
+        void (async () => {
+            try {
+                const res = await fetch("/api/admin/metrics/oi-org-calc-measurements");
+                const json = (await res.json()) as {
+                    measurements?: Array<{
+                        id: string;
+                        name: string;
+                        status: string;
+                        question_key?: string | null;
+                        source?: { calculation_id?: string };
+                    }>;
+                };
+                if (!res.ok) return;
+                setMeasurements(
+                    (json.measurements ?? []).filter(
+                        (m) =>
+                            m.status !== "retired"
+                            && m.source?.calculation_id === calculationId,
+                    ),
+                );
+            } catch {
+                /* optional */
+            }
+        })();
+    }, [calculationId]);
+
     return (
         <ConfigWorkspaceCard testId="organization-calculations-usage">
-            <ConfigEditorSection title="Usage" description="Where this calculation is used today.">
+            <ConfigEditorSection
+                title="Where used"
+                description="Measurements and surfaces that use this reusable definition."
+            >
+                {measurements.length > 0 ?
+                    <ul className="mb-3 space-y-2">
+                        {measurements.map((m) => (
+                            <li key={m.id}>
+                                <Link
+                                    href={`${CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF}?view=measurements&orgMeasurement=${m.id}`}
+                                    className="block rounded-md border border-alloy-stone/25 px-3 py-3 hover:border-[#00a283]/40"
+                                    data-testid={`organization-calculations-where-used-measurement-${m.id}`}
+                                >
+                                    <p className="text-sm font-semibold text-alloy-midnight">{m.name}</p>
+                                    <p className="config-typo-sublabel mt-0.5">
+                                        Operational Intelligence · Measurements
+                                        {m.question_key === "future_room_capacity" ?
+                                            " · Future Room Capacity"
+                                        :   ""}
+                                    </p>
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                :   null}
+
                 {boundVersion ?
                     <div className="rounded-md border border-alloy-stone/25 px-3 py-3">
                         <p className="text-sm font-semibold text-alloy-midnight">Room capacity</p>
@@ -1593,12 +1720,13 @@ function UsagePanel({
                             </div>
                         :   null}
                     </div>
-                :   <ConfigurationEmptyState
+                : measurements.length === 0 ?
+                    <ConfigurationEmptyState
                         testId="organization-calculations-usage-empty"
                         title="Not used yet"
-                        description="This calculation isn’t connected to Room capacity. Publish a version, then choose Use for Room capacity on the Versions tab."
+                        description="This definition isn’t connected to a measurement or Room capacity yet."
                     />
-                }
+                :   null}
             </ConfigEditorSection>
         </ConfigWorkspaceCard>
     );

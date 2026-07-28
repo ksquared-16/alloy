@@ -32,9 +32,9 @@ import {
 } from "@/lib/metrics/oipStatusPresentation";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import {
-    CANONICAL_ORGANIZATION_CALCULATIONS_HREF,
     CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF,
     CANONICAL_ORGANIZATION_SURFACES_HREF,
+    organizationCalculationLibraryHref,
 } from "@/lib/admin/canonicalAdminRoutes";
 import type { OipKpiKey } from "@/lib/metrics/types";
 import type { OipTargetApiItem } from "@/lib/metrics/fetchOipSettingsSnapshot";
@@ -49,11 +49,18 @@ import { capacityRecipeFromProductTypeLabel } from "@/lib/adminV2/settings/opera
 import type { OiOrgCalcMeasurement } from "@/lib/metrics/oiOrgCalcMeasurements";
 import OiFutureRoomCapacityBuilder from "@/components/adminV2/settings/operationalIntelligence/OiFutureRoomCapacityBuilder";
 import OiOrgCalcMeasurementPanel from "@/components/adminV2/settings/operationalIntelligence/OiOrgCalcMeasurementPanel";
+import OrganizationCalculationsWorkspace from "@/components/adminV2/settings/organizationCalculations/OrganizationCalculationsWorkspace";
 import { findFutureRoomCapacityMeasurement } from "@/lib/operationalQuestions/answerFutureRoomCapacity";
 import { FUTURE_ROOM_CAPACITY_QUESTION_KEY } from "@/lib/operationalQuestions/catalog";
 
 type DetailRegion = "overview" | "target" | "history" | "lifecycle" | "provenance";
-type WorkspaceView = "home" | "measurements" | "advanced" | "builder";
+type WorkspaceView = "questions" | "measurements" | "calculations" | "advanced" | "builder";
+
+const OI_PRODUCT_TABS: Array<{ key: "questions" | "measurements" | "calculations"; label: string }> = [
+    { key: "questions", label: "Questions" },
+    { key: "measurements", label: "Measurements" },
+    { key: "calculations", label: "Calculation Library" },
+];
 
 const SURFACES_OI_HREF = `${CANONICAL_ORGANIZATION_SURFACES_HREF}?section=operational-intelligence`;
 
@@ -494,8 +501,9 @@ function OperationalIntelligenceInner() {
     const view: WorkspaceView =
         tabParam === "diagnostics" || viewParam === "advanced" ? "advanced"
         : addOpen && !orgMeasurementId ? "builder"
+        : viewParam === "calculations" ? "calculations"
         : viewParam === "measurements" || measurementParam || orgMeasurementId ? "measurements"
-        : "home";
+        : "questions";
 
     const rows = useMemo(() => buildOiMeasurementRows(snapshot), [snapshot]);
     const filtered = useMemo(
@@ -613,25 +621,72 @@ function OperationalIntelligenceInner() {
                 titleIcon={<Activity className="h-5 w-5" strokeWidth={2} />}
                 subtitle="What do you want to know about how the organization is running?"
                 testId="oi-configuration-context"
-                actions={
-                    canMutate ?
+                actions={null}
+            />
+
+            <div
+                className="mb-3 flex flex-wrap gap-1.5"
+                data-testid="oi-product-tabs"
+                role="tablist"
+                aria-label="Operational Intelligence sections"
+            >
+                {OI_PRODUCT_TABS.map((t) => {
+                    const active =
+                        t.key === "questions" ? view === "questions" || view === "builder"
+                        : t.key === "measurements" ? view === "measurements"
+                        : view === "calculations";
+                    return (
                         <button
+                            key={t.key}
                             type="button"
+                            role="tab"
+                            aria-selected={active}
                             onClick={() => {
-                                if (frcMeasurement) {
-                                    selectOrgCalc(frcMeasurement.id);
+                                setAddOpen(false);
+                                if (t.key === "questions") {
+                                    setParams({
+                                        view: null,
+                                        add: null,
+                                        orgMeasurement: null,
+                                        measurement: null,
+                                        calculationId: null,
+                                        libraryView: null,
+                                        activated: null,
+                                        question: null,
+                                    });
                                     return;
                                 }
-                                openAdd();
+                                if (t.key === "measurements") {
+                                    setParams({
+                                        view: "measurements",
+                                        add: null,
+                                        calculationId: null,
+                                        libraryView: null,
+                                        activated: null,
+                                    });
+                                    return;
+                                }
+                                setParams({
+                                    view: "calculations",
+                                    add: null,
+                                    orgMeasurement: null,
+                                    measurement: null,
+                                    activated: null,
+                                    question: null,
+                                });
                             }}
-                            className="rounded-md border border-alloy-juniper/30 bg-alloy-juniper/10 px-2.5 py-1.5 text-xs font-semibold text-alloy-juniper"
-                            data-testid="oi-add-measurement"
+                            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                                active ?
+                                    "border-[#00a283]/45 bg-[#00a283]/10 text-[#007d68]"
+                                :   "border-alloy-stone/25 bg-white text-alloy-midnight/60"
+                            }`}
+                            data-testid={`oi-tab-${t.key}`}
                         >
-                            {frcMeasurement ? "View Future Room Capacity" : "Start measuring"}
+                            {t.label}
                         </button>
-                    :   null
-                }
-            />
+                    );
+                })}
+            </div>
 
             {error && !snapshot ?
                 <p className="mb-2 text-sm text-alloy-ember" data-testid="oi-load-error">
@@ -642,7 +697,7 @@ function OperationalIntelligenceInner() {
                 <p className="mb-2 text-xs text-alloy-midnight/50">Loading measurements…</p>
             : null}
 
-            {view === "home" ?
+            {view === "questions" ?
                 <DomainHome
                     activeMeasurements={activeOrgCalcs}
                     needsAttentionCount={attentionCount}
@@ -660,7 +715,7 @@ function OperationalIntelligenceInner() {
                         onClick={closeAdd}
                         data-testid="oi-builder-back-home"
                     >
-                        ← What do you want to know?
+                        ← Questions
                     </button>
                     <OiFutureRoomCapacityBuilder
                         busy={!canMutate}
@@ -670,6 +725,10 @@ function OperationalIntelligenceInner() {
                             void reloadOrgCalcs().then(() => selectOrgCalc(id, { activated: true }));
                         }}
                     />
+                </div>
+            : view === "calculations" ?
+                <div data-testid="oi-calculation-library-view">
+                    <OrganizationCalculationsWorkspace embedded />
                 </div>
             : view === "advanced" ?
                 <div className="space-y-3">
@@ -693,10 +752,10 @@ function OperationalIntelligenceInner() {
                                 <button
                                     type="button"
                                     className="text-[11px] font-semibold text-[#007d68] hover:underline"
-                                    onClick={() => setParams({ view: "home", measurement: null, orgMeasurement: null, activated: null })}
+                                    onClick={() => setParams({ view: null, measurement: null, orgMeasurement: null, activated: null })}
                                     data-testid="oi-back-home"
                                 >
-                                    ← What do you want to know?
+                                    ← Questions
                                 </button>
                                 <input
                                     type="search"
@@ -783,10 +842,12 @@ function OperationalIntelligenceInner() {
                                 </button>
                                 <span className="text-alloy-midnight/30">·</span>
                                 <Link
-                                    href={`${CANONICAL_ORGANIZATION_CALCULATIONS_HREF}?id=${activeOrg.source.calculation_id}`}
+                                    href={organizationCalculationLibraryHref({
+                                        calculationId: activeOrg.source.calculation_id,
+                                    })}
                                     className="text-[#007d68] hover:underline"
                                 >
-                                    Advanced · Calculation library
+                                    View definition
                                 </Link>
                             </div>
                         </div>
@@ -820,14 +881,6 @@ function OperationalIntelligenceInner() {
                 >
                     Advanced tools
                 </button>
-                {" · "}
-                <Link
-                    href={CANONICAL_ORGANIZATION_CALCULATIONS_HREF}
-                    className="hover:underline"
-                    data-testid="oi-open-calculation-library"
-                >
-                    Calculation library
-                </Link>
             </p>
         </div>
     );

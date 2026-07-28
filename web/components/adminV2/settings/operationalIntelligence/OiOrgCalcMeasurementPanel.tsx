@@ -16,7 +16,7 @@ import {
     ConfigWorkspaceCard,
     ConfigWorkspaceTabBar,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
-import { CANONICAL_ORGANIZATION_CALCULATIONS_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import { organizationCalculationLibraryHref } from "@/lib/admin/canonicalAdminRoutes";
 import { capacityRecipeFromProductTypeLabel } from "@/lib/adminV2/settings/operationalIntelligence/oiCapacityRecipeCopy";
 import type { OiOrgCalcHealth, OiOrgCalcMeasurement, OiOrgCalcObservation } from "@/lib/metrics/oiOrgCalcMeasurements";
 
@@ -213,7 +213,9 @@ export default function OiOrgCalcMeasurementPanel({
     const recipe = capacityRecipeFromProductTypeLabel(
         measurement.description ?? measurement.source.calculation_name,
     );
-    const calcHref = `${CANONICAL_ORGANIZATION_CALCULATIONS_HREF}?id=${measurement.source.calculation_id}`;
+    const calcHref = organizationCalculationLibraryHref({
+        calculationId: measurement.source.calculation_id,
+    });
 
     return (
         <div className="min-w-0 space-y-3" data-testid="oi-org-calc-measurement">
@@ -434,55 +436,54 @@ export default function OiOrgCalcMeasurementPanel({
                             title="How this is measured"
                             description="Future updates won’t change this measurement until you choose to use a newer definition."
                         >
-                            <p className="text-sm text-alloy-midnight" data-testid="oi-org-calc-source-line">
-                                {recipe.recipeSentence}
-                            </p>
-                            {newerVersions.length > 0 ?
-                                <div className="mt-3 space-y-2">
-                                    <p className="text-xs text-alloy-midnight/60">
-                                        A newer definition is available.
+                                    <p className="text-sm text-alloy-midnight" data-testid="oi-org-calc-source-line">
+                                        {recipe.recipeSentence}
                                     </p>
-                                    {newerVersions.map((v) => (
-                                        <ConfigurationSecondaryButton
-                                            key={v.id}
-                                            disabled={busy}
-                                            onClick={() => void useNewerVersion(v.id)}
-                                            data-testid={`oi-org-calc-rebind-v${v.version_number}`}
-                                        >
-                                            Use the newer definition
-                                        </ConfigurationSecondaryButton>
-                                    ))}
-                                </div>
-                            :   null}
-
-                            <button
-                                type="button"
-                                className="mt-3 text-xs font-semibold text-[#007d68] hover:underline"
-                                onClick={() => setShowAdvanced((v) => !v)}
-                                data-testid="oi-org-calc-toggle-advanced"
-                            >
-                                {showAdvanced ? "Hide advanced" : "Advanced"}
-                            </button>
-                            {showAdvanced ?
-                                <div className="mt-2 space-y-2 text-sm" data-testid="oi-org-calc-version-panel">
-                                    <p className="config-typo-sublabel" data-testid="oi-org-calc-bound-version">
-                                        Using definition version {measurement.source.version_number}
-                                    </p>
-                                    <p>
+                                    <p className="mt-3">
                                         <Link
                                             href={calcHref}
-                                            className="font-semibold text-[#007d68] hover:underline"
+                                            className="text-sm font-semibold text-[#007d68] hover:underline"
                                             data-testid="oi-org-calc-open-definition"
                                         >
-                                            Open calculation library
+                                            View definition
                                         </Link>
-                                        <span className="text-alloy-midnight/45">
-                                            {" "}
-                                            — reusable definitions, versions, and where used
-                                        </span>
                                     </p>
-                                </div>
-                            :   null}
+                                    {newerVersions.length > 0 ?
+                                        <div className="mt-3 space-y-2">
+                                            <p className="text-xs text-alloy-midnight/60">
+                                                A newer definition is available.
+                                            </p>
+                                            {newerVersions.map((v) => (
+                                                <ConfigurationSecondaryButton
+                                                    key={v.id}
+                                                    disabled={busy}
+                                                    onClick={() => void useNewerVersion(v.id)}
+                                                    data-testid={`oi-org-calc-rebind-v${v.version_number}`}
+                                                >
+                                                    Use the newer definition
+                                                </ConfigurationSecondaryButton>
+                                            ))}
+                                        </div>
+                                    :   null}
+
+                                    <button
+                                        type="button"
+                                        className="mt-3 text-xs font-semibold text-[#007d68] hover:underline"
+                                        onClick={() => setShowAdvanced((v) => !v)}
+                                        data-testid="oi-org-calc-toggle-advanced"
+                                    >
+                                        {showAdvanced ? "Hide advanced" : "Advanced"}
+                                    </button>
+                                    {showAdvanced ?
+                                        <div className="mt-2 space-y-2 text-sm" data-testid="oi-org-calc-version-panel">
+                                            <p className="config-typo-sublabel" data-testid="oi-org-calc-bound-version">
+                                                Using definition version {measurement.source.version_number}
+                                            </p>
+                                            <p className="text-xs text-alloy-midnight/50">
+                                                Opens Calculation Library for versions and where used.
+                                            </p>
+                                        </div>
+                                    :   null}
                         </ConfigEditorSection>
                     </ConfigWorkspaceCard>
                 </div>
