@@ -144,12 +144,20 @@ command_set_v1 → stage → WT → capability support → subject validity → 
 ### Done
 1. Wire live BOS discovery to `resolveBosProcessEffectiveCommandKeys` (department → process) — `5750a475b`
 2. Surface/placement no longer gates BOS eligibility
+3. Shared invoke helper → `executePlatformCommandViaActionsApi` + BOS `origin: "bos"` — `558604814`
+4. Adapter registry (`bosCommandAdapterRegistry`) + draft coverage ledger — `70f213b84`
 
-### In progress / next
-3. Shared invoke helper → same execute route / Runtime (`executePlatformCommandViaActionsApi`)
-4. Introduce adapter registry beyond `create_lead`
-5. Prove mutation + relationship + confirmation Commands with thin adapters or generic preparation
-6. Coverage ledger for all Commands
+### Remaining (audit follow-up)
+5. Register representative Commands (mutation / relationship / confirmation) on shared bridge — expand registry beyond `create_lead`
+6. Keep coverage ledger honest as adapters ship
+7. Align Conversation Intake naming with Conversation Runtime vocabulary (do **not** merge Participant/packet Runtime into BOS)
+8. Browser QA proofs + full Commands/BOS regression + certify
+
+**Audit honesty (from [Audit BOS Create Lead](63cc1549-cc30-4a19-892a-afd80b6bddda)):**
+- Mutation path already converged — no private BOS write path
+- BOS confirmation UX is client-side; durable create still waits on Processing IdentityReviewPanel commit
+- Server confirm token for non-destructive RegisteredActions is weak — do not overclaim
+- `ConversationIntakeAdapter` ≠ Participant Runtime
 
 ---
 
