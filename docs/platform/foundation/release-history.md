@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-13
+last_reviewed: 2026-07-28
 supersedes: []
 ---
 
@@ -14,6 +14,10 @@ supersedes: []
 ---
 
 ## 2026 H1 — Platform maturation
+
+### July 2026 — Commands architecture + product-boundary correction
+
+**Local mission delivery (Slot 1 Commands); not yet merged to staging.** Capability Registry, Command Runtime, domain adapters, destructive safety, `command_set_v1`, and BOS Command Runtime Convergence are retained. A standalone **operator-facing Organization Commands configuration product was rejected**. **Surfaces do not configure Commands** — Business Process `command_set_v1` owns process selection. BOS is a preparation/placement over the shared Runtime bridge (`executePlatformCommandViaActionsApi`); representative families proven. Frozen closeout: `platform/milestones/bos-command-runtime-convergence-closeout.md`. `/organization/commands` remains **internal capability diagnostics** only. Normal Operations sequence is **Automation → Business Processes → Surfaces**.
 
 ### July 2026 — Documentation Platform v1.0
 

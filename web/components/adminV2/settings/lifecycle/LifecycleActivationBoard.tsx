@@ -1818,6 +1818,7 @@ export default function LifecycleActivationBoard({
                                     stageRecord={builderStages.find((s) => s.key === stageKey) ?? null}
                                     allStages={builderStages}
                                     processTracks={builderProcess?.tracks_v1 ?? null}
+                                    process={builderProcess ?? null}
                                     bootstrap={stageBootstrap}
                                     bootstrapLoading={stageBootstrapLoading}
                                     statusesError={statusesError}

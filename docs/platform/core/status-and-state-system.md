@@ -91,6 +91,12 @@ generated from stage membership.
    `withdraw_child`, `close_lead` — resolve to outcome executions with preflight/readiness
 3. **Workflow effects** — event-triggered automation (origin: `automation`) — same typed domains
 
+**Destructive vs status transitions (P4.S1):** Commands that delete, archive, cancel, withdraw,
+void, or **replace** a designation are not ordinary status updates. They use the Command Runtime
+destructive/replacement policy contract (preview + confirmation + permission class). Replacement
+(e.g. make primary contact) displaces a designation without deleting the prior record. Facade
+commit for these Classes remains gated separately from Mutation Runtime status transitions.
+
 Removed by the Enrollment Alignment sprint: operator-facing generic status mutation
 (`update_status` / `update_enrollment_status` modal) and status PATCH as a transition path.
 Direct PATCH of `status_key` / `outcome_status_key` / `stage_key` is rejected.

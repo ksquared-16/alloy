@@ -57,6 +57,9 @@ export const CANONICAL_ORGANIZATION_ACCESS_HREF = `${CANONICAL_ORGANIZATION_BASE
 /** Canonical Organization Business Processes. */
 export const CANONICAL_ORGANIZATION_PROCESSES_HREF = `${CANONICAL_ORGANIZATION_BASE}/processes` as const;
 
+/** Internal Command capability diagnostics route (`/organization/commands`) — not an org config product. */
+export const CANONICAL_ORGANIZATION_COMMANDS_HREF = `${CANONICAL_ORGANIZATION_BASE}/commands` as const;
+
 /** Canonical Organization Data Model (Entities, Fields, Statuses, Option Sets, Relationships, Calculations). */
 export const CANONICAL_ORGANIZATION_DATA_MODEL_HREF = `${CANONICAL_ORGANIZATION_BASE}/data-model` as const;
 
@@ -76,6 +79,7 @@ const ORGANIZATION_CONFIG_SUBPATH_ALIASES: Record<string, string> = {
     "users-roles": "access",
     processes: "processes",
     "business-processes": "processes",
+    commands: "commands",
     "data-model": "data-model",
     /** Legacy Data Model landing slug → `/organization/data-model` (default Entities). */
     entities: "data-model",

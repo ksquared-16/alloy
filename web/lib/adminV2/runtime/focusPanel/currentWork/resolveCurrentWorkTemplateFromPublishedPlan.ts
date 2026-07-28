@@ -45,6 +45,7 @@ import type {
     CurrentWorkTemplateConfigOverlay,
 } from "./currentWorkTemplateConfig";
 import type { PublishedStageInputsForCurrentWork } from "./resolvePublishedStageInputsForCurrentWork";
+import { filterStageCatalogToProcessSelection } from "@/lib/lifecycle/processRuntimeCommandProjection";
 
 export type ResolveCurrentWorkTemplateFromPublishedPlanInput = PublishedStageInputsForCurrentWork & {
     stageWorkRuntime: StageWorkRuntimeProjection | null;
@@ -317,7 +318,10 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
         processStages,
         processTracks,
         stageKey: publishedStageKey,
+        commandProjection: explicitProjection,
     } = input;
+    const commandProjection = explicitProjection ?? null;
+    const processAwareCatalog = filterStageCatalogToProcessSelection(actionCatalog, commandProjection);
     const activeTemplate = activeWorkTemplate(operatingPlan, stageWorkRuntime);
     const workKey = activeTemplate?.template_key ?? stageWorkRuntime?.primary?.template_key ?? "unknown";
 
@@ -326,9 +330,9 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
         checklistFromFieldRules(fieldRules),
     );
 
-    const catalogActions = actionsFromCatalog(actionCatalog);
+    const catalogActions = actionsFromCatalog(processAwareCatalog);
     const actionRegistry = buildActionRegistry({
-        actionCatalog,
+        actionCatalog: processAwareCatalog,
         recordHeaderActions,
         activeTemplate,
         processStages,

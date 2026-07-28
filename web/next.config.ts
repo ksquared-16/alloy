@@ -147,6 +147,14 @@ const nextConfig: NextConfig = {
       { source: "/settings/processes/:path*", destination: "/organization/processes", permanent: false },
       { source: "/settings/business-processes", destination: "/organization/processes", permanent: false },
       { source: "/settings/business-processes/:path*", destination: "/organization/processes", permanent: false },
+      /**
+       * Action Buttons developer CRUD — do not redirect to the rejected operator Commands product.
+       * `/organization/commands` remains an internal capability diagnostics route only.
+       */
+      { source: "/settings/actions", destination: "/adminV2/settings/actions", permanent: false },
+      { source: "/settings/actions/:path*", destination: "/adminV2/settings/actions", permanent: false },
+      { source: "/configuration/commands", destination: "/organization/commands", permanent: false },
+      { source: "/configuration/commands/:path*", destination: "/organization/commands", permanent: false },
       { source: "/settings/financials", destination: "/organization/financials", permanent: false },
       { source: "/settings/financials/:path*", destination: "/organization/financials", permanent: false },
       { source: "/settings/locations", destination: "/organization/locations", permanent: false },
@@ -241,6 +249,8 @@ const nextConfig: NextConfig = {
       { source: "/organization/access/:path*", destination: "/adminV2/settings/organization/access/:path*" },
       { source: "/organization/processes", destination: "/adminV2/settings/organization/processes" },
       { source: "/organization/processes/:path*", destination: "/adminV2/settings/organization/processes/:path*" },
+      { source: "/organization/commands", destination: "/adminV2/settings/organization/commands" },
+      { source: "/organization/commands/:path*", destination: "/adminV2/settings/organization/commands/:path*" },
       { source: "/organization/data-model", destination: "/adminV2/settings/organization/data-model" },
       { source: "/organization/data-model/:path*", destination: "/adminV2/settings/organization/data-model/:path*" },
       /**

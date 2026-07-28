@@ -2,6 +2,8 @@
  * Executable action registry for Settings library, catalog filtering, and documentation.
  */
 
+import { getPlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
+
 export type ActionDefinitionCategory =
     | "record"
     | "communication"
@@ -241,6 +243,24 @@ export function filterSettingsActionCatalogDefinitions(definitions: ActionCatalo
         const key = d.key.trim();
         if (isInternalOrPlaceholderActionKey(key)) return false;
         if (d.action_type === "ui_intent" && key.includes("placeholder")) return false;
+
+        // P0.S1 honesty: a DB definition never implies a runnable organization Command.
+        // Unknown-to-registry keys keep prior behavior (library / org_id gates below).
+        const capability = getPlatformCapability(key);
+        if (capability) {
+            if (
+                capability.maturity === "placeholder" ||
+                capability.maturity === "unavailable" ||
+                capability.maturity === "processing_only" ||
+                capability.maturity === "workflow_only" ||
+                capability.maturity === "configuration_maintenance"
+            ) {
+                return false;
+            }
+            if (capability.catalogVisibility === "hidden" || capability.catalogVisibility === "internal_only") {
+                return false;
+            }
+        }
 
         const entry = actionRegistryEntryForKey(key);
         if (entry) return entry.settingsConfigurable;

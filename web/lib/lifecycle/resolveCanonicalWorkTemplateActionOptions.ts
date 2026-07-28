@@ -16,12 +16,21 @@ import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1"
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     isNonCanonicalIntentAlias,
+    normalizeActionRefToIntentKey,
     resolveIntentExecutionRef,
     resolveWorkTemplateSubjectGrain,
     workTemplateActionIntentForKey,
     type WorkTemplateActionIntentCategory,
 } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 import { getPlatformAction, type PlatformActionGrain } from "@/lib/platform/actions/platformActionCatalog";
+import {
+    getPlatformCapability,
+    isNonRunnableCatalogCapability,
+    tryResolvePlatformCapability,
+} from "@/lib/platform/commands/capabilityRegistry";
+import type { LifecycleBuilderProcessRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { resolveBusinessProcessCommandSelection } from "@/lib/lifecycle/resolveBusinessProcessCommandSelection";
+import { listEnabledCommandKeys } from "@/lib/lifecycle/processCommandSetV1";
 
 export type CanonicalWorkTemplateActionOption = {
     ref: string;
@@ -156,6 +165,11 @@ function isHiddenFromEditor(actionKey: string): boolean {
 function isUnsupportedActionKey(actionKey: string): string | null {
     const key = actionKey.trim();
     if (!key) return "Missing action key";
+    // P0.S1 honesty: seed stubs / placeholders are not usable process Commands.
+    if (isNonRunnableCatalogCapability(key)) {
+        const maturity = getPlatformCapability(key)?.maturity ?? "unavailable";
+        return `Capability is ${maturity} and is not a runnable Command`;
+    }
     const canonical = canonicalActionDefinition(key);
     if (canonical && !canonical.runtimeWired) return "Action is not runtime-wired";
     return null;
@@ -291,6 +305,32 @@ function mergeByIntent(
     return [...byIntent.values()].filter((row) => row.supported);
 }
 
+function processSelectionKeySet(
+    process: LifecycleBuilderProcessRecord | null | undefined
+): Set<string> | null {
+    if (!process) return null;
+    const selection = resolveBusinessProcessCommandSelection({ process });
+    const keys = listEnabledCommandKeys(selection.commands, (key) => {
+        const resolved = tryResolvePlatformCapability(key);
+        return resolved.status === "known" ? resolved.capability.canonicalCommandKey : key.trim();
+    });
+    const out = new Set<string>();
+    for (const key of keys) {
+        out.add(key);
+        out.add(normalizeActionRefToIntentKey(key));
+    }
+    return out;
+}
+
+function keyInSelection(selection: Set<string>, key: string): boolean {
+    const trimmed = key.trim();
+    if (!trimmed) return false;
+    return (
+        selection.has(trimmed) ||
+        selection.has(normalizeActionRefToIntentKey(trimmed))
+    );
+}
+
 export function resolveCanonicalWorkTemplateActionOptions(input: {
     processDefinition?: unknown;
     stageDefinition?: unknown;
@@ -298,6 +338,11 @@ export function resolveCanonicalWorkTemplateActionOptions(input: {
     stageActionCatalog?: StageActionCatalogV1 | null;
     processTransitions?: unknown;
     stageKey?: string;
+    /**
+     * P6.S3: when provided, option membership is gated to process Command selection
+     * (command_set_v1 or deterministic legacy migrate). Stage catalogs remain recommendation-only.
+     */
+    process?: LifecycleBuilderProcessRecord | null;
 }): CanonicalWorkTemplateActionOption[] {
     const subjectGrain = resolveWorkTemplateSubjectGrain({
         processDefinition: input.processDefinition,
@@ -309,11 +354,16 @@ export function resolveCanonicalWorkTemplateActionOptions(input: {
         catalogRecommendations.set(row.action_key, row.recommendation ?? "");
     }
 
-    const candidateKeys = collectCandidateActionKeys({
+    let candidateKeys = collectCandidateActionKeys({
         actionRegistry: input.actionRegistry,
         stageActionCatalog: input.stageActionCatalog ?? null,
         stageKey: input.stageKey,
     });
+
+    const selection = processSelectionKeySet(input.process ?? null);
+    if (selection) {
+        candidateKeys = candidateKeys.filter((key) => keyInSelection(selection, key));
+    }
 
     const rawOptions = candidateKeys
         .map((key) =>

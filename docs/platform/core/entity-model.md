@@ -56,6 +56,8 @@ Parent and Guardian remain roles, Child remains a `customer_members` record (opt
 | `tour_bookings` | Confirmed tour appointments (not `schedules`) |
 | `placement_candidates` | Waitlist candidate grain (preview/triage) |
 
+**Delete Lead (hard delete):** opportunity-scoped graph deletion via `executeDeleteOpportunityLead`. Does **not** delete `work_units`. Person/customer rows are removed only when unreferenced after the graph; otherwise retained. No supported restore path. Command Runtime facade cutover: `delete_lead` (P4.S3); direct `POST .../opportunities/:id/delete` remains.
+
 ---
 
 ## Status grains (frozen)

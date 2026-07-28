@@ -55,12 +55,17 @@ A business process defines:
 
 - **Name and catalog entry** — appears on `/workspace` landing and sidebar
 - **Stages** — ordered steps in the operator journey
+- **Process Command selection (`command_set_v1`)** — sole target process-wide authority for which Commands the process selects (P6.S1). Stage catalogs recommend/evaluate selected Commands; they do not create process selection.
 - **Stage operating plans** — purpose, expected work, success/off-track criteria — see `docs/system/operating-plan-runtime-doctrine.md`
 - **Stage membership** — subject grain + scope (`membership_criteria_v1`); membership itself is the persisted `stage_key`, written by outcome execution
 - **Outgoing transitions** — stage-owned, stable identities for destination, availability, and optional canonical status/close effects
 - **Outcome Definitions** — stage-owned completion choices; Work Templates select Available Outcomes and outcomes compose movement, follow-up work, and attention
 - **Required information & actions** — per-stage configuration
 - **Layout assignments** — published layouts per stage slot — see `../operator/business-process-layout-assignments.md`
+
+**Operations hierarchy (Commands mission):** Commands define capabilities → Automations may invoke/react to Commands → Business Processes select Commands → Stages recommend/evaluate selected Commands → Surfaces expose effective Commands. There is **no** standalone Organization Commands configuration product. `/organization/commands` is internal capability diagnostics only. `command_set_v1` remains process selection authority.
+
+**Runtime consumption (P6.S2):** Current Work, process-aware stage evaluation, and optional BOS process filters resolve Commands through `projectProcessRuntimeCommands` → `resolveEffectiveBusinessProcessCommands`. **Authoring (P6.S3):** process saves stamp `command_set_v1`; Work Template options gate to process selection. Process Command picker UI remains P6.S4.
 
 **Implementation tables:** `lifecycles`, `business_process_layout_assignments`, lifecycle builder metadata (JSON in org/dept metadata), stage keys in builder config.
 

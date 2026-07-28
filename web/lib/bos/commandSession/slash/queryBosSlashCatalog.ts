@@ -1,26 +1,46 @@
 /**
- * Slash command catalog — registered + bosProposalSupport + adapter-ready allowlist.
- * Not a parallel command list: discovery always starts from the action registry.
+ * Slash command catalog — adapter-ready Commands only.
+ *
+ * Discovery starts from `bosCommandAdapterRegistry` (not RegisteredAction alone),
+ * so mutation / relationship / tour Commands can surface when they ship adapters.
+ * Labels come from Capability Registry, with RegisteredAction as fallback for Create Lead.
+ *
+ * Eligibility authority (BOS Command Runtime Convergence):
+ *   process-effective Command keys (command_set_v1 / legacy selection)
+ *   ∩ adapter-ready allowlist
+ *   ∩ authorization
+ *
+ * Surface / action_placements visibility does **not** gate BOS eligibility.
  */
 
-import { getRegisteredAction, listRegisteredActionKeys } from "@/lib/adminV2/actions/actionRegistry";
-import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
+import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
+import {
+    getBosCommandAdapterRegistration,
+    listBosCommandAdapterKeys,
+} from "@/lib/bos/commandSession/adapters/bosCommandAdapterRegistry";
 import type { BosSlashCommandDescriptor } from "@/lib/bos/commandSession/types";
+import { getPlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 
 /**
  * Commands that have a BOS command-session adapter today.
- * Expand only when an adapter ships — other bosProposalSupport keys stay hidden.
+ * Sourced from the adapter registry — expand only when an adapter ships.
  */
-export const BOS_SLASH_SESSION_ADAPTER_KEYS = ["create_lead"] as const;
+export const BOS_SLASH_SESSION_ADAPTER_KEYS = listBosCommandAdapterKeys() as readonly string[];
 
 export type QueryBosSlashCatalogInput = {
     /** Raw composer text (may include leading `/`). */
     query: string;
     /**
-     * Optional placement-resolved action keys (from Actions menu / DB placements).
-     * When provided, slash results must also be in this set.
+     * @deprecated Surface placement must not gate BOS eligibility. Ignored when present.
      */
     placedActionKeys?: readonly string[] | null;
+    /**
+     * Process-effective Command keys (P6.S2 / BOS convergence).
+     * Required for eligibility — omit/null means process context is unknown (fail closed).
+     * Empty set means the process selected no Commands.
+     * Callers resolve via resolveBosProcessEffectiveCommandKeys.
+     */
+    processEffectiveCommandKeys?: ReadonlySet<string> | readonly string[] | null;
     /** When false, mark descriptors ineligible. */
     authorized?: boolean;
 };
@@ -41,9 +61,50 @@ function matchesQuery(descriptor: BosSlashCommandDescriptor, q: string): boolean
     return hay.includes(q);
 }
 
+function asKeySet(
+    keys: ReadonlySet<string> | readonly string[] | null | undefined
+): Set<string> | null {
+    if (keys == null) return null;
+    if (keys instanceof Set) return keys;
+    return new Set([...keys].map((k) => k.trim()).filter(Boolean));
+}
+
+function describeCommand(actionKey: string): {
+    displayLabel: string;
+    description: string;
+    requiresEntityId: boolean;
+} {
+    const registration = getBosCommandAdapterRegistration(actionKey);
+    const capability = getPlatformCapability(actionKey);
+    const registered = getRegisteredAction(actionKey);
+    const displayLabel =
+        registration?.label?.trim() ||
+        capability?.operatorLabel?.trim() ||
+        registered?.defaultLabel?.trim() ||
+        actionKey.replace(/_/g, " ");
+    const description =
+        (registered?.description?.trim() && registered.description.trim()) ||
+        (capability?.reason?.trim() && capability.reason.trim()) ||
+        `Start ${displayLabel}`;
+    const requiresEntityId = actionKey !== "create_lead";
+    return {
+        displayLabel,
+        description:
+            actionKey === "create_lead"
+                ? "Capture a new lead through Conversation or Form"
+                : actionKey === "update_lead_status"
+                  ? "Change status on the open lead"
+                  : actionKey === "add_parent_guardian"
+                    ? "Add a guardian to the open household"
+                    : actionKey === "cancel_tour"
+                      ? "Cancel the active tour booking on this lead"
+                      : description,
+        requiresEntityId,
+    };
+}
+
 /**
- * Build slash descriptors from the registered action registry.
- * Round 2: only Create Lead is adapter-ready and therefore visible when eligible.
+ * Build slash descriptors from the BOS adapter registry ∩ process-effective Commands.
  */
 export function queryBosSlashCatalog(
     input: QueryBosSlashCatalogInput
@@ -53,45 +114,36 @@ export function queryBosSlashCatalog(
 
     const q = raw.slice(1).trim().toLowerCase();
     const authorized = input.authorized !== false;
-    const placed =
-        input.placedActionKeys == null
-            ? null
-            : new Set(input.placedActionKeys.map((k) => k.trim()).filter(Boolean));
-    const adapterReady = new Set<string>(BOS_SLASH_SESSION_ADAPTER_KEYS);
+    // Placement intentionally ignored — Surfaces do not own BOS Command eligibility.
+    void input.placedActionKeys;
+    const processKeys = asKeySet(input.processEffectiveCommandKeys);
+    const processContextKnown = processKeys != null;
 
     const out: BosSlashCommandDescriptor[] = [];
-    for (const actionKey of listRegisteredActionKeys()) {
-        const action = getRegisteredAction(actionKey);
-        if (!action?.bosProposalSupport) continue;
-        const canonical = canonicalActionDefinition(actionKey);
-        if (canonical && canonical.bosProposalSupport === false) continue;
-
-        const displayLabel = action.defaultLabel?.trim() || actionKey.replace(/_/g, " ");
-        const hasAdapter = adapterReady.has(actionKey);
-        const placedOk = placed == null || placed.has(actionKey);
-        let eligible = authorized && hasAdapter && placedOk;
+    for (const actionKey of listBosCommandAdapterKeys()) {
+        const { displayLabel, description, requiresEntityId } = describeCommand(actionKey);
+        const processOk = processContextKnown && processKeys!.has(actionKey);
+        let eligible = authorized && processOk;
         let ineligibleReason: string | undefined;
         if (!authorized) ineligibleReason = "You don’t have permission to run commands here.";
-        else if (!hasAdapter) ineligibleReason = "This command isn’t available in BOS yet.";
-        else if (!placedOk) ineligibleReason = "This command isn’t available in this workspace.";
-
-        // Round 2 product scope: hide non-adapter commands entirely (don’t clutter /).
-        if (!hasAdapter) continue;
+        else if (!processContextKnown) {
+            ineligibleReason =
+                "Open a Business Process workspace so BOS can use process-selected Commands.";
+        } else if (!processOk) {
+            ineligibleReason = "This command isn’t selected for this process.";
+        }
 
         const descriptor: BosSlashCommandDescriptor = {
             token: tokenForAction(actionKey, displayLabel),
             actionKey,
-            displayLabel: displayLabel.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/ Lead$/i, " Lead"),
-            description: action.description?.trim() || `Start ${displayLabel}`,
+            displayLabel,
+            description,
             eligible,
             ineligibleReason,
-            placementContextRequired: Boolean(action.requiredContext?.requiresEntityId),
+            placementContextRequired: requiresEntityId,
         };
-        // Prefer title case "Create Lead"
         if (actionKey === "create_lead") {
-            descriptor.displayLabel = "Create Lead";
             descriptor.token = "create-lead";
-            descriptor.description = "Capture a new lead through Conversation or Form";
         }
         if (matchesQuery(descriptor, q)) out.push(descriptor);
     }
@@ -103,6 +155,6 @@ export function queryBosSlashCatalog(
     return out;
 }
 
-export function isBosSlashComposerQuery(value: string): boolean {
-    return value.trimStart().startsWith("/");
+export function isBosSlashComposerQuery(text: string): boolean {
+    return text.trim().startsWith("/");
 }

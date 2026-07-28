@@ -20,6 +20,8 @@ import {
 import { useCreateLeadBosSessionController } from "@/app/adminV2/components/aiCommandSurface/commandSession/useCreateLeadBosSessionController";
 import { CreateLeadCommandHelp } from "@/app/adminV2/components/aiCommandSurface/commandSession/CreateLeadCommandHelp";
 import { CreateLeadProgressiveForm } from "@/app/adminV2/components/aiCommandSurface/commandSession/CreateLeadProgressiveForm";
+import { GenericBosCommandSessionBody } from "@/app/adminV2/components/aiCommandSurface/commandSession/GenericBosCommandSessionBody";
+import { getBosCommandAdapterRegistration } from "@/lib/bos/commandSession/adapters/bosCommandAdapterRegistry";
 import { opportunityIdFromAttempt } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { bosDraftToEligiblePayload } from "@/lib/bos/commandSession";
@@ -46,14 +48,18 @@ export function BosCommandSessionHost() {
     const ctx = useBosCommandSessionOptional();
     const session = ctx?.session ?? null;
     if (!session || session.phase === "discarded") return null;
-    if (session.invocation.actionKey !== "create_lead") {
+    const registration = getBosCommandAdapterRegistration(session.invocation.actionKey);
+    if (!registration) {
         return (
             <div className="p-3 text-sm text-alloy-midnight/70" data-bos-command-session-host="true">
                 This command is not available in BOS yet.
             </div>
         );
     }
-    return <CreateLeadCommandSessionBody session={session} />;
+    if (session.invocation.actionKey === "create_lead") {
+        return <CreateLeadCommandSessionBody session={session} />;
+    }
+    return <GenericBosCommandSessionBody session={session} />;
 }
 
 function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession }) {

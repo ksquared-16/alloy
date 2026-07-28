@@ -41,6 +41,8 @@ import {
     lifecycleBuilderV1MissingError,
 } from "@/lib/lifecycle/lifecycleBuilderRouteErrors";
 import { validateConfiguredStageReferences } from "@/lib/lifecycle/validateConfiguredStageReferences";
+import { ensureBuilderCommandSetsOnSave } from "@/lib/lifecycle/ensureProcessCommandSetV1OnSave";
+import { validateProcessCommandSetsForPublish } from "@/lib/lifecycle/validateProcessCommandSetsForPublish";
 
 function processIdInConfig(config: LifecycleBuilderV1, processId: string): boolean {
     const pid = processId.trim();
@@ -81,14 +83,15 @@ async function loadDepartment(orgId: string, departmentId: string) {
 }
 
 async function saveConfig(orgId: string, departmentId: string, config: LifecycleBuilderV1) {
+    const stamped = ensureBuilderCommandSetsOnSave(config);
     const row = await loadDepartment(orgId, departmentId);
     if (!row) return null;
     const metadata =
         row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
             ? (row.metadata as Record<string, unknown>)
             : {};
-    let nextMeta = mergeLifecycleBuilderIntoMetadata(metadata, config);
-    const active = activeLifecycleProcess(config);
+    let nextMeta = mergeLifecycleBuilderIntoMetadata(metadata, stamped);
+    const active = activeLifecycleProcess(stamped);
     if (active?.id && isLifecycleBuilderOwnedDepartmentMetadata(nextMeta)) {
         nextMeta = mergeLifecycleBuilderOwnedIntoMetadata(nextMeta, { process_id: active.id });
     }
@@ -107,7 +110,7 @@ async function saveConfig(orgId: string, departmentId: string, config: Lifecycle
         .eq("id", departmentId)
         .eq("org_id", orgId);
     if (error) throw new Error(error.message);
-    return config;
+    return stamped;
 }
 
 function payloadFromConfig(config: LifecycleBuilderV1) {
@@ -325,6 +328,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                         "Fix or remove them before saving.",
                     code: "dangling_stage_reference",
                     violations: referenceCheck.violations,
+                },
+                { status: 422 },
+            );
+        }
+
+        // Stamp command_set_v1 before publish validation so orphan checks see selection.
+        config = ensureBuilderCommandSetsOnSave(config);
+        const commandSetCheck = validateProcessCommandSetsForPublish(config);
+        if (!commandSetCheck.ok) {
+            return NextResponse.json(
+                {
+                    error:
+                        "Business Process Command selection is invalid or stage/Work Template " +
+                        "references Commands that are not process-selected.",
+                    code: "process_command_set_invalid",
+                    issues: commandSetCheck.issues,
                 },
                 { status: 422 },
             );
