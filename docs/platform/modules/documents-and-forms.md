@@ -112,6 +112,44 @@ detector (`web/lib/pos/processingCase/structure/detectLayoutStructure.ts`). See 
 `core/configuration-ownership-and-inheritance.md` and `modules/configuration-platform.md` for the
 canonical Field System that Discovery binds into.
 
+#### Implemented architecture (FP16 M1–M5) — ownership map
+
+Configuration Discovery composes existing platform owners; it introduces no parallel storage:
+
+- **Documents and Forms (this doc)** owns source interpretation + discovery (the pipeline, concepts,
+  proposals) and the concept-first review.
+- **Field System** (`configuration-platform.md`) owns approved NEW fields — Discovery only *proposes*
+  a field (`create_proposed_field`); creation happens through the canonical Field System after
+  explicit operator confirmation. A new field is never silently created.
+- **Relationship Model** owns relationship application — repeated person groups project through the
+  canonical collection providers (`person.contact_role.{parents,emergency_contacts,authorized_pickups}`,
+  operational role keys) and the Person↔Child write service; contact data belongs to the person, role
+  and scope to the edge.
+- **Requirement Responsibility** (frozen) owns upload/acknowledgement/signature requirements; Discovery
+  proposes sensible defaults and leaves responsibility editable in Packet Composition.
+- **Configuration Platform** owns governed proposal *application* — the apply service consumes only
+  approved, valid proposals.
+- **Surface placement is future/deferred** — a concept may *suggest* a Focus Panel / card placement,
+  but Discovery never mutates a live surface; operator approval remains mandatory.
+
+Durable state + guarantees:
+
+- **Persistence ownership:** operator decisions persist at
+  `processing_cases.metadata.configuration_discovery_decisions` (case-scoped, alongside
+  `form_draft_preview`), stored SEPARATELY from detector output so a rerun never overwrites them.
+  Shaped as a flat record list so promotion to a first-class table is a mechanical migration; a table
+  is the right long-term owner (deferred only because this environment cannot apply/verify migrations).
+- **Identity + reconciliation:** four separated identities — SourceOccurrence · SemanticConcept ·
+  ConfigurationProposal · OperatorDecision. Reruns reconcile on SEMANTIC identity, so decisions survive
+  an inserted page / renamed section / detector-version bump; materially changed concepts go stale,
+  removed concepts stay auditable, new concepts are pending.
+- **Application contract:** structured per-proposal outcomes (`applied · skipped · already_applied ·
+  requires_confirmation · conflicted · failed`) — never "success because a UI flag changed".
+- **Idempotency:** a proposal-identity application ledger makes re-apply a no-op.
+- **Audit lineage:** source → concept → proposal → decision → applied binding is explainable end to
+  end; `configuration_discovery` is preserved across the operator-review save so the published form
+  retains source→discovery→binding lineage.
+
 ### Work pipeline
 
 Import Form → Review Alloy's understanding → Generate native form → Studio Builder.
