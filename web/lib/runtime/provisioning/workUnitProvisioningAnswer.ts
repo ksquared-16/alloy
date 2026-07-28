@@ -769,7 +769,27 @@ export async function composeWorkUnitProvisioningAnswer(
     const primaryContactName = strOrNull(chosenPrimaryContact.display_name);
     const primaryContactPhone = strOrNull(chosenPrimaryContact.phone);
     const primaryContactEmail = strOrNull(chosenPrimaryContact.email);
-    const inquiryChildren = subjectMetadata?.inquiry_children ?? null;
+    // The committed Children card's roster. Primary source = the enriched queue-row context's
+    // `related_subjects_summary` — the SAME compact child projection the queue row's children band
+    // already resolved for this page (no extra DB read), sibling to `primary_contact` above. Mapped to
+    // the `_inquiry_children` raw shape the shared `buildChildrenCardModel` consumes so the committed
+    // card matches the enriched one. `metadata.inquiry_children` (legacy authored path, empty for most
+    // subjects) wins when present, preserving prior behaviour for subjects that carry it.
+    const relatedSubjectsSummary = Array.isArray(chosenRowContext.related_subjects_summary)
+        ? (chosenRowContext.related_subjects_summary as Array<Record<string, unknown>>)
+        : [];
+    const childrenFromContext = relatedSubjectsSummary
+        .filter((s) => s.subject_type === "child")
+        .map((s) => ({
+            id: strOrNull(s.subject_id) ?? "",
+            person_id: strOrNull(s.subject_id),
+            display_name: strOrNull(s.display_name),
+            dob: strOrNull(s.date_of_birth),
+            age: strOrNull(s.age_label),
+            outcome_status_label: strOrNull(s.status_label),
+        }));
+    const inquiryChildren =
+        subjectMetadata?.inquiry_children ?? (childrenFromContext.length ? childrenFromContext : null);
     const subjectIdentityTruthBindings: SubjectIdentityTruth = {
         ...(primaryContactName ? { "person.primary_contact_name": primaryContactName } : {}),
         ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),
