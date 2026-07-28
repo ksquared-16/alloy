@@ -94,6 +94,66 @@ export function compile({ capability, snapshot, mission, gapReport = null, revis
       : [],
   };
 
+  // ---- IMPLEMENT MODE: a conductor phase mission that actually BUILDS — code +
+  // tests + browser QA — following the already-accepted plan as its spec. This is
+  // the "implementation" step of audit → recommendations → plan → implementation.
+  // Autonomy operating rules come from WORKER_POLICY (turn protocol). Logins use the
+  // worker's stored session — no operator action. Source changes are the POINT here
+  // (unlike the proposal), but push/merge/promote stay forbidden. ----
+  if (/—\s*implement:/i.test(String(mission.intent || ""))) {
+    const phaseTitle = String(mission.intent).split(/—\s*implement:/i)[1]?.trim() || String(mission.intent);
+    const qaDir = `docs/platform/planning/vacilando-os/qa/${capability.slug || cid}-v2/`;
+    const clarBlock2 = (mission.clarifications || []).map((c) => c.answer).filter(Boolean);
+    const clarStr = clarBlock2.length ? `\n\n[OPERATOR CLARIFICATIONS]\n${clarBlock2.map((a) => `- ${a}`).join("\n")}` : "";
+    const input = {
+      mission_id: mission.mission_id, project_id: capability.project_id, capability_id: cid, worker_slot: mission.worker_slot,
+      title: `${capability.name} V2 — implement: ${phaseTitle}`, operator_directed: false, implement_phase: phaseTitle,
+      objective: `Implement "${phaseTitle}" for ${capability.name} V2, following the accepted plan at ${outPath}. Change application source as the plan requires, add/adjust tests, and VALIDATE: run the relevant tests and perform browser QA — log in via the worker's stored session (no operator needed) and capture screenshots as evidence under ${qaDir}. Honor every inherited product rule and rejected pattern. If a step needs a NEW product decision the plan did not settle, STOP and ask the operator rather than guess.${clarStr}`,
+      scope_included: [
+        `Implement the "${phaseTitle}" requirements from the accepted plan (${outPath}).`,
+        "Modify application source and add/adjust tests as the plan requires.",
+        "Run the relevant tests and perform browser QA (login via stored session), capturing screenshots as evidence.",
+      ],
+      scope_excluded: [
+        "Work beyond this phase — later phases run as their own missions.",
+        "Any product decision the plan did not settle — pause and ask the operator instead.",
+        "Any push, merge, or promotion.",
+      ],
+      relevant_documents: [{ uri: outPath, title: `${capability.name} V2 plan`, why_relevant: "the accepted plan this phase implements" }, ...(snapshot?.items || []).filter((i) => i.kind !== "code").map((i) => ({ uri: i.uri, title: i.title, why_relevant: i.why_relevant }))],
+      approved_references: (snapshot?.items || []).filter((i) => i.kind === "code").map((i) => ({ type: "code", uri: i.uri, note: "current implementation" })),
+      inherited_product_rules: (capability.accepted_decisions || []).map((d) => ({ id: d.id, scope: "capability", rule: d.statement, provenance: d.ref })),
+      accepted_decisions: capability.accepted_decisions || [],
+      rejected_patterns: capability.rejected_patterns || [],
+      acceptance_criteria: [
+        { id: "AC1", type: "implementation", statement: `The "${phaseTitle}" requirements from the plan are implemented in application source.`, evidence_required: ["source_changed"] },
+        { id: "AC2", type: "validation", statement: "The relevant tests were run and pass.", evidence_required: ["tests_pass"] },
+        { id: "AC3", type: "qa", statement: `Browser QA was performed and screenshots captured under ${qaDir}.`, evidence_required: ["qa_evidence"] },
+        { id: "AC4", type: "product-fidelity", statement: `No rejected pattern reintroduced (${(capability.rejected_patterns || []).map((r) => r.id).join(", ") || "none"}); no push/merge/promote.`, evidence_required: ["rejected_patterns_not_reintroduced"] },
+      ],
+      required_evidence: [
+        { id: "EV1", kind: "log", description: "git diff of the implemented source changes", criterion_ids: ["AC1"] },
+        { id: "EV2", kind: "log", description: "test run results (pass)", criterion_ids: ["AC2"] },
+        { id: "EV3", kind: "file", description: `QA screenshots under ${qaDir}`, criterion_ids: ["AC3"] },
+      ],
+      unresolved_questions: [], operator_decision_gates: [],
+      governance_constraints: { no_push: true, no_merge: true, no_promote: true, no_scope_broadening: true, ask_before_consequential: true, loopback_only: true },
+      QA_plan: [
+        { id: "QA1", step: "Run the tests relevant to this phase; confirm they pass.", verifies: ["AC2"] },
+        { id: "QA2", step: "Perform browser QA (login via stored session); capture screenshots.", verifies: ["AC3"] },
+        { id: "QA3", step: "Confirm git diff shows the intended source changes and no rejected pattern.", verifies: ["AC1", "AC4"] },
+      ],
+      expected_deliverables: [
+        { id: "D1", kind: "code", description: `Implementation of "${phaseTitle}"`, path: null, criterion_ids: ["AC1"] },
+        { id: "D2", kind: "evidence", description: "Test results + QA screenshots", path: qaDir, criterion_ids: ["AC2", "AC3"] },
+      ],
+      gap_report: gapReport || null, product_definition_snapshot: capability.product_definition || null,
+      suggested_acceptance_criteria: [], risks: [], questions: [],
+      compiler_version: COMPILER_VERSION, compiler_trace: trace, knowledge_snapshot: snapshot || null,
+    };
+    const pkg = reviseOf ? revisePackage(reviseOf, input) : createPackage(input, { origin: "compiled" });
+    return { package: pkg, trace };
+  }
+
   // ---- AUTHORITY: a substantial operator direction is the mission; the generic
   // template is only the fallback when the operator gave no direction. ----
   const directed = isOperatorDirected(mission, capability);
@@ -123,7 +183,8 @@ export function compile({ capability, snapshot, mission, gapReport = null, revis
     ? `${String(mission.intent).trim()}\n\n[EXECUTION NOTES] Write the outputs this objective requires to ${opPath}. Governance: do not push, merge, or promote; do not modify application source code unless the objective explicitly requires it.`
     : `Analyze the current ${capability.name} implementation${codePaths ? ` (${codePaths})` : ""} ` +
       `and produce the ${capability.name} V2 implementation proposal${roadmapStr ? ` covering the roadmap items [${roadmapStr}]` : ""}. ` +
-      `Write the proposal to ${outPath}. Do NOT modify any source code — this is a planning proposal only.`) + clarBlock;
+      `Write the proposal to ${outPath}. Do NOT modify any source code — this is a planning proposal only. ` +
+      `Also, in your vacilando-report, include an "implementation_phases" array — the ORDERED list of short implementation-phase titles this plan defines (e.g. ["Phase 0 — role-catalog integrity", "Phase 1 — audit trail", …]) — so Director can conduct them as the implementation steps.`) + clarBlock;
 
   const scope_included = directed ? [
     "Perform the work described in the objective, in full.",

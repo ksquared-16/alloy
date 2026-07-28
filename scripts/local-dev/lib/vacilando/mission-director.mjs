@@ -20,7 +20,7 @@ import { deriveVerdict } from "./director-review.mjs";
 import { compile } from "./mission-compiler.mjs";
 import { createMission, getMission, updateMission } from "./commands/missions.mjs";
 import { getPackage, packageForMission, updatePackage } from "./commands/mission-packages.mjs";
-import { checkStartPreconditions, runMissionTurn, stopMission, isLive } from "./mission-executor.mjs";
+import { checkStartPreconditions, runMissionTurn, stopMission, isLive, readLatestReport } from "./mission-executor.mjs";
 import { evaluateMission, readAcceptance } from "./acceptance.mjs";
 import { writeAuditEvent } from "./commands/audit.mjs";
 import { createRequest, updateRequest } from "./commands/director-requests.mjs";
@@ -30,7 +30,7 @@ import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { TOOLKIT_DIR } from "./commands/executor.mjs";
 import { freeDiskGb, runGc } from "./disk-hygiene.mjs";
-import { ensureObjective, getObjective, advanceOnAccept, intentForPhase, clearProposedNext, setMode } from "./objective.mjs";
+import { ensureObjective, getObjective, advanceOnAccept, intentForPhase, clearProposedNext, setMode, adoptPhases } from "./objective.mjs";
 
 const PROVISION_HARD_GB = 5; // pre-provision floor: below this, reclaim then fail fast
 
@@ -558,6 +558,11 @@ export function accept({ mission_id, confirm }) {
   try {
     const cap = mission.capability_id ? getCapability(mission.capability_id) : null;
     if (cap && result.gate !== "fail") {
+      // If this was the audit/plan mission, adopt the phases it produced — the plan
+      // becomes the script the conductor sequences. Implement missions don't re-adopt.
+      if (!pkg.implement_phase) {
+        try { const rep = readLatestReport(mission_id); if (rep?.implementation_phases?.length) adoptPhases(cap, rep.implementation_phases); } catch { /* plan without structured phases → spine stays as-is */ }
+      }
       const adv = advanceOnAccept(cap, { mission_id });
       conductor = { complete: adv.complete, next: adv.next || null, mode: adv.objective?.mode || "gated" };
       if (!adv.complete && conductor.mode === "autonomous") {

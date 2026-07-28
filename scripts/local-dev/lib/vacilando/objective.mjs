@@ -106,6 +106,29 @@ export function advanceOnAccept(capability, { mission_id } = {}) {
   return { objective: o, next, complete: !next };
 }
 
+/**
+ * Adopt the phase plan the accepted audit/plan mission produced. The plan is the
+ * script: its structured `implementation_phases` become the objective's real
+ * implementation phases (appended after "plan"). Idempotent by title.
+ */
+export function adoptPhases(capability, phaseTitles) {
+  const capId = capability?.capability_id;
+  const o = read(capId); if (!o) return null;
+  const titles = (phaseTitles || [])
+    .map((t) => (typeof t === "string" ? t : (t && (t.title || t.name || t.phase))))
+    .map((t) => String(t || "").trim()).filter(Boolean);
+  if (!titles.length) return o;
+  const have = new Set(o.phases.filter((p) => p.kind === "implement").map((p) => p.title));
+  const added = titles.filter((t) => !have.has(t)).map((t, i) => ({ id: `p_impl_${o.phases.length + i}`, title: t, kind: "implement", status: "pending", mission_id: null }));
+  if (!added.length) return o;
+  o.phases = [...o.phases, ...added];
+  o.current = o.phases.findIndex((p) => p.status !== "done");
+  const next = o.current >= 0 ? o.phases[o.current] : null;
+  o.proposed_next = next ? { phase: next, intent: intentForPhase(capability, next) } : o.proposed_next;
+  o.updated_at = iso();
+  return write(o);
+}
+
 /** Clear the proposed-next once the operator has acted on it (prepared/started). */
 export function clearProposedNext(capId) {
   const o = read(capId); if (!o) return null;

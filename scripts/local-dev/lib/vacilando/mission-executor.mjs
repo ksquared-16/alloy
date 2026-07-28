@@ -148,6 +148,17 @@ export function readMissionOutputs(mission_id) {
 export function readTurnOutput(mission_id, turn) {
   try { return readFileSync(join(OUT_ROOT, mission_id, `turn-${turn}.md`), "utf8"); } catch { return null; }
 }
+/** The latest turn's parsed vacilando-report (or null) — the conductor reads the
+ *  plan mission's structured `implementation_phases` from here. */
+export function readLatestReport(mission_id) {
+  try {
+    const idx = readMissionOutputs(mission_id);
+    const withReport = idx.filter((o) => o.has_report);
+    const turn = (withReport.length ? withReport : idx).slice(-1)[0]?.turn;
+    if (turn == null) return null;
+    return JSON.parse(readFileSync(join(OUT_ROOT, mission_id, `turn-${turn}.report.json`), "utf8"));
+  } catch { return null; }
+}
 
 /**
  * Execute one turn of a mission against its bound package. Async, server-owned.
