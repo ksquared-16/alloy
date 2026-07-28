@@ -25,6 +25,8 @@ export function extractDependencyRefs(expr: OrgCalcExpr): ApprovedInputRef[] {
             case "call":
                 for (const a of node.args) walk(a);
                 return;
+            case "equivalent_count":
+                return;
         }
     }
 

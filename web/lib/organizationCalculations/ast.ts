@@ -15,7 +15,13 @@ export type OrgCalcExpr =
     | { kind: "input"; ref: ApprovedInputRef; id?: string }
     | { kind: "unary"; op: "neg"; arg: OrgCalcExpr; id?: string }
     | { kind: "binary"; op: BinaryOp; left: OrgCalcExpr; right: OrgCalcExpr; id?: string }
-    | { kind: "call"; fn: CallFn; args: OrgCalcExpr[]; id?: string };
+    | { kind: "call"; fn: CallFn; args: OrgCalcExpr[]; id?: string }
+    | {
+          kind: "equivalent_count";
+          population_version_id: string;
+          weighting_version_id: string;
+          id?: string;
+      };
 
 export type OrgCalcValidationIssue = {
     code: string;
@@ -120,6 +126,27 @@ export function parseAndValidateOrgCalcExpr(
                     kind: "call",
                     fn: node.fn as CallFn,
                     args,
+                    id: typeof node.id === "string" ? node.id : undefined,
+                };
+            }
+            case "equivalent_count": {
+                if (
+                    typeof node.population_version_id !== "string"
+                    || !node.population_version_id.trim()
+                    || typeof node.weighting_version_id !== "string"
+                    || !node.weighting_version_id.trim()
+                ) {
+                    issues.push({
+                        code: "invalid_equivalent_count",
+                        message: "equivalent_count requires population_version_id and weighting_version_id",
+                        path: p,
+                    });
+                    return null;
+                }
+                return {
+                    kind: "equivalent_count",
+                    population_version_id: node.population_version_id.trim(),
+                    weighting_version_id: node.weighting_version_id.trim(),
                     id: typeof node.id === "string" ? node.id : undefined,
                 };
             }

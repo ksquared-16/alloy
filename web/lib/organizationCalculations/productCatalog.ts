@@ -1,6 +1,5 @@
 /**
  * Administrator-facing calculation types for Organization Calculations.
- * Exactly the templates the platform supports today — no fake future types.
  */
 
 import { provingMinPhysicalLicensedAst, type OrgCalcExpr } from "@/lib/organizationCalculations/ast";
@@ -9,7 +8,9 @@ import type { ApprovedInputRef } from "@/lib/organizationCalculations/catalog";
 export type OrgCalcProductTypeId =
     | "capacity_lowest_physical_licensed"
     | "capacity_operational_with_fallback"
-    | "room_utilization_pct";
+    | "room_utilization_pct"
+    | "room_utilization_fte_pct"
+    | "equivalent_child_count";
 
 export type OrgCalcProductType = {
     id: OrgCalcProductTypeId;
@@ -19,7 +20,11 @@ export type OrgCalcProductType = {
     outputLabel: string;
     units: string;
     inputLabels: string[];
-    buildAst: () => OrgCalcExpr;
+    /** Static AST when no population/weighting binding is required */
+    buildAst: (binding?: {
+        populationVersionId: string;
+        weightingVersionId: string;
+    }) => OrgCalcExpr;
 };
 
 /** Occupied children ÷ effective capacity × 100 */
@@ -40,6 +45,46 @@ export function roomUtilizationPctAst(): OrgCalcExpr {
             },
         },
         right: { kind: "const", value: 100, id: "pct" },
+    };
+}
+
+export function roomUtilizationFtePctAst(binding: {
+    populationVersionId: string;
+    weightingVersionId: string;
+}): OrgCalcExpr {
+    return {
+        kind: "binary",
+        op: "mul",
+        id: "root",
+        left: {
+            kind: "binary",
+            op: "div",
+            id: "ratio",
+            left: {
+                kind: "equivalent_count",
+                population_version_id: binding.populationVersionId,
+                weighting_version_id: binding.weightingVersionId,
+                id: "fte",
+            },
+            right: {
+                kind: "input",
+                ref: "capacity.room_binding.binding" as ApprovedInputRef,
+                id: "cap",
+            },
+        },
+        right: { kind: "const", value: 100, id: "pct" },
+    };
+}
+
+export function equivalentChildCountAst(binding: {
+    populationVersionId: string;
+    weightingVersionId: string;
+}): OrgCalcExpr {
+    return {
+        kind: "equivalent_count",
+        population_version_id: binding.populationVersionId,
+        weighting_version_id: binding.weightingVersionId,
+        id: "root",
     };
 }
 
@@ -82,6 +127,32 @@ export const ORG_CALC_PRODUCT_TYPES: readonly OrgCalcProductType[] = [
         inputLabels: ["Active enrolled children", "Effective capacity"],
         buildAst: roomUtilizationPctAst,
     },
+    {
+        id: "room_utilization_fte_pct",
+        typeLabel: "Utilization",
+        title: "Room utilization (FTE)",
+        summary: "Full-time equivalent children divided by effective capacity, shown as a percentage.",
+        outputLabel: "Utilization",
+        units: "percent",
+        inputLabels: ["Equivalent children", "Effective capacity"],
+        buildAst: (binding) => {
+            if (!binding) throw new Error("FTE utilization requires population and weighting versions");
+            return roomUtilizationFtePctAst(binding);
+        },
+    },
+    {
+        id: "equivalent_child_count",
+        typeLabel: "Population",
+        title: "Equivalent child count",
+        summary: "Weighted count of children in the room population.",
+        outputLabel: "Equivalent children",
+        units: "children",
+        inputLabels: ["Population", "Weighting"],
+        buildAst: (binding) => {
+            if (!binding) throw new Error("Equivalent count requires population and weighting versions");
+            return equivalentChildCountAst(binding);
+        },
+    },
 ] as const;
 
 export function productTypeById(id: string | null | undefined): OrgCalcProductType | null {
@@ -91,6 +162,12 @@ export function productTypeById(id: string | null | undefined): OrgCalcProductTy
 
 export function inferProductTypeFromAst(ast: unknown): OrgCalcProductType {
     const raw = JSON.stringify(ast ?? {});
+    if (raw.includes("equivalent_count") && raw.includes("capacity.room_binding.binding")) {
+        return ORG_CALC_PRODUCT_TYPES.find((t) => t.id === "room_utilization_fte_pct")!;
+    }
+    if (raw.includes("equivalent_count")) {
+        return ORG_CALC_PRODUCT_TYPES.find((t) => t.id === "equivalent_child_count")!;
+    }
     if (raw.includes("occupancy.expected") && raw.includes("capacity.room_binding.binding")) {
         return ORG_CALC_PRODUCT_TYPES.find((t) => t.id === "room_utilization_pct")!;
     }

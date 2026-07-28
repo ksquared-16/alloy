@@ -11,6 +11,10 @@ import {
     resolveInputFromCapacityProjection,
 } from "@/lib/organizationCalculations/capacityProjection";
 import { resolveOccupancyExpectedForRoom } from "@/lib/organizationCalculations/occupancyProjection";
+import {
+    collectEquivalentCountBindings,
+    resolveEquivalentCountForRoom,
+} from "@/lib/organizationPopulations/equivalentCount";
 import { evaluateOrgCalcExpr, type OrgCalcEvaluationResult, type InputResolution } from "@/lib/organizationCalculations/evaluate";
 import type { ApprovedInputRef } from "@/lib/organizationCalculations/catalog";
 import { formatExplanationLines } from "@/lib/organizationCalculations/explain";
@@ -155,6 +159,20 @@ export async function evaluateOrganizationCalculationForRoom(
         });
     }
 
+    const equivalentCache = new Map<string, InputResolution>();
+    const equivalentBindings = collectEquivalentCountBindings(version.expression_ast);
+    for (const binding of equivalentBindings) {
+        const key = `${binding.populationVersionId}::${binding.weightingVersionId}`;
+        const resolved = await resolveEquivalentCountForRoom(supabase, {
+            orgId: request.orgId,
+            roomLocationId: request.roomLocationId,
+            effectiveAt: request.effectiveAt,
+            populationVersionId: binding.populationVersionId,
+            weightingVersionId: binding.weightingVersionId,
+        });
+        equivalentCache.set(key, resolved.resolution);
+    }
+
     const evaluation = evaluateOrgCalcExpr(parsed.expr, {
         resolveInput: (ref) => {
             if (ref === "occupancy.expected") {
@@ -167,6 +185,16 @@ export async function evaluateOrganizationCalculationForRoom(
                 );
             }
             return resolveInputFromCapacityProjection(projection, ref);
+        },
+        resolveEquivalentCount: (populationVersionId, weightingVersionId) => {
+            const key = `${populationVersionId}::${weightingVersionId}`;
+            return (
+                equivalentCache.get(key) ?? {
+                    value: null,
+                    upstreamStatus: "incomplete",
+                    note: "Equivalent count was not loaded",
+                }
+            );
         },
     });
 

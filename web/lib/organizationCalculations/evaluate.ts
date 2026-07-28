@@ -37,6 +37,11 @@ export type InputResolution = {
 
 export type OrgCalcEvalContext = {
     resolveInput: (ref: ApprovedInputRef) => InputResolution;
+    /** Exact-version population×weighting aggregate (preloaded at room evaluation). */
+    resolveEquivalentCount?: (
+        populationVersionId: string,
+        weightingVersionId: string,
+    ) => InputResolution;
 };
 
 function mergeStatus(
@@ -187,6 +192,35 @@ export function evaluateOrgCalcExpr(
                     output,
                 });
                 return output;
+            }
+            case "equivalent_count": {
+                const resolve = ctx.resolveEquivalentCount;
+                const resolved =
+                    resolve ?
+                        resolve(node.population_version_id, node.weighting_version_id)
+                    :   {
+                            value: null as number | null,
+                            upstreamStatus: "incomplete" as const,
+                            note: "Equivalent count resolver was not provided",
+                        };
+                if (resolved.upstreamStatus) {
+                    status = mergeStatus(status, resolved.upstreamStatus);
+                }
+                if (resolved.value == null) {
+                    noteUnknown(
+                        "equivalent_count_unknown",
+                        resolved.note ?? "Equivalent count is not available",
+                    );
+                }
+                explanation.push({
+                    nodeId: id,
+                    label: "Equivalent count",
+                    op: "equivalent_count",
+                    inputs: [],
+                    output: resolved.value,
+                    notes: resolved.note ? [resolved.note] : undefined,
+                });
+                return resolved.value;
             }
         }
     }

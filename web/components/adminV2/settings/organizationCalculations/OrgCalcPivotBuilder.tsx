@@ -1,11 +1,10 @@
 "use client";
 
 /**
- * Governed pivot-style composer — operator controls compile to OrgCalcExpr AST.
- * Does not expose AST in the UI.
+ * Builder V3 — Population / Weighting / Compare composer.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
     compilePivotBuilderDraft,
     listPivotValueChoices,
@@ -26,18 +25,39 @@ const OPERATORS: PivotOperatorLabel[] = [
     "Use first available value",
 ];
 
+export type PopulationOption = { versionId: string; label: string };
+export type WeightingOption = { versionId: string; label: string };
+
 export type OrgCalcPivotBuilderProps = {
     draft: PivotBuilderDraft;
     onChange: (next: PivotBuilderDraft) => void;
     disabled?: boolean;
+    populations?: PopulationOption[];
+    weightings?: WeightingOption[];
 };
 
 export function defaultPivotDraftForProduct(productTypeId: OrgCalcProductTypeId): PivotBuilderDraft {
-    if (productTypeId === "room_utilization_pct") return roomUtilizationPivotDraft();
+    if (productTypeId === "room_utilization_pct" || productTypeId === "room_utilization_fte_pct") {
+        return roomUtilizationPivotDraft();
+    }
+    if (productTypeId === "equivalent_child_count") {
+        return {
+            name: "Equivalent Child Count",
+            grain: "room",
+            valueMode: "equivalent_count",
+            populationVersionId: null,
+            weightingVersionId: null,
+            compareRef: null,
+            operator: "Add",
+            asPercentage: false,
+            outputUnit: "children",
+        };
+    }
     if (productTypeId === "capacity_operational_with_fallback") {
         return {
             name: "Operational seats when available",
             grain: "room",
+            valueMode: "catalog_input",
             valueRef: "capacity.room_binding.operational",
             compareRef: "capacity.room_binding.physical",
             operator: "Use first available value",
@@ -48,6 +68,7 @@ export function defaultPivotDraftForProduct(productTypeId: OrgCalcProductTypeId)
     return {
         name: "Lower of physical and licensed seats",
         grain: "room",
+        valueMode: "catalog_input",
         valueRef: "capacity.room_binding.physical",
         compareRef: "capacity.room_binding.licensed",
         operator: "Minimum of",
@@ -56,7 +77,13 @@ export function defaultPivotDraftForProduct(productTypeId: OrgCalcProductTypeId)
     };
 }
 
-export default function OrgCalcPivotBuilder({ draft, onChange, disabled }: OrgCalcPivotBuilderProps) {
+export default function OrgCalcPivotBuilder({
+    draft,
+    onChange,
+    disabled,
+    populations = [],
+    weightings = [],
+}: OrgCalcPivotBuilderProps) {
     const choices = useMemo(() => listPivotValueChoices(), []);
     const previewAst = useMemo(() => {
         try {
@@ -68,38 +95,103 @@ export default function OrgCalcPivotBuilder({ draft, onChange, disabled }: OrgCa
     const inferred = previewAst ? inferProductTypeFromAst(previewAst) : null;
 
     return (
-        <div className="space-y-4" data-testid="org-calc-pivot-builder">
+        <div className="space-y-3" data-testid="org-calc-pivot-builder">
             <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
                     Calculated for
                 </p>
-                <p className="mt-1 text-sm font-medium text-alloy-midnight">Each room</p>
+                <p className="mt-0.5 text-sm font-medium text-alloy-midnight">Each room</p>
             </div>
 
-            <div className="rounded-lg border border-alloy-stone/20 bg-white/70 p-4 space-y-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+            <div className="rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.035] px-3 py-2.5 space-y-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
                     Build the answer
                 </p>
+
                 <label className="block space-y-1">
-                    <span className="config-typo-field-label">Value</span>
+                    <span className="config-typo-field-label">Use</span>
                     <select
                         className="config-runtime-input"
                         disabled={disabled}
-                        value={draft.valueRef}
-                        onChange={(e) =>
-                            onChange({ ...draft, valueRef: e.target.value as ApprovedInputRef })
-                        }
-                        data-testid="pivot-value-ref"
+                        value={draft.valueMode}
+                        onChange={(e) => {
+                            const mode = e.target.value as PivotBuilderDraft["valueMode"];
+                            onChange({
+                                ...draft,
+                                valueMode: mode,
+                                asPercentage: mode === "equivalent_count" ? draft.asPercentage : draft.asPercentage,
+                            });
+                        }}
+                        data-testid="pivot-value-mode"
                     >
-                        {choices.map((c) => (
-                            <option key={c.ref} value={c.ref}>
-                                {c.label}
-                            </option>
-                        ))}
+                        <option value="catalog_input">Approved fact</option>
+                        <option value="equivalent_count">Population (equivalent count)</option>
                     </select>
                 </label>
+
+                {draft.valueMode === "equivalent_count" ?
+                    <>
+                        <label className="block space-y-1">
+                            <span className="config-typo-field-label">Population</span>
+                            <select
+                                className="config-runtime-input"
+                                disabled={disabled}
+                                value={draft.populationVersionId ?? ""}
+                                onChange={(e) =>
+                                    onChange({ ...draft, populationVersionId: e.target.value || null })
+                                }
+                                data-testid="pivot-population-version"
+                            >
+                                <option value="">Select population…</option>
+                                {populations.map((p) => (
+                                    <option key={p.versionId} value={p.versionId}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="block space-y-1">
+                            <span className="config-typo-field-label">Count as</span>
+                            <select
+                                className="config-runtime-input"
+                                disabled={disabled}
+                                value={draft.weightingVersionId ?? ""}
+                                onChange={(e) =>
+                                    onChange({ ...draft, weightingVersionId: e.target.value || null })
+                                }
+                                data-testid="pivot-weighting-version"
+                            >
+                                <option value="">Select weighting…</option>
+                                {weightings.map((w) => (
+                                    <option key={w.versionId} value={w.versionId}>
+                                        {w.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </>
+                :   <label className="block space-y-1">
+                        <span className="config-typo-field-label">Value</span>
+                        <select
+                            className="config-runtime-input"
+                            disabled={disabled}
+                            value={draft.valueRef ?? ""}
+                            onChange={(e) =>
+                                onChange({ ...draft, valueRef: e.target.value as ApprovedInputRef })
+                            }
+                            data-testid="pivot-value-ref"
+                        >
+                            {choices.map((c) => (
+                                <option key={c.ref} value={c.ref}>
+                                    {c.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                }
+
                 <label className="block space-y-1">
-                    <span className="config-typo-field-label">Calculation</span>
+                    <span className="config-typo-field-label">Calculate</span>
                     <select
                         className="config-runtime-input"
                         disabled={disabled}
@@ -116,8 +208,9 @@ export default function OrgCalcPivotBuilder({ draft, onChange, disabled }: OrgCa
                         ))}
                     </select>
                 </label>
+
                 <label className="block space-y-1">
-                    <span className="config-typo-field-label">Compared with</span>
+                    <span className="config-typo-field-label">Compare with</span>
                     <select
                         className="config-runtime-input"
                         disabled={disabled}
@@ -130,7 +223,7 @@ export default function OrgCalcPivotBuilder({ draft, onChange, disabled }: OrgCa
                         }
                         data-testid="pivot-compare-ref"
                     >
-                        <option value="">Select…</option>
+                        <option value="">None (value only)</option>
                         {choices.map((c) => (
                             <option key={c.ref} value={c.ref}>
                                 {c.label}
@@ -138,6 +231,7 @@ export default function OrgCalcPivotBuilder({ draft, onChange, disabled }: OrgCa
                         ))}
                     </select>
                 </label>
+
                 <label className="flex items-center gap-2 text-sm">
                     <input
                         type="checkbox"
@@ -147,7 +241,7 @@ export default function OrgCalcPivotBuilder({ draft, onChange, disabled }: OrgCa
                             onChange({
                                 ...draft,
                                 asPercentage: e.target.checked,
-                                outputUnit: e.target.checked ? "percent" : "seats",
+                                outputUnit: e.target.checked ? "percent" : draft.outputUnit === "percent" ? "number" : draft.outputUnit,
                             })
                         }
                         data-testid="pivot-as-percentage"
@@ -156,16 +250,13 @@ export default function OrgCalcPivotBuilder({ draft, onChange, disabled }: OrgCa
                 </label>
             </div>
 
-            <div className="rounded-md border border-alloy-stone/15 bg-[#00a283]/5 px-3 py-2 text-sm text-alloy-midnight/80">
+            <div className="rounded-md border border-alloy-forge/10 bg-[#00a283]/5 px-3 py-2 text-sm text-alloy-midnight/80">
                 <span className="font-medium text-alloy-midnight">Result: </span>
-                {draft.asPercentage ? "Percentage" : "Number of seats"}
-                {inferred ? ` · Matches “${inferred.title}” when saved` : ""}
+                {draft.asPercentage ? "Percentage"
+                : draft.outputUnit === "children" ? "Equivalent children"
+                : "Number"}
+                {inferred ? ` · ${inferred.title}` : ""}
             </div>
         </div>
     );
-}
-
-/** Hook-friendly controlled draft for new-definition flow */
-export function usePivotDraft(initial?: PivotBuilderDraft) {
-    return useState<PivotBuilderDraft>(initial ?? roomUtilizationPivotDraft("New reusable definition"));
 }
