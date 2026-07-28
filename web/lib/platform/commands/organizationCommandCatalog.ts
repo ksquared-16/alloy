@@ -1,9 +1,8 @@
 /**
- * Organization Commands catalog projection (P7).
+ * Organization Commands catalog projection (P7/P8).
  *
  * Read-only view of Platform Capability Registry for `/organization/commands`.
- * Does not invent Commands. Availability/enable overlays remain on existing
- * action_definitions storage (P7/P8 product completion).
+ * Does not invent Commands. Org overlays (labels, placements) load via detail API.
  */
 
 import {
@@ -11,6 +10,8 @@ import {
 } from "@/lib/platform/commands/capabilityRegistry";
 import type {
     CapabilityCatalogVisibility,
+    CapabilityConfirmationPolicy,
+    CapabilityDestructiveKind,
     CapabilityFamily,
     CapabilityMaturity,
     PlatformCapabilityDefinition,
@@ -26,6 +27,9 @@ export type OrganizationCommandCatalogEntry = {
     /** Honest operator-facing status — not executor jargon. */
     statusLabel: "Available" | "Limited" | "Unavailable" | "Internal" | "Hidden";
     aliases: readonly string[];
+    confirmationPolicy: CapabilityConfirmationPolicy;
+    supportsPreview: boolean;
+    destructiveKind?: CapabilityDestructiveKind;
     reason?: string;
 };
 
@@ -44,6 +48,23 @@ function statusLabelFor(cap: PlatformCapabilityDefinition): OrganizationCommandC
     }
     if (cap.maturity === "executable" || cap.maturity === "adapted") return "Available";
     return "Unavailable";
+}
+
+function toEntry(cap: PlatformCapabilityDefinition): OrganizationCommandCatalogEntry {
+    return {
+        capabilityKey: cap.capabilityKey,
+        canonicalCommandKey: cap.canonicalCommandKey,
+        operatorLabel: cap.operatorLabel,
+        family: cap.family,
+        maturity: cap.maturity,
+        catalogVisibility: cap.catalogVisibility,
+        statusLabel: statusLabelFor(cap),
+        aliases: cap.compatibilityAliases ?? [],
+        confirmationPolicy: cap.confirmationPolicy,
+        supportsPreview: cap.supportsPreview,
+        ...(cap.destructiveKind ? { destructiveKind: cap.destructiveKind } : {}),
+        ...(cap.reason ? { reason: cap.reason } : {}),
+    };
 }
 
 /**
@@ -82,17 +103,7 @@ export function listOrganizationCommandCatalog(opts?: {
         if (seen.has(key)) continue;
         seen.add(key);
 
-        rows.push({
-            capabilityKey: cap.capabilityKey,
-            canonicalCommandKey: cap.canonicalCommandKey,
-            operatorLabel: cap.operatorLabel,
-            family: cap.family,
-            maturity: cap.maturity,
-            catalogVisibility: cap.catalogVisibility,
-            statusLabel: statusLabelFor(cap),
-            aliases: cap.compatibilityAliases ?? [],
-            ...(cap.reason ? { reason: cap.reason } : {}),
-        });
+        rows.push(toEntry(cap));
     }
 
     rows.sort((a, b) => {
@@ -116,4 +127,25 @@ export function getOrganizationCommandCatalogEntry(
                 row.aliases.includes(want)
         ) ?? null
     );
+}
+
+export function confirmationPolicyLabel(policy: CapabilityConfirmationPolicy): string {
+    switch (policy) {
+        case "none":
+            return "No confirmation";
+        case "confirm":
+            return "Confirm before run";
+        case "strong_confirm":
+            return "Strong confirmation";
+        case "typed_confirm":
+            return "Type to confirm";
+        case "domain_owned":
+            return "Domain-owned confirmation";
+        default:
+            return policy;
+    }
+}
+
+export function destructiveKindLabel(kind: CapabilityDestructiveKind): string {
+    return kind.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }

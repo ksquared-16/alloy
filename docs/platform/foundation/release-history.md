@@ -15,6 +15,10 @@ supersedes: []
 
 ## 2026 H1 — Platform maturation
 
+### July 2026 — Organization Commands product foundation
+
+**Local mission delivery (Slot 1 Commands); not yet merged to staging.** Operator-facing **Commands** catalog at `/organization/commands` (product alias `/configuration/commands`). Operations navigation order: Commands → Automation → Processes → Surfaces. Action Buttons (`/settings/actions`) redirects to Commands. Catalog projects Capability Registry honesty; detail workspace covers availability placements, Business Process usage via `command_set_v1`, variants, and platform-owned safety policy. Execution APIs remain `/api/admin/actions/*` during convergence.
+
 ### July 2026 — Documentation Platform v1.0
 
 **Shipped to `staging`.** Canonical documentation architecture, Platform Handbook, governed frontmatter, docs-lint/CI, history separation (sprints/audits/archive), curation, repository certification, and the **Platform Decisions** register. Documentation is treated as production infrastructure; no further broad documentation reorganization is planned. Active doctrine remains clean; historical sprint/archive link debt stays intentionally baselined.

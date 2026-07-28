@@ -1,5 +1,5 @@
 /**
- * P7 — Commands product route shell and Action Buttons transition.
+ * P7/P8 — Commands product route shell and Action Buttons transition.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -26,7 +26,17 @@ describe("Organization Commands route foundation", () => {
         expect(client).toContain("settings-commands-page");
         expect(client).toContain("commands-catalog-list");
         expect(client).not.toContain("Action buttons");
-        expect(client).not.toContain("placement");
+        expect(client).not.toContain("Action Buttons");
+    });
+
+    it("ships workspace tabs for availability, processes, variants, and safety", () => {
+        const client = read("components/adminV2/settings/commands/CommandsConfigurationPage.tsx");
+        expect(client).toContain('id: "availability"');
+        expect(client).toContain('id: "processes"');
+        expect(client).toContain('id: "variants"');
+        expect(client).toContain('id: "safety"');
+        expect(client).toContain("commands-tab-");
+        expect(client).toContain("/api/admin/commands/");
     });
 
     it("rewrites /organization/commands and redirects Action Buttons + product alias", () => {

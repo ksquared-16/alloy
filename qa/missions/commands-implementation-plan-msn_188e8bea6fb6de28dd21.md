@@ -10,14 +10,15 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress:** P0 → P6 certified → **P7 foundation shipped** (`/organization/commands`). Next: P8 product completion.
+**Implementation progress:** P0 → P7 foundation → **P8 product completion**. Next: P9 `executeAdminAction` drain.
 
 ### Autonomous execution ledger
 
 | Slice | Commit | Tests | Typecheck | Behavior | Compat retained | Next |
 |-------|--------|-------|-----------|----------|-----------------|------|
 | P6.S3 + P6 cert | `571080d0f` | processCommandSetAuthoring + prior P6 | pass | Authoring stamps V1; WT gated; publish validates | Legacy read fallback | P7 |
-| P7 foundation | *(this commit)* | organizationCommandCatalog + organizationCommandsRoute + P6 authoring (15) | pass | Commands shell + Ops nav + Action Buttons redirect | `/adminV2/settings/actions` developer | P8 |
+| P7 foundation | `1f0f049b3` | organizationCommandCatalog + organizationCommandsRoute + P6 authoring (15) | pass | Commands shell + Ops nav + Action Buttons redirect | `/adminV2/settings/actions` developer | P8 |
+| P8 product completion | *(this commit)* | commandsProductCompletion + route + catalog + authoring (20) | pass | Detail workspace, usage, variants, safety, placement toggle | actions APIs + developer Action defs | P9 |
 
 
 ---
@@ -369,9 +370,9 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 
 | ID | Title |
 |----|-------|
-| **P8.S1** | Variants overlay editor |
-| **P8.S2** | Families + automation refs + audit link |
-| **P8.S3** | Remove Action Buttons from nav |
+| **P8.S1** | Variants overlay read (**shipped** — `command_config.variants`; editor polish deferred) |
+| **P8.S2** | Families + process usage + safety (**shipped**) |
+| **P8.S3** | Action Buttons operator path retired via redirect (**shipped** in P7; developer path retained) |
 
 ### P9 — Drain (3)
 
