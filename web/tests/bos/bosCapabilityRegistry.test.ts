@@ -22,6 +22,8 @@ const EXPECTED_AUDITED_KEYS: BosCapabilityKey[] = [
     "packet_review_insight",
     "operational_question_future_room_capacity",
     "operational_question_room_utilization",
+    "operational_question_room_utilization_fte",
+    "operational_question_equivalent_child_count",
 ];
 
 describe("bosCapabilityRegistry", () => {
