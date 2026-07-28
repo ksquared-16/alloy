@@ -21,6 +21,7 @@
  *   GET  /                    → the SPA shell (static, path-traversal safe)
  */
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { createConnection } from "node:net";
@@ -417,6 +418,18 @@ const MISSION_BUSY = new Set(["starting", "running", "stopping"]);
  * worker that is NOT already running a mission, so work never silently piles onto
  * one slot. Returns { slot } or { error, detail, available }.
  */
+// A worktree with uncommitted changes belongs to a sprint that is actively using
+// it. Dispatching a mission there runs a SECOND agent in the same tree and mixes
+// two sprints' work — the exact corruption this guards against. Vacilando only
+// tracks its own missions, so this git-level check is how it sees external sprints.
+function worktreeHasUncommittedWork(path) {
+  if (!path || !existsSync(path)) return false;
+  try {
+    const out = execFileSync("git", ["-C", path, "status", "--porcelain"], { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] });
+    return out.trim().length > 0;
+  } catch { return false; } // if git can't answer, don't hard-block on it
+}
+
 function resolveRunSlot(requested) {
   const ids = listSlotIdentities().filter((i) => i.ok && i.worktree_name);
   const liveIds = new Set(liveMissionIds());
@@ -425,15 +438,21 @@ function resolveRunSlot(requested) {
       .filter((m) => liveIds.has(m.mission_id) || MISSION_BUSY.has(m.status))
       .map((m) => m.worker_slot)
   );
-  const available = ids.filter((i) => !busy.has(i.slot)).map((i) => i.slot).sort((a, b) => a - b);
+  // A slot is OCCUPIED if a Vacilando mission is live on it OR its worktree carries
+  // uncommitted work from an external sprint. Never dispatch onto either — not on
+  // Auto, and not on an explicit pick (silent co-tenancy is what mixed two sprints).
+  const occupiedById = new Map(ids.map((i) => [i.slot, busy.has(i.slot) || worktreeHasUncommittedWork(i.worktree_path)]));
+  const available = ids.filter((i) => !occupiedById.get(i.slot)).map((i) => i.slot).sort((a, b) => a - b);
   if (Number.isInteger(requested)) {
     if (requested < 1 || requested > 6) return { error: "bad_slot", detail: `slot ${requested} out of range`, available };
-    if (!ids.some((i) => i.slot === requested)) return { error: "slot_not_occupied", detail: `slot ${requested} has no worker`, available };
-    return { slot: requested }; // explicit target — the operator owns the choice, even if busy
+    const target = ids.find((i) => i.slot === requested);
+    if (!target) return { error: "slot_not_occupied", detail: `slot ${requested} has no worker`, available };
+    if (occupiedById.get(requested)) return { error: "slot_occupied", detail: `slot ${requested} (${target.worktree_name}) already has a sprint in progress — a live mission or uncommitted work is there. Dispatching would mix two sprints in one worktree.`, available };
+    return { slot: requested };
   }
   if (available.length) return { slot: available[0] };
-  if (ids.length) return { error: "all_workers_busy", detail: "every worker is currently running a mission — pick one explicitly or wait", available: [] };
-  return { error: "no_workers", detail: "no occupied worker slots to dispatch to", available: [] };
+  if (ids.length) return { error: "all_workers_busy", detail: "every worker slot is occupied by a sprint (live mission or uncommitted work) — free a slot or dedicate a clean worktree before dispatching", available: [] };
+  return { error: "no_workers", detail: "no worker slots to dispatch to", available: [] };
 }
 
 /** Warm the expensive keys in the background so the first operator read is instant. */
