@@ -55,8 +55,13 @@ Gotchas: `next build` overwrites `.next`, so a prod build clobbers the dev serve
 
 ---
 
-## 5. Committed arc this session (14 commits, `agent/claude/3-runtime-v1-polish`)
-Compose −60%: `4ac13b5b2`, `006aca55c`. Server-loads: `99fd9017a` (viewer-tz orgId dedup), `225b3771a` (route-identity 3 reads→1), `dcde9e163` (viewer-tz 60s-cache reuse). Registry: `c7b739f2b` (CardDefinition + titles) + design-law commit. Docs/cert: prod waterfall, cold decomposition, loads-as-one cert, Workstream B waterfall, Workstream C/D audit, registry ledger + design law.
+## 5. Committed arc
+
+**Prior session (14 commits, `agent/claude/3-runtime-v1-polish`):** Compose −60%: `4ac13b5b2`, `006aca55c`. Server-loads: `99fd9017a` (viewer-tz orgId dedup), `225b3771a` (route-identity 3 reads→1), `dcde9e163` (viewer-tz 60s-cache reuse). Registry: `c7b739f2b` (CardDefinition + titles) + design-law commit. Docs/cert: prod waterfall, cold decomposition, loads-as-one cert, Workstream B waterfall, Workstream C/D audit, registry ledger + design law.
+
+**Session 2026-07-28 (EEC active — host memory-saturated; EEC-free work only, prod A/B batched):**
+- **`fcce804a0` — Workstream A dead-weight removal:** moved the landing-only `lifecycleCards` seed OUT of the shared `/workspace` layout INTO the landing route (`page.tsx` async server component + `WorkspaceLandingRouteVmBridge`). Work-unit routes no longer load a ~600 ms landing-only N+1 seed they never read. Cert: +0 new test failures (stash-verified 12=12), incremental tsc clean on the 4 files, both routes compile. **Honest scope:** this is a wasted-work/architecture win, NOT a work-unit primary-usable win — that phase is HIDDEN under the child `composeAndMeta` (measurement discipline §3). The same is true of the `orgName` twin (367 ms, also hidden). **The real work-unit levers remain the child critical chain — `resolveWorkUnitRouteIdentity` (1040 warm / 2470 cold), auth (1977 cold), compose — whose aggregate confirmation needs a PROD build (batched until the host quiesces).**
+- **Workstream C/D — registry concern 2 (`lifecycle`) extracted** (commit pending tsc): see §6 C/D.
 
 ---
 
@@ -73,8 +78,9 @@ Real background waste to trim: **dedup 3 duplicate requests** (`communications/d
 ### Workstream C/D — Declarative surface / registry extraction (STARTED)
 **Audit verdict: FAIL** — adding a card = 6–8 central edits across 13 files. **Approved approach: incremental, non-breaking, one concern at a time, keep/revert-verified.** Registry established: `web/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry.ts`.
 - **DESIGN LAW (Kelly, platform contract):** COMPOSE SMALL, INDEPENDENTLY-EVOLVABLE CONCERN CONTRACTS — do NOT grow a god-schema. A card = IDENTITY composed with the concern contracts it opts into (placement · lifecycle · loadingPolicy · dependencies · permissions · diagnostics · render), EACH a small separately-typed contract OWNED BY ITS OWN runtime composer. No single coordinator knows all concerns. Every property must satisfy: (1) runtime needs it, (2) multiple cards use it, (3) multiple surfaces use it, (4) removes orchestration, (5) NO new central coordinator. Scale test on every decision: at 300 cards × 40 products, easier or harder to extend? Optimize for easier.
-- **DONE:** concern 1/N = `identity.title` (split into `CardIdentity` contract; migrated `FOCUS_PANEL_CARD_TITLES` 1:1 → `cardTitle(key)`).
-- **NEXT concerns (each its own contract + composer, in the module that owns that concern):** placement (replaces `SUMMARY_GRID`/`WORK_GRID_*` + default doc) · loadingPolicy (folds in `COMMIT_CRITICAL_CARD_SPECS` — the proven seed) · lifecycle (replaces `OPERATIONAL_TRUTH_CARDS`/`WORK_OWNING_CARDS` sets) · dependencies · permissions · diagnostics · render (renderer if-chain → default ArchetypeCardBody + opt-in bespoke) · archetype (needs expanding the registry to all 22 keys) · catalog.
+- **DONE concern 1/N = `identity.title`** (split into `CardIdentity` contract; migrated `FOCUS_PANEL_CARD_TITLES` 1:1 → `cardTitle(key)`).
+- **DONE concern 2/N = `lifecycle`** (`CardLifecycle`, owned by `focusPanelCoordinationModel`): `ownsOperationalTruth`/`ownsWorkCompletion` replace the `OPERATIONAL_TRUTH_CARDS`/`WORK_OWNING_CARDS` membership sets; `isOperationalTruthCard`/`isWorkOwningCard` now read the registry (type-only import edge, no runtime cycle). Added the missing `scheduling` registry entry. Parity locked by `focusPanelCardLifecycleRegistry.test.ts` (5/5); +0 new failures (stash-verified 79=79 across `tests/adminV2/runtime/`).
+- **NEXT concerns (each its own contract + composer, in the module that owns that concern):** placement (replaces `SUMMARY_GRID`/`WORK_GRID_*` + default doc — but it's a per-MODE grid composition, not per-card data: needs a real composer, not a flat field) · loadingPolicy (folds in `COMMIT_CRITICAL_CARD_SPECS` — the proven seed; NOTE it entangles `isKnowable` with the domain `build` fn, so extract `isKnowable` as loadingPolicy and defer `build`) · dependencies · permissions · diagnostics · render (renderer if-chain → default ArchetypeCardBody + opt-in bespoke) · archetype (needs expanding the registry to all 22 keys) · catalog.
 - **2 domain→platform leaks to fix** (both in provisioning, not kernel/host): `workUnitProvisioningAnswer.ts:178` (`FocusPanelSubjectSnapshot` embeds Household/Children card shape) + `focusPanelWorkModeModelFromProvisioningAnswer.ts:66` (hardcoded domain truth keys).
 - **Endpoint:** re-run the "add `family_alerts`" test to certify PASS (target: one array entry + one component, 0 central edits).
 

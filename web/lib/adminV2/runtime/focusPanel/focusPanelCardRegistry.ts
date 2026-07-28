@@ -1,4 +1,5 @@
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { CardLifecycle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 
 /**
  * THE FOCUS PANEL CARD REGISTRY — the extension model for Alloy surfaces (Runtime V1 Certification,
@@ -26,8 +27,12 @@ import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPa
  *
  * MIGRATION LEDGER (concerns folded in so far):
  *   1. IDENTITY.title — reserved-cell / display title (was `FOCUS_PANEL_CARD_TITLES`).
+ *   2. LIFECYCLE (`CardLifecycle`, owned by `focusPanelCoordinationModel`) — canvas-elevation
+ *      ownership: `ownsOperationalTruth` / `ownsWorkCompletion` (were the `OPERATIONAL_TRUTH_CARDS` /
+ *      `WORK_OWNING_CARDS` membership sets). The composers `isOperationalTruthCard` /
+ *      `isWorkOwningCard` now read this concern off the registry.
  *   (next, each as its own concern contract + composer: placement · loadingPolicy(+commitCritical) ·
- *    lifecycle · dependencies · permissions · diagnostics · render · archetype · catalog)
+ *    dependencies · permissions · diagnostics · render · archetype · catalog)
  *
  * The proven seed is `COMMIT_CRITICAL_CARD_SPECS` (`{key, isKnowable, build}`, already iterated with no
  * per-card blocks) — it becomes the `loadingPolicy` concern, not a field on a monolith.
@@ -48,31 +53,35 @@ export type CardIdentity = {
 
 /**
  * A card DECLARATION = its identity composed with the concern contracts it opts into. As concerns
- * migrate, this becomes `CardIdentity & Partial<CardPlacement & CardLoadingPolicy & CardLifecycle & …>`,
- * where each `CardXxx` is a small contract imported from the module that OWNS that concern's composer.
- * It must never collapse into one flat schema this file defines wholesale.
+ * migrate, this becomes `CardIdentity & Partial<CardPlacement & CardLoadingPolicy & …>`, where each
+ * `CardXxx` is a small contract imported from the module that OWNS that concern's composer. It must
+ * never collapse into one flat schema this file defines wholesale.
  */
-export type CardDefinition = CardIdentity;
+export type CardDefinition = CardIdentity & Partial<CardLifecycle>;
 
 /**
- * The declared cards. Only cards that need a reserved-cell title carry one (others render their own).
- * Ordering is not authoritative here — placement folds in as a later concern (`defaultPlacement`).
+ * The declared cards. Each carries only the concern slices it opts into: a reserved-cell `title`
+ * (others render their own) and the LIFECYCLE ownership flags (`ownsOperationalTruth` /
+ * `ownsWorkCompletion`, read by `focusPanelCoordinationModel`). Ordering is not authoritative here —
+ * placement folds in as a later concern.
  */
 export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
-    { key: "current_work", title: "What's Next" },
-    { key: "household", title: "Household" },
-    { key: "children", title: "Children" },
+    { key: "current_work", title: "What's Next", ownsWorkCompletion: true },
+    { key: "household", title: "Household", ownsOperationalTruth: true },
+    { key: "children", title: "Children", ownsOperationalTruth: true },
     { key: "readiness_kpi", title: "Readiness" },
     { key: "health", title: "Enrollment Health" },
     { key: "tour_summary", title: "Tour" },
-    { key: "communications", title: "Communications" },
-    { key: "documents", title: "Documents" },
+    { key: "communications", title: "Communications", ownsOperationalTruth: true },
+    { key: "documents", title: "Documents", ownsOperationalTruth: true },
     { key: "attention", title: "Why Now" },
-    { key: "billing_preview", title: "Billing Preview" },
+    { key: "billing_preview", title: "Billing Preview", ownsOperationalTruth: true },
     { key: "required_information", title: "Required Information" },
     { key: "current_mission", title: "Current Mission" },
     { key: "timeline", title: "Timeline" },
     { key: "notes", title: "Notes" },
+    // Truth-owning card with no reserved-cell title (renders its own): declared for the lifecycle concern.
+    { key: "scheduling", ownsOperationalTruth: true },
 ];
 
 const CARD_BY_KEY: ReadonlyMap<FocusPanelCardKey, CardDefinition> = new Map(
