@@ -1,35 +1,58 @@
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
 /**
- * THE FOCUS PANEL CARD REGISTRY — the extensibility contract (Runtime V1 Certification, Workstream C/D).
+ * THE FOCUS PANEL CARD REGISTRY — the extension model for Alloy surfaces (Runtime V1 Certification,
+ * Workstreams C/D/E). This is a PLATFORM CONTRACT, not a switch-statement replacement.
  *
- * The certification target is: adding a new card is "declare one `CardDefinition` entry + one card
- * component", with the runtime composing/rendering/revealing/deferring it automatically — never an edit
- * to central orchestration. Today card knowledge is scattered across ~13 central lists (union type,
- * archetype Record, builder map.set chain, placement grids, renderer if-chain, titles, catalog,
- * coordination Sets, provisioning contract). This registry folds those concerns in ONE AT A TIME, each
+ * TARGET: adding a card is "declare it once + supply its component", and the runtime
+ * composes/renders/reveals/defers/measures it automatically — never a central-orchestration edit. Today
+ * card knowledge is scattered across ~13 central lists; each is folded in ONE CONCERN AT A TIME, each
  * migration replacing a central list 1:1 and verified against the loads-as-one + warm-<2s guardrails.
  *
- * The proven seed is `COMMIT_CRITICAL_CARD_SPECS` (a `{key, isKnowable, build}` array the commit-critical
- * producer already iterates with no per-card blocks); this registry generalises that shape.
+ * DESIGN LAW — COMPOSE SMALL CONTRACTS, DO NOT GROW A GOD-SCHEMA:
+ *   A `CardDefinition` is the composition of its IDENTITY with the independent CONCERN CONTRACTS it opts
+ *   into — placement · lifecycle · loading policy · dependencies · permissions · diagnostics · render.
+ *   Each concern is a SMALL, separately-typed contract OWNED BY ITS OWN runtime composer (the placement
+ *   composer reads placement; the reveal composer reads loading policy; …). No single coordinator knows
+ *   all concerns. Adding a concern = one optional slice + one composer; existing cards are untouched.
+ *   Every property added here must satisfy: (1) the runtime needs it; (2) multiple cards use it;
+ *   (3) multiple future surfaces use it; (4) it REMOVES orchestration; (5) it introduces NO new central
+ *   coordinator. Scale test for every decision: at 300 cards across 40 products, does this get EASIER to
+ *   extend, or harder? Optimize for easier.
+ *
+ * PLATFORM vs DOMAIN: the registry + concern contracts are PLATFORM (how ANY surface declares cards). A
+ * card's `build`/data bindings (folded in later) stay DOMAIN-owned (opportunity/stage-work) and are
+ * declared THROUGH the contract — domain knowledge never leaks back into the kernel/surface-host layers.
  *
  * MIGRATION LEDGER (concerns folded in so far):
- *   1. title — reserved-cell / display identity (was `FOCUS_PANEL_CARD_TITLES` in OpportunityFocusPanelModeGrid).
- *   (next: archetype · build · defaultPlacement · lifecycle · commitCritical · catalog · render)
+ *   1. IDENTITY.title — reserved-cell / display title (was `FOCUS_PANEL_CARD_TITLES`).
+ *   (next, each as its own concern contract + composer: placement · loadingPolicy(+commitCritical) ·
+ *    lifecycle · dependencies · permissions · diagnostics · render · archetype · catalog)
  *
- * PLATFORM vs DOMAIN: this registry is a PLATFORM contract (how any surface declares cards). The
- * per-card `build`/data bindings that fold in later stay DOMAIN-owned (opportunity/stage-work), declared
- * through the contract — domain knowledge must not leak back into the kernel/surface-host layers.
+ * The proven seed is `COMMIT_CRITICAL_CARD_SPECS` (`{key, isKnowable, build}`, already iterated with no
+ * per-card blocks) — it becomes the `loadingPolicy` concern, not a field on a monolith.
  */
-export type CardDefinition = {
+
+/**
+ * IDENTITY concern — the one contract every card has. Kept deliberately tiny; other concerns attach as
+ * their own optional slices (see the DESIGN LAW above), each defined in its owning module as it migrates.
+ */
+export type CardIdentity = {
     key: FocusPanelCardKey;
     /**
-     * Display + reserved-cell identity title. A reserved (settling) cell shows this so the committed
-     * panel reads as a complete surface, not a blank placeholder. `undefined` = the card carries its own
-     * title in its rendered body (matches the prior `Partial<Record>` behaviour).
+     * Display + reserved-cell title. A reserved (settling) cell shows this so the committed panel reads
+     * as a complete surface, not a blank placeholder. `undefined` = the card renders its own title.
      */
     title?: string;
 };
+
+/**
+ * A card DECLARATION = its identity composed with the concern contracts it opts into. As concerns
+ * migrate, this becomes `CardIdentity & Partial<CardPlacement & CardLoadingPolicy & CardLifecycle & …>`,
+ * where each `CardXxx` is a small contract imported from the module that OWNS that concern's composer.
+ * It must never collapse into one flat schema this file defines wholesale.
+ */
+export type CardDefinition = CardIdentity;
 
 /**
  * The declared cards. Only cards that need a reserved-cell title carry one (others render their own).
