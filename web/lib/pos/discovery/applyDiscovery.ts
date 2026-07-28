@@ -23,7 +23,7 @@
 
 import type { StoredFormDraftPreview, DraftFormField } from "@/lib/pos/processingCase/formDraft/types";
 import { canonicalCollectionProviderForRole } from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
-import { relationshipDefinitionForRole } from "@/lib/fields/collection/relationshipCollectionDefinitions";
+import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
 import type { ConfigurationDiscoveryResult, ConfigurationProposal, ProposalDecisionState } from "./contracts";
 import { proposalIdentity, semanticConceptIdentity } from "./reconciliation";
 
