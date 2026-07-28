@@ -20,7 +20,7 @@
  *   POST /api/commands        → confirm+execute a command through the registry
  *   GET  /                    → the SPA shell (static, path-traversal safe)
  */
-import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
@@ -536,6 +536,21 @@ const DISK_POLICY = {
 let lastDiskGc = { signal: null, last_run: null, policy: DISK_POLICY, auto_actions: [] };
 let diskReclaimCooldown = 0;
 
+// Persist the operator's disk-policy choice so "set-and-forget" survives a server
+// restart (the app respawns the server; an in-memory flag would silently revert).
+const DISK_POLICY_FILE = join(RUNTIME_ROOT_DIR, "vacilando", "disk-policy.json");
+function loadDiskPolicy() {
+  try {
+    const j = JSON.parse(readFileSync(DISK_POLICY_FILE, "utf8"));
+    if (typeof j.auto_gc === "boolean") DISK_POLICY.auto_gc = j.auto_gc;
+    if (Number.isFinite(j.low_water_gb) && j.low_water_gb > 0) DISK_POLICY.low_water_gb = j.low_water_gb;
+  } catch { /* first run / unreadable → keep defaults */ }
+}
+function saveDiskPolicy() {
+  try { mkdirSync(dirname(DISK_POLICY_FILE), { recursive: true }); writeFileSync(DISK_POLICY_FILE, JSON.stringify({ auto_gc: DISK_POLICY.auto_gc, low_water_gb: DISK_POLICY.low_water_gb }, null, 2)); } catch { /* best-effort */ }
+}
+loadDiskPolicy();
+
 async function refreshDisk({ act = false } = {}) {
   let signal = null;
   try { signal = diskSignal(); } catch { /* keep last */ }
@@ -660,6 +675,7 @@ export function createVacilandoServer() {
       const v = body.value || {};
       if (typeof v.auto_gc === "boolean") DISK_POLICY.auto_gc = v.auto_gc;
       if (Number.isFinite(v.low_water_gb) && v.low_water_gb > 0) DISK_POLICY.low_water_gb = v.low_water_gb;
+      saveDiskPolicy(); // survive restarts — the whole point is set-and-forget
       return sendJson(res, 200, { ok: true, policy: DISK_POLICY });
     }
 
