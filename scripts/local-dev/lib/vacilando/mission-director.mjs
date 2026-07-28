@@ -186,12 +186,26 @@ export function answerQuestions({ mission_id, answer }) {
   const text = String(answer || "").trim();
   if (!text) return { ok: false, error: "empty_answer" };
   const pkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
-  const open = understandingQuestions(mission, pkg).map((q) => q.id);
+  const openQs = understandingQuestions(mission, pkg);
+  const open = openQs.map((q) => q.id);
+  // When the block is "Needs Product Decisions", the operator's answer IS the
+  // product decision(s) — record them into the Product Definition so the empty-PD
+  // gap (gap-analysis: accepted_decisions+goals+constraints === 0) actually clears.
+  // Without this the reply is only a clarification and Director asks forever.
+  let decisions_recorded = 0;
+  const needsDecisions = pkg?.readiness_verdict?.verdict === "Needs Product Decisions" || open.includes("verdict:Needs Product Decisions");
+  if (needsDecisions && mission.capability_id) {
+    const statements = text.split(/\n\s*\n+/).map((s) => s.trim()).filter(Boolean);
+    for (const statement of (statements.length ? statements : [text])) {
+      const r = addDecisionForCapability(mission.capability_id, { statement, decided_by: "operator", provenance: "operator" }, { name: mission.title });
+      if (r?.added) decisions_recorded++;
+    }
+  }
   const clarifications = [...(mission.clarifications || []), { answer: text, question_ids: open, at: new Date().toISOString() }];
   const answered = [...new Set([...(mission.answered_questions || []), ...open])];
   updateMission(mission_id, { answered_questions: answered, clarifications });
   const out = recompileMission({ mission_id }); // recompile carries the clarifications into the objective
-  return out.ok ? { ...out, answered: open.length } : out;
+  return out.ok ? { ...out, answered: open.length, decisions_recorded } : out;
 }
 
 /** Turn an intent into a capability display name (strip leading verb + version). */
