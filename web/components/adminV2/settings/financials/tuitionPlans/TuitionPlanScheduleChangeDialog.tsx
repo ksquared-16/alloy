@@ -18,6 +18,28 @@ import type { TuitionPlansSnapshot } from "@/lib/financials/tuitionPlans/tuition
 
 type PriceDraft = { variantId: string; commitmentLabel: string; cents: number; selected: boolean };
 
+function FormSection({
+    title,
+    description,
+    children,
+}: {
+    title: string;
+    description?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <section className="space-y-3 border-b border-alloy-stone/15 pb-4 last:border-b-0 last:pb-0">
+            <div>
+                <h3 className="text-sm font-semibold text-alloy-midnight">{title}</h3>
+                {description ?
+                    <p className="mt-0.5 text-xs text-alloy-midnight/50">{description}</p>
+                :   null}
+            </div>
+            <div className="space-y-3">{children}</div>
+        </section>
+    );
+}
+
 export function TuitionPlanScheduleChangeDialog({
     detail,
     snapshot,
@@ -71,6 +93,8 @@ export function TuitionPlanScheduleChangeDialog({
         );
     };
 
+    const selectedCount = drafts.filter((row) => applyAll || row.selected).length;
+
     const submit = () => {
         const changes = drafts
             .filter((row) => applyAll || row.selected)
@@ -89,9 +113,11 @@ export function TuitionPlanScheduleChangeDialog({
             <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-alloy-stone/25 bg-white shadow-sm">
                 <div className="border-b border-alloy-stone/20 px-5 py-4">
                     <h2 id="tuition-schedule-title" className="text-lg font-semibold text-alloy-midnight">
-                        Schedule Tuition Change
+                        Tuition Change
                     </h2>
-                    <p className="mt-1 text-sm text-alloy-midnight/55">{detail.name}</p>
+                    <p className="mt-1 text-sm text-alloy-midnight/55">
+                        Set new Organization Prices and when they take effect.
+                    </p>
                 </div>
 
                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
@@ -101,105 +127,141 @@ export function TuitionPlanScheduleChangeDialog({
                         </p>
                     :   null}
 
-                    <label>
-                        <span className="config-typo-field-label">Effective date *</span>
-                        <input
-                            type="date"
-                            value={effectiveDate}
-                            onChange={(event) => setEffectiveDate(event.target.value)}
-                            className="config-runtime-input mt-1"
-                            data-testid="tuition-schedule-effective-date"
-                        />
-                    </label>
+                    <FormSection title="Plan Identity" description="What is changing.">
+                        <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                            <div>
+                                <dt className="text-[11px] text-alloy-midnight/45">Plan</dt>
+                                <dd className="font-medium text-alloy-midnight">{detail.name}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-[11px] text-alloy-midnight/45">Program</dt>
+                                <dd className="text-alloy-midnight/75">{detail.programLabel}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-[11px] text-alloy-midnight/45">Care format</dt>
+                                <dd className="text-alloy-midnight/75">{detail.careFormatLabel}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-[11px] text-alloy-midnight/45">Billing</dt>
+                                <dd className="text-alloy-midnight/75">{detail.billingFrequencyLabel ?? "—"}</dd>
+                            </div>
+                        </dl>
+                    </FormSection>
 
-                    <div className="flex flex-wrap gap-2">
-                        <ConfigurationSecondaryButton
-                            type="button"
-                            onClick={() => applyAdjustment("percent", 3)}
-                            data-testid="tuition-schedule-plus-3"
-                        >
-                            +3%
-                        </ConfigurationSecondaryButton>
-                        <ConfigurationSecondaryButton
-                            type="button"
-                            onClick={() => applyAdjustment("percent", -3)}
-                            data-testid="tuition-schedule-minus-3"
-                        >
-                            −3%
-                        </ConfigurationSecondaryButton>
-                        <ConfigurationSecondaryButton
-                            type="button"
-                            onClick={() => applyAdjustment("round", 5)}
-                            data-testid="tuition-schedule-round-5"
-                        >
-                            Round to $5
-                        </ConfigurationSecondaryButton>
-                    </div>
+                    <FormSection title="Scope" description="Who is affected by this price change.">
+                        <label className="flex items-center gap-2 text-sm text-alloy-midnight/75">
+                            <input
+                                type="checkbox"
+                                checked={applyAll}
+                                onChange={(event) => setApplyAll(event.target.checked)}
+                                data-testid="tuition-schedule-apply-all"
+                            />
+                            Apply to all Enrollment Commitments
+                        </label>
+                        <p className="text-xs text-alloy-midnight/45">
+                            {selectedCount} commitment{selectedCount === 1 ? "" : "s"} selected
+                        </p>
+                    </FormSection>
 
-                    <label className="flex items-center gap-2 text-sm text-alloy-midnight/75">
-                        <input
-                            type="checkbox"
-                            checked={applyAll}
-                            onChange={(event) => setApplyAll(event.target.checked)}
-                            data-testid="tuition-schedule-apply-all"
-                        />
-                        Apply to all Enrollment Commitments
-                    </label>
-
-                    <ul className="space-y-3">
-                        {drafts.map((row) => {
-                            const existing = cadenceKey
-                                ? orgMap.get(tuitionRateCellKey(row.variantId, cadenceKey))
-                                : undefined;
-                            return (
-                                <li
-                                    key={row.variantId}
-                                    className="rounded-lg border border-alloy-stone/20 p-3"
-                                    data-testid={`tuition-schedule-row-${row.variantId}`}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        {!applyAll ?
-                                            <input
-                                                type="checkbox"
-                                                checked={row.selected}
-                                                onChange={(event) =>
-                                                    setDrafts((current) =>
-                                                        current.map((item) =>
-                                                            item.variantId === row.variantId
-                                                                ? { ...item, selected: event.target.checked }
-                                                                : item,
-                                                        ),
-                                                    )
-                                                }
-                                            />
-                                        :   null}
-                                        <span className="text-sm font-medium text-alloy-midnight">
-                                            {row.commitmentLabel}
-                                        </span>
-                                    </div>
-                                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                                        <div>
-                                            <p className="text-[11px] text-alloy-midnight/45">Current</p>
-                                            <p className="text-sm text-alloy-midnight/70">
-                                                {existing && !existing.not_offered
-                                                    ? formatRateCents(existing.rate_cents)
-                                                    : "—"}
-                                            </p>
+                    <FormSection title="Pricing" description="New Organization Prices for each commitment.">
+                        <div className="flex flex-wrap gap-2">
+                            <ConfigurationSecondaryButton
+                                type="button"
+                                onClick={() => applyAdjustment("percent", 3)}
+                                data-testid="tuition-schedule-plus-3"
+                            >
+                                +3%
+                            </ConfigurationSecondaryButton>
+                            <ConfigurationSecondaryButton
+                                type="button"
+                                onClick={() => applyAdjustment("percent", -3)}
+                                data-testid="tuition-schedule-minus-3"
+                            >
+                                −3%
+                            </ConfigurationSecondaryButton>
+                            <ConfigurationSecondaryButton
+                                type="button"
+                                onClick={() => applyAdjustment("round", 5)}
+                                data-testid="tuition-schedule-round-5"
+                            >
+                                Round to $5
+                            </ConfigurationSecondaryButton>
+                        </div>
+                        <ul className="space-y-3">
+                            {drafts.map((row) => {
+                                const existing = cadenceKey
+                                    ? orgMap.get(tuitionRateCellKey(row.variantId, cadenceKey))
+                                    : undefined;
+                                return (
+                                    <li
+                                        key={row.variantId}
+                                        className="rounded-lg border border-alloy-stone/20 p-3"
+                                        data-testid={`tuition-schedule-row-${row.variantId}`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            {!applyAll ?
+                                                <input
+                                                    type="checkbox"
+                                                    checked={row.selected}
+                                                    onChange={(event) =>
+                                                        setDrafts((current) =>
+                                                            current.map((item) =>
+                                                                item.variantId === row.variantId
+                                                                    ? { ...item, selected: event.target.checked }
+                                                                    : item,
+                                                            ),
+                                                        )
+                                                    }
+                                                />
+                                            :   null}
+                                            <span className="text-sm font-medium text-alloy-midnight">
+                                                {row.commitmentLabel}
+                                            </span>
                                         </div>
-                                        <label>
-                                            <span className="text-[11px] text-alloy-midnight/45">New price</span>
-                                            <input
-                                                value={String(row.cents / 100)}
-                                                onChange={(event) => updateDraftCents(row.variantId, event.target.value)}
-                                                className="config-runtime-input mt-0.5"
-                                                data-testid={`tuition-schedule-price-${row.variantId}`}
-                                            />
-                                        </label>
-                                    </div>
-                                </li>
-                            );
-                        })}
-                    </ul>
+                                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                            <div>
+                                                <p className="text-[11px] text-alloy-midnight/45">Current</p>
+                                                <p className="text-sm text-alloy-midnight/70">
+                                                    {existing && !existing.not_offered
+                                                        ? formatRateCents(existing.rate_cents)
+                                                        : "—"}
+                                                </p>
+                                            </div>
+                                            <label>
+                                                <span className="text-[11px] text-alloy-midnight/45">New price</span>
+                                                <input
+                                                    value={String(row.cents / 100)}
+                                                    onChange={(event) => updateDraftCents(row.variantId, event.target.value)}
+                                                    className="config-runtime-input mt-0.5"
+                                                    data-testid={`tuition-schedule-price-${row.variantId}`}
+                                                />
+                                            </label>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </FormSection>
+
+                    <FormSection title="Effective Date" description="When the new prices become current.">
+                        <label>
+                            <span className="config-typo-field-label">Effective date *</span>
+                            <input
+                                type="date"
+                                value={effectiveDate}
+                                onChange={(event) => setEffectiveDate(event.target.value)}
+                                className="config-runtime-input mt-1"
+                                data-testid="tuition-schedule-effective-date"
+                            />
+                        </label>
+                    </FormSection>
+
+                    <FormSection title="Impact">
+                        <p className="text-sm text-alloy-midnight/65">
+                            Previous Organization Prices stay in history. New prices apply from the effective date for
+                            this plan’s location scope.
+                        </p>
+                    </FormSection>
                 </div>
 
                 <div className="flex justify-end gap-2 border-t border-alloy-stone/20 px-5 py-4">
@@ -207,7 +269,7 @@ export function TuitionPlanScheduleChangeDialog({
                         Cancel
                     </ConfigurationSecondaryButton>
                     <ConfigurationPrimaryButton
-                        disabled={busy || !effectiveDate}
+                        disabled={busy || !effectiveDate || selectedCount === 0}
                         onClick={() => setConfirmOpen(true)}
                         data-testid="tuition-schedule-review"
                     >
@@ -224,9 +286,11 @@ export function TuitionPlanScheduleChangeDialog({
                     data-testid="tuition-schedule-confirm"
                 >
                     <div className="w-full max-w-md rounded-xl border border-alloy-stone/25 bg-white p-5">
-                        <h3 className="text-lg font-semibold text-alloy-midnight">Confirm scheduled change</h3>
+                        <h3 className="text-lg font-semibold text-alloy-midnight">Confirm Tuition Change</h3>
                         <p className="mt-2 text-sm text-alloy-midnight/60">
-                            New Organization Prices will take effect on {effectiveDate}. Previous prices will be preserved in history.
+                            New Organization Prices for {selectedCount} commitment
+                            {selectedCount === 1 ? "" : "s"} take effect on {effectiveDate}. Previous prices are
+                            preserved in history.
                         </p>
                         <div className="mt-5 flex justify-end gap-2">
                             <ConfigurationSecondaryButton
@@ -243,7 +307,7 @@ export function TuitionPlanScheduleChangeDialog({
                                 }}
                                 data-testid="tuition-schedule-confirm-submit"
                             >
-                                {busy ? "Scheduling…" : "Schedule change"}
+                                {busy ? "Saving…" : "Save Tuition Change"}
                             </ConfigurationPrimaryButton>
                         </div>
                     </div>

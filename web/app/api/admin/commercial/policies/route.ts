@@ -7,6 +7,7 @@ import {
     validateCommercialPolicyValue,
     type CommercialPolicyType,
 } from "@/lib/commercial/execution/policy/policyTypes";
+import { operatorFriendlyCommercialError } from "@/lib/commercial/operatorFriendlyCommercialError";
 
 /**
  * Commercial Policies CRUD — operator authoring for the Commercial-owned
@@ -146,6 +147,11 @@ export async function POST(request: NextRequest) {
         .select(SELECT_COLS)
         .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+        return NextResponse.json(
+            { error: operatorFriendlyCommercialError(error.message, "Could not create policy.") },
+            { status: error.code === "23505" ? 409 : 400 },
+        );
+    }
     return NextResponse.json({ policy: mapPolicyRow(data as Record<string, unknown>) }, { status: 201 });
 }

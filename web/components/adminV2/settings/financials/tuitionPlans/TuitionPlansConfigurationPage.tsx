@@ -64,6 +64,8 @@ import {
     type TuitionPlanCollectionRow,
 } from "@/lib/financials/tuitionPlans/tuitionPlanViewModel";
 import { readTuitionLocationApplicability } from "@/lib/financials/tuitionPlans/tuitionPlanMetadata";
+import { occupiedCareFormatsForProgram } from "@/lib/financials/tuitionPlans/occupiedCareFormats";
+import { operatorFriendlyProgramOfferingError } from "@/lib/programs/operatorFriendlyProgramOfferingError";
 
 type DialogMode =
     | null
@@ -476,6 +478,7 @@ export default function TuitionPlansConfigurationPage({
                     existingVariants={snapshot.variants}
                     dayCommitments={dayCommitments}
                     locations={snapshot.locations}
+                    offerings={snapshot.offerings}
                     busy={busy}
                     error={dialogError}
                     onCancel={() => {
@@ -491,7 +494,16 @@ export default function TuitionPlansConfigurationPage({
                                 const created = await createTuitionPlan(input);
                                 await afterMutation(created.offering.id, "Tuition Plan created.");
                             } catch (err) {
-                                setDialogError(err instanceof Error ? err.message : "Create failed.");
+                                setDialogError(
+                                    operatorFriendlyProgramOfferingError(
+                                        err instanceof Error ? err.message : "Create failed.",
+                                        {
+                                            programLabel: input.programKey,
+                                            careFormat: input.careFormat,
+                                            planName: input.name,
+                                        },
+                                    ),
+                                );
                                 setBusy(false);
                             }
                         })();
@@ -505,6 +517,11 @@ export default function TuitionPlansConfigurationPage({
                     cadences={snapshot.cadences}
                     revenueCategories={snapshot.revenueCategories}
                     locations={snapshot.locations}
+                    occupiedCareFormats={occupiedCareFormatsForProgram(
+                        snapshot.offerings,
+                        detail.offering.program_key,
+                        detail.id,
+                    )}
                     initialLocationMode={readTuitionLocationApplicability(detail.offering.metadata).mode}
                     initialLocationIds={readTuitionLocationApplicability(detail.offering.metadata).locationIds}
                     busy={busy}
@@ -533,7 +550,16 @@ export default function TuitionPlansConfigurationPage({
                                 });
                                 await afterMutation(detail.id, "Tuition Plan saved.");
                             } catch (err) {
-                                setDialogError(err instanceof Error ? err.message : "Save failed.");
+                                setDialogError(
+                                    operatorFriendlyProgramOfferingError(
+                                        err instanceof Error ? err.message : "Save failed.",
+                                        {
+                                            programLabel: detail.programLabel,
+                                            careFormat: input.careFormat,
+                                            planName: input.name,
+                                        },
+                                    ),
+                                );
                                 setBusy(false);
                             }
                         })();
