@@ -75,12 +75,13 @@ describe("Operational Intelligence Organization product", () => {
         expect(workspace).toContain("data-testid=\"operational-intelligence-organization-product\"");
         expect(workspace).toContain("data-oi-v2-measurements-first=\"true\"");
         expect(workspace).toContain("What do you want to know?");
-        expect(workspace).toContain("oi-home-add-measurement");
+        expect(workspace).toContain("Questions Alloy can answer");
+        expect(workspace).toContain("What we are measuring");
         expect(workspace).toContain("Manage presentation in Surfaces");
         expect(workspace).not.toContain('title="Operational Calculations"');
         expect(workspace).not.toContain("SourcesWorkspace");
         expect(workspace).not.toContain("enablement");
-        expect(workspace).toContain("OiOrgCalcAddWizard");
+        expect(workspace).toContain("OiFutureRoomCapacityBuilder");
         expect(workspace).toContain("oi-question-future-room-capacity");
         expect(workspace).toContain("What do you want to know?");
     });

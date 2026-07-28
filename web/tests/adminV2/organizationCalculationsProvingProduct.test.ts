@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { organizationConfigurationDomain } from "@/lib/configRuntime/organizationRuntime";
+import { organizationConfigurationDomain, organizationConfigurationDomains } from "@/lib/configRuntime/organizationRuntime";
 import { CANONICAL_ORGANIZATION_CALCULATIONS_HREF } from "@/lib/admin/canonicalAdminRoutes";
 import {
     ORG_CALC_PRODUCT_TYPES,
@@ -22,7 +22,12 @@ describe("Organization Calculations V1 product", () => {
         expect(organizationConfigurationDomain("organization-calculations")?.href).toBe(
             CANONICAL_ORGANIZATION_CALCULATIONS_HREF,
         );
-        expect(organizationConfigurationDomain("organization-calculations")?.label).toBe("Calculations");
+        expect(organizationConfigurationDomain("organization-calculations")?.label).toBe(
+            "Calculation library",
+        );
+        expect(
+            organizationConfigurationDomains().some((d) => d.key === "organization-calculations"),
+        ).toBe(false);
         expect(read("next.config.ts")).toContain('source: "/organization/calculations"');
         expect(read("app/adminV2/settings/organization/calculations/page.tsx")).toContain(
             "OrganizationCalculationsWorkspace",

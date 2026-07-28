@@ -24,10 +24,13 @@ describe("Organization IA — Programs & Locations domain", () => {
         const keys = organizationConfigurationDomains().map((d) => d.key);
         expect(keys).toContain("programs-locations");
         expect(keys).toContain("financials");
-        expect(keys).toContain("organization-calculations");
+        expect(keys).not.toContain("organization-calculations");
         expect(keys).not.toContain("programs");
         expect(keys).not.toContain("locations");
-        expect(keys).toHaveLength(10);
+        expect(keys).toHaveLength(9);
+        expect(organizationConfigurationDomain("organization-calculations")?.label).toBe(
+            "Calculation library",
+        );
         expect(organizationConfigurationDomain("programs-locations")?.href).toBe(
             CANONICAL_ORGANIZATION_PROGRAMS_LOCATIONS_HREF,
         );
