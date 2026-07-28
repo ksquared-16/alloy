@@ -36,33 +36,15 @@ export function sectionSubtitle(key: SurfaceConfigSectionKey): string {
  * `edit` embeds the existing Surface editor inline — it never navigates to a detached builder.
  * Overview was removed: selecting a Surface opens Edit (builder) directly.
  */
-export type SurfaceWorkspaceTab = "edit" | "commands" | "assignments" | "versions" | "health" | "history";
+export type SurfaceWorkspaceTab = "edit" | "assignments" | "versions" | "health" | "history";
 
 export const SURFACE_WORKSPACE_TABS: readonly { key: SurfaceWorkspaceTab; label: string }[] = [
     { key: "edit", label: "Edit" },
-    { key: "commands", label: "Commands" },
     { key: "assignments", label: "Assignments" },
     { key: "versions", label: "Versions" },
     { key: "health", label: "Health" },
     { key: "history", label: "History" },
 ];
-
-/** Tabs that include Command exposure for the selected Surface category. */
-export function surfaceSectionSupportsCommandExposure(section: SurfaceConfigSectionKey): boolean {
-    return (
-        section === "focus-panels" ||
-        section === "queue-rows" ||
-        section === "workspaces" ||
-        section === "work-units"
-    );
-}
-
-export function surfaceWorkspaceTabsForSection(
-    section: SurfaceConfigSectionKey
-): readonly { key: SurfaceWorkspaceTab; label: string }[] {
-    if (surfaceSectionSupportsCommandExposure(section)) return SURFACE_WORKSPACE_TABS;
-    return SURFACE_WORKSPACE_TABS.filter((t) => t.key !== "commands");
-}
 
 /** Default tab when a Surface is selected — builder first. */
 export const SURFACE_WORKSPACE_DEFAULT_TAB: SurfaceWorkspaceTab = "edit";

@@ -24,10 +24,10 @@ export const SURFACES_LANDING_SECTIONS = [
 ] as const satisfies readonly SurfaceConfigSectionKey[];
 
 const SECTION_CAPABILITIES: Record<SurfaceConfigSectionKey, readonly string[]> = {
-    "focus-panels": ["Focus Panel composition", "Command exposure", "Published panel layouts"],
-    "queue-rows": ["Queue row presentation", "Command exposure", "Process-bound rows"],
-    workspaces: ["Workspace header", "Command exposure", "Process summaries"],
-    "work-units": ["Work Unit header", "Command exposure", "Header metrics"],
+    "focus-panels": ["Focus Panel composition", "Modes and cards", "Published panel layouts"],
+    "queue-rows": ["Queue row presentation", "Fields and widgets", "Process-bound rows"],
+    workspaces: ["Workspace header", "Process summaries", "Org-level KPIs"],
+    "work-units": ["Work Unit header", "Header metrics", "Attention placement"],
     "operational-intelligence": ["Indicators and playbooks", "Metric placement", "OI surface builder"],
 };
 

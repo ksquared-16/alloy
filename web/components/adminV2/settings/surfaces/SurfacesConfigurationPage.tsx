@@ -43,10 +43,9 @@ import {
     sectionLabel,
     sectionSubtitle,
     SURFACE_WORKSPACE_DEFAULT_TAB,
-    surfaceWorkspaceTabsForSection,
+    SURFACE_WORKSPACE_TABS,
     type SurfaceWorkspaceTab,
 } from "@/lib/adminV2/settings/surfaces/surfacesNavigationModel";
-import SurfaceCommandExposureEditor from "@/components/adminV2/settings/surfaces/SurfaceCommandExposureEditor";
 import {
     useSurfacesConfigurationSettings,
     type SurfaceConfigSectionKey,
@@ -252,10 +251,7 @@ function SurfacesConfigurationPageInner({
             const tabParam = searchParams.get("tab")?.trim();
             if (searchParams.get("editor") === "1") {
                 setTabState("edit");
-            } else if (
-                tabParam &&
-                surfaceWorkspaceTabsForSection(section).some((t) => t.key === tabParam)
-            ) {
+            } else if (tabParam && SURFACE_WORKSPACE_TABS.some((t) => t.key === tabParam)) {
                 setTabState(tabParam as SurfaceWorkspaceTab);
             } else if (initialTab) {
                 setTabState(initialTab);
@@ -548,7 +544,7 @@ function SurfacesConfigurationPageInner({
                         </div>
                     </div>
                     <ConfigWorkspaceTabBar
-                        tabs={surfaceWorkspaceTabsForSection(section)}
+                        tabs={SURFACE_WORKSPACE_TABS}
                         activeSection={tab}
                         onSectionChange={setTab}
                         ariaLabel="Surface sections"
@@ -559,15 +555,6 @@ function SurfacesConfigurationPageInner({
 
                 {tab === "edit" ?
                     <div data-testid="surfaces-edit-tab">{renderEditTab()}</div>
-                : tab === "commands" ?
-                    <div data-testid="surfaces-commands-tab" className="px-1">
-                        <SurfaceCommandExposureEditor
-                            section={section}
-                            departmentId={selectedObject.departmentId ?? null}
-                            processId={selectedObject.processId ?? null}
-                            surfaceTitle={selectedObject.title}
-                        />
-                    </div>
                 : tab === "assignments" ?
                     renderAssignmentsTab()
                 : tab === "versions" ?
