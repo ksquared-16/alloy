@@ -30,6 +30,12 @@ export const ADMINV2_DRAWER_BACKDROP_Z = 60;
 export const ADMINV2_DRAWER_PANEL_Z = 70;
 /** Registry action modals from VM drawer (create work, tour, send form) — above panel, below shell chrome (100). */
 export const ADMINV2_DRAWER_ACTION_MODAL_Z = 80;
+/**
+ * Scheduling / Inbox workspace BOS modal — above BOS float rail (~91) and rail menus (95),
+ * below shell chrome (100). Without this, BOS controls stack over the workspace dialog.
+ */
+export const ADMINV2_WORKSPACE_BOS_BACKDROP_Z = 96;
+export const ADMINV2_WORKSPACE_BOS_PANEL_Z = 97;
 /** Above drawer panel; below drawer-adjacent modals (z-80+). */
 /** Sidebar + top nav — above portaled drawer (panel z-70). */
 export const ADMINV2_SHELL_CHROME_Z = 100;

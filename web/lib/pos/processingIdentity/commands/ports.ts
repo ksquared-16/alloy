@@ -83,6 +83,7 @@ export interface IdentityCommandPorts {
             status_key: string;
             stage_key: string;
             work_unit_id: string | null;
+            location_id?: string | null;
         },
     ): Promise<UpsertResult>;
 
@@ -259,6 +260,10 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
         },
 
         async createLead(ctx, input) {
+            const locationId =
+                typeof input.location_id === "string" && input.location_id.trim()
+                    ? input.location_id.trim()
+                    : null;
             const { data, error } = await ctx.supabase
                 .from("opportunities")
                 .insert({
@@ -269,6 +274,7 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
                     status_key: input.status_key,
                     stage_key: input.stage_key,
                     ...(input.work_unit_id ? { work_unit_id: input.work_unit_id } : {}),
+                    ...(locationId ? { location_id: locationId } : {}),
                 })
                 .select("id")
                 .single();

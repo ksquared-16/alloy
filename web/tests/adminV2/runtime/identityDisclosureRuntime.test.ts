@@ -222,16 +222,13 @@ describe("identity inline edit wiring", () => {
         expect(summary).toContain("personId={record.id}");
     });
 
-    it("collection drill affordance sits below the field grid when onActivate is wired", () => {
+    it("collection summary has no Schedule → / Details → footer action", () => {
         const summary = readSrc("components/admin/focusPanel/identity/IdentityRecordSummary.tsx");
-        expect(summary).toContain("data-identity-open-details");
-        expect(summary).toContain("Details →");
-        const gridIdx = summary.indexOf("<IdentityFieldGrid");
-        const detailsIdx = summary.indexOf("identity-record-summary__open-details");
-        expect(gridIdx).toBeGreaterThan(-1);
-        expect(detailsIdx).toBeGreaterThan(gridIdx);
-        const titleInner = summary.match(/identity-record-summary__title">([\s\S]*?)<\/span>/)?.[1] ?? "";
-        expect(titleInner).not.toContain("identity-record-summary__open-details");
+        expect(summary).not.toContain("Details →");
+        expect(summary).not.toContain("Schedule →");
+        expect(summary).not.toContain("resolveIdentityContextualActivateAction");
+        expect(summary).not.toContain("identity-record-summary__open-details");
+        expect(summary).not.toContain("data-identity-open-details");
     });
 
     it("ChildrenCard wires onSaveField when mutation is available", () => {

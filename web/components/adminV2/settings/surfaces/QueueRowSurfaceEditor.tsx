@@ -206,7 +206,7 @@ export default function QueueRowSurfaceEditor({
         setError(null);
         try {
             await publishQueueRowSurfaceConfig({ surfaceId, envelope });
-            dispatchQueueRowSurfacePublished(surfaceId);
+            dispatchQueueRowSurfacePublished(surfaceId, processKey);
             setDirty(false);
             setPublishedAt(true);
             onPublished?.();

@@ -46,6 +46,7 @@ import { DrawerCommandRailActionsProvider } from "@/contexts/DrawerCommandRailAc
 import { WorkspaceCommandRailRegistryProvider } from "@/contexts/WorkspaceCommandRailRegistryContext";
 import { BosPresentationControls } from "@/components/presentation/BosPresentationControls";
 import { BosPresentationControllerProvider } from "@/contexts/BosPresentationControllerContext";
+import { BosCommandSessionProvider } from "@/contexts/BosCommandSessionContext";
 import {
   isExperienceBuilderStudioActive,
   isExperienceBuilderStudioPath,
@@ -189,6 +190,7 @@ function AdminV2ShellInner({
           BosRailHeader cannot read pin/close context.
         */}
         <BosPresentationControllerProvider ambientRef={ambientRootRef}>
+        <BosCommandSessionProvider>
         <CommandRailBosMount>
         <WorkspaceCommandRailRegistryProvider>
         <DrawerCommandRailActionsProvider>
@@ -241,6 +243,7 @@ function AdminV2ShellInner({
         </DrawerCommandRailActionsProvider>
         </WorkspaceCommandRailRegistryProvider>
         </CommandRailBosMount>
+        </BosCommandSessionProvider>
         </BosPresentationControllerProvider>
       </GlobalAssistantProvider>
     );

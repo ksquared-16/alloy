@@ -15,6 +15,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import ProcessingLandingActionCard from "@/app/adminV2/pos/ProcessingLandingActionCard";
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
+import {
+    WorkspaceOverviewActionRow,
+    WorkspaceOverviewInfoGrid,
+    WorkspaceOverviewInfoPrimary,
+    WorkspaceOverviewStack,
+} from "@/components/workspace/WorkspaceOverviewLayout";
 import { formatOperationalTaskDueDisplay } from "@/lib/agent/taskAssist/formatOperationalTaskSourceLabel";
 import { normalizeOperationalTaskTitleDisplay } from "@/lib/agent/taskAssist/normalizeOperationalTaskTitleDisplay";
 import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
@@ -92,8 +98,8 @@ export default function WorkItemsOverviewLanding({
     const recentCompleted = useMemo(() => completedTasks.slice(0, 4), [completedTasks]);
 
     return (
-        <div className="mx-auto max-w-6xl space-y-7" data-testid="work-items-overview-landing">
-                <section className="grid gap-3 md:grid-cols-3">
+        <WorkspaceOverviewStack data-testid="work-items-overview-landing">
+                <WorkspaceOverviewActionRow>
                     <ProcessingLandingActionCard
                         tier="primary"
                         testId="work-items-create-action-card"
@@ -121,9 +127,10 @@ export default function WorkItemsOverviewLanding({
                         cta="View processes"
                         onClick={onOpenQueue}
                     />
-                </section>
+                </WorkspaceOverviewActionRow>
 
-                <div className="grid gap-5 lg:grid-cols-3">
+                <WorkspaceOverviewInfoGrid>
+                    <WorkspaceOverviewInfoPrimary>
                     <ContinuePanel title="Continue where you left off" action="View all" onAction={onOpenQueue}>
                         {recentOpen.length === 0 ? (
                             <EmptyHint>No open work items yet — create one to get started.</EmptyHint>
@@ -168,6 +175,7 @@ export default function WorkItemsOverviewLanding({
                             </ul>
                         )}
                     </ContinuePanel>
+                    </WorkspaceOverviewInfoPrimary>
 
                     <ContinuePanel title="Recently completed" action="View all" onAction={() => onNavigateFilter("completed")}>
                         {recentCompleted.length === 0 ? (
@@ -223,8 +231,8 @@ export default function WorkItemsOverviewLanding({
                             ))}
                         </ul>
                     </section>
-                </div>
-        </div>
+                </WorkspaceOverviewInfoGrid>
+        </WorkspaceOverviewStack>
     );
 }
 

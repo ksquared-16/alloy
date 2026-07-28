@@ -285,11 +285,12 @@ export function filterCatalogByOwnership(
 export const FIELD_SECTION_DISPLAY_ORDER = [
     "identity",
     "contact",
+    "child_profile",
+    "profile",
+    "inquiry_participation",
     "enrollment",
     "health",
     "medical",
-    "child_profile",
-    "profile",
     "requirements",
     "attendance",
     "scheduling",
@@ -312,13 +313,15 @@ export function sectionDisplayLabel(sectionKey: string): string {
     const key = sectionKey.trim().toLowerCase();
     if (!key) return "General";
     const aliases: Record<string, string> = {
-        child_profile: "Child Profile",
-        enrollment_profile: "Enrollment",
+        inquiry_participation: "Inquiry Participation",
         enrollment: "Enrollment",
-        profile: "Child Profile",
-        medical: "Child Profile",
-        health: "Child Profile",
+        child_profile: "Child profile",
+        enrollment_profile: "Enrollment",
+        profile: "Profile",
+        medical: "Medical",
+        health: "Medical",
         runtime_signals: "Runtime Signals",
+        requirements: "Requirements",
         relationships: "Relationships",
     };
     if (aliases[key]) return aliases[key];

@@ -162,9 +162,19 @@ export type FocusPanelScopeStateKind = "in_scope" | "no_active_view" | "out_of_s
 export type WorkUnitActionsProjection = {
     count: number;
     actions: ResolvedActionForClient[];
+    /**
+     * Department used to resolve this action set. Baked at commit so Create Lead / execute
+     * receive the same scope as the Actions control — Settlement must not be required to
+     * discover it (Actions can render before Settlement fills the rail).
+     */
+    departmentId: string | null;
 };
 
-const EMPTY_ACTIONS_PROJECTION: WorkUnitActionsProjection = { count: 0, actions: [] };
+const EMPTY_ACTIONS_PROJECTION: WorkUnitActionsProjection = {
+    count: 0,
+    actions: [],
+    departmentId: null,
+};
 
 /**
  * COMMIT-CRITICAL SUBJECT IDENTITY TRUTH (A — preparation completeness) — a GENERIC, domain-declared
@@ -561,16 +571,21 @@ export async function composeWorkUnitProvisioningAnswer(
     // presentation branch (it depends only on org + department + work unit, all known here). The SAME
     // `/process`-published resolver Workspace uses, config-cached (`act:` prefix, busted on an action
     // publish), and non-fatal: any resolver error degrades to an empty projection — never fails the answer.
-    const actionsProjectionPromise: Promise<WorkUnitActionsProjection> = wuRow.department_id
+    const actionsDepartmentId = wuRow.department_id ? String(wuRow.department_id) : null;
+    const actionsProjectionPromise: Promise<WorkUnitActionsProjection> = actionsDepartmentId
         ? cachedConfigRead(`act:${req.orgId}:${workUnit.id}`, () =>
               loadRightRailActionsBundleServer({
                   orgId: req.orgId,
-                  departmentId: String(wuRow.department_id),
+                  departmentId: actionsDepartmentId,
                   workUnitId: workUnit.id,
               }),
           )
-              .then((actions) => ({ count: actions.length, actions }))
-              .catch(() => EMPTY_ACTIONS_PROJECTION)
+              .then((actions) => ({
+                  count: actions.length,
+                  actions,
+                  departmentId: actionsDepartmentId,
+              }))
+              .catch(() => ({ ...EMPTY_ACTIONS_PROJECTION, departmentId: actionsDepartmentId }))
         : Promise.resolve(EMPTY_ACTIONS_PROJECTION);
     void actionsProjectionPromise.catch(() => {});
 

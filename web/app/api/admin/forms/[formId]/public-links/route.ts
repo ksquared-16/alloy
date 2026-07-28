@@ -6,7 +6,15 @@ import {
     dbGetVersion,
     dbInsertFormPublicLink,
     dbListPublicLinksForForm,
+    dbUpdateFormPublicLinkForForm,
+    type FormPublicLinkSafeRow,
 } from "@/lib/admin/forms/formsAdminDb";
+import {
+    SHARE_EMBED_PATH_META_KEY,
+    planDistributionLink,
+    plaintextTokenFromEmbedPath,
+    readShareEmbedPath,
+} from "@/lib/admin/forms/distributionLinkReuse";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 import { generateSecureFormLinkPlaintext, buildPublicFormEmbedPath } from "@/lib/admin/forms/formPublicLinkToken";
@@ -237,6 +245,39 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const is_active = typeof body.is_active === "boolean" ? body.is_active : true;
 
+    // Distribution-mode (the Processing "Create distribution link(s)" panel): make create idempotent,
+    // retrievable, and self-healing. Reuse the existing active link for this scope, collapse duplicates,
+    // and — with `regenerate` — rotate to a fresh token. Other callers of this route are unaffected.
+    const distributionMode = body.distribution === true;
+    if (distributionMode) {
+        const { data: existingLinks } = await dbListPublicLinksForForm(supabase, ctx.orgId, formId);
+        const plan = planDistributionLink({
+            links: (existingLinks ?? []) as FormPublicLinkSafeRow[],
+            locationId: locationId ?? null,
+            regenerate: body.regenerate === true,
+        });
+        for (const staleId of plan.deactivateIds) {
+            await dbUpdateFormPublicLinkForForm(supabase, ctx.orgId, formId, staleId, { is_active: false });
+        }
+        if (plan.reuse) {
+            const sharePath = readShareEmbedPath(plan.reuse.metadata);
+            if (sharePath) {
+                const base = deriveEmbedBaseUrl(request);
+                return jsonData(
+                    {
+                        ...(plan.reuse as unknown as Record<string, unknown>),
+                        plaintext_token: plaintextTokenFromEmbedPath(sharePath),
+                        embed_path: sharePath,
+                        embed_url: base ? `${base}${sharePath}` : null,
+                        reused: true,
+                    },
+                    { status: 200 }
+                );
+            }
+        }
+        // No retrievable link to reuse — fall through to mint a fresh, retrievable one below.
+    }
+
     const maxAttempts = 5;
     let lastErr: { message?: string; code?: string } | null = null;
 
@@ -244,6 +285,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const plaintextToken = generateSecureFormLinkPlaintext();
         const token_hash = hashFormLinkToken(plaintextToken);
         const token_prefix = plaintextToken.length > 12 ? plaintextToken.slice(0, 12) : plaintextToken;
+        const embed_path = buildPublicFormEmbedPath(plaintextToken);
+        // Persist the reconstructable path so the link stays retrievable for any operator, any session.
+        const persistedMetadata = { ...metadata, [SHARE_EMBED_PATH_META_KEY]: embed_path };
 
         const { data: row, error } = await dbInsertFormPublicLink(supabase, {
             org_id: ctx.orgId,
@@ -254,11 +298,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             is_active,
             expires_at,
             allowed_embed_origins,
-            metadata,
+            metadata: persistedMetadata,
         });
 
         if (!error && row) {
-            const embed_path = buildPublicFormEmbedPath(plaintextToken);
             const base = deriveEmbedBaseUrl(request);
             return jsonData(
                 {

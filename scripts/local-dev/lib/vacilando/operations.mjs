@@ -62,6 +62,59 @@ function engineeringPhase(current_phase) {
   return "working";
 }
 
+// De-jargon a gap question for the operator ("the intent's" → "the", raw ids kept legible).
+function cleanQuestion(q) {
+  return String(q || "").replace(/\bthe intent's\b/ig, "the").replace(/\bIntent\b/g, "The objective").replace(/\s+/g, " ").trim();
+}
+function conflictQuestion(detail) {
+  const m = String(detail || "").match(/rejected pattern\s+\w+:\s*(.+)$/i);
+  const what = m ? m[1].replace(/\.$/, "") : "an approach that was set aside";
+  return `Your objective looks like it may touch “${what}”, which was deliberately set aside before. Did you mean to include that, or should it stay excluded?`;
+}
+
+/**
+ * Director's OPEN QUESTIONS for this work — surfaced as a conversation, from the
+ * gap report's unknowns + conflicts and the verdict's send-back. Questions the
+ * operator has already answered drop off. This is the content of the Understanding
+ * stage: what Director needs before it can honestly prepare.
+ */
+export function understandingQuestions(mission, pkg) {
+  const V = pkg?.readiness_verdict || null;
+  const g = pkg?.gap_report?.findings || {};
+  const answered = new Set(mission?.answered_questions || []);
+  const out = [];
+  for (const c of (g.conflicts || [])) {
+    if (answered.has(c.id)) continue;
+    out.push({ id: c.id, question: conflictQuestion(c.detail), why: "It contradicts something already settled — worth confirming before we build on it.", blocks: true, tests: "whether you intend to reintroduce a rejected approach" });
+  }
+  for (const u of (g.unknowns || [])) {
+    if (answered.has(u.id)) continue;
+    out.push({ id: u.id, question: cleanQuestion(u.question), why: u.blocking ? "Director can't resolve this on its own, and it shapes the work." : "A smaller open point Director wants to confirm is in or out of scope.", blocks: !!u.blocking, tests: null });
+  }
+  // A send-back verdict that needs operator input is itself the question.
+  if (V && ["Needs Product Decisions", "Needs References", "Needs Acceptance Criteria"].includes(V.verdict) && !answered.has("verdict:" + V.verdict)) {
+    out.push({ id: "verdict:" + V.verdict, question: V.what_to_do || "Director needs more before it can prepare this.", why: V.why || null, blocks: true, tests: null });
+  }
+  return out;
+}
+
+/**
+ * The conversation STAGE (Engineering Session Model, realized): the operator sees
+ * only the stage they are in. Understanding (Director still has questions) →
+ * Preparing (understanding sufficient; review the contract) → Executing → Reviewing.
+ * Preparation is never the primary experience while Director is still understanding.
+ */
+export function conversationStage(mission, pkg) {
+  const s = mission?.status;
+  if (s === "closed") return "closed";
+  if (["completed", "waiting_for_acceptance"].includes(s)) return "reviewing";
+  if (["starting", "running", "stopping", "failed", "interrupted", "blocked", "waiting_for_operator"].includes(s)) return "executing";
+  // Pre-start: understanding until Director's questions are answered.
+  if (understandingQuestions(mission, pkg).length > 0) return "understanding";
+  const ready = pkg?.readiness_verdict?.verdict === "Ready" && pkg?.readiness_status === "ready";
+  return ready ? "preparing" : "understanding";
+}
+
 /** What changed — engineering artifacts, never provider tokens or transcript. */
 function whatChanged(mission, report) {
   const out = [];
@@ -147,9 +200,15 @@ export function composeOperations({ mission, package: pkg, acceptance }) {
 
   const review = (key === "review" || key === "accepted") ? assembleReview(mission, pkg, acceptanceLatest) : null;
 
-  // Allowed operator actions for this state — the work's next step, not substrate.
+  // The conversation STAGE the operator is in — and Director's open questions.
+  // Preparation is not primary while Director is still understanding the work.
+  const stage = conversationStage(mission, pkg);
+  const questions = stage === "understanding" ? understandingQuestions(mission, pkg) : [];
+
+  // Allowed operator actions for this stage — the next step is always obvious.
   const actions = [];
-  if (key === "ready") actions.push("start");
+  if (stage === "understanding") actions.push("answer");
+  if (stage === "preparing" && key === "ready") actions.push("start");
   if (key === "executing") actions.push("stop");
   if (key === "needs_operator") actions.push("reply", "stop");
   if (key === "blocked" || key === "at_risk") actions.push("reply", "restart");
@@ -158,6 +217,8 @@ export function composeOperations({ mission, package: pkg, acceptance }) {
 
   return {
     schema_version: "vacilando.operations.v1",
+    stage,
+    questions,
     state: { key, label: st.label, tone: st.tone, interrupts: st.interrupts },
     is_active: ["executing", "verifying", "needs_operator", "blocked"].includes(key),
     progress,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import type { IdentityFieldRowVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import IdentityFieldValue from "@/components/admin/focusPanel/identity/IdentityFieldValue";
@@ -24,9 +24,12 @@ type Props = {
     personId?: string;
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
     onEditField?: (fieldRef: string) => void;
+    onLinkField?: (fieldRef: string) => void;
     /** When set, every editable field opens with one shared Cancel/Save owned by the parent. */
     batchEdit?: IdentityFieldBatchEditSession | null;
 };
+
+const SAVED_FLASH_MS = 1800;
 
 export default function IdentityFieldGrid({
     rows,
@@ -34,10 +37,29 @@ export default function IdentityFieldGrid({
     personId,
     onSaveField,
     onEditField,
+    onLinkField,
     batchEdit = null,
 }: Props) {
     const [editingFieldRef, setEditingFieldRef] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const [justSavedFieldRef, setJustSavedFieldRef] = useState<string | null>(null);
+    const savedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(
+        () => () => {
+            if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
+        },
+        [],
+    );
+
+    const flashSaved = (fieldRef: string) => {
+        if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
+        setJustSavedFieldRef(fieldRef);
+        savedFlashTimer.current = setTimeout(() => {
+            setJustSavedFieldRef((cur) => (cur === fieldRef ? null : cur));
+            savedFlashTimer.current = null;
+        }, SAVED_FLASH_MS);
+    };
 
     if (rows.length === 0) return null;
     return (
@@ -66,9 +88,15 @@ export default function IdentityFieldGrid({
                                     cell.width === "third" && "identity-field-grid__cell--third",
                                     cell.width === "full" && "identity-field-grid__cell--full",
                                 )}
+                                savedFlash={justSavedFieldRef === cell.fieldRef}
                                 onEdit={
                                     cell.editable && onEditField && !canInline
                                         ? () => onEditField(cell.fieldRef)
+                                        : undefined
+                                }
+                                onLink={
+                                    cell.linked && onLinkField
+                                        ? () => onLinkField(cell.fieldRef)
                                         : undefined
                                 }
                                 inlineEdit={
@@ -100,6 +128,7 @@ export default function IdentityFieldGrid({
                                                         });
                                                         if (!result || result.ok !== false) {
                                                             setEditingFieldRef(null);
+                                                            flashSaved(cell.fieldRef);
                                                         }
                                                     } finally {
                                                         setSaving(false);

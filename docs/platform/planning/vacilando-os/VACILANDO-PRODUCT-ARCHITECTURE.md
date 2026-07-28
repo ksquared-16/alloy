@@ -123,6 +123,10 @@ Three rules govern that boundary:
 
 The Validation already draws the first line across this boundary: the doctrine is sound, the ten-move repertoire is sufficient, and the smallest transformative slice is unambiguous and fully signalled by data that already exists. That slice is the start of realization.
 
+**Operational record of a realization initiative.** Each long-running initiative maintains one [Sprint Runtime](SPRINT-RUNTIME.md) — the canonical specification for the durable operational record an initiative is tracked, resumed, and handed off through. It is a realization artifact, not a pillar: it *references* the foundation systems (Shared Understanding, Mission History, Operational Learning, Engineering Sessions, Persistent Continuity) rather than duplicating them, and adds no architecture.
+
+**Global Mission Rules.** Standing rules that govern *how every mission operates and ends*, independent of capability: the [Worker Operating Policy](WORKER-OPERATING-POLICY.md) (a worker owns forward progress; "still running" is never a valid turn-end) and [Deployment Certification](DEPLOYMENT-CERTIFICATION.md) (application, schema, migrations, and migration history are one deployable unit; completion, certification, merge, and staging promotion are blocked until deployment verification succeeds across every layer). Both are realization rules, not pillars.
+
 ---
 
 ## 6. Initial Product Realization Roadmap

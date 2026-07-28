@@ -77,6 +77,8 @@ export const QUEUE_PREVIEW_CONTEXT_READ_MANIFEST = [
     "related_subjects_summary[].date_of_birth",
     "related_subjects_summary[].age_label",
     "related_subjects_summary[].gender_label",
+    "related_subjects_summary[].room_label",
+    "related_subjects_summary[].location_label",
     "attention_summary.needs_attention",
     "attention_summary.primary_reason_label",
     "current_work_summary.label",
@@ -91,6 +93,7 @@ export const QUEUE_PREVIEW_CONTEXT_READ_MANIFEST = [
     "placement_context.room_label",
     "placement_context.location_label",
     "waitlist_context.position_label",
+    "waitlist_context.wait_since",
     "drawer_open.entity_type",
     "drawer_open.entity_id",
     "drawer_open.stage_focus_key",
@@ -123,9 +126,7 @@ export const QUEUE_PREVIEW_CONTEXT_DROPPED_PATHS = [
     "placement_context.room_id",
     "placement_context.schedule_key",
     "related_subjects_summary[].location_id",
-    "related_subjects_summary[].location_label",
-    "related_subjects_summary[].room_label",
-    "waitlist_context.wait_since",
+    // room_label / location_label kept on related subjects for collection + schedule projections
 ] as const;
 
 function nonEmptyString(value: unknown): string | null {
@@ -149,7 +150,7 @@ function projectSubject(subject: QueueRowSubjectPresentation): QueueRowSubjectPr
 
 /**
  * Narrow one related subject to the fields the children-collection / siblings / focus adapters read.
- * `status_label` is type-required but unread → emptied. Location/room detail dropped.
+ * `status_label` is type-required but unread → emptied. Keep room/location for collection + schedule.
  */
 function projectRelatedSubject(subject: RelatedSubjectSummary): RelatedSubjectSummary {
     const out: RelatedSubjectSummary = {
@@ -164,6 +165,8 @@ function projectRelatedSubject(subject: RelatedSubjectSummary): RelatedSubjectSu
     if (subject.date_of_birth != null) out.date_of_birth = subject.date_of_birth;
     if (subject.age_label != null) out.age_label = subject.age_label;
     if (subject.gender_label != null) out.gender_label = subject.gender_label;
+    if (subject.room_label != null) out.room_label = subject.room_label;
+    if (subject.location_label != null) out.location_label = subject.location_label;
     return out;
 }
 
@@ -177,13 +180,19 @@ function projectPlacement(placement: SubjectPlacementContext): SubjectPlacementC
     return out;
 }
 
-/** Drawer open: keep routing identity + stage focus; drop the heavy active-subject ref(s). */
+/** Drawer open: keep routing identity + stage focus; preserve stage_key when active_subject is dropped. */
 function projectDrawerOpen(drawerOpen: QueueRowDrawerOpen): QueueRowDrawerOpen {
     const out: QueueRowDrawerOpen = {
         entity_type: drawerOpen.entity_type,
         entity_id: drawerOpen.entity_id,
     };
-    if (nonEmptyString(drawerOpen.stage_focus_key)) out.stage_focus_key = drawerOpen.stage_focus_key;
+    // Variant matching reads stage_focus_key (or active_subject.stage_key). Projection drops the
+    // heavy active_subject ref — promote its stage_key onto stage_focus_key so Waitlist/Tour
+    // variants still match on live compact rows.
+    const stage =
+        nonEmptyString(drawerOpen.stage_focus_key) ||
+        nonEmptyString(drawerOpen.active_subject?.stage_key ?? null);
+    if (stage) out.stage_focus_key = stage;
     return out;
 }
 
@@ -251,7 +260,13 @@ export function projectQueuePreviewRowContext(context: QueueRowContext): QueueRo
     if (context.placement_context) projected.placement_context = projectPlacement(context.placement_context);
     if (context.waitlist_context) {
         const position = nonEmptyString(context.waitlist_context.position_label);
-        if (position) projected.waitlist_context = { position_label: position };
+        const waitSince = nonEmptyString(context.waitlist_context.wait_since);
+        if (position || waitSince) {
+            projected.waitlist_context = {
+                ...(position ? { position_label: position } : {}),
+                ...(waitSince ? { wait_since: waitSince } : {}),
+            };
+        }
     }
 
     return projected;

@@ -34,6 +34,16 @@ import {
   BosRailHeader,
   BosRailStarterCards,
 } from "@/app/adminV2/components/aiCommandSurface/bosRail/BosRailPresentation";
+import { BosCommandSessionHost } from "@/app/adminV2/components/aiCommandSurface/commandSession/BosCommandSessionHost";
+import {
+  dispatchStartBosCommandSession,
+  useBosCommandSessionOptional,
+} from "@/contexts/BosCommandSessionContext";
+import {
+  isBosSlashComposerQuery,
+  queryBosSlashCatalog,
+} from "@/lib/bos/commandSession/slash";
+import type { BosSlashCommandDescriptor } from "@/lib/bos/commandSession/types";
 import {
   JobLayoutOperationalProposalCard,
   type JobLayoutCardUiState,
@@ -656,6 +666,8 @@ export default function AICommandSurfaceShell({
   const adminDrawer = useAdminDrawerOptional();
 
   const globalAssistant = useGlobalAssistantOptional();
+  const bosCommandSession = useBosCommandSessionOptional();
+  const activeCommandSession = bosCommandSession?.session ?? null;
   const { labels: entityLabelMap } = useEntityLabelsOptional();
   const opportunitySingular = entityLabelMap.opportunities?.singular ?? "Lead";
   const siteFilter = useWorkspaceSiteFilter();
@@ -664,6 +676,59 @@ export default function AICommandSurfaceShell({
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [commandText, setCommandText] = useState("");
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const slashItems = useMemo(() => {
+    if (!isBosSlashComposerQuery(commandText)) return [];
+    return queryBosSlashCatalog({ query: commandText });
+  }, [commandText]);
+  useEffect(() => {
+    setSlashActiveIndex(0);
+  }, [commandText]);
+  const selectSlashCommand = useCallback(
+    (item: BosSlashCommandDescriptor) => {
+      if (!item.eligible) return;
+      setCommandText("");
+      const ws = globalAssistant?.workspaceScope;
+      dispatchStartBosCommandSession({
+        actionKey: item.actionKey,
+        displayLabel: item.displayLabel,
+        placement: "bos_slash",
+        contextResolution: "bos_proposal",
+        workspace: {
+          departmentId: ws?.department_id?.trim() || null,
+          workUnitId: ws?.work_unit_id?.trim() || null,
+          surface: ws?.work_unit_id?.trim() ? "work_unit" : "workspace",
+        },
+      });
+    },
+    [globalAssistant?.workspaceScope]
+  );
+  const onSlashKeyNavigate = useCallback(
+    (direction: "up" | "down" | "enter" | "escape") => {
+      if (direction === "escape") {
+        setCommandText("");
+        return true;
+      }
+      if (slashItems.length === 0) return false;
+      if (direction === "down") {
+        setSlashActiveIndex((i) => Math.min(i + 1, slashItems.length - 1));
+        return true;
+      }
+      if (direction === "up") {
+        setSlashActiveIndex((i) => Math.max(i - 1, 0));
+        return true;
+      }
+      if (direction === "enter") {
+        const item = slashItems[slashActiveIndex] ?? slashItems[0];
+        if (item?.eligible) {
+          selectSlashCommand(item);
+          return true;
+        }
+      }
+      return false;
+    },
+    [selectSlashCommand, slashActiveIndex, slashItems]
+  );
   const [localThread, setLocalThread] = useState<CommandSurfaceThreadState>(() => createEmptyThreadState());
   const [localJobCardUi, setLocalJobCardUi] = useState<
     Record<
@@ -2234,6 +2299,10 @@ export default function AICommandSurfaceShell({
             contextPills={bosContextPills}
             statusLabel={threadStatusLabel}
           />
+          {activeCommandSession && activeCommandSession.phase !== "discarded" ? (
+            <BosCommandSessionHost />
+          ) : (
+            <>
           <div className="bos-rail-upper shrink-0">
             <BosRailAttentionSection attention={bosRailAttention} onCta={onBosRailAttentionCta} />
             {hasThread ? null : (
@@ -2298,7 +2367,14 @@ export default function AICommandSurfaceShell({
             onChange={setCommandText}
             onSubmit={() => void handleSubmit()}
             inputRef={inputRef}
+            slashItems={slashItems}
+            slashActiveIndex={slashActiveIndex}
+            onSlashHighlight={setSlashActiveIndex}
+            onSlashSelect={selectSlashCommand}
+            onSlashKeyNavigate={onSlashKeyNavigate}
           />
+            </>
+          )}
         </>
       :   null}
       {presentation !== "rail" && hasThread ? (

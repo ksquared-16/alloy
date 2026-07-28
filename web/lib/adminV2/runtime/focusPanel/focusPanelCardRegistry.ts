@@ -69,6 +69,7 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
     { key: "current_work", title: "What's Next", ownsWorkCompletion: true },
     { key: "household", title: "Household", ownsOperationalTruth: true },
     { key: "children", title: "Children", ownsOperationalTruth: true },
+    { key: "milestones", title: "Milestones" },
     { key: "readiness_kpi", title: "Readiness" },
     { key: "health", title: "Enrollment Health" },
     { key: "tour_summary", title: "Tour" },

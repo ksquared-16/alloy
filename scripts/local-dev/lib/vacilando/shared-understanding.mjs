@@ -92,12 +92,13 @@ export function composeUnderstanding({ mission, capability, package: pkg, capabi
     carrying.push({ text: "This touches the ledger and rests on thin support — worth firming before acting.", kind: "risk", why: null });
   }
 
-  // ---- Director advises — recommendations NOT yet decided (kept distinct). ----
-  // Curated to a headline, never a checklist; the operator turns advice into a
-  // decision only through the conversation, never here.
+  // ---- Director also suggests — OPTIONAL extra checks, never a blocker. ----
+  // These are gap-analysis recommendations (roadmap / known issues) the mission did
+  // NOT adopt — it is Ready without them. Surfaced as an informed tradeoff the
+  // operator accepts by starting, not a pending decision with no affordance.
   const suggested = (pkg?.suggested_acceptance_criteria || []);
   const advises = suggested.length
-    ? { headline: `${suggested.length} acceptance ${suggested.length === 1 ? "criterion" : "criteria"} to confirm`, count: suggested.length }
+    ? { headline: `${suggested.length} extra check${suggested.length === 1 ? "" : "s"} Director could also verify`, count: suggested.length, optional: true }
     : null;
 
   // ---- Set aside — superseded / rejected directions (history, not active). ----

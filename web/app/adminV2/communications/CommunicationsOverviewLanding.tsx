@@ -8,6 +8,13 @@ import ProcessingLandingActionCard from "@/app/adminV2/pos/ProcessingLandingActi
 import type { CommunicationsModalTab } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
+import {
+    WorkspaceOverviewActionRow,
+    WorkspaceOverviewActivityBand,
+    WorkspaceOverviewInfoGrid,
+    WorkspaceOverviewInfoPrimary,
+    WorkspaceOverviewStack,
+} from "@/components/workspace/WorkspaceOverviewLayout";
 import { SurfaceHeaderKpiCard } from "@/components/presentation/workspace/WorkspaceHeader";
 import type { WorkspaceHeaderKpiVm } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import {
@@ -118,8 +125,8 @@ export default function CommunicationsOverviewLanding({
 
     return (
         <WorkspaceSurface data-comms-overview-landing="true">
-            <div className="mx-auto max-w-6xl space-y-5">
-                <section className="grid gap-3 md:grid-cols-3">
+            <WorkspaceOverviewStack>
+                <WorkspaceOverviewActionRow>
                     <ProcessingLandingActionCard
                         tier="primary"
                         icon={<MessageSquare className="h-5 w-5" aria-hidden />}
@@ -147,20 +154,16 @@ export default function CommunicationsOverviewLanding({
                         onClick={() => (onComposeNew ? onComposeNew() : onNavigateTab("inbox"))}
                         testId="comms-compose-card"
                     />
-                </section>
+                </WorkspaceOverviewActionRow>
 
-                <section>
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/35">
-                        Today&apos;s activity
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                <WorkspaceOverviewActivityBand>
                         {overviewKpis.map((kpi) => (
                             <SurfaceHeaderKpiCard key={kpi.slot} kpi={kpi} variant="work-unit" density="compact" />
                         ))}
-                    </div>
-                </section>
+                </WorkspaceOverviewActivityBand>
 
-                <div className="grid gap-4 lg:grid-cols-3">
+                <WorkspaceOverviewInfoGrid>
+                    <WorkspaceOverviewInfoPrimary>
                     <ContinuePanel title="Continue conversations" action="View all" onAction={() => onNavigateTab("inbox")}>
                         {needsReplyConversations.length === 0 ? (
                             <EmptyHint>No conversations need a reply right now.</EmptyHint>
@@ -198,6 +201,7 @@ export default function CommunicationsOverviewLanding({
                             </ul>
                         )}
                     </ContinuePanel>
+                    </WorkspaceOverviewInfoPrimary>
 
                     <ContinuePanel title="Recent announcements" action="View all" onAction={() => onNavigateTab("announcements")}>
                         {recentAnnouncements.length === 0 ? (
@@ -250,8 +254,8 @@ export default function CommunicationsOverviewLanding({
                             ))}
                         </ul>
                     </section>
-                </div>
-            </div>
+                </WorkspaceOverviewInfoGrid>
+            </WorkspaceOverviewStack>
         </WorkspaceSurface>
     );
 }

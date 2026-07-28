@@ -69,16 +69,17 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
 
         const firstRowKeys = grid.rows[0]?.cells.map((c) => c.key) ?? [];
         const secondRowKeys = grid.rows[1]?.cells.map((c) => c.key) ?? [];
-        // Core Four validation pass: Overview pairs wide identity/collection cards
-        // with their adjacent assessment/work card.
-        expect(firstRowKeys).toEqual(["household", "readiness_kpi"]);
-        expect(secondRowKeys).toEqual(["children", "current_work"]);
+        // Code SUMMARY_GRID fallback (published Enrollment doc overrides at runtime).
+        expect(firstRowKeys).toEqual(["current_work", "household"]);
+        expect(secondRowKeys).toEqual(["children", "readiness_kpi"]);
 
-        // Card models for suppressed cards are still built (used by Work / catalog).
+        // Card models for catalog / Linked cards are still built (composer + Linked host).
         expect(cards.get("attention")?.insight).toBe("Missing immunizations");
         expect(cards.get("health")?.insight).toBe("2 blockers before tour");
-        expect(cards.get("readiness_kpi")?.insight).toBe("Missing immunizations");
+        expect(cards.get("readiness_kpi")?.insight).toContain("Missing immunizations");
         expect(cards.get("children")?.insight).toBe("1 child enrolling");
+        expect(cards.get("milestones")?.title).toBe("Milestones");
+        expect(cards.get("milestones")?.visible).toBe(true);
     });
 
     it("work idle grid follows attention → step → blockers hierarchy", () => {

@@ -18,7 +18,8 @@ import { getProductDefinitionForCapability } from "./product-definition.mjs";
 import { readAcceptance } from "./acceptance.mjs";
 import { composeCounsel } from "./counsel.mjs";
 import { composeUnderstanding } from "./shared-understanding.mjs";
-import { composeOperations, stateKeyFor, STATES } from "./operations.mjs";
+import { composeOperations, stateKeyFor, STATES, conversationStage } from "./operations.mjs";
+import { composePresence } from "./presence.mjs";
 
 const firstSentence = (s) => { const t = String(s || "").trim(); const i = t.search(/[.!?]/); return i > 0 ? t.slice(0, i) : t; };
 const time = (x) => (x ? new Date(x).getTime() : 0);
@@ -42,34 +43,20 @@ const STATE_ACTION = {
  * Part III). A blocking verdict (Needs Product Decisions) still shows its own
  * label so the send-back reads honestly.
  */
+const STAGE_INBOX = {
+  understanding: { label: "Understanding", tone: "run", action: "Answer" },
+  preparing: { label: "Ready to start", tone: "ok", action: "Review" },
+};
 export function conversationState(m, pkg) {
-  const V = pkg?.readiness_verdict || null;
-  // A prepared-but-not-ready package names its send-back verdict, not "Preparing".
-  if (!["completed", "closed", "failed", "interrupted"].includes(m.status) && V && V.verdict !== "Ready" && !["starting", "running", "stopping", "waiting_for_operator", "waiting_for_acceptance", "blocked"].includes(m.status)) {
-    return { label: V.verdict, tone: "attn", action: "Continue", key: "preparing" };
+  // Pre-start, the conversation is in a STAGE (Understanding until Director's
+  // questions are answered, then Preparing). The inbox names the stage honestly.
+  if (!["completed", "closed", "failed", "interrupted", "starting", "running", "stopping", "waiting_for_operator", "waiting_for_acceptance", "blocked"].includes(m.status)) {
+    const stage = conversationStage(m, pkg);
+    if (STAGE_INBOX[stage]) return { ...STAGE_INBOX[stage], key: stage === "understanding" ? "preparing" : "ready" };
   }
   const key = stateKeyFor(m, pkg);
   const st = STATES[key];
   return { label: st.label, tone: st.tone, action: STATE_ACTION[key] || "Open", key };
-}
-
-/**
- * What Director says right now. Lifecycle states (executing / done / waiting /
- * failed) are unchanged. At REST — a prepared package awaiting the operator —
- * Director speaks confidence-qualified counsel (readiness + attempt history +
- * frontier), composed upstream, instead of a flat "Ready" badge.
- */
-function directorSays(V, m, title, counsel) {
-  if (m.status === "closed") return "This work is accepted and closed.";
-  if (m.status === "completed") return "This work is done and accepted.";
-  if (m.status === "waiting_for_acceptance") return "I've finished a pass and checked the evidence against acceptance — here's what I found.";
-  if (["starting", "running", "stopping"].includes(m.status)) return "This is executing now — you can close the provider window; I'll let you know when it needs you.";
-  if (m.status === "waiting_for_operator") return "I'm waiting on your input to continue.";
-  if (m.status === "blocked") return "This is blocked on something in the work — let's clear it before it goes on.";
-  if (m.status === "failed" || m.status === "interrupted") return "The last run didn't finish cleanly — let's take another look before sending it again.";
-  if (counsel?.closing) return counsel.closing;
-  if (V) return `${V.why || "I need a little more before this is ready."} ${V.what_to_do || ""}`.trim();
-  return `Let me pull together what I know about ${title}.`;
 }
 
 /**
@@ -124,7 +111,14 @@ export function assembleConversation(mission_id) {
   }
   middle.sort((a, b) => time(a.at) - time(b.at));
 
-  const closing = [{ from: "director", kind: "state", text: directorSays(V, m, title, counsel), at: m.updated_at }];
+  // Director's PRESENCE — the single, event-driven voice for this stage (the closing
+  // line). Derived from the same durable state; falls back to counsel at rest.
+  const presence = composePresence({
+    mission: m, stage: operations.stage, stateKey: operations.state?.key,
+    questions: operations.questions, counsel, review: operations.review,
+  });
+
+  const closing = [{ from: "director", kind: "state", text: presence.line, at: m.updated_at }];
   const messages = [...opening, ...middle, ...closing];
 
   const st = conversationState(m, pkg);
@@ -132,7 +126,7 @@ export function assembleConversation(mission_id) {
     schema_version: "vacilando.conversation.v1",
     conversation_id: mission_id, mission_id, title, intent,
     state: st, verdict: V, capability_id: m.capability_id || null,
-    messages,
+    messages, presence,
     understanding, operations,
     package: pkg || null, mission: m,
     acceptance: readAcceptance(mission_id),

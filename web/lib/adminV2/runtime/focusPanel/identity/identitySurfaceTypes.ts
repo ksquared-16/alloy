@@ -8,6 +8,7 @@
  */
 
 import type { SurfaceFieldVisibility } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import type {
     IdentityFieldLabelMode,
@@ -82,6 +83,12 @@ export type IdentitySurfaceConfig = {
     sections: IdentitySectionConfig[];
 };
 
+/** Inline edit control resolved from the field's published type (not hardcoded text). */
+export type IdentityFieldEditControlVM =
+    | { kind: "text"; inputType: "text" | "email" | "tel" }
+    | { kind: "date" }
+    | { kind: "select"; optionSetKey: string };
+
 export type IdentityFieldCellVM = {
     fieldRef: string;
     label: string;
@@ -90,8 +97,14 @@ export type IdentityFieldCellVM = {
     labelMode: IdentityFieldLabelMode;
     policy: SurfaceFieldVisibility;
     editable: boolean;
+    linked?: boolean;
+    linkLabel?: string | null;
+    linkDestination?: FocusPanelCardKey | null;
+    linkTarget?: import("@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract").IdentityFieldLinkTarget | null;
     hideWhenEmpty: boolean;
     width: NestedSurfaceFieldLayoutWidth;
+    /** Control type for inline edit — select/date/text from field definition. */
+    editControl?: IdentityFieldEditControlVM;
 };
 
 export type IdentityFieldRowVM = {

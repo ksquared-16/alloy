@@ -13,7 +13,7 @@ import {
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { IdentityFieldTier } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
 import { configurationPurposeFromTierArg } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
-import { identityPickerCategoriesForNamespaces } from "@/lib/adminV2/settings/surfaces/identityPickerFieldCatalog";
+import { identityPickerCategoriesForNamespaces, IDENTITY_PICKER_SHOW_ALL_KEY } from "@/lib/adminV2/settings/surfaces/identityPickerFieldCatalog";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { householdAuthoringGroupKey } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
 import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -31,7 +31,7 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
     const composer = useFocusPanelComposer();
     const { tenantFieldDefinitions } = useTenantFieldDefinitions("opportunities");
     const [addOpen, setAddOpen] = useState(false);
-    const [activeCategory, setActiveCategory] = useState<string | null>(null);
+    const [activeCategory, setActiveCategory] = useState<string>(IDENTITY_PICKER_SHOW_ALL_KEY);
     const [search, setSearch] = useState("");
     const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -55,14 +55,20 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
     const categories = useMemo(() => {
         const namespaces = namespacesForNestedGroupPicker(surfaceId, groupKey);
         if (namespaces.length === 0) return [];
-        const all = identityPickerCategoriesForNamespaces({
+        return identityPickerCategoriesForNamespaces({
             namespaces,
             tenantFieldDefinitions,
             excludeKeys: placedKeys,
+            includeShowAll: true,
         });
+    }, [surfaceId, groupKey, tenantFieldDefinitions, placedKeys]);
+
+    /** Search spans all applicable fields regardless of the active category tab. */
+    const searchFilteredCategories = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return all;
-        return all
+        if (!q) return categories;
+        return categories
+            .filter((category) => category.key !== IDENTITY_PICKER_SHOW_ALL_KEY)
             .map((category) => ({
                 ...category,
                 fields: category.fields.filter(
@@ -72,13 +78,20 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
                 ),
             }))
             .filter((category) => category.fields.length > 0);
-    }, [surfaceId, groupKey, tenantFieldDefinitions, placedKeys, search]);
+    }, [categories, search]);
 
     const activeFields = useMemo(() => {
-        if (categories.length === 0) return [];
-        const key = activeCategory ?? categories[0]?.key ?? null;
-        return categories.find((c) => c.key === key)?.fields ?? [];
-    }, [categories, activeCategory]);
+        const pool = search.trim() ? searchFilteredCategories : categories;
+        if (pool.length === 0) return [];
+        if (search.trim()) {
+            // Searching: flatten matches while preserving category order from Show-all grouping.
+            return pool.flatMap((category) => category.fields);
+        }
+        const key = activeCategory || IDENTITY_PICKER_SHOW_ALL_KEY;
+        return pool.find((c) => c.key === key)?.fields ?? pool[0]?.fields ?? [];
+    }, [categories, searchFilteredCategories, activeCategory, search]);
+
+    const categoryTabs = search.trim() ? [] : categories;
 
     const mutate = useCallback(
         (next: NestedSurfaceConfig) => composer?.updateConfig(surfaceId, next),
@@ -142,40 +155,71 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
                         aria-label="Search available fields"
                     />
                     <div className="fp-inline-field-library__categories">
-                        {categories.map((category) => (
+                        {categoryTabs.map((category) => (
                             <button
                                 key={category.key}
                                 type="button"
                                 className={
-                                    (activeCategory ?? categories[0]?.key) === category.key
+                                    (activeCategory || IDENTITY_PICKER_SHOW_ALL_KEY) === category.key
                                         ? "fp-inline-field-library__category is-active"
                                         : "fp-inline-field-library__category"
                                 }
                                 onClick={() => setActiveCategory(category.key)}
+                                data-field-category={category.key}
                             >
                                 {category.label}
                             </button>
                         ))}
                     </div>
-                    <div className="fp-inline-field-library__items">
-                        {activeFields.map((f) => (
-                            <button
-                                key={f.key}
-                                type="button"
-                                className="fp-inline-field-library__item"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    mutate(addFieldToNestedGroup(config, groupKey, f.key, { tier }));
-                                    setAddOpen(false);
-                                    setSearch("");
-                                }}
-                            >
-                                <span className="fp-inline-field-library__label">{f.label}</span>
-                                {!f.isSystemField ? (
-                                    <span className="fp-inline-field-library__meta">Custom field</span>
-                                ) : null}
-                            </button>
-                        ))}
+                    <div className="fp-inline-field-library__items" data-field-category-active={activeCategory}>
+                        {activeCategory === IDENTITY_PICKER_SHOW_ALL_KEY && !search.trim()
+                            ? categories
+                                  .filter((c) => c.key !== IDENTITY_PICKER_SHOW_ALL_KEY)
+                                  .map((category) => (
+                                      <div key={category.key} data-field-category-group={category.key}>
+                                          <div className="fp-inline-field-library__group-label px-1.5 py-1 text-[9.5px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                                              {category.label}
+                                          </div>
+                                          {category.fields.map((f) => (
+                                              <button
+                                                  key={f.key}
+                                                  type="button"
+                                                  className="fp-inline-field-library__item"
+                                                  data-add-field-option={f.key}
+                                                  onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      mutate(addFieldToNestedGroup(config, groupKey, f.key, { tier }));
+                                                      setAddOpen(false);
+                                                      setSearch("");
+                                                  }}
+                                              >
+                                                  <span className="fp-inline-field-library__label">{f.label}</span>
+                                                  {!f.isSystemField ? (
+                                                      <span className="fp-inline-field-library__meta">Custom field</span>
+                                                  ) : null}
+                                              </button>
+                                          ))}
+                                      </div>
+                                  ))
+                            : activeFields.map((f) => (
+                                  <button
+                                      key={f.key}
+                                      type="button"
+                                      className="fp-inline-field-library__item"
+                                      data-add-field-option={f.key}
+                                      onClick={(e) => {
+                                          e.stopPropagation();
+                                          mutate(addFieldToNestedGroup(config, groupKey, f.key, { tier }));
+                                          setAddOpen(false);
+                                          setSearch("");
+                                      }}
+                                  >
+                                      <span className="fp-inline-field-library__label">{f.label}</span>
+                                      {!f.isSystemField ? (
+                                          <span className="fp-inline-field-library__meta">Custom field</span>
+                                      ) : null}
+                                  </button>
+                              ))}
                     </div>
                 </div>
             </ComposerFloatingPopover>

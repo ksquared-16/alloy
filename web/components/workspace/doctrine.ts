@@ -72,6 +72,13 @@ export { default as WorkspaceCard } from "@/components/workspace/WorkspaceCard";
 export { default as WorkspaceZonePanel } from "@/components/workspace/WorkspaceZonePanel";
 export { default as WorkspaceDivider } from "@/components/workspace/WorkspaceDivider";
 export { default as WorkspaceSurface } from "@/components/workspace/WorkspaceSurface";
+export {
+    WorkspaceOverviewStack,
+    WorkspaceOverviewActionRow,
+    WorkspaceOverviewActivityBand,
+    WorkspaceOverviewInfoGrid,
+    WorkspaceOverviewInfoPrimary,
+} from "@/components/workspace/WorkspaceOverviewLayout";
 
 /** Design tokens — import when composing custom layout inside doctrine surfaces. */
 export {
@@ -90,4 +97,12 @@ export {
     WS_PROCESS_TILE_CHROME,
     WS_ACTION_PRIMARY,
     WS_ACTION_SECONDARY,
+    WS_OVERVIEW_CONTENT,
+    WS_OVERVIEW_STACK,
+    WS_OVERVIEW_ACTION_GRID,
+    WS_OVERVIEW_ACTIVITY_GRID,
+    WS_OVERVIEW_INFO_GRID,
+    WS_OVERVIEW_INFO_PRIMARY,
+    WS_OVERVIEW_INFO_SPLIT,
+    WS_OVERVIEW_LAUNCH_GRID,
 } from "@/components/workspace/workspaceTokens";

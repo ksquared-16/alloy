@@ -52,24 +52,27 @@ function verdictForValidationCode(code) {
  * (for its computed readiness_status + validation findings).
  * Returns { verdict, status, send_back_to, reasons[], advisory[] }.
  */
-export function deriveVerdict(gapReport, pkg) {
+export function deriveVerdict(gapReport, pkg, { answered = [] } = {}) {
   const f = gapReport?.findings || {};
+  const done = new Set(answered);            // questions the operator has already answered
   const blocking = new Map();   // verdict → [reasons]
   const advisory = [];
   const push = (verdict, reason) => { if (!blocking.has(verdict)) blocking.set(verdict, []); blocking.get(verdict).push(reason); };
 
-  // 1. blocking gap findings
+  // 1. blocking gap findings (an answered one no longer holds the verdict off Ready)
   for (const m of f.missing_information || []) {
+    if (done.has(m.id)) continue;
     if (m.severity === "block") push(m.feeds_verdict || "Needs Review", m.what);
     else advisory.push(m.what);
   }
-  // 2. blocking questions → Needs Review; non-blocking → advisory
+  // 2. blocking questions → Needs Review; non-blocking → advisory. Answered → cleared.
   for (const q of f.unknowns || []) {
+    if (done.has(q.id)) continue;
     if (q.blocking === true) push(q.feeds_verdict || "Needs Review", q.question);
     else advisory.push(q.question);
   }
-  // 3. conflicts always warrant human review
-  for (const c of f.conflicts || []) push(c.feeds_verdict || "Needs Review", c.detail);
+  // 3. conflicts warrant human review — unless the operator has answered them.
+  for (const c of f.conflicts || []) { if (done.has(c.id)) continue; push(c.feeds_verdict || "Needs Review", c.detail); }
   // 4. missing files → Needs References
   for (const mf of f.missing_files || []) push("Needs References", `Missing reference: ${mf.uri}`);
   // 5. suggested criteria are advisory (the compiler authors executable criteria)

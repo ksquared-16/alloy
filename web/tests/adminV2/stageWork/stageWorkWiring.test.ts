@@ -53,7 +53,7 @@ describe("stage-work Tier-2 wiring", () => {
     it("Current Work card renders the pending treatment BEFORE the empty state (no false 'No active work')", () => {
         const card = read("components/admin/focusPanel/cards/CurrentWorkCard.tsx");
         expect(card).toContain("stageWorkPending");
-        expect(card).toContain("Loading current work");
+        expect(card).toContain("Loading What's Next");
         // In each presentation the pending JSX (data-work-pending) precedes the empty JSX
         // (data-work-empty) — using the unambiguous render markers, not prose.
         const firstPendingMark = card.indexOf('data-work-pending="true"');

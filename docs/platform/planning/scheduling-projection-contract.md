@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: proposed
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-24
 supersedes: []
 ---
 
@@ -58,6 +58,59 @@ Everything a child's schedule can be is a set of assignments over time. **Never 
 > **V1 implementation note (times).** The slice-1 schema stores `weekdays` on `schedule_patterns` but **no per-assignment times**. In V1, `arriveTime`/`departTime` resolve to **`null`** (the card renders weekdays · room · effective dates). Per-day arrival/departure is a **small extension** (a times column on the assignment or pattern metadata) delivered with the Phase-2 pattern editor — engineering must **not** synthesize a time source. See [`SCHEDULING-IMPLEMENTATION-VALIDATION.md`](./SCHEDULING-IMPLEMENTATION-VALIDATION.md) §1/§14.
 
 ---
+
+## 1.1 Assignment Platform foundation (Phase 2)
+
+Phase 2 extends the existing effective-dated `schedule_assignments` ledger **in
+place**. Its physical name is retained for compatibility; its semantic contract
+is now a typed recurring operational commitment:
+
+- `subject_type`: `child` or `staff`
+- one child enrollment agreement **or** one employee person, never both
+- assignment type, site, room, program, recurrence pattern, and effective window
+- a code-enforced, singular `is_primary` child assignment
+
+`child_placements` remains the compatibility authority for the primary child's
+operational home while existing enrollment flows migrate. A secondary
+assignment owns its own room and recurrence but does not overwrite that home.
+Changing a primary assignment is an effective-dated command
+(`assignment.set_primary`) that must supersede the previous primary (and the
+child's compatibility placement when the home room changes) together; it is not
+a browser toggle. Staff subjects may also designate an effective-dated primary
+keyed by `persons.id`.
+
+Primary uniqueness is **effective-dated**: historical ended primaries and
+non-overlapping future primaries may coexist; overlapping primary periods for
+the same subject are rejected. Secondary assignments may overlap intentionally.
+
+Assignment Types are tenant-scoped configuration vocabulary. They provide
+label, icon, visual treatment, eligible subject types, and participation
+defaults for billing, attendance, and staffing. Types steer behavior; they do
+not create financial, attendance, or ratio facts by themselves.
+
+The `Scheduling` name remains correct for the recurrence/pattern and child
+schedule lifecycle views. `Assignments` is the cross-subject operational
+product noun. No global label rename is implied by this storage transition.
+
+### 1.1.1 Operator surfaces (Phase 2A)
+
+Phase 2A does not redesign the Scheduling Focus Panel or Workspace shell. It
+makes concurrent assignments legible on the accepted Schedule Detail spine:
+
+- **Assignment Summary** — list of concurrent commitments (type, primary,
+  room, pattern, days, hours, effective dates, status, billing relationship)
+- **Assignment Detail** — canonical detail surface (identity, schedule, room,
+  timeline, billing, operational effects) with create / duplicate / archive /
+  set-primary through registered actions
+- **Assignment Timeline V1** — reusable weekday chronology
+  (`web/lib/operationalAssignments/assignmentTimeline.ts` +
+  `AssignmentTimeline` component) for Detail now; Household / Workspace /
+  Staff later without a second implementation
+- Compact identity lines prefer primary type label and append `+N more` when
+  multiple concurrent assignments exist
+
+Staff scheduling UI is out of scope; view models remain subject-typed
+(`child` | `staff`) so surfaces do not bake in child-only assumptions.
 
 ## 2. Schedule = a lifecycle grouping of assignments (operator-facing)
 

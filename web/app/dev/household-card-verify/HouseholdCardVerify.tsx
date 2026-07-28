@@ -244,6 +244,8 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
                 return { ok: true };
             },
             saveInquiryChild: async () => ({ ok: true }),
+            savePersonChildPhoto: async () => ({ ok: false, status: 501, error: "Not implemented in dev verify" }),
+            clearPersonChildPhoto: async () => ({ ok: false, status: 501, error: "Not implemented in dev verify" }),
             openAddEmergencyContact: () => {},
             openAddEmergencyContactForChild: () => {},
             savePersonChildRelationship: async () => ({ ok: true }),

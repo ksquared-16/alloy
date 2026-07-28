@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import type { IdentityRecordVM, IdentityDisclosureDepth, IdentityFieldRowVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import { identityRowsForDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityDisclosureVM";
@@ -26,8 +26,11 @@ type Props = {
     /** Atomic multi-field save (preferred for person-level Edit). */
     onSaveFields?: (args: IdentityFieldBatchSaveArgs) => Promise<{ ok: boolean } | void>;
     onEditField?: (fieldRef: string) => void;
+    onLinkField?: (fieldRef: string) => void;
     onActivate?: (recordId: string) => void;
     dataAttr?: string;
+    /** Replaces default IdentityAvatar when provided (composer upload slot). */
+    avatarSlot?: ReactNode;
 };
 
 function collectEditableFieldRefs(rows: IdentityFieldRowVM[]): string[] {
@@ -59,8 +62,10 @@ export default function IdentityRecordSummary({
     onSaveField,
     onSaveFields,
     onEditField,
+    onLinkField,
     onActivate,
     dataAttr,
+    avatarSlot,
 }: Props) {
     const { visibleRows, detailRows } = identityRowsForDisclosureDepth(record, depth);
     const showInlineDetails = depth === "details" || depth === "evidence";
@@ -166,13 +171,15 @@ export default function IdentityRecordSummary({
             data-identity-batch-editing={batchEditing ? "true" : undefined}
         >
             <div className="identity-record-summary__header">
-                <IdentityAvatar
-                    name={record.title}
-                    imageUrl={record.avatar?.imageUrl}
-                    visible={record.avatar?.visible !== false}
-                    role={record.avatar?.role as IdentityAvatarSemanticRole | undefined}
-                    recordId={record.id}
-                />
+                {avatarSlot ?? (
+                    <IdentityAvatar
+                        name={record.title}
+                        imageUrl={record.avatar?.imageUrl}
+                        visible={record.avatar?.visible !== false}
+                        role={record.avatar?.role as IdentityAvatarSemanticRole | undefined}
+                        recordId={record.id}
+                    />
+                )}
                 <div className="identity-record-summary__title-block min-w-0">
                     <span className="identity-record-summary__title">
                         {onActivate ? (
@@ -203,6 +210,7 @@ export default function IdentityRecordSummary({
                         personId={record.id}
                         onSaveField={onSaveField}
                         onEditField={batchEditing ? undefined : onEditField}
+                        onLinkField={batchEditing ? undefined : onLinkField}
                         batchEdit={batchEditSession}
                     />
                     {showInlineDetails && detailRows.length > 0 ? (
@@ -211,20 +219,10 @@ export default function IdentityRecordSummary({
                             personId={record.id}
                             onSaveField={onSaveField}
                             onEditField={batchEditing ? undefined : onEditField}
+                            onLinkField={batchEditing ? undefined : onLinkField}
                             batchEdit={batchEditSession}
                             defaultOpen
                         />
-                    ) : null}
-                    {onActivate && !batchEditing ? (
-                        <button
-                            type="button"
-                            className="identity-record-summary__open-details"
-                            data-identity-open-details={record.id}
-                            onClick={() => onActivate(record.id)}
-                            aria-label={`Open details for ${record.title}`}
-                        >
-                            Details →
-                        </button>
                     ) : null}
                 </div>
                 {showPersonLevelEdit ? (

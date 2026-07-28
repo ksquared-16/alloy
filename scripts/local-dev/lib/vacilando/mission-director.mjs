@@ -25,6 +25,7 @@ import { evaluateMission, readAcceptance } from "./acceptance.mjs";
 import { writeAuditEvent } from "./commands/audit.mjs";
 import { createRequest, updateRequest } from "./commands/director-requests.mjs";
 import { resolveSlotIdentity } from "./identity.mjs";
+import { understandingQuestions } from "./operations.mjs";
 
 /** Consequential mission actions require explicit confirmation, like every other. */
 const CONSEQUENTIAL = new Set(["start", "steer", "stop", "accept", "close"]);
@@ -84,7 +85,9 @@ export function compileMissionForIntent({ slot, intent }) {
     title: `${capability.name} V2`, objective: `(compiling from ${capability.capability_id})`, status: "draft",
   });
 
-  const { package: pkgRaw } = compile({ capability, snapshot, mission, gapReport });
+  // The operator's own words are authoritative for compilation — the compiler
+  // derives the objective from the intent, not the generic capability template.
+  const { package: pkgRaw } = compile({ capability, snapshot, mission: { ...mission, intent }, gapReport });
 
   // Stage: Readiness Verdict — Director rolls the gap report + package validation
   // into the six-state operator verdict, then binds it to the package.
@@ -125,7 +128,8 @@ export function recompileMission({ mission_id }) {
   const gapReport = analyzeGap({ intent, capability, snapshot });
   const { package: pkgRaw } = compile({ capability, snapshot, mission, gapReport, reviseOf: prevPkg.package_id });
 
-  const verdict = deriveVerdict(gapReport, pkgRaw);
+  // Questions the operator has already answered no longer hold the verdict off Ready.
+  const verdict = deriveVerdict(gapReport, pkgRaw, { answered: mission.answered_questions || [] });
   const prevVerdict = prevPkg.readiness_verdict?.verdict || "?";
   const diff = { ...(pkgRaw.diff_from_previous || {}), verdict_change: prevVerdict !== verdict.verdict ? `${prevVerdict} → ${verdict.verdict}` : null };
   const pkg = updatePackage(pkgRaw.package_id, { readiness_verdict: verdict, diff_from_previous: diff }) || pkgRaw;
@@ -139,6 +143,55 @@ export function recompileMission({ mission_id }) {
   const m = getMission(mission_id);
   audit("recompile", targetOf(m, identity), "succeeded", { summary: `recompiled → v${pkg.version} (${verdict.verdict})` });
   return { ok: true, mission: m, package: pkg, capability, snapshot, gap_report: gapReport, verdict, diff };
+}
+
+/**
+ * Reframe a not-yet-started mission with the operator's direction. The operator's
+ * words are authoritative: the direction becomes (or extends) the mission's INTENT,
+ * and the package is recompiled so the objective/deliverables/scope/acceptance
+ * derive from it — NOT recorded as a side decision while a generic objective stays
+ * in charge. This is the fix for the mission-integrity failure.
+ */
+export function reframeMission({ mission_id, direction }) {
+  const mission = getMission(mission_id);
+  if (!mission) return { ok: false, error: "unknown_mission" };
+  if (isLive(mission_id)) return { ok: false, error: "mid_turn", detail: "This work is executing; stop it before reframing." };
+  if (["completed", "closed"].includes(mission.status)) return { ok: false, error: "terminal", detail: "This work is finished; start a new mission to change direction." };
+  const add = String(direction || "").trim();
+  if (!add) return { ok: false, error: "empty_direction" };
+  const cur = String(mission.intent || "").trim();
+  // A thin capability-name intent ("Access & Roles", "Improve Scheduling V2") is
+  // replaced; a real direction is accumulated.
+  const meaningful = cur.replace(/\bv\d+\b/ig, " ").replace(/[^a-z0-9\s]/ig, " ").split(/\s+/).filter((w) => w.length >= 2);
+  const isNameOnly = meaningful.length < 5;
+  // Accumulate the operator's direction (thin capability-name intents are replaced).
+  const intent = (!cur || isNameOnly) ? add : (cur.includes(add) ? cur : `${cur}\n\n${add}`);
+  updateMission(mission_id, { intent });
+  const out = recompileMission({ mission_id }); // recompiles from the new authoritative intent
+  return out.ok ? { ...out, reframed: true } : out;
+}
+
+/**
+ * Answer Director's open questions in the Understanding stage. The operator simply
+ * replies — they do NOT rewrite the objective. The answer is recorded as a durable
+ * clarification (carried into the objective for the worker), the answered questions
+ * drop off, and the package recompiles. When no questions remain, understanding is
+ * sufficient and the conversation advances to Preparing.
+ */
+export function answerQuestions({ mission_id, answer }) {
+  const mission = getMission(mission_id);
+  if (!mission) return { ok: false, error: "unknown_mission" };
+  if (isLive(mission_id)) return { ok: false, error: "mid_turn" };
+  if (["completed", "closed"].includes(mission.status)) return { ok: false, error: "terminal" };
+  const text = String(answer || "").trim();
+  if (!text) return { ok: false, error: "empty_answer" };
+  const pkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
+  const open = understandingQuestions(mission, pkg).map((q) => q.id);
+  const clarifications = [...(mission.clarifications || []), { answer: text, question_ids: open, at: new Date().toISOString() }];
+  const answered = [...new Set([...(mission.answered_questions || []), ...open])];
+  updateMission(mission_id, { answered_questions: answered, clarifications });
+  const out = recompileMission({ mission_id }); // recompile carries the clarifications into the objective
+  return out.ok ? { ...out, answered: open.length } : out;
 }
 
 /** Turn an intent into a capability display name (strip leading verb + version). */
@@ -225,12 +278,17 @@ export function startMission({ mission_id, confirm }) {
     return { ok: false, error: "confirmation_required", preview: previewAction("start", mission_id) };
   }
 
+  // APPROVAL CONTRACT: Start means "execute the mission I just reviewed." Snapshot
+  // the exact objective + acceptance the operator is approving, so any later
+  // material change is detectable and cannot be accepted without re-review.
+  const approved = { objective: pkg.objective, acceptance_ids: (pkg.acceptance_criteria || []).map((c) => c.id).sort(), operator_directed: !!pkg.operator_directed, at: new Date().toISOString() };
+
   // Durable request: a mission turn is a first-class Director request.
   const req = createRequest({
     slot: mission.worker_slot, worktree: identity.worktree_name, provider: identity.provider || mission.provider,
     instruction: `[mission] ${mission.title}`, request_type: "worker-instruction", mission_id,
   });
-  updateMission(mission_id, { active_request_id: req.request_id, status: "starting" });
+  updateMission(mission_id, { active_request_id: req.request_id, status: "starting", approved_contract: approved });
   updateRequest(req.request_id, { status: "starting", started_at: new Date().toISOString() });
 
   setImmediate(() => {
@@ -325,6 +383,17 @@ export function accept({ mission_id, confirm }) {
   if (confirm !== true) {
     audit("accept", targetOf(mission, identity), "refused", { error: "confirmation_required" });
     return { ok: false, error: "confirmation_required", preview: previewAction("accept", mission_id) };
+  }
+  // INTEGRITY: the mission that is accepted must be the mission that was approved.
+  // If the objective or acceptance changed since Start, refuse — it needs re-review.
+  const approved = mission.approved_contract;
+  if (approved) {
+    const nowIds = (pkg.acceptance_criteria || []).map((c) => c.id).sort();
+    const drifted = approved.objective !== pkg.objective || JSON.stringify(approved.acceptance_ids) !== JSON.stringify(nowIds);
+    if (drifted) {
+      audit("accept", targetOf(mission, identity), "blocked", { confirmed: true, error: "objective_changed_since_approval" });
+      return { ok: false, error: "objective_changed_since_approval", detail: "The objective or acceptance changed after you approved this. Review the updated mission and approve again before accepting." };
+    }
   }
   const result = evaluateMission(mission, pkg, { worktreePath: identity.worktree_path });
   if (result.gate === "fail") {

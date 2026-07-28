@@ -53,6 +53,8 @@ export type ChildFocusEditSeed = {
     row: InquiryChildRow;
     values: ChildFocusEditValues;
     identityBaseline: InquiryChildIdentityPatch;
+    /** When true, program/room fields are owned by the Primary Assignment (read-only in edit). */
+    hasCommittedPrimaryAssignment?: boolean;
 };
 
 export function findInquiryChildRow(
@@ -95,6 +97,7 @@ export function childFocusEditDirtyForPolicy(
 export type ChildFocusSavePatch = {
     identityPatch: InquiryChildIdentityPatch;
     ocmPatch: InquiryChildOcmPatch;
+    profilePatch?: Record<string, unknown>;
 };
 
 /** Build identity + OCM patches including only editable, changed fields. Pure. */

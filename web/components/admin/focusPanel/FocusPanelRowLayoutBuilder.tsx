@@ -26,7 +26,7 @@ import {
  * Row-based Experience Builder — compose the Focus Panel VISUALLY with rows and
  * columns, not abstract tokens. The operator adds rows, drops cards into them, and
  * sets each card's width with plain fractions (Full / 1/2 / 1/3 / 2/3). Stacking two
- * cards in one column makes the "Household left, Readiness + Current Work stacked
+ * cards in one column makes the "Household left, Readiness + What's Next stacked
  * right" pattern. The operator sizes each card by INTENT (Quarter / Third / Half /
  * Two Thirds / Full / Fill) — the runtime computes exact spacing, and `Fill` absorbs
  * the row's leftover space so nothing is pinned awkwardly. The preview is the REAL

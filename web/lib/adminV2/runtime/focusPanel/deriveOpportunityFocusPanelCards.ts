@@ -105,7 +105,7 @@ export function buildCurrentWorkCardModel(input: {
     const primaryOpen = input.stageWorkRuntime?.primary?.state === "open";
     return card({
         key: "current_work",
-        title: "Current Work",
+        title: "What's Next",
         insight: stageWorkInsight(input.stageWorkRuntime),
         secondaryInsight: primaryOpen
             ? "Due today · continue stage steps"
@@ -473,20 +473,38 @@ function schedulingCollectionItems(record: Record<string, unknown>): {
  * (configured) is launched from the card action. Room · weekly pattern · dates are
  * set at Registration once enrollment creates the operational agreement.
  */
+/** Canonical Milestones card model — composer + runtime share this producer. */
+export function buildMilestonesCardModel(record: Record<string, unknown>): FocusPanelCardModel {
+    const raw = record["milestones"];
+    const count = Array.isArray(raw) ? raw.length : 0;
+    return card({
+        key: "milestones",
+        title: "Milestones",
+        insight: count > 0 ? `${count} milestone${count === 1 ? "" : "s"}` : "No milestones yet",
+        secondaryInsight: count > 0 ? "Completed · committed · upcoming outcomes" : null,
+        tier: "context",
+        span: 1,
+        density: "compact",
+        statusChip: count > 0 ? String(count) : null,
+        statusTone: count > 0 ? "ready" : "neutral",
+        primaryAction: null,
+    });
+}
+
 export function buildSchedulingCardModel(record: Record<string, unknown>): FocusPanelCardModel {
     const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
     const count = rows.length;
     const collection = schedulingCollectionItems(record);
     const insight =
         count === 0
-            ? "No children to schedule"
+            ? "No children to assign"
             : count === 1
-              ? "1 child · schedule not set"
-              : `${count} children · schedule not set`;
+              ? "1 child · no assignments yet"
+              : `${count} children · assignments vary`;
     void collection;
     return card({
         key: "scheduling",
-        title: "Scheduling",
+        title: "Assignments",
         insight,
         tier: "reference",
         span: 2,
@@ -496,7 +514,7 @@ export function buildSchedulingCardModel(record: Record<string, unknown>): Focus
         // The card component renders per-child status + opens the work surface on
         // click; no card-level primary action or collection payload.
         primaryAction: null,
-        secondaryInsight: count > 0 ? "Open a child to build their schedule" : null,
+        secondaryInsight: count > 0 ? "Open a child to view or add assignments" : null,
     });
 }
 
@@ -625,6 +643,7 @@ function buildCardModels(input: {
     map.set("household", buildHouseholdCardModel(record, title));
     map.set("children", buildChildrenCardModel(record));
     map.set("scheduling", buildSchedulingCardModel(record));
+    map.set("milestones", buildMilestonesCardModel(record));
 
     map.set(
         "communications",

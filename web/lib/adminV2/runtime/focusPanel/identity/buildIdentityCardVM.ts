@@ -6,10 +6,12 @@ import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nested
 import {
     fieldPresentationLabel,
     groupShowAvatarForNestedGroup,
+    groupUseProfilePhotosForNestedGroup,
     nestedGroupLabel,
     groupDefsFor,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+
+import { fieldIsLinked, fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import type {
     HouseholdEvidenceChild,
     HouseholdEvidenceContact,
@@ -30,11 +32,19 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompose";
 import { resolveIdentityFieldRows, type IdentityFieldRowInput } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows";
 import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
+import { isIdentityFieldInlineSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityInlineChildSave";
+import { resolveIdentityFieldLinkContract, normalizeIdentityFieldLinkTarget } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { resolveIdentityPlacementLabelMode } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import {
+    isCompactTitleRedundantIdentityField,
+    resolveCompactIdentitySummaryLabelMode,
+} from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
 import { composeContextCollectionRows } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
+import { resolveIdentityFieldEditControl } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldEditControl";
+import { assignmentOwnsProgramRoomField } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
 import {
     enabledEvidenceSections,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -96,7 +106,9 @@ function placementsForIdentityGroupPurpose(
 ): ReturnType<typeof generateDefaultPlacementsForGroup> {
     const group = config.groups.find((g) => g.key === groupKey);
     if (!group) return [];
-    return (group.fieldPlacements ?? generateDefaultPlacementsForGroup(group)).filter((placement) =>
+    // Always re-pack from key order + fieldLayoutWidths. Stored fieldPlacements may be
+    // stale after Builder beside/reorder; regenerate preserves policy/label/icon only.
+    return generateDefaultPlacementsForGroup(group).filter((placement) =>
         storageTierMatchesPurpose(placement.tier, purpose),
     );
 }
@@ -135,6 +147,24 @@ function buildRecordRows(args: {
             tier: args.purpose,
         });
         if (!fieldShouldRender(policy)) continue;
+        const authoredLabelModeEarly =
+            placement.labelMode === "hidden"
+            || placement.labelMode === "eyebrow"
+            || placement.labelMode === "visible"
+                ? placement.labelMode
+                : group.fieldModes?.[placement.fieldRef]?.showLabel === false
+                  ? ("hidden" as const)
+                  : group.fieldModes?.[placement.fieldRef]?.showLabel === true
+                    ? ("visible" as const)
+                    : null;
+        // Compact summary: omit title-redundant name parts entirely (runtime projection only).
+        if (
+            args.purpose === "summary"
+            && authoredLabelModeEarly == null
+            && isCompactTitleRedundantIdentityField(placement.fieldRef)
+        ) {
+            continue;
+        }
         const isMaskedChannel =
             args.maskedChannels
             && args.subject.kind === "person"
@@ -144,11 +174,46 @@ function buildRecordRows(args: {
             : resolveIdentityFieldValue(args.subject, placement.fieldRef);
         const saveSupported =
             args.isFieldSaveSupported?.(placement.fieldRef)
-            ?? (args.groupKey === args.editGroupKey && Boolean(args.editGroupKey));
-        const editable = args.canMutate && fieldIsSaveable(policy) && saveSupported;
+            ?? isIdentityFieldInlineSaveSupported(placement.fieldRef);
+        const linkContract = resolveIdentityFieldLinkContract(placement.fieldRef);
+        const hasExplicitPolicy = Boolean(
+            placement.policy
+            || group.fieldPolicies?.[placement.fieldRef]
+            || (args.editGroupKey
+                ? args.config.groups.find((g) => g.key === args.editGroupKey)?.fieldPolicies?.[
+                      placement.fieldRef
+                  ]
+                : undefined),
+        );
+        // Enrollment fields default to Linked when no explicit policy is stored.
+        const effectivePolicy =
+            policy === "read-only" && linkContract.canOfferLinked && !hasExplicitPolicy
+                ? "linked"
+                : policy;
+        const editableBase = args.canMutate && fieldIsSaveable(effectivePolicy) && saveSupported;
+        const childHasPrimary =
+            args.subject.kind === "child"
+            && "hasCommittedPrimaryAssignment" in args.subject.value
+            && (args.subject.value as ChildrenEvidenceChild).hasCommittedPrimaryAssignment === true;
+        const editable =
+            editableBase
+            && !(childHasPrimary && assignmentOwnsProgramRoomField(placement.fieldRef));
+        const linked = fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked;
+        const linkTarget = linked
+            ? normalizeIdentityFieldLinkTarget(placement.linkTarget, placement.fieldRef)
+                ?? linkContract.defaultTarget
+            : null;
+        const authoredLabelMode = authoredLabelModeEarly;
         const placementForRuntime = {
             ...placement,
-            labelMode: resolveIdentityPlacementLabelMode(placement, group.fieldModes, placement.fieldRef),
+            labelMode: resolveCompactIdentitySummaryLabelMode({
+                fieldRef: placement.fieldRef,
+                authoredLabelMode:
+                    authoredLabelMode
+                    ?? resolveIdentityPlacementLabelMode(placement, group.fieldModes, placement.fieldRef),
+                purpose: args.purpose,
+                treatResolvedVisibleAsUnauthored: authoredLabelMode == null,
+            }),
         };
         inputs.push({
             placement: placementForRuntime,
@@ -160,8 +225,16 @@ function buildRecordRows(args: {
             ),
             value,
             icon: resolveIdentityFieldIcon({ group, fieldRef: placement.fieldRef }),
-            policy,
+            policy: effectivePolicy,
             editable,
+            linked,
+            linkLabel: linked ? linkContract.linkLabel : null,
+            linkDestination: linked ? (linkTarget?.toCard ?? linkContract.destinationCard) : null,
+            linkTarget,
+            editControl: resolveIdentityFieldEditControl(
+                placement.fieldRef,
+                args.tenantFieldDefinitions,
+            ),
         });
     }
     return resolveIdentityFieldRows(inputs);
@@ -212,6 +285,7 @@ function buildContactRecordVM(args: {
 }): IdentityRecordVM {
     const subject = contactSubject(args.contact);
     const showAvatar = groupShowAvatarForNestedGroup(args.config, args.groupKey);
+    const useProfilePhotos = groupUseProfilePhotosForNestedGroup(args.config, args.groupKey);
     const summaryRows = buildRecordRows({
         config: args.config,
         groupKey: args.groupKey,
@@ -246,7 +320,7 @@ function buildContactRecordVM(args: {
         id: args.contact.personId,
         title: composedIdentityDisplayName(subject, args.config, args.groupKey, args.contact.name),
         avatar: {
-            imageUrl: args.contact.imageUrl ?? null,
+            imageUrl: useProfilePhotos ? args.contact.imageUrl ?? null : null,
             initials: args.contact.initials || initialsFor(args.contact.name),
             visible: showAvatar,
             role: inferAvatarRoleFromSectionKey(args.groupKey),
@@ -268,6 +342,7 @@ function buildChildRecordVM(args: {
 }): IdentityRecordVM {
     const subject = childSubject(args.child);
     const showAvatar = groupShowAvatarForNestedGroup(args.config, args.groupKey);
+    const useProfilePhotos = groupUseProfilePhotosForNestedGroup(args.config, args.groupKey);
     const summaryRows = buildRecordRows({
         config: args.config,
         groupKey: args.groupKey,
@@ -296,11 +371,12 @@ function buildChildRecordVM(args: {
         editGroupKey: "child_edit",
     });
     const name = "name" in args.child ? args.child.name : "Child";
+    const rawImageUrl = "imageUrl" in args.child ? args.child.imageUrl ?? null : null;
     return finalizeIdentityRecordVM({
         id: args.child.id,
         title: composedIdentityDisplayName(subject, args.config, args.groupKey, name),
         avatar: {
-            imageUrl: "imageUrl" in args.child ? args.child.imageUrl ?? null : null,
+            imageUrl: useProfilePhotos ? rawImageUrl : null,
             initials: initialsFor(name),
             visible: showAvatar,
             role: "child",

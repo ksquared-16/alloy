@@ -11,6 +11,7 @@ import type {
     FocusPanelCoordination,
     FocusPanelPerspectiveLevel,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import { focusPanelCardBackLabel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import {
     useDismissSignal,
@@ -105,10 +106,8 @@ export default function CommunicationsCard({
                 onClick={handleBack}
                 data-communications-action="back"
             >
-                {previousFocus?.card === "current_work" ?
-                    "← Back to Current Work"
-                : previousFocus ?
-                    "← Back"
+                {previousFocus ?
+                    `← Back to ${focusPanelCardBackLabel(previousFocus.card)}`
                 :   "← Back to panel"}
             </button>
             {canCancelSend ?

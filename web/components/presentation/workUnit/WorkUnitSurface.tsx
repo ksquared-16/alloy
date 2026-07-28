@@ -22,6 +22,7 @@ import {
 import { RightRailSurface } from "@/components/presentation/rightRail/RightRailSurface";
 import { WorkUnitRightRailActions } from "@/components/presentation/rightRail/WorkUnitRightRailActions";
 import { CreateLeadEventHost } from "@/components/presentation/rightRail/CreateLeadEventHost";
+import { BosWorkspaceScopeSync } from "@/components/presentation/rightRail/BosWorkspaceScopeSync";
 import { WorkUnitHeader } from "./WorkUnitHeader";
 import { WorkViewPillStrip } from "./WorkViewPillStrip";
 import type {
@@ -55,13 +56,21 @@ export function WorkUnitSurfaceBodyFromModel({
         model.workViews.find((view) => view.isActive) ??
         model.workViews.find((view) => view.id === model.activeWorkViewId) ??
         null;
+    // Selection already lives on the committed model — drive the shared header Focus state
+    // without touching Focus Panel payload, reveal, or VM authority.
+    const headerDensity = model.selectedRecordId ? "focus" : "browse";
     return (
         <>
-        <>
+            <BosWorkspaceScopeSync
+                departmentId={model.departmentId}
+                workUnitId={model.workUnitId}
+                workUnitName={model.header?.title ?? null}
+            />
             <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1">
                 <div className="shrink-0 space-y-1">
                     <WorkUnitHeader
                         model={model.header}
+                        density={headerDensity}
                         actionsSlot={
                             <WorkUnitRightRailActions
                                 actions={model.rightRailActions}
@@ -94,7 +103,6 @@ export function WorkUnitSurfaceBodyFromModel({
             <RightRailSurface />
             {/* Page-level Create Lead modal host — stable, outside the actions floating menu. */}
             <CreateLeadEventHost />
-        </>
         </>
     );
 }

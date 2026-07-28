@@ -242,6 +242,87 @@ describe("D3 recommendation builder", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Create Lead work-unit binding — Work View visibility (workUnitLeadMembership
+// excludes work_unit_id IS NULL, so the created opportunity MUST carry the work
+// unit the intake resolved or the new lead never appears in its Work View).
+// ---------------------------------------------------------------------------
+describe("Create Lead work-unit binding (Work View visibility)", () => {
+    const leadSet = (leadValues: Record<string, unknown>): IdentityResolutionSet => ({
+        subjects: [
+            { ref: "household:0", role: "household", decision: "create", values: { household_name: "H" } },
+            { ref: "lead:0", role: "lead", decision: "create", householdRef: "household:0", values: leadValues },
+        ],
+    });
+
+    it("includes work_unit_id in the create_lead op when the lead subject carries it", () => {
+        const op = buildRecommendations(leadSet({ name: "L", work_unit_id: "wu-1" })).operations.find(
+            (o) => o.commandKey === IDENTITY_COMMAND_KEYS.createLead,
+        );
+        expect(op?.payload.work_unit_id).toBe("wu-1");
+    });
+
+    it("omits work_unit_id when the lead subject has none (unrelated intakes unchanged, no silent wrong value)", () => {
+        const op = buildRecommendations(leadSet({ name: "L" })).operations.find(
+            (o) => o.commandKey === IDENTITY_COMMAND_KEYS.createLead,
+        );
+        expect(op).toBeTruthy();
+        expect("work_unit_id" in (op!.payload as Record<string, unknown>)).toBe(false);
+    });
+
+    it("buildPlan sources work_unit_id from the case create_lead_intake metadata onto the create_lead op", async () => {
+        const db = new FakeSupabase();
+        seedNewFamily(db);
+        db.seed("processing_cases", [
+            { id: CASE, org_id: ORG, metadata: { create_lead_intake: { work_unit_id: "wu-777" } } } as Row,
+        ]);
+        const d = deps(db, new Counter());
+        const { plan } = await buildPlan(d, { caseId: CASE });
+        const leadOp = plan.operations.find((o) => o.commandKey === IDENTITY_COMMAND_KEYS.createLead);
+        expect(leadOp?.payload.work_unit_id).toBe("wu-777");
+    });
+
+    it("leaves the create_lead op work-unit-less when the case has no create_lead_intake (e.g. non-create-lead intake)", async () => {
+        const db = new FakeSupabase();
+        seedNewFamily(db);
+        db.seed("processing_cases", [{ id: CASE, org_id: ORG, metadata: {} } as Row]);
+        const d = deps(db, new Counter());
+        const { plan } = await buildPlan(d, { caseId: CASE });
+        const leadOp = plan.operations.find((o) => o.commandKey === IDENTITY_COMMAND_KEYS.createLead);
+        expect("work_unit_id" in (leadOp!.payload as Record<string, unknown>)).toBe(false);
+    });
+
+    it("delivers work_unit_id to the opportunity-creation command port end to end", async () => {
+        const db = new FakeSupabase();
+        const counter = new Counter();
+        seedNewFamily(db);
+        db.seed("processing_cases", [
+            { id: CASE, org_id: ORG, metadata: { create_lead_intake: { work_unit_id: "wu-888" } } } as Row,
+        ]);
+        const captured: Record<string, unknown>[] = [];
+        const capturing: CommandExecutor = {
+            async execute(commandKey, payload) {
+                if (commandKey === IDENTITY_COMMAND_KEYS.createLead) captured.push(payload as Record<string, unknown>);
+                const table = commandKey === IDENTITY_COMMAND_KEYS.createProcessParticipation ? "process_instances" : "opportunities";
+                return { ok: true, refs: [{ targetType: "lead", recordId: counter.bump(table), created: true }], result: {}, idempotentReplay: false };
+            },
+        };
+        const d: OperatorReviewDeps = {
+            supabase: db as unknown as SupabaseClient,
+            orgId: ORG,
+            actorId: "user-1",
+            actorAuthorized: true,
+            executorPorts: { atomicGroup: atomicRunner(counter), command: capturing, compensation: compensationPort([]) },
+            now: clock,
+        };
+        const { plan } = await buildPlan(d, { caseId: CASE });
+        await approvePlan(d, { caseId: CASE, planId: plan.planId });
+        await executeApprovedPlanForCase(d, { caseId: CASE, planId: plan.planId, executionIdempotencyKey: "exec-wu" });
+        expect(captured).toHaveLength(1);
+        expect(captured[0]?.work_unit_id).toBe("wu-888");
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Case readiness projection
 // ---------------------------------------------------------------------------
 describe("D3 readiness projection", () => {

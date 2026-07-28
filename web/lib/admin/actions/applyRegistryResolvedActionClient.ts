@@ -28,6 +28,8 @@ import {
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
 import { dispatchActionPreflightBlocked } from "@/lib/admin/actions/actionPreflightDrawerEvents";
+import { isBosCreateLeadSessionEnabled } from "@/lib/bos/commandSession/bosCreateLeadSessionFlag";
+import { dispatchStartBosCommandSession } from "@/contexts/BosCommandSessionContext";
 import {
     dispatchOpenAddInquiryChildModal,
     isAddInquiryChildActionKey,
@@ -268,6 +270,20 @@ export async function applyRegistryResolvedActionClient(
             return { ok: true };
         }
         if (formKey === "create_lead") {
+            if (isBosCreateLeadSessionEnabled()) {
+                dispatchStartBosCommandSession({
+                    actionKey: "create_lead",
+                    displayLabel: a.label?.trim() || "Create Lead",
+                    placement: host.workUnitId ? "work_unit_actions" : "workspace_actions_menu",
+                    contextResolution: "bos_proposal",
+                    workspace: {
+                        departmentId: host.departmentId ?? null,
+                        workUnitId: host.workUnitId ?? null,
+                        surface: host.workUnitId ? "work_unit" : "workspace",
+                    },
+                });
+                return { ok: true };
+            }
             if (host.openCreateLead) {
                 host.openCreateLead();
                 return { ok: true };

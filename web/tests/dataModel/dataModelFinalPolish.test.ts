@@ -445,6 +445,7 @@ describe("Polish 7 — relationships edit in place where authority exists", () =
         const term: EntityRelationshipSummaryVm = {
             id: "vocabulary:person_relationship:grandparent",
             label: "Grandparent",
+            pluralLabel: null,
             connectionLabel: "Person connection",
             meaning: "A way one person can be connected to another.",
             targetLabel: "Person",

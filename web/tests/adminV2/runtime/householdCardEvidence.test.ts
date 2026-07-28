@@ -71,6 +71,24 @@ describe("buildHouseholdCardEvidence", () => {
         expect(ev.missingCriticalWarning).toBeNull();
     });
 
+    it("carries profile photo URLs on contacts and children when present", () => {
+        const record = baseRecord();
+        (record._opportunity_persons as Record<string, unknown>[])[0]!.photo_url =
+            "https://cdn.example/sarah.jpg";
+        (record._opportunity_persons as Record<string, unknown>[])[1]!.photo_url =
+            "https://cdn.example/mike.jpg";
+        (record._inquiry_children as Record<string, unknown>[])[0]!.photo_url =
+            "https://cdn.example/emma.jpg";
+
+        const ev = buildHouseholdCardEvidence(ctx(record));
+        expect(ev.primaryContact?.imageUrl).toBe("https://cdn.example/sarah.jpg");
+        const otherParent = ev.groups.find((g) => g.key === "other_parent_guardian");
+        expect(otherParent?.contacts[0]?.imageUrl).toBe("https://cdn.example/mike.jpg");
+        const children = ev.groups.find((g) => g.key === "children");
+        expect(children?.children[0]?.imageUrl).toBe("https://cdn.example/emma.jpg");
+        expect(children?.children[1]?.imageUrl ?? null).toBeNull();
+    });
+
     it("classifies evidence groups by relationship role", () => {
         const ev = buildHouseholdCardEvidence(ctx(baseRecord()));
         const keys = ev.groups.map((g) => g.key);
@@ -133,7 +151,9 @@ describe("buildHouseholdCardEvidence", () => {
         expect(children?.count).toBe(1);
         const child = children?.children[0];
         expect(child?.name).toBe("Emma Johnson");
-        expect(Object.keys(child ?? {}).sort()).toEqual(["id", "name"]);
+        // Belonging-only: name (+ optional identity photo). No operational child fields.
+        expect(Object.keys(child ?? {}).sort()).toEqual(["id", "imageUrl", "name"]);
+        expect(child?.imageUrl ?? null).toBeNull();
         const serialized = JSON.stringify(ev.groups);
         expect(serialized).not.toContain("Age 6");
         expect(serialized).not.toContain("Preschool");

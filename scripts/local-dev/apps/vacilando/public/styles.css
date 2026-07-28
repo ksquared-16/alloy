@@ -513,9 +513,19 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .cvgo{font-size:12px;color:var(--terra);font-weight:600;white-space:nowrap;}
 /* workspace grid */
 .cvgrid{display:grid;grid-template-columns:1.15fr 1.25fr .9fr;gap:14px;align-items:start;}
-.cvcol{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;}
-.cvcol-h{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-4);margin-bottom:12px;}
+/* Each column is bounded to the viewport and scrolls internally, so a long
+   transcript, package, or decision never grows the page without end. */
+.cvcol{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;max-height:calc(100vh - 150px);display:flex;flex-direction:column;min-height:0;}
+.cvprep,.cvinsights{overflow-y:auto;}
+.cvhistory{overflow:hidden;} /* the thread scrolls; the composer stays pinned */
+.cvhistory .cvthread{flex:1 1 auto;min-height:60px;overflow-y:auto;}
+.cvhistory .cvcompose{flex:none;}
+.cvcol-h{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-4);margin-bottom:12px;flex:none;}
 .cvthread{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+.cvbub{overflow-wrap:anywhere;} /* long unbroken text wraps instead of overflowing */
+.cvmsg .cvbub{max-height:340px;overflow-y:auto;} /* one huge message scrolls in place */
+.su-item .su-line span,.su-why{overflow-wrap:anywhere;}
+@media(max-width:900px){.cvcol{max-height:none;}}
 .cvmsg{display:flex;}
 .cvmsg.you{justify-content:flex-end;}
 .cvbub{max-width:88%;font-size:13px;line-height:1.5;padding:8px 12px;border-radius:14px;}
@@ -567,8 +577,37 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .opstate.muted{background:var(--bg-tint);color:var(--ink-3);}
 .opphase{margin-left:8px;font-size:11px;color:var(--ink-3);font-style:italic;}
 .opsum{margin:8px 0 0;font-size:12.5px;color:var(--ink);line-height:1.5;}
+.opobjective{font-size:12.5px;color:var(--ink);line-height:1.5;white-space:pre-wrap;max-height:200px;overflow-y:auto;overflow-wrap:anywhere;}
+/* Understanding stage — Director's open questions, shown as a conversation */
+.uqlist{margin-top:10px;display:flex;flex-direction:column;gap:10px;}
+.uq{border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:8px;padding:9px 11px;background:var(--card-2);}
+.uq.blocks{border-left-color:var(--terra);}
+.uq-q{font-size:13px;color:var(--ink);line-height:1.5;font-weight:600;}
+.uq-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:5px;align-items:center;}
+.uq-badge{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:5px;background:var(--bg-tint);color:var(--ink-3);}
+.uq-badge.blocks{background:var(--terra-soft);color:var(--terra);}
+.uq-tests{font-size:11px;color:var(--ink-4);font-style:italic;}
+.uq-why{font-size:11.5px;color:var(--ink-3);line-height:1.45;margin-top:5px;}
 .opnote{margin-top:8px;font-size:11px;color:var(--ink-3);font-style:italic;}
+.opsub{margin-top:4px;font-size:11px;color:var(--ink-4);line-height:1.4;}
+/* Launching — the worker coming online, shown as an honest, calm sequence. */
+.oplaunch{margin-top:9px;display:flex;flex-direction:column;gap:5px;}
+.oplaunch-step{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-4);line-height:1.3;transition:color .3s ease;}
+.oplaunch-step .oplaunch-mark{width:13px;text-align:center;font-size:11px;}
+.oplaunch-step.done{color:var(--ink-3);}
+.oplaunch-step.done .oplaunch-mark{color:var(--ok,#3c8a5a);}
+.oplaunch-step.active{color:var(--ink);font-weight:600;}
+.oplaunch-step.active .oplaunch-mark{color:var(--terra);}
+.oplaunch-step.pending{opacity:.5;}
 .opsec{margin-top:10px;}
+/* Ready gate: "Change what this mission does" disclosure — keeps Start the obvious primary. */
+.cvreframe{margin-top:8px;}
+.cvreframe>summary{list-style:none;cursor:pointer;font-size:11.5px;color:var(--ink-3);padding:2px 0;user-select:none;}
+.cvreframe>summary::-webkit-details-marker{display:none;}
+.cvreframe>summary::before{content:"+ ";color:var(--ink-4);}
+.cvreframe[open]>summary::before{content:"– ";}
+.cvreframe>summary:hover{color:var(--terra);}
+.cvreframe .cvcompose{margin-top:6px;border-top:none;padding-top:0;}
 .opfile{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);padding:1px 0;}
 .opneed p{margin:3px 0 0;font-size:12.5px;color:var(--ink);line-height:1.5;}
 .opev{display:flex;gap:7px;align-items:flex-start;margin:4px 0;font-size:12px;color:var(--ink);line-height:1.45;}

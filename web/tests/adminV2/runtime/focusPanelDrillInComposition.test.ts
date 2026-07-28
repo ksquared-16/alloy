@@ -246,11 +246,11 @@ describe("Add Field / centered drill-in composer wiring", () => {
         expect(canvas).toContain("data-fp-composer-depth-active");
     });
 
-    it("vertically centers the elevated drill-in inside the visible composer body", () => {
+    it("top-pins the elevated drill-in inside the visible composer body", () => {
         expect(runtimeCss).toContain(".alloy-os-fp-composer__body");
-        expect(runtimeCss).toContain("top: 50%");
-        expect(runtimeCss).toContain("transform: translate(-50%, -50%)");
-        expect(runtimeCss).toContain("max-height: min(75vh, calc(100% - 32px), calc(100dvh - 120px))");
+        expect(runtimeCss).toContain("top: 12px");
+        expect(runtimeCss).toContain("transform: none");
+        expect(runtimeCss).toContain("max-height: min(75vh, calc(100% - 24px), calc(100dvh - 120px))");
         expect(runtimeCss).not.toContain("max-height: min(calc(100% - 44px)");
         // Grid is static only inside the composer body — re-parents abspos to the viewport.
         expect(runtimeCss).toMatch(
@@ -388,7 +388,7 @@ describe("Focus Panel in-canvas drill-in composer wiring", () => {
     });
 
     it("mounts shared identity builder inspector for household and children drill-in", () => {
-        expect(householdCard).toContain("NestedSurfaceAddField");
+        expect(householdCard).toContain("IdentityComposeSectionCanvas");
         expect(householdCard).toContain("IdentityRecordSummary");
         expect(drillInspector).toContain("IdentitySurfaceBuilderInspector");
         expect(drillInspector).toContain('data-focus-panel-drill-in-mode={identitySurface ? "identity-builder" : "metadata"}');
@@ -409,7 +409,7 @@ describe("Focus Panel in-canvas drill-in composer wiring", () => {
 
     it("household card wraps runtime regions with composable shells", () => {
         expect(householdCard).toContain("ComposableRegionShell");
-        expect(householdCard).toContain("NestedSurfaceAddField");
+        expect(householdCard).toContain("IdentityComposeSectionCanvas");
         expect(householdCard).not.toContain("function RegionEditLayer");
         expect(householdCard).not.toContain("RegionInlineCompose");
         expect(householdCard).not.toContain("Edit fields below");
@@ -507,10 +507,10 @@ describe("Final Surface Composer doctrine — runtime sacred, composer overlay",
 
     it("mounts canvas layout composer on Household summary and context configure paths", () => {
         const addField = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceAddField.tsx");
-        expect(addField).toContain("regionSelected");
+        expect(addField).toContain("ensureRegionSelected");
         expect(addField).toContain("data-canvas-add-field");
-        expect(householdCard).toContain("NestedSurfaceFieldLayoutSurface");
-        expect(householdCard).toContain('composePurpose === "summary"');
+        expect(householdCard).toContain("IdentityComposeSectionCanvas");
+        expect(householdCard).toContain('composePurpose ?? "summary"');
         expect(householdCard).toContain('composePurpose === "context_facts"');
         expect(householdCard).not.toContain("InlineRuntimeFieldList");
     });
@@ -644,7 +644,9 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(runtimeCss).not.toContain("min-height: min(70vh, calc(100% - 32px))");
         expect(runtimeCss).toContain(".alloy-os-ucard__body");
         expect(runtimeCss).toContain("overflow-y: auto");
-        expect(runtimeCss).toContain("width: min(560px, calc(100% - 32px));");
+        expect(runtimeCss).toContain(
+            "width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));",
+        );
         expect(runtimeCss).toContain(".fp-composer-tier-label");
     });
 
@@ -667,7 +669,26 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(avatarComposer).toContain("setChildAvatarPreviewUrl");
         expect(avatarComposer).toContain("Remove");
         expect(avatarComposer).toContain("groupShowAvatarForNestedGroup");
+        expect(avatarComposer).toContain("data-child-avatar-upload");
+        expect(avatarComposer).toContain("builder?");
         expect(childrenCard).toContain("imageUrl={previewImageUrl}");
+        const childrenDrillIn = readSrc(
+            "components/admin/focusPanel/drillIn/FocusPanelChildrenDrillInComposer.tsx",
+        );
+        expect(childrenDrillIn).toContain("ChildProfileAvatarComposer");
+        expect(childrenDrillIn).toContain("builder={{ config, onConfigChange }}");
+    });
+
+    it("exposes child profile avatar composer on roster context facts", () => {
+        expect(childrenCard).toContain('groupKey="roster"');
+        expect(childrenCard).toContain("childRosterAvatarComposer");
+        expect(childrenCard).toContain('purpose="context_facts"');
+        expect(childrenCard).toContain("renderRecordAvatar");
+        const childrenDrillIn = readSrc(
+            "components/admin/focusPanel/drillIn/FocusPanelChildrenDrillInComposer.tsx",
+        );
+        expect(childrenDrillIn).toContain('groupKey="roster"');
+        expect(childrenDrillIn).toContain("ChildProfileAvatarComposer");
     });
 
     it("polish sprint — field instances own controls; evidence sections are cards", () => {
@@ -676,9 +697,8 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(layoutSurface).toContain("fp-field-instance__remove");
         expect(layoutSurface).toContain("FieldInstance");
         expect(layoutSurface).toContain("showAddField");
-        expect(addField).toContain("!regionSelected");
+        expect(addField).toContain("data-canvas-add-field");
         expect(childrenCard).toContain("EvidenceSectionCard");
-        expect(childrenCard).toContain("NestedSurfaceAddField");
         expect(childrenCard).not.toContain("InlineRuntimeFieldList");
         expect(evidenceCard).toContain("setNestedGroupEnabled");
         expect(evidenceCard).toContain("showAddField={false}");

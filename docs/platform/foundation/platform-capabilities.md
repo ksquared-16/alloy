@@ -147,9 +147,10 @@ The frozen [Operational Expectations architecture](../core/operational-expectati
 | Capability | Status | Description | Notes |
 |------------|--------|-------------|-------|
 | BOS foundation | **Complete** | Orchestrator, Task Assist, Workflow Assist | Human-in-the-loop |
+| BOS actionable interface (Create Lead) | **Complete** (local) | Command session: Conversation + Form → registered `create_lead` | Placement over Operational Command Runtime; Processing identity gate preserved; slash/briefing deferred |
 | Needs-attention enrich | **Complete** | Gated enrichment | |
 | Config/Layout Assist foundation | **Complete** | Proposals table | Apply catalog partial |
-| Autonomous agents | **Future** | Explicitly not roadmap execution | Paused |
+| Autonomous agents | **Future** | Explicitly not roadmap execution | Paused — distinct from human-confirmed BOS command sessions |
 | BOS identity system | **Complete** | Visual doctrine frozen | |
 
 ## Security & governance

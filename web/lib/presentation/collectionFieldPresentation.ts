@@ -137,6 +137,28 @@ export function normalizeCollectionFieldPresentation(
     };
 }
 
+/**
+ * Presentation config for a children collection field key.
+ * Legacy keys (`children.names|count|summary`) keep distinct modes — never collapse to one default.
+ */
+export function collectionPresentationForFieldKey(
+    fieldKey: string,
+    options?: {
+        collectionPresentation?: CollectionFieldPresentationConfig | null;
+        nameDisplay?: QueueRecordNameDisplay;
+    },
+): CollectionFieldPresentationConfig | null {
+    const collectionKey = normalizeCollectionFieldKey(fieldKey);
+    if (!collectionKey) return null;
+    if (options?.collectionPresentation) {
+        return normalizeCollectionFieldPresentation(options.collectionPresentation);
+    }
+    return (
+        legacyCollectionPresentationFromFieldKey(fieldKey, options?.nameDisplay)
+        ?? normalizeCollectionFieldPresentation(undefined)
+    );
+}
+
 /** Map legacy children.* primitive keys to equivalent collection configs. */
 export function legacyCollectionPresentationFromFieldKey(
     fieldKey: string,
@@ -418,11 +440,12 @@ function formatItemLine(item: CollectionItem, includedFields: readonly Collectio
 
     let head = nameSegment ?? "";
     if (includesAge && ageLabel) {
-        head = head ? `${head} (${ageLabel})` : ageLabel;
+        // Operator-facing list shape: "Blake Wenc · 3" (not parentheses).
+        head = head ? `${head} · ${ageLabel}` : ageLabel;
     } else if (!head && dobLabel) {
         head = dobLabel;
     } else if (head && includesDob && dobLabel) {
-        head = `${head} ${dobLabel}`;
+        head = `${head} · ${dobLabel}`;
     } else if (!head) {
         head = item.displayName.trim();
     }
@@ -509,7 +532,7 @@ export function renderCollectionFieldPresentation(
     if (config.displayMode === "summary") {
         const listBody = applyOverflow(lines, count, config);
         if (!listBody) return countLabel(count);
-        return `${countLabel(count)}: ${listBody}`;
+        return `${countLabel(count)} · ${listBody}`;
     }
 
     return applyOverflow(lines, count, config);
@@ -527,10 +550,11 @@ export function renderCollectionFieldFromContext(
     const collectionKey = normalizeCollectionFieldKey(fieldKey);
     if (!collectionKey) return null;
 
-    const config =
-        options?.collectionPresentation
-        ?? legacyCollectionPresentationFromFieldKey(fieldKey, options?.nameDisplay)
-        ?? normalizeCollectionFieldPresentation(undefined);
+    const config = collectionPresentationForFieldKey(fieldKey, {
+        collectionPresentation: options?.collectionPresentation,
+        nameDisplay: options?.nameDisplay,
+    });
+    if (!config) return null;
 
     return renderCollectionFieldPresentation(collectionKey, context, config, options?.record);
 }

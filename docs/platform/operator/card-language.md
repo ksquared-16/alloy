@@ -125,7 +125,7 @@ Rules:
 
 > **Employee clarification:** Employee status is not a Household field. When the context changes to Sarah and Sarah is linked to an Employee entity, the configured surface may include an Employee card. Relationship is derived — never an "Employee = Yes" checkbox as canonical truth.
 
-Architecture freeze: **no additional interaction primitives** should be introduced before card implementation unless a genuine contradiction is discovered.
+> **Card Links (Focus Panel):** Configured in-panel links between cards (e.g. Children → Schedule) are Perspective Changes owned by `FocusPanelCoordination.requestFocus`. Platform helpers live in `focusPanelCardLinks.ts`. They never open a new page, drawer, or workspace — they change the active card inside the same Focus Panel. Surface Builder authors which fields/controls link where.
 
 ### Editing
 

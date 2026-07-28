@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import { join } from "node:path";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 
 process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-test-"));
 
@@ -18,14 +18,17 @@ const { getProductDefinitionForCapability, addAcceptedDecision, recordMissionInH
 const { capabilityNameFromIntent } = await import("../lib/vacilando/mission-director.mjs");
 const { retrieveForCapability, readSnapshot } = await import("../lib/vacilando/knowledge.mjs");
 const { createMission, getMission, recoverMissions, updateMission } = await import("../lib/vacilando/commands/missions.mjs");
-const { compile } = await import("../lib/vacilando/mission-compiler.mjs");
+const { compile, isOperatorDirected } = await import("../lib/vacilando/mission-compiler.mjs");
+const { evaluateMission: evalMission } = await import("../lib/vacilando/acceptance.mjs");
 const { analyzeGap } = await import("../lib/vacilando/gap-analysis.mjs");
 const { checkStartPreconditions, serializePackagePrompt, parseOutcome } = await import("../lib/vacilando/mission-executor.mjs");
 const { composeCounsel, selectFrontier, attemptCounsel, readinessCounsel, frontierPhrase } = await import("../lib/vacilando/counsel.mjs");
 const { assembleConversation } = await import("../lib/vacilando/conversation.mjs");
 const { composeUnderstanding } = await import("../lib/vacilando/shared-understanding.mjs");
-const { composeOperations, stateKeyFor, assembleReview, STATES } = await import("../lib/vacilando/operations.mjs");
+const { classifyCommandState, assessCommand, budgetFor, isValidTurnEnd, turnEndViolation, runGoverned, VALID_TURN_ENDS, WORKER_POLICY, COMMAND_CLASSES, classifyPassiveWaitEnding, buildStopDecision, buildSessionStartContext } = await import("../lib/vacilando/command-budget.mjs");
+const { composeOperations, stateKeyFor, assembleReview, STATES, conversationStage, understandingQuestions } = await import("../lib/vacilando/operations.mjs");
 const { close: directorCloseFn } = await import("../lib/vacilando/mission-director.mjs");
+const { composePresence, isLaunching, launchSequence, executionEvent, LAUNCH_STEPS } = await import("../lib/vacilando/presence.mjs");
 
 test("readiness is computed: a complete package is ready", () => {
   const cap = retrieveCapability("Build Access & Roles V2");
@@ -565,12 +568,14 @@ test("SU: a superseded decision is NOT active — it is demoted to history", () 
   assert.ok(u.set_aside.some((s) => s.text === "Old direction"), "superseded claim is retained in history");
 });
 
-test("SU: a Director recommendation stays distinguishable from a decision", () => {
+test("SU: a Director recommendation is present, OPTIONAL, and distinct from a decision", () => {
   const u = U({ pkg: pkgU({ suggested: [{ statement: "cover roadmap item" }, { statement: "address ki1" }] }) });
   assert.ok(u.advises, "recommendation is present");
-  assert.match(JSON.stringify(u.advises), /criteria|criterion/i);
+  assert.equal(u.advises.optional, true, "surfaced as optional, not a pending decision");
+  assert.equal(u.advises.count, 2);
+  assert.doesNotMatch(u.advises.headline, /to confirm|not yet decided/i); // no false 'you must decide' pressure
   // it is NOT in the relied-upon (decided) set
-  assert.ok(!u.relied_upon.some((r) => /criteria|criterion/i.test(r.text)));
+  assert.ok(!u.relied_upon.some((r) => /criteria|criterion|check/i.test(r.text)));
 });
 
 test("SU: an assumption/constraint does not present as a fact", () => {
@@ -838,4 +843,393 @@ test("ops closure: accepted work closes, freeing capacity and preserving artifac
   assert.equal(r.ok, true);
   assert.equal(r.status, "closed");
   assert.equal(getMission(m.mission_id).status, "closed");
+});
+
+// ============================================================================
+// Mission-Intent Integrity — the operator's approved intent is authoritative
+// through compilation and verification. Encodes the failed Access & Roles run:
+// a substantial discovery scope must NOT execute the seeded "refresh V2 proposal"
+// objective, and must not pass acceptance on a generic proposal artifact.
+// ============================================================================
+
+const DISCOVERY = "Discover and specify Access & Roles V2: inventory the real authority paths and gaps, define the canonical security model, produce implementation-ready specifications, and sequence a safe delivery plan. Do not build V2 immediately; do not modify application source.";
+function directedPkg(intent = DISCOVERY) {
+  const cap = retrieveCapability("Build Access & Roles V2").capability;
+  const snap = retrieveForCapability(cap);
+  const m = createMission({ slot: 6, provider: "claude", title: "t", objective: "o", status: "draft" });
+  const { package: pkg } = compile({ capability: cap, snapshot: snap, mission: { ...m, intent } });
+  return { cap, snap, m, pkg };
+}
+
+test("intent authority: a substantial operator direction is detected as operator-directed", () => {
+  const cap = retrieveCapability("Build Access & Roles V2").capability;
+  assert.equal(isOperatorDirected({ intent: DISCOVERY }, cap), true);
+  assert.equal(isOperatorDirected({ intent: "Access & Roles" }, cap), false);
+  assert.equal(isOperatorDirected({ intent: "Access & Roles V2" }, cap), false);
+  assert.equal(isOperatorDirected({ intent: "" }, cap), false);
+});
+
+test("intent authority: the objective derives from the operator's intent, NOT the generic template", () => {
+  const { pkg } = directedPkg();
+  assert.equal(pkg.operator_directed, true);
+  assert.match(pkg.objective, /inventory the real authority paths/i);          // the operator's words
+  assert.doesNotMatch(pkg.objective, /produce the Access & Roles V2 implementation proposal/i); // NOT the template
+});
+
+test("intent authority: thin capability-name intent falls back to the template (Phase 1–3 preserved)", () => {
+  const { pkg } = directedPkg("Access & Roles");
+  assert.equal(pkg.operator_directed, false);
+  assert.match(pkg.objective, /produce the Access & Roles V2 implementation proposal/i);
+});
+
+test("intent authority: deliverables, exclusions, and acceptance all derive from the approved intent", () => {
+  const { pkg } = directedPkg();
+  // deliverable is mission-scoped, not the generic proposal path
+  assert.match(pkg.expected_deliverables[0].path, /\/qa\/missions\//);
+  assert.doesNotMatch(pkg.expected_deliverables[0].path, /v2-proposal\.md$/);
+  // the operator's explicit "do not" became out-of-scope
+  assert.ok(pkg.scope_excluded.some((s) => /do not build v2/i.test(s)));
+  assert.ok(pkg.scope_excluded.some((s) => /do not modify application source/i.test(s)));
+  // acceptance is intent-bound; there is NO generic "V2 proposal exists" criterion
+  assert.ok(pkg.acceptance_criteria.some((c) => c.type === "intent-fidelity"));
+  assert.ok(!pkg.acceptance_criteria.some((c) => /V2 proposal exists/i.test(c.statement)));
+});
+
+test("verification integrity: an intent-fidelity criterion is never auto-met (operator must confirm)", () => {
+  const { m, pkg } = directedPkg();
+  const tmp = mkdtempSync(join(os.tmpdir(), "vac-cwd-"));
+  const result = evalMission({ ...m, intent: DISCOVERY, git_baseline: [] }, pkg, { worktreePath: tmp });
+  const acf = result.criteria.find((c) => c.criterion_id === "ACF");
+  assert.equal(acf.status, "operator_review"); // semantic fidelity is the operator's judgment, never auto-passed
+});
+
+test("REGRESSION (failed A&R run): refreshing the generic V2 proposal cannot pass a discovery mission", () => {
+  const { m, pkg } = directedPkg();
+  const tmp = mkdtempSync(join(os.tmpdir(), "vac-cwd-"));
+  // Simulate the failure: the generic proposal file exists, but the mission's own
+  // output does not. Acceptance must NOT pass.
+  const proposalDir = join(tmp, "docs/platform/planning/vacilando-os/qa/vertical-slice-v1");
+  mkdirSync(proposalDir, { recursive: true });
+  writeFileSync(join(proposalDir, "access-roles-v2-proposal.md"), "# refreshed generic proposal\n", "utf8");
+  const result = evalMission({ ...m, intent: DISCOVERY, git_baseline: [] }, pkg, { worktreePath: tmp });
+  assert.notEqual(result.gate, "pass");                       // cannot pass on the wrong artifact
+  const ac1 = result.criteria.find((c) => c.criterion_id === "AC1");
+  assert.equal(ac1.status, "unmet");                          // the mission's own output is absent
+});
+
+test("intent authority: the operator's scope is the objective, not a side decision", () => {
+  // The failure was that the scope became an accepted_decision while a generic
+  // objective stayed authoritative. Here the intent IS the objective.
+  const { pkg } = directedPkg();
+  assert.ok(pkg.objective.includes("security model")); // the operator's substance is in the objective
+});
+
+// ============================================================================
+// Understanding stage — the operator sees only the stage they are in. Director's
+// open questions are shown (not buried under preparation); the operator answers;
+// preparation waits until understanding is sufficient.
+// ============================================================================
+
+const pkgQ = (o = {}) => ({
+  readiness_verdict: o.verdict || { verdict: "Needs Clarification", why: "open questions", what_to_do: "answer them" },
+  readiness_status: o.status || "awaiting_operator",
+  gap_report: { findings: { unknowns: o.unknowns || [{ id: "u1", question: "The intent's scope includes ki1?", blocking: false }], conflicts: o.conflicts || [{ id: "c1", detail: "Intent text overlaps rejected pattern rp1: Per-user direct grants" }] } },
+});
+
+test("understanding: Director's open questions are surfaced from gap conflicts + unknowns", () => {
+  const qs = understandingQuestions({}, pkgQ());
+  assert.equal(qs.length, 2);
+  const conflict = qs.find((q) => q.id === "c1");
+  assert.ok(conflict.blocks);                                   // a conflict is a blocking question
+  assert.match(conflict.question, /set aside|did you mean|exclud/i);
+  assert.ok(conflict.why && conflict.tests);                    // why it matters + what it tests
+  const unknown = qs.find((q) => q.id === "u1");
+  assert.equal(unknown.blocks, false);
+  assert.doesNotMatch(unknown.question, /the intent's/i);       // de-jargoned
+});
+
+test("understanding: answered questions drop off", () => {
+  assert.equal(understandingQuestions({ answered_questions: ["c1", "u1"] }, pkgQ()).length, 0);
+  assert.equal(understandingQuestions({ answered_questions: ["c1"] }, pkgQ()).length, 1);
+});
+
+test("stage: a mission with open questions is Understanding, not Preparing", () => {
+  assert.equal(conversationStage({ status: "draft" }, pkgQ()), "understanding");
+});
+
+test("stage: preparation waits until Ready with no open questions", () => {
+  const ready = { readiness_verdict: { verdict: "Ready" }, readiness_status: "ready", gap_report: { findings: {} } };
+  assert.equal(conversationStage({ status: "ready" }, ready), "preparing");
+  // Ready but still carrying a question → stay in Understanding
+  const readyWithQ = { ...ready, gap_report: { findings: { unknowns: [{ id: "u1", question: "confirm scope?", blocking: false }] } } };
+  assert.equal(conversationStage({ status: "ready" }, readyWithQ), "understanding");
+  assert.equal(conversationStage({ status: "ready", answered_questions: ["u1"] }, readyWithQ), "preparing"); // answered → prepares
+});
+
+test("stage: executing / reviewing / closed map to their stages", () => {
+  assert.equal(conversationStage({ status: "running" }, pkgQ()), "executing");
+  assert.equal(conversationStage({ status: "waiting_for_acceptance" }, {}), "reviewing");
+  assert.equal(conversationStage({ status: "completed" }, {}), "reviewing");
+  assert.equal(conversationStage({ status: "closed" }, {}), "closed");
+});
+
+test("stage: understanding offers 'answer'; start is withheld until preparing", () => {
+  const u = composeOperations({ mission: { mission_id: "m", status: "draft" }, package: pkgQ(), acceptance: [] });
+  assert.equal(u.stage, "understanding");
+  assert.ok(u.actions.includes("answer"));
+  assert.ok(!u.actions.includes("start"));              // cannot start while questions are open
+  assert.ok(u.questions.length >= 1);
+});
+
+test("understanding: answering clears the verdict's blocking findings → Ready", () => {
+  const gap = { findings: { conflicts: [{ id: "c1", detail: "overlaps rejected pattern rp1", feeds_verdict: "Needs Clarification" }] } };
+  const pkgReady = { readiness_status: "ready" };
+  assert.equal(deriveVerdict(gap, pkgReady).verdict, "Needs Clarification");            // conflict blocks
+  assert.equal(deriveVerdict(gap, pkgReady, { answered: ["c1"] }).verdict, "Ready");     // answered → cleared
+});
+
+// ============================================================================
+// Worker Operating Policy — forward progress + command budgets. A managed worker
+// owns forward progress and can never end a turn because a command is "still
+// running". Encodes the exact typecheck regression.
+// ============================================================================
+
+test("command state: running-but-recent-progress is progressing; no progress past soft is stalled", () => {
+  const soft = budgetFor("typecheck").soft_ms;
+  // Output appeared just now → progressing.
+  assert.equal(classifyCommandState({ startedAt: 0, now: 5 * 60000, lastProgressAt: 5 * 60000 - 1000, soft_ms: soft }), "progressing");
+  // Alive but no new output for longer than the soft budget → stalled (a PID is not progress).
+  assert.equal(classifyCommandState({ startedAt: 0, now: 5 * 60000, lastProgressAt: 0, soft_ms: soft }), "stalled");
+  assert.equal(classifyCommandState({ exited: true, exitCode: 0, startedAt: 0 }), "complete");
+  assert.equal(classifyCommandState({ exited: true, exitCode: 1, startedAt: 0 }), "failed");
+  assert.equal(classifyCommandState({ blocker: "missing credential", startedAt: 0 }), "blocked");
+});
+
+test("command budget: within → continue; soft+progress → parallel; soft+stall → diagnose; hard → corrective", () => {
+  const b = budgetFor("typecheck");
+  assert.equal(assessCommand({ cls: "typecheck", startedAt: 0, now: 30 * 1000, lastProgressAt: 29 * 1000 }).directive, "continue");
+  assert.equal(assessCommand({ cls: "typecheck", startedAt: 0, now: b.soft_ms + 5000, lastProgressAt: b.soft_ms + 4000 }).directive, "continue_with_parallel_work");
+  assert.equal(assessCommand({ cls: "typecheck", startedAt: 0, now: b.soft_ms + 5000, lastProgressAt: 0 }).directive, "diagnose");
+  const hard = assessCommand({ cls: "typecheck", startedAt: 0, now: b.hard_ms + 5000, lastProgressAt: 0 });
+  assert.equal(hard.phase, "hard_exceeded");
+  assert.equal(hard.directive, "corrective_action"); // never "keep waiting"
+  assert.ok(hard.fallback && hard.escalation);
+});
+
+test("turn-end: only complete/needs-operator/blocked/failed/paused can end a turn", () => {
+  for (const ok of ["complete", "needs_operator", "blocked", "failed", "paused"]) assert.ok(isValidTurnEnd(ok));
+  for (const bad of ["running", "still_running", "waiting_for_typecheck", "waiting_for_tests", "waiting_for_server", "monitoring", "no_errors_so_far", "will_notify", "status_unchanged", "stalled"]) {
+    assert.equal(isValidTurnEnd(bad), false, `${bad} must not end a turn`);
+    assert.ok(turnEndViolation(bad).message.length > 0);
+  }
+});
+
+test("REGRESSION (the typecheck failure): a worker cannot end its turn on 'still running'", () => {
+  // 1) edit a trivial file, 2) start a full typecheck, 3) it exceeds the soft
+  // threshold, 4) worker polls, 5) worker tries to end with "still running".
+  const v = turnEndViolation("waiting_for_typecheck");
+  assert.ok(v && !v.ok);
+  assert.match(v.message, /forward progress|not a valid turn end/i);
+  // At 7 minutes with no progress, the typecheck is past its hard budget and STALLED —
+  // the required directive is corrective action, not another poll.
+  const a = assessCommand({ cls: "typecheck", startedAt: 0, now: 7 * 60000, lastProgressAt: 0 });
+  assert.equal(a.state, "stalled");
+  assert.equal(a.phase, "hard_exceeded");
+  assert.equal(a.directive, "corrective_action");
+});
+
+test("governed runner: a completing command returns complete with output", async () => {
+  const r = await runGoverned({ command: "node", args: ["-e", "process.stdout.write('ok')"], cls: "targeted_test" });
+  assert.equal(r.state, "complete");
+  assert.match(r.output, /ok/);
+  assert.ok(!r.killed_at_hard);
+});
+
+test("governed runner: a stalled command is terminated at the hard budget — never left 'running'", async () => {
+  // A command that produces no output and would outlive its budget → hard-killed,
+  // returned as a diagnosed stall, NOT "still running". Tiny budget for the test.
+  const r = await runGoverned({ command: "node", args: ["-e", "setTimeout(()=>{}, 60000)"], budget: { soft_ms: 60, hard_ms: 200, fallback: "narrow", escalation: "isolate" } });
+  assert.notEqual(r.state, "complete");
+  assert.ok(r.killed_at_hard, "the command was terminated at the hard budget");
+  assert.match(r.summary, /hard budget|terminated/i);
+});
+
+// ============================================================================
+// Operational Presence — Director stays quietly present across the lifecycle. A
+// single, event-driven voice: the operator never has to ask "what is happening?".
+// Pure projection over durable state; silence (a stable line) is correct.
+// ============================================================================
+
+test("presence: every lifecycle stage has an honest, non-empty voice", () => {
+  const cases = [
+    ["understanding", { mission: { status: "draft" }, stage: "understanding", questions: [{ id: "u1" }] }],
+    ["preparing", { mission: { status: "draft" }, stateKey: "preparing", counsel: { closing: "I need a decision first." } }],
+    ["ready", { mission: { status: "draft" }, stateKey: "ready", counsel: { closing: "I'd go ahead." } }],
+    ["launching", { mission: { status: "starting", current_phase: "attaching engine" } }],
+    ["executing", { mission: { status: "running", current_phase: "using Write", last_activity_at: "2026-07-25T14:00:00Z" } }],
+    ["reviewing", { mission: { status: "waiting_for_acceptance" } }],
+    ["accepted", { mission: { status: "completed" } }],
+    ["closed", { mission: { status: "closed" } }],
+    ["needs_operator", { mission: { status: "waiting_for_operator" } }],
+    ["blocked", { mission: { status: "blocked" } }],
+    ["at_risk", { mission: { status: "failed" } }],
+  ];
+  for (const [phase, inp] of cases) {
+    const p = composePresence(inp);
+    assert.equal(p.phase, phase, `${phase} → phase`);
+    assert.ok(p.line && p.line.trim().length > 0, `${phase} has a voice`);
+    // No manufactured reassurance / "still here" narration.
+    assert.doesNotMatch(p.line, /still here|just checking|hang tight/i);
+  }
+});
+
+test("presence: LAUNCHING is distinct from executing until the worker actually produces activity", () => {
+  // Dispatched but no activity yet → still launching (fixes the 'running with dead air').
+  assert.equal(isLaunching({ status: "running", current_phase: "dispatching work" }), true);
+  assert.equal(composePresence({ mission: { status: "running", current_phase: "dispatching work" } }).phase, "launching");
+  // First real activity flips it to executing.
+  const execMission = { status: "running", current_phase: "using Bash", last_activity_at: "2026-07-25T14:00:00Z" };
+  assert.equal(isLaunching(execMission), false);
+  assert.equal(composePresence({ mission: execMission }).phase, "executing");
+});
+
+test("presence: the launch sequence is an ordered, honest set of real steps", () => {
+  const seq = launchSequence({ current_phase: "attaching engine" });
+  assert.deepEqual(LAUNCH_STEPS.map((s) => s.key), ["preparing", "verifying", "attaching", "dispatching"]);
+  assert.equal(seq.current, "attaching");
+  const active = seq.steps.find((s) => s.active);
+  assert.equal(active.key, "attaching");
+  assert.ok(seq.steps.slice(0, 2).every((s) => s.done), "earlier steps are done");
+  assert.ok(seq.steps[3].active === false && seq.steps[3].done === false, "later steps are pending");
+});
+
+test("presence: executing is event-driven from the phase, coarse not twitchy", () => {
+  assert.equal(executionEvent({ current_phase: "using Write" }).key, "writing");
+  assert.equal(executionEvent({ current_phase: "using Read" }).key, "exploring");
+  assert.equal(executionEvent({ current_phase: "running vitest" }).key, "verifying");
+  // A running worker with a writing phase speaks the deliverable event.
+  assert.match(composePresence({ mission: { status: "running", current_phase: "using Write", last_activity_at: "x" } }).line, /writing the deliverable/i);
+});
+
+test("presence: silence is stable — identical state yields an identical line (no manufactured updates)", () => {
+  const m = { mission: { status: "running", current_phase: "using Bash", last_activity_at: "2026-07-25T14:00:00Z" } };
+  assert.equal(composePresence(m).line, composePresence(m).line);
+});
+
+test("policy is one canonical text carrying the load-bearing rules", () => {
+  assert.match(WORKER_POLICY, /forward progress/i);
+  assert.match(WORKER_POLICY, /still running/i);
+  assert.match(WORKER_POLICY, /soft/i);
+  assert.match(WORKER_POLICY, /hard/i);
+  assert.ok(Object.keys(COMMAND_CLASSES).includes("typecheck") && Object.keys(COMMAND_CLASSES).includes("full_test_suite"));
+});
+
+// ============================================================================
+// Direct-worker DELIVERY + turn-end GUARD. A directly-opened Claude loads CLAUDE.md
+// but NOT .alloy-agent-instructions.md, so the policy was never delivered to it (a
+// file on disk is not consumption). SessionStart delivers it; a Stop-hook guard
+// refuses a turn that ends on "still running". Both are thin wrappers over these
+// tested pure functions. Semantic rules — not brittle provider-prose snapshots.
+// ============================================================================
+
+test("passive-wait ending: forbidden phrasing is flagged; resolution + quoting are not", () => {
+  // The exact failure mode: a worker hands background monitoring back to the operator.
+  assert.ok(classifyPassiveWaitEnding("The build is still running; I'll check back later.").passive);
+  assert.ok(classifyPassiveWaitEnding("No errors so far — I'll keep you posted.").passive);
+  assert.ok(classifyPassiveWaitEnding("Waiting for the typecheck to finish.").passive);
+  // Resolution (diagnosis / corrective action / a concrete blocker) suppresses a false positive.
+  assert.equal(classifyPassiveWaitEnding("The suite ran long so I terminated it, isolated the slow suite, and the targeted run completed green.").passive, false);
+  assert.equal(classifyPassiveWaitEnding("It's still running but blocked on a missing DB credential — needs your input.").passive, false);
+  // A quoted / meta mention of the phrase is discussion, not a live report.
+  assert.equal(classifyPassiveWaitEnding('The rule is: "Still running" is not a valid state to end a turn on. Nothing is running here.').passive, false);
+  // Clean terminal / a real question / empty → not flagged.
+  assert.equal(classifyPassiveWaitEnding("Typecheck completed with no errors. Complete.").passive, false);
+  assert.equal(classifyPassiveWaitEnding("Which environment should I target for the migration?").passive, false);
+  assert.equal(classifyPassiveWaitEnding("").passive, false);
+});
+
+test("stop-guard decision: blocks a passive turn-end, points at the governed runner, never loops", () => {
+  const blocked = buildStopDecision({ lastAssistantText: "The typecheck is still running; I'll notify you when it finishes.", stopHookActive: false });
+  assert.equal(blocked.block, true);
+  assert.match(blocked.reason, /forward progress|still running/i);
+  assert.match(blocked.reason, /command-budget\.mjs run/);                 // steers to the governed runner
+  assert.match(blocked.reason, /complete|needs_operator|blocked|failed/);  // names the valid terminal states
+  // A resolved ending is allowed through.
+  assert.equal(buildStopDecision({ lastAssistantText: "Terminated the stalled build and isolated the failure; blocked on X — needs your input.", stopHookActive: false }).block, false);
+  // Loop backstop: once the guard is already active, allow the stop regardless (fires at most once per stuck turn).
+  assert.equal(buildStopDecision({ lastAssistantText: "still running", stopHookActive: true }).block, false);
+});
+
+test("session-start delivery: slot instructions become SessionStart additionalContext", () => {
+  assert.equal(buildSessionStartContext("   "), null);                     // nothing to deliver → the hook stays silent
+  const ctx = buildSessionStartContext("# Alloy agent instructions\nWorker Operating Policy: own forward progress.");
+  assert.match(ctx, /Managed-slot operating instructions/);               // framed as the worker's own operating rules
+  assert.match(ctx, /Worker Operating Policy/);                            // carries the delivered content
+});
+
+test("CLI seams: session-start emits additionalContext; stop-guard blocks a passive transcript, allows a resolved one", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const cbPath = new URL("../lib/vacilando/command-budget.mjs", import.meta.url).pathname;
+  const dir = mkdtempSync(join(os.tmpdir(), "cb-cli-"));
+
+  // session-start over a temp instructions file → valid SessionStart hook JSON.
+  const instr = join(dir, "instr.md");
+  writeFileSync(instr, "# Slot\n\nWorker Operating Policy: \"still running\" is not a valid turn end.");
+  const ss = JSON.parse(execFileSync("node", [cbPath, "session-start", instr], { encoding: "utf8" }));
+  assert.equal(ss.hookSpecificOutput.hookEventName, "SessionStart");
+  assert.match(ss.hookSpecificOutput.additionalContext, /Worker Operating Policy/);
+  // missing file → silent (empty stdout), exit 0.
+  assert.equal(execFileSync("node", [cbPath, "session-start", join(dir, "nope.md")], { encoding: "utf8" }).trim(), "");
+
+  // stop-guard over a PASSIVE transcript → block decision.
+  const tr = join(dir, "t.jsonl");
+  const asst = (text) => JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text }] } }) + "\n";
+  writeFileSync(tr, asst("The tests are still running; I'll report back when they finish."));
+  const sg = execFileSync("node", [cbPath, "stop-guard"], { input: JSON.stringify({ transcript_path: tr, stop_hook_active: false }), encoding: "utf8" });
+  assert.match(sg, /"decision":"block"/);
+  // RESOLVED transcript → allow (empty stdout).
+  writeFileSync(tr, asst("Terminated the stall at the hard budget, isolated it; blocked on a credential — needs your input."));
+  const sg2 = execFileSync("node", [cbPath, "stop-guard"], { input: JSON.stringify({ transcript_path: tr, stop_hook_active: false }), encoding: "utf8" });
+  assert.equal(sg2.trim(), "");
+});
+
+test("budget class names resolve tolerantly (policy prose is hyphenated; keys are underscored)", () => {
+  // The exact gotcha a real worker hit: it typed the class as the policy writes it.
+  assert.equal(budgetFor("targeted-test"), budgetFor("targeted_test"));   // hyphen → underscore
+  assert.equal(budgetFor("full-suite"), budgetFor("full_test_suite"));    // prose alias → real class
+  assert.equal(budgetFor("dev-server-start"), budgetFor("dev_server_start"));
+  assert.equal(budgetFor("browser-validation"), budgetFor("browser_validation"));
+  // A resolved class must NOT be the default fallback (which is the silent-degradation bug).
+  assert.notEqual(budgetFor("targeted-test").soft_ms, budgetFor("default").soft_ms);
+  // A genuinely unknown class still falls back to default.
+  assert.equal(budgetFor("nonsense-class"), budgetFor("default"));
+});
+
+test("governed runner (Case A — long but progressing): past the soft budget, still completes — not killed", async () => {
+  // Emits output steadily so lastProgressAt keeps advancing; soft is tiny, hard generous.
+  // "Slow but progressing" must NOT be killed just for being slow.
+  const r = await runGoverned({
+    command: "node",
+    args: ["-e", "let n=0;const t=setInterval(()=>{process.stdout.write('tick'+(++n)+'\\n');if(n>=6){clearInterval(t)}},40)"],
+    budget: { soft_ms: 60, hard_ms: 5000, fallback: "run the targeted suite", escalation: "isolate" },
+  });
+  assert.equal(r.state, "complete");
+  assert.ok(!r.killed_at_hard, "a progressing command must not be terminated");
+  assert.ok(r.soft_exceeded, "it ran past its soft budget — proving slow-but-progressing is allowed to finish");
+  assert.match(r.output, /tick6/);
+});
+
+test("governed runner (Case B — stalled): terminated with a corrective directive, state never 'running'", async () => {
+  // Alive but producing no output past its budget → hard-killed, returned as a diagnosed
+  // stall with a corrective directive. The turn can never end on "running".
+  const r = await runGoverned({
+    command: "node",
+    args: ["-e", "setInterval(()=>{},1000)"],
+    budget: { soft_ms: 40, hard_ms: 150, fallback: "run the targeted suite", escalation: "isolate" },
+  });
+  assert.equal(r.killed_at_hard, true);
+  assert.equal(r.state, "stalled");
+  assert.equal(r.directive, "corrective_action");
+  assert.match(r.summary, /terminated|hard budget/i);
+  assert.equal(isValidTurnEnd(r.state), false, "'stalled' is not a valid turn end — it demands corrective action");
 });

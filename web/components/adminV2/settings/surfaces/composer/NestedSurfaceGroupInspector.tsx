@@ -2,7 +2,12 @@
 
 import type { NestedSurfaceGroupConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { NestedSurfaceGroupDef } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { HOUSEHOLD_CONTACT_SURFACE_ID, HOUSEHOLD_SURFACE_ID, CHILD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
+import { CHILDREN_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    HOUSEHOLD_CONTACT_SURFACE_ID,
+    HOUSEHOLD_SURFACE_ID,
+    CHILD_SURFACE_ID,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import { defaultContactFieldModes } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
 import { defaultChildFieldModes } from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
 import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
@@ -50,9 +55,16 @@ export default function NestedSurfaceGroupInspector({
 
     const isContactSurface = surfaceId === HOUSEHOLD_CONTACT_SURFACE_ID && groupDef.key === "contact_fields";
     const isChildSurface = surfaceId === CHILD_SURFACE_ID;
+    const isChildrenSurface = surfaceId === CHILDREN_SURFACE_ID;
     const isChildrenGroup = groupDef.key === "children";
     const isChildIdentity = isChildSurface && groupDef.key === "identity";
+    const isChildrenIdentityOrRoster =
+        isChildrenSurface && (groupDef.key === "identity" || groupDef.key === "roster");
+    const isHouseholdContactGroup =
+        surfaceId === HOUSEHOLD_SURFACE_ID && !isChildrenGroup && groupDef.key !== "address";
     const isChildFieldGroup = isChildSurface && !isChildIdentity && groupDef.key !== "readiness";
+    const showAvatarControls =
+        isChildIdentity || isChildrenIdentityOrRoster || isHouseholdContactGroup || isChildrenGroup;
 
     return (
         <div className="process-config-setup-card space-y-4 p-4" data-nested-group-inspector={groupDef.key}>
@@ -73,6 +85,31 @@ export default function NestedSurfaceGroupInspector({
                     />
                     Show this section
                 </label>
+            :   null}
+
+            {showAvatarControls ?
+                <div className="space-y-2 border-t border-alloy-stone/10 pt-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Avatar</p>
+                    <label className="flex items-center gap-2 text-xs text-alloy-midnight/70">
+                        <input
+                            type="checkbox"
+                            checked={opts.showAvatar !== false}
+                            onChange={(e) => patchDisplayOptions({ showAvatar: e.target.checked })}
+                            data-nested-group-show-avatar
+                        />
+                        Show avatar
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-alloy-midnight/70">
+                        <input
+                            type="checkbox"
+                            checked={opts.useProfilePhotos !== false}
+                            disabled={opts.showAvatar === false}
+                            onChange={(e) => patchDisplayOptions({ useProfilePhotos: e.target.checked })}
+                            data-nested-group-use-profile-photos
+                        />
+                        Load profile photos when available
+                    </label>
+                </div>
             :   null}
 
             {!isChildrenGroup && !isContactSurface && surfaceId === HOUSEHOLD_SURFACE_ID ?

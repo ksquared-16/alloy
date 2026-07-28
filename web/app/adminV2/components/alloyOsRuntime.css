@@ -1616,16 +1616,65 @@ html[data-alloy-os-runtime="on"]
   }
 }
 
-/* Universal Card — tier hierarchy + density (white-on-white, quiet borders) */
+/* Queue row card shell — same soft stone perimeter + layered elevation as Universal Card.
+ * Owned by QUEUE_ROW_CARD_SHELL_CLASS → `.alloy-os-queue-row-card` (runtime + Builder). */
+.alloy-os-queue-row-card {
+  border-color: var(--alloy-os-queue-row-border, var(--alloy-os-fp-card-border));
+  border-radius: var(--alloy-os-fp-card-radius, 14px);
+  background: var(--alloy-os-queue-row-surface, #fff);
+  box-shadow: var(--alloy-os-queue-row-shadow, var(--alloy-os-fp-card-shadow));
+  transition:
+    box-shadow var(--alloy-os-motion-hover, 80ms) ease,
+    border-color var(--alloy-os-motion-hover, 80ms) ease,
+    background var(--alloy-os-motion-hover, 80ms) ease;
+}
+.alloy-os-queue-row-card:hover {
+  box-shadow: var(--alloy-os-queue-row-shadow-hover, var(--alloy-os-fp-card-shadow-hover));
+}
+.alloy-os-queue-row-card.alloy-os-queue-row-card--selected,
+.alloy-os-queue-row-card[data-queue-row-active="true"] {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 42%, var(--alloy-os-fp-card-border));
+  box-shadow: var(--alloy-os-queue-row-shadow-hover, var(--alloy-os-fp-card-shadow-hover));
+}
+
+/* Universal Card — shared shell (white surface, soft stone perimeter, layered elevation).
+ * No decorative left rails / domain tints — Bend Pine stays on actions/selected/status only.
+ * overflow visible so layered box-shadow is not clipped by the shell. */
 .alloy-os-ucard {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  /* Card border prominence — matches the Activity cockpit cards for one cohesive definition */
-  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 20%, var(--alloy-os-border, #e5e9ef));
-  border-radius: 10px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #e5e9ef)));
+  border-radius: var(--alloy-os-fp-card-radius, 14px);
   background: var(--alloy-os-surface, #fff);
-  overflow: hidden;
+  box-shadow: var(--alloy-os-fp-card-shadow);
+  overflow: visible;
+  isolation: isolate;
+  transition: box-shadow var(--alloy-os-motion-hover, 80ms) ease, border-color var(--alloy-os-motion-hover, 80ms) ease;
+}
+
+.alloy-os-ucard__header,
+.alloy-os-ucard__body,
+.alloy-os-ucard__footer {
+  border-radius: inherit;
+}
+
+/* Tiny hover lift only for cards that expose operator controls (clickable / expandable). */
+.alloy-os-ucard:has(button:not(:disabled)):hover {
+  box-shadow: var(--alloy-os-fp-card-shadow-hover, var(--alloy-os-elevation-2, 0 4px 12px rgba(20, 25, 34, 0.08)));
+}
+
+/* Elevated Focus Card owns its own depth shadow — do not compete with base hover. */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard:hover {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.7) inset,
+    0 2px 8px -3px rgba(15, 23, 42, 0.16),
+    0 24px 44px -22px rgba(15, 23, 42, 0.34),
+    0 56px 110px -44px rgba(15, 23, 42, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 24%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, transparent);
 }
 
 .alloy-os-ucard--tier-attention,
@@ -1633,24 +1682,18 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard[data-universal-card-key="attention"],
 .alloy-os-ucard[data-universal-card-key="current_mission"],
 .alloy-os-ucard[data-universal-card-key="primary_next_action"] {
-  border-left-width: 3px;
-  border-left-color: #d97706;
+  /* Uniform perimeter — no decorative accent rail */
+  border-left-width: 1px;
+  border-left-color: var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
 .alloy-os-ucard--tier-work,
 .alloy-os-ucard[data-card-role="active-work"] {
-  border-left-width: 3px;
-  border-left-color: var(--alloy-os-bend-pine, #00a283);
+  border-left-width: 1px;
+  border-left-color: var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
-.alloy-os-ucard--tier-attention .alloy-os-ucard__title,
-.alloy-os-ucard--tier-work .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="attention"] .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="current_mission"] .alloy-os-ucard__title {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--alloy-os-midnight, #273f52);
-}
+/* Title chrome unified below (.alloy-os-ucard__title) — no tier-specific title overrides. */
 
 .alloy-os-ucard--tier-attention .alloy-os-ucard__insight,
 .alloy-os-ucard--tier-work .alloy-os-ucard__insight,
@@ -1670,7 +1713,7 @@ html[data-alloy-os-runtime="on"]
 
 .alloy-os-ucard--tier-context,
 .alloy-os-ucard[data-card-role="context"] {
-  border-left: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 90%, transparent);
+  border-left: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
 .alloy-os-ucard--tier-context .alloy-os-ucard__insight,
@@ -1684,11 +1727,11 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard--tier-historical,
 .alloy-os-ucard[data-card-role="reference"],
 .alloy-os-ucard[data-card-role="history"] {
-  border-left: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 85%, transparent);
+  border-left: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 .alloy-os-ucard--tier-reference,
 .alloy-os-ucard[data-card-role="reference"] {
-  border-left-color: color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 85%, transparent);
+  border-left-color: var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
 .alloy-os-ucard__supporting {
@@ -1712,23 +1755,7 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard[data-universal-card-key="health"],
 .alloy-os-ucard[data-universal-card-key="readiness_kpi"],
 .alloy-os-ucard[data-universal-card-key="tour"] {
-  border-left: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, var(--alloy-os-border, #e5e9ef));
-}
-
-.alloy-os-ucard--tier-metric .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="health"] .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="readiness_kpi"] .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="tour"] .alloy-os-ucard__title {
-  font-weight: 800;
-  color: var(--alloy-os-midnight, #273f52);
-}
-
-.alloy-os-ucard--compact .alloy-os-ucard__title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--alloy-os-text-secondary, #4b5563);
+  border-left: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
 .alloy-os-ucard__insight {
@@ -2250,18 +2277,30 @@ html[data-alloy-os-runtime="on"]
   padding: 8px 12px 4px;
 }
 
+/* Shared header icon chrome — same quiet gray as the category title. */
 .alloy-os-ucard__icon {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
   margin-top: 1px;
-  color: var(--alloy-os-text-secondary, #4b5563);
+  color: var(--alloy-os-text-tertiary, #9ca3af);
 }
-.alloy-os-ucard--tier-attention .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
-.alloy-os-ucard--tier-work .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
-.alloy-os-ucard--tier-metric .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
-/* Uniform Bend Pine section icons across all neutral tiers (one cohesive language, no gray/pine mix) */
-.alloy-os-ucard--tier-context .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
-.alloy-os-ucard--tier-historical .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
+.alloy-os-ucard__icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
+.alloy-os-ucard--tier-attention .alloy-os-ucard__icon,
+.alloy-os-ucard--tier-work .alloy-os-ucard__icon,
+.alloy-os-ucard--tier-metric .alloy-os-ucard__icon,
+.alloy-os-ucard--tier-context .alloy-os-ucard__icon,
+.alloy-os-ucard--tier-reference .alloy-os-ucard__icon,
+.alloy-os-ucard--tier-historical .alloy-os-ucard__icon {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
 
 .alloy-os-ucard--micro .alloy-os-ucard__header {
   padding: 8px 10px;
@@ -2397,11 +2436,11 @@ html[data-alloy-os-runtime="on"]
 
 /* System 5A — Universal Card Archetypes */
 .alloy-os-ucard--archetype-action-emphasis {
-  border-left-width: 3px;
+  border-left-width: 1px;
 }
 
 .alloy-os-ucard--archetype-action-emphasis.alloy-os-ucard--tier-attention {
-  border-left-color: #d97706;
+  border-left-color: var(--alloy-os-fp-card-border, color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #e5e9ef)));
 }
 
 .alloy-os-ucard--archetype-metric .alloy-os-ucard__insight--metric {
@@ -3049,23 +3088,23 @@ html[data-alloy-os-runtime-split="true"]
   color: var(--alloy-os-text-tertiary, #9ca3af);
 }
 
-/* — Calmer chrome: hairline borders, soften tier left-rails in Overview — */
+/* Focus Panel grid cards — reinforce shared shell (do not wash out perimeter/elevation). */
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-ucard {
-  border-color: color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 75%, transparent);
-  border-radius: 12px;
+  border: 1px solid var(--alloy-os-fp-card-border);
+  border-radius: var(--alloy-os-fp-card-radius, 14px);
+  box-shadow: var(--alloy-os-fp-card-shadow);
+  background: var(--alloy-os-surface, #fff);
 }
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
   .alloy-os-ucard[data-card-role="reference"],
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
-  .alloy-os-ucard[data-card-role="context"] {
-  border-left-width: 1px;
-}
-/* Decision/work accent rail: thinner, calmer than the System-5 3px bar. */
+  .alloy-os-ucard[data-card-role="context"],
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
   .alloy-os-ucard[data-card-role="critical"],
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
   .alloy-os-ucard[data-card-role="active-work"] {
-  border-left-width: 2px;
+  border-left-width: 1px;
+  border-left-color: var(--alloy-os-fp-card-border);
 }
 
 /* — Footer demotion: expand/collapse is a quiet inline affordance, no slab — */
@@ -3193,6 +3232,30 @@ html[data-alloy-os-runtime-split="true"]
   --alloy-os-fp-gap-y: 10px;        /* card gap — vertical (matches Activity cockpit) */
   --alloy-os-fp-card-radius: 14px;  /* card + overlay corner radius */
   --alloy-os-fp-overlay-offset: 6px;/* gap between a card and its inline overlay */
+  /* Shared Focus Panel card chrome — soft stone perimeter + restrained layered elevation.
+   * All Universal Cards share this shell; prominence is content-only (no unique chrome). */
+  /* ~8% stronger perimeter contrast vs prior mix (cards separate from canvas). */
+  --alloy-os-fp-card-border: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, var(--alloy-os-border, #dde3eb));
+  /* Near edge + ambient lift — one level above the Focus Panel canvas. */
+  --alloy-os-fp-card-shadow:
+    0 1px 2px rgba(20, 25, 34, 0.07),
+    0 4px 14px -4px rgba(20, 25, 34, 0.12),
+    0 14px 28px -16px rgba(20, 25, 34, 0.14);
+  --alloy-os-fp-card-shadow-hover:
+    0 1px 2px rgba(20, 25, 34, 0.08),
+    0 6px 18px -4px rgba(20, 25, 34, 0.14),
+    0 18px 32px -14px rgba(20, 25, 34, 0.16);
+  /* Queue rows share soft-depth language with Focus Panel, ~30% lighter shade. */
+  --alloy-os-queue-row-border: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #dde3eb));
+  --alloy-os-queue-row-surface: #fff;
+  --alloy-os-queue-row-shadow:
+    0 1px 2px rgba(20, 25, 34, 0.05),
+    0 3px 10px -4px rgba(20, 25, 34, 0.08),
+    0 10px 20px -14px rgba(20, 25, 34, 0.10);
+  --alloy-os-queue-row-shadow-hover:
+    0 1px 2px rgba(20, 25, 34, 0.06),
+    0 4px 12px -4px rgba(20, 25, 34, 0.10),
+    0 12px 22px -12px rgba(20, 25, 34, 0.11);
   --alloy-os-fp-overlay-shadow:
     0 1px 0 0 rgba(255, 255, 255, 0.8) inset,
     0 2px 6px -2px rgba(15, 23, 42, 0.12),
@@ -3313,6 +3376,7 @@ html[data-alloy-os-runtime-split="true"]
  * ring, matching the app's input doctrine (no rich date picker exists to adopt). */
 .alloy-os-sched-input {
   font-size: 13px;
+  font-weight: 500;
   padding: 7px 10px;
   border-radius: 8px;
   border: 1px solid #e5e9ef;
@@ -3320,6 +3384,13 @@ html[data-alloy-os-runtime-split="true"]
   color: #273f52;
   box-sizing: border-box;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* Days + Daily hours share one band on comfortable widths; stack on narrow panels. */
+@media (max-width: 420px) {
+  .alloy-os-sched-days-hours-band {
+    grid-template-columns: 1fr !important;
+  }
 }
 .alloy-os-sched-input:hover:not(:disabled) {
   border-color: #cfd6e0;
@@ -3623,6 +3694,67 @@ html[data-alloy-os-runtime-split="true"]
   font-size: 10px;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
+.fp-linked-target-controls {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  background: rgba(244, 246, 249, 0.7);
+}
+.fp-linked-target-controls--collapsed {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.fp-linked-target-controls__summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.fp-linked-target-controls__edit {
+  flex: 0 0 auto;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  border-radius: 6px;
+  background: #fff;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+}
+.fp-linked-target-controls__warn {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: #b4532a;
+}
+.fp-linked-target-controls__done-row {
+  display: flex;
+  justify-content: flex-end;
+}
+.fp-linked-target-controls__row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.fp-linked-target-controls__row select {
+  font-size: 11px;
+  border-radius: 6px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  padding: 2px 6px;
+  background: #fff;
+  color: inherit;
+  min-width: 0;
+}
 .fp-layout-surface {
   display: flex;
   flex-direction: column;
@@ -3639,7 +3771,11 @@ html[data-alloy-os-runtime-split="true"]
   transition: outline-color var(--motion-instant, 100ms) ease;
 }
 .fp-layout-surface--composing .fp-layout-field--composing {
-  padding-bottom: 2px;
+  /* Chrome (toolbar) is in document flow — never overlap neighbor fields. */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 .fp-layout-surface--composing .fp-layout-field:hover,
 .fp-layout-surface--composing .fp-layout-field.is-selected {
@@ -3649,13 +3785,15 @@ html[data-alloy-os-runtime-split="true"]
   opacity: 0.55;
 }
 .fp-field-instance__chrome {
-  position: absolute;
-  inset: auto 0 0 0;
-  z-index: 4;
+  /* In-flow layout chrome: reserved height so fields never occupy the same space. */
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  margin-top: 2px;
   pointer-events: none;
+  flex: 0 0 auto;
 }
 .fp-field-instance__toolbar {
   display: flex;
@@ -3704,6 +3842,45 @@ html[data-alloy-os-runtime-split="true"]
   gap: 3px;
   flex: 1;
   min-width: 0;
+}
+.fp-field-instance__identity {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.fp-field-instance__name {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--alloy-os-text-primary, #17211c);
+  line-height: 1.25;
+}
+.fp-field-instance__alias {
+  font-size: 10px;
+  color: var(--alloy-os-text-secondary, #6b7280);
+}
+.fp-layout-field__control--secondary {
+  font-size: 10px;
+  color: var(--alloy-os-text-secondary, #6b7280);
+}
+.fp-builder-field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 4px 4px;
+}
+.fp-builder-field-row__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--alloy-os-text-primary, #17211c);
+}
+.fp-builder-field-row__hint {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--alloy-os-text-secondary, #6b7280);
 }
 .fp-field-instance__remove {
   display: inline-flex;
@@ -3954,6 +4131,19 @@ html[data-alloy-os-runtime-split="true"]
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
+}
+.fp-child-avatar--composing {
+  min-width: 120px;
+}
+.fp-child-avatar__hidden {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px dashed var(--alloy-os-border, #e5e9ef);
+  color: var(--alloy-os-text-tertiary, #9ca3af);
 }
 .fp-child-avatar__controls {
   display: flex;
@@ -4328,6 +4518,16 @@ html[data-alloy-os-runtime-split="true"]
   font-size: 10.5px;
   color: var(--alloy-os-text-tertiary, #9ca3af);
 }
+.alloy-os-card-edit__avatar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0 8px;
+}
+.alloy-os-card-edit__avatar .alloy-os-card-edit__hint {
+  flex-basis: 100%;
+  margin-top: 2px;
+}
 
 /* — Live edit form (Household primary contact, Edit depth) — */
 .alloy-os-card-edit__form {
@@ -4432,26 +4632,14 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-ucard__footer {
   padding: 0 13px 11px;
 }
-/* Title: quiet category label; the insight is the loud line. */
+/* Title: quiet category label for EVERY card; the insight is the loud line. */
 .alloy-os-ucard__title {
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--alloy-os-text-tertiary, #9ca3af);
-}
-.alloy-os-ucard--tier-reference .alloy-os-ucard__title,
-.alloy-os-ucard[data-card-role="reference"] .alloy-os-ucard__title,
-.alloy-os-ucard--tier-attention .alloy-os-ucard__title,
-.alloy-os-ucard--tier-work .alloy-os-ucard__title,
-.alloy-os-ucard--tier-metric .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="readiness_kpi"] .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="current_work"] .alloy-os-ucard__title {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--alloy-os-text-tertiary, #9ca3af);
-  font-weight: 700;
+  line-height: 1.2;
 }
 /* Answer line owns the visual weight. */
 .alloy-os-ucard__insight {
@@ -4495,39 +4683,28 @@ html[data-alloy-os-runtime-split="true"]
   align-items: start;
 }
 
-/* Cards read as soft SURFACES on the white canvas: a quiet hairline + soft shadow
- * (no hard outline) so the answers feel like one composed workspace. */
+/* Cards share the Universal Card shell on the Focus Panel canvas.
+ * No transparent borders and no inset Bend Pine rails (What's Next included). */
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-ucard {
-  border-color: transparent;
+  border: 1px solid var(--alloy-os-fp-card-border);
   border-radius: var(--alloy-os-fp-card-radius);
   background: var(--alloy-os-surface, #fff);
-  box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.05),
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 4px 12px -8px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--alloy-os-fp-card-shadow);
   transition: box-shadow var(--motion-micro) var(--motion-ease-move);
 }
-/* Keep the left accent rails legible even without the box border. */
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
   .alloy-os-ucard[data-card-role="critical"],
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
   .alloy-os-ucard[data-card-role="active-work"] {
-  box-shadow:
-    inset 2px 0 0 0 color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent),
-    0 0 0 1px rgba(15, 23, 42, 0.04),
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 4px 12px -8px rgba(15, 23, 42, 0.14);
+  border-left-color: var(--alloy-os-fp-card-border);
+  box-shadow: var(--alloy-os-fp-card-shadow);
 }
 
-/* When NOT in a depth layer, a gentle hover lift communicates the cards are live
- * surfaces of one canvas (suppressed entirely while a card is elevated). */
+/* When NOT in a depth layer, a gentle hover lift for cards with controls only. */
 .alloy-os-focus-panel-grid:not([data-fp-depth="active"]):not(.alloy-os-focus-panel-grid--work)
   .alloy-os-focus-panel-grid__cell:hover
-  .alloy-os-ucard {
-  box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.05),
-    0 2px 4px rgba(15, 23, 42, 0.05),
-    0 10px 22px -12px rgba(15, 23, 42, 0.22);
+  .alloy-os-ucard:has(button:not(:disabled)) {
+  box-shadow: var(--alloy-os-fp-card-shadow-hover);
 }
 @media (prefers-reduced-motion: reduce) {
   .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-ucard {
@@ -4735,16 +4912,75 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-card-avatar[data-card-avatar="image"] { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08); }
 
 /* ── Children Summary: scannable per-child mini-profile (details stack) ── */
-.alloy-os-children__roster { display: flex; flex-direction: column; gap: 4px; }
+.alloy-os-children__roster { display: flex; flex-direction: column; gap: 1px; }
 .alloy-os-children__summary-row {
-  display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
-  padding: 9px 8px; border: 0; border-radius: 10px; background: transparent; cursor: pointer;
+  /* Column stack — never put the "Needs …" chip beside the field grid.
+     A horizontal sibling chip used to shrink each child's grid differently,
+     so Gender/Program columns drifted between Blake vs Jarek. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.alloy-os-children__roster .identity-record-summary {
+  padding: 2px 0;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+/* Keep avatar column fixed so photo vs initials rows stay aligned. */
+.alloy-os-children__roster .identity-record-summary__header {
+  align-items: center;
+}
+.alloy-os-children__roster .identity-record-summary__header > .identity-avatar,
+.alloy-os-children__roster .identity-record-summary__header > .alloy-os-card-avatar,
+.alloy-os-children__roster .identity-record-summary__header > .identity-avatar-editable,
+.alloy-os-children__roster .identity-record-summary__header > .fp-child-avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  align-self: center;
+}
+.alloy-os-children__roster .identity-record-summary__title-block {
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
+/* Shared column tracks across every child so half-width fields line up. */
+.alloy-os-children__roster .identity-field-grid {
+  width: 100%;
+}
+.alloy-os-children__roster .identity-field-grid__row--pair {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.alloy-os-children__roster .identity-field-grid__row--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .alloy-os-children__summary-row:hover { background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 5%, #fff); }
 .alloy-os-children__summary-main { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; }
 .alloy-os-children__summary-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .alloy-os-children__summary-meta { display: flex; flex-direction: column; gap: 2px; }
 .alloy-os-children__summary-line { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--alloy-os-text-secondary, #4b5563); }
+/* Keep the needs chip top-right without participating in field-grid width. */
+.alloy-os-children__summary-row > .alloy-os-children__summary-line[data-children-missing] {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  max-width: 42%;
+  justify-content: flex-end;
+  text-align: right;
+  font-size: 11px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  pointer-events: none;
+}
 .alloy-os-children__summary-wrap { display: flex; flex-direction: column; gap: 2px; }
 .alloy-os-children__details-toggle {
   align-self: flex-start; margin: 0 0 2px 54px; padding: 0; border: 0; background: transparent;
@@ -5007,7 +5243,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   inset: 0;
 }
 /* Re-parent elevated drill-ins to the visible composer body (not the tall grid) so
- * vertical centering uses the builder viewport — same centered-focus read as runtime. */
+ * top-pinning uses the builder viewport — same top-aligned Focus Card as runtime. */
 [data-fp-composer-depth-active="true"]
   .alloy-os-fp-composer__body
   .alloy-os-focus-panel-grid[data-fp-depth="active"] {
@@ -5045,16 +5281,17 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard {
-  top: 50%;
-  left: 50%;
-  right: auto;
-  margin-inline: 0;
-  transform: translate(-50%, -50%);
+  /* Top-pin under the composer chrome — not vertically centered. */
+  top: 12px;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  transform: none;
   width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
   max-width: var(--alloy-os-focus-panel-max-width, 720px);
   /* Body-anchored bounds — card stays fully inside the visible builder canvas. */
   min-height: min(280px, calc(100% - 48px));
-  max-height: min(75vh, calc(100% - 32px), calc(100dvh - 120px));
+  max-height: min(75vh, calc(100% - 24px), calc(100dvh - 120px));
   animation: none;
 }
 [data-fp-composer-depth-active="true"]
@@ -5104,8 +5341,9 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   position: absolute;
   top: 0;
   left: 34px;
-  right: 104px;
-  height: 28px;
+  /* Leave clear space for the top-right Configure toolbar so drag doesn't steal hits. */
+  right: 156px;
+  height: 34px;
   z-index: 6;
   cursor: grab;
   touch-action: none;
@@ -5136,26 +5374,60 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   outline-offset: 2px;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 12%, transparent);
 }
+/* Stable top-right chrome: Configure is always reachable; Remove sits beside it. */
+.alloy-os-fp-composer-cell__toolbar {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
 .alloy-os-fp-composer-cell__configure,
 .alloy-os-fp-composer-cell__grip,
 .alloy-os-fp-composer-cell__remove {
-  position: absolute; top: 6px; display: flex; align-items: center; justify-content: center;
-  height: 22px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 80%, transparent);
-  background: color-mix(in srgb, #fff 92%, transparent); color: var(--alloy-os-text-tertiary, #9ca3af);
-  pointer-events: auto; opacity: 0; transition: opacity 100ms;
-  z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  height: 28px; border-radius: 7px; border: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 80%, transparent);
+  background: color-mix(in srgb, #fff 96%, transparent); color: var(--alloy-os-text-tertiary, #9ca3af);
+  pointer-events: auto; transition: opacity 100ms, background 100ms, border-color 100ms, box-shadow 100ms;
+  box-shadow: 0 1px 2px color-mix(in srgb, #0f172a 8%, transparent);
 }
 .alloy-os-fp-composer-cell__configure {
-  right: 34px; padding: 0 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
-  text-transform: uppercase; cursor: pointer; color: var(--alloy-os-accent, #2f6f4f);
+  position: relative;
+  padding: 0 12px;
+  min-width: 84px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  color: var(--alloy-os-accent, #2f6f4f);
+  /* Always visible at a subtle level so users don't chase a fleeting hover target. */
+  opacity: 0.78;
 }
-.alloy-os-fp-composer-cell__grip { left: 6px; width: 22px; cursor: grab; touch-action: none; }
-.alloy-os-fp-composer-cell__remove { right: 6px; width: 22px; cursor: pointer; }
+.alloy-os-fp-composer-cell__configure:hover,
+.alloy-os-fp-composer-cell__configure:focus-visible {
+  opacity: 1;
+  background: #fff;
+  border-color: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 45%, transparent);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 18%, transparent);
+}
+.alloy-os-fp-composer-cell__grip {
+  position: absolute; top: 6px; left: 6px; width: 28px; z-index: 12;
+  cursor: grab; touch-action: none; opacity: 0;
+}
+.alloy-os-fp-composer-cell__remove {
+  position: relative; width: 28px; cursor: pointer; opacity: 0;
+}
 .alloy-os-fp-composer-cell__remove:hover { color: var(--alloy-os-danger, #b91c1c); border-color: color-mix(in srgb, var(--alloy-os-danger, #b91c1c) 40%, transparent); }
 .alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__configure,
+.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__configure {
+  opacity: 1;
+}
 .alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__grip,
 .alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__remove,
-.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__configure,
 .alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__grip,
 .alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__remove,
 .alloy-os-fp-composer-cell.is-arranging .alloy-os-fp-composer-cell__grip,
@@ -5165,7 +5437,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   position: absolute; background: transparent; transition: background 100ms;
   touch-action: none; pointer-events: auto; opacity: 0; z-index: 6;
 }
-.alloy-os-fp-composer-cell__handle--w { top: 0; right: 0; width: 8px; height: 100%; cursor: col-resize; }
+/* Keep the right resize strip below the Configure toolbar so it doesn't steal clicks. */
+.alloy-os-fp-composer-cell__handle--w { top: 40px; right: 0; width: 8px; height: calc(100% - 40px); cursor: col-resize; }
 .alloy-os-fp-composer-cell__handle--h { left: 0; bottom: 0; height: 8px; width: 100%; cursor: row-resize; }
 .alloy-os-fp-composer-cell__handle--corner { right: 0; bottom: 0; width: 12px; height: 12px; cursor: nwse-resize; }
 .alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__handle,
@@ -5579,6 +5852,21 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   gap: 10px;
 }
 
+/* Extra breath between Description (header supporting) → actions → Still Needed. */
+.alloy-os-ucard[data-universal-card-key="current_work"] .alloy-os-ucard__supporting {
+  margin-bottom: 2px;
+}
+
+.alloy-os-ucard[data-universal-card-key="current_work"] .alloy-os-ucard__body {
+  padding-top: 6px;
+}
+
+.alloy-os-currentwork__summary-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .alloy-os-currentwork__header-meta {
   display: inline-flex;
   align-items: baseline;
@@ -5680,8 +5968,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 4px;
-  padding-top: 9px;
+  margin-top: 2px;
+  padding-top: 12px;
   border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
 }
 
@@ -5747,7 +6035,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  gap: 8px;
+  gap: 0;
 }
 .alloy-os-currentwork__composer-header {
   flex: 0 0 auto;
@@ -5755,6 +6043,71 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__composer-host > .alloy-os-activity-cockpit__comms {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* Mode panel hosts Linked overlays relative to the Focus Panel column. */
+[data-focus-panel-mode="summary"],
+[data-focus-panel-mode="work"] {
+  position: relative;
+}
+
+/* Linked card host — transient elevated overlay (not inserted into Visible layout).
+ * Pin to the TOP of the Focus Panel workspace (flush under Work/Activity), matching
+ * elevated Visible cards (`top: 22px`). Vertical centering wasted room and clipped tall
+ * detail surfaces (e.g. Scheduling → Recurring Tuition). */
+.alloy-os-focus-panel-linked-host {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  align-items: start;
+  padding: 12px 12px 16px;
+  pointer-events: none;
+}
+.alloy-os-focus-panel-linked-host__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
+  pointer-events: auto;
+}
+.alloy-os-focus-panel-linked-host__card {
+  position: relative;
+  z-index: 1;
+  width: min(560px, calc(100% - 24px));
+  /* Bound to the host content box (FP workspace under Work/Activity), not the viewport. */
+  max-height: 100%;
+  overflow: auto;
+  pointer-events: auto;
+}
+
+/* Capability compose: Close sits on the What's Next header (top-right), not under the title. */
+.alloy-os-currentwork[data-capability-active="true"] {
+  position: relative;
+}
+.alloy-os-currentwork__capability-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 3;
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
+}
+.alloy-os-currentwork__capability-close:hover,
+.alloy-os-currentwork__capability-close:focus-visible {
+  color: var(--alloy-os-bend-pine, #00a283);
 }
 
 /* Generic form-delivery surface (send-form capability). */
@@ -5848,6 +6201,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork[data-capability-active="true"] .alloy-os-ucard__header {
   flex: 0 0 auto;
   padding-bottom: 6px;
+  padding-right: 52px; /* room for capability Close */
 }
 /* Cap the centered card to the viewport; height follows content (max-content on the base rule). */
 .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
@@ -6150,6 +6504,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   flex: 1 1 0;
   min-width: 0;
   align-self: stretch;
@@ -6157,6 +6512,18 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   white-space: nowrap;
   padding-left: 10px;
   padding-right: 10px;
+}
+
+.alloy-os-currentwork__action-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.alloy-os-currentwork__action-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .alloy-os-currentwork__open-work {
@@ -6259,7 +6626,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__summary {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .alloy-os-currentwork__guidance-label {
@@ -6822,11 +7189,16 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     0 0 0 1px color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
 }
 
-/* Summary accent rail — Bend Pine (operational emphasis, not alert amber). */
+/* What's Next summary — same shared shell as every other Focus Panel card.
+ * No decorative Bend Pine left rail (prominence is content + actions only). */
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
   .alloy-os-currentwork[data-work-card-perspective="summary"]
   .alloy-os-ucard {
-  border-left: 4px solid var(--alloy-os-bend-pine, #00a283);
+  border: 1px solid var(--alloy-os-fp-card-border);
+  border-left-width: 1px;
+  border-left-color: var(--alloy-os-fp-card-border);
+  box-shadow: var(--alloy-os-fp-card-shadow);
+  background: var(--alloy-os-surface, #fff);
 }
 
 
@@ -7170,6 +7542,105 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   min-width: 0;
 }
 
+.identity-avatar-editable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.identity-avatar-zoom-trigger {
+  all: unset;
+  display: inline-flex;
+  cursor: zoom-in;
+  border-radius: 999px;
+  line-height: 0;
+}
+.identity-avatar-zoom-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent);
+  outline-offset: 2px;
+}
+.identity-avatar-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, #0f172a 55%, transparent);
+  backdrop-filter: blur(2px);
+}
+.identity-avatar-zoom__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: min(92vw, 420px);
+  padding: 16px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
+}
+.identity-avatar-zoom__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--alloy-os-text, #0f172a);
+}
+.identity-avatar-zoom__image {
+  display: block;
+  width: min(72vw, 320px);
+  height: min(72vw, 320px);
+  object-fit: cover;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+.identity-avatar-zoom__close {
+  all: unset;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--alloy-os-bend-pine, #00a283);
+  padding: 4px 8px;
+}
+.identity-avatar-zoom__close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent);
+  outline-offset: 2px;
+}
+.identity-avatar-editable__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  max-width: 72px;
+}
+.identity-avatar-editable__btn {
+  all: unset;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--alloy-os-bend-pine, #00a283);
+  text-align: center;
+}
+.identity-avatar-editable__btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.identity-avatar-editable__btn--muted {
+  color: var(--alloy-os-text-secondary, #6b7280);
+  font-weight: 550;
+}
+.identity-avatar-editable__error {
+  margin: 0;
+  font-size: 10px;
+  color: #9a3412;
+  max-width: 88px;
+  text-align: center;
+}
+
 .identity-record-summary__title-block {
   display: grid;
   flex: 1 1 auto;
@@ -7211,9 +7682,9 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .identity-field-value__value-row {
   display: inline-flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 5px;
   min-width: 0;
   max-width: 100%;
 }
@@ -7228,9 +7699,76 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   transition: opacity 120ms ease;
 }
 
+.identity-field-value__saved {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-accent, #2f6f4f);
+  letter-spacing: 0.01em;
+  animation: identity-field-saved-in 160ms ease-out;
+}
+
+@keyframes identity-field-saved-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .identity-field-value--inline-editable:hover .identity-field-value__edit,
 .identity-field-value--inline-editable:focus-within .identity-field-value__edit {
   opacity: 1;
+}
+
+.identity-field-value--linked .identity-field-value__edit,
+.identity-field-value--linked .identity-field-value__link {
+  opacity: 0;
+  pointer-events: auto;
+  position: static;
+  transform: none;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: opacity 120ms ease;
+}
+
+.identity-field-value--linked:hover .identity-field-value__edit,
+.identity-field-value--linked:focus-within .identity-field-value__edit {
+  opacity: 1;
+}
+
+.identity-field-value__value--linked {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  max-width: 100%;
+  color: var(--alloy-os-midnight, #273f52);
+  text-decoration: none;
+}
+
+.identity-field-value__linked-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity-field-value__nav-cue {
+  flex: 0 0 auto;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  font-weight: 600;
+  font-size: 0.95em;
+  transition: color var(--alloy-os-motion-hover, 80ms) ease, transform var(--alloy-os-motion-hover, 80ms) ease;
+}
+
+.identity-field-value--linked:hover .identity-field-value__value--linked,
+.identity-field-value--linked:focus-within .identity-field-value__value--linked {
+  text-decoration: none;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.identity-field-value--linked:hover .identity-field-value__nav-cue,
+.identity-field-value--linked:focus-within .identity-field-value__nav-cue {
+  color: var(--alloy-os-bend-pine, #00a283);
+  transform: translateX(1px);
 }
 
 .identity-field-value__value--clickable {
@@ -7314,9 +7852,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .identity-record-summary__open-details:hover,
 .identity-record-summary__open-details:focus-visible {
-  color: var(--alloy-os-accent, #24634f);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  color: var(--alloy-os-bend-pine, #00a283);
+  text-decoration: none;
 }
 
 .identity-record-summary__activate:hover,
@@ -7369,6 +7906,15 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   flex-direction: column;
   gap: 0.5rem;
 }
+.identity-collection-context__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+.identity-collection-context__details {
+  margin-left: 2.25rem;
+}
 
 .identity-field-grid__row--pair {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -7397,6 +7943,30 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   min-width: 0;
 }
 
+/* Compact contact lines: one horizontal icon+value row (no stacked icon above). */
+.identity-field-value:not(:has(.identity-field-value__label)) {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+}
+
+.identity-field-value:not(:has(.identity-field-value__label)) .identity-field-value__value-row {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 5px;
+  min-width: 0;
+  width: 100%;
+}
+
+.identity-field-value:not(:has(.identity-field-value__label)) .identity-field-value__icon--solo {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+}
+
 .identity-field-value__label {
   display: inline-flex;
   align-items: center;
@@ -7416,6 +7986,12 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   width: 12px;
   height: 12px;
   flex: 0 0 auto;
+}
+
+/* Compact summary: icon sits inline with the value, not stacked above it. */
+.identity-field-value__icon--solo {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  align-self: center;
 }
 
 .identity-field-value__value {

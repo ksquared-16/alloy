@@ -24,6 +24,7 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     workflow_history: "summary",
     household: "profile",
     children: "collection",
+    milestones: "summary",
     scheduling: "collection",
     tasks: "collection",
     work_launcher: "launcher",

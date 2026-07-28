@@ -81,6 +81,7 @@ function RelationshipDetail({
 }) {
     const [activeTab, setActiveTab] = useState<EntityChildDetailTabKey>("definition");
     const [label, setLabel] = useState(relationship.label);
+    const [pluralLabel, setPluralLabel] = useState(relationship.pluralLabel ?? "");
     const [description, setDescription] = useState(relationship.description ?? "");
     const [active, setActive] = useState(relationship.isActive);
     const [saving, setSaving] = useState(false);
@@ -91,12 +92,13 @@ function RelationshipDetail({
     useEffect(() => {
         setActiveTab("definition");
         setLabel(relationship.label);
+        setPluralLabel(relationship.pluralLabel ?? "");
         setDescription(relationship.description ?? "");
         setActive(relationship.isActive);
         setError(null);
         setSaved(false);
         setAdvancedOpen(false);
-    }, [relationship.id, relationship.label, relationship.description, relationship.isActive]);
+    }, [relationship.id, relationship.label, relationship.pluralLabel, relationship.description, relationship.isActive]);
 
     const editable =
         canMutate &&
@@ -107,6 +109,7 @@ function RelationshipDetail({
 
     const dirty =
         label.trim() !== relationship.label ||
+        (pluralLabel.trim() || null) !== (relationship.pluralLabel ?? null) ||
         (description.trim() || null) !== (relationship.description ?? null) ||
         active !== relationship.isActive;
 
@@ -127,6 +130,7 @@ function RelationshipDetail({
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         label: label.trim(),
+                        plural_label: pluralLabel.trim() || null,
                         description: description.trim() || null,
                         is_active: active,
                     }),
@@ -137,6 +141,7 @@ function RelationshipDetail({
             onSaved({
                 ...relationship,
                 label: label.trim(),
+                pluralLabel: pluralLabel.trim() || null,
                 description: description.trim() || null,
                 isActive: active,
             });
@@ -181,7 +186,7 @@ function RelationshipDetail({
                                 </p>
                                 <label className="block space-y-0.5">
                                     <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                                        Name
+                                        Singular label
                                     </span>
                                     <input
                                         value={label}
@@ -192,7 +197,19 @@ function RelationshipDetail({
                                 </label>
                                 <label className="block space-y-0.5">
                                     <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                                        Description
+                                        Plural label
+                                    </span>
+                                    <input
+                                        value={pluralLabel}
+                                        onChange={(event) => setPluralLabel(event.target.value)}
+                                        className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
+                                        data-testid={`${testId}-plural-label-input`}
+                                        placeholder={`${label.trim() || "Label"}s`}
+                                    />
+                                </label>
+                                <label className="block space-y-0.5">
+                                    <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                        Description / help
                                     </span>
                                     <textarea
                                         value={description}
@@ -202,6 +219,25 @@ function RelationshipDetail({
                                         data-testid={`${testId}-description-input`}
                                     />
                                 </label>
+                                <div
+                                    className="rounded-md border border-alloy-stone/20 bg-alloy-stone/[0.04] px-2.5 py-2"
+                                    data-testid={`${testId}-label-preview`}
+                                >
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                        Preview
+                                    </p>
+                                    <p className="mt-1 text-[12px] text-alloy-midnight">
+                                        Forms & drawers show <span className="font-semibold">{label.trim() || "—"}</span>
+                                        {" · "}
+                                        lists show{" "}
+                                        <span className="font-semibold">
+                                            {pluralLabel.trim() || `${(label.trim() || "label")}s`}
+                                        </span>
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-alloy-midnight/50">
+                                        Stable key <code className="text-[10px]">{relationship.vocabularyRowId ? "preserved" : "n/a"}</code> — identity and cardinality stay unchanged.
+                                    </p>
+                                </div>
                                 <label className="flex items-center gap-2 text-[12px] text-alloy-midnight">
                                     <input
                                         type="checkbox"
@@ -216,7 +252,7 @@ function RelationshipDetail({
                                         {error}
                                     </p>
                                 :   null}
-                                <div className="flex items-center gap-2 border-t border-alloy-stone/25 pt-2.5">
+                                <div className="flex flex-wrap items-center gap-2 border-t border-alloy-stone/25 pt-2.5">
                                     <button
                                         type="button"
                                         disabled={saving || !dirty}
@@ -225,6 +261,56 @@ function RelationshipDetail({
                                         data-testid={`${testId}-save`}
                                     >
                                         {saving ? "Saving…" : "Save Relationship"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={saving}
+                                        onClick={() => {
+                                            void (async () => {
+                                                if (!editable || !relationship.vocabularyKind || !relationship.vocabularyRowId) return;
+                                                setSaving(true);
+                                                setError(null);
+                                                try {
+                                                    const res = await fetch(
+                                                        `${relationshipVocabularyEndpoint(relationship.vocabularyKind)}/${relationship.vocabularyRowId}`,
+                                                        {
+                                                            method: "PATCH",
+                                                            headers: { "Content-Type": "application/json" },
+                                                            body: JSON.stringify({ reset_to_default: true }),
+                                                        },
+                                                    );
+                                                    const json = (await res.json().catch(() => ({}))) as {
+                                                        error?: string;
+                                                        data?: { item?: { label?: string; description?: string | null; metadata?: { plural_label?: string } } };
+                                                    };
+                                                    if (!res.ok) throw new Error(json.error ?? "Reset failed");
+                                                    const item = json.data?.item;
+                                                    const nextLabel = item?.label?.trim() || relationship.label;
+                                                    const nextPlural =
+                                                        item?.metadata && typeof item.metadata.plural_label === "string"
+                                                            ? item.metadata.plural_label
+                                                            : null;
+                                                    setLabel(nextLabel);
+                                                    setPluralLabel(nextPlural ?? "");
+                                                    setDescription(item?.description ?? "");
+                                                    onSaved({
+                                                        ...relationship,
+                                                        label: nextLabel,
+                                                        pluralLabel: nextPlural,
+                                                        description: item?.description ?? null,
+                                                    });
+                                                    setSaved(true);
+                                                } catch (err) {
+                                                    setError((err as Error).message);
+                                                } finally {
+                                                    setSaving(false);
+                                                }
+                                            })();
+                                        }}
+                                        className="rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-alloy-midnight/70"
+                                        data-testid={`${testId}-reset-default`}
+                                    >
+                                        Reset to default
                                     </button>
                                     {saved && !dirty ?
                                         <span className="text-[11px] text-[#007d68]" data-testid={`${testId}-saved`}>
@@ -363,6 +449,7 @@ function RelationshipCreatePanel({
             onCreated({
                 id: `vocabulary:${kind}:${normalizedKey}`,
                 label: label.trim(),
+                pluralLabel: null,
                 connectionLabel: VOCABULARY_KIND_LABEL[kind],
                 meaning:
                     kind === "family_role" ?
@@ -590,6 +677,7 @@ export function EntityRelationshipsTab({
                 description: string | null;
                 is_system?: boolean;
                 is_active?: boolean;
+                metadata?: Record<string, unknown> | null;
             };
             const rows: EntityRelationshipSummaryVm[] = [];
             const push = (row: Row, kind: EntityRelationshipVocabularyKind) => {
@@ -597,6 +685,12 @@ export function EntityRelationshipsTab({
                 rows.push({
                     id: `vocabulary:${kind}:${row.key}`,
                     label: row.label ?? row.key,
+                    pluralLabel:
+                        row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+                            ? (typeof (row.metadata as { plural_label?: unknown }).plural_label === "string"
+                                ? (row.metadata as { plural_label: string }).plural_label
+                                : null)
+                            : null,
                     connectionLabel: VOCABULARY_KIND_LABEL[kind],
                     meaning:
                         kind === "family_role" ?
