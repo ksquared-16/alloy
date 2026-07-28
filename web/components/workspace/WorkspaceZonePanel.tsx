@@ -45,7 +45,7 @@ export default function WorkspaceZonePanel({
                 <h2 className={WS_EYEBROW}>{title}</h2>
                 {headerAction}
             </header>
-            <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+            <div className="relative min-h-0 flex-1 overflow-hidden">{children}</div>
         </section>
     );
 }
