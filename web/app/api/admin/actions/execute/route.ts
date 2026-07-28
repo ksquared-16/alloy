@@ -10,6 +10,7 @@ import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { CREATE_LEAD_ACTION_ENTITY_ID } from "@/lib/admin/actions/createLeadActionConstants";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
 import { logCommandExecutePathDiagnostic } from "@/lib/platform/commands/runtime/commandExecuteCompatDiagnostics";
+import { recordExecuteAdminActionFallback } from "@/lib/platform/commands/runtime/executeAdminActionFallbackTelemetry";
 import { isCommandRuntimeFacadeExecutionSupported } from "@/lib/platform/commands/runtime/commandRuntimeExecutionGate";
 import { executeCommandInvocation } from "@/lib/platform/commands/runtime/executeCommandInvocation";
 import type { CommandInvocationOrigin } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
@@ -536,6 +537,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Compatibility path: adapted / legacy / unregistered keys — executeAdminAction.
+    recordExecuteAdminActionFallback(actionKey);
     const result = await executeAdminAction(supabase, runtimeCtx, {
         actionKey,
         entityType,

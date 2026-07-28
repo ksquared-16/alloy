@@ -10,7 +10,7 @@
 | Date | 2026-07-27 |
 | Scope | **Planning only** — no production implementation, migrations, runtime edits, API renames, schema changes, or doctrine updates |
 
-**Implementation progress:** P0 → P7 foundation → **P8 product completion**. Next: P9 `executeAdminAction` drain.
+**Implementation progress:** P0 → P8 product → **P9 fallback ledger + telemetry**. Next: P10 certification.
 
 ### Autonomous execution ledger
 
@@ -18,7 +18,8 @@
 |-------|--------|-------|-----------|----------|-----------------|------|
 | P6.S3 + P6 cert | `571080d0f` | processCommandSetAuthoring + prior P6 | pass | Authoring stamps V1; WT gated; publish validates | Legacy read fallback | P7 |
 | P7 foundation | `1f0f049b3` | organizationCommandCatalog + organizationCommandsRoute + P6 authoring (15) | pass | Commands shell + Ops nav + Action Buttons redirect | `/adminV2/settings/actions` developer | P8 |
-| P8 product completion | *(this commit)* | commandsProductCompletion + route + catalog + authoring (20) | pass | Detail workspace, usage, variants, safety, placement toggle | actions APIs + developer Action defs | P9 |
+| P8 product completion | `b3c3ddbf3` | commandsProductCompletion + route + catalog + authoring (20) | pass | Detail workspace, usage, variants, safety, placement toggle | actions APIs + developer Action defs | P9 |
+| P9 drain ledger | *(this commit)* | executeAdminActionFallbackDrain + execute route suites (28) | pass | Fallback dispositions + in-process counter | Intentional compatibility keys | P10 |
 
 
 ---
@@ -378,9 +379,9 @@ No org mutation builder. No rewrite of tour/relationship/status domain services.
 
 | ID | Title |
 |----|-------|
-| **P9.S1** | Ledger drain pass (wrap or mark unsupported) |
-| **P9.S2** | Remove dead executeAdminAction branches |
-| **P9.S3** | Legacy telemetry zero window |
+| **P9.S1** | Ledger drain pass (**shipped** — dispositions + telemetry; no fake executors) |
+| **P9.S2** | Remove dead executeAdminAction branches (**deferred** — requires zero-traffic evidence) |
+| **P9.S3** | Legacy telemetry zero window (**instrumented**; production zero not claimed) |
 
 ### P10 — Cert (2)
 

@@ -4,6 +4,7 @@
  */
 
 import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
+import { getExecuteAdminActionFallbackDisposition } from "@/lib/platform/commands/runtime/executeAdminActionFallbackLedger";
 
 export type CompatibilityExecutePath =
     | "command_runtime_registered_action"
@@ -40,6 +41,10 @@ export function logCommandExecutePathDiagnostic(input: {
         resolved.status === "known" ? resolved.capability.canonicalCommandKey : null;
     const owner =
         resolved.status === "known" ? resolved.capability.executionOwner : "unknown";
+    const fallbackDisposition =
+        input.path === "execute_admin_action_fallback"
+            ? getExecuteAdminActionFallbackDisposition(input.requestedKey)
+            : null;
 
     console.info("[command-runtime-compat]", {
         requested_key: input.requestedKey,
@@ -47,6 +52,7 @@ export function logCommandExecutePathDiagnostic(input: {
         execution_owner: owner,
         facade_execution_supported: input.facadeSupported,
         compatibility_path: input.path,
+        fallback_disposition: fallbackDisposition?.disposition ?? null,
         adapter: input.adapter ?? null,
         mutation_domain: input.mutationDomain ?? null,
         invocation_id: input.invocationId ?? null,
