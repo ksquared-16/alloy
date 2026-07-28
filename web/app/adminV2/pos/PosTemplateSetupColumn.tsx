@@ -41,6 +41,7 @@ import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import ProcessingConceptReview from "./ProcessingConceptReview";
 import type { BusinessConceptCandidate, ProposalDecisionState } from "@/lib/pos/discovery/contracts";
+import { toDecisionRecords, fromDecisionRecords } from "@/lib/pos/discovery/discoveryDecisionBridge";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 import { AlloyFieldLabel, AlloyTextInput } from "./ProcessingAlloyControls";
 import {
@@ -219,6 +220,43 @@ export default function PosTemplateSetupColumn({
         return m;
     }, [discovery]);
 
+    // Durable decision persistence: load once per case, then debounced-save on operator change.
+    const decisionsLoadedRef = useRef<string | null>(null);
+    const decisionsDirtyRef = useRef(false);
+    useEffect(() => {
+        if (!caseId || !discovery) return;
+        if (decisionsLoadedRef.current === caseId) return;
+        decisionsLoadedRef.current = caseId;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/discovery-decisions`, { credentials: "same-origin" });
+                const body = (await res.json().catch(() => ({}))) as { data?: { decisions?: Parameters<typeof fromDecisionRecords>[1] } };
+                if (cancelled || !res.ok) return;
+                const records = body.data?.decisions ?? [];
+                if (records.length) setConceptDecisions(fromDecisionRecords(discovery, records));
+            } catch {
+                /* durable load is best-effort — the operator can still decide */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [caseId, discovery]);
+    useEffect(() => {
+        if (!caseId || !discovery || !decisionsDirtyRef.current) return;
+        const records = toDecisionRecords(discovery, conceptDecisions, "operator", new Date().toISOString());
+        const t = window.setTimeout(() => {
+            void fetch(`/api/admin/processing/cases/${caseId}/form-draft/discovery-decisions`, {
+                method: "PUT",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ decisions: records }),
+            });
+        }, 600);
+        return () => window.clearTimeout(t);
+    }, [conceptDecisions, caseId, discovery]);
+
     const autoDetectAttemptedRef = useRef<string | null>(null);
 
     const clearSelection = () => {
@@ -394,10 +432,13 @@ export default function PosTemplateSetupColumn({
     const sectionCount = new Set(reviewQuestions.map((q) => q.section)).size;
     const activeFieldCount = reviewQuestions.filter((q) => !q.ignored).length;
 
-    const setConceptDecision = (proposalId: string, state: ProposalDecisionState) =>
+    const setConceptDecision = (proposalId: string, state: ProposalDecisionState) => {
+        decisionsDirtyRef.current = true;
         setConceptDecisions((prev) => ({ ...prev, [proposalId]: state }));
+    };
     const bulkAcceptHighConfidence = () => {
         if (!discovery) return;
+        decisionsDirtyRef.current = true;
         setConceptDecisions((prev) => {
             const next = { ...prev };
             for (const p of discovery.proposals) {

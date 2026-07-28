@@ -117,3 +117,24 @@ describe("M5A — rerun reconciliation", () => {
         expect(semanticConceptIdentity(childName)).toContain("child.name");
     });
 });
+
+describe("M5A — decision persistence bridge round-trip", () => {
+    it("survives UI → durable records → UI (rehydration by semantic identity)", async () => {
+        const { toDecisionRecords, fromDecisionRecords } = await import("@/lib/pos/discovery/discoveryDecisionBridge");
+        const { discoverConfiguration } = await import("@/lib/pos/discovery/discoverConfiguration");
+        const g = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures/enrollment-record-8.25.geom.json"), "utf8")) as Geom;
+        const doc: LayoutDocument = {
+            pageCount: g.pageCount, ok: true, reason: null,
+            pages: g.pages.map((p) => ({ page: p.page, width: p.width, height: p.height, lines: buildLayoutLines(p.items.map((it) => ({ s: it.s, x: it.x, y: it.y, w: it.w, h: it.h, fh: it.fh })), p.page) })),
+        };
+        const discovery = discoverConfiguration({ structure: detectLayoutStructure(doc) });
+        const someProposalId = discovery.proposals[0]!.id;
+        const ui = { [someProposalId]: "accepted" as const };
+        const records = toDecisionRecords(discovery, ui, "kelly", "2026-07-28T00:00:00Z");
+        expect(records.length).toBe(1);
+        const rehydrated = fromDecisionRecords(discovery, records);
+        expect(rehydrated[someProposalId]).toBe("accepted");
+        // proposed (default) decisions do NOT persist
+        expect(toDecisionRecords(discovery, {}, "kelly", "t").length).toBe(0);
+    });
+});
