@@ -29,9 +29,11 @@ async function loadOrgDisplayName(orgId: string): Promise<string | null> {
     }
 }
 
-async function loadViewerTimezoneSafe(userId: string): Promise<AdminViewerTimezoneValue> {
+async function loadViewerTimezoneSafe(userId: string, orgId: string): Promise<AdminViewerTimezoneValue> {
     try {
-        return await loadAdminViewerTimezoneBootstrap(userId);
+        // Pass the already-authoritative org id so viewer-tz resolution reuses it instead of re-running
+        // the ~1s access-core resolution (`getAdminOrgIdForUser`) the layout already performed.
+        return await loadAdminViewerTimezoneBootstrap(userId, orgId);
     } catch (e) {
         console.error("[adminV2/workspace/layout] viewer timezone bootstrap failed:", e);
         return { iana: "UTC", source: "utc_fallback" };
@@ -88,7 +90,7 @@ export default async function AdminV2WorkspaceLayout({
     const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels, lifecycleCards] =
         await Promise.all([
             loadOrgDisplayName(orgId),
-            loadViewerTimezoneSafe(auth.user.id),
+            loadViewerTimezoneSafe(auth.user.id, orgId),
             loadOperationalTimezoneSafe(orgId),
             getAdminAccessContextCached(),
             // Known org id (no redundant access-core resolve) + a hard timeout so a slow cold industry
