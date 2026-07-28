@@ -7,6 +7,16 @@
 **Port:** 3015  
 **Base:** `origin/staging` @ Focus Panel merge (`741bb4ed2`)
 
+## Integration (local staging only — not pushed)
+
+| Ref | SHA |
+|-----|-----|
+| Feature commit | `9bc2bd59ffa98d429ed6f6677940d56b76c8ef80` |
+| Merge into local staging | `3ab070ebfb90bc4b23e8da4547c6f078199c76fc` |
+| `origin/staging` at merge base | `741bb4ed27aa96a20899160136145393c4490d53` |
+
+Local `staging` is **ahead 4 / behind 0** vs `origin/staging` (includes prior local toolkit stop fix + sync merge + this sprint). Nothing pushed.
+
 ## Acceptance verdict
 
 **Accepted for Phase 1 product hardening** — Immediate product defects and Immediate UX improvements shipped; Phase 2 architecture documented only. No broad redesign. Ready for local staging integration (not pushed).
