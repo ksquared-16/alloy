@@ -54,5 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cas
     const application = { ledger: result.ledger, counts: result.counts, applied_at: new Date().toISOString(), applied_by: ctx.userId };
     await supabase.from("processing_cases").update({ metadata: { ...freshMeta, [APPLICATION_METADATA_KEY]: application } }).eq("org_id", ctx.orgId).eq("id", caseId);
 
-    return jsonData({ caseId, application: { counts: result.counts, results: result.results } });
+    // Return the BOUND draft so the review + generate flow carries the applied field bindings
+    // straight into the published form (source→discovery→binding→published lineage).
+    return jsonData({ caseId, application: { counts: result.counts, results: result.results }, form_draft_preview: updatedDraft });
 }

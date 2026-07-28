@@ -68,12 +68,18 @@ function conceptLabel(discovery: ConfigurationDiscoveryResult, candidateId: stri
     return discovery.concepts.find((c) => c.id === candidateId)?.label ?? candidateId;
 }
 
-/** Draft field ids whose label matches one of the concept's source labels (the questions to bind). */
+/** Draft field ids whose label matches the concept's source labels — EXCLUDING output-copy sections
+ *  (a classroom/office copy reproduces earlier questions; we never bind its duplicate fields). */
 function draftFieldsForConcept(draft: StoredFormDraftPreview, discovery: ConfigurationDiscoveryResult, candidateId: string): DraftFormField[] {
     const concept = discovery.concepts.find((c) => c.id === candidateId);
     if (!concept) return [];
     const labels = new Set(concept.source.labels.map((l) => l.trim().toLowerCase()));
-    return draft.fields.filter((f) => labels.has(f.label.trim().toLowerCase()));
+    // Field ids that live in an output/duplicate section (disposition static_reference or a "(… Copy)" title).
+    const outputCopyFieldIds = new Set<string>();
+    for (const s of draft.sections) {
+        if (s.disposition === "static_reference" || /\bcopy\b/i.test(s.title)) for (const id of s.field_ids) outputCopyFieldIds.add(id);
+    }
+    return draft.fields.filter((f) => labels.has(f.label.trim().toLowerCase()) && !outputCopyFieldIds.has(f.id));
 }
 
 export interface ApplyInput {

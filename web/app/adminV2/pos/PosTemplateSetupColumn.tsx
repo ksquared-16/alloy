@@ -460,9 +460,21 @@ export default function PosTemplateSetupColumn({
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({ confirmedNewFields }),
             });
-            const body = (await res.json().catch(() => ({}))) as { data?: { application?: { counts?: Record<string, number> } }; error?: string };
+            const body = (await res.json().catch(() => ({}))) as {
+                data?: { application?: { counts?: Record<string, number> }; form_draft_preview?: StoredFormDraftPreview };
+                error?: string;
+            };
             if (res.ok) {
                 setApplicationCounts(body.data?.application?.counts ?? null);
+                // Re-seed the review from the BOUND draft so applied field bindings carry into
+                // the generate/publish flow (published form retains the discovered bindings).
+                const bound = body.data?.form_draft_preview ?? null;
+                if (bound) {
+                    setDraft(bound);
+                    const seeded = seedReviewQuestions(bound);
+                    setReviewQuestions(seeded);
+                    reviewQuestionsRef.current = seeded;
+                }
                 await reload();
             } else {
                 setErr(body.error || "Couldn't apply the configuration.");
