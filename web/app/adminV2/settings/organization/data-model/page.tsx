@@ -1,6 +1,8 @@
 import DataModelWorkspaceSurface from "@/components/adminV2/settings/dataModel/DataModelWorkspaceSurface";
 import { resolveDataModelEntityRoute } from "@/lib/dataModel/dataModelChapterRoutes";
 import { loadDataModelEntitiesWorkspaceVm } from "@/lib/dataModel/loadDataModelEntitiesWorkspaceVm";
+import { redirect } from "next/navigation";
+import { CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF } from "@/lib/admin/canonicalAdminRoutes";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,9 @@ function firstOf(value: string | string[] | undefined): string | undefined {
  * Entity-centric: pick an Entity, then work inside it. Legacy `?section=` links
  * (fields, statuses, option-sets, relationships) map onto the matching Entity tab
  * rather than a separate category page.
+ *
+ * `?section=calculations` redirects to the first-class Operational Intelligence product
+ * so Data Model no longer hosts a second editable mount.
  */
 export default async function OrganizationDataModelPage({ searchParams }: PageProps) {
     const resolved = searchParams ? await searchParams : {};
@@ -34,18 +39,18 @@ export default async function OrganizationDataModelPage({ searchParams }: PagePr
         field: firstOf(resolved.field),
     });
 
-    // The Entity workspace is the primary experience, so its VM composes on every
-    // request — collection, selected identity, fields, statuses, and option sets
-    // all arrive with the initial payload. Operational Calculations is the one
-    // deferred compat pane and does not need it.
-    const entitiesLoad = route.mode === "entity" ? await loadDataModelEntitiesWorkspaceVm() : undefined;
+    if (route.mode === "calculations") {
+        redirect(CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF);
+    }
+
+    const entitiesLoad = await loadDataModelEntitiesWorkspaceVm();
 
     return (
         <DataModelWorkspaceSurface
-            mode={route.mode}
-            initialEntity={route.mode === "entity" ? route.entity : undefined}
-            initialTab={route.mode === "entity" ? route.tab : undefined}
-            initialField={route.mode === "entity" ? route.field : undefined}
+            mode="entity"
+            initialEntity={route.entity}
+            initialTab={route.tab}
+            initialField={route.field}
             entitiesLoad={entitiesLoad}
         />
     );

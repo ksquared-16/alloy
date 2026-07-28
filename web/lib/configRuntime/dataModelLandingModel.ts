@@ -1,4 +1,5 @@
 import type { OrganizationDomainLandingModel } from "@/lib/configRuntime/organizationDomainLandingModel";
+import { CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF } from "@/lib/admin/canonicalAdminRoutes";
 import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
 
 /** Data Model landing model — tiles deep-link into the Category workspace (no ceremony cards). */
@@ -58,12 +59,12 @@ export function buildDataModelLandingModel(): OrganizationDomainLandingModel {
             },
             {
                 id: "calculations",
-                label: "Operational Calculations",
-                summary: "Metrics, formulas, targets, and derived values.",
-                capabilities: ["Operational metrics", "Derived values"],
+                label: "Operational Intelligence",
+                summary: "Measurements, goals, health, lifecycle, and history.",
+                capabilities: ["Measurements", "Targets & health"],
                 kind: "configuration",
-                postureLabel: "Organization definition",
-                href: dataModelSectionHref("calculations"),
+                postureLabel: "Organization product",
+                href: CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF,
             },
         ],
     };

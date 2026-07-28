@@ -1,0 +1,71 @@
+{
+  "base": "http://127.0.0.1:3012",
+  "startedAt": "2026-07-28T12:53:49.282Z",
+  "steps": [
+    {
+      "step": "health",
+      "status": 200
+    },
+    {
+      "step": "create_draft",
+      "status": 201,
+      "id": "812c6ebe-c0b4-4d37-8295-cfc487334662"
+    },
+    {
+      "step": "list_product",
+      "type_label": "Capacity",
+      "status_label": "Draft"
+    },
+    {
+      "step": "evaluate_draft",
+      "status": "not_configured",
+      "value": null,
+      "explanationCount": 3
+    },
+    {
+      "step": "publish_v1",
+      "status": 200,
+      "version": 1
+    },
+    {
+      "step": "bind_v1",
+      "status": 200
+    },
+    {
+      "step": "fork_draft",
+      "status": 200
+    },
+    {
+      "step": "publish_v2",
+      "version": 2
+    },
+    {
+      "step": "runtime_still_v1",
+      "version": 1,
+      "value": null
+    },
+    {
+      "step": "rebind_v2",
+      "status": 200
+    },
+    {
+      "step": "runtime_v2",
+      "version": 2
+    },
+    {
+      "step": "invalid_room",
+      "status": 404,
+      "error": "Room not found in organization (inaccessible or cross-org)"
+    },
+    {
+      "step": "archive",
+      "ok": true
+    },
+    {
+      "step": "restore",
+      "lifecycle": "published"
+    }
+  ],
+  "finishedAt": "2026-07-28T12:54:38.524Z",
+  "ok": true
+}

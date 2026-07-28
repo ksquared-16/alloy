@@ -27,6 +27,7 @@ import {
     ConfigEditorSection,
     ConfigObjectHeader,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import RoomOrganizationCalculationPanel from "@/components/adminV2/settings/locations/RoomOrganizationCalculationPanel";
 
 export default function LocationRoomDetailPanel({
     room,
@@ -354,7 +355,10 @@ export default function LocationRoomDetailPanel({
                         </div>
                     ))}
                 </div>
-            </div>;
+
+                <RoomOrganizationCalculationPanel roomId={room.id} />
+            </div>
+        ;
 
     return (
         <ConfigChildObjectMasterDetail
