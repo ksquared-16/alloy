@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminOrgIdForUser } from "@/lib/admin/entityLabelsServer";
 import {
     UTC_FALLBACK_IANA,
-    fetchEffectiveUserDisplayTimezone,
+    fetchEffectiveUserDisplayTimezoneCached,
     type UserDisplayTimezoneSource,
 } from "@/lib/admin/timezoneContract";
 
@@ -30,7 +30,11 @@ export async function loadAdminViewerTimezoneBootstrap(
             return { iana: UTC_FALLBACK_IANA, source: "utc_fallback" };
         }
         const supabase = createAdminClient();
-        return fetchEffectiveUserDisplayTimezone(supabase, { userId, orgId });
+        // Reuse the EXISTING process cache (USER_DISPLAY_TZ_CACHE, 60 s TTL, keyed org+user — "safe per
+        // org+user") instead of re-reading user_profiles + org metadata on every navigation. The bootstrap
+        // was calling the uncached variant; the cached one already owns the correct lifetime/invalidation.
+        const { iana, source } = await fetchEffectiveUserDisplayTimezoneCached(supabase, { userId, orgId });
+        return { iana, source };
     } catch (e) {
         console.error("[viewerTimezoneBootstrap] failed:", e);
         return { iana: UTC_FALLBACK_IANA, source: "utc_fallback" };
