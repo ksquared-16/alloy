@@ -26,6 +26,35 @@ import { writeAuditEvent } from "./commands/audit.mjs";
 import { createRequest, updateRequest } from "./commands/director-requests.mjs";
 import { resolveSlotIdentity } from "./identity.mjs";
 import { understandingQuestions } from "./operations.mjs";
+import { execFile } from "node:child_process";
+import { join } from "node:path";
+import { TOOLKIT_DIR } from "./commands/executor.mjs";
+
+/**
+ * The LAUNCHER: provision a fresh managed worktree on a FREE worker slot so a
+ * mission can run in isolation — never in the champion, never co-tenanting a
+ * human sprint. Runs the sanctioned `alloy-sprint-start` (the exact argv the
+ * command registry uses), then force-resolves the newly registered slot identity.
+ * Long-running (git worktree + dependency install), so callers run it async and
+ * surface a "provisioning" phase. Resolves { ok, identity } or { ok:false, error }.
+ */
+function provisionSlotForMission(mission) {
+  return new Promise((resolveP) => {
+    const cap = mission.capability_id ? getCapability(mission.capability_id) : null;
+    const base = (cap?.slug || String(mission.capability_id || mission.title || "mission").replace(/^cap_/, ""))
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "mission";
+    const name = `vac-${base}`;
+    const provider = mission.provider || cap?.owner?.provider_default || "claude";
+    const bin = join(TOOLKIT_DIR, "alloy-sprint-start");
+    const args = [name, "--provider", provider, "--slot", String(mission.worker_slot), "--without-server"];
+    execFile(bin, args, { cwd: TOOLKIT_DIR, env: process.env, timeout: 15 * 60 * 1000, maxBuffer: 1 << 24 }, (err, _stdout, stderr) => {
+      if (err) return resolveP({ ok: false, error: `provisioning slot ${mission.worker_slot} failed: ${String(stderr || err.message || "").trim().slice(0, 300)}` });
+      const id = resolveSlotIdentity(mission.worker_slot, { force: true });
+      if (!id.ok) return resolveP({ ok: false, error: id.conflict?.detail || "worktree provisioned but slot identity did not resolve" });
+      resolveP({ ok: true, identity: id });
+    });
+  });
+}
 
 /** Consequential mission actions require explicit confirmation, like every other. */
 const CONSEQUENTIAL = new Set(["start", "steer", "stop", "accept", "close"]);
@@ -63,11 +92,15 @@ function identityFor(slot) {
  */
 export function compileMissionForIntent({ slot, intent }) {
   const idr = identityFor(slot);
-  if (!idr.ok) {
+  // A FREE slot (no worktree yet) is legal here: the launcher provisions its
+  // worktree at start. Only a genuine conflict (wrong branch, missing worktree)
+  // blocks compilation.
+  const freeSlot = !idr.ok && idr.conflict?.kind === "unregistered_slot";
+  if (!idr.ok && !freeSlot) {
     audit("compile", { kind: "slot", label: `slot ${slot}` }, "blocked", { error: idr.conflict?.detail });
     return { ok: false, stage: "identity", reason: "identity_conflict", conflict: idr.conflict };
   }
-  const identity = idr.identity;
+  const identity = idr.ok ? idr.identity : null;
 
   const cap = retrieveCapability(intent);
   if (!cap.ok) {
@@ -80,8 +113,9 @@ export function compileMissionForIntent({ slot, intent }) {
   // Stage: Gap Analysis (the reasoning stage) — compares intent vs the prepared context.
   const gapReport = analyzeGap({ intent, capability, snapshot });
 
+  const provider = identity?.provider || capability?.owner?.provider_default || "claude";
   const mission = createMission({
-    slot, worktree: identity.worktree_name, branch: identity.branch, provider: identity.provider || "claude",
+    slot, worktree: identity?.worktree_name || null, branch: identity?.branch || null, provider,
     title: `${capability.name} V2`, objective: `(compiling from ${capability.capability_id})`, status: "draft",
   });
 
@@ -99,6 +133,7 @@ export function compileMissionForIntent({ slot, intent }) {
     intent, // the operator's own words — recompilation reuses them
     package_id: pkg.package_id, package_version: pkg.version,
     gap_report_id: gapReport.gap_report_id, readiness_verdict: verdict.verdict,
+    needs_provision: !identity, // free slot → the launcher provisions its worktree at start
     status: verdict.verdict === "Ready" && pkg.readiness_status === "ready" ? "ready" : "draft",
   });
 
@@ -247,18 +282,22 @@ export function previewAction(action, mission_id) {
   const mission = getMission(mission_id);
   if (!mission) return { ok: false, error: "unknown_mission" };
   const idr = identityFor(mission.worker_slot);
-  const identity = idr.identity;
+  // A free-slot mission previews as "will provision a worker" rather than failing
+  // on the not-yet-existing worktree.
+  const freeSlot = !idr.ok && idr.conflict?.kind === "unregistered_slot" && mission.needs_provision !== false;
+  const identity = idr.ok ? idr.identity : null;
   const pkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
   const base = { ok: true, action, mission_id, requires_confirmation: CONSEQUENTIAL.has(action), identity, target: targetOf(mission, identity) };
 
-  if (!idr.ok) return { ...base, ok: false, error: "identity_conflict", conflict: identity.conflict, effects: [] };
+  if (!idr.ok && !freeSlot) return { ...base, ok: false, error: "identity_conflict", conflict: idr.conflict, effects: [] };
 
   if (action === "start") {
     const pre = checkStartPreconditions(pkg);
+    const where = identity ? identity.worktree_name : `a fresh worktree on free slot ${mission.worker_slot}`;
     return { ...base, ok: pre.ok, blockers: pre.blockers,
-      summary: `Start "${mission.title}" — runs a ${identity.provider || "claude"} turn in ${identity.worktree_name}`,
+      summary: `Start "${mission.title}" — runs a ${identity?.provider || mission.provider || "claude"} turn in ${where}`,
       effects: [
-        `Spawns a provider process in ${identity.worktree_path}`,
+        freeSlot ? `Provisions a fresh managed worktree on free slot ${mission.worker_slot} (git worktree + dependency install, ~1–3 min), then spawns the worker there` : `Spawns a provider process in ${identity.worktree_path}`,
         `The worker may create/modify files in that worktree`,
         `Governance: no push, no merge, no promote, no scope broadening`,
       ] };
@@ -275,11 +314,14 @@ export function startMission({ mission_id, confirm }) {
   const mission = getMission(mission_id);
   if (!mission) return { ok: false, error: "unknown_mission" };
   const idr = identityFor(mission.worker_slot);
-  if (!idr.ok) {
+  // A free-slot mission has no worktree yet — the launcher provisions it in the
+  // async block below. Only a genuine identity conflict blocks the start.
+  const needsProvision = !idr.ok && idr.conflict?.kind === "unregistered_slot" && mission.needs_provision !== false;
+  if (!idr.ok && !needsProvision) {
     audit("start", targetOf(mission, idr.identity), "blocked", { error: idr.conflict?.detail });
     return { ok: false, error: "identity_conflict", conflict: idr.conflict };
   }
-  const identity = idr.identity;
+  const identity = idr.ok ? idr.identity : null;
   const pkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
   const pre = checkStartPreconditions(pkg);
   if (!pre.ok) {
@@ -299,26 +341,39 @@ export function startMission({ mission_id, confirm }) {
 
   // Durable request: a mission turn is a first-class Director request.
   const req = createRequest({
-    slot: mission.worker_slot, worktree: identity.worktree_name, provider: identity.provider || mission.provider,
+    slot: mission.worker_slot, worktree: identity?.worktree_name || `(provisioning slot ${mission.worker_slot})`, provider: identity?.provider || mission.provider,
     instruction: `[mission] ${mission.title}`, request_type: "worker-instruction", mission_id,
   });
   updateMission(mission_id, { active_request_id: req.request_id, status: "starting", approved_contract: approved, error_code: null, error_message: null, acceptance_error: null });
   updateRequest(req.request_id, { status: "starting", started_at: new Date().toISOString() });
 
-  setImmediate(() => {
-    runMissionTurn(mission, pkg, { provider: identity.provider || mission.provider || "claude", identity })
-      .then(() => {
-        const after = getMission(mission_id);
-        updateRequest(req.request_id, { status: after?.status === "failed" ? "failed" : "worker-responded", completed_at: new Date().toISOString() });
-      })
-      .catch((e) => {
-        updateMission(mission_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e) });
-        updateRequest(req.request_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e), failed_at: new Date().toISOString() });
-      });
+  setImmediate(async () => {
+    try {
+      let id = identity;
+      if (needsProvision) {
+        // The launcher: create the worker's worktree on the free slot, then run.
+        updateMission(mission_id, { status: "provisioning", current_phase: `provisioning a worker on slot ${mission.worker_slot} (new worktree + deps, ~1–3 min)` });
+        const prov = await provisionSlotForMission(getMission(mission_id));
+        if (!prov.ok) {
+          updateMission(mission_id, { status: "failed", error_code: "provision_failed", error_message: prov.error, current_phase: null });
+          updateRequest(req.request_id, { status: "failed", error_code: "provision_failed", error_message: prov.error, failed_at: new Date().toISOString() });
+          audit("start", targetOf(getMission(mission_id), null), "failed", { error: prov.error });
+          return;
+        }
+        id = prov.identity;
+        updateMission(mission_id, { worktree: id.worktree_name, branch: id.branch, provider: id.provider || mission.provider, needs_provision: false });
+      }
+      await runMissionTurn(getMission(mission_id), pkg, { provider: id.provider || mission.provider || "claude", identity: id });
+      const after = getMission(mission_id);
+      updateRequest(req.request_id, { status: after?.status === "failed" ? "failed" : "worker-responded", completed_at: new Date().toISOString() });
+    } catch (e) {
+      updateMission(mission_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e) });
+      updateRequest(req.request_id, { status: "failed", error_code: "exception", error_message: String(e?.message || e), failed_at: new Date().toISOString() });
+    }
   });
 
-  audit("start", targetOf(mission, identity), "succeeded", { confirmed: true, summary: `started in ${identity.worktree_name}`, input: { mission_id } });
-  return { ok: true, mission_id, status: "starting", request_id: req.request_id, worktree: identity.worktree_name };
+  audit("start", targetOf(mission, identity), "succeeded", { confirmed: true, summary: identity ? `started in ${identity.worktree_name}` : `provisioning + starting on slot ${mission.worker_slot}`, input: { mission_id } });
+  return { ok: true, mission_id, status: "starting", request_id: req.request_id, worktree: identity?.worktree_name || `(provisioning slot ${mission.worker_slot})` };
 }
 
 /** Steering / answer → a continuation turn resuming the SAME provider session. */

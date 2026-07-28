@@ -418,41 +418,22 @@ const MISSION_BUSY = new Set(["starting", "running", "stopping"]);
  * worker that is NOT already running a mission, so work never silently piles onto
  * one slot. Returns { slot } or { error, detail, available }.
  */
-// A worktree with uncommitted changes belongs to a sprint that is actively using
-// it. Dispatching a mission there runs a SECOND agent in the same tree and mixes
-// two sprints' work — the exact corruption this guards against. Vacilando only
-// tracks its own missions, so this git-level check is how it sees external sprints.
-function worktreeHasUncommittedWork(path) {
-  if (!path || !existsSync(path)) return false;
-  try {
-    const out = execFileSync("git", ["-C", path, "status", "--porcelain"], { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] });
-    return out.trim().length > 0;
-  } catch { return false; } // if git can't answer, don't hard-block on it
-}
-
 function resolveRunSlot(requested) {
-  const ids = listSlotIdentities().filter((i) => i.ok && i.worktree_name);
-  const liveIds = new Set(liveMissionIds());
-  const busy = new Set(
-    readMissions(null, 500)
-      .filter((m) => liveIds.has(m.mission_id) || MISSION_BUSY.has(m.status))
-      .map((m) => m.worker_slot)
-  );
-  // A slot is OCCUPIED if a Vacilando mission is live on it OR its worktree carries
-  // uncommitted work from an external sprint. Never dispatch onto either — not on
-  // Auto, and not on an explicit pick (silent co-tenancy is what mixed two sprints).
-  const occupiedById = new Map(ids.map((i) => [i.slot, busy.has(i.slot) || worktreeHasUncommittedWork(i.worktree_path)]));
-  const available = ids.filter((i) => !occupiedById.get(i.slot)).map((i) => i.slot).sort((a, b) => a - b);
-  if (Number.isInteger(requested)) {
-    if (requested < 1 || requested > 6) return { error: "bad_slot", detail: `slot ${requested} out of range`, available };
-    const target = ids.find((i) => i.slot === requested);
-    if (!target) return { error: "slot_not_occupied", detail: `slot ${requested} has no worker`, available };
-    if (occupiedById.get(requested)) return { error: "slot_occupied", detail: `slot ${requested} (${target.worktree_name}) already has a sprint in progress — a live mission or uncommitted work is there. Dispatching would mix two sprints in one worktree.`, available };
-    return { slot: requested };
+  // A slot with a registered worktree already hosts a sprint (human or a prior
+  // Vacilando mission). A FREE slot (no worktree) is where a new mission goes —
+  // Vacilando provisions a fresh worktree there at start (the launcher). Missions
+  // never run in the champion and never co-tenant an occupied worktree.
+  const withWorktree = new Set(listSlotIdentities().filter((i) => i.ok && i.worktree_name).map((i) => i.slot));
+  const freeSlots = [1, 2, 3, 4, 5, 6].filter((n) => !withWorktree.has(n));
+  const req = (typeof requested === "string" && /^-?\d+$/.test(requested)) ? Number(requested) : requested;
+  if (Number.isInteger(req)) {
+    if (req < 1 || req > 6) return { error: "bad_slot", detail: `slot ${req} out of range`, available: freeSlots };
+    if (!freeSlots.includes(req)) return { error: "slot_occupied", detail: `slot ${req} already hosts a sprint — pick a free slot, or End Work to free it.`, available: freeSlots };
+    return { slot: req, provision: true };
   }
-  if (available.length) return { slot: available[0] };
-  if (ids.length) return { error: "all_workers_busy", detail: "every worker slot is occupied by a sprint (live mission or uncommitted work) — free a slot or dedicate a clean worktree before dispatching", available: [] };
-  return { error: "no_workers", detail: "no worker slots to dispatch to", available: [] };
+  // Auto → the lowest free worker slot; a fresh worktree is provisioned on start.
+  if (freeSlots.length) return { slot: freeSlots[0], provision: true };
+  return { error: "all_workers_busy", detail: "all six worker slots host sprints — End Work on one to free a slot before dispatching.", available: [] };
 }
 
 /** Warm the expensive keys in the background so the first operator read is instant. */
