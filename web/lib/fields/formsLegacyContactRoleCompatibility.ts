@@ -49,6 +49,19 @@ export const FORMS_RELATIONSHIP_PROVIDER_ROLE_BY_REF: Readonly<Record<string, Fo
     "person.contact_role.emergency.phone": "emergency",
 };
 
+/**
+ * LEGACY BRIDGE — canonical collection provider ref → legacy Forms role axis, where one exists.
+ *
+ * The legacy axis (`primary/parents/billing/emergency/secondary`) predates and does not correspond to
+ * the canonical `operational_role_key`. Only `parents` has a role-specific manifest column set, so it
+ * is the only entry. A NEW relationship definition needs NO entry here: with no mapping, leaf values
+ * resolve from the generic person columns, which is the correct behaviour. Do not grow this map —
+ * collapse the legacy axis instead (gap #7 in docs/platform/core/data/relationship-model.md).
+ */
+export const FORMS_LEGACY_ROLE_BY_COLLECTION_PROVIDER_REF: Readonly<Record<string, FormsRelationshipRoleKey>> = {
+    "person.contact_role.parents": "parents",
+};
+
 /** Whether a legacy system field id should be hidden when role-specific relationship leaf exists. */
 export function isLegacyAmbiguousContactSystemFieldId(systemFieldId: string): boolean {
     return FORMS_LEGACY_AMBIGUOUS_CONTACT_SYSTEM_IDS.has(systemFieldId.trim());

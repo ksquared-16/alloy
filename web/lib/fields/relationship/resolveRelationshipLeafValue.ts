@@ -29,7 +29,13 @@ function columnFromManifestRef(manifestRefKey: string): string | null {
 export function resolveRelationshipLeafFromPersonRow(
     personRow: Record<string, unknown> | null | undefined,
     args: {
-        role: FormsRelationshipRoleKey;
+        /**
+         * Legacy Forms role axis, used only to pick a role-specific manifest column. OMIT for
+         * collection items whose role has no legacy manifest — passing an unrelated role (the old
+         * hardcoded `"parents"`) would read a guardian-flavoured column for emergency contacts and
+         * authorized pickups. Absent role → generic fallback column, which is correct for person rows.
+         */
+        role?: FormsRelationshipRoleKey;
         leafKey: string;
         leafProviderRefKey?: string | null;
     },
@@ -38,7 +44,7 @@ export function resolveRelationshipLeafFromPersonRow(
     const leaf = args.leafKey.trim().toLowerCase();
     const manifestRef =
         args.leafProviderRefKey?.trim()
-        ?? manifestRefKeyForRelationshipRoleLeaf(args.role, leaf);
+        ?? (args.role ? manifestRefKeyForRelationshipRoleLeaf(args.role, leaf) : null);
     const manifestColumn = manifestRef ? columnFromManifestRef(manifestRef) : null;
     const fallbackColumn = LEAF_MANIFEST_FALLBACK_COLUMN[leaf];
     if (!fallbackColumn) return null;
