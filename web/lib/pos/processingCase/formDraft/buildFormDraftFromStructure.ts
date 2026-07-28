@@ -86,10 +86,20 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
                 description: f.evidence ? undefined : undefined,
                 confidence: f.confidence === "invalid" ? "low" : f.confidence,
                 evidence: f.evidence,
+                ...(typeof f.page === "number" ? { page: f.page } : {}),
             });
             fieldIds.push(id);
         }
-        sections.push({ id: sectionId, title: sec.title || `Section ${si + 1}`, field_ids: fieldIds });
+        // Carry the native-layout detector's geometric section classification (signature block,
+        // consent/legal prose, output copy) + preserved static text straight onto the draft section,
+        // so it drives the operator-facing disposition instead of the label-text heuristic.
+        sections.push({
+            id: sectionId,
+            title: sec.title || `Section ${si + 1}`,
+            field_ids: fieldIds,
+            ...(sec.disposition ? { disposition: sec.disposition } : {}),
+            ...(sec.static_text ? { static_text: sec.static_text } : {}),
+        });
     });
 
     if (fields.length === 0) {

@@ -22,6 +22,9 @@ import { extractPdfAcroFormFields } from "../structure/pdfAcroForm";
 import { downloadDocumentBytesSafe, looksLikePdfBytes } from "../structure/documentBytes";
 import { extractDocumentTextSafe } from "../structure/extractDocumentTextSafe";
 import { detectDocumentStructure } from "../structure/detectDocumentStructure";
+import { extractPdfPositional } from "../structure/pdfPositionalExtract";
+import { detectLayoutStructure } from "../structure/detectLayoutStructure";
+import type { LayoutDocument } from "../structure/pdfLayoutTypes";
 import { buildFormDraftFromStructure } from "./buildFormDraftFromStructure";
 import { buildFormDraftFromAcroForm } from "./buildFormDraftFromAcroForm";
 import { deriveDocumentTitle } from "./deriveDocumentTitle";
@@ -29,9 +32,23 @@ import { ocrProvenanceFromDocument } from "./ocrDraftProvenance";
 import { dbStoreFormDraftPreview, stampFormDraftPreview } from "./formDraftPreviewDb";
 import type { StoredFormDraftPreview } from "./types";
 
-/** Injected so the AcroForm-vs-text decision is unit-testable without storage / pdf.js. */
+/** A single detection stage's wall-clock + outcome — surfaced to the route for reliability diagnostics. */
+export interface FormDraftStageTiming {
+    stage: string;
+    ms: number;
+    ok: boolean;
+    detail?: string;
+}
+
+/** Injected so the AcroForm/positional/text decision is unit-testable without storage / pdf.js. */
 export interface FormDraftCaseDeps {
     extractAcroForm?: (bytes: Uint8Array) => Promise<PdfAcroFormResult>;
+    /** Native-layout positional extractor (unpdf getTextContent per page). Injectable for tests. */
+    extractPositional?: (bytes: Uint8Array) => Promise<LayoutDocument>;
+    /** Per-stage timing sink (download / extract-text / acroform / positional / flat-text). */
+    onStage?: (t: FormDraftStageTiming) => void;
+    /** Monotonic clock (ms). Injected so tests avoid Date.now(); defaults to performance.now. */
+    now?: () => number;
 }
 
 /**
@@ -46,18 +63,35 @@ export async function chooseDraftForCase(input: {
     pdfBytes: Uint8Array | null;
     mimeType: string | null;
     extractAcroForm: (bytes: Uint8Array) => Promise<PdfAcroFormResult>;
+    extractPositional?: (bytes: Uint8Array) => Promise<LayoutDocument>;
+    onStage?: (t: FormDraftStageTiming) => void;
+    now?: () => number;
 }): Promise<StoredFormDraftPreview> {
     const textLen = (input.text.text ?? "").length;
+    const clock = input.now ?? (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
+    const timed = async <T>(stage: string, fn: () => Promise<T> | T, detail?: (r: T) => string): Promise<T> => {
+        const t0 = clock();
+        try {
+            const r = await fn();
+            input.onStage?.({ stage, ms: Math.round(clock() - t0), ok: true, detail: detail?.(r) });
+            return r;
+        } catch (e) {
+            input.onStage?.({ stage, ms: Math.round(clock() - t0), ok: false, detail: e instanceof Error ? e.message : String(e) });
+            throw e;
+        }
+    };
     const { title } = deriveDocumentTitle({
         extractedText: input.text.text,
         fileName: input.fileName,
         classificationKey: input.classificationKey,
     });
 
-    // PRIMARY — real PDF form fields.
-    if (input.pdfBytes && looksLikePdfBytes(input.pdfBytes, input.mimeType)) {
+    const isPdf = !!input.pdfBytes && looksLikePdfBytes(input.pdfBytes, input.mimeType);
+
+    // PRIMARY — real PDF AcroForm widget fields.
+    if (isPdf && input.pdfBytes) {
         try {
-            const acro = await input.extractAcroForm(input.pdfBytes);
+            const acro = await timed("acroform", () => input.extractAcroForm(input.pdfBytes as Uint8Array), (a) => `fields=${a.fields.length}`);
             if (acro.has_acroform && acro.fields.length > 0) {
                 return buildFormDraftFromAcroForm({
                     acroform: acro,
@@ -72,9 +106,33 @@ export async function chooseDraftForCase(input: {
         }
     }
 
-    // FALLBACK — text structure detection.
+    // SECONDARY — native-text WITH layout geometry (the structured, non-AcroForm case).
+    if (isPdf && input.pdfBytes) {
+        try {
+            const extractPos = input.extractPositional ?? extractPdfPositional;
+            const layout = await timed("positional_extract", () => extractPos(input.pdfBytes as Uint8Array), (l) => `pages=${l.pageCount} ok=${l.ok}`);
+            if (layout.ok && layout.pages.length > 0) {
+                const structure = await timed("layout_detect", () => detectLayoutStructure(layout), (s) => `sections=${s.sections.length} fields=${s.sections.reduce((n, x) => n + x.fields.length, 0)}`);
+                const totalFields = structure.sections.reduce((n, s) => n + s.fields.length, 0);
+                if (totalFields > 0) {
+                    return buildFormDraftFromStructure({
+                        structure,
+                        sourceDocumentId: input.sourceDocumentId,
+                        extractedText: input.text.text,
+                        fileName: input.fileName,
+                        classificationKey: input.classificationKey,
+                        extractedTextAvailable: input.text.available,
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn("[chooseDraftForCase] positional", e instanceof Error ? e.message : e);
+        }
+    }
+
+    // FALLBACK — flat-text structure detection (scanned/OCR text, or when layout yielded nothing).
     return buildFormDraftFromStructure({
-        structure: detectDocumentStructure(input.text.text),
+        structure: await timed("flat_text_detect", () => detectDocumentStructure(input.text.text)),
         sourceDocumentId: input.sourceDocumentId,
         extractedText: input.text.text,
         fileName: input.fileName,
@@ -137,6 +195,9 @@ export async function buildFormDraftForCaseSafe(
             pdfBytes: downloaded?.bytes ?? null,
             mimeType: downloaded?.mimeType ?? null,
             extractAcroForm: deps.extractAcroForm ?? extractPdfAcroFormFields,
+            extractPositional: deps.extractPositional,
+            onStage: deps.onStage,
+            now: deps.now,
         });
 
         const draft = stampFormDraftPreview(draftPre);

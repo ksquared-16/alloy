@@ -155,10 +155,20 @@ export default function PosTemplateSetupColumn({
             }
             byTitle.get(title)!.push(q.displayLabel || q.evidenceLabel || "");
         }
+        // The native-layout detector classifies a section geometrically (signature block, consent/legal
+        // prose, output copy) and carries that on the draft section. When present it is a high-confidence
+        // recommendation and wins over the label-text heuristic; otherwise we fall back to that heuristic.
+        const draftDisposition = new Map<string, SectionDisposition>();
+        for (const s of draft?.sections ?? []) {
+            if (s.disposition) draftDisposition.set(s.title, s.disposition);
+        }
         const out: Record<string, { disposition: SectionDisposition; recommended: SectionDisposition; confidence: "high" | "medium" | "low" }> = {};
         for (const title of order) {
             const labels = byTitle.get(title)!;
-            const rec = recommendSectionDisposition({ title, fieldLabels: labels, sectionText: labels.join("\n") });
+            const detected = draftDisposition.get(title);
+            const rec = detected
+                ? { disposition: detected, confidence: "high" as const }
+                : recommendSectionDisposition({ title, fieldLabels: labels, sectionText: labels.join("\n") });
             out[title] = {
                 recommended: rec.disposition,
                 confidence: rec.confidence,
@@ -166,7 +176,7 @@ export default function PosTemplateSetupColumn({
             };
         }
         return out;
-    }, [reviewQuestions, dispositionOverrides]);
+    }, [reviewQuestions, dispositionOverrides, draft]);
     const autoDetectAttemptedRef = useRef<string | null>(null);
 
     const clearSelection = () => {
