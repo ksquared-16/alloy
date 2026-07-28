@@ -302,7 +302,7 @@ export function startMission({ mission_id, confirm }) {
     slot: mission.worker_slot, worktree: identity.worktree_name, provider: identity.provider || mission.provider,
     instruction: `[mission] ${mission.title}`, request_type: "worker-instruction", mission_id,
   });
-  updateMission(mission_id, { active_request_id: req.request_id, status: "starting", approved_contract: approved });
+  updateMission(mission_id, { active_request_id: req.request_id, status: "starting", approved_contract: approved, error_code: null, error_message: null, acceptance_error: null });
   updateRequest(req.request_id, { status: "starting", started_at: new Date().toISOString() });
 
   setImmediate(() => {
@@ -341,7 +341,9 @@ export function steerMission({ mission_id, instruction, confirm }) {
     slot: mission.worker_slot, worktree: identity.worktree_name, provider: identity.provider || mission.provider,
     instruction, request_type: "worker-instruction", mission_id,
   });
-  updateMission(mission_id, { pending_question: null, status: "starting", active_request_id: req.request_id });
+  // Clear any stale failure from a prior attempt so the UI doesn't show a dead
+  // run's error banner over a fresh, live turn.
+  updateMission(mission_id, { pending_question: null, status: "starting", active_request_id: req.request_id, error_code: null, error_message: null, acceptance_error: null });
   updateRequest(req.request_id, { status: "starting", started_at: new Date().toISOString() });
 
   setImmediate(() => {
