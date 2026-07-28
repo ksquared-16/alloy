@@ -672,3 +672,7 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .cvcompose.big .cv-reply{flex:1;font-size:15px;padding:12px 14px;border-radius:9px;border:1px solid var(--line,#e3d9c9)}
 .cvcompose.big .cv-reply:focus{outline:none;border-color:var(--accent,#c2703f)}
 .cvcompose.big .btn.go{padding:11px 20px;font-size:14px}
+
+/* Review summary lives in the thread as selectable, copy-pasteable text */
+.cvmsg.director.review .cvbub{border:1px solid var(--line,#e3d9c9);background:var(--panel,#fbf7f0);max-width:100%}
+.cvbub.sel{user-select:text;-webkit-user-select:text;white-space:pre-wrap;cursor:text;line-height:1.5}

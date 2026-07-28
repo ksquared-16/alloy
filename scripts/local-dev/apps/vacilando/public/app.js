@@ -1463,12 +1463,12 @@ function opReview(o) {
   const ev = (r.evidence || []).map((e) => `<div class="opev"><span class="opev-b ${cls(e.status)}">${mark(e.status)}</span><div><span>${esc(e.criterion)}</span>${e.detail ? `<div class="su-why">${esc(e.detail)}</div>` : ""}</div></div>`).join("");
   const changed = (r.what_changed || []).length ? r.what_changed.map(opFileRow).join("") : `<span class="muted">—</span>`;
   const risks = (r.risks || []).length ? `<div class="opsec"><div class="dlabel">Remaining risks</div>${r.risks.map((x) => `<div class="oprisk">• ${esc(x)}</div>`).join("")}</div>` : "";
+  // Summary + Director's read now live in the conversation thread (copy-pasteable);
+  // here we keep only the structured verification detail.
   return `<div class="opband review"><span class="opstate ${o.state.tone}">${esc(o.state.label)}</span>
-    ${r.summary ? `<p class="opsum">${esc(r.summary)}</p>` : ""}
     <div class="opsec"><div class="dlabel">What changed</div>${changed}</div>
     <div class="opsec"><div class="dlabel">Evidence vs. acceptance</div>${ev || `<span class="muted">—</span>`}</div>
     ${risks}
-    <div class="oprec"><b>Director's read.</b> ${esc(r.recommendation)}</div>
   </div>`;
 }
 function opBand(c) {
@@ -1581,7 +1581,11 @@ function conversationWorkspace(id) {
   // LEFT — the conversation, as a dialogue, with the stage-aware next-action footer.
   const bubbles = c.messages.map((msg) => `<div class="cvmsg ${msg.from}"><div class="cvbub">${esc(msg.text)}</div></div>`).join("");
   const qbubbles = (stage === "understanding" ? (o?.questions || []) : []).map((q) => `<div class="cvmsg director q${q.blocks ? " blocks" : ""}"><div class="cvbub"><span class="qbadge">${q.blocks ? "needs an answer" : "worth confirming"}</span>${esc(q.question)}${q.why ? `<div class="qwhy">${esc(q.why)}</div>` : ""}</div></div>`).join("");
-  const left = `<div class="cvcol cvhistory"><div class="cvcol-h">Conversation</div><div class="cvthread">${bubbles}${qbubbles}</div>${opFooter(c, id)}</div>`;
+  // When work is ready for review, Director's summary + read belong IN the thread as
+  // plain, selectable/copy-pasteable text — not boxed in "the work".
+  const rev = (stage === "reviewing" ? o?.review : null);
+  const reviewBubble = rev && rev.summary ? `<div class="cvmsg director review"><div class="cvbub sel">${esc(rev.summary)}${rev.recommendation ? `<div class="qwhy" style="margin-top:8px"><b>Director's read:</b> ${esc(rev.recommendation)}</div>` : ""}</div></div>` : "";
+  const left = `<div class="cvcol cvhistory"><div class="cvcol-h">Conversation</div><div class="cvthread">${bubbles}${qbubbles}${reviewBubble}</div>${opFooter(c, id)}</div>`;
 
   // CENTER — gated by stage: while Director is still Understanding, it shows the
   // OPEN QUESTIONS and nothing else; preparation artifacts appear only afterward.
