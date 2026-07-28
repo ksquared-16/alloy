@@ -59,7 +59,13 @@ export default function ProcessingImportIntentModal({
         } else {
             setDisplayName("");
         }
-    }, [open, initialFile, existingDisplayNames]);
+        // Re-initialize ONLY when the modal opens or the seeded file changes — never on
+        // every render. `existingDisplayNames` is deliberately excluded from deps: callers
+        // frequently pass a fresh array literal (or rely on the `[]` default), so including
+        // it would re-run this effect each render and wipe a file the operator just chose
+        // in-modal via "Choose file". (Seeding uses the latest value at open time.)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, initialFile]);
 
     const formatCaps = useMemo(() => {
         if (!file) return null;
@@ -166,7 +172,7 @@ export default function ProcessingImportIntentModal({
                                 checked={intent === opt.value}
                                 disabled={!opt.available}
                                 onChange={() => setIntent(opt.value)}
-                                className="mt-0.5"
+                                className="mt-0.5 accent-alloy-bend-pine"
                                 data-testid={`processing-import-intent-${opt.value}`}
                             />
                             <span>
@@ -184,7 +190,7 @@ export default function ProcessingImportIntentModal({
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={submitting}
-                            className="text-[11px] font-semibold text-alloy-blue hover:underline"
+                            className="text-[11px] font-semibold text-alloy-bend-pine hover:underline"
                         >
                             {file ? "Choose different file" : "Choose file"}
                         </button>
