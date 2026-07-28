@@ -96,6 +96,29 @@ describe("executeCommandInvocation (P1.S2)", () => {
         expect(runSpy.mock.calls[0][3]).toBe("preview");
     });
 
+    it("carries request departmentId into the RegisteredAction invocation context", async () => {
+        const result = await executeCommandInvocation({
+            request: {
+                invocation: invocation({
+                    commandKey: "create_lead",
+                    inputValues: { contact_name: "A" },
+                    workUnitId: "wu-1",
+                }),
+                mode: "execute",
+                executionSubject: { entityType: "opportunity", entityId: "create-lead" },
+                invocationId: "inv-dept",
+                departmentId: "dept-1",
+            },
+            server: { orgId: "org-1", userId: "user-1", supabase },
+            deps: { runRegisteredAction: runSpy as never },
+        });
+        expect(result.ok).toBe(true);
+        expect(runSpy).toHaveBeenCalledTimes(1);
+        // Dropping this strands Create Lead with no lifecycle binding → 422 "not configured
+        // for this process/location" even when the client sent a valid department.
+        expect(runSpy.mock.calls[0][2].context.department_id).toBe("dept-1");
+    });
+
     it("rejects unknown, placeholder, unadapted relationship, navigation, processing, mark_lost, and enrollment aliases", async () => {
         const cases = [
             "totally_unknown_xyz",
