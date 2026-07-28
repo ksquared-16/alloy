@@ -19,6 +19,7 @@ import {
 import { organizationCalculationLibraryHref } from "@/lib/admin/canonicalAdminRoutes";
 import { capacityRecipeFromProductTypeLabel } from "@/lib/adminV2/settings/operationalIntelligence/oiCapacityRecipeCopy";
 import type { OiOrgCalcHealth, OiOrgCalcMeasurement, OiOrgCalcObservation } from "@/lib/metrics/oiOrgCalcMeasurements";
+import { formatOiOrgCalcTargetLabel } from "@/lib/metrics/oiOrgCalcTargetFormat";
 
 type RoomOption = { id: string; label: string; siteLabel: string };
 type Tab = "overview" | "history" | "settings";
@@ -31,9 +32,16 @@ const TABS: Array<{ key: Tab; label: string }> = [
 
 function healthLabel(h: OiOrgCalcHealth): string {
     if (h === "on_goal") return "On goal";
-    if (h === "below_goal") return "Below goal";
+    if (h === "below_goal") return "Below range";
+    if (h === "above_goal") return "Above range";
     if (h === "no_target") return "No goal";
     return "Not available";
+}
+
+function formatAnswerValue(value: number | null, unit: "seats" | "percent"): string {
+    if (value == null) return "Not available";
+    if (unit === "percent") return `${Math.round(value * 10) / 10}%`;
+    return `${value} seats`;
 }
 
 export default function OiOrgCalcMeasurementPanel({
@@ -54,6 +62,7 @@ export default function OiOrgCalcMeasurementPanel({
     const [observation, setObservation] = useState<OiOrgCalcObservation | null>(null);
     const [health, setHealth] = useState<OiOrgCalcHealth>("not_available");
     const [targetDraft, setTargetDraft] = useState("");
+    const [targetMaxDraft, setTargetMaxDraft] = useState("");
     const [newerVersions, setNewerVersions] = useState<Array<{ id: string; version_number: number }>>([]);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -69,9 +78,17 @@ export default function OiOrgCalcMeasurementPanel({
         if (!res.ok) throw new Error(json.error ?? "Load failed");
         setMeasurement(json.measurement ?? null);
         setHistory(json.history ?? []);
-        setTargetDraft(
-            json.measurement?.target?.value != null ? String(json.measurement.target.value) : "",
-        );
+        const t = json.measurement?.target;
+        if (t?.kind === "rate_range") {
+            setTargetDraft(String(t.min));
+            setTargetMaxDraft(String(t.max));
+        } else if (t?.kind === "count_min") {
+            setTargetDraft(String(t.value));
+            setTargetMaxDraft("");
+        } else {
+            setTargetDraft("");
+            setTargetMaxDraft("");
+        }
     }, [measurementId]);
 
     useEffect(() => {
@@ -160,24 +177,39 @@ export default function OiOrgCalcMeasurementPanel({
         setBusy(true);
         setError(null);
         try {
+            const isPercent = measurement?.unit === "percent";
+            const body =
+                isPercent ?
+                    {
+                        target_min_pct: targetDraft.trim() ? Number(targetDraft) : null,
+                        target_max_pct: targetMaxDraft.trim() ? Number(targetMaxDraft) : null,
+                    }
+                :   {
+                        target_min_seats: targetDraft.trim() ? Number(targetDraft) : null,
+                    };
             const res = await fetch(`/api/admin/metrics/oi-org-calc-measurements/${measurementId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    target_min_seats: targetDraft.trim() ? Number(targetDraft) : null,
-                }),
+                body: JSON.stringify(body),
             });
-            const json = (await res.json()) as { error?: string };
+            const json = (await res.json()) as { measurement?: OiOrgCalcMeasurement; error?: string };
             if (!res.ok) throw new Error(json.error ?? "Could not save goal");
             await reload();
-            if (observation) {
-                setHealth(
-                    observation.availability === "resolved" && observation.value != null ?
-                        !targetDraft.trim() ? "no_target"
-                        : observation.value >= Number(targetDraft) ? "on_goal"
-                        : "below_goal"
-                    :   "not_available",
-                );
+            if (observation && json.measurement) {
+                const t = json.measurement.target;
+                if (observation.availability !== "resolved" || observation.value == null) {
+                    setHealth("not_available");
+                } else if (!t) {
+                    setHealth("no_target");
+                } else if (t.kind === "count_min") {
+                    setHealth(observation.value >= t.value ? "on_goal" : "below_goal");
+                } else if (observation.value < t.min) {
+                    setHealth("below_goal");
+                } else if (observation.value > t.max) {
+                    setHealth("above_goal");
+                } else {
+                    setHealth("on_goal");
+                }
             }
         } catch (e) {
             setError(e instanceof Error ? e.message : "Could not save goal");
@@ -289,14 +321,12 @@ export default function OiOrgCalcMeasurementPanel({
                                     data-testid="oi-org-calc-observation"
                                 >
                                     <p className="text-lg font-semibold text-alloy-midnight">
-                                        {observation.value == null ?
-                                            "Not available"
-                                        :   `${observation.value} seats`}
+                                        {formatAnswerValue(observation.value, measurement.unit)}
                                     </p>
                                     <p className="config-typo-sublabel">
                                         {healthLabel(health)}
                                         {measurement.target ?
-                                            ` · Warn below ${measurement.target.value} seats`
+                                            ` · ${formatOiOrgCalcTargetLabel(measurement.target, measurement.unit)}`
                                         :   ""}
                                         {" · "}
                                         {observation.effective_at}
@@ -337,9 +367,7 @@ export default function OiOrgCalcMeasurementPanel({
                                 Goal
                             </p>
                             <p className="mt-1 text-sm font-semibold">
-                                {measurement.target ?
-                                    `Warn below ${measurement.target.value} seats`
-                                :   "None"}
+                                {formatOiOrgCalcTargetLabel(measurement.target, measurement.unit)}
                             </p>
                         </div>
                         <div className="rounded-lg border border-alloy-stone/15 bg-white p-3">
@@ -379,7 +407,9 @@ export default function OiOrgCalcMeasurementPanel({
                                                 <td className="py-1.5 pr-3">{row.room_label ?? "Room"}</td>
                                                 <td className="py-1.5 pr-3">{row.effective_at}</td>
                                                 <td className="py-1.5 pr-3">
-                                                    {row.value == null ? "—" : `${row.value} seats`}
+                                                    {row.value == null ?
+                                                        "—"
+                                                    :   formatAnswerValue(row.value, measurement.unit)}
                                                 </td>
                                                 <td className="py-1.5 pr-3">
                                                     {row.availability === "resolved" ?
@@ -404,20 +434,44 @@ export default function OiOrgCalcMeasurementPanel({
                     <ConfigWorkspaceCard testId="oi-org-calc-target-panel">
                         <ConfigEditorSection
                             title="Goal"
-                            description="Warn when expected capacity drops below this number of seats."
+                            description={
+                                measurement.unit === "percent" ?
+                                    "Set a healthy utilization range. Below or above the range needs attention."
+                                :   "Warn when expected capacity drops below this number of seats."
+                            }
                         >
-                            <label className="block max-w-xs space-y-1">
-                                <span className="config-typo-field-label">Warn me when capacity is below</span>
-                                <div className="flex items-center gap-2">
+                            {measurement.unit === "percent" ?
+                                <label className="flex flex-wrap items-center gap-2 text-sm">
+                                    <span className="text-alloy-midnight/70">Healthy between</span>
                                     <input
-                                        className="config-runtime-input"
+                                        className="config-runtime-input w-16"
                                         value={targetDraft}
                                         onChange={(e) => setTargetDraft(e.target.value)}
-                                        data-testid="oi-org-calc-target-input"
+                                        data-testid="oi-org-calc-target-min"
                                     />
-                                    <span className="text-sm text-alloy-midnight/60">seats</span>
-                                </div>
-                            </label>
+                                    <span className="text-alloy-midnight/60">%</span>
+                                    <span className="text-alloy-midnight/70">and</span>
+                                    <input
+                                        className="config-runtime-input w-16"
+                                        value={targetMaxDraft}
+                                        onChange={(e) => setTargetMaxDraft(e.target.value)}
+                                        data-testid="oi-org-calc-target-max"
+                                    />
+                                    <span className="text-alloy-midnight/60">%</span>
+                                </label>
+                            :   <label className="block max-w-xs space-y-1">
+                                    <span className="config-typo-field-label">Warn me when capacity is below</span>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            className="config-runtime-input"
+                                            value={targetDraft}
+                                            onChange={(e) => setTargetDraft(e.target.value)}
+                                            data-testid="oi-org-calc-target-input"
+                                        />
+                                        <span className="text-sm text-alloy-midnight/60">seats</span>
+                                    </div>
+                                </label>
+                            }
                             <div className="mt-3">
                                 <ConfigurationPrimaryButton
                                     className="config-primary-btn--sm"

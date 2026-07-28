@@ -79,7 +79,28 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
             }
             next.status = status;
         }
-        if (body.target_min_seats === null) {
+        if (body.target_min_pct !== undefined || body.target_max_pct !== undefined) {
+            const min =
+                typeof body.target_min_pct === "number" ? body.target_min_pct
+                : body.target_min_pct === null ? null
+                : typeof body.target_min_pct === "string" && body.target_min_pct.trim() ?
+                    Number(body.target_min_pct)
+                :   null;
+            const max =
+                typeof body.target_max_pct === "number" ? body.target_max_pct
+                : body.target_max_pct === null ? null
+                : typeof body.target_max_pct === "string" && body.target_max_pct.trim() ?
+                    Number(body.target_max_pct)
+                :   null;
+            if (min == null && max == null) {
+                next.target = null;
+            } else if (min == null || max == null || Number.isNaN(min) || Number.isNaN(max) || min > max) {
+                return NextResponse.json({ error: "Invalid healthy range" }, { status: 400 });
+            } else {
+                next.target = { kind: "rate_range", min, max };
+                next.unit = "percent";
+            }
+        } else if (body.target_min_seats === null) {
             next.target = null;
         } else if (body.target_min_seats !== undefined) {
             const n = typeof body.target_min_seats === "number" ? body.target_min_seats : Number(body.target_min_seats);

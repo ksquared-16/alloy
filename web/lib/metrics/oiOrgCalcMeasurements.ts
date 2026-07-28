@@ -9,11 +9,18 @@ export type OiOrgCalcSourceType = "organization_calculation";
 
 export type OiOrgCalcMeasurementStatus = "active" | "disabled" | "retired";
 
-export type OiOrgCalcTarget = {
-    /** Minimum seats (count_min semantics). */
-    kind: "count_min";
-    value: number;
-};
+export type OiOrgCalcTarget =
+    | {
+          /** Minimum seats (count_min semantics). */
+          kind: "count_min";
+          value: number;
+      }
+    | {
+          /** Healthy percentage range inclusive. */
+          kind: "rate_range";
+          min: number;
+          max: number;
+      };
 
 export type OiOrgCalcSourceBinding = {
     type: OiOrgCalcSourceType;
@@ -32,7 +39,7 @@ export type OiOrgCalcMeasurement = {
     status: OiOrgCalcMeasurementStatus;
     source: OiOrgCalcSourceBinding;
     subject_grain: "room";
-    unit: "seats";
+    unit: "seats" | "percent";
     output_type: "numeric";
     target: OiOrgCalcTarget | null;
     /** Operational Question Platform key when created via question flow (optional for legacy). */
@@ -66,7 +73,12 @@ export type OiOrgCalcObservation = {
     };
 };
 
-export type OiOrgCalcHealth = "on_goal" | "below_goal" | "not_available" | "no_target";
+export type OiOrgCalcHealth =
+    | "on_goal"
+    | "below_goal"
+    | "above_goal"
+    | "not_available"
+    | "no_target";
 
 const META_KEY = "oi_org_calc_measurements";
 const HISTORY_KEY = "oi_org_calc_measurement_history";
@@ -101,6 +113,11 @@ export function parseOiOrgCalcMeasurements(metadata: unknown): OiOrgCalcMeasurem
         const target =
             isRecord(raw.target) && raw.target.kind === "count_min" && typeof raw.target.value === "number" ?
                 { kind: "count_min" as const, value: raw.target.value }
+            : isRecord(raw.target)
+                && raw.target.kind === "rate_range"
+                && typeof raw.target.min === "number"
+                && typeof raw.target.max === "number" ?
+                { kind: "rate_range" as const, min: raw.target.min, max: raw.target.max }
             :   null;
         out.push({
             id: raw.id,
@@ -116,7 +133,7 @@ export function parseOiOrgCalcMeasurements(metadata: unknown): OiOrgCalcMeasurem
                 version_number: typeof source.version_number === "number" ? source.version_number : 0,
             },
             subject_grain: "room",
-            unit: "seats",
+            unit: raw.unit === "percent" ? "percent" : "seats",
             output_type: "numeric",
             target,
             question_key: typeof raw.question_key === "string" ? raw.question_key : null,
@@ -173,6 +190,7 @@ export function createOiOrgCalcMeasurementDraft(args: {
     target?: OiOrgCalcTarget | null;
     question_key?: string | null;
     entry_point?: string | null;
+    unit?: "seats" | "percent";
 }): OiOrgCalcMeasurement {
     const now = new Date().toISOString();
     const id =
@@ -187,7 +205,7 @@ export function createOiOrgCalcMeasurementDraft(args: {
         status: "active",
         source: args.source,
         subject_grain: "room",
-        unit: "seats",
+        unit: args.unit ?? "seats",
         output_type: "numeric",
         target: args.target ?? null,
         question_key: args.question_key ?? null,
@@ -206,7 +224,12 @@ export function evaluateOiOrgCalcHealth(
         return "not_available";
     }
     if (!target) return "no_target";
-    return observation.value >= target.value ? "on_goal" : "below_goal";
+    if (target.kind === "count_min") {
+        return observation.value >= target.value ? "on_goal" : "below_goal";
+    }
+    if (observation.value < target.min) return "below_goal";
+    if (observation.value > target.max) return "above_goal";
+    return "on_goal";
 }
 
 export function humanUnavailableReason(evaluationStatus: string, warnings: Array<{ message: string }>): string {
