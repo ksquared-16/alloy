@@ -373,7 +373,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             detail: "Calculation health remains owned by Operational Intelligence.",
         },
         distributionMode: "inherit",
-        ownedConfiguration: ["Calculations & metrics", "Targets", "Indicator definitions"],
+        ownedConfiguration: ["Measurements", "Goals", "Health", "Lifecycle", "History"],
     },
     {
         key: "organization-calculations",
