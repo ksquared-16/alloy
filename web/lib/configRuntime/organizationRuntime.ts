@@ -375,32 +375,37 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         distributionMode: "inherit",
         ownedConfiguration: ["Measurements", "Goals", "Health", "Lifecycle", "History"],
     },
-    {
-        key: "organization-calculations",
-        label: "Calculations",
-        description: "Define reusable business calculations from approved capacity data.",
-        href: "/organization/calculations",
-        icon: "intelligence",
-        publisherLabel: "Organization",
-        configurationOwner: "Calculations",
-        runtimeOwner: "Calculations runtime",
-        consumers: ["Room capacity"],
-        inheritance: {
-            kind: "value",
-            path: ["platform", "organization", "location"],
-            label: "Organization owns definitions; each room supplies the inputs",
-        },
-        publication: { mode: "explicit", status: "publish_required", label: "Publish required before use" },
-        override: { state: "not_allowed", label: "Published versions cannot be edited" },
-        health: {
-            state: "not_assessed",
-            label: "Not assessed",
-            detail: "Capacity calculations for Room capacity.",
-        },
-        distributionMode: "none",
-        ownedConfiguration: ["Definitions", "Published versions", "Usage"],
-    },
 ] as const;
+
+/**
+ * Calculation library — advanced reusable definitions inside Operational Intelligence.
+ * Not an Organization landing peer; route `/organization/calculations` remains for compatibility.
+ */
+export const ORGANIZATION_CALCULATIONS_CONFIGURATION_DOMAIN: OrganizationConfigurationDomain = {
+    key: "organization-calculations",
+    label: "Calculation library",
+    description: "Advanced reusable definitions used by measurements.",
+    href: "/organization/calculations",
+    icon: "intelligence",
+    publisherLabel: "Organization",
+    configurationOwner: "Operational Intelligence",
+    runtimeOwner: "Calculations runtime",
+    consumers: ["Operational Intelligence measurements"],
+    inheritance: {
+        kind: "value",
+        path: ["platform", "organization", "location"],
+        label: "Organization owns reusable definitions",
+    },
+    publication: { mode: "explicit", status: "publish_required", label: "Publish required before reuse" },
+    override: { state: "not_allowed", label: "Published versions cannot be edited" },
+    health: {
+        state: "not_assessed",
+        label: "Not assessed",
+        detail: "Managed from Operational Intelligence → Advanced.",
+    },
+    distributionMode: "none",
+    ownedConfiguration: ["Reusable definitions", "Published versions", "Where used"],
+};
 
 /**
  * Programs remains a configuration domain for runtime/publication lookups and
@@ -485,6 +490,9 @@ export function organizationConfigurationDomain(
     }
     if (domainKey === LOCATIONS_CONFIGURATION_DOMAIN.key) {
         return LOCATIONS_CONFIGURATION_DOMAIN;
+    }
+    if (domainKey === ORGANIZATION_CALCULATIONS_CONFIGURATION_DOMAIN.key) {
+        return ORGANIZATION_CALCULATIONS_CONFIGURATION_DOMAIN;
     }
     return (
         CONFIGURATION_DOMAINS.find(
