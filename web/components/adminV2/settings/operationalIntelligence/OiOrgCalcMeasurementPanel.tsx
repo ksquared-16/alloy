@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Organization-backed measurement detail — operator language.
- * Exact-version behavior preserved; engineering nouns stay one click deeper.
+ * Organization-backed measurement detail — Overview / History / Settings.
+ * Exact-version behavior preserved; advanced library is one click deeper.
  */
 
 import Link from "next/link";
@@ -21,14 +21,12 @@ import { capacityRecipeFromProductTypeLabel } from "@/lib/adminV2/settings/opera
 import type { OiOrgCalcHealth, OiOrgCalcMeasurement, OiOrgCalcObservation } from "@/lib/metrics/oiOrgCalcMeasurements";
 
 type RoomOption = { id: string; label: string; siteLabel: string };
-type Tab = "overview" | "check" | "goal" | "history" | "source";
+type Tab = "overview" | "history" | "settings";
 
 const TABS: Array<{ key: Tab; label: string }> = [
     { key: "overview", label: "Overview" },
-    { key: "check", label: "Check a room" },
-    { key: "goal", label: "Goal" },
     { key: "history", label: "History" },
-    { key: "source", label: "How it’s calculated" },
+    { key: "settings", label: "Settings" },
 ];
 
 function healthLabel(h: OiOrgCalcHealth): string {
@@ -57,7 +55,7 @@ export default function OiOrgCalcMeasurementPanel({
     const [health, setHealth] = useState<OiOrgCalcHealth>("not_available");
     const [targetDraft, setTargetDraft] = useState("");
     const [newerVersions, setNewerVersions] = useState<Array<{ id: string; version_number: number }>>([]);
-    const [showVersions, setShowVersions] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -151,7 +149,6 @@ export default function OiOrgCalcMeasurementPanel({
             setObservation(json.observation ?? null);
             setHealth(json.health ?? "not_available");
             await reload();
-            setTab("check");
         } catch (e) {
             setError(e instanceof Error ? e.message : "Check failed");
         } finally {
@@ -199,11 +196,11 @@ export default function OiOrgCalcMeasurementPanel({
                 body: JSON.stringify({ calculation_version_id: versionId }),
             });
             const json = (await res.json()) as { error?: string };
-            if (!res.ok) throw new Error(json.error ?? "Could not switch versions");
+            if (!res.ok) throw new Error(json.error ?? "Could not use the newer definition");
             setObservation(null);
             await reload();
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Could not switch versions");
+            setError(e instanceof Error ? e.message : "Could not use the newer definition");
         } finally {
             setBusy(false);
         }
@@ -222,13 +219,13 @@ export default function OiOrgCalcMeasurementPanel({
         <div className="min-w-0 space-y-3" data-testid="oi-org-calc-measurement">
             <div className="process-config-setup-card p-5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                    Measurement
+                    Future Room Capacity
                 </p>
                 <h2 className="config-typo-workspace-title mt-1 text-xl" data-testid="oi-org-calc-selected-name">
                     {measurement.name}
                 </h2>
-                <p className="config-typo-sublabel mt-1">
-                    Calculated using: {recipe.sourceLine} · {measurement.unit}
+                <p className="config-typo-sublabel mt-1" data-testid="oi-org-calc-recipe-sentence">
+                    {recipe.recipeSentence}
                 </p>
                 <ConfigWorkspaceTabBar
                     tabs={TABS}
@@ -241,164 +238,116 @@ export default function OiOrgCalcMeasurementPanel({
             </div>
 
             {tab === "overview" ?
-                <div className="grid gap-3 lg:grid-cols-2" data-testid="oi-org-calc-overview">
-                    <ConfigWorkspaceCard>
-                        <p className="config-typo-queue-section-label">What we measure</p>
-                        <p className="mt-2 text-sm text-alloy-midnight">
-                            {measurement.description
-                                ?? "How many seats a room is expected to have on a future date."}
-                        </p>
-                        <p className="config-typo-sublabel mt-3">
-                            Pick a room and date to get the current answer.
-                        </p>
-                    </ConfigWorkspaceCard>
-                    <ConfigWorkspaceCard>
-                        <p className="config-typo-queue-section-label">At a glance</p>
-                        <dl className="mt-2 space-y-2 text-sm">
-                            <div className="flex justify-between gap-2">
-                                <dt className="text-alloy-midnight/50">Status</dt>
-                                <dd className="font-medium capitalize">
-                                    {measurement.status === "active" ? "Measuring" : measurement.status}
-                                </dd>
+                <div className="space-y-3" data-testid="oi-org-calc-overview">
+                    <ConfigWorkspaceCard testId="oi-org-calc-observe">
+                        <ConfigEditorSection
+                            title="Current answer"
+                            description="Choose a room and date to see how many seats are expected."
+                        >
+                            <div className="grid gap-2 sm:grid-cols-2">
+                                <label className="block space-y-1">
+                                    <span className="config-typo-field-label">Room</span>
+                                    <select
+                                        className="config-runtime-input"
+                                        value={roomId}
+                                        onChange={(e) => setRoomId(e.target.value)}
+                                        data-testid="oi-org-calc-room"
+                                    >
+                                        {rooms.map((r) => (
+                                            <option key={r.id} value={r.id}>
+                                                {r.siteLabel} / {r.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className="block space-y-1">
+                                    <span className="config-typo-field-label">Date</span>
+                                    <input
+                                        type="date"
+                                        className="config-runtime-input"
+                                        value={effectiveAt}
+                                        onChange={(e) => setEffectiveAt(e.target.value)}
+                                        data-testid="oi-org-calc-effective-at"
+                                    />
+                                </label>
                             </div>
-                            <div className="flex justify-between gap-2">
-                                <dt className="text-alloy-midnight/50">Current answer</dt>
-                                <dd className="font-medium">
-                                    {observation?.value != null ?
-                                        `${observation.value} seats`
-                                    :   "Check a room to see"}
-                                </dd>
-                            </div>
-                            <div className="flex justify-between gap-2">
-                                <dt className="text-alloy-midnight/50">Goal</dt>
-                                <dd className="font-medium">
-                                    {measurement.target ?
-                                        `Warn below ${measurement.target.value} seats`
-                                    :   "None"}
-                                </dd>
-                            </div>
-                            <div className="flex justify-between gap-2">
-                                <dt className="text-alloy-midnight/50">Health</dt>
-                                <dd className="font-medium">{healthLabel(health)}</dd>
-                            </div>
-                            <div className="flex justify-between gap-2">
-                                <dt className="text-alloy-midnight/50">Source</dt>
-                                <dd className="font-medium text-right">{recipe.sourceLine}</dd>
-                            </div>
-                        </dl>
-                    </ConfigWorkspaceCard>
-                </div>
-            : null}
-
-            {tab === "check" ?
-                <ConfigWorkspaceCard testId="oi-org-calc-observe">
-                    <ConfigEditorSection
-                        title="Check a room"
-                        description="See how many seats this room is expected to have on a future date."
-                    >
-                        <div className="grid gap-2 sm:grid-cols-2">
-                            <label className="block space-y-1">
-                                <span className="config-typo-field-label">Room</span>
-                                <select
-                                    className="config-runtime-input"
-                                    value={roomId}
-                                    onChange={(e) => setRoomId(e.target.value)}
-                                    data-testid="oi-org-calc-room"
+                            <div className="mt-3">
+                                <ConfigurationPrimaryButton
+                                    className="config-primary-btn--sm"
+                                    disabled={busy}
+                                    onClick={() => void observe()}
+                                    data-testid="oi-org-calc-run-observe"
                                 >
-                                    {rooms.map((r) => (
-                                        <option key={r.id} value={r.id}>
-                                            {r.siteLabel} / {r.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label className="block space-y-1">
-                                <span className="config-typo-field-label">Date</span>
-                                <input
-                                    type="date"
-                                    className="config-runtime-input"
-                                    value={effectiveAt}
-                                    onChange={(e) => setEffectiveAt(e.target.value)}
-                                    data-testid="oi-org-calc-effective-at"
-                                />
-                            </label>
-                        </div>
-                        <div className="mt-3">
-                            <ConfigurationPrimaryButton
-                                className="config-primary-btn--sm"
-                                disabled={busy}
-                                onClick={() => void observe()}
-                                data-testid="oi-org-calc-run-observe"
-                            >
-                                {busy ? "Checking…" : "Check"}
-                            </ConfigurationPrimaryButton>
-                        </div>
-                        {observation ?
-                            <div
-                                className="mt-4 space-y-2 rounded-md border border-alloy-stone/25 bg-white/70 p-3"
-                                data-testid="oi-org-calc-observation"
-                            >
-                                <p className="text-lg font-semibold text-alloy-midnight">
-                                    {observation.value == null ?
-                                        "Not available"
-                                    :   `${observation.value} seats`}
-                                </p>
-                                <p className="config-typo-sublabel">
-                                    {healthLabel(health)} · {observation.effective_at}
-                                </p>
-                                {observation.unavailable_reason ?
-                                    <p className="text-sm text-amber-900" data-testid="oi-org-calc-unavailable">
-                                        {observation.unavailable_reason}
+                                    {busy ? "Checking…" : "Get answer"}
+                                </ConfigurationPrimaryButton>
+                            </div>
+                            {observation ?
+                                <div
+                                    className="mt-4 space-y-2 rounded-md border border-alloy-stone/25 bg-white/70 p-3"
+                                    data-testid="oi-org-calc-observation"
+                                >
+                                    <p className="text-lg font-semibold text-alloy-midnight">
+                                        {observation.value == null ?
+                                            "Not available"
+                                        :   `${observation.value} seats`}
                                     </p>
-                                :   null}
-                                {observation.explanation_summary.length > 0 ?
-                                    <details className="text-xs text-alloy-midnight/70">
-                                        <summary className="cursor-pointer font-medium text-[#007d68]">
-                                            How we got this number
-                                        </summary>
-                                        <ol className="mt-2 list-decimal space-y-1 pl-4">
-                                            {observation.explanation_summary.map((line) => (
-                                                <li key={line}>{line}</li>
-                                            ))}
-                                        </ol>
-                                    </details>
-                                :   null}
-                            </div>
-                        :   null}
-                    </ConfigEditorSection>
-                </ConfigWorkspaceCard>
-            : null}
+                                    <p className="config-typo-sublabel">
+                                        {healthLabel(health)}
+                                        {measurement.target ?
+                                            ` · Warn below ${measurement.target.value} seats`
+                                        :   ""}
+                                        {" · "}
+                                        {observation.effective_at}
+                                    </p>
+                                    {observation.unavailable_reason ?
+                                        <p className="text-sm text-amber-900" data-testid="oi-org-calc-unavailable">
+                                            {observation.unavailable_reason}
+                                        </p>
+                                    :   null}
+                                    {observation.explanation_summary.length > 0 ?
+                                        <details className="text-xs text-alloy-midnight/70">
+                                            <summary className="cursor-pointer font-medium text-[#007d68]">
+                                                How we got this number
+                                            </summary>
+                                            <ol className="mt-2 list-decimal space-y-1 pl-4">
+                                                {observation.explanation_summary.map((line) => (
+                                                    <li key={line}>{line}</li>
+                                                ))}
+                                            </ol>
+                                        </details>
+                                    :   null}
+                                </div>
+                            :   null}
+                        </ConfigEditorSection>
+                    </ConfigWorkspaceCard>
 
-            {tab === "goal" ?
-                <ConfigWorkspaceCard testId="oi-org-calc-target-panel">
-                    <ConfigEditorSection
-                        title="When should Alloy get your attention?"
-                        description="Warn when expected capacity drops below this number of seats."
-                    >
-                        <label className="block max-w-xs space-y-1">
-                            <span className="config-typo-field-label">Warn me when capacity is below</span>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    className="config-runtime-input"
-                                    value={targetDraft}
-                                    onChange={(e) => setTargetDraft(e.target.value)}
-                                    data-testid="oi-org-calc-target-input"
-                                />
-                                <span className="text-sm text-alloy-midnight/60">seats</span>
-                            </div>
-                        </label>
-                        <div className="mt-3">
-                            <ConfigurationPrimaryButton
-                                className="config-primary-btn--sm"
-                                disabled={busy}
-                                onClick={() => void saveTarget()}
-                                data-testid="oi-org-calc-save-target"
-                            >
-                                Save goal
-                            </ConfigurationPrimaryButton>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-lg border border-alloy-stone/15 bg-white p-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                Status
+                            </p>
+                            <p className="mt-1 text-sm font-semibold capitalize">
+                                {measurement.status === "active" ? "Measuring" : measurement.status}
+                            </p>
                         </div>
-                    </ConfigEditorSection>
-                </ConfigWorkspaceCard>
+                        <div className="rounded-lg border border-alloy-stone/15 bg-white p-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                Goal
+                            </p>
+                            <p className="mt-1 text-sm font-semibold">
+                                {measurement.target ?
+                                    `Warn below ${measurement.target.value} seats`
+                                :   "None"}
+                            </p>
+                        </div>
+                        <div className="rounded-lg border border-alloy-stone/15 bg-white p-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                Health
+                            </p>
+                            <p className="mt-1 text-sm font-semibold">{healthLabel(health)}</p>
+                        </div>
+                    </div>
+                </div>
             : null}
 
             {tab === "history" ?
@@ -409,7 +358,7 @@ export default function OiOrgCalcMeasurementPanel({
                     >
                         {history.length === 0 ?
                             <p className="config-typo-sublabel">
-                                No history yet. Check a room to begin.
+                                No history yet. Get an answer on Overview to begin.
                             </p>
                         :   <div className="overflow-x-auto">
                                 <table className="min-w-full text-left text-xs">
@@ -448,64 +397,95 @@ export default function OiOrgCalcMeasurementPanel({
                 </ConfigWorkspaceCard>
             : null}
 
-            {tab === "source" ?
-                <ConfigWorkspaceCard testId="oi-org-calc-source">
-                    <ConfigEditorSection
-                        title="How this is calculated"
-                        description="Future updates won’t change this measurement until you choose to use a newer version."
-                    >
-                        <dl className="space-y-2 text-sm">
-                            <div>
-                                <dt className="config-typo-field-label">Calculated using</dt>
-                                <dd data-testid="oi-org-calc-source-line">{recipe.sourceLine}</dd>
-                            </div>
-                            <div>
-                                <dt className="config-typo-field-label">Current recipe in use</dt>
-                                <dd data-testid="oi-org-calc-bound-version">
-                                    Version {measurement.source.version_number}
-                                </dd>
-                            </div>
-                        </dl>
-                        <p className="mt-3 text-sm">
-                            <Link
-                                href={calcHref}
-                                className="font-semibold text-[#007d68] hover:underline"
-                                data-testid="oi-org-calc-open-definition"
-                            >
-                                Open calculation definition
-                            </Link>
-                            <span className="text-alloy-midnight/45"> — versions, where used, and library tools</span>
-                        </p>
-
-                        <button
-                            type="button"
-                            className="mt-3 text-xs font-semibold text-[#007d68] hover:underline"
-                            onClick={() => setShowVersions((v) => !v)}
-                            data-testid="oi-org-calc-toggle-versions"
+            {tab === "settings" ?
+                <div className="space-y-3" data-testid="oi-org-calc-settings">
+                    <ConfigWorkspaceCard testId="oi-org-calc-target-panel">
+                        <ConfigEditorSection
+                            title="Goal"
+                            description="Warn when expected capacity drops below this number of seats."
                         >
-                            {showVersions ? "Hide version options" : "Manage versions"}
-                        </button>
-
-                        {showVersions ?
-                            <div className="mt-3 space-y-2" data-testid="oi-org-calc-version-panel">
-                                {newerVersions.length > 0 ?
-                                    <div className="flex flex-wrap gap-2">
-                                        {newerVersions.map((v) => (
-                                            <ConfigurationSecondaryButton
-                                                key={v.id}
-                                                disabled={busy}
-                                                onClick={() => void useNewerVersion(v.id)}
-                                                data-testid={`oi-org-calc-rebind-v${v.version_number}`}
-                                            >
-                                                Use newer version ({v.version_number})
-                                            </ConfigurationSecondaryButton>
-                                        ))}
-                                    </div>
-                                :   <p className="config-typo-sublabel">No newer versions available.</p>}
+                            <label className="block max-w-xs space-y-1">
+                                <span className="config-typo-field-label">Warn me when capacity is below</span>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        className="config-runtime-input"
+                                        value={targetDraft}
+                                        onChange={(e) => setTargetDraft(e.target.value)}
+                                        data-testid="oi-org-calc-target-input"
+                                    />
+                                    <span className="text-sm text-alloy-midnight/60">seats</span>
+                                </div>
+                            </label>
+                            <div className="mt-3">
+                                <ConfigurationPrimaryButton
+                                    className="config-primary-btn--sm"
+                                    disabled={busy}
+                                    onClick={() => void saveTarget()}
+                                    data-testid="oi-org-calc-save-target"
+                                >
+                                    Save goal
+                                </ConfigurationPrimaryButton>
                             </div>
-                        :   null}
-                    </ConfigEditorSection>
-                </ConfigWorkspaceCard>
+                        </ConfigEditorSection>
+                    </ConfigWorkspaceCard>
+
+                    <ConfigWorkspaceCard testId="oi-org-calc-source">
+                        <ConfigEditorSection
+                            title="How this is measured"
+                            description="Future updates won’t change this measurement until you choose to use a newer definition."
+                        >
+                            <p className="text-sm text-alloy-midnight" data-testid="oi-org-calc-source-line">
+                                {recipe.recipeSentence}
+                            </p>
+                            {newerVersions.length > 0 ?
+                                <div className="mt-3 space-y-2">
+                                    <p className="text-xs text-alloy-midnight/60">
+                                        A newer definition is available.
+                                    </p>
+                                    {newerVersions.map((v) => (
+                                        <ConfigurationSecondaryButton
+                                            key={v.id}
+                                            disabled={busy}
+                                            onClick={() => void useNewerVersion(v.id)}
+                                            data-testid={`oi-org-calc-rebind-v${v.version_number}`}
+                                        >
+                                            Use the newer definition
+                                        </ConfigurationSecondaryButton>
+                                    ))}
+                                </div>
+                            :   null}
+
+                            <button
+                                type="button"
+                                className="mt-3 text-xs font-semibold text-[#007d68] hover:underline"
+                                onClick={() => setShowAdvanced((v) => !v)}
+                                data-testid="oi-org-calc-toggle-advanced"
+                            >
+                                {showAdvanced ? "Hide advanced" : "Advanced"}
+                            </button>
+                            {showAdvanced ?
+                                <div className="mt-2 space-y-2 text-sm" data-testid="oi-org-calc-version-panel">
+                                    <p className="config-typo-sublabel" data-testid="oi-org-calc-bound-version">
+                                        Using definition version {measurement.source.version_number}
+                                    </p>
+                                    <p>
+                                        <Link
+                                            href={calcHref}
+                                            className="font-semibold text-[#007d68] hover:underline"
+                                            data-testid="oi-org-calc-open-definition"
+                                        >
+                                            Open calculation library
+                                        </Link>
+                                        <span className="text-alloy-midnight/45">
+                                            {" "}
+                                            — reusable definitions, versions, and where used
+                                        </span>
+                                    </p>
+                                </div>
+                            :   null}
+                        </ConfigEditorSection>
+                    </ConfigWorkspaceCard>
+                </div>
             : null}
 
             {error ?
