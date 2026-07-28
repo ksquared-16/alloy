@@ -180,7 +180,10 @@ export function buildChildrenCardEvidence(
         // Program/Room — is operational truth.
         const primaryAssignment = primaryAssignmentFromScheduling(schedulingProjection);
         const hasCommittedPrimaryAssignment = primaryAssignment != null;
-        const program = primaryAssignment?.program ?? trimOrNull(row.desired_program_label);
+        const program =
+            primaryAssignment?.program
+            ?? trimOrNull(schedulingProjection?.child?.program)
+            ?? trimOrNull(row.desired_program_label);
         const room =
             primaryAssignment?.room
             ?? scheduleCompact.roomLabel
