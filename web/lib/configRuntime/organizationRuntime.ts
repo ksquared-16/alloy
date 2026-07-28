@@ -379,13 +379,13 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
 
 /**
  * Calculation library — advanced reusable definitions inside Operational Intelligence.
- * Not an Organization landing peer; route `/organization/calculations` remains for compatibility.
+ * Not an Organization landing peer; `/organization/calculations` redirects into OI.
  */
 export const ORGANIZATION_CALCULATIONS_CONFIGURATION_DOMAIN: OrganizationConfigurationDomain = {
     key: "organization-calculations",
     label: "Calculation library",
     description: "Advanced reusable definitions used by measurements.",
-    href: "/organization/calculations",
+    href: "/organization/operational-intelligence?view=calculations",
     icon: "intelligence",
     publisherLabel: "Organization",
     configurationOwner: "Operational Intelligence",

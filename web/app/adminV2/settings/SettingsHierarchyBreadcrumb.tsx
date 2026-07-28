@@ -89,7 +89,11 @@ function crumbsForPath(path: string): Crumb[] {
         || tail === "/calculations"
         || tail.startsWith("/calculations/")
     ) {
-        base.push({ label: "Calculations", href: null });
+        base.push({
+            label: "Operational Intelligence",
+            href: "/organization/operational-intelligence",
+        });
+        base.push({ label: "Calculation Library", href: null });
         return base;
     }
 
