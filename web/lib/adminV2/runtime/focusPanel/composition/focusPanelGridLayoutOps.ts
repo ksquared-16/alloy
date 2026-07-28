@@ -183,9 +183,10 @@ export const COMPOSER_GRID_GAP_PX = 10;
 /**
  * Snap a drag target so cards align/stack predictably on the composer grid. PURE.
  *
- * Insertion rule (same column): pointer in the upper half of a neighbor → insert above;
- * pointer in the lower half or at/after the neighbor’s bottom edge → stack immediately
- * beneath that neighbor. Do not yank a “stack below” intent back to the column top.
+ * Insertion rule (same column): pointer in the upper third of a neighbor → insert above;
+ * otherwise overlapping / lower → stack immediately beneath. Full-width cards keep their
+ * span — never shrink to half during drag. Half-width cards only magnet to L/R when near
+ * a column edge.
  */
 export function snapMoveTarget(
     grid: FocusPanelGridLayout,
@@ -196,18 +197,23 @@ export function snapMoveTarget(
     let next = clampArea(grid, { ...moving, colStart, rowStart });
     const rightHalfStart = Math.floor(grid.columns / 2) + 1;
     const halfSpan = Math.max(1, Math.floor(grid.columns / 2));
+    const isApproximatelyHalfWidth =
+        next.colSpan >= halfSpan - 1 && next.colSpan <= halfSpan + 1;
 
-    // Half-width cards snap cleanly into left or right column (common 6/6 layout).
-    if (next.colSpan >= halfSpan - 1) {
-        if (next.colStart >= rightHalfStart) {
-            next = clampArea(grid, { ...next, colStart: rightHalfStart, colSpan: Math.min(next.colSpan, halfSpan) });
-        } else if (next.colStart + next.colSpan <= rightHalfStart + 1) {
-            next = clampArea(grid, { ...next, colStart: 1, colSpan: Math.min(next.colSpan, halfSpan) });
+    // Magnet half-width cards into left/right columns when near an edge.
+    // Never shrink a wider/full-width card — that feels rigid and fights free placement.
+    if (isApproximatelyHalfWidth) {
+        const nearRight = next.colStart >= rightHalfStart - 1;
+        const nearLeft = next.colStart <= 2;
+        if (nearRight) {
+            next = clampArea(grid, { ...next, colStart: rightHalfStart, colSpan: halfSpan });
+        } else if (nearLeft) {
+            next = clampArea(grid, { ...next, colStart: 1, colSpan: halfSpan });
         }
     }
 
-    // Same-column neighbors: upper half → insert above (push neighbor down via placeArea
-    // normalize). Lower half / past bottom → stack immediately below.
+    // Same-column neighbors: upper third → insert above (push neighbor down via placeArea
+    // normalize). Lower two-thirds / past bottom → stack immediately below.
     const neighbors = grid.areas
         .filter((area) => area.card !== moving.card && sameStackColumn(area, next))
         .sort((a, b) => a.rowStart - b.rowStart);
@@ -217,10 +223,10 @@ export function snapMoveTarget(
         const stackBelow = neighbor.rowStart + neighbor.rowSpan;
         const nextEnd = next.rowStart + next.rowSpan;
         const overlaps = next.rowStart < stackBelow && nextEnd > neighbor.rowStart;
-        const neighborMid = neighbor.rowStart + neighbor.rowSpan / 2;
+        const insertAboveBand = neighbor.rowStart + Math.max(1, neighbor.rowSpan / 3);
         const insertAbove =
             next.rowStart < neighbor.rowStart
-            || (overlaps && next.rowStart < neighborMid)
+            || (overlaps && next.rowStart < insertAboveBand)
             || (!overlaps && next.rowStart === neighbor.rowStart);
 
         if (insertAbove) {
@@ -228,23 +234,22 @@ export function snapMoveTarget(
             stackedBelow = false;
             break;
         }
-        if (overlaps || (next.rowStart >= neighborMid && next.rowStart <= stackBelow)) {
+        if (overlaps || (next.rowStart >= insertAboveBand && next.rowStart <= stackBelow)) {
             next = { ...next, rowStart: stackBelow };
             stackedBelow = true;
             // Keep scanning — may still overlap a card further down after stacking.
         }
     }
 
-    // Right-column cards near the top align with the left-column anchor (e.g. What's Next).
-    // Only when the operator is not already stacking below a same-column neighbor — otherwise
-    // a drop intended “immediately beneath” teleports to row 1.
-    if (!stackedBelow && next.colStart >= rightHalfStart) {
+    // Soft align: only nudge a half-width right-column card to the left column's top
+    // when already within half a track — never yank full-width reorder intent.
+    if (!stackedBelow && isApproximatelyHalfWidth && next.colStart >= rightHalfStart) {
         const leftAnchors = grid.areas
             .filter((area) => area.card !== moving.card && area.colStart < rightHalfStart)
             .map((area) => area.rowStart);
         if (leftAnchors.length > 0) {
             const alignTop = Math.min(...leftAnchors);
-            if (Math.abs(next.rowStart - alignTop) <= 1) {
+            if (Math.abs(next.rowStart - alignTop) < 1) {
                 next = { ...next, rowStart: alignTop };
             }
         }
