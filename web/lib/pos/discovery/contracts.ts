@@ -181,7 +181,8 @@ export interface BusinessConceptCandidate {
 export type ProposalDisposition =
     | "reuse_canonical_field" // bind to a platform/system canonical field (FormFieldSource)
     | "reuse_existing_field" // bind to an org custom field_definitions entry
-    | "create_proposed_field" // no match → propose a new configurable field (never auto-created)
+    | "create_proposed_field" // no match → propose a NEW durable configurable field (never auto-created)
+    | "form_only_response" // collected on the form but NOT durable record data — no field created
     | "relationship_binding" // repeated person → operational-role relationship
     | "upload_requirement"
     | "acknowledgement"
@@ -252,6 +253,7 @@ export interface ConfigurationProposal {
 export type DiscoveryCategory =
     | "existing_fields"
     | "new_fields"
+    | "form_responses"
     | "relationships"
     | "upload_requirements"
     | "acknowledgements"

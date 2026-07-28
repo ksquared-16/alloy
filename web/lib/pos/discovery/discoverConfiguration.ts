@@ -22,6 +22,7 @@ import { matchConcepts } from "./configurationMatching";
 const CATEGORY_LABEL: Record<DiscoveryCategory, string> = {
     existing_fields: "Existing fields matched",
     new_fields: "New fields proposed",
+    form_responses: "Form responses (no field)",
     relationships: "Relationships found",
     upload_requirements: "Upload requirements found",
     acknowledgements: "Acknowledgements found",
@@ -34,6 +35,7 @@ const CATEGORY_LABEL: Record<DiscoveryCategory, string> = {
 const CATEGORY_ORDER: DiscoveryCategory[] = [
     "existing_fields",
     "new_fields",
+    "form_responses",
     "relationships",
     "upload_requirements",
     "acknowledgements",
@@ -50,6 +52,8 @@ function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
             return "existing_fields";
         case "create_proposed_field":
             return "new_fields";
+        case "form_only_response":
+            return "form_responses";
         case "relationship_binding":
             return "relationships";
         case "upload_requirement":

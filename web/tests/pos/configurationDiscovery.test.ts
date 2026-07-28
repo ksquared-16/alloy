@@ -56,12 +56,31 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
 
     it("produces the operator-facing summary categories", () => {
         expect(summaryCount(/Existing fields matched/)).toBeGreaterThanOrEqual(6);
-        expect(summaryCount(/New fields proposed/)).toBeGreaterThan(0);
         expect(summaryCount(/Relationships found/)).toBe(3);
         expect(summaryCount(/Upload requirements found/)).toBe(2);
         expect(summaryCount(/Acknowledgements found/)).toBe(1);
         expect(summaryCount(/Signatures found/)).toBe(2);
         expect(summaryCount(/output copies found/)).toBe(1);
+    });
+
+    it("AUDIT: proposes only genuinely durable new fields — screening data is form-only, not new fields", () => {
+        const newFields = proposals.filter((p) => p.disposition === "create_proposed_field");
+        const formOnly = proposals.filter((p) => p.disposition === "form_only_response");
+        // The 5 audited durable new fields — no more (25→5 correction). Optimize ownership, not count.
+        const newLabels = newFields.map((p) => concepts.find((c) => c.id === p.candidate_id)!.label).sort();
+        expect(newLabels).toEqual(["Date of Enrollment", "Dentist Name/Practice", "Nickname", "Preferred Hospital", "Primary Care Doctor Name/Practice"]);
+        // The health-history screening grid is FORM-ONLY, never durable customer_member fields.
+        for (const screening of ["Ear Infections", "Diabetes", "Asthma", "Nosebleeds", "Convulsions/Seizures", "Heart Disease/Defect"]) {
+            expect(formOnly.some((p) => concepts.find((c) => c.id === p.candidate_id)!.label === screening)).toBe(true);
+            expect(newLabels).not.toContain(screening);
+        }
+        // Y/N screening statuses + conditional explanations are form-only.
+        expect(formOnly.some((p) => /health care plan/i.test(concepts.find((c) => c.id === p.candidate_id)!.label))).toBe(true);
+        expect(formOnly.some((p) => /if yes, please explain/i.test(concepts.find((c) => c.id === p.candidate_id)!.label))).toBe(true);
+        expect(formOnly.length).toBeGreaterThanOrEqual(18);
+        // A durable medical-provider field carries health sensitivity.
+        const doctor = newFields.find((p) => /Primary Care Doctor/.test(concepts.find((c) => c.id === p.candidate_id)!.label));
+        expect(doctor?.proposed_field?.sensitivity).toBe("health");
     });
 
     it("matches high-confidence canonical fields to the existing model (no duplicates)", () => {
@@ -118,13 +137,11 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
         expect(concepts.find((c) => c.id === out?.candidate_id)?.kind).toBe("output_copy");
     });
 
-    it("proposes new configurable fields for unmatched concepts, with health sensitivity", () => {
+    it("proposes a durable new field for a genuine unmatched attribute (choice with options)", () => {
         const hospital = proposalFor(/Preferred Hospital/);
         expect(hospital?.disposition).toBe("create_proposed_field");
         expect(hospital?.proposed_field?.data_type).toBe("select");
         expect((hospital?.proposed_field?.option_set ?? []).length).toBe(6);
-        const asthma = proposalFor(/Asthma/);
-        expect(asthma?.proposed_field?.sensitivity).toBe("health");
         // new fields are proposals only — never auto-created
         expect(proposals.filter((p) => p.disposition === "create_proposed_field").every((p) => p.decision_state === "proposed")).toBe(true);
     });
