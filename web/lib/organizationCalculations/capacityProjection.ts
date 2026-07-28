@@ -8,13 +8,12 @@ import { resolveCalculation } from "@/lib/operationalCalculations/runtime";
 import type { CapacityConfig } from "@/lib/childcareOperational/capacity/resolveOperationalCapacity";
 import type { OperationalCapacityRequest } from "@/lib/childcareOperational/capacity/capacityContractTypes";
 import type { CalculationResolutionStatus } from "@/lib/operationalCalculations/resultContract";
-import type { ApprovedInputRef } from "@/lib/organizationCalculations/catalog";
+import { CATALOG_INPUTS, isCapacityCatalogInput, type ApprovedInputRef } from "@/lib/organizationCalculations/catalog";
 import type { InputResolution } from "@/lib/organizationCalculations/evaluate";
-import { CATALOG_INPUTS } from "@/lib/organizationCalculations/catalog";
 
 export type CapacityProjectionBundle = {
     status: CalculationResolutionStatus;
-    projections: Record<ApprovedInputRef, InputResolution>;
+    projections: Partial<Record<ApprovedInputRef, InputResolution>>;
     /** Platform binding scalar for parity checks. */
     binding: number | null;
     physical: number | null;
@@ -47,8 +46,9 @@ export function projectCapacityRoomBindingInputs(args: {
         binding: value.binding,
     } as const;
 
-    const projections = {} as Record<ApprovedInputRef, InputResolution>;
+    const projections: Partial<Record<ApprovedInputRef, InputResolution>> = {};
     for (const input of CATALOG_INPUTS) {
+        if (!isCapacityCatalogInput(input)) continue;
         const scalar = byProjection[input.projection];
         projections[input.ref] = {
             value: scalar,

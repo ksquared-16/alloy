@@ -1,34 +1,53 @@
 /**
- * Administrator-facing calculation types for Organization Calculations V1.
+ * Administrator-facing calculation types for Organization Calculations.
  * Exactly the templates the platform supports today — no fake future types.
  */
 
 import { provingMinPhysicalLicensedAst, type OrgCalcExpr } from "@/lib/organizationCalculations/ast";
 import type { ApprovedInputRef } from "@/lib/organizationCalculations/catalog";
 
-export type OrgCalcProductTypeId = "capacity_lowest_physical_licensed" | "capacity_operational_with_fallback";
+export type OrgCalcProductTypeId =
+    | "capacity_lowest_physical_licensed"
+    | "capacity_operational_with_fallback"
+    | "room_utilization_pct";
 
 export type OrgCalcProductType = {
     id: OrgCalcProductTypeId;
-    /** Short label shown in collection rows and Definition */
     typeLabel: string;
-    /** Card title in New Calculation */
     title: string;
-    /** One-line business description */
     summary: string;
-    /** What the result means */
     outputLabel: string;
     units: string;
-    /** Human input labels (never registry keys) */
     inputLabels: string[];
     buildAst: () => OrgCalcExpr;
 };
+
+/** Occupied children ÷ effective capacity × 100 */
+export function roomUtilizationPctAst(): OrgCalcExpr {
+    return {
+        kind: "binary",
+        op: "mul",
+        id: "root",
+        left: {
+            kind: "binary",
+            op: "div",
+            id: "ratio",
+            left: { kind: "input", ref: "occupancy.expected" as ApprovedInputRef, id: "occ" },
+            right: {
+                kind: "input",
+                ref: "capacity.room_binding.binding" as ApprovedInputRef,
+                id: "cap",
+            },
+        },
+        right: { kind: "const", value: 100, id: "pct" },
+    };
+}
 
 export const ORG_CALC_PRODUCT_TYPES: readonly OrgCalcProductType[] = [
     {
         id: "capacity_lowest_physical_licensed",
         typeLabel: "Capacity",
-        title: "Lowest of physical and licensed seats",
+        title: "Lower of physical and licensed seats",
         summary: "Uses whichever is smaller for the room: physical seats or licensed seats.",
         outputLabel: "Effective seats",
         units: "seats",
@@ -53,6 +72,16 @@ export const ORG_CALC_PRODUCT_TYPES: readonly OrgCalcProductType[] = [
             ],
         }),
     },
+    {
+        id: "room_utilization_pct",
+        typeLabel: "Utilization",
+        title: "Room utilization",
+        summary: "Active enrolled children divided by effective capacity, shown as a percentage.",
+        outputLabel: "Utilization",
+        units: "percent",
+        inputLabels: ["Active enrolled children", "Effective capacity"],
+        buildAst: roomUtilizationPctAst,
+    },
 ] as const;
 
 export function productTypeById(id: string | null | undefined): OrgCalcProductType | null {
@@ -60,9 +89,11 @@ export function productTypeById(id: string | null | undefined): OrgCalcProductTy
     return ORG_CALC_PRODUCT_TYPES.find((t) => t.id === id) ?? null;
 }
 
-/** Infer product type from a stored AST (best-effort for existing drafts). */
 export function inferProductTypeFromAst(ast: unknown): OrgCalcProductType {
     const raw = JSON.stringify(ast ?? {});
+    if (raw.includes("occupancy.expected") && raw.includes("capacity.room_binding.binding")) {
+        return ORG_CALC_PRODUCT_TYPES.find((t) => t.id === "room_utilization_pct")!;
+    }
     if (raw.includes("coalesce") && raw.includes("operational")) {
         return ORG_CALC_PRODUCT_TYPES[1]!;
     }

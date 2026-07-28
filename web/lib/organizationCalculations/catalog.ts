@@ -1,5 +1,5 @@
 /**
- * Approved Organization Calculation catalog — proving slice (capacity projections).
+ * Approved Organization Calculation catalog.
  * Expanding this catalog is a deliberate platform change.
  */
 
@@ -9,6 +9,7 @@ export const APPROVED_INPUT_REFS = [
     "capacity.room_binding.operational",
     "capacity.room_binding.ratio_limited",
     "capacity.room_binding.binding",
+    "occupancy.expected",
 ] as const;
 
 export type ApprovedInputRef = (typeof APPROVED_INPUT_REFS)[number];
@@ -16,49 +17,71 @@ export type ApprovedInputRef = (typeof APPROVED_INPUT_REFS)[number];
 export type BinaryOp = "add" | "sub" | "mul" | "div";
 export type CallFn = "min" | "max" | "coalesce";
 
-export type CatalogInputDescriptor = {
-    ref: ApprovedInputRef;
-    label: string;
-    description: string;
-    platformKey: "capacity.room_binding";
-    projection: "physical" | "licensed" | "operational" | "ratioLimited" | "binding";
-};
+export type CatalogCapacityProjection =
+    | "physical"
+    | "licensed"
+    | "operational"
+    | "ratioLimited"
+    | "binding";
+
+export type CatalogInputDescriptor =
+    | {
+          ref: ApprovedInputRef;
+          label: string;
+          description: string;
+          platformKey: "capacity.room_binding";
+          projection: CatalogCapacityProjection;
+      }
+    | {
+          ref: "occupancy.expected";
+          label: string;
+          description: string;
+          platformKey: "occupancy.expected";
+          projection: "expected";
+      };
 
 export const CATALOG_INPUTS: readonly CatalogInputDescriptor[] = [
     {
         ref: "capacity.room_binding.physical",
-        label: "Physical capacity",
+        label: "Physical seats",
         description: "Physical seat capacity for the room",
         platformKey: "capacity.room_binding",
         projection: "physical",
     },
     {
         ref: "capacity.room_binding.licensed",
-        label: "Licensed capacity",
+        label: "Licensed seats",
         description: "Licensed ceiling for the room",
         platformKey: "capacity.room_binding",
         projection: "licensed",
     },
     {
         ref: "capacity.room_binding.operational",
-        label: "Operational capacity",
+        label: "Operational seats",
         description: "Configured operational capacity for the room",
         platformKey: "capacity.room_binding",
         projection: "operational",
     },
     {
         ref: "capacity.room_binding.ratio_limited",
-        label: "Ratio-limited capacity",
+        label: "Ratio-limited seats",
         description: "Ratio-limited child capacity for the cohort",
         platformKey: "capacity.room_binding",
         projection: "ratioLimited",
     },
     {
         ref: "capacity.room_binding.binding",
-        label: "Binding capacity",
-        description: "Platform binding capacity (most restrictive known limit)",
+        label: "Effective capacity",
+        description: "Most restrictive known seat limit for the room",
         platformKey: "capacity.room_binding",
         projection: "binding",
+    },
+    {
+        ref: "occupancy.expected",
+        label: "Active enrolled children",
+        description: "Children expected in the room on the selected date from committed schedules",
+        platformKey: "occupancy.expected",
+        projection: "expected",
     },
 ] as const;
 
@@ -74,10 +97,16 @@ export function listOrganizationCalculationCatalog() {
         inputs: CATALOG_INPUTS,
         operators: CATALOG_OPERATORS,
         notes:
-            "Proving slice: compose approved capacity.room_binding projections only. No SQL, JS, or arbitrary tables.",
+            "Compose approved capacity and occupancy facts only. No SQL, JS, or arbitrary tables.",
     };
 }
 
 export function catalogLabelForRef(ref: ApprovedInputRef): string {
     return CATALOG_INPUTS.find((i) => i.ref === ref)?.label ?? ref;
+}
+
+export function isCapacityCatalogInput(
+    input: CatalogInputDescriptor,
+): input is Extract<CatalogInputDescriptor, { platformKey: "capacity.room_binding" }> {
+    return input.platformKey === "capacity.room_binding";
 }

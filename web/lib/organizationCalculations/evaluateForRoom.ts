@@ -10,7 +10,9 @@ import {
     projectCapacityRoomBindingInputs,
     resolveInputFromCapacityProjection,
 } from "@/lib/organizationCalculations/capacityProjection";
-import { evaluateOrgCalcExpr, type OrgCalcEvaluationResult } from "@/lib/organizationCalculations/evaluate";
+import { resolveOccupancyExpectedForRoom } from "@/lib/organizationCalculations/occupancyProjection";
+import { evaluateOrgCalcExpr, type OrgCalcEvaluationResult, type InputResolution } from "@/lib/organizationCalculations/evaluate";
+import type { ApprovedInputRef } from "@/lib/organizationCalculations/catalog";
 import { formatExplanationLines } from "@/lib/organizationCalculations/explain";
 import {
     getOrganizationCalculation,
@@ -132,8 +134,40 @@ export async function evaluateOrganizationCalculationForRoom(
         clock: () => new Date(request.effectiveAt),
     });
 
+    const occupancyCache = new Map<ApprovedInputRef, InputResolution>();
+    const needsOccupancy = JSON.stringify(version.expression_ast).includes("occupancy.expected");
+    if (needsOccupancy && siteLocationId) {
+        occupancyCache.set(
+            "occupancy.expected",
+            await resolveOccupancyExpectedForRoom({
+                supabase,
+                orgId: request.orgId,
+                siteLocationId,
+                roomLocationId: request.roomLocationId,
+                effectiveAt: request.effectiveAt,
+            }),
+        );
+    } else if (needsOccupancy && !siteLocationId) {
+        occupancyCache.set("occupancy.expected", {
+            value: null,
+            upstreamStatus: "incomplete",
+            note: "Room site is required to resolve expected occupancy",
+        });
+    }
+
     const evaluation = evaluateOrgCalcExpr(parsed.expr, {
-        resolveInput: (ref) => resolveInputFromCapacityProjection(projection, ref),
+        resolveInput: (ref) => {
+            if (ref === "occupancy.expected") {
+                return (
+                    occupancyCache.get(ref) ?? {
+                        value: null,
+                        upstreamStatus: "incomplete",
+                        note: "Expected occupancy was not loaded",
+                    }
+                );
+            }
+            return resolveInputFromCapacityProjection(projection, ref);
+        },
     });
 
     return {

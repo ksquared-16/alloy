@@ -39,6 +39,10 @@ import {
     statusLabel,
     type OrgCalcProductTypeId,
 } from "@/lib/organizationCalculations/productCatalog";
+import { compilePivotBuilderDraft, type PivotBuilderDraft } from "@/lib/organizationCalculations/pivotBuilder";
+import OrgCalcPivotBuilder, {
+    defaultPivotDraftForProduct,
+} from "@/components/adminV2/settings/organizationCalculations/OrgCalcPivotBuilder";
 
 type CalcListItem = {
     id: string;
@@ -201,6 +205,9 @@ export default function OrganizationCalculationsWorkspace({
     const [productTypeId, setProductTypeId] = useState<OrgCalcProductTypeId>("capacity_lowest_physical_licensed");
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
+    const [pivotDraft, setPivotDraft] = useState<PivotBuilderDraft>(() =>
+        defaultPivotDraftForProduct("capacity_lowest_physical_licensed"),
+    );
 
     // Survive Fast Refresh / soft-nav remounts during New Calculation.
     useEffect(() => {
@@ -412,13 +419,21 @@ export default function OrganizationCalculationsWorkspace({
         setBusy(true);
         setError(null);
         try {
+            let expressionAst;
+            try {
+                expressionAst = compilePivotBuilderDraft({ ...pivotDraft, name: name.trim() || pivotDraft.name });
+            } catch (e) {
+                throw new Error(e instanceof Error ? e.message : "Complete the calculation builder");
+            }
+            const inferred = inferProductTypeFromAst(expressionAst);
             const res = await fetch("/api/admin/organization-calculations", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     name: name.trim(),
                     description: description.trim(),
-                    product_type_id: productTypeId,
+                    product_type_id: inferred.id,
+                    expression_ast: expressionAst,
                 }),
             });
             const json = (await res.json()) as { calculation?: CalcListItem; error?: string };
@@ -592,19 +607,20 @@ export default function OrganizationCalculationsWorkspace({
             />
         : mode === "new" ?
             <NewCalculationWizard
-                step={wizardStep}
-                setStep={setWizardStep}
                 productTypeId={productTypeId}
                 setProductTypeId={(id) => {
                     setProductTypeId(id);
                     const t = productTypeById(id)!;
                     setName(t.title);
                     setDescription(t.summary);
+                    setPivotDraft(defaultPivotDraftForProduct(id));
                 }}
                 name={name}
                 setName={setName}
                 description={description}
                 setDescription={setDescription}
+                pivotDraft={pivotDraft}
+                setPivotDraft={setPivotDraft}
                 busy={busy}
                 error={error}
                 onCancel={() => openCollection("active")}
@@ -971,154 +987,112 @@ function CollectionRail({
 }
 
 function NewCalculationWizard({
-    step,
-    setStep,
     productTypeId,
     setProductTypeId,
     name,
     setName,
     description,
     setDescription,
+    pivotDraft,
+    setPivotDraft,
     busy,
     error,
     onCancel,
     onSave,
 }: {
-    step: 1 | 2 | 3 | 4;
-    setStep: (s: 1 | 2 | 3 | 4) => void;
     productTypeId: OrgCalcProductTypeId;
     setProductTypeId: (id: OrgCalcProductTypeId) => void;
     name: string;
     setName: (v: string) => void;
     description: string;
     setDescription: (v: string) => void;
+    pivotDraft: PivotBuilderDraft;
+    setPivotDraft: (d: PivotBuilderDraft) => void;
     busy: boolean;
     error: string | null;
     onCancel: () => void;
     onSave: () => void;
 }) {
-    const selectedType = productTypeById(productTypeId)!;
     return (
         <div className="mx-auto max-w-2xl space-y-4" data-testid="organization-calculations-new-wizard">
             <div className="process-config-setup-card p-5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                    New definition
+                    New reusable definition
                 </p>
-                <h2 className="config-typo-workspace-title mt-1 text-xl">Create a reusable definition</h2>
+                <h2 className="config-typo-workspace-title mt-1 text-xl">Build how the answer is calculated</h2>
                 <p className="config-typo-sublabel mt-1">
-                    Step {step} of 4 — choose how capacity is determined, name it, confirm what’s needed, then save a draft.
+                    Choose approved facts and a calculation. Alloy compiles a governed definition — no formulas or SQL.
                 </p>
             </div>
 
-            {step === 1 ?
-                <ConfigWorkspaceCard testId="organization-calculations-wizard-type">
-                    <ConfigEditorSection title="Choose calculation type" description="Only supported types are listed.">
-                        <div className="space-y-2">
-                            {ORG_CALC_PRODUCT_TYPES.map((t) => (
-                                <label
-                                    key={t.id}
-                                    className={`flex cursor-pointer gap-3 rounded-md border px-3 py-3 ${
-                                        productTypeId === t.id ?
-                                            "border-[#00a283]/50 bg-[#00a283]/5"
-                                        :   "border-alloy-stone/30 hover:border-alloy-stone/50"
-                                    }`}
-                                >
-                                    <input
-                                        type="radio"
-                                        className="mt-1"
-                                        name="product-type"
-                                        checked={productTypeId === t.id}
-                                        onChange={() => setProductTypeId(t.id)}
-                                        data-testid={`organization-calculations-type-${t.id}`}
-                                    />
-                                    <span>
-                                        <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">
-                                            {t.typeLabel}
-                                        </span>
-                                        <span className="block text-sm font-semibold text-alloy-midnight">{t.title}</span>
-                                        <span className="config-typo-sublabel mt-0.5 block">{t.summary}</span>
+            <ConfigWorkspaceCard testId="organization-calculations-wizard-info">
+                <ConfigEditorSection title="Name">
+                    <label className="block space-y-1">
+                        <span className="config-typo-field-label">Name</span>
+                        <input
+                            className="config-runtime-input"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            data-testid="organization-calculations-name"
+                        />
+                    </label>
+                    <label className="mt-3 block space-y-1">
+                        <span className="config-typo-field-label">Description</span>
+                        <textarea
+                            className="config-runtime-input min-h-[4rem]"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            data-testid="organization-calculations-description"
+                        />
+                    </label>
+                </ConfigEditorSection>
+            </ConfigWorkspaceCard>
+
+            <ConfigWorkspaceCard testId="organization-calculations-wizard-preset">
+                <ConfigEditorSection
+                    title="Start from"
+                    description="Optional presets fill the builder. You can still change every field."
+                >
+                    <div className="space-y-2">
+                        {ORG_CALC_PRODUCT_TYPES.map((t) => (
+                            <label
+                                key={t.id}
+                                className={`flex cursor-pointer gap-3 rounded-md border px-3 py-3 ${
+                                    productTypeId === t.id ?
+                                        "border-[#00a283]/50 bg-[#00a283]/5"
+                                    :   "border-alloy-stone/30 hover:border-alloy-stone/50"
+                                }`}
+                            >
+                                <input
+                                    type="radio"
+                                    className="mt-1"
+                                    name="product-type"
+                                    checked={productTypeId === t.id}
+                                    onChange={() => setProductTypeId(t.id)}
+                                    data-testid={`organization-calculations-type-${t.id}`}
+                                />
+                                <span>
+                                    <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">
+                                        {t.typeLabel}
                                     </span>
-                                </label>
-                            ))}
-                        </div>
-                    </ConfigEditorSection>
-                </ConfigWorkspaceCard>
-            : null}
+                                    <span className="block text-sm font-semibold text-alloy-midnight">{t.title}</span>
+                                    <span className="config-typo-sublabel mt-0.5 block">{t.summary}</span>
+                                </span>
+                            </label>
+                        ))}
+                    </div>
+                </ConfigEditorSection>
+            </ConfigWorkspaceCard>
 
-            {step === 2 ?
-                <ConfigWorkspaceCard testId="organization-calculations-wizard-info">
-                    <ConfigEditorSection title="Business information">
-                        <label className="block space-y-1">
-                            <span className="config-typo-field-label">Name</span>
-                            <input
-                                className="config-runtime-input"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                data-testid="organization-calculations-name"
-                            />
-                        </label>
-                        <label className="mt-3 block space-y-1">
-                            <span className="config-typo-field-label">Description</span>
-                            <textarea
-                                className="config-runtime-input min-h-[5rem]"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                data-testid="organization-calculations-description"
-                            />
-                        </label>
-                    </ConfigEditorSection>
-                </ConfigWorkspaceCard>
-            : null}
-
-            {step === 3 ?
-                <ConfigWorkspaceCard testId="organization-calculations-wizard-inputs">
-                    <ConfigEditorSection
-                        title="Inputs"
-                        description="These come from your organization’s capacity configuration for each room."
-                    >
-                        <ul className="space-y-2">
-                            {selectedType.inputLabels.map((label) => (
-                                <li
-                                    key={label}
-                                    className="rounded-md border border-alloy-stone/25 bg-white/60 px-3 py-2 text-sm text-alloy-midnight"
-                                >
-                                    {label}
-                                </li>
-                            ))}
-                        </ul>
-                        <p className="config-typo-sublabel mt-3">
-                            Result: {selectedType.outputLabel} ({selectedType.units})
-                        </p>
-                    </ConfigEditorSection>
-                </ConfigWorkspaceCard>
-            : null}
-
-            {step === 4 ?
-                <ConfigWorkspaceCard testId="organization-calculations-wizard-preview">
-                    <ConfigEditorSection title="Preview" description="Confirm before saving as a draft.">
-                        <dl className="space-y-2 text-sm">
-                            <div>
-                                <dt className="config-typo-field-label">Name</dt>
-                                <dd className="text-alloy-midnight">{name.trim() || "—"}</dd>
-                            </div>
-                            <div>
-                                <dt className="config-typo-field-label">Type</dt>
-                                <dd className="text-alloy-midnight">{selectedType.title}</dd>
-                            </div>
-                            <div>
-                                <dt className="config-typo-field-label">Description</dt>
-                                <dd className="text-alloy-midnight/80">{description.trim() || "—"}</dd>
-                            </div>
-                            <div>
-                                <dt className="config-typo-field-label">Result</dt>
-                                <dd className="text-alloy-midnight">
-                                    {selectedType.outputLabel} · {selectedType.units}
-                                </dd>
-                            </div>
-                        </dl>
-                    </ConfigEditorSection>
-                </ConfigWorkspaceCard>
-            : null}
+            <ConfigWorkspaceCard testId="organization-calculations-wizard-build">
+                <ConfigEditorSection title="Build">
+                    <OrgCalcPivotBuilder
+                        draft={pivotDraft}
+                        onChange={setPivotDraft}
+                        disabled={busy}
+                    />
+                </ConfigEditorSection>
+            </ConfigWorkspaceCard>
 
             {error ?
                 <p className="text-sm text-red-800" role="alert" data-testid="organization-calculations-error">
@@ -1130,29 +1104,14 @@ function NewCalculationWizard({
                 <ConfigurationSecondaryButton onClick={onCancel} disabled={busy}>
                     Cancel
                 </ConfigurationSecondaryButton>
-                {step > 1 ?
-                    <ConfigurationSecondaryButton onClick={() => setStep((step - 1) as 1 | 2 | 3 | 4)} disabled={busy}>
-                        Back
-                    </ConfigurationSecondaryButton>
-                :   null}
-                {step < 4 ?
-                    <ConfigurationPrimaryButton
-                        className="config-primary-btn--sm"
-                        onClick={() => setStep((step + 1) as 1 | 2 | 3 | 4)}
-                        disabled={step === 2 && !name.trim()}
-                        data-testid="organization-calculations-wizard-next"
-                    >
-                        Continue
-                    </ConfigurationPrimaryButton>
-                :   <ConfigurationPrimaryButton
-                        className="config-primary-btn--sm"
-                        onClick={onSave}
-                        disabled={busy || !name.trim()}
-                        data-testid="organization-calculations-create"
-                    >
-                        {busy ? "Saving…" : "Save draft"}
-                    </ConfigurationPrimaryButton>
-                }
+                <ConfigurationPrimaryButton
+                    className="config-primary-btn--sm"
+                    onClick={onSave}
+                    disabled={busy || !name.trim()}
+                    data-testid="organization-calculations-create"
+                >
+                    {busy ? "Saving…" : "Save draft"}
+                </ConfigurationPrimaryButton>
             </div>
         </div>
     );
