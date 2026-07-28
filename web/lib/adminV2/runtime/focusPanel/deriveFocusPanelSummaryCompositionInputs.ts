@@ -31,6 +31,7 @@ import {
     type FocusPanelCardConfig,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { readFocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
+import { isCardProviderUnavailable } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProviders";
 import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
 import type { FocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import type { CardCompositionPreference } from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
@@ -84,7 +85,14 @@ export function deriveFocusPanelSummaryCompositionInputs(
         for (const section of activeDoc.sections) {
             const meta = readFocusPanelCardSectionMeta(section);
             if (!meta) continue;
-            const visibility = cardVisibilityFromMeta(meta);
+            // CAPABILITY AVAILABILITY (separate from readiness/visibility). A card whose required
+            // authoritative provider is not registered is provider-unavailable → excluded from
+            // production participation regardless of the authored visibility, so it never occupies a
+            // production slot nor emits a business conclusion from missing wiring. It re-participates
+            // automatically once a provider registers. See `focusPanelCardProviders`.
+            const visibility = isCardProviderUnavailable(meta.key)
+                ? "hidden"
+                : cardVisibilityFromMeta(meta);
             visibilityByCardKey.set(meta.key, visibility);
             if (visibility === "linked") linkedCardKeys.push(meta.key);
         }
