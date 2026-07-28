@@ -68,7 +68,7 @@ export async function PATCH(
     const { data: existing, error: fetchErr } = await supabase
         .from("persons")
         .select(
-            "id, org_id, first_name, last_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source"
+            "id, org_id, first_name, last_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source, metadata"
         )
         .eq("id", id)
         .eq("org_id", ctx.orgId)
@@ -99,12 +99,25 @@ export async function PATCH(
                   : null
             : undefined;
 
+    // Shallow-merge metadata (jsonb, existing column) — used today for the canonical
+    // profile-photo reference (`profile_photo_document_id` / `photo_url`). Merge rather
+    // than replace so unrelated metadata keys survive an edit that only touches one key.
+    const metadataPatch =
+        body.metadata != null && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+            ? (body.metadata as Record<string, unknown>)
+            : undefined;
+    const existingMetadata =
+        (existing as { metadata?: unknown }).metadata && typeof (existing as { metadata?: unknown }).metadata === "object"
+            ? ((existing as { metadata?: unknown }).metadata as Record<string, unknown>)
+            : {};
+
     const personUpdates: Record<string, unknown> = {};
     if (first_name !== undefined) personUpdates.first_name = first_name;
     if (last_name !== undefined) personUpdates.last_name = last_name;
     if (email !== undefined) personUpdates.email = email;
     if (phone !== undefined) personUpdates.phone = phone;
     if (date_of_birth !== undefined) personUpdates.date_of_birth = date_of_birth;
+    if (metadataPatch) personUpdates.metadata = { ...existingMetadata, ...metadataPatch };
     if (status_key !== undefined) {
         const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "persons", status_key);
         if (!chk.ok) {
@@ -172,7 +185,7 @@ export async function PATCH(
     const { data: updated } = await supabase
         .from("persons")
         .select(
-            "id, org_id, first_name, last_name, full_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source, created_at, updated_at"
+            "id, org_id, first_name, last_name, full_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source, metadata, created_at, updated_at"
         )
         .eq("id", id)
         .eq("org_id", ctx.orgId)

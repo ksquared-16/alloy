@@ -201,7 +201,9 @@ const LIFECYCLE_PLATFORM_ACTIONS: CanonicalActionDefinition[] = [
         inputSchema: "registry_form",
         executor: { kind: "admin_execute", definitionKey: "create_lead", formKey: "create_lead" },
         confirmationPolicy: "required",
-        bosProposalSupport: false,
+        // Aligned with RegisteredAction.createLeadAction.bosProposalSupport — BOS may
+        // propose/prepare Create Lead; execution remains the registered action path.
+        bosProposalSupport: true,
         runtimeWired: true,
         settingsConfigurable: true,
     },

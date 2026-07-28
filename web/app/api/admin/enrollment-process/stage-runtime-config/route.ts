@@ -12,6 +12,7 @@ import { parsePerspectivesV1 } from "@/lib/lifecycle/perspectiveConfigV1";
 import { parseQueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
+import { parseStoredFieldRules } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import {
     saveLifecycleStageRuntimeConfig,
     validateLifecycleStageRuntimeConfigSnapshot,
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
             required_rule_ids?: string[];
             recommended_rule_ids?: string[];
             rule_levels_v1?: { version?: number; by_rule_id?: Record<string, string> };
+            rule_meta_v1?: unknown;
         } | null;
         queue_membership_v1?: unknown;
         stage_operating_plan_v1?: unknown;
@@ -108,19 +110,7 @@ export async function POST(request: NextRequest) {
     const fieldRulesRaw = body.field_rules;
     const fieldRules =
         fieldRulesRaw && typeof fieldRulesRaw === "object" && !Array.isArray(fieldRulesRaw)
-            ? {
-                  required_rule_ids: Array.isArray(fieldRulesRaw.required_rule_ids)
-                      ? fieldRulesRaw.required_rule_ids.filter((x): x is string => typeof x === "string")
-                      : [],
-                  recommended_rule_ids: Array.isArray(fieldRulesRaw.recommended_rule_ids)
-                      ? fieldRulesRaw.recommended_rule_ids.filter((x): x is string => typeof x === "string")
-                      : [],
-                  ...(fieldRulesRaw.rule_levels_v1 &&
-                  typeof fieldRulesRaw.rule_levels_v1 === "object" &&
-                  !Array.isArray(fieldRulesRaw.rule_levels_v1)
-                      ? { rule_levels_v1: fieldRulesRaw.rule_levels_v1 }
-                      : {}),
-              }
+            ? parseStoredFieldRules(fieldRulesRaw)
             : null;
 
     const queueMembershipRaw = body.queue_membership_v1;

@@ -229,9 +229,10 @@ function avatarFromDisplayOptions(
     group: NestedSurfaceGroupConfig,
 ): IdentitySectionConfig["avatar"] {
     const showAvatar = group.displayOptions?.showAvatar !== false;
+    const useProfilePhotos = group.displayOptions?.useProfilePhotos !== false;
     return {
         visible: showAvatar,
-        source: "photo_or_initials",
+        source: useProfilePhotos ? "photo_or_initials" : "initials",
     };
 }
 

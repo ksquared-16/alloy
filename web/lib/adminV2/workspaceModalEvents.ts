@@ -60,7 +60,24 @@ export function dispatchAdminV2OpenProcessingModal(intent?: ProcessingModalInten
     openWorkspaceModal("processing");
 }
 
-export function dispatchAdminV2OpenSchedulingModal(): void {
+export type OpenSchedulingModalDetail = {
+    mode?: "work" | "studio";
+    workView?: "overview" | "roster" | "attendance";
+    studioView?: "types" | "patterns" | "templates" | "validation";
+};
+
+/** Session key for deep-linking Assignments Workspace (Focus Panel → Studio Types, etc.). */
+export const ASSIGNMENTS_WORKSPACE_DEEPLINK_KEY = "alloy.assignments.workspace.deeplink";
+
+export function dispatchAdminV2OpenSchedulingModal(detail?: OpenSchedulingModalDetail): void {
+    if (typeof window !== "undefined" && detail) {
+        try {
+            sessionStorage.setItem(ASSIGNMENTS_WORKSPACE_DEEPLINK_KEY, JSON.stringify(detail));
+        } catch {
+            /* ignore quota */
+        }
+        window.dispatchEvent(new CustomEvent("adminv2:open-scheduling-modal", { detail }));
+    }
     openWorkspaceModal("scheduling");
 }
 

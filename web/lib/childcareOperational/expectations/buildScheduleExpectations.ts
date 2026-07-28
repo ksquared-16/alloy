@@ -6,14 +6,19 @@
 
 import {
     aggregateExpectedOccupancyByRoomDate,
+    aggregatePlannedOccupancyByRoomDate,
     computeExpectedStaffingByRoomDate,
     expandExpectedAttendance,
+    expandPlannedAttendance,
     type ExpectedAttendanceEntry,
     type ExpectedOccupancyEntry,
     type ExpectedStaffingEntry,
     type OperationalAgreementInput,
     type OperationalAssignmentInput,
     type OperationalPlacementInput,
+    type OperationalProposedAssignmentInput,
+    type PlannedAttendanceEntry,
+    type PlannedOccupancyEntry,
     type SchedulePatternInput,
 } from "@/lib/childcareOperational/expectations/scheduleExpectationCore";
 import {
@@ -59,6 +64,13 @@ export type ScheduleExpectationReadModel = {
     expectedOccupancyByRoomDate: ExpectedOccupancyEntry[];
     expectedStaffingByRoomDate: ExpectedStaffingEntry[];
     warnings: ExpectationWarning[];
+    /**
+     * Planned (Proposed) attendance/occupancy — a distinct, non-authoritative signal.
+     * NEVER merged into `expectedAttendance` / `expectedOccupancyByRoomDate` and never
+     * contributes to staffing or capacity warnings; those stay committed-only.
+     */
+    plannedAttendance: PlannedAttendanceEntry[];
+    plannedOccupancyByRoomDate: PlannedOccupancyEntry[];
 };
 
 export type BuildScheduleExpectationsInput = {
@@ -72,6 +84,8 @@ export type BuildScheduleExpectationsInput = {
     /** Optional age-group resolution by room/program (e.g. classroom_age_group). */
     ageGroupByRoomLocationId?: Readonly<Record<string, string | null>>;
     ageGroupByProgramCategoryId?: Readonly<Record<string, string | null>>;
+    /** Proposed (planning-only) assignments — surfaced as `planned*`, never as attendance truth. */
+    proposedAssignments?: readonly OperationalProposedAssignmentInput[];
 };
 
 export function buildScheduleExpectations(
@@ -111,11 +125,22 @@ export function buildScheduleExpectations(
         resolveTiers,
     });
 
+    // Planning signal — computed independently, never folded into committed truth above.
+    const plannedAttendance = expandPlannedAttendance({
+        dateStart: input.dateStart,
+        dateEnd: input.dateEnd,
+        proposedAssignments: input.proposedAssignments ?? [],
+        patternsById: input.patternsById,
+    });
+    const plannedOccupancyByRoomDate = aggregatePlannedOccupancyByRoomDate(plannedAttendance);
+
     return {
         expectedAttendance,
         expectedOccupancyByRoomDate,
         expectedStaffingByRoomDate,
         warnings,
+        plannedAttendance,
+        plannedOccupancyByRoomDate,
     };
 }
 

@@ -272,6 +272,28 @@ No privileged client-side service-role shortcuts “for AI.” Recommendations s
 
 ---
 
+## 2026-07 — BOS actionable interface binds to Operational Command Runtime
+
+**Decision:**  
+BOS is Alloy’s **universal conversational command interface** for registered operational commands, but it is a **placement** over the **Operational Command Runtime** — not a parallel mutation, identity, form, or Processing engine. Confirmed Create Lead execution uses existing `POST /api/admin/actions/execute` / registered `create_lead`. Conversation and Form share one `BosCommandDraft`. Processing owns inbound identity resolution at the established approval/commit boundary. V1 stops at the Create Lead reference flow + Actions placement convergence; slash commands and daily briefing are deferred foundations.
+
+**Why:**  
+Operators need one trusted command surface without duplicating authority. Binding BOS to the registered action path preserves permissions, eligibility, audit, idempotency, and Processing identity guarantees.
+
+**Consequences:**  
+No new foundational execute API for BOS Create Lead. No Processing Case on first paste. No auto-open Focus Panel on success. No new identity tables for V1 session state (sessionStorage). Modal Create Lead remains a compatibility host behind an explicit flag.
+
+**Canonical owners:**  
+- [`../modules/ai-platform.md`](../modules/ai-platform.md)  
+- [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md)  
+- [`../../sprints/active/bos-actionable-interface/`](../../sprints/active/bos-actionable-interface/)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
 ## 2026-07 — Configuration is object-centric
 
 **Decision:**  

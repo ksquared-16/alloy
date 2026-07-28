@@ -90,6 +90,8 @@ export function deriveFocusPanelSummaryCompositionInputs(
         }
     }
 
+    // Honor authored visibility: Linked cards (including Assignments/`scheduling`) stay
+    // navigable-only and must not occupy initial Focus Panel settle geometry.
     const grid = deriveFocusPanelGridFromLayoutDoc(activeDoc);
     const instanceMap = activeDoc ? deriveFocusPanelInstanceMap(activeDoc) : new Map();
     const rawPublishedLayout = readFocusPanelPublishedLayout(activeDoc);

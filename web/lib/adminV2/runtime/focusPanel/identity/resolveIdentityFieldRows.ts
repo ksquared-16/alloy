@@ -21,6 +21,7 @@ export type IdentityFieldRowInput = {
     linkLabel?: string | null;
     linkDestination?: IdentityFieldCellVM["linkDestination"];
     linkTarget?: IdentityFieldCellVM["linkTarget"];
+    editControl?: IdentityFieldCellVM["editControl"];
 };
 
 /** Build row VMs from ordered placements (summary or expanded tier). */
@@ -28,8 +29,12 @@ export function resolveIdentityFieldRows(
     inputs: readonly IdentityFieldRowInput[],
 ): IdentityFieldRowVM[] {
     const visible = inputs.filter((input) => {
-        if (input.placement.hideWhenEmpty && !input.value?.trim()) return false;
-        return input.policy !== "hidden";
+        if (input.policy === "hidden") return false;
+        const empty = !input.value?.trim();
+        // Filter before pack so empty/hidden cells never leave pair/triple holes.
+        if (empty && input.placement.hideWhenEmpty) return false;
+        if (empty && (input.placement.labelMode ?? "visible") === "hidden") return false;
+        return true;
     });
     if (visible.length === 0) return [];
 
@@ -64,6 +69,7 @@ export function resolveIdentityFieldRows(
                 linkTarget: input.linkTarget ?? null,
                 hideWhenEmpty: input.placement.hideWhenEmpty ?? false,
                 width,
+                editControl: input.editControl,
                 column: (columnIndex + 1) as 1 | 2 | 3,
             } satisfies IdentityFieldCellVM & { column?: 1 | 2 | 3 };
         }),

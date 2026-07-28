@@ -40,7 +40,8 @@ Each identity section configures **three field purposes** plus evidence collecti
 - **Detail Fields** — inspect one identity after selection (`expandedFieldKeys`; tier `details`)
 - **Evidence Collections** — proof-oriented regions (`evidenceCollections`)
 - **Row layout** — `full` or paired `half` columns via one shared `resolveIdentityFieldRows` resolver
-- **Avatar** — configured per section (`displayOptions.showAvatar`); photo → initials fallback
+- **Avatar** — configured per section (`displayOptions.showAvatar`); when enabled, `displayOptions.useProfilePhotos` (default true) loads evidence photo URLs into the avatar, otherwise initials-only
+- **Child Gender** — seeds into Detail Fields (Focus child view uses Details depth). Published configs that still have summary-only `child.gender` are promoted onto Details at reconcile so the row stays visible without republish.
 - **Badge** — relationship label, role, or configured field
 - **Icons** — explicit placement override → catalog icon → none
 - **Editability** — configured policy **and** runtime capability (`canMutate` + save-supported path)

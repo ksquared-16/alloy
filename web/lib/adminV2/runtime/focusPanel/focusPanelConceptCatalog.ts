@@ -50,7 +50,7 @@ export const CONCEPT_TREE: ConceptBranch[] = [
         label: "Program",
         leaves: [
             { label: "Name" },
-            { label: "Schedule" },
+            { label: "Assignments" },
             { label: "Desired Start" },
             { label: "Room" },
             { label: "Location" },

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import clsx from "clsx";
 
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import ChildProfileAvatarComposer from "@/components/admin/focusPanel/drillIn/ChildProfileAvatarComposer";
 import DrillInRegionComposer from "@/components/admin/focusPanel/drillIn/DrillInRegionComposer";
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import {
@@ -61,6 +62,19 @@ export default function FocusPanelChildrenDrillInComposer({
                     tenantFieldDefinitions={tenantFieldDefinitions}
                     label="Roster rows"
                 >
+                    {focused ? (
+                        <ChildProfileAvatarComposer
+                            surfaceId={CHILDREN_SURFACE_ID}
+                            groupKey="roster"
+                            childId={focused.id}
+                            childName={focused.name}
+                            imageUrl={focused.imageUrl ?? null}
+                            personId={focused.personId ?? null}
+                            customerMemberId={focused.customerMemberId ?? null}
+                            size={40}
+                            builder={{ config, onConfigChange }}
+                        />
+                    ) : null}
                     <div className="alloy-os-children__roster" data-children-roster>
                         {evidence.children.map((child) => (
                             <button
@@ -73,7 +87,13 @@ export default function FocusPanelChildrenDrillInComposer({
                                 onClick={() => setFocusedId(child.id)}
                                 data-children-roster-row={child.id}
                             >
-                                <CardAvatar name={child.name} size={28} />
+                                <CardAvatar
+                                    name={child.name}
+                                    imageUrl={child.imageUrl}
+                                    size={28}
+                                    role="child"
+                                    recordId={child.id}
+                                />
                                 <span className="alloy-os-children__row-main min-w-0">
                                     <span className="alloy-os-children__row-name">{child.name}</span>
                                     <span className="alloy-os-children__row-meta">
@@ -102,7 +122,23 @@ export default function FocusPanelChildrenDrillInComposer({
                             tenantFieldDefinitions={tenantFieldDefinitions}
                             label={`${focused.name.split(" ")[0]} — Identity`}
                         >
-                            <ChildFocusPreview child={focused} fieldKeys={selectedFieldKeys(config, "identity")} />
+                            <div className="space-y-3">
+                                <ChildProfileAvatarComposer
+                                    surfaceId={CHILDREN_SURFACE_ID}
+                                    groupKey="identity"
+                                    childId={focused.id}
+                                    childName={focused.name}
+                                    imageUrl={focused.imageUrl ?? null}
+                                    personId={focused.personId ?? null}
+                                    customerMemberId={focused.customerMemberId ?? null}
+                                    size={40}
+                                    builder={{ config, onConfigChange }}
+                                />
+                                <ChildFocusPreview
+                                    child={focused}
+                                    fieldKeys={selectedFieldKeys(config, "identity")}
+                                />
+                            </div>
                         </DrillInRegionComposer>
                         <DrillInRegionComposer
                             surfaceId={CHILDREN_SURFACE_ID}

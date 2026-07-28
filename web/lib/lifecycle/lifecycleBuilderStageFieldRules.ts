@@ -20,6 +20,7 @@ import {
     storedFieldRulesToMetadataFieldRules,
     type LifecycleStageFieldRulesStored,
     type RuleLevelsV1,
+    type RuleMetaV1,
 } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import type { LifecycleFieldPaletteEntry } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
 
@@ -34,6 +35,7 @@ export type LifecycleBuilderStageFieldRulesV1 = {
             required_rule_ids?: string[];
             recommended_rule_ids?: string[];
             rule_levels_v1?: RuleLevelsV1;
+            rule_meta_v1?: RuleMetaV1;
         }
     >;
 };
@@ -79,13 +81,30 @@ export function departmentHasBuilderStageFieldOverride(
     return parsed?.by_stage_key[builderStageKey.trim()] !== undefined;
 }
 
-/** Effective field rules for a builder stage key (operator stages use progression override when no builder row). */
+/**
+ * Effective field rules for a builder stage key.
+ *
+ * Operator stages (lead/tour/…) prefer `lifecycle_progression_requirements_v1` when a
+ * department override exists — Save Stage writes that store. A leftover
+ * `lifecycle_builder_stage_field_rules_v1` row must not shadow Off / timing changes.
+ */
 export function effectiveFieldRulesForBuilderStage(
     builderStageKey: string,
     departmentMetadata: Record<string, unknown> | null | undefined,
     operatorStage: LifecycleOperatorStage | null
 ): { rules: LifecycleStageFieldRules; source: "none" | "platform" | "department" | "builder_stage" } {
     const key = builderStageKey.trim();
+    if (operatorStage) {
+        const override = parseLifecycleProgressionRequirementsOverride(departmentMetadata ?? null);
+        const hasOverride = departmentHasStageOverride(override, operatorStage);
+        if (hasOverride) {
+            const effective = effectiveFieldRulesForStage(operatorStage, departmentMetadata ?? null);
+            return {
+                rules: effective.rules,
+                source: "department",
+            };
+        }
+    }
     const builderParsed = parseLifecycleBuilderStageFieldRules(departmentMetadata ?? null);
     const builderRow = builderParsed?.by_stage_key[key];
     if (builderRow) {
@@ -99,13 +118,9 @@ export function effectiveFieldRulesForBuilderStage(
     }
     if (operatorStage) {
         const effective = effectiveFieldRulesForStage(operatorStage, departmentMetadata ?? null);
-        const hasOverride = departmentHasStageOverride(
-            parseLifecycleProgressionRequirementsOverride(departmentMetadata ?? null),
-            operatorStage
-        );
         return {
             rules: effective.rules,
-            source: hasOverride ? "department" : effective.source === "platform" ? "platform" : "department",
+            source: effective.source === "platform" ? "platform" : "department",
         };
     }
     return {
@@ -114,13 +129,19 @@ export function effectiveFieldRulesForBuilderStage(
     };
 }
 
-/** Effective stored field rules including rule_levels_v1 when persisted. */
+/** Effective stored field rules including rule_levels_v1 / rule_meta_v1 when persisted. */
 export function effectiveFieldRulesStoredForBuilderStage(
     builderStageKey: string,
     departmentMetadata: Record<string, unknown> | null | undefined,
     operatorStage: LifecycleOperatorStage | null
 ): LifecycleStageFieldRulesStored {
     const key = builderStageKey.trim();
+    if (operatorStage) {
+        const override = parseLifecycleProgressionRequirementsOverride(departmentMetadata ?? null);
+        if (departmentHasStageOverride(override, operatorStage)) {
+            return effectiveFieldRulesStoredForStage(operatorStage, departmentMetadata);
+        }
+    }
     const builderParsed = parseLifecycleBuilderStageFieldRules(departmentMetadata ?? null);
     const builderRow = builderParsed?.by_stage_key[key];
     if (builderRow) {
@@ -143,6 +164,7 @@ export function buildBuilderStageFieldRulesPatch(input: {
     recommended_rule_ids: string[];
     existingMetadata: Record<string, unknown> | null;
     explicit_rule_levels_v1?: RuleLevelsV1 | null;
+    explicit_rule_meta_v1?: RuleMetaV1 | null;
     mergedPalette?: readonly LifecycleFieldPaletteEntry[];
 }): Record<string, unknown> {
     const stageKey = input.builderStageKey.trim();
@@ -165,6 +187,7 @@ export function buildBuilderStageFieldRulesPatch(input: {
         required_rule_ids: sanitizedRequired,
         recommended_rule_ids: sanitizedRecommended,
         explicit_rule_levels_v1: input.explicit_rule_levels_v1,
+        explicit_rule_meta_v1: input.explicit_rule_meta_v1,
         isEnforceable,
     });
 

@@ -189,6 +189,21 @@ describe("child save refresh", () => {
         expect(afterStart).toContain("2026");
     });
 
+    it("rebuilt children evidence shows Male after gender profilePatch merge", () => {
+        const merged = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
+            childId: "child-1",
+            row: { person_id: null },
+            patch: {
+                identityPatch: {},
+                ocmPatch: {},
+                profilePatch: { gender: "male" },
+            },
+            savedPerson: null,
+        });
+        const afterChild = buildChildrenCardEvidence(householdCtx(merged)).children[0]!;
+        expect(afterChild.gender).toBe("Male");
+    });
+
     it("unsupported expanded field does not expose edit affordance", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = addFieldToNestedGroup(config, "readiness", "child.readiness_summary");

@@ -47,9 +47,11 @@ describe("sidebar modal navigation", () => {
         expect(read("lib/adminV2/adminV2NavConstants.ts")).toContain("ADMIN_V2_NOTIFICATIONS_HREF");
     });
 
-    it("sidebar lists the Scheduling workspace modal", () => {
+    it("sidebar lists the Assignments workspace modal", () => {
         const sidebar = read("app/adminV2/components/Sidebar.tsx");
         expect(sidebar).toContain("SidebarSchedulingNavItem");
-        expect(read("app/adminV2/components/SidebarModalNavItems.tsx")).toContain("dispatchAdminV2OpenSchedulingModal");
+        const items = read("app/adminV2/components/SidebarModalNavItems.tsx");
+        expect(items).toContain("dispatchAdminV2OpenSchedulingModal");
+        expect(items).toContain('label="Assignments"');
     });
 });

@@ -144,8 +144,9 @@ export default function LocationScheduleTemplateDetailPanel({
     useEffect(() => {
         if (!pattern) return;
         hydrate(pattern);
-        setEditing(false);
-    }, [pattern]);
+        // Enter edit mode when the operator can mutate so header Save matches Studio Patterns.
+        setEditing(canMutate);
+    }, [pattern, canMutate]);
 
     if (!pattern) {
         return (
@@ -291,27 +292,109 @@ export default function LocationScheduleTemplateDetailPanel({
 
     const resolvedWeekdays = resolveScheduleDefinitionWeekdays({ patternType, weeks });
     const hoursRequired = dayType !== "hourly";
+    /** Hours may be unset on enrichment Patterns — allow Save when both ends empty. */
     const hoursOk =
         !hoursRequired ||
-        weeks.every((week) => isValidScheduleHours({ opensAt: week.startTime, closesAt: week.endTime }));
+        weeks.every((week) => {
+            const opensAt = week.startTime;
+            const closesAt = week.endTime;
+            if (!opensAt && !closesAt) return true;
+            return isValidScheduleHours({ opensAt, closesAt });
+        });
     const weeksOk =
         patternType === "continuous" ?
             (weeks[0]?.days.length ?? 0) > 0
         :   weeks.length >= 1 && weeks.every((week) => week.days.length > 0);
     const anchorOk = patternType !== "rotating" || isValidRotationAnchorDate(rotationAnchorDate);
-    const canSave = Boolean(label.trim()) && Boolean(dayType) && weeksOk && hoursOk && anchorOk;
+    const canSave = Boolean(label.trim()) && Boolean(dayType) && weeksOk && hoursOk && anchorOk && canMutate;
+
+    const persist = async () => {
+        setSaving(true);
+        try {
+            if (!dayType) throw new Error("Select a Day Type.");
+            if (!weeksOk) throw new Error("Select at least one day for each week.");
+            if (!hoursOk) throw new Error("End time must be after start time when hours are set.");
+            if (rotatingPatternRequiresAnchor(patternType, rotationAnchorDate)) {
+                throw new Error("Rotation begins is required for rotating Patterns.");
+            }
+            const hours = {
+                opensAt: weeks[0]?.startTime ?? null,
+                closesAt: weeks[0]?.endTime ?? null,
+            };
+            const metadata = writeScheduleDefinitionMetadata({
+                existing: (pattern.metadata ?? {}) as Record<string, unknown>,
+                dayType,
+                patternType,
+                hours,
+                weeks,
+                rotationAnchorDate: patternType === "rotating" ? rotationAnchorDate : null,
+            });
+            const patch = {
+                label: label.trim(),
+                schedule_type_key: scheduleTypeKeyFromDayType(dayType),
+                weekdays: resolvedWeekdays,
+                is_active: active,
+                metadata,
+            };
+            const updated = await patchSchedulePattern(pattern.id, patch);
+            if (
+                !mutationResponseContainsPatch(updated as unknown as Record<string, unknown>, {
+                    label: patch.label,
+                    schedule_type_key: patch.schedule_type_key,
+                    weekdays: patch.weekdays,
+                    is_active: patch.is_active,
+                })
+            ) {
+                throw new Error("Schedule save was not confirmed by the authoritative response.");
+            }
+            onUpdated(updated);
+            setEditing(false);
+        } catch (cause) {
+            onError(cause instanceof Error ? cause.message : "Save failed");
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
-        <div className="space-y-3" data-testid="locations-schedule-edit">
+        <div className="space-y-3" data-testid="locations-schedule-editor" data-locations-schedule-editing="true">
             <ConfigObjectHeader
                 size="hero"
                 name={label.trim() || "Untitled schedule"}
                 status={{ label: "Editing", tone: "attention" }}
                 facts={[siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
                 actions={
-                    <ConfigurationSecondaryButton onClick={cancelEdit} disabled={saving}>
-                        Cancel
-                    </ConfigurationSecondaryButton>
+                    <div className="flex flex-wrap items-center gap-2" data-locations-schedule-header-actions="true">
+                        <ConfigurationSecondaryButton onClick={cancelEdit} disabled={saving}>
+                            Cancel
+                        </ConfigurationSecondaryButton>
+                        {canMutate ? (
+                            <ConfigurationPrimaryButton
+                                disabled={saving || !canSave}
+                                data-testid="locations-schedule-save"
+                                title={
+                                    !canSave
+                                        ? !dayType
+                                            ? "Select a Day Type to enable Save"
+                                            : !weeksOk
+                                              ? "Select at least one day for each week"
+                                              : !hoursOk
+                                                ? "End time must be after start time when hours are set"
+                                                : !anchorOk
+                                                  ? "Rotation begins is required for rotating Patterns"
+                                                  : "Complete required fields to save"
+                                        : saving
+                                          ? "Saving…"
+                                          : "Save schedule"
+                                }
+                                onClick={() => {
+                                    void persist();
+                                }}
+                            >
+                                {saving ? "Saving…" : !canSave ? "Save schedule (complete required fields)" : "Save schedule"}
+                            </ConfigurationPrimaryButton>
+                        ) : null}
+                    </div>
                 }
                 testId="locations-schedule-header"
             />
@@ -500,71 +583,6 @@ export default function LocationScheduleTemplateDetailPanel({
                 />
                 <span className="config-typo-sublabel">Active schedule</span>
             </label>
-
-            <div className="flex flex-wrap gap-2">
-                <ConfigurationPrimaryButton
-                    disabled={saving || !canSave}
-                    data-testid="locations-schedule-save"
-                    onClick={() => {
-                        void (async () => {
-                            setSaving(true);
-                            try {
-                                if (!dayType) throw new Error("Select a Day Type.");
-                                if (!weeksOk) throw new Error("Select at least one day for each week.");
-                                if (!hoursOk) throw new Error("End time must be after start time.");
-                                if (rotatingPatternRequiresAnchor(patternType, rotationAnchorDate)) {
-                                    throw new Error("Rotation begins is required for rotating Patterns.");
-                                }
-                                const hours = {
-                                    opensAt: weeks[0]?.startTime ?? null,
-                                    closesAt: weeks[0]?.endTime ?? null,
-                                };
-                                const metadata = writeScheduleDefinitionMetadata({
-                                    existing: (pattern.metadata ?? {}) as Record<string, unknown>,
-                                    dayType,
-                                    patternType,
-                                    hours,
-                                    weeks,
-                                    rotationAnchorDate:
-                                        patternType === "rotating" ? rotationAnchorDate : null,
-                                });
-                                const patch = {
-                                    label: label.trim(),
-                                    schedule_type_key: scheduleTypeKeyFromDayType(dayType),
-                                    weekdays: resolvedWeekdays,
-                                    is_active: active,
-                                    metadata,
-                                };
-                                const updated = await patchSchedulePattern(pattern.id, patch);
-                                if (
-                                    !mutationResponseContainsPatch(
-                                        updated as unknown as Record<string, unknown>,
-                                        {
-                                            label: patch.label,
-                                            schedule_type_key: patch.schedule_type_key,
-                                            weekdays: patch.weekdays,
-                                            is_active: patch.is_active,
-                                        },
-                                    )
-                                ) {
-                                    throw new Error("Schedule save was not confirmed by the authoritative response.");
-                                }
-                                onUpdated(updated);
-                                setEditing(false);
-                            } catch (cause) {
-                                onError(cause instanceof Error ? cause.message : "Save failed");
-                            } finally {
-                                setSaving(false);
-                            }
-                        })();
-                    }}
-                >
-                    {saving ? "Saving…" : "Save schedule"}
-                </ConfigurationPrimaryButton>
-                <ConfigurationSecondaryButton onClick={cancelEdit} disabled={saving}>
-                    Cancel
-                </ConfigurationSecondaryButton>
-            </div>
         </div>
     );
 }

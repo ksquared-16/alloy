@@ -1,12 +1,15 @@
 /**
- * Canonical compact schedule summary — shared by Scheduling card rows and
+ * Canonical Assignment summary — shared by Scheduling card rows and
  * Children-card Schedule fields.
  *
- * Default line: Room · weekly pattern · effective start
- * Example: Toddler 2 · Monday–Friday · from Aug 4, 2026
+ * Default scan line: Room · Days · Effective · Time
+ * Examples:
+ *   Pre-K · Mon–Fri · Aug 24, 2026 · 8:30 AM–4:00 PM
+ *   Toddler East · Tue/Thu · Sep 1 → Dec 15 · 9:00 AM–2:00 PM
  *
  * Never appends “open-ended.” Null effective end omits the end segment entirely.
- * Hours / site / schedule type / status are optional (off by default).
+ * Site / schedule type / status remain optional (off by default).
+ * Hours are included by default for operational scanning (`includeHours: false` to omit).
  */
 
 import type {
@@ -16,7 +19,7 @@ import type {
 } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 
 export type CompactScheduleIdentityProjection = {
-    /** Default compact summary (Room · pattern · effective). */
+    /** Default compact summary (Room · Days · Effective · Time). */
     scheduleLabel: string | null;
     roomLabel: string | null;
     siteLabel: string | null;
@@ -27,9 +30,14 @@ export type CompactScheduleIdentityProjection = {
     statusLabel: string | null;
     /** Alias of scheduleLabel (default compact). */
     compactLine: string | null;
+    /** Primary assignment type label when present. */
+    primaryTypeLabel: string | null;
+    /** Count of concurrent current/proposed assignments. */
+    assignmentCount: number;
 };
 
 export type CompactScheduleProjectionOptions = {
+    /** Include time segment (default true for operational scanning). */
     includeHours?: boolean;
     includeSite?: boolean;
     includeScheduleType?: boolean;
@@ -64,12 +72,12 @@ export function formatCompactScheduleIsoDate(iso: string | null | undefined): st
     });
 }
 
-/** Mon–Fri → "Monday–Friday"; otherwise short weekday list. */
+/** Mon–Fri contiguous → "Mon–Fri"; otherwise short weekday list with "/". */
 export function formatCompactScheduleWeekdays(weekdays: readonly number[]): string | null {
     if (!weekdays.length) return null;
     const sorted = [...weekdays].sort((a, b) => a - b);
-    if (sorted.join(",") === "1,2,3,4,5") return "Monday–Friday";
-    return sorted.map((d) => WEEKDAY_NAMES[d] ?? String(d)).join(", ");
+    if (sorted.join(",") === "1,2,3,4,5") return "Mon–Fri";
+    return sorted.map((d) => WEEKDAY_NAMES[d] ?? String(d)).join("/");
 }
 
 export function formatCompactScheduleHours(
@@ -90,8 +98,8 @@ export function formatCompactScheduleHours(
 
 /**
  * Effective date segment for compact summaries.
- * - open-ended / null end → "from {start}" (never "open-ended")
- * - both ends → "{start}–{end}"
+ * - open-ended / null end → "{start}" (never "open-ended" / never "from")
+ * - both ends → "{start} → {end}"
  */
 export function formatCompactScheduleEffective(args: {
     effectiveFrom: string | null | undefined;
@@ -102,11 +110,11 @@ export function formatCompactScheduleEffective(args: {
     if (!from) return null;
     const toRaw = args.effectiveTo?.trim() || null;
     if (!toRaw || args.openEnded) {
-        return `from ${from}`;
+        return from;
     }
     const to = formatCompactScheduleIsoDate(toRaw);
-    if (!to) return `from ${from}`;
-    return `${from}–${to}`;
+    if (!to) return from;
+    return `${from} → ${to}`;
 }
 
 function joinCompactParts(parts: Array<string | null | undefined>): string | null {
@@ -127,6 +135,8 @@ export function projectCompactScheduleForIdentity(
         effectiveLabel: null,
         statusLabel: null,
         compactLine: null,
+        primaryTypeLabel: null,
+        assignmentCount: 0,
     };
     if (!scheduling) {
         const emptyLabel = options.emptyLabel ?? null;
@@ -150,8 +160,12 @@ export function projectCompactScheduleForIdentity(
         };
     }
 
-    const assignment = view.assignments[0] ?? null;
+    const assignments = view.assignments ?? [];
+    const primary =
+        assignments.find((a) => a.isPrimary) ?? assignments[0] ?? null;
+    const assignment = primary;
     const roomLabel = assignment?.room.name?.trim() || null;
+    const primaryTypeLabel = assignment?.assignmentType?.label?.trim() || null;
     const daysLabel = assignment?.weekdays?.length
         ? formatCompactScheduleWeekdays(assignment.weekdays)
         : null;
@@ -164,10 +178,18 @@ export function projectCompactScheduleForIdentity(
         effectiveTo: view.effectiveTo,
         openEnded: view.openEnded,
     });
+    const moreCount = Math.max(0, assignments.length - 1);
+    const moreLabel = moreCount > 0 ? `+${moreCount} more` : null;
+    const includeHours = options.includeHours !== false;
 
-    // Default canonical: Room · weekly pattern · effective start
-    const defaultParts: Array<string | null> = [roomLabel, daysLabel, effectiveLabel];
-    if (options.includeHours) defaultParts.splice(2, 0, hoursLabel);
+    // Default scan: Room · Days · Effective · Time · +N more
+    const defaultParts: Array<string | null> = [
+        roomLabel,
+        daysLabel,
+        effectiveLabel,
+    ];
+    if (includeHours) defaultParts.push(hoursLabel);
+    defaultParts.push(moreLabel);
     if (options.includeSite) defaultParts.push(siteLabel);
     if (options.includeScheduleType) defaultParts.push(scheduleTypeLabel);
     if (options.includeStatus) defaultParts.push(statusLabel);
@@ -183,6 +205,8 @@ export function projectCompactScheduleForIdentity(
         effectiveLabel,
         statusLabel,
         compactLine,
+        primaryTypeLabel,
+        assignmentCount: assignments.length,
     };
 }
 

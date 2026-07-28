@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import {
     BadgeCheck,
@@ -19,6 +19,7 @@ import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import ChildFocusEdit from "@/components/admin/focusPanel/cards/ChildFocusEdit";
 import IdentityRecordSummary from "@/components/admin/focusPanel/identity/IdentityRecordSummary";
+import IdentityAvatarEditable from "@/components/admin/focusPanel/identity/IdentityAvatarEditable";
 import IdentityFieldGrid, { type IdentityFieldSaveArgs } from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
 import IdentityExpandedDetails from "@/components/admin/focusPanel/identity/IdentityExpandedDetails";
 import IdentityDisclosureBackAction from "@/components/admin/focusPanel/identity/IdentityDisclosureBackAction";
@@ -96,6 +97,7 @@ import {
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { buildChildIdentityRecordVM } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM";
+import { mergeChildrenRosterIntoFocusedIdentityRecord } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import IdentityComposeCanvasShell from "@/components/admin/focusPanel/identity/IdentityComposeCanvasShell";
 import IdentityComposeChildPicker from "@/components/admin/focusPanel/identity/IdentityComposeChildPicker";
 import IdentityComposeSectionCanvas from "@/components/admin/focusPanel/identity/IdentityComposeSectionCanvas";
@@ -105,6 +107,7 @@ import { builderPurposeForDisclosureDepth } from "@/lib/adminV2/runtime/focusPan
 import { identityDisclosureCoordinationLevel } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
 import { backIdentityDisclosure } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
 import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import { prefetchOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
 
 type ChildrenComposerPreview = {
     perspective: "roster" | "child_focus" | "child_edit";
@@ -128,6 +131,29 @@ type Props = {
 
 const CAPS = cardCapabilities("children");
 const RELATED_VIEWS = cardRelatedViews("children");
+
+function childRosterAvatarComposer(args: {
+    child: ChildrenEvidenceChild;
+    previewImageUrl: string | null;
+    size?: number;
+    onSavePhoto?: FocusPanelMutation["savePersonChildPhoto"];
+    onClearPhoto?: FocusPanelMutation["clearPersonChildPhoto"];
+}) {
+    return (
+        <ChildProfileAvatarComposer
+            surfaceId={CHILDREN_SURFACE_ID}
+            groupKey="roster"
+            childId={args.child.id}
+            childName={args.child.name}
+            imageUrl={args.previewImageUrl}
+            personId={args.child.personId ?? null}
+            customerMemberId={args.child.customerMemberId ?? null}
+            size={args.size ?? 40}
+            onSavePhoto={args.onSavePhoto}
+            onClearPhoto={args.onClearPhoto}
+        />
+    );
+}
 
 /**
  * Children operational card — reference implementation of the Universal Card Lifecycle
@@ -154,6 +180,12 @@ export default function ChildrenCard({
 }: Props) {
     const composer = useFocusPanelComposer();
     const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
+
+    // Warm Gender (and other high-traffic) option-sets before the operator opens inline edit.
+    useEffect(() => {
+        prefetchOptionSetSelectOptions(["person_gender"]);
+    }, []);
+
     const composingChildrenSurface = composer?.isComposingSurface(CHILDREN_SURFACE_ID) ?? false;
     const childrenSurfaceConfig = useMemo(
         () => (composingChildrenSurface ? composer?.configFor(CHILDREN_SURFACE_ID) ?? null : readChildrenNestedConfigFromDoc(publishedDoc)),
@@ -371,10 +403,15 @@ export default function ChildrenCard({
         !isEmpty && disclosure.selectedIdentityId
             ? evidence.children.find((c) => c.id === disclosure.selectedIdentityId) ?? null
             : null;
-    const editSeed = useMemo(
-        () => (editing && focused ? seedChildFocusEditValues(context.truth, focused.id) : null),
-        [editing, focused, context.truth],
-    );
+    const editSeed = useMemo(() => {
+        if (!editing || !focused) return null;
+        const seed = seedChildFocusEditValues(context.truth, focused.id);
+        if (!seed) return null;
+        return {
+            ...seed,
+            hasCommittedPrimaryAssignment: focused.hasCommittedPrimaryAssignment === true,
+        };
+    }, [editing, focused, context.truth]);
 
     const selectChildIdentity = (id: string) => {
         if (composerPreview?.onSelectChild) {
@@ -510,16 +547,8 @@ export default function ChildrenCard({
             ? null
             : runtimeFooterAction;
 
-    const focusedIdentityRecord = useMemo(() => {
-        if (!focused || !childrenSurfaceConfig) return null;
-        return buildChildIdentityRecordVM({
-            config: childrenSurfaceConfig,
-            child: focused,
-            groupKey: "identity",
-            canMutate: canMutateIdentity,
-            isFieldSaveSupported: (fieldRef) => isChildIdentityFieldInlineSaveSupported(fieldRef),
-        });
-    }, [focused, childrenSurfaceConfig, canMutateIdentity]);
+    const childIdentitySaveSupported = (fieldRef: string) =>
+        isChildIdentityFieldInlineSaveSupported(fieldRef) || isIdentityFieldSaveSupported(fieldRef);
 
     const contextRosterRecords = useMemo(
         () =>
@@ -529,12 +558,36 @@ export default function ChildrenCard({
                     child,
                     groupKey: "roster",
                     canMutate: canMutateIdentity,
-                    isFieldSaveSupported: (fieldRef) => isChildIdentityFieldInlineSaveSupported(fieldRef),
+                    isFieldSaveSupported: childIdentitySaveSupported,
                 }),
                 badge: child.status,
             })),
         [evidence.children, childrenSurfaceConfig, canMutateIdentity],
     );
+
+    const focusedIdentityRecord = useMemo(() => {
+        if (!focused || !childrenSurfaceConfig) return null;
+        const identity = buildChildIdentityRecordVM({
+            config: childrenSurfaceConfig,
+            child: focused,
+            groupKey: "identity",
+            canMutate: canMutateIdentity,
+            isFieldSaveSupported: childIdentitySaveSupported,
+        });
+        const roster =
+            contextRosterRecords.find((row) => row.id === focused.id)
+            ?? buildChildIdentityRecordVM({
+                config: childrenSurfaceConfig,
+                child: focused,
+                groupKey: "roster",
+                canMutate: canMutateIdentity,
+                isFieldSaveSupported: childIdentitySaveSupported,
+            });
+        return {
+            ...mergeChildrenRosterIntoFocusedIdentityRecord(identity, roster),
+            badge: focused.status,
+        };
+    }, [focused, childrenSurfaceConfig, canMutateIdentity, contextRosterRecords]);
 
     let lifecycle: "empty" | "summary" | "focus" | "edit" | "expanded" | "related";
     let body: React.ReactNode;
@@ -574,33 +627,43 @@ export default function ChildrenCard({
                     />
                 ) : purpose === "details" ? (
                     composeFocusedChild ? (
-                        <FocusedChild
-                            child={composeFocusedChild}
-                            editing={false}
-                            editSeed={null}
-                            expandedOpen={false}
-                            relatedViewId={null}
-                            childFocusView={childFocusView}
-                            focusRows={focusRows}
-                            evidenceSections={evidenceSections}
-                            emergencyContactsSection={emergencyContactsSection}
-                            context={context}
-                            childrenSurfaceConfig={childrenSurfaceConfig}
-                            opportunityStartDate={opportunityStartDate}
-                            mutation={mutation}
-                            composerPreview={composerPreview}
-                            composingChildrenSurface
-                            disclosureDepth="details"
-                            onExpand={undefined}
-                            onOpenRelated={(id) => setRelatedViewId(id)}
-                            onRequestEdit={undefined}
-                            onEditClose={() => setEditing(false)}
-                        />
+                        <ComposableRegionShell
+                            surfaceId={CHILDREN_SURFACE_ID}
+                            groupKey="identity"
+                            label={`${composeFocusedChild.name.split(" ")[0]} — Detail Fields`}
+                            className="alloy-os-children__composer-region"
+                            dataAttrs={{ "data-children-identity-region": "true", "data-identity-depth": "details" }}
+                        >
+                            <IdentityComposeSectionCanvas
+                                surfaceId={CHILDREN_SURFACE_ID}
+                                groupKey="identity"
+                                record={buildChildIdentityRecordVM({
+                                    config: childrenSurfaceConfig,
+                                    child: composeFocusedChild,
+                                    groupKey: "identity",
+                                    canMutate: canMutateIdentity,
+                                    isFieldSaveSupported: childIdentitySaveSupported,
+                                })}
+                                purpose="details"
+                            />
+                            <button
+                                type="button"
+                                className="alloy-os-ucard__action alloy-os-ucard__action--system5 mt-2"
+                                onClick={() => {
+                                    composer.setSelectedIdentityId(null);
+                                    composer.setActiveConfigPurpose("details");
+                                }}
+                                data-children-compose-reselect-child
+                            >
+                                ← Choose another child
+                            </button>
+                        </ComposableRegionShell>
                     ) : (
                         <IdentityComposeChildPicker
                             children={evidence.children}
                             selectedId={composer.selectedIdentityId}
                             onSelect={focusChildForCompose}
+                            hint="Select a child to configure Detail Fields"
                         />
                     )
                 ) : purpose === "context_facts" ? (
@@ -611,17 +674,22 @@ export default function ChildrenCard({
                         className="alloy-os-children__composer-region"
                         dataAttrs={{ "data-children-roster-region": "true", "data-identity-depth": "context" }}
                     >
+                        {evidence.children[0] ? (
+                            childRosterAvatarComposer({
+                                child: evidence.children[0],
+                                previewImageUrl:
+                                    composer.childAvatarPreviewUrl(evidence.children[0].id)
+                                    ?? evidence.children[0].imageUrl
+                                    ?? null,
+                                onSavePhoto: mutation?.savePersonChildPhoto,
+                                onClearPhoto: mutation?.clearPersonChildPhoto,
+                            })
+                        ) : null}
                         <IdentityComposeSectionCanvas
                             surfaceId={CHILDREN_SURFACE_ID}
                             groupKey="roster"
                             record={contextRosterRecords[0] ?? null}
                             purpose="context_facts"
-                        />
-                        <IdentityComposeChildPicker
-                            children={evidence.children}
-                            selectedId={composer.selectedIdentityId}
-                            onSelect={focusChildForCompose}
-                            hint="Select a child to configure Detail Fields"
                         />
                     </ComposableRegionShell>
                 ) : (
@@ -632,6 +700,17 @@ export default function ChildrenCard({
                         className="alloy-os-children__composer-region"
                         dataAttrs={{ "data-children-roster-region": "true", "data-identity-depth": "summary" }}
                     >
+                        {evidence.children[0] ? (
+                            childRosterAvatarComposer({
+                                child: evidence.children[0],
+                                previewImageUrl:
+                                    composer.childAvatarPreviewUrl(evidence.children[0].id)
+                                    ?? evidence.children[0].imageUrl
+                                    ?? null,
+                                onSavePhoto: mutation?.savePersonChildPhoto,
+                                onClearPhoto: mutation?.clearPersonChildPhoto,
+                            })
+                        ) : null}
                         <IdentityComposeSectionCanvas
                             surfaceId={CHILDREN_SURFACE_ID}
                             groupKey="roster"
@@ -651,6 +730,9 @@ export default function ChildrenCard({
                 childSurfaceConfig={childrenSurfaceConfig}
                 opportunityStartDate={opportunityStartDate}
                 save={mutation!.saveInquiryChild}
+                imageUrl={focused.imageUrl ?? null}
+                savePhoto={mutation?.savePersonChildPhoto}
+                clearPhoto={mutation?.clearPersonChildPhoto}
                 onClose={() => setEditing(false)}
                 onSaved={() => setEditing(false)}
             />
@@ -663,7 +745,7 @@ export default function ChildrenCard({
         body = (
             <>
                 <IdentityDisclosureSurface
-                    record={{ ...focusedIdentityRecord, badge: focused.status }}
+                    record={focusedIdentityRecord}
                     depth={disclosure.depth}
                     onSaveField={saveChildIdentityField}
                     onLinkField={(fieldRef) => linkChildIdentityField(fieldRef, focused.id)}
@@ -673,6 +755,10 @@ export default function ChildrenCard({
                             : undefined
                     }
                     onEditField={canEditChild ? () => setEditing(true) : undefined}
+                    personId={focused.personId ?? null}
+                    customerMemberId={focused.customerMemberId ?? null}
+                    onSavePhoto={mutation?.savePersonChildPhoto}
+                    onClearPhoto={mutation?.clearPersonChildPhoto}
                 />
                 {disclosure.depth === "details" && emergencyContactsSection && childrenSurfaceConfig ? (
                     <EmergencyContactsSection
@@ -702,6 +788,23 @@ export default function ChildrenCard({
                         onSelectIdentity={selectChildIdentity}
                         onSaveField={saveChildIdentityField}
                         onLinkField={linkChildIdentityField}
+                        renderRecordAvatar={
+                            composingChildrenSurface
+                                ? (record) => {
+                                      const child = evidence.children.find((c) => c.id === record.id);
+                                      if (!child) return null;
+                                      return childRosterAvatarComposer({
+                                          child,
+                                          previewImageUrl:
+                                              composer?.childAvatarPreviewUrl(child.id)
+                                              ?? child.imageUrl
+                                              ?? null,
+                                          onSavePhoto: mutation?.savePersonChildPhoto,
+                                          onClearPhoto: mutation?.clearPersonChildPhoto,
+                                      });
+                                  }
+                                : undefined
+                        }
                     />
             </ComposableRegionShell>
         );
@@ -723,6 +826,20 @@ export default function ChildrenCard({
                                 depth="summary"
                                 childrenSurfaceConfig={childrenSurfaceConfig}
                                 canMutate={canMutateIdentity}
+                                composingChildrenSurface={composingChildrenSurface}
+                                rosterAvatarComposer={
+                                    composingChildrenSurface
+                                        ? childRosterAvatarComposer({
+                                              child,
+                                              previewImageUrl:
+                                                  composer?.childAvatarPreviewUrl(child.id)
+                                                  ?? child.imageUrl
+                                                  ?? null,
+                                              onSavePhoto: mutation?.savePersonChildPhoto,
+                                              onClearPhoto: mutation?.clearPersonChildPhoto,
+                                          })
+                                        : undefined
+                                }
                                 onSaveField={saveChildIdentityField}
                                 onLinkField={linkChildIdentityField}
                                 onActivate={
@@ -818,6 +935,8 @@ function ChildSummaryRow({
     onSaveField,
     onLinkField,
     canMutate = false,
+    composingChildrenSurface = false,
+    rosterAvatarComposer,
 }: {
     child: ChildrenEvidenceChild;
     childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
@@ -826,19 +945,26 @@ function ChildSummaryRow({
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
     onLinkField?: (fieldRef: string, childId: string) => void;
     canMutate?: boolean;
+    composingChildrenSurface?: boolean;
+    rosterAvatarComposer?: ReactNode;
 }) {
     const record = buildChildIdentityRecordVM({
         config: childrenSurfaceConfig,
         child,
         groupKey: "roster",
         canMutate,
-        isFieldSaveSupported: (fieldRef) => isChildIdentityFieldInlineSaveSupported(fieldRef),
+        isFieldSaveSupported: (fieldRef) =>
+            isChildIdentityFieldInlineSaveSupported(fieldRef) || isIdentityFieldSaveSupported(fieldRef),
     });
+    // Work Unit summary: display-only avatar (default IdentityAvatar).
+    // Surfaces → context facts composer owns upload/remove via rosterAvatarComposer.
+    const liveAvatarSlot = composingChildrenSurface ? rosterAvatarComposer : undefined;
     return (
         <div className="alloy-os-children__summary-row" data-children-child={child.id}>
             <IdentityRecordSummary
                 record={{ ...record, badge: child.status }}
                 depth={depth}
+                avatarSlot={liveAvatarSlot}
                 onActivate={onActivate}
                 onSaveField={onSaveField}
                 onLinkField={
@@ -901,8 +1027,8 @@ function ChildScheduleBlock({ child }: { child: ChildrenEvidenceChild }) {
     const days = scheduleDaySelection(daysText);
     return (
         <div className="alloy-os-child-edit__section" data-child-schedule>
-            <span className="alloy-os-child-edit__label">Schedule</span>
-            <div className="alloy-os-child-edit__chips" role="group" aria-label="Schedule days">
+            <span className="alloy-os-child-edit__label">Assignments</span>
+            <div className="alloy-os-child-edit__chips" role="group" aria-label="Assignment days">
                 {WEEKDAYS.map((d, i) => (
                     <span key={i} className={clsx("alloy-os-child-edit__chip", days[i] && "alloy-os-child-edit__chip--on")}>
                         {d}
@@ -1233,9 +1359,9 @@ function FocusedChild({
             data-children-focused-child={child.id}
             data-children-edit={editing ? "true" : undefined}
         >
-            {composingChildrenSurface ? <div className="alloy-os-child-focus__header">
-                {showHeaderAvatar ? (
-                    composingChildrenSurface ? (
+            {composingChildrenSurface ? (
+                <div className="alloy-os-child-focus__header">
+                    {showHeaderAvatar ? (
                         <ChildProfileAvatarComposer
                             surfaceId={CHILDREN_SURFACE_ID}
                             groupKey="identity"
@@ -1243,26 +1369,62 @@ function FocusedChild({
                             childName={child.name}
                             imageUrl={previewImageUrl}
                             personId={child.personId ?? null}
+                            customerMemberId={child.customerMemberId ?? null}
                             size={40}
+                            onSavePhoto={mutation?.savePersonChildPhoto}
+                            onClearPhoto={mutation?.clearPersonChildPhoto}
                         />
-                    ) : (
-                        <CardAvatar name={child.name} imageUrl={previewImageUrl} size={40} />
-                    )
-                ) : null}
-                <div className="alloy-os-child-focus__id min-w-0">
-                    <span className="alloy-os-household__group-title">{child.name}</span>
-                    {headerDob ? (
-                        <span className="alloy-os-child-focus__sub">
-                            <Cake size={13} strokeWidth={1.75} /> {headerDob}
-                        </span>
                     ) : null}
+                    <div className="alloy-os-child-focus__id min-w-0">
+                        <span className="alloy-os-household__group-title">{child.name}</span>
+                        {headerDob ? (
+                            <span className="alloy-os-child-focus__sub">
+                                <Cake size={13} strokeWidth={1.75} /> {headerDob}
+                            </span>
+                        ) : null}
+                    </div>
+                    <StatusPill child={child} />
                 </div>
-                <StatusPill child={child} />
-            </div> : (
+            ) : (
                 <IdentityRecordSummary
-                    record={{ ...identityRecord, badge: child.status }}
+                    record={{
+                        ...identityRecord,
+                        badge: child.status,
+                        avatar: identityRecord.avatar
+                            ? {
+                                  ...identityRecord.avatar,
+                                  // Composer session preview overrides evidence URL when present.
+                                  imageUrl:
+                                      identityRecord.avatar.visible === false
+                                          ? null
+                                          : (composer?.childAvatarPreviewUrl(child.id)
+                                              ?? identityRecord.avatar.imageUrl),
+                              }
+                            : identityRecord.avatar,
+                    }}
                     depth={disclosureDepth}
                     onEditField={onRequestEdit ? () => onRequestEdit() : undefined}
+                    avatarSlot={
+                        showHeaderAvatar ? (
+                            <IdentityAvatarEditable
+                                name={child.name}
+                                imageUrl={
+                                    composer?.childAvatarPreviewUrl(child.id)
+                                    ?? child.imageUrl
+                                    ?? identityRecord.avatar?.imageUrl
+                                    ?? null
+                                }
+                                visible={showHeaderAvatar}
+                                role={identityRecord.avatar?.role}
+                                recordId={child.id}
+                                personId={child.personId ?? null}
+                                customerMemberId={child.customerMemberId ?? null}
+                                onSavePhoto={mutation?.savePersonChildPhoto}
+                                onClearPhoto={mutation?.clearPersonChildPhoto}
+                                size={40}
+                            />
+                        ) : undefined
+                    }
                 />
             )}
 
@@ -1283,6 +1445,9 @@ function FocusedChild({
                     opportunityStartDate={opportunityStartDate}
                     previewOnly={Boolean(composerPreview)}
                     save={mutation!.saveInquiryChild}
+                    imageUrl={child.imageUrl ?? null}
+                    savePhoto={composerPreview ? undefined : mutation?.savePersonChildPhoto}
+                    clearPhoto={composerPreview ? undefined : mutation?.clearPersonChildPhoto}
                     onClose={onEditClose}
                     onSaved={onEditClose}
                 />
@@ -1326,6 +1491,8 @@ function FocusedChild({
                                 dob: "",
                             },
                             identityBaseline: { first_name: "", last_name: "", dob: "" },
+                            hasCommittedPrimaryAssignment:
+                                child.hasCommittedPrimaryAssignment === true,
                         }
                     }
                     childName={child.name}

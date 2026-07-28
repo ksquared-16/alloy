@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import clsx from "clsx";
 import type { IdentityRecordVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import IdentityRecordSummary from "@/components/admin/focusPanel/identity/IdentityRecordSummary";
@@ -22,6 +23,8 @@ type Props = {
      * Detail Fields never appear here — only after identity selection.
      */
     collectionSummaryOnly?: boolean;
+    /** Optional avatar slot (e.g. child roster composer upload). */
+    renderRecordAvatar?: (record: IdentityRecordVM) => ReactNode;
 };
 
 /**
@@ -39,25 +42,38 @@ export default function IdentityCollectionContext({
     onLinkField,
     selectable = true,
     collectionSummaryOnly = false,
+    renderRecordAvatar,
 }: Props) {
     if (records.length === 0) return null;
 
     return (
         <div className={clsx("identity-collection-context", className)} data-identity-collection-context="true">
             {records.map((record) => (
-                <IdentityRecordSummary
-                    key={record.id}
-                    record={record}
-                    depth={collectionSummaryOnly ? "summary" : "context"}
-                    onActivate={selectable && onSelectIdentity ? onSelectIdentity : undefined}
-                    onEditContact={onEditContact}
-                    onSaveField={onSaveField}
-                    onSaveFields={onSaveFields}
-                    onLinkField={
-                        onLinkField ? (fieldRef) => onLinkField(fieldRef, record.id) : undefined
-                    }
-                    dataAttr={record.id}
-                />
+                <div key={record.id} className="identity-collection-context__item" data-identity-collection-item={record.id}>
+                    <IdentityRecordSummary
+                        record={record}
+                        depth={collectionSummaryOnly ? "summary" : "context"}
+                        avatarSlot={renderRecordAvatar?.(record)}
+                        onActivate={selectable && onSelectIdentity ? onSelectIdentity : undefined}
+                        onEditContact={onEditContact}
+                        onSaveField={onSaveField}
+                        onSaveFields={onSaveFields}
+                        onLinkField={
+                            onLinkField ? (fieldRef) => onLinkField(fieldRef, record.id) : undefined
+                        }
+                        dataAttr={record.id}
+                    />
+                    {selectable && onSelectIdentity && record.canShowDetails ? (
+                        <button
+                            type="button"
+                            className="identity-collection-context__details alloy-os-ucard__action alloy-os-ucard__action--system5"
+                            onClick={() => onSelectIdentity(record.id)}
+                            data-identity-view-details={record.id}
+                        >
+                            View details →
+                        </button>
+                    ) : null}
+                </div>
             ))}
         </div>
     );

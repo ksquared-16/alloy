@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
+import { mergeRelationshipPresentationMetadata } from "@/lib/dataModel/relationshipVocabularyPresentation";
 
 const ALLOWED_PATCH_KEYS = ["label", "description", "sort_order", "is_active"] as const;
 
@@ -46,7 +47,7 @@ export async function PATCH(
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("customer_person_role_types")
-        .select("id, org_id, is_system")
+        .select("id, org_id, is_system, key, label, description, metadata")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -75,6 +76,39 @@ export async function PATCH(
             updates[key] = !!body[key];
             continue;
         }
+    }
+
+    const wantsPresentation =
+        body.label !== undefined ||
+        body.plural_label !== undefined ||
+        body.description !== undefined ||
+        body.reset_to_default === true;
+    if (wantsPresentation) {
+        const merged = mergeRelationshipPresentationMetadata({
+            existingMetadata: (existing as { metadata?: unknown }).metadata,
+            existingLabel: String((existing as { label?: string }).label ?? ""),
+            existingDescription: ((existing as { description?: string | null }).description ?? null) as string | null,
+            nextLabel: typeof body.label === "string" ? body.label : undefined,
+            nextPluralLabel:
+                body.plural_label === undefined
+                    ? undefined
+                    : body.plural_label === null
+                      ? null
+                      : String(body.plural_label),
+            nextDescription:
+                body.description === undefined
+                    ? undefined
+                    : body.description === null
+                      ? null
+                      : String(body.description),
+            resetToDefault: body.reset_to_default === true,
+        });
+        if (merged.error) {
+            return apiError("BAD_REQUEST", merged.error, 400, undefined, { request });
+        }
+        updates.label = merged.label;
+        updates.description = merged.description;
+        updates.metadata = merged.metadata;
     }
 
     if (Object.keys(updates).length === 0) {

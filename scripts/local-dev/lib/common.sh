@@ -606,6 +606,39 @@ alloy_export_node_defaults() {
   export NODE_OPTIONS="${NODE_OPTIONS:-$NODE_OPTIONS_DEFAULT}"
 }
 
+# Force spawned dev/build processes to run under NATIVE arm64 on Apple Silicon — the fix
+# for the intermittent "Cannot find module '../lightningcss.darwin-x64.node'" (and
+# next-swc) build error. A universal `node` inherits the launching shell's arch, and on
+# this machine the toolkit's shells vary (some run under Rosetta/x64), so the Next process
+# nondeterministically runs x64 and then cannot load the arm64 native modules the worktree
+# installed. arm64 is the native, correct arch here, so we pin to it deterministically.
+#   * Hardware is detected via `hw.optional.arm64` (NOT `uname -m`, which reports the
+#     current process arch — under Rosetta that is already x86_64, which would disable the
+#     fix exactly when it is needed).
+#   * We launch the SYSTEM /bin/bash (a universal binary) because the PATH `bash` may be an
+#     x86_64-only Homebrew build that `arch -arm64` cannot execute — verified before use.
+# No-op on Intel macOS and Linux. (A worktree whose node_modules were installed for x64 is
+# the inverse mismatch and must be reinstalled arm64 — see alloy_warn_node_modules_arch.)
+alloy_native_arch_prefix() {
+  [[ "$(uname -s)" == "Darwin" ]] || return 0
+  [[ "$(sysctl -n hw.optional.arm64 2>/dev/null)" == "1" ]] || return 0
+  command -v arch >/dev/null 2>&1 || return 0
+  arch -arm64 /bin/bash -c true >/dev/null 2>&1 || return 0
+  printf 'arch -arm64 '
+}
+
+# Warn (with the exact remedy) when this is an arm64 Mac but a worktree's node_modules were
+# installed for x86_64 — the inverse of the arch mismatch the launcher forces arm64 to fix.
+# Such a worktree cannot run under the (correct) arm64 launch until its deps are reinstalled.
+alloy_warn_node_modules_arch() {
+  local web_dir="$1"
+  [[ "$(uname -s)" == "Darwin" && "$(sysctl -n hw.optional.arm64 2>/dev/null)" == "1" ]] || return 0
+  local nm="${web_dir}/node_modules"
+  if [[ -d "${nm}/lightningcss-darwin-x64" && ! -d "${nm}/lightningcss-darwin-arm64" ]]; then
+    alloy_warn "node_modules in ${web_dir} were installed for x86_64, but this Mac is arm64 — native modules (lightningcss/next-swc) will not load under the native arm64 server. Reinstall arm64:  (cd ${web_dir} && rm -rf node_modules && npm install)"
+  fi
+}
+
 alloy_web_dir_for() {
   local worktree_path="$1"
   printf '%s/%s' "$worktree_path" "$ALLOY_WEB_DIR"

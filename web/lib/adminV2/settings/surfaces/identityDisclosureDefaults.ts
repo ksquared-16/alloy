@@ -11,6 +11,8 @@ const DETAILS_FIELD_SUFFIXES = [
     "address_line",
     "address",
     "date_of_birth",
+    /** Child Focus renders Details depth — gender must seed with DOB, not Summary-only. */
+    "gender",
     "employer",
     "preferred_language",
     "secondary_phone",
