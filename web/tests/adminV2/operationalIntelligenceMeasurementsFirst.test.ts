@@ -9,6 +9,10 @@ import {
     organizationConfigurationDomain,
     organizationConfigurationDomains,
 } from "@/lib/configRuntime/organizationRuntime";
+import {
+    CANONICAL_ORGANIZATION_CALCULATIONS_HREF,
+    organizationCalculationLibraryHref,
+} from "@/lib/admin/canonicalAdminRoutes";
 
 const WEB = join(process.cwd());
 
@@ -41,7 +45,13 @@ describe("OI V2 inline question builder convergence", () => {
         expect(ws).toContain("OiFutureRoomCapacityBuilder");
         expect(ws).toContain("oi-builder-view");
         expect(ws).toContain("oi-post-activation");
-        expect(ws).toContain("Calculation library");
+        expect(ws).toContain("oi-product-tabs");
+        expect(ws).toContain("oi-tab-");
+        expect(ws).toContain('key: "questions"');
+        expect(ws).toContain('key: "measurements"');
+        expect(ws).toContain('key: "calculations"');
+        expect(ws).toContain("OrganizationCalculationsWorkspace");
+        expect(ws).toContain("embedded");
         expect(ws).not.toContain("enablement");
         expect(ws).not.toContain("active_pack_count");
         expect(ws).not.toContain("oi-home-add-measurement");
@@ -74,20 +84,43 @@ describe("OI V2 inline question builder convergence", () => {
         expect(panel).toContain("Get answer");
         expect(panel).toContain("oi-org-calc-room");
         expect(panel).toContain("Use the newer definition");
-        expect(panel).toContain("Open calculation library");
+        expect(panel).toContain("View definition");
+        expect(panel).toContain("organizationCalculationLibraryHref");
         expect(panel).not.toContain("Source binding");
         expect(panel).not.toContain("Run observation");
         expect(panel).not.toContain('label: "Check a room"');
-        expect(panel).not.toContain('label: "Goal"');
-        expect(panel).not.toContain('label: "How it’s calculated"');
     });
 
-    it("Calculations is not a primary Organization peer; library remains lookupable", () => {
+    it("Calculations is not a primary Organization peer; library lives in OI", () => {
         const keys = organizationConfigurationDomains().map((d) => d.key);
         expect(keys).not.toContain("organization-calculations");
         expect(keys).toContain("operational-intelligence");
         const domain = organizationConfigurationDomain("organization-calculations");
         expect(domain?.label).toBe("Calculation library");
-        expect(domain?.href).toBe("/organization/calculations");
+        expect(domain?.href).toContain("operational-intelligence");
+        expect(domain?.href).toContain("view=calculations");
+        expect(organizationCalculationLibraryHref({ calculationId: "abc" })).toBe(
+            "/organization/operational-intelligence?view=calculations&calculationId=abc",
+        );
+        expect(CANONICAL_ORGANIZATION_CALCULATIONS_HREF).toBe("/organization/calculations");
+    });
+
+    it("compatibility calculations page redirects into OI library", () => {
+        const page = read("app/adminV2/settings/organization/calculations/page.tsx");
+        expect(page).toContain("redirect(");
+        expect(page).toContain("organizationCalculationLibraryHref");
+        expect(page).not.toContain("<OrganizationCalculationsWorkspace");
+    });
+
+    it("calculation library supports embedded mount without forking", () => {
+        const lib = read(
+            "components/adminV2/settings/organizationCalculations/OrganizationCalculationsWorkspace.tsx",
+        );
+        expect(lib).toContain("embedded");
+        expect(lib).toContain("data-oi-embedded-library");
+        expect(lib).toContain("New definition");
+        expect(lib).toContain("Where used");
+        expect(lib).toContain("organizationCalculationLibraryHref");
+        expect(lib).toContain("where-used-measurement");
     });
 });

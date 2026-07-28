@@ -19,8 +19,8 @@ function read(rel: string): string {
 describe("Organization Calculations V1 product", () => {
     it("registers domain + canonical route to /organization/calculations", () => {
         expect(CANONICAL_ORGANIZATION_CALCULATIONS_HREF).toBe("/organization/calculations");
-        expect(organizationConfigurationDomain("organization-calculations")?.href).toBe(
-            CANONICAL_ORGANIZATION_CALCULATIONS_HREF,
+        expect(organizationConfigurationDomain("organization-calculations")?.href).toContain(
+            "operational-intelligence",
         );
         expect(organizationConfigurationDomain("organization-calculations")?.label).toBe(
             "Calculation library",
@@ -30,8 +30,9 @@ describe("Organization Calculations V1 product", () => {
         ).toBe(false);
         expect(read("next.config.ts")).toContain('source: "/organization/calculations"');
         expect(read("app/adminV2/settings/organization/calculations/page.tsx")).toContain(
-            "OrganizationCalculationsWorkspace",
+            "organizationCalculationLibraryHref",
         );
+        expect(read("app/adminV2/settings/organization/calculations/page.tsx")).toContain("redirect(");
     });
 
     it("exposes admin APIs for author → publish → evaluate → usage → restore", () => {
@@ -81,8 +82,10 @@ describe("Organization Calculations V1 product", () => {
         expect(ui).toContain("Overview");
         expect(ui).toContain("Definition");
         expect(ui).toContain("Versions");
-        expect(ui).toContain("Usage");
+        expect(ui).toContain("Where used");
         expect(ui).toContain("Lifecycle");
+        expect(ui).toContain("New definition");
+        expect(ui).toContain("embedded");
         expect(ui).not.toContain("provingMinPhysicalLicensedAst");
         expect(ui).not.toContain("eval(");
         expect(ui).not.toContain("Function(");
