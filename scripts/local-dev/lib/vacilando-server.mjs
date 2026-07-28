@@ -45,6 +45,7 @@ import { collectPolicies } from "./vacilando/policies.mjs";
 import { collectUsage } from "./vacilando/usage.mjs";
 import { getProviderRuntime } from "./vacilando/provider-runtime.mjs";
 import { computeReclaim, memoryPressure, runningDevServers } from "./vacilando/memory-manager.mjs";
+import { diskSignal, freeDiskGb, runGc } from "./vacilando/disk-hygiene.mjs";
 import { schedule } from "./vacilando/scheduler.mjs";
 import { readReviews } from "./vacilando/commands/review.mjs";
 import { readMissions, getMission, recoverMissions } from "./vacilando/commands/missions.mjs";
@@ -519,6 +520,39 @@ async function refreshMemory({ act = false } = {}) {
 }
 
 /**
+ * Disk Hygiene — the sibling of the memory manager, one resource over. It measures
+ * headroom + what a reclaim would free (dry-run signal), and — only when the
+ * operator has ENABLED it (auto_gc, default OFF; a destructive action gated behind
+ * an explicit opt-in) — reactively runs the safe `alloy-worktree-gc` when free disk
+ * crosses a low-water mark. Never touches source, history, or uncommitted work.
+ */
+const DISK_POLICY = {
+  auto_gc: false,        // OFF until the operator flips it on (dashboard toggle)
+  low_water_gb: 8,       // reactive: reclaim below this
+  hard_gb: 5,            // pre-build/pre-sprint fail-fast floor
+  cache_min_free_gb: 20, // also clear the npm cache if still below this after
+  cooldown_ms: 30 * 60 * 1000,
+};
+let lastDiskGc = { signal: null, last_run: null, policy: DISK_POLICY, auto_actions: [] };
+let diskReclaimCooldown = 0;
+
+async function refreshDisk({ act = false } = {}) {
+  let signal = null;
+  try { signal = diskSignal(); } catch { /* keep last */ }
+  if (act && DISK_POLICY.auto_gc && signal && typeof signal.free_gb === "number" && signal.free_gb < DISK_POLICY.low_water_gb
+      && Date.now() - diskReclaimCooldown >= DISK_POLICY.cooldown_ms) {
+    diskReclaimCooldown = Date.now();
+    try {
+      const out = await runGc({ minFreeGb: DISK_POLICY.cache_min_free_gb });
+      lastDiskGc.auto_actions = [{ ...out, trigger: `free ${signal.free_gb}GB < ${DISK_POLICY.low_water_gb}GB`, at: new Date().toISOString() }, ...(lastDiskGc.auto_actions || [])].slice(0, 10);
+      try { signal = diskSignal(); } catch { /* keep */ }
+    } catch (e) { lastDiskGc.auto_actions = [{ ok: false, error: String(e.message || e), at: new Date().toISOString() }, ...(lastDiskGc.auto_actions || [])].slice(0, 10); }
+  }
+  lastDiskGc = { ...lastDiskGc, signal: signal || lastDiskGc.signal, policy: DISK_POLICY };
+  return lastDiskGc;
+}
+
+/**
  * Director async send: run a durable request's provider turn in the background
  * and update its record through the lifecycle. The browser never waits on this —
  * it created the record (Queued) and polls /api/director/requests for status.
@@ -610,6 +644,23 @@ export function createVacilandoServer() {
         // NEVER hang: a thrown command returns a real error the UI can show.
         return sendJson(res, 500, { ok: false, stage: "execute", code: "server_error", command: body.value?.command, error: String(e && e.message || e) });
       }
+    }
+
+    // Disk hygiene: run the safe reclaim now (operator-triggered), or set the policy
+    // (enable/disable the reactive auto-gc, tune the low-water mark).
+    if (req.method === "POST" && path === "/api/disk/reclaim") {
+      const out = await runGc({ minFreeGb: DISK_POLICY.cache_min_free_gb });
+      lastDiskGc.auto_actions = [{ ...out, trigger: "operator", at: new Date().toISOString() }, ...(lastDiskGc.auto_actions || [])].slice(0, 10);
+      await refreshDisk();
+      return sendJson(res, out.ok ? 200 : 500, { ok: out.ok, result: out, disk: lastDiskGc });
+    }
+    if (req.method === "POST" && path === "/api/disk/policy") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      const v = body.value || {};
+      if (typeof v.auto_gc === "boolean") DISK_POLICY.auto_gc = v.auto_gc;
+      if (Number.isFinite(v.low_water_gb) && v.low_water_gb > 0) DISK_POLICY.low_water_gb = v.low_water_gb;
+      return sendJson(res, 200, { ok: true, policy: DISK_POLICY });
     }
 
     // Director async send: durable request created BEFORE execution; returns immediately.
@@ -762,6 +813,9 @@ export function createVacilandoServer() {
     if (path === "/api/memory") {
       return sendJson(res, 200, await refreshMemory());
     }
+    if (path === "/api/disk") {
+      return sendJson(res, 200, await refreshDisk());
+    }
     if (path === "/api/dashboard") {
       // Dashboard must never block on the provider probe or the resource scan.
       const [snap, resrcC] = await Promise.all([snapshotSafe(), swr("resources", () => collectResources(), { ttlMs: 15000 })]);
@@ -798,6 +852,7 @@ export function createVacilandoServer() {
         providers: usage,
         provider_runtime,
         memory: lastReclaim,
+        disk: lastDiskGc,
         scheduler: sched,
         throughput,
         operator_load,
@@ -1035,6 +1090,9 @@ export function createVacilandoServer() {
   // servers when the host is thrashing. Slower cadence than the SSE tick.
   const memTimer = setInterval(() => { refreshMemory({ act: true }).catch(() => {}); }, MEMORY_TICK_MS);
   memTimer.unref?.();
+  // Disk hygiene changes slowly — measure + (opt-in) reactively reclaim every 10 min.
+  const diskTimer = setInterval(() => { refreshDisk({ act: true }).catch(() => {}); }, 10 * 60 * 1000);
+  diskTimer.unref?.();
 
   // Any Director request left non-terminal died with a previous process — mark it
   // interrupted honestly rather than showing a fake "running".
@@ -1051,13 +1109,14 @@ export function createVacilandoServer() {
   // Warm the cache immediately so the first request isn't a cold ~8s compute.
   getSnapshot().catch(() => {});
   refreshMemory({ act: true }).catch(() => {});
+  refreshDisk({ act: false }).catch(() => {}); // warm the disk signal for the dashboard
   // Warm the EXPENSIVE keys too (providers ~23s, resources ~6s) so the operator's
   // first read of those surfaces is served from cache instead of blocking.
   warmExpensive();
   const warmTimer = setInterval(warmExpensive, 30000);
   warmTimer.unref?.();
 
-  return { server, clients, close: () => { clearInterval(timer); clearInterval(memTimer); server.close(); } };
+  return { server, clients, close: () => { clearInterval(timer); clearInterval(memTimer); clearInterval(diskTimer); server.close(); } };
 }
 
 export function startVacilandoServer(port = DEFAULT_PORT) {

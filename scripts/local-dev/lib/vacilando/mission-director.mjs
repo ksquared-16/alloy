@@ -29,6 +29,9 @@ import { understandingQuestions } from "./operations.mjs";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { TOOLKIT_DIR } from "./commands/executor.mjs";
+import { freeDiskGb, runGc } from "./disk-hygiene.mjs";
+
+const PROVISION_HARD_GB = 5; // pre-provision floor: below this, reclaim then fail fast
 
 /**
  * The LAUNCHER: provision a fresh managed worktree on a FREE worker slot so a
@@ -38,7 +41,18 @@ import { TOOLKIT_DIR } from "./commands/executor.mjs";
  * Long-running (git worktree + dependency install), so callers run it async and
  * surface a "provisioning" phase. Resolves { ok, identity } or { ok:false, error }.
  */
-function provisionSlotForMission(mission) {
+async function provisionSlotForMission(mission) {
+  // Pre-provision disk guard: a fresh worktree + npm install needs headroom. If
+  // we're below the floor, reclaim first (safe gc), then fail fast with a clear
+  // message rather than dying mid-install with a cryptic ENOSPC.
+  let free = freeDiskGb();
+  if (typeof free === "number" && free < PROVISION_HARD_GB) {
+    await runGc({ minFreeGb: 20 }).catch(() => {});
+    free = freeDiskGb();
+    if (typeof free === "number" && free < PROVISION_HARD_GB) {
+      return { ok: false, error: `Only ${free} GB free after reclaim — not enough to provision a worker. Free disk (or finish/merge worktrees) and retry.` };
+    }
+  }
   return new Promise((resolveP) => {
     const cap = mission.capability_id ? getCapability(mission.capability_id) : null;
     const base = (cap?.slug || String(mission.capability_id || mission.title || "mission").replace(/^cap_/, ""))

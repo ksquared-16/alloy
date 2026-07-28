@@ -420,6 +420,30 @@ function memoryBlock(mem) {
     <div class="muted src">Vacilando reclaims <b>idle</b> dev servers automatically when the host thrashes (never active work). External apps (Chrome, VMs, editors) are outside its control — the biggest hogs there are yours to close.</div></div>`;
 }
 
+// Disk hygiene — Vacilando reclaims build bloat from merged+clean worktrees so
+// the operator manages WORK, not disk. Mirror of memoryBlock, one resource over.
+function diskBlock(disk) {
+  const sig = disk.signal || {};
+  const pol = disk.policy || {};
+  const auto = !!pol.auto_gc;
+  const free = sig.free_gb;
+  const low = typeof free === "number" && free < (pol.low_water_gb || 8);
+  const kr = sig.kept_reasons || {};
+  const keptParts = Object.entries(kr).map(([k, n]) => `${n} ${k.replace(/_/g, "-")}`).join(", ");
+  const rMb = sig.reclaimable_mb;
+  const la = (disk.auto_actions || [])[0];
+  return `<div class="dsec"><div class="dsh">Disk hygiene · managed by Vacilando
+      <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· auto-reclaim ${auto ? "on" : "off"}${low ? " · LOW DISK" : ""}</span></div>
+    <div class="memhead"><span><b class="${low ? "warn" : "clean"}">${free != null ? free + " GB free" : "—"}</b> · ${sig.worktrees ?? "—"} worktrees</span>
+      <span>${rMb ? `<span class="clean">${(rMb / 1024).toFixed(1)}G reclaimable now</span>` : `<span class="muted">nothing reclaimable</span>`}</span></div>
+    <div class="memrow"><span class="memk">${sig.reclaimable ?? 0} merged+clean → reclaimable · ${sig.kept ?? 0} kept${keptParts ? ` (${keptParts})` : ""}</span>
+      <button class="btn sm" data-disk-reclaim="1" title="Reclaim node_modules/.next from merged+clean worktrees only — safe">Reclaim now</button></div>
+    <div class="memrow"><span class="memk">Reactive auto-reclaim when free disk < ${pol.low_water_gb || 8} GB</span>
+      <button class="btn sm ${auto ? "warn" : ""}" data-disk-auto="${auto ? "0" : "1"}">${auto ? "Turn off" : "Turn on"}</button></div>
+    ${la ? `<div class="muted src">Last reclaim: ${la.ok ? `freed ${la.reclaim_mb != null ? (la.reclaim_mb / 1024).toFixed(1) + "G" : "—"} across ${la.reclaimed ?? 0} worktree(s)${la.trigger ? ` · ${esc(la.trigger)}` : ""}` : `failed — ${esc(la.error || "")}`}</div>` : ""}
+    <div class="muted src">Reclaims only <b>regenerable</b> artifacts (node_modules/.next) from worktrees that are <b>merged + clean</b>. Never touches source, history, uncommitted work, the canonical repo, the current checkout, or a live server — restored by npm install on revisit.</div></div>`;
+}
+
 // -------- Team Dashboard (default center) --------
 function dashboardCenter() {
   const d = state._dash;
@@ -428,6 +452,7 @@ function dashboardCenter() {
   const stat = (l, v, sub) => `<div class="dstat"><div class="dl">${l}</div><div class="dv">${v}</div>${sub ? `<div class="ds">${sub}</div>` : ""}</div>`;
   const c = sc.counts || {};
   const memHtml = memoryBlock(d.memory || {});
+  const diskHtml = diskBlock(d.disk || {});
   return `<div class="dash">
     <div class="dash-h"><div class="dt">${esc(d.team?.project || "Alloy")} · Team Dashboard</div><div class="muted mono">${d.team?.base_sha || ""}</div></div>
 
@@ -460,6 +485,7 @@ function dashboardCenter() {
     </div>
 
     ${memHtml}
+    ${diskHtml}
 
     <div class="dgrid2">
       <div class="dsec"><div class="dsh">Scheduler <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· deterministic · auto-scheduling ${sc.auto_scheduling ? "on" : "off"}</span></div>
@@ -1010,6 +1036,21 @@ async function fetchCommands() { try { const r = await fetch("/api/commands"); s
 async function fetchPolicies() { try { const r = await fetch("/api/policies"); state._pol = await r.json(); render(true); } catch {} }
 async function fetchResources() { try { const r = await fetch("/api/resources"); state.res = await r.json(); render(); } catch {} }
 async function fetchDashboard() { try { const r = await fetch("/api/dashboard"); state._dash = await r.json(); render(true); } catch {} }
+async function diskReclaim() {
+  toast("idle", "Reclaiming disk…", "merged + clean worktrees only — safe");
+  try {
+    const { data } = await api("/api/disk/reclaim", {});
+    const r = (data && data.result) || {};
+    toast(data && data.ok ? "ok" : "err", data && data.ok ? "Disk reclaimed" : "Reclaim failed",
+      data && data.ok ? `freed ${r.reclaim_mb != null ? (r.reclaim_mb / 1024).toFixed(1) + "G" : "—"} · ${r.reclaimed ?? 0} worktree(s)` : (r.error || ""));
+  } catch { toast("err", "Reclaim failed", ""); }
+  fetchDashboard();
+}
+async function diskSetAuto(on) {
+  try { await api("/api/disk/policy", { auto_gc: on }); toast("ok", `Auto-reclaim ${on ? "on" : "off"}`, on ? "reclaims when free disk drops below the low-water mark" : ""); }
+  catch { toast("err", "Couldn't change policy", ""); }
+  fetchDashboard();
+}
 async function fetchProviders() { try { const r = await fetch("/api/providers"); state._providers = await r.json(); render(true); } catch {} }
 // A worker's provider status is READ from the Provider Runtime (shared), never owned by the worker.
 function providerRt(id) { return (state._providers?.providers || state._dash?.provider_runtime?.providers || []).find((p) => p.id === id) || null; }
@@ -1698,6 +1739,8 @@ document.addEventListener("click", (e) => {
   // be the LAST fallback — otherwise every button click just selects the card.
   if ((n = t("[data-tab]"))) { state.tab = n.dataset.tab; render(true); return; }
   if ((n = t("[data-cmd]"))) { e.stopPropagation(); startCommand(n.dataset.cmd, n.dataset.slot ? { slot: Number(n.dataset.slot) } : {}); return; }
+  if ((n = t("[data-disk-reclaim]"))) { e.stopPropagation(); diskReclaim(); return; }
+  if ((n = t("[data-disk-auto]"))) { e.stopPropagation(); diskSetAuto(n.dataset.diskAuto === "1"); return; }
   if ((n = t("[data-end]"))) { e.stopPropagation(); showEndWork(Number(n.dataset.end)); return; }
   if (t("[data-start]")) { showStartWork(); return; }
   if ((n = t("[data-startserver]"))) { e.stopPropagation(); showStartServer(Number(n.dataset.startserver)); return; }
