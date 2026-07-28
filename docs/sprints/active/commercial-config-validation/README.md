@@ -11,11 +11,13 @@
 
 | Ref | SHA |
 |-----|-----|
-| Feature commit | `9bc2bd59ffa98d429ed6f6677940d56b76c8ef80` |
-| Merge into local staging | `3ab070ebfb90bc4b23e8da4547c6f078199c76fc` |
-| `origin/staging` at merge base | `741bb4ed27aa96a20899160136145393c4490d53` |
+| Implementation commit | `9bc2bd59ffa98d429ed6f6677940d56b76c8ef80` |
+| Closeout docs commit | `62993cee8135b4d315c16f9aa071967b2e7defb4` |
+| Local staging HEAD (after merges) | `c683cca1fe1cdf725b488550ad4427dea704c771` |
+| First commercial→staging merge | `3ab070ebfb90bc4b23e8da4547c6f078199c76fc` |
+| `origin/staging` at integration | `741bb4ed27aa96a20899160136145393c4490d53` |
 
-Local `staging` is **ahead 4 / behind 0** vs `origin/staging` (includes prior local toolkit stop fix + sync merge + this sprint). Nothing pushed.
+Local `staging` is **ahead 6 / behind 0** vs `origin/staging` (local toolkit stop fix + sync merge + commercial commits + doc merges). Nothing pushed.
 
 ## Acceptance verdict
 
