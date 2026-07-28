@@ -9,6 +9,7 @@ import type { CanonicalDataProvider } from "@/lib/fields/canonicalDataProviderMo
 import type { FormsRelationshipRoleKey } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
 import { formsRelationshipRoleFromProvider } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
 import { RELATIONSHIP_ROLE_SEMANTICS } from "@/lib/fields/relationship/relationshipSemanticShape";
+import { collectableRelationshipDefinitions } from "@/lib/fields/relationship/relationshipDefinitions";
 
 export type FormsRelationshipOperationalClass =
     | "authorable_prefill_readonly"
@@ -54,11 +55,18 @@ export function isFormsRelationshipPublishableInP2(provider: CanonicalDataProvid
 
 /**
  * Per-provider collection authoring enablement (P4).
- * Global flag retained for backward-compatible tests; prefer per-provider checks.
+ *
+ * DERIVED, not an allowlist: the native `children` collection plus every collectable relationship
+ * definition. This set gates BOTH Forms authoring and Processing submission acceptance
+ * (`adaptFormSubmissionToRelatedRecordProposals`), so a hand-maintained list here silently makes a
+ * registered collection unauthorable and its submissions unsupported. It previously held only
+ * `children` + `person.contact_role.parents`, stranding emergency contacts and authorized pickups.
+ *
+ * @see docs/platform/core/data/relationship-model.md — Forms is a consumer, never an owner.
  */
 export const FORMS_COLLECTION_BINDING_AUTHORING_ENABLED_REFS = new Set<string>([
     "children",
-    "person.contact_role.parents",
+    ...collectableRelationshipDefinitions().map((d) => d.provider_ref),
 ]);
 
 /** @deprecated Prefer collectionBindingAuthoringEnabledForProvider(refKey). */

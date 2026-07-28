@@ -100,6 +100,8 @@ export interface RelationshipDefinition {
     active_only: boolean;
     /** Default sort. */
     ordering_policy: "display_name" | "created_at";
+    /** Per-item alias inside a repeatable Forms group ("guardian" → `{{guardian.full_name}}`). */
+    iteration_alias: string;
 }
 
 export const RELATIONSHIP_DEFINITIONS: readonly RelationshipDefinition[] = [
@@ -126,6 +128,7 @@ export const RELATIONSHIP_DEFINITIONS: readonly RelationshipDefinition[] = [
         required_context_keys: ["customer_id"],
         active_only: false,
         ordering_policy: "display_name",
+        iteration_alias: "guardian",
     },
     {
         definition_key: "emergency_contacts",
@@ -150,6 +153,7 @@ export const RELATIONSHIP_DEFINITIONS: readonly RelationshipDefinition[] = [
         required_context_keys: ["customer_id"],
         active_only: false,
         ordering_policy: "display_name",
+        iteration_alias: "emergency_contact",
     },
     {
         definition_key: "authorized_pickups",
@@ -174,6 +178,7 @@ export const RELATIONSHIP_DEFINITIONS: readonly RelationshipDefinition[] = [
         required_context_keys: ["customer_id"],
         active_only: false,
         ordering_policy: "display_name",
+        iteration_alias: "authorized_pickup",
     },
 ];
 

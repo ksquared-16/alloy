@@ -94,16 +94,17 @@ generically with no new code. The gaps are in the layers that still keep their o
 | # | Gap | Location | Effect on a new role |
 |---|-----|----------|----------------------|
 | 1 | Operational role vocabulary is a closed platform constant | `personChildRelationshipEntity.ts` (`PERSON_CHILD_OPERATIONAL_ROLE_KEYS`) | **Compile-time block** — `operational_role_key` is typed against it, so the row cannot be written at all |
-| 2 | Forms collection providers hand-authored | `canonicalFormsRelationshipProviderDerivation.ts` | Invisible to Forms authoring. **Live defect:** `emergency_contacts` and `authorized_pickups` are already missing today |
-| 3 | Two-entry authoring allowlist | `formsRelationshipOperationalSupport.ts` | Gates Forms authoring **and** Processing submission acceptance |
+| 2 | ~~Forms collection providers hand-authored~~ **CLOSED** | `canonicalFormsRelationshipProviderDerivation.ts` | Now derived from `collectableRelationshipDefinitions()`. Fixed the live defect that stranded `emergency_contacts` and `authorized_pickups` |
+| 3 | ~~Two-entry authoring allowlist~~ **CLOSED** | `formsRelationshipOperationalSupport.ts` | Now derived; a definition row widens Forms authoring **and** Processing submission acceptance together |
 | 4 | Write path enumerates commands per role | `relationshipActionRegistry.ts`, `relationshipActionContract.ts`, `relationshipActionRoleResolution.ts` | `apply_command_key` resolves to nothing; no write path exists |
 | 5 | Discovery *detection* is regex-per-role | `semanticModel.ts`, `conceptDiscovery.ts` | The role is never detected, so the correct generic apply path is unreachable |
-| 6 | Prefill hardcodes `role: "parents"` for every person-grain collection | `formsCollectionPrefillResolver.ts` | **Silent wrong-data bug** once non-parent collections are authorable |
+| 6 | ~~Prefill hardcodes `role: "parents"`~~ **CLOSED** | `formsCollectionPrefillResolver.ts` | Role now derives from the bound collection; unmapped collections resolve from generic person columns. The legacy bridge is contained in `formsLegacyContactRoleCompatibility.ts` and needs no entry for a new definition |
 | 7 | Parallel role axis (`primary/parents/billing/emergency/secondary`) unrelated to `operational_role_key` | `FormsRelationshipRoleKey`, `layoutEditorContactRoles.ts`, `relationshipSemanticShape.ts`, `relationshipRoleResolutionPolicy.ts` | Root cause of #2 and #6 |
 | 8 | Four separate command allowlists | `capabilityRegistry.ts`, `relationshipExecutionAdapter.ts`, `commandRuntimeExecutionGate.ts`, `canonicalActionAvailability.ts` | Each must gain the key before the API route will execute |
 | 9 | **A second definition registry still live** | `focusPanel/household/householdRelationshipSectionDefinitions.ts` | Six hand-authored sections with literal `roleKeys` — no Focus Panel section for a new role |
 | 10 | One BOS adapter file per role; NL intent→role is an if-else ladder | `bosCommandAdapterRegistry.ts`, `addParentGuardianAdapter.ts`, `relationshipActionBosAdapter.ts` | The role is not conversational |
 | 11 | Processing keeps its own guardian/emergency taxonomy | `questionResolutionModel.ts`, `processingReviewFieldCatalog.ts`, `requirementResponsibility.ts` | Question resolution and responsibility have no non-guardian participant kind |
+| 13 | ~~`iteration_alias` decided by a per-ref ternary in Forms~~ **CLOSED** | `formsCollectionRepeatBinding.ts` | Alias is now a definition column; natives keep their literal aliases |
 | 12 | Presentation long tail (~40 Admin V2 / Layout / Person-Drawer files) | §Admin V2 registries | The role does not appear in drawers, cards, or pickers |
 
 Gap #9 is the one to watch: it is a *second canonical registry* of the exact kind this architecture

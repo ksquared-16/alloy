@@ -6,8 +6,13 @@ import type { CanonicalDataProvider } from "@/lib/fields/canonicalDataProviderMo
 import type { FormField, FormGroupCollectionBinding, FormIterationContext } from "@/lib/forms/schema";
 import {
     findFormsCollectionBindingProvider,
+    FORMS_REPEATABLE_COLLECTION_REFS,
     type FormsRepeatableCollectionRef,
 } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
+import {
+    collectableRelationshipDefinitions,
+    relationshipDefinitionForRef,
+} from "@/lib/fields/relationship/relationshipDefinitions";
 import {
     collectionBindingAuthoringEnabledForProvider,
     FORMS_COLLECTION_BINDING_AUTHORING_ENABLED,
@@ -32,18 +37,25 @@ export { iterationContextFromCollectionBinding, buildCollectionIterationContext 
 
 export const FORMS_MAX_COLLECTION_NESTING_DEPTH = 1;
 
-/** Map collection provider ref → iteration entity for nested scalar validation. */
+/**
+ * Map collection ref → iteration entity for nested scalar validation. Natives are literal; configured
+ * relationship collections derive from `RELATIONSHIP_DEFINITIONS`. Fallback only — the canonical path
+ * is `collectionItemEntityTypeForProvider`.
+ */
 export const FORMS_COLLECTION_ITERATION_ENTITY: Readonly<Record<string, string>> = {
     children: "customer_member",
     household_members: "customer_member",
-    parents_guardians: "person",
+    ...Object.fromEntries(collectableRelationshipDefinitions().map((d) => [d.collection_ref, d.item_entity_type])),
 };
 
-/** Required launch/source context keys per collection provider ref. */
+/**
+ * Required launch/source context keys per collection provider ref. Fallback only — the canonical path
+ * is `collectionRequiredContextForProvider`.
+ */
 export const FORMS_COLLECTION_REQUIRED_CONTEXT: Readonly<Record<string, readonly string[]>> = {
     children: ["customer_id"],
     "household.members": ["customer_id"],
-    "person.contact_role.parents": ["customer_id"],
+    ...Object.fromEntries(collectableRelationshipDefinitions().map((d) => [d.provider_ref, d.required_context_keys])),
 };
 
 /** @deprecated Use evaluateFormFieldAvailabilityForIteration — retained for transitional imports. */
@@ -70,7 +82,7 @@ export function nestedFieldAvailabilityForBinding(
 
 export function collectionRefFromProvider(provider: CanonicalDataProvider): FormsRepeatableCollectionRef | string | null {
     const fromProjection = provider.collectionProjection?.collection_ref?.trim();
-    if (fromProjection === "children" || fromProjection === "household_members" || fromProjection === "parents_guardians") {
+    if (fromProjection && FORMS_REPEATABLE_COLLECTION_REFS.includes(fromProjection)) {
         return fromProjection;
     }
     const canonical = findCanonicalCollectionProvider(provider.refKey);
@@ -88,14 +100,15 @@ export function collectionBindingFromProvider(provider: CanonicalDataProvider): 
         ?? (collectionRef ? FORMS_COLLECTION_ITERATION_ENTITY[collectionRef] : null)
         ?? provider.settingsEntity
         ?? "customer_member";
+    // Natives carry literal aliases; configured relationship collections carry theirs on the definition.
+    const definitionAlias = relationshipDefinitionForRef(provider.refKey)?.iteration_alias;
     return {
         collection_provider_ref: provider.refKey,
         iteration_entity_type: iterationEntity,
         iteration_alias:
             collectionRef === "children" ? "child"
             : collectionRef === "household_members" ? "member"
-            : collectionRef === "parents_guardians" ? "guardian"
-            : undefined,
+            : definitionAlias,
     };
 }
 

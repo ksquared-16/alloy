@@ -22,13 +22,25 @@ import { QUEUE_ROW_CHILDREN_COLLECTION_FIELD_KEY } from "@/lib/layout/runtime/qu
 import { platformFieldByRefKey } from "@/lib/fields/platformFieldCatalog";
 import { FORMS_RELATIONSHIP_PROVIDER_ROLE_BY_REF } from "@/lib/fields/formsLegacyContactRoleCompatibility";
 import { collectionBindingAuthoringEnabledForProvider } from "@/lib/fields/formsRelationshipOperationalSupport";
+import { collectableRelationshipDefinitions } from "@/lib/fields/relationship/relationshipDefinitions";
 
 const BOTH: CanonicalDataProvider["availability"] = { pipeline: true, waitlist: true };
 
-/** Supported whole-collection bindings for repeatable Form groups. */
-export const FORMS_REPEATABLE_COLLECTION_REFS = ["children", "household_members", "parents_guardians"] as const;
+/**
+ * Native structural collection refs authorable as repeatable Form groups. Configured relationship
+ * collections are NOT listed here — they derive from `RELATIONSHIP_DEFINITIONS` (see
+ * `docs/platform/core/data/relationship-model.md`). Forms is a consumer, never an owner.
+ */
+const FORMS_NATIVE_COLLECTION_REFS = ["children", "household_members"] as const;
 
-export type FormsRepeatableCollectionRef = (typeof FORMS_REPEATABLE_COLLECTION_REFS)[number];
+/** Supported whole-collection bindings for repeatable Form groups — natives + every collectable definition. */
+export const FORMS_REPEATABLE_COLLECTION_REFS: readonly string[] = [
+    ...FORMS_NATIVE_COLLECTION_REFS,
+    ...collectableRelationshipDefinitions().map((d) => d.collection_ref),
+];
+
+/** Open by design: a new relationship definition widens this set without a code change. */
+export type FormsRepeatableCollectionRef = string;
 
 export type FormsRelationshipRoleKey =
     | "primary"
@@ -125,7 +137,14 @@ function wholeCollectionProvider(
     };
 }
 
-/** Whole-collection providers bound to repeatable Form groups (not scalar picker). */
+/**
+ * Whole-collection providers bound to repeatable Form groups (not scalar picker).
+ *
+ * Two native structural collections, then ONE provider per collectable relationship definition —
+ * derived, never hand-authored. Adding a relationship definition row makes it bindable in Forms with
+ * no edit here. Previously only `parents_guardians` was listed, so `emergency_contacts` and
+ * `authorized_pickups` were unreachable from Forms authoring despite being registered providers.
+ */
 export function buildFormsCollectionBindingSeeds(): CanonicalDataProvider[] {
     return [
         wholeCollectionProvider(
@@ -140,11 +159,8 @@ export function buildFormsCollectionBindingSeeds(): CanonicalDataProvider[] {
             "Household Members",
             "customer_member",
         ),
-        wholeCollectionProvider(
-            "person.contact_role.parents",
-            "parents_guardians",
-            "Parents / Guardians",
-            "person",
+        ...collectableRelationshipDefinitions().map((def) =>
+            wholeCollectionProvider(def.provider_ref, def.collection_ref, def.label, def.item_entity_type),
         ),
     ];
 }
