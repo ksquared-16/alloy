@@ -76,7 +76,7 @@ function fieldKeyFrom(conceptKey: string | null, label: string): string {
     return base.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) || "field";
 }
 
-const HEALTH_RE = /medical|health|immuniz|allerg|diabet|asthma|seizure|convuls|medication|surgery|injur|chronic|dietary|physical limitation|nosebleed|heart|infection|sting/i;
+const HEALTH_RE = /medical|health|immuniz|allerg|diabet|asthma|seizure|convuls|medication|surgery|injur|chronic|dietary|physical limitation|nosebleed|heart|infection|sting|doctor|dentist|physician|hospital|provider|practice/i;
 
 /**
  * High-value SEMANTIC concept keys → canonical binding. The concept layer's understanding is richer
@@ -94,6 +94,58 @@ const CANONICAL_CONCEPT_BINDINGS: Record<string, { entity_type: string; field_ke
     "person.name": { entity_type: "person", field_key: "full_name", band: "high" },
     "household.address": { entity_type: "customer", field_key: "address", band: "review" },
 };
+
+const SCREENING_SECTION_RE = /chronic|health history|nature of reaction|recurring/i;
+const DURABLE_ATTR_RE = /nickname|doctor|dentist|physician|provider|practice|hospital|clinic/i;
+const FORM_ONLY_LABEL_RE = /please\s+(list|describe|explain)|\bactivities\b|^other$/i;
+
+/**
+ * Is this concept DURABLE RECORD DATA (a new canonical field is warranted) rather than a form-only
+ * response? Conservative by DESIGN — a false "new field" (pushing the operator to create a field the
+ * matcher just failed to match) is worse than a form-only response the operator can promote later.
+ */
+function isDurableRecordConcept(c: BusinessConceptCandidate): boolean {
+    if (c.kind === "conditional_explanation" || c.kind === "boolean_status") return false; // screening / conditional answers
+    if (c.kind === "choice_field") return true; // a fixed-option attribute (e.g. Preferred Hospital)
+    // scalar_field:
+    if (c.suggested_data_type === "date") return true; // a date attribute
+    if (DURABLE_ATTR_RE.test(c.label)) return true; // named durable reference (provider, hospital, nickname)
+    if (SCREENING_SECTION_RE.test(c.source.section_title)) return false; // health-history screening grid → form-only
+    if (FORM_ONLY_LABEL_RE.test(c.label)) return false; // "please list/describe", free-text prompts
+    return true; // a plain named attribute outside screening defaults to durable
+}
+
+function formOnlyReason(c: BusinessConceptCandidate): string {
+    if (c.kind === "conditional_explanation") return "conditional explanation collected on the form";
+    if (c.kind === "boolean_status") return "yes/no screening answer";
+    if (SCREENING_SECTION_RE.test(c.source.section_title)) return "health-screening response";
+    return "form-collected response";
+}
+
+function durabilitySignal(c: BusinessConceptCandidate): string {
+    if (c.kind === "boolean_status") return "yes/no screening question — not durable record data";
+    if (c.kind === "conditional_explanation") return "conditional free-text explanation — not durable record data";
+    if (SCREENING_SECTION_RE.test(c.source.section_title)) return "health-history screening grid — form response, not a record field";
+    return "free-text prompt — form response, not a record field";
+}
+
+function reuseFieldProposal(
+    base: Pick<ConfigurationProposal, "contract_version" | "id" | "candidate_id" | "decision_state" | "validation_issues" | "source">,
+    concept: BusinessConceptCandidate,
+    field_source: { entity_type: string; field_key: string; shared_value_key?: string; crm_mapping_key?: string },
+    bindingConfidence: "high" | "medium" | "low",
+    note?: string
+): ConfigurationProposal {
+    const band: Confidence["band"] = bindingConfidence === "high" ? "high" : bindingConfidence === "medium" ? "review" : "attention";
+    return {
+        ...base,
+        disposition: "reuse_canonical_field",
+        target_field_source: field_source,
+        confidence: conf(band, [`matched to ${field_source.entity_type}.${field_source.field_key}`, ...(note ? [note] : [])]),
+        alternatives: [{ disposition: "create_proposed_field", label: `Create a new ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) }],
+        explanation: `Matched "${concept.label}" to the canonical ${field_source.entity_type} field ${field_source.field_key} — reuse the existing field rather than create a duplicate.`,
+    };
+}
 
 export function matchConcept(concept: BusinessConceptCandidate): ConfigurationProposal {
     const base = {
@@ -181,6 +233,26 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
             alternatives: [{ disposition: "create_proposed_field", label: `Create a new ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) }],
             explanation: `Matched "${concept.label}" to the canonical ${semantic.entity_type} field ${semantic.field_key} — reuse the existing field rather than create a duplicate.`,
         };
+    }
+
+    // ── AUDIT (M5): unmatched concepts are NOT automatically new durable fields. Most of the health
+    // screening section is FORM-ONLY response data — collected on the form, never a durable
+    // customer_member field. The operator must not be pushed to create a field because the matcher
+    // failed. A concept becomes a durable new field only when it is genuinely durable record data.
+    if (concept.kind === "scalar_field" || concept.kind === "choice_field" || concept.kind === "boolean_status" || concept.kind === "conditional_explanation") {
+        const binding = concept.kind === "scalar_field" ? suggestFieldBinding(concept.label, wantsType) : null;
+        if (!binding?.field_source && !isDurableRecordConcept(concept)) {
+            return {
+                ...base,
+                disposition: "form_only_response",
+                confidence: conf("high", [durabilitySignal(concept)]),
+                alternatives: [
+                    { disposition: "create_proposed_field", label: `Create a durable ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) },
+                ],
+                explanation: `Collected as a form response (${concept.label}) — a ${formOnlyReason(concept)}. No durable record field is created unless you choose to.`,
+            };
+        }
+        if (binding?.field_source) return reuseFieldProposal(base, concept, binding.field_source, binding.confidence, binding.note);
     }
 
     const binding = concept.kind === "scalar_field" ? suggestFieldBinding(concept.label, wantsType) : null;

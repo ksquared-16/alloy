@@ -28,6 +28,7 @@ const CATEGORY_ORDER: DiscoveryCategory[] = [
     "existing_fields",
     "relationships",
     "new_fields",
+    "form_responses",
     "upload_requirements",
     "acknowledgements",
     "signatures",
@@ -40,6 +41,7 @@ const DISPOSITION_LABEL: Record<ProposalDisposition, string> = {
     reuse_canonical_field: "Existing field",
     reuse_existing_field: "Existing field",
     create_proposed_field: "New field",
+    form_only_response: "Form response",
     relationship_binding: "Relationship",
     upload_requirement: "Upload requirement",
     acknowledgement: "Acknowledgement",
@@ -57,6 +59,8 @@ function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
             return "existing_fields";
         case "create_proposed_field":
             return "new_fields";
+        case "form_only_response":
+            return "form_responses";
         case "relationship_binding":
             return "relationships";
         case "upload_requirement":
@@ -78,6 +82,7 @@ const CATEGORY_TITLE: Record<DiscoveryCategory, string> = {
     existing_fields: "Existing data",
     relationships: "Relationships",
     new_fields: "New fields",
+    form_responses: "Form responses",
     upload_requirements: "Document requirements",
     acknowledgements: "Acknowledgements",
     signatures: "Signatures",
