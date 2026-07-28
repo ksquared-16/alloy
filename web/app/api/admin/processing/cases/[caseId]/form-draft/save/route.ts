@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
-import { buildManualFormDraft, type ManualFieldInput } from "@/lib/pos/processingCase/formDraft/buildManualFormDraft";
+import {
+    buildManualFormDraft,
+    type ManualFieldInput,
+    type SectionDispositionInput,
+} from "@/lib/pos/processingCase/formDraft/buildManualFormDraft";
+import { SECTION_DISPOSITIONS, type SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
 import { dbStoreFormDraftPreview, stampFormDraftPreview } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
+import { ocrProvenanceFromDocument } from "@/lib/pos/processingCase/formDraft/ocrDraftProvenance";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const caseId = parseUuidParam(rawCaseId, "caseId");
     if (caseId instanceof NextResponse) return caseId;
 
-    let body: { title?: unknown; form_name?: unknown; fields?: unknown };
+    let body: { title?: unknown; form_name?: unknown; fields?: unknown; section_dispositions?: unknown };
     try {
         body = (await request.json()) as typeof body;
     } catch {
@@ -67,6 +73,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return jsonError("Provide at least one field with a label.", 422);
     }
 
+    // Operator-set section dispositions (control the emitted schema — not cosmetic).
+    const rawDisp = Array.isArray(body.section_dispositions) ? body.section_dispositions : [];
+    const sectionDispositions: SectionDispositionInput[] = rawDisp
+        .filter((d): d is Record<string, unknown> => !!d && typeof d === "object")
+        .map((d) => {
+            const title = typeof d.title === "string" ? d.title.trim() : "";
+            const dispo = typeof d.disposition === "string" ? d.disposition : "";
+            const disposition = (SECTION_DISPOSITIONS as string[]).includes(dispo)
+                ? (dispo as SectionDisposition)
+                : ("fields" as SectionDisposition);
+            const static_text = typeof d.static_text === "string" ? d.static_text : undefined;
+            return { title, disposition, ...(static_text ? { static_text } : {}) };
+        })
+        .filter((d) => d.title.length > 0);
+
     const supabase = createAdminClient();
 
     try {
@@ -91,15 +112,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const sourceDocumentId = source?.source_kind === "document" && source.source_id ? source.source_id : null;
 
         let docTitle: string | null = null;
+        // OCR provenance is preserved across the operator-review save so the create step keeps
+        // source→OCR→published lineage (the document row is the single source of truth).
+        let ocr: ReturnType<typeof ocrProvenanceFromDocument> = null;
         if (sourceDocumentId) {
             const { data: docRow } = await supabase
                 .from("documents")
-                .select("title, original_filename")
+                .select("title, original_filename, extraction_provider, metadata")
                 .eq("org_id", ctx.orgId)
                 .eq("id", sourceDocumentId)
                 .maybeSingle();
-            const doc = (docRow ?? {}) as { title?: string | null; original_filename?: string | null };
+            const doc = (docRow ?? {}) as {
+                title?: string | null;
+                original_filename?: string | null;
+                extraction_provider?: string | null;
+                metadata?: Record<string, unknown> | null;
+            };
             docTitle = doc.title ?? doc.original_filename ?? null;
+            ocr = ocrProvenanceFromDocument(doc);
         }
 
         const title = (typeof body.title === "string" && body.title.trim()) || docTitle || "Untitled form";
@@ -107,8 +137,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             typeof body.form_name === "string" && body.form_name.trim() ? body.form_name.trim() : null;
 
         const draft = stampFormDraftPreview({
-            ...buildManualFormDraft({ title, sourceDocumentId, fields }),
+            ...buildManualFormDraft({ title, sourceDocumentId, fields, sectionDispositions }),
             ...(generatedFormName ? { generated_form_name: generatedFormName } : {}),
+            ...(ocr ? { ocr } : {}),
         });
         const stored = await dbStoreFormDraftPreview(supabase, { orgId: ctx.orgId, caseId, draft });
         return jsonData({ caseId, form_draft_preview: stored });

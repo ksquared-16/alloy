@@ -34,9 +34,29 @@ export interface SourceDisplayDescriptor {
     kind: ProcessingCaseSourceKind;
     id: string;
     label: string;
+    /**
+     * Raw source filename when known (documents) — carries the file extension the human display `label`
+     * drops. Format/capability detection must use this, NOT `label` (a display name like
+     * "Upload 1784… — 07/24/2026" has no extension and misresolves the source format).
+     */
+    originalFilename?: string | null;
+    /**
+     * OCR provenance when the document's text came from OCR (scanned / image source) rather than native
+     * PDF text/fields. Drives OCR eligibility for form setup + the "Detected using OCR" review state.
+     */
+    ocr?: SourceOcrProvenance | null;
     receivedAt: string | null;
     channel: string | null;
     resolved: boolean;
+}
+
+/** OCR provenance surfaced from the source document into the review/setup experience. */
+export interface SourceOcrProvenance {
+    derived: true;
+    method: string;
+    /** Overall confidence 0–100. */
+    confidence: number;
+    lowConfidence: boolean;
 }
 
 /** Deliverable 1 — the compressed operational queue row. Contains no source payload / record truth. */
@@ -156,6 +176,10 @@ export interface ProcessingCaseReadDeps {
 /** A batched resolver for one source kind: given ids, returns id -> label (one call per kind = no N+1). */
 export interface ResolvedSourceLabel {
     label: string;
+    /** Raw filename with extension (documents) — for format detection; display `label` drops it. */
+    originalFilename?: string | null;
+    /** OCR provenance when the document's text was OCR-derived. */
+    ocr?: SourceOcrProvenance | null;
     receivedAt: string | null;
     channel: string | null;
 }

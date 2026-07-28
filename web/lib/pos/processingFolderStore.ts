@@ -121,6 +121,28 @@ export function reorderProcessingFolder(id: string, direction: "up" | "down", or
     saveProcessingFolders(next, orgId);
 }
 
+/**
+ * Reorder a set of folders to an explicit sequence (drag-and-drop).
+ *
+ * Reassigns each dragged folder into the SAME set of order slots it already occupies, in the new
+ * sequence. This preserves the position of any folders not in `orderedIds` and — unlike the adjacent
+ * up/down swap — lets a custom folder move past a block of system folders in a single gesture.
+ */
+export function reorderProcessingFolders(orderedIds: string[], orgId?: string | null): void {
+    const current = sortFolders(getProcessingFoldersSnapshot(orgId));
+    const idSet = new Set(orderedIds);
+    if (idSet.size !== orderedIds.length) return; // duplicate ids — refuse
+    const slots = current
+        .filter((f) => idSet.has(f.id))
+        .map((f) => f.order)
+        .sort((a, b) => a - b);
+    if (slots.length !== orderedIds.length) return; // ids not all present — refuse
+    const orderById = new Map<string, number>();
+    orderedIds.forEach((id, i) => orderById.set(id, slots[i]!));
+    const next = current.map((f) => (orderById.has(f.id) ? { ...f, order: orderById.get(f.id)! } : f));
+    saveProcessingFolders(next, orgId);
+}
+
 export function hideProcessingFolder(id: string, orgId?: string | null): void {
     const folder = getProcessingFoldersSnapshot(orgId).find((f) => f.id === id);
     if (!folder) return;
