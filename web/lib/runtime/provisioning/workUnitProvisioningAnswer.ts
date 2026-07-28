@@ -167,19 +167,19 @@ export type WorkUnitActionsProjection = {
 const EMPTY_ACTIONS_PROJECTION: WorkUnitActionsProjection = { count: 0, actions: [] };
 
 /**
- * COMMIT-CRITICAL SUBJECT SNAPSHOT (A — preparation completeness). The default subject's
- * first-operational relationship identity — primary contact reachability + the children roster —
- * carried in the answer so the committed Focus Panel renders Household + Children as MEANINGFUL cards
- * at commit, not blank reserved rectangles. Sourced entirely from data the composer already resolved
- * for the subject row (enriched primary contact + the row's `metadata.inquiry_children`) — NO extra
- * DB read. Deeper family (secondary parents, emergency, address) + per-child settlement detail remain
- * Settlement (the drawer VM fills them in place).
+ * COMMIT-CRITICAL SUBJECT IDENTITY TRUTH (A — preparation completeness) — a GENERIC, domain-declared
+ * bag of committed-subject truth bindings (`key → value`), carried in the answer so the committed panel
+ * renders its identity-owning cards MEANINGFUL at commit, not blank reserved rectangles.
+ *
+ * PLATFORM/DOMAIN SEAM: this platform type is OPAQUE — the platform provisioning contract and the
+ * platform work-mode builder forward this bag into `context.truth` WITHOUT knowing any specific key.
+ * The DOMAIN composer (the opportunity answer builder in this file) declares WHICH keys it carries
+ * (e.g. `person.primary_contact_name`, `_inquiry_children`); those Household/Children semantics live in
+ * the domain, never in a platform type or a platform builder. A second surface declares its own
+ * bindings the same way — with no change to any platform layer. Sourced entirely from data the composer
+ * already resolved for the subject row (NO extra DB read); deeper detail remains Settlement.
  */
-export type FocusPanelSubjectSnapshot = {
-    primaryContact: { name: string | null; phone: string | null; email: string | null };
-    /** Raw `opportunity.metadata.inquiry_children` — the Children card's `truth._inquiry_children`. */
-    inquiryChildren: unknown;
-};
+export type SubjectIdentityTruth = Record<string, unknown>;
 
 /**
  * COMMIT-CRITICAL PUBLISHED SUMMARY COMPOSITION (A — the committed panel must present the PUBLISHED
@@ -232,8 +232,8 @@ export type ProvisioningAnswer =
            * unresolved (degrades to the drawer-VM load; never an operational failure).
            */
           focusPanelStageWork: OpportunityStageWorkSlice | null;
-          /** A — commit-critical Household + Children snapshot (see {@link FocusPanelSubjectSnapshot}). */
-          focusPanelSubjectSnapshot: FocusPanelSubjectSnapshot | null;
+          /** A — commit-critical subject identity truth bindings, domain-declared + opaque to the platform (see {@link SubjectIdentityTruth}). */
+          subjectIdentityTruth: SubjectIdentityTruth | null;
           /** A — the published Summary composition for the committed scope (see {@link FocusPanelSummaryDocProjection}). */
           focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null;
           /**
@@ -741,21 +741,28 @@ export async function composeWorkUnitProvisioningAnswer(
     const actionsProjection = await actionsProjectionPromise;
     const focusPanelStageWork = await focusPanelStageWorkPromise;
 
-    // A — COMMIT-CRITICAL SUBJECT SNAPSHOT. The default subject's Household + Children first-operational
-    // identity, from data ALREADY resolved for its row: the enriched queue-row `primary_contact` and the
-    // row's `metadata.inquiry_children`. No extra DB read. Lets the committed Focus Panel render Household
-    // and Children as MEANINGFUL cards, not blank reserved rectangles.
+    // A — COMMIT-CRITICAL SUBJECT IDENTITY TRUTH (DOMAIN-owned key declaration). The opportunity domain
+    // composer declares WHICH truth bindings the committed Household + Children cards read
+    // (`person.primary_contact_name` / `_phone` / `_email`, `_inquiry_children`) — these Household/Children
+    // semantics live HERE, in the domain, and the platform contract/builder forward the bag opaquely.
+    // Sourced from data ALREADY resolved for the subject row (enriched queue-row `primary_contact` + the
+    // row's `metadata.inquiry_children`) — no extra DB read. Empty/absent bindings → the bag is null and
+    // those cards reserve (the drawer VM fills them). A second surface declares its own keys the same way.
     const chosenRowContext = (rows.find((r) => r.id === chosen.entityId)?.context ?? {}) as Record<string, unknown>;
     const chosenPrimaryContact = (chosenRowContext.primary_contact ?? {}) as Record<string, unknown>;
     const subjectMetadata = (subjectRow as Record<string, unknown>).metadata as Record<string, unknown> | null | undefined;
-    const focusPanelSubjectSnapshot: FocusPanelSubjectSnapshot = {
-        primaryContact: {
-            name: strOrNull(chosenPrimaryContact.display_name),
-            phone: strOrNull(chosenPrimaryContact.phone),
-            email: strOrNull(chosenPrimaryContact.email),
-        },
-        inquiryChildren: subjectMetadata?.inquiry_children ?? null,
+    const primaryContactName = strOrNull(chosenPrimaryContact.display_name);
+    const primaryContactPhone = strOrNull(chosenPrimaryContact.phone);
+    const primaryContactEmail = strOrNull(chosenPrimaryContact.email);
+    const inquiryChildren = subjectMetadata?.inquiry_children ?? null;
+    const subjectIdentityTruthBindings: SubjectIdentityTruth = {
+        ...(primaryContactName ? { "person.primary_contact_name": primaryContactName } : {}),
+        ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),
+        ...(primaryContactEmail ? { "person.primary_email": primaryContactEmail } : {}),
+        ...(inquiryChildren != null ? { _inquiry_children: inquiryChildren } : {}),
     };
+    const subjectIdentityTruth: SubjectIdentityTruth | null =
+        Object.keys(subjectIdentityTruthBindings).length ? subjectIdentityTruthBindings : null;
 
     // A — the published Summary composition for the committed scope. Selected with the SAME axes the
     // client doc provider sends (`workViewId` + committed stage; Business Process / status stay
@@ -799,7 +806,7 @@ export async function composeWorkUnitProvisioningAnswer(
             workTemplateKey: template.template_key,
         },
         focusPanelStageWork,
-        focusPanelSubjectSnapshot,
+        subjectIdentityTruth,
         focusPanelSummaryDoc,
         presentation,
         settlement,

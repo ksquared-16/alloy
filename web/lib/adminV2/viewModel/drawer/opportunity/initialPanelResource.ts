@@ -8,7 +8,7 @@
  *
  * It imports NOTHING from the Deferred Detail (Tier-3) resource. It does NOT own scheduling, deep
  * communications, documents/history, or stage-work. It does NOT recompute Household/Children (those are the
- * Provisioning Answer's, carried by `focusPanelSubjectSnapshot`) nor re-resolve committed-seeded stage work.
+ * Provisioning Answer's, carried by `subjectIdentityTruth`) nor re-resolve committed-seeded stage work.
  *
  * Record ordering (S4.4, preserved from the inline composer): A mutates the shared `record` with
  * `_record_surface` + its first-paint patches BEFORE building the render model. The orchestrator runs Tier-3
