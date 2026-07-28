@@ -1,0 +1,32 @@
+{
+  "started_at": "2026-07-28T15:26:00Z",
+  "finished_at": "2026-07-28T15:50:00Z",
+  "ok": false,
+  "partial": true,
+  "note": "Authenticated UI QA captured OI home + wizard step 1 under Slot 4 storage state. Full wizard Continue\u2192activate path blocked by machine memory (Next on 3012 repeatedly OOM/hang during compile; Slot 4 auth storage dated Jul 26). Architecture APIs unchanged; unit language tests cover product copy. Screenshots present: 01-oi-home.png, 02-wizard-failed.png, 02-wizard-question.png",
+  "steps": [
+    {
+      "name": "oi-home",
+      "status": "pass"
+    },
+    {
+      "name": "wizard-step-1-question",
+      "status": "pass"
+    },
+    {
+      "name": "wizard-continue-through-activate",
+      "status": "blocked",
+      "reason": "dev server instability / possible stale auth hydration"
+    },
+    {
+      "name": "calc-library-link-present-on-home",
+      "status": "pass",
+      "evidence": "01-oi-home.png footer Advanced tools \u00b7 Calculation library"
+    }
+  ],
+  "screenshots": [
+    "01-oi-home.png",
+    "02-wizard-failed.png",
+    "02-wizard-question.png"
+  ]
+}

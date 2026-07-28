@@ -83,7 +83,26 @@ function crumbsForPath(path: string): Crumb[] {
         return base;
     }
 
-    if (tail === "/analytics" || tail.startsWith("/analytics/")) {
+    if (
+        path === `${CANONICAL_ADMIN_CONFIG_LANDING}/calculations`
+        || path.startsWith(`${CANONICAL_ADMIN_CONFIG_LANDING}/calculations/`)
+        || tail === "/calculations"
+        || tail.startsWith("/calculations/")
+    ) {
+        base.push({
+            label: "Operational Intelligence",
+            href: "/organization/operational-intelligence",
+        });
+        base.push({ label: "Calculation Library", href: null });
+        return base;
+    }
+
+    if (
+        tail === "/analytics"
+        || tail.startsWith("/analytics/")
+        || tail === "/operational-intelligence"
+        || tail.startsWith("/operational-intelligence/")
+    ) {
         base.push({ label: "Operational Intelligence", href: null });
         return base;
     }

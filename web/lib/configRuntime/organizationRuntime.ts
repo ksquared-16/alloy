@@ -353,8 +353,8 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
     {
         key: "operational-intelligence",
         label: "Operational Intelligence",
-        description: "Shared calculations, metrics, targets, and indicator placement.",
-        href: "/settings/calculations",
+        description: "What the organization measures — goals, health, lifecycle, and history.",
+        href: "/organization/operational-intelligence",
         icon: "intelligence",
         publisherLabel: "Organization",
         configurationOwner: "Operational Intelligence",
@@ -373,9 +373,39 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             detail: "Calculation health remains owned by Operational Intelligence.",
         },
         distributionMode: "inherit",
-        ownedConfiguration: ["Calculations & metrics", "Targets", "Indicator definitions"],
+        ownedConfiguration: ["Measurements", "Goals", "Health", "Lifecycle", "History"],
     },
 ] as const;
+
+/**
+ * Calculation library — advanced reusable definitions inside Operational Intelligence.
+ * Not an Organization landing peer; `/organization/calculations` redirects into OI.
+ */
+export const ORGANIZATION_CALCULATIONS_CONFIGURATION_DOMAIN: OrganizationConfigurationDomain = {
+    key: "organization-calculations",
+    label: "Calculation library",
+    description: "Advanced reusable definitions used by measurements.",
+    href: "/organization/operational-intelligence?view=calculations",
+    icon: "intelligence",
+    publisherLabel: "Organization",
+    configurationOwner: "Operational Intelligence",
+    runtimeOwner: "Calculations runtime",
+    consumers: ["Operational Intelligence measurements"],
+    inheritance: {
+        kind: "value",
+        path: ["platform", "organization", "location"],
+        label: "Organization owns reusable definitions",
+    },
+    publication: { mode: "explicit", status: "publish_required", label: "Publish required before reuse" },
+    override: { state: "not_allowed", label: "Published versions cannot be edited" },
+    health: {
+        state: "not_assessed",
+        label: "Not assessed",
+        detail: "Managed from Operational Intelligence → Advanced.",
+    },
+    distributionMode: "none",
+    ownedConfiguration: ["Reusable definitions", "Published versions", "Where used"],
+};
 
 /**
  * Programs remains a configuration domain for runtime/publication lookups and
@@ -460,6 +490,9 @@ export function organizationConfigurationDomain(
     }
     if (domainKey === LOCATIONS_CONFIGURATION_DOMAIN.key) {
         return LOCATIONS_CONFIGURATION_DOMAIN;
+    }
+    if (domainKey === ORGANIZATION_CALCULATIONS_CONFIGURATION_DOMAIN.key) {
+        return ORGANIZATION_CALCULATIONS_CONFIGURATION_DOMAIN;
     }
     return (
         CONFIGURATION_DOMAINS.find(

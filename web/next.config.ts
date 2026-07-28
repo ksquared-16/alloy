@@ -168,7 +168,7 @@ const nextConfig: NextConfig = {
       { source: "/settings/statuses", destination: "/organization/data-model?section=statuses", permanent: false },
       { source: "/settings/option-sets", destination: "/organization/data-model?section=option-sets", permanent: false },
       { source: "/settings/relationships", destination: "/organization/data-model?section=relationships", permanent: false },
-      { source: "/settings/calculations", destination: "/organization/data-model?section=calculations", permanent: false },
+      { source: "/settings/calculations", destination: "/organization/operational-intelligence", permanent: false },
       { source: "/settings/data-model", destination: "/organization/data-model", permanent: false },
       { source: "/settings/data-model/:path*", destination: "/organization/data-model", permanent: false },
       /**
@@ -253,6 +253,18 @@ const nextConfig: NextConfig = {
       { source: "/organization/commands/:path*", destination: "/adminV2/settings/organization/commands/:path*" },
       { source: "/organization/data-model", destination: "/adminV2/settings/organization/data-model" },
       { source: "/organization/data-model/:path*", destination: "/adminV2/settings/organization/data-model/:path*" },
+      { source: "/organization/operational-intelligence", destination: "/adminV2/settings/organization/operational-intelligence" },
+      {
+        source: "/organization/operational-intelligence/:path*",
+        destination: "/adminV2/settings/organization/operational-intelligence/:path*",
+      },
+      /** Organization Calculations — Path B authoring surface (not OI). */
+      { source: "/organization/calculations", destination: "/adminV2/settings/organization/calculations" },
+      {
+        source: "/organization/calculations/:path*",
+        destination: "/adminV2/settings/organization/calculations/:path*",
+      },
+
       /**
        * Organization Programs & Locations — relationship landing.
        * Must precede exact `/organization` rewrite. Collections remain at

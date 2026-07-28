@@ -93,7 +93,7 @@ Platform construction is complete ([`milestones/freeze-july-2026.md`](../milesto
 5. **Commercial**
 6. **Automation**
 7. **AI**
-8. **Operational Intelligence**
+8. **Operational Intelligence** — **V1 frozen** (Questions → Measurements → Definitions → Answers). Next: Phase 2 consumers present Answers (`platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`).
 9. **Parent Experience**
 10. **Teacher Experience**
 11. **Partner APIs**

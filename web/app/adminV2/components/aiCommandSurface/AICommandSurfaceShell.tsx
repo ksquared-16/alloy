@@ -1908,6 +1908,40 @@ export default function AICommandSurfaceShell({
           case "task_assist":
             await runTaskAssistRoute(cmd, routed.taskAssistIntent, routed.slots);
             break;
+          case "operational_question": {
+            try {
+              const res = await fetch("/api/admin/operational-questions/bos", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: cmd }),
+              });
+              const json = (await res.json()) as {
+                transcript_lines?: string[];
+                clarify?: string | null;
+                error?: string;
+              };
+              const lines =
+                json.transcript_lines && json.transcript_lines.length > 0
+                  ? json.transcript_lines
+                  : [json.clarify || json.error || "I couldn’t answer that operational question."];
+              for (const line of lines) {
+                setThread((prev) =>
+                  appendThreadTurn(prev, {
+                    kind: "assistant_notice",
+                    text: line,
+                  }),
+                );
+              }
+            } catch {
+              setThread((prev) =>
+                appendThreadTurn(prev, {
+                  kind: "assistant_notice",
+                  text: "I couldn’t reach Operational Intelligence for that question.",
+                }),
+              );
+            }
+            break;
+          }
         }
       } finally {
         setBusy(false);
