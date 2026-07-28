@@ -39,6 +39,35 @@ export async function dbStoreFormDraftPreview(
     return args.draft;
 }
 
+/**
+ * Durable record of a detection RUN (reliability diagnostics), stored at
+ * `processing_cases.metadata.form_draft_detection`. Survives a page reload so a hung/failed
+ * detection is a visible, retryable state — not a spinner the operator waited 7 minutes on.
+ */
+export interface FormDraftDetectionRecord {
+    status: "ok" | "timeout" | "error";
+    /** Per-pipeline-stage wall-clock (download / extract-text / acroform / positional / detect). */
+    stages: { stage: string; ms: number; ok: boolean; detail?: string }[];
+    total_ms: number;
+    reason?: string | null;
+    at: string;
+}
+
+export async function dbRecordFormDraftDetection(
+    supabase: SupabaseClient,
+    args: { orgId: string; caseId: string; record: FormDraftDetectionRecord }
+): Promise<void> {
+    const { data: existing } = await supabase
+        .from("processing_cases")
+        .select("metadata")
+        .eq("org_id", args.orgId)
+        .eq("id", args.caseId)
+        .maybeSingle();
+    const baseMeta = (existing as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
+    const metadata = { ...baseMeta, form_draft_detection: args.record };
+    await supabase.from("processing_cases").update({ metadata }).eq("org_id", args.orgId).eq("id", args.caseId);
+}
+
 /** Pure: parse a case's metadata jsonb into a stored draft (or null). For the read model. */
 export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftPreview | null {
     if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;

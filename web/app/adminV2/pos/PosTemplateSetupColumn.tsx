@@ -101,6 +101,33 @@ function seedReviewQuestions(draft: StoredFormDraftPreview | null): ReviewQuesti
     return out;
 }
 
+/** Client-side detect cap — slightly above the server's 60s bound, so a hung request surfaces an
+ *  error + retry instead of an endless "Reading your document" spinner (the 7-minute complaint). */
+const DETECT_CLIENT_TIMEOUT_MS = 70_000;
+
+/** POST the detect endpoint with a hard client timeout; maps timeout/abort to operator language. */
+async function postDetect(caseId: string): Promise<StoredFormDraftPreview | null> {
+    let res: Response;
+    try {
+        res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft`, {
+            method: "POST",
+            credentials: "same-origin",
+            signal: AbortSignal.timeout(DETECT_CLIENT_TIMEOUT_MS),
+        });
+    } catch (e) {
+        if (e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError")) {
+            throw new Error("Reading this document took too long and was stopped. You can try again.");
+        }
+        throw e;
+    }
+    const body = (await res.json().catch(() => ({}))) as {
+        data?: { form_draft_preview?: StoredFormDraftPreview };
+        error?: string;
+    };
+    if (!res.ok) throw new Error(body.error || `Couldn't read this document (${res.status})`);
+    return body.data?.form_draft_preview ?? null;
+}
+
 export default function PosTemplateSetupColumn({
     state,
     onOpenForm,
@@ -321,17 +348,8 @@ export default function PosTemplateSetupColumn({
             setBusy(true);
             setErr(null);
             try {
-                const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft`, {
-                    method: "POST",
-                    credentials: "same-origin",
-                });
-                const body = (await res.json().catch(() => ({}))) as {
-                    data?: { form_draft_preview?: StoredFormDraftPreview };
-                    error?: string;
-                };
+                const next = await postDetect(caseId);
                 if (cancelled) return;
-                if (!res.ok) throw new Error(body.error || `Couldn't read this document (${res.status})`);
-                const next = body.data?.form_draft_preview ?? null;
                 setDraft(next);
                 const seeded = seedReviewQuestions(next);
                 setReviewQuestions(seeded);
@@ -536,10 +554,8 @@ export default function PosTemplateSetupColumn({
 
     // ---- endpoints ----
     async function detectDoc(): Promise<StoredFormDraftPreview | null> {
-        const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft`, { method: "POST", credentials: "same-origin" });
-        const body = (await res.json().catch(() => ({}))) as { data?: { form_draft_preview?: StoredFormDraftPreview }; error?: string };
-        if (!res.ok) throw new Error(body.error || `Couldn't read this document (${res.status})`);
-        return body.data?.form_draft_preview ?? null;
+        if (!caseId) return null;
+        return postDetect(caseId);
     }
 
     const handleDetect = async () => {
