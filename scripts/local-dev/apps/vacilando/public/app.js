@@ -1053,6 +1053,13 @@ async function diskSetAuto(on) {
 }
 // Conductor controls: hand the objective to Director (autonomous) or take it back,
 // and prepare the next phase (gated).
+async function copyBubble(btn) {
+  const bub = btn.closest(".cvbub"); if (!bub) return;
+  const clone = bub.cloneNode(true); clone.querySelectorAll(".cvcopy").forEach((b) => b.remove());
+  const text = (clone.innerText || clone.textContent || "").trim();
+  try { await navigator.clipboard.writeText(text); toast("ok", "Copied to clipboard", ""); }
+  catch { try { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast("ok", "Copied", ""); } catch { toast("err", "Couldn't copy", ""); } }
+}
 async function objSetMode(cap, mode) {
   try { await api("/api/director/objective/mode", { capability_id: cap, mode }); toast("ok", mode === "autonomous" ? "Handed off to Director" : "Taken back", mode === "autonomous" ? "Director conducts the remaining phases; you're pulled in only for a decision or blocker." : "You approve each phase."); }
   catch { toast("err", "Couldn't change mode", ""); }
@@ -1579,12 +1586,12 @@ function conversationWorkspace(id) {
   const list = (arr, f) => (arr && arr.length ? `<ul class="dul">${arr.slice(0, 6).map((x) => `<li>${esc(f(x))}</li>`).join("")}</ul>` : `<span class="muted">—</span>`);
 
   // LEFT — the conversation, as a dialogue, with the stage-aware next-action footer.
-  const bubbles = c.messages.map((msg) => `<div class="cvmsg ${msg.from}"><div class="cvbub">${esc(msg.text)}</div></div>`).join("");
+  const bubbles = c.messages.map((msg) => `<div class="cvmsg ${msg.from}"><div class="cvbub sel">${esc(msg.text)}<button class="cvcopy" data-copy title="Copy">Copy</button></div></div>`).join("");
   const qbubbles = (stage === "understanding" ? (o?.questions || []) : []).map((q) => `<div class="cvmsg director q${q.blocks ? " blocks" : ""}"><div class="cvbub"><span class="qbadge">${q.blocks ? "needs an answer" : "worth confirming"}</span>${esc(q.question)}${q.why ? `<div class="qwhy">${esc(q.why)}</div>` : ""}</div></div>`).join("");
   // When work is ready for review, Director's summary + read belong IN the thread as
   // plain, selectable/copy-pasteable text — not boxed in "the work".
   const rev = (stage === "reviewing" ? o?.review : null);
-  const reviewBubble = rev && rev.summary ? `<div class="cvmsg director review"><div class="cvbub sel">${esc(rev.summary)}${rev.recommendation ? `<div class="qwhy" style="margin-top:8px"><b>Director's read:</b> ${esc(rev.recommendation)}</div>` : ""}</div></div>` : "";
+  const reviewBubble = rev && rev.summary ? `<div class="cvmsg director review"><div class="cvbub sel">${esc(rev.summary)}${rev.recommendation ? `<div class="qwhy" style="margin-top:8px"><b>Director's read:</b> ${esc(rev.recommendation)}</div>` : ""}<button class="cvcopy" data-copy title="Copy">Copy</button></div></div>` : "";
   const left = `<div class="cvcol cvhistory"><div class="cvcol-h">Conversation</div><div class="cvthread">${bubbles}${qbubbles}${reviewBubble}</div>${opFooter(c, id)}</div>`;
 
   // CENTER — gated by stage: while Director is still Understanding, it shows the
@@ -1776,6 +1783,7 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-cmd]"))) { e.stopPropagation(); startCommand(n.dataset.cmd, n.dataset.slot ? { slot: Number(n.dataset.slot) } : {}); return; }
   if ((n = t("[data-disk-reclaim]"))) { e.stopPropagation(); diskReclaim(); return; }
   if ((n = t("[data-disk-auto]"))) { e.stopPropagation(); diskSetAuto(n.dataset.diskAuto === "1"); return; }
+  if ((n = t("[data-copy]"))) { e.stopPropagation(); copyBubble(n); return; }
   if ((n = t("[data-obj-mode]"))) { e.stopPropagation(); objSetMode(n.dataset.cap, n.dataset.objMode); return; }
   if ((n = t("[data-obj-prepare]"))) { e.stopPropagation(); objPrepareNext(n.dataset.objPrepare); return; }
   if ((n = t("[data-end]"))) { e.stopPropagation(); showEndWork(Number(n.dataset.end)); return; }

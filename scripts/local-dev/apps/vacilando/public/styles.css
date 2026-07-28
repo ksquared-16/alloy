@@ -556,12 +556,12 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .cvcol-h{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-4);margin-bottom:12px;flex:none;}
 .cvthread{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
 .cvbub{overflow-wrap:anywhere;} /* long unbroken text wraps instead of overflowing */
-.cvmsg .cvbub{max-height:340px;overflow-y:auto;} /* one huge message scrolls in place */
+.cvmsg .cvbub{max-height:none;} /* messages show IN FULL; the thread scrolls, not each bubble */
 .su-item .su-line span,.su-why{overflow-wrap:anywhere;}
 @media(max-width:900px){.cvcol{max-height:none;}}
 .cvmsg{display:flex;}
 .cvmsg.you{justify-content:flex-end;}
-.cvbub{max-width:88%;font-size:13px;line-height:1.5;padding:8px 12px;border-radius:14px;}
+.cvbub{max-width:92%;font-size:14px;line-height:1.55;padding:10px 14px;border-radius:14px;position:relative;}
 .cvmsg.director .cvbub{background:var(--bg-tint);color:var(--ink);border-bottom-left-radius:4px;}
 .cvmsg.you .cvbub{background:var(--terra);color:#fff;border-bottom-right-radius:4px;}
 .cvcompose{display:flex;gap:6px;margin-top:8px;border-top:1px solid var(--line-soft);padding-top:10px;}
@@ -676,3 +676,8 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 /* Review summary lives in the thread as selectable, copy-pasteable text */
 .cvmsg.director.review .cvbub{border:1px solid var(--line,#e3d9c9);background:var(--panel,#fbf7f0);max-width:100%}
 .cvbub.sel{user-select:text;-webkit-user-select:text;white-space:pre-wrap;cursor:text;line-height:1.5}
+
+/* Copy button on chat messages */
+.cvcopy{position:absolute;top:6px;right:8px;font-size:10px;line-height:1;padding:3px 8px;border-radius:6px;border:1px solid var(--line,#e3d9c9);background:rgba(255,255,255,.82);color:var(--muted,#8a7f6d);cursor:pointer;opacity:.5;transition:opacity .12s;font-weight:600}
+.cvbub:hover .cvcopy{opacity:1}
+.cvmsg.you .cvcopy{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.45);color:#fff}
