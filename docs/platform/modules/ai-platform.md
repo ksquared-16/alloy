@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-28
 supersedes: []
 ---
 
@@ -53,21 +53,18 @@ Layout ownership: `../core/navigation-and-workspace-doctrine.md` § Adaptive Wor
 
 ## Action execution path
 
-**BOS suggests/proposes; the user confirms; the server executes.** When BOS applies a
-registered action, it uses the same `POST /api/admin/actions/execute` route as manual UI
-(`runRegisteredAction` → validate → eligibility gate → invariant-owning mutation). BOS
-never invents executable behavior or mutates directly: it can only invoke *registered*
-action keys, and the server remains authoritative for validation, eligibility, required
-inputs, mutation, audit, and result. Reference implementation: `create_lead` via the BOS
-**command session** (Conversation + Form over one shared draft). See
-`actions-and-workflows.md` § Action Runtime contract.
+**BOS suggests/proposes; the user confirms; the server executes.** Confirmed BOS Commands
+use the shared client bridge `executePlatformCommandViaActionsApi` →
+`POST /api/admin/actions/execute` → `executeCommandInvocation` → the capability’s canonical
+executor. BOS never invents executable behavior or mutates directly: it prepares inputs and
+invokes Runtime once; the server remains authoritative for validation, eligibility,
+authorization, mutation, audit, and result. See `actions-and-workflows.md` and the frozen
+closeout `../milestones/bos-command-runtime-convergence-closeout.md`.
 
-BOS is a **placement**, not a separate command system. A BOS recommendation invokes the
-same registered Operational Command as any other surface; its context resolution is
-`bos_proposal` (BOS proposes a subject/payload, the operator confirms — never a silent
-assumption). One capability, many placements, one runtime — see `invocationContext.ts`.
-When a Business Process context is available, BOS slash discovery may optionally filter by
-process-effective Command keys (`resolveBosProcessEffectiveCommandKeys`) so BOS cannot invent
+BOS is a **placement**, not a separate command system. Context resolution is `bos_proposal`
+(BOS proposes a subject/payload; the operator confirms — never a silent assumption). Live
+slash discovery is gated by process-effective Command keys
+(`resolveBosProcessEffectiveCommandKeys`) ∩ `bosCommandAdapterRegistry` — BOS cannot invent
 an unselected process Command; authorization remains deferred to invocation.
 
 BOS is the eventual primary interface, but it must use the same runtime as manual UI.
@@ -100,22 +97,19 @@ phone or email"). BOS confirms and executes through the **same** registered `cre
 action and execute route as manual entry. See
 `docs/sprints/archive/06_2026/create_lead_command_flow_audit.md`.
 
-**BOS command session (V6 — actionable interface).** Create Lead from Actions (Work Unit or
-Workspace) or `/` slash discovery opens a **scoped BOS command session** over the Operational
-Command Runtime — not a parallel mutation engine. Conversation and Form are projections of one
-shared `BosCommandDraft` (`web/lib/bos/commandSession/*`). Round 2 product realization adds a
-`ConversationIntakeAdapter` boundary, effective intake-spec Form/parse, turn-based transcript
-(no mode-switch noise), slash discovery for Create Lead, and expanded/pinned layout density.
-Confirmed execution still calls `executeCreateLeadCommand` → registered `create_lead`. Processing
-owns inbound identity resolution; Processing Conversation Runtime may later **implement** the
-same intake adapter. Sprint package:
-`docs/sprints/active/bos-actionable-interface/` (Round 2 under `round-2/`).
+**BOS command session.** Slash discovery or Actions entry opens a **scoped BOS command session**
+over Command Runtime — not a parallel mutation engine. Adapter registry keys include
+representative families (`create_lead`, `update_lead_status`, `add_parent_guardian`,
+`cancel_tour`); Create Lead remains the richest conversation/form draft reference
+(`ConversationIntakeAdapter`). Other BOS-ready Commands use thin preparation adapters + a
+generic session body. Confirmed execution always goes through
+`executePlatformCommandViaActionsApi`. Universal Conversation Runtime is a **separate**
+mission; Participant/packet Runtime is orthogonal.
 
-**BOS uses the platform Command Surface concepts, not a separate mutation runtime (V5).**
-Command Surface shell/controller remain platform-owned patterns for command anatomy. The V6
-Create Lead reference hosts Conversation/Form inside the BOS rail command-session host while
-still executing through the registered action path — BOS must not own a private mutation
-lifecycle or bypass server authority.
+**BOS uses the platform Command Surface concepts, not a separate mutation runtime.**
+BOS must not own a private mutation lifecycle or bypass server authority. Canonical path:
+Business Process → effective Commands → BOS preparation → shared bridge → Command Runtime →
+domain executor.
 
 **Automations (dependency direction only).** Commands emit domain events that Automations may
 consume. Automations may invoke Commands through the shared Command Runtime under the same

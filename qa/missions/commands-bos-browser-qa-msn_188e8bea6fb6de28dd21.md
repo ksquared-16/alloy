@@ -1,8 +1,11 @@
 # Browser QA — BOS Command Runtime Convergence (promotion pass)
 
+> Mission closed. Canonical architecture:  
+> [`docs/platform/milestones/bos-command-runtime-convergence-closeout.md`](../../docs/platform/milestones/bos-command-runtime-convergence-closeout.md)
+
 Mission: `msn_188e8bea6fb6de28dd21`  
 Date: 2026-07-28  
-HEAD: `15e936584`  
+HEAD at classification: `15e936584` (evidence commit follows)  
 Worktree: `wt1-commands-system-inventory` / port **3011**
 
 ## Classification

@@ -1,16 +1,24 @@
-# BOS Create Lead — execution map (pre-generalization)
+# BOS Command Runtime Convergence — mission evidence
 
-**Mission:** BOS Command Runtime Convergence  
+> **CLOSEOUT:** Architecture frozen. Canonical long-term reference:  
+> [`docs/platform/milestones/bos-command-runtime-convergence-closeout.md`](../../docs/platform/milestones/bos-command-runtime-convergence-closeout.md)  
+> **Verdict:** Mission accepted. Ready for integration. Browser QA environment-blocked only (not architecture-blocking).
+
+**Mission:** BOS Command Runtime Convergence (`msn_188e8bea6fb6de28dd21`)  
 **Worktree:** `/Users/Kelly/Code/alloy-worktrees/wt1-commands-system-inventory`  
 **Branch:** `agent/cursor/1-commands-system-inventory`  
-**Staging:** reconciled twice — `df12fca95` (Phase 7) then `eddefb49b` (Runtime V1 perf/registry; 0 behind `origin/staging`)  
-**Surface Command Exposure:** stopped/reverted (`ea10ed500`); BP Process Actions remain exposure owner  
+**Surface Command Exposure:** stopped/reverted; BP Process Actions remain exposure owner  
 **Date:** 2026-07-28  
-**Scope:** Discovery + first convergence increments
 
 ---
 
-## Architecture verdict (Create Lead today)
+## Historical note (pre-generalization Create Lead map)
+
+The sections below retain the investigation-era Create Lead execution map for auditors. Gaps called out in early sections (unwired process filter, Create-Lead-only adapter allowlist) were **closed** in subsequent Mission 1 commits. Prefer the frozen closeout for current truth.
+
+---
+
+## Architecture verdict (Create Lead at audit time)
 
 ```text
 BOS slash / session UI
@@ -24,7 +32,7 @@ BOS slash / session UI
 ```
 
 **Mutation ownership:** Server execute route + RegisteredAction / Runtime — **not** a BOS-owned executor.  
-**Gap:** Live slash discovery does **not** yet pass `processEffectiveCommandKeys` (helper exists; UI unwired). Adapter allowlist is hardcoded to `create_lead` only.
+**(Audit-time gap — since closed):** Live slash now passes `processEffectiveCommandKeys`; adapter registry expanded to representative families.
 
 ---
 

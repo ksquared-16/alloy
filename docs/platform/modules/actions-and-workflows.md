@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-28
 supersedes: []
 ---
 
@@ -201,8 +201,8 @@ For compatibility, legacy child rules without timing are still downgraded to rec
 | **Business Process `command_set_v1`** | Which Commands the process selects (sole target process-wide authority; P6.S1) |
 | **Stage `action_catalog_v1`** | Stage recommendation / evaluation metadata for selected Commands only |
 | **Experience Builder** | Where actions appear on a layout surface (contact row, section, related list) |
-| **BOS** | Command-session placement for registered commands (Create Lead V1: Conversation + Form over one draft → `executeCreateLeadCommand`) |
-| **Command Runtime / Executors** | Invocation governance and durable writes |
+| **BOS** | Command-session placement: discover process-effective ∩ adapter-ready Commands, prepare inputs, confirm, invoke shared Runtime bridge (`executePlatformCommandViaActionsApi`) |
+| **Command Runtime / Executors** | Invocation governance, authorization, exactly-once delegation, and durable writes |
 
 Legacy note: DB placements + lifecycle builder matrix remain **compatibility / availability** inputs until process migration completes; they are not equal process-wide selection authorities once `command_set_v1` is present.
 
@@ -453,11 +453,14 @@ Product language is **Lead**, not **Inquiry**. The internal `new_inquiry` status
 ## BOS readiness
 
 - Relationship and enrollment status adapters produce **canonical action requests** with confirmation policy.
-- **Create Lead (V1 actionable interface):** Actions placements start a BOS command session by default
-  (`dispatchStartBosCommandSession` / `CreateLeadEventHost`). Conversation and Form share one draft;
-  confirm executes through `executeCreateLeadCommand`. Legacy modal host remains behind
-  `NEXT_PUBLIC_BOS_CREATE_LEAD_SESSION=0`. Additional registered-command adapters beyond Create Lead
-  remain follow-up.
+- **BOS Command Runtime Convergence (Mission 1 — frozen):** BOS is a placement over Command Runtime.
+  Live slash discovery is process-effective ∩ `bosCommandAdapterRegistry`. Confirmed invoke always
+  uses `executePlatformCommandViaActionsApi` → `/api/admin/actions/execute` →
+  `executeCommandInvocation`. Representative BOS-ready families: `create_lead` (owner-accepted
+  reference), `update_lead_status`, `add_parent_guardian`, `cancel_tour`. Create Lead legacy modal
+  remains behind `NEXT_PUBLIC_BOS_CREATE_LEAD_SESSION=0`. Coverage honesty and remaining adapters:
+  `../milestones/bos-command-runtime-convergence-closeout.md` and the mission coverage ledger.
+  **Surfaces do not configure Commands** — Business Process `command_set_v1` owns selection.
 
 ---
 

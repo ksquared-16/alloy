@@ -1,6 +1,8 @@
 # BOS Command coverage ledger
 
 Mission: `msn_188e8bea6fb6de28dd21` — BOS Command Runtime Convergence  
+**Status:** Complete for Mission 1 (honest dispositions). Canonical summary:  
+[`docs/platform/milestones/bos-command-runtime-convergence-closeout.md`](../../docs/platform/milestones/bos-command-runtime-convergence-closeout.md) §9.  
 Updated: 2026-07-28  
 Authority: Capability Registry + process `command_set_v1` + Command Runtime.  
 BOS disposition is honest — Runtime-executable ≠ BOS-ready.

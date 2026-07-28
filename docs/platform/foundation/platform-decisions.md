@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-14
+last_reviewed: 2026-07-28
 supersedes: []
 ---
 
@@ -31,6 +31,23 @@ Detailed behavior always lives in the **canonical owner** documents linked below
 **Status:** Active | Superseded
 **Superseded by:** link when applicable.
 ```
+
+---
+
+## 2026-07 — BOS Command Runtime Convergence (Mission 1)
+
+**Decision:**
+BOS is a Command placement, not a mutation engine. Business Process `command_set_v1` owns process-wide Command selection. Surfaces do not configure Commands. A standalone Organization Commands operator product is rejected. Confirmed BOS invokes go through one shared bridge into Command Runtime; domain executors remain authoritative. Representative families prove the architecture; not every Command must be conversational.
+
+**Why:**
+Create Lead–centric BOS paths and bespoke family clients would not scale and risked inventing Commands outside Process authority.
+
+**Consequences:**
+Future BOS adapters prepare only and execute via `executePlatformCommandViaActionsApi`. Conversation Runtime is a separate mission. Coverage ledger honesty is required. Do not reopen Surface Command Exposure or a standalone Commands product.
+
+**Canonical owners:** [`../milestones/bos-command-runtime-convergence-closeout.md`](../milestones/bos-command-runtime-convergence-closeout.md), [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md), [`../modules/ai-platform.md`](../modules/ai-platform.md).
+
+**Status:** Active
 
 ---
 
