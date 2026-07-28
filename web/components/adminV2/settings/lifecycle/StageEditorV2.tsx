@@ -533,6 +533,7 @@ export default function StageEditorV2({
     stageRecord,
     allStages: _allStages,
     processTracks,
+    process,
     bootstrap,
     bootstrapLoading,
     entityDisplayLabels,
@@ -551,6 +552,8 @@ export default function StageEditorV2({
     stageRecord?: LifecycleBuilderStageRecord | null;
     allStages?: LifecycleBuilderStageRecord[];
     processTracks?: ProcessTracksV1 | null;
+    /** P6.S3 — active process including command_set_v1 when stamped. */
+    process?: import("@/lib/lifecycle/lifecycleBuilderConfig").LifecycleBuilderProcessRecord | null;
     bootstrap: LifecycleStageBootstrapPayload | null;
     bootstrapLoading: boolean;
     entityDisplayLabels?: Partial<Record<LifecycleRequirementEntityKey, string>>;
@@ -878,6 +881,17 @@ export default function StageEditorV2({
                                     })) ?? []
                                 }
                                 processTracks={processTracks ?? null}
+                                process={
+                                    process ?? {
+                                        id: businessProcessKey,
+                                        key: businessProcessKey,
+                                        name: businessProcessKey,
+                                        primary_entity: "opportunity",
+                                        sort_order: 0,
+                                        is_active: true,
+                                        stages: _allStages ?? [],
+                                    }
+                                }
                                 configuredStatuses={(bootstrap?.queue_membership_status_options ?? []).map((row) => ({
                                     status_key: row.status_key,
                                     status_label: row.status_label,

@@ -57,8 +57,33 @@ export const CANONICAL_ORGANIZATION_ACCESS_HREF = `${CANONICAL_ORGANIZATION_BASE
 /** Canonical Organization Business Processes. */
 export const CANONICAL_ORGANIZATION_PROCESSES_HREF = `${CANONICAL_ORGANIZATION_BASE}/processes` as const;
 
+/** Internal Command capability diagnostics route (`/organization/commands`) — not an org config product. */
+export const CANONICAL_ORGANIZATION_COMMANDS_HREF = `${CANONICAL_ORGANIZATION_BASE}/commands` as const;
+
 /** Canonical Organization Data Model (Entities, Fields, Statuses, Option Sets, Relationships, Calculations). */
 export const CANONICAL_ORGANIZATION_DATA_MODEL_HREF = `${CANONICAL_ORGANIZATION_BASE}/data-model` as const;
+
+/** Canonical Organization Operational Intelligence (measurements, targets, health, lifecycle, history). */
+export const CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF =
+    `${CANONICAL_ORGANIZATION_BASE}/operational-intelligence` as const;
+
+/** Compatibility path — redirects into Operational Intelligence Calculation Library. */
+export const CANONICAL_ORGANIZATION_CALCULATIONS_HREF =
+    `${CANONICAL_ORGANIZATION_BASE}/calculations` as const;
+
+/** OI-embedded Calculation Library (preferred product URL). */
+export function organizationCalculationLibraryHref(opts?: {
+    calculationId?: string | null;
+    libraryView?: string | null;
+    step?: string | number | null;
+}): string {
+    const params = new URLSearchParams();
+    params.set("view", "calculations");
+    if (opts?.calculationId) params.set("calculationId", opts.calculationId);
+    if (opts?.libraryView) params.set("libraryView", opts.libraryView);
+    if (opts?.step != null && opts.step !== "") params.set("step", String(opts.step));
+    return `${CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF}?${params.toString()}`;
+}
 
 /**
  * Settings subpaths that have been productized under `/organization/{slug}`.
@@ -76,9 +101,16 @@ const ORGANIZATION_CONFIG_SUBPATH_ALIASES: Record<string, string> = {
     "users-roles": "access",
     processes: "processes",
     "business-processes": "processes",
+    commands: "commands",
     "data-model": "data-model",
     /** Legacy Data Model landing slug → `/organization/data-model` (default Entities). */
     entities: "data-model",
+    "operational-intelligence": "operational-intelligence",
+    /** Organization Calculations product (not Data Model chapter; not OI). */
+    calculations: "calculations",
+    /** Legacy analytics / KPIs → Operational Intelligence. */
+    analytics: "operational-intelligence",
+    kpis: "operational-intelligence",
 };
 
 /** Legacy admin implementation base (financials, old list pages, unmigrated system). */

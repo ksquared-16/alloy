@@ -180,7 +180,13 @@ export function setAreaHeight(
 export const COMPOSER_GRID_ROW_UNIT_PX = 76;
 export const COMPOSER_GRID_GAP_PX = 10;
 
-/** Snap a drag target so cards align/stack predictably on the composer grid. PURE. */
+/**
+ * Snap a drag target so cards align/stack predictably on the composer grid. PURE.
+ *
+ * Insertion rule (same column): pointer in the upper half of a neighbor → insert above;
+ * pointer in the lower half or at/after the neighbor’s bottom edge → stack immediately
+ * beneath that neighbor. Do not yank a “stack below” intent back to the column top.
+ */
 export function snapMoveTarget(
     grid: FocusPanelGridLayout,
     moving: FocusPanelGridArea,
@@ -200,9 +206,39 @@ export function snapMoveTarget(
         }
     }
 
+    // Same-column neighbors: upper half → insert above (push neighbor down via placeArea
+    // normalize). Lower half / past bottom → stack immediately below.
+    const neighbors = grid.areas
+        .filter((area) => area.card !== moving.card && sameStackColumn(area, next))
+        .sort((a, b) => a.rowStart - b.rowStart);
+
+    let stackedBelow = false;
+    for (const neighbor of neighbors) {
+        const stackBelow = neighbor.rowStart + neighbor.rowSpan;
+        const nextEnd = next.rowStart + next.rowSpan;
+        const overlaps = next.rowStart < stackBelow && nextEnd > neighbor.rowStart;
+        const neighborMid = neighbor.rowStart + neighbor.rowSpan / 2;
+        const insertAbove =
+            next.rowStart < neighbor.rowStart
+            || (overlaps && next.rowStart < neighborMid)
+            || (!overlaps && next.rowStart === neighbor.rowStart);
+
+        if (insertAbove) {
+            next = { ...next, rowStart: neighbor.rowStart };
+            stackedBelow = false;
+            break;
+        }
+        if (overlaps || (next.rowStart >= neighborMid && next.rowStart <= stackBelow)) {
+            next = { ...next, rowStart: stackBelow };
+            stackedBelow = true;
+            // Keep scanning — may still overlap a card further down after stacking.
+        }
+    }
+
     // Right-column cards near the top align with the left-column anchor (e.g. What's Next).
-    // Tight ±1 window — do not yank lower-half drops up to row 1.
-    if (next.colStart >= rightHalfStart) {
+    // Only when the operator is not already stacking below a same-column neighbor — otherwise
+    // a drop intended “immediately beneath” teleports to row 1.
+    if (!stackedBelow && next.colStart >= rightHalfStart) {
         const leftAnchors = grid.areas
             .filter((area) => area.card !== moving.card && area.colStart < rightHalfStart)
             .map((area) => area.rowStart);
@@ -211,32 +247,6 @@ export function snapMoveTarget(
             if (Math.abs(next.rowStart - alignTop) <= 1) {
                 next = { ...next, rowStart: alignTop };
             }
-        }
-    }
-
-    // Same-column neighbors: drop in the upper half → insert above (push neighbor down via
-    // placeArea normalize). Drop in the lower half → stack below.
-    const neighbors = grid.areas
-        .filter((area) => area.card !== moving.card && sameStackColumn(area, next))
-        .sort((a, b) => a.rowStart - b.rowStart);
-
-    for (const neighbor of neighbors) {
-        const stackBelow = neighbor.rowStart + neighbor.rowSpan;
-        const nextEnd = next.rowStart + next.rowSpan;
-        const overlaps = next.rowStart < stackBelow && nextEnd > neighbor.rowStart;
-        const neighborMid = neighbor.rowStart + neighbor.rowSpan / 2;
-        const insertAbove =
-            next.rowStart <= neighbor.rowStart
-            || (overlaps && next.rowStart < neighborMid)
-            || (next.rowStart > neighbor.rowStart && next.rowStart <= neighbor.rowStart + 1);
-
-        if (insertAbove) {
-            next = { ...next, rowStart: neighbor.rowStart };
-            break;
-        }
-        if (overlaps || (next.rowStart > neighbor.rowStart && next.rowStart < stackBelow + 1)) {
-            next = { ...next, rowStart: stackBelow };
-            // Keep scanning — may still overlap a card further down after stacking.
         }
     }
 

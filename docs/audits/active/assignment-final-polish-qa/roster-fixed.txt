@@ -1,0 +1,218 @@
+roster=
+Assignments
+
+All sites · operational
+
+Add Assignment
+Actions
+Close
+Work
+Studio
+Overview
+Roster
+Attendance
+
+ASSIGNMENT HEALTH
+
+0Missing assignments
+
+—
+
+0Multiple
+
+—
+
+0Upcoming
+
+—
+
+0Future primary
+
+—
+
+0Conflicts
+
+—
+
+0Expiring soon
+
+—
+
+Assignments
+Room board
+
+No assignments at All sites
+
+Proposed and committed assignments appear here with room, Assignment Kind, role, and lifecycle state.
+rosterAPI 200 {"view":"assignment_roster","siteLocationId":"1a5644a7-45c4-413b-9021-5f556118b6e2","subjects":[{"agreementId":"member:05cf9138-7f4f-482c-a839-4644359985d1","customerMemberId":"05cf9138-7f4f-482c-a839-4644359985d1","childName":"Unnamed child","subjectType":"child","assignmentCount":5,"primaryRoom":"Pre-K","assignments":[{"assignmentId":"7c9b9bb6-e65c-4749-95c2-6539b02b7a18","agreementId":"member:0
+form=
+Edit Assignment Kind
+
+Cancel
+
+IDENTITY
+
+Name
+Description
+Icon
+Calendar
+Schedule
+Classroom
+Clock
+Before care
+After care
+Activity
+Enrichment
+Transportation
+Care
+Therapy
+Group
+Recurring
+Appearance
+Select…
+Neutral
+Calm blue
+Success green
+Attention gold
+Accent pine
+
+BEHAVIOR
+
+Can be primary
+Can overlap another assignment
+
+OPERATIONAL REQUIREMENTS
+
+Program
+Select…
+Required
+Optional
+Not used
+Space requirement
+Select…
+Required
+Optional
+Not used
+Eligible spaces
+Select…
+Any valid space
+Selected spaces
+Spaces matching Program
+
+OPERATIONAL EFFECTS
+
+Attendance
+Select…
+Does not expect attendance
+Expects attendance
+Staffing and ratios
+Select…
+No staffing effect
+Creates staff demand
+Provides staff supply
+
+FINANCIALS
+
+Financial behavior
+Select…
+No financial effect
+Recurring billing eligible
+
+AVAILABILITY
+
+Locations
+Select…
+Organization-wide
+North Campus
+South Campus
+West Campus
+
+Organization-wide, or limit to a selected location for this Purpose.
+
+Save Kind
+spaceReq=1
+eligible=1
+add=
+Assignments
+
+North Campus · operational
+
+Site
+Select…
+North Campus
+South Campus
+West Campus
+Add Assignment
+Actions
+Close
+Work
+Studio
+Overview
+Roster
+Attendance
+
+ASSIGNMENT HEALTH
+
+0Missing assignments
+
+—
+
+0Multiple
+
+—
+
+0Upcoming
+
+—
+
+0Future primary
+
+—
+
+0Conflicts
+
+—
+
+0Expiring soon
+
+—
+
+Create Assignment
+
+North Campus · pick child, type, and placement
+
+Creating for Unnamed child
+
+What kind of assignment is this?
+
+ASSIGNMENT KIND
+Choose purpose…
+Primary Classroom
+Before Care
+After Care
+Enrichment
+Transportation
+Therapy
+Recurring Service
+Homeroom
+Continue
+Back
+Cancel
+Assignments
+Room board
+
+1 child · 5 assignments · North Campus
+
+SELECT
+CHILD
+COUNT
+PRIMARY ROOM
+ROLE
+TYPE · DAYS
+STATUS
+Unnamed child
+5
+Pre-K
+Primary
+Primary Classroom · Mon, Tue, Wed, Thu, Fri
+Planned

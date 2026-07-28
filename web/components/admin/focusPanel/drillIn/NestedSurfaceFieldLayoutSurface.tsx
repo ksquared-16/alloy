@@ -176,10 +176,14 @@ export default function NestedSurfaceFieldLayoutSurface({
                 <div
                     key={`${chunk.join("-")}-${rowIndex}`}
                     className={clsx(
+                        "identity-field-grid__row",
+                        chunk.length === 2 && "identity-field-grid__row--pair",
+                        chunk.length === 3 && "identity-field-grid__row--triple",
                         "alloy-os-child-truth__inline-row",
                         chunk.length === 2 && "alloy-os-child-truth__inline-row--pair",
                     )}
-                    data-children-inline-row={chunk.length === 2 ? "pair" : "single"}
+                    data-identity-row={chunk.length === 3 ? "triple" : chunk.length === 2 ? "pair" : "single"}
+                    data-children-inline-row={chunk.length === 2 ? "pair" : chunk.length === 3 ? "triple" : "single"}
                 >
                     {chunk.map((fieldKey) => {
                         const meta =

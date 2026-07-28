@@ -25,6 +25,7 @@ import LifecycleStageWorkTemplateActionsEditor from "@/components/adminV2/settin
 import LifecycleStageOutgoingTransitionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutgoingTransitionsEditor";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
+import type { LifecycleBuilderProcessRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { resolveStageOutcomeTransitionOptions } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
 import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 import {
@@ -48,6 +49,8 @@ type Props = {
     processStages?: Array<{ key: string; label: string }>;
     processTracks?: ProcessTracksV1 | null;
     configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+    /** P6.S3 — process record for Command selection gating. */
+    process?: LifecycleBuilderProcessRecord | null;
 };
 
 function dueDaysFromPolicy(work: StageOperatingPlanEditorDraft["work_templates"][number]): number {
@@ -68,6 +71,7 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
         processStages,
         processTracks,
         configuredStatuses = [],
+        process,
     },
     ref,
 ) {
@@ -444,6 +448,7 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                     stageOperatingPlan={stageOperatingPlanForResolver}
                                     processTracks={processTracks ?? null}
                                     stageDefinition={{ journey_segment: draft.journey_segment }}
+                                    process={process ?? null}
                                     stageDraft={draft}
                                     transitionOptions={transitionOptions}
                                     onStageDraftChange={setDraft}

@@ -232,14 +232,14 @@ export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) 
         />
     );
 }
-/** Scheduling — rooms, ratios, and placements; opens as a workspace modal. */
+/** Assignments — operational placement command center; opens as a workspace modal. */
 export function SidebarSchedulingNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();
     return (
         <SidebarModalNavButton
             collapsed={collapsed}
-            title="Scheduling — rooms, ratios, and placements"
-            label="Scheduling"
+            title="Assignments — rooms, types, and operational placement"
+            label="Assignments"
             icon={<CalendarRange size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
             badge={null}
             active={activeModal === "scheduling"}

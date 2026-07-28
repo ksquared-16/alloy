@@ -1,12 +1,10 @@
 "use client";
 
 /**
- * Scheduling operational health — Work vs Studio contextual metrics (Doctrine V3).
+ * Assignments operational health — Work vs Studio contextual metrics (Doctrine V3).
  *
- * Pure presentation adapter: the container resolves counts (from the scheduling read
- * API + the operational calculations registry) and passes them in; this file only maps
- * them onto the canonical `WorkspaceOperationalHealth` band. No layout or trend styling
- * lives here, and it never fetches — so the control band cannot double-load the workspace.
+ * Work mode surfaces assignment-platform attention counts; Studio mode surfaces
+ * administration inventory (types, patterns). Pure presentation — no fetching here.
  */
 
 import { useMemo } from "react";
@@ -15,19 +13,17 @@ import WorkspaceOperationalHealth, {
 } from "@/components/workspace/WorkspaceOperationalHealth";
 
 export type SchedulingWorkCounts = {
-    /** Children ready to start with no room yet. */
-    toDecide: number | null;
-    /** e.g. "6 / 7" rooms within ratio, or null when the ratio read-model is unresolved. */
-    roomsInRatio: string | null;
-    /** Site fill percentage, e.g. "82%", or null when occupancy is unresolved. */
-    fill: string | null;
-    /** Children whose start date falls within this week. */
-    startsThisWeek: number | null;
+    childrenMissingAssignments: number | null;
+    multipleAssignments: number | null;
+    upcomingAssignments: number | null;
+    futurePrimaryChanges: number | null;
+    assignmentConflicts: number | null;
+    expiringSoon: number | null;
 };
 
 export type SchedulingStudioCounts = {
+    assignmentTypes: number | null;
     patterns: number | null;
-    calculations: number | null;
 };
 
 const DASH = "—";
@@ -47,51 +43,70 @@ export default function SchedulingKpiStrip({
     const workItems: WorkspaceOperationalHealthItem[] = useMemo(
         () => [
             {
-                key: "to_decide",
-                label: "To decide",
-                value: show(work.toDecide),
-                tone: work.toDecide && work.toDecide > 0 ? "ember" : "pine",
+                key: "missing",
+                label: "Missing assignments",
+                value: show(work.childrenMissingAssignments),
+                tone: work.childrenMissingAssignments && work.childrenMissingAssignments > 0 ? "ember" : "pine",
             },
             {
-                key: "rooms_in_ratio",
-                label: "Rooms in ratio",
-                value: show(work.roomsInRatio),
-                tone: "pine",
+                key: "multiple",
+                label: "Multiple",
+                value: show(work.multipleAssignments),
+                tone: work.multipleAssignments && work.multipleAssignments > 0 ? "midnight" : "pine",
             },
             {
-                key: "fill",
-                label: "Fill",
-                value: show(work.fill),
-                tone: "pine",
-            },
-            {
-                key: "starts_this_week",
-                label: "Starts this week",
-                value: show(work.startsThisWeek),
+                key: "upcoming",
+                label: "Upcoming",
+                value: show(work.upcomingAssignments),
                 tone: "midnight",
             },
+            {
+                key: "future_primary",
+                label: "Future primary",
+                value: show(work.futurePrimaryChanges),
+                tone: work.futurePrimaryChanges && work.futurePrimaryChanges > 0 ? "gold" : "pine",
+            },
+            {
+                key: "conflicts",
+                label: "Conflicts",
+                value: show(work.assignmentConflicts),
+                tone: work.assignmentConflicts && work.assignmentConflicts > 0 ? "ember" : "pine",
+            },
+            {
+                key: "expiring",
+                label: "Expiring soon",
+                value: show(work.expiringSoon),
+                tone: work.expiringSoon && work.expiringSoon > 0 ? "gold" : "pine",
+            },
         ],
-        [work.toDecide, work.roomsInRatio, work.fill, work.startsThisWeek]
+        [
+            work.childrenMissingAssignments,
+            work.multipleAssignments,
+            work.upcomingAssignments,
+            work.futurePrimaryChanges,
+            work.assignmentConflicts,
+            work.expiringSoon,
+        ]
     );
 
     const studioItems: WorkspaceOperationalHealthItem[] = useMemo(
         () => [
-            { key: "patterns", label: "Patterns", value: show(studio.patterns), tone: "midnight" },
-            { key: "calculations", label: "Calculations", value: show(studio.calculations), tone: "pine" },
+            { key: "types", label: "Assignment Categories", value: show(studio.assignmentTypes), tone: "midnight" },
+            { key: "patterns", label: "Patterns", value: show(studio.patterns), tone: "pine" },
         ],
-        [studio.patterns, studio.calculations]
+        [studio.assignmentTypes, studio.patterns]
     );
 
     const isWork = mode === "work";
 
     return (
         <WorkspaceOperationalHealth
-            eyebrow={isWork ? "This week" : "Studio health"}
+            eyebrow={isWork ? "Assignment health" : "Studio inventory"}
             items={isWork ? workItems : studioItems}
             loading={loading}
-            ariaLabel={isWork ? "Scheduling operational health" : "Scheduling studio health"}
+            ariaLabel={isWork ? "Assignment operational health" : "Assignment studio inventory"}
             className="w-full"
-            data-testid={isWork ? "scheduling-work-health-band" : "scheduling-studio-health-band"}
+            data-testid={isWork ? "assignments-work-health-band" : "assignments-studio-health-band"}
         />
     );
 }

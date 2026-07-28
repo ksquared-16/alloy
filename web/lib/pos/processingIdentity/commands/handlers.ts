@@ -497,6 +497,7 @@ const createLead: ProcessingIdentityCommand<CreateLeadPayload, { lead_id: string
             status_key: input.status_key ?? "new",
             stage_key: input.stage_key ?? "lead",
             work_unit_id: input.work_unit_id ?? null,
+            location_id: input.location_id ?? null,
         });
         return refResult([{ targetType: "lead", recordId: res.id, created: res.created }], {
             lead_id: res.id,

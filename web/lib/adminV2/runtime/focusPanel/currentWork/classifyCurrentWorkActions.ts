@@ -85,11 +85,16 @@ function isLifecycleIntentAction(actionKey: string): boolean {
 function isContextuallyAllowedRecordHeaderAction(
     actionKey: string,
     allowedActionKeys: ReadonlySet<string> | null | undefined,
+    enforceAllowlist?: boolean,
 ): boolean {
     const key = actionKey.trim();
     if (!key) return false;
 
     const intentKey = normalizeActionRefToIntentKey(key);
+    if (enforceAllowlist) {
+        if (!allowedActionKeys) return false;
+        return allowedActionKeys.has(key) || allowedActionKeys.has(intentKey);
+    }
     if (allowedActionKeys?.size) {
         return allowedActionKeys.has(key) || allowedActionKeys.has(intentKey);
     }
@@ -120,6 +125,11 @@ export function classifyRecordHeaderActionsForCurrentWork(args: {
     primaryActionLabel: string | null;
     /** Stage catalog + explicit template refs — record-header fallback must match these. */
     allowedActionKeys?: ReadonlySet<string> | null;
+    /**
+     * When true, empty allowlist blocks all actions (explicit-empty command_set_v1).
+     * When false/omitted, empty allowlist preserves legacy unrestricted fallback.
+     */
+    enforceActionAllowlist?: boolean;
 }): ClassifiedCurrentWorkActions {
     const slots = args.recordHeaderSlots;
     const supporting: CurrentWorkActionVM[] = [];
@@ -144,7 +154,15 @@ export function classifyRecordHeaderActionsForCurrentWork(args: {
         const key = action.key.trim();
         if (!key || seen.has(key)) continue;
         if (isGenericUmbrellaLifecycleAction(key)) continue;
-        if (!isContextuallyAllowedRecordHeaderAction(key, args.allowedActionKeys)) continue;
+        if (
+            !isContextuallyAllowedRecordHeaderAction(
+                key,
+                args.allowedActionKeys,
+                args.enforceActionAllowlist === true
+            )
+        ) {
+            continue;
+        }
 
         const labelNorm = action.label.trim().toLowerCase();
         if (primaryNorm && (labelNorm === primaryNorm || labelNorm === `${primaryNorm} →`)) continue;

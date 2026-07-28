@@ -35,6 +35,7 @@ import {
     type ProcessingCanvasState,
 } from "@/lib/pos/processingCase/formDraft/processingCanvasInteraction";
 import { ProcessingQuestionReviewList } from "./ProcessingQuestionReviewList";
+import { recommendSectionDisposition, type SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
 import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
@@ -65,6 +66,14 @@ function formatWhen(iso: string | null | undefined): string {
 }
 
 /** Build the editable reviewed question list from the stored draft, preserving provenance. */
+/** Translate OCR confidence (0–100) into operator language (numeric is supporting detail, not primary). */
+function ocrConfidenceLabel(confidence: number): string {
+    if (confidence <= 0) return "Could not determine";
+    if (confidence >= 85) return "High confidence";
+    if (confidence >= 70) return "Review recommended";
+    return "Needs attention";
+}
+
 function seedReviewQuestions(draft: StoredFormDraftPreview | null): ReviewQuestionInput[] {
     if (!draft) return [];
     const out: ReviewQuestionInput[] = [];
@@ -127,9 +136,37 @@ export default function PosTemplateSetupColumn({
     const [pendingSaveBusy, setPendingSaveBusy] = useState(false);
     const pendingSaveLockRef = useRef(false);
     const [phase, setPhase] = useState<"review" | "generate">("review");
+    const [dispositionOverrides, setDispositionOverrides] = useState<Record<string, SectionDisposition>>({});
     const [formName, setFormName] = useState("");
     const [creatingPhase, setCreatingPhase] = useState(0);
     const [generateAnywayOpen, setGenerateAnywayOpen] = useState(false);
+
+    // Per-section disposition: Alloy recommends an intent (with operator-language confidence); the
+    // operator confirms/overrides. Effective disposition drives the emitted schema on create.
+    const sectionInfo = useMemo(() => {
+        const byTitle = new Map<string, string[]>();
+        const order: string[] = [];
+        for (const q of reviewQuestions) {
+            if (q.ignored) continue;
+            const title = (q.section ?? "").trim() || "Questions";
+            if (!byTitle.has(title)) {
+                byTitle.set(title, []);
+                order.push(title);
+            }
+            byTitle.get(title)!.push(q.displayLabel || q.evidenceLabel || "");
+        }
+        const out: Record<string, { disposition: SectionDisposition; recommended: SectionDisposition; confidence: "high" | "medium" | "low" }> = {};
+        for (const title of order) {
+            const labels = byTitle.get(title)!;
+            const rec = recommendSectionDisposition({ title, fieldLabels: labels, sectionText: labels.join("\n") });
+            out[title] = {
+                recommended: rec.disposition,
+                confidence: rec.confidence,
+                disposition: dispositionOverrides[title] ?? rec.disposition,
+            };
+        }
+        return out;
+    }, [reviewQuestions, dispositionOverrides]);
     const autoDetectAttemptedRef = useRef<string | null>(null);
 
     const clearSelection = () => {
@@ -161,10 +198,18 @@ export default function PosTemplateSetupColumn({
     const primary = detail?.sources.find((s) => s.role === "primary") ?? detail?.sources[0] ?? null;
     const docId = draft?.source_document_id ?? (primary?.kind === "document" ? (primary?.id ?? null) : null);
     const processingIntent = detail?.processingIntent ?? null;
-    const sourceFilenameEarly = primary?.display.label ?? draft?.title ?? "Untitled document";
+    // Format/capability detection MUST use the raw filename (with extension) — the display `label`
+    // (e.g. "Upload 1784… — 07/24/2026") drops the extension and would misresolve to an unsupported
+    // format, wrongly gating out "generate form" for a perfectly valid PDF.
+    const sourceFilenameEarly = primary?.display.originalFilename ?? primary?.display.label ?? draft?.title ?? "Untitled document";
     const sourceFormat = detectProcessingSourceFormat(sourceFilenameEarly, "");
     const sourceCapabilities = capabilitiesForFormat(sourceFormat);
-    const shouldAutoDetect = processingIntent === "generate_form" && sourceCapabilities.questionDetection;
+    // OCR provenance (scanned / image source). An OCR-derived document is eligible for form setup even
+    // when its native format has no question detection — the review runs over the OCR text.
+    const ocrProvenance = primary?.display.ocr ?? null;
+    const isOcrDerived = !!ocrProvenance?.derived;
+    const questionDetectionAvailable = sourceCapabilities.questionDetection || isOcrDerived;
+    const shouldAutoDetect = processingIntent === "generate_form" && questionDetectionAvailable;
 
     // Re-seed the reviewed list when the stored draft changes (detect / save / case switch).
     useEffect(() => {
@@ -540,6 +585,9 @@ export default function PosTemplateSetupColumn({
                         ...(f.description ? { description: f.description } : {}),
                         ...(f.field_source ? { field_source: f.field_source } : {}),
                     })),
+                    section_dispositions: Object.entries(sectionInfo)
+                        .filter(([, info]) => info.disposition !== "fields")
+                        .map(([title, info]) => ({ title, disposition: info.disposition })),
                 }),
             });
             const saveBody = (await saveRes.json().catch(() => ({}))) as { error?: string };
@@ -571,7 +619,7 @@ export default function PosTemplateSetupColumn({
 
     // ---- no draft yet: auto-detect for generate_form, manual gate otherwise ----
     if (!draft) {
-        if (processingIntent === "generate_form" && !sourceCapabilities.questionDetection) {
+        if (processingIntent === "generate_form" && !questionDetectionAvailable) {
             return (
                 <div className="flex h-full min-h-0 flex-col items-center justify-center bg-white p-6 text-center">
                     <div className="max-w-sm">
@@ -646,6 +694,25 @@ export default function PosTemplateSetupColumn({
                     </p>
                 </div>
             </div>
+
+            {isOcrDerived ? (
+                <div
+                    className="mb-2 shrink-0 rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1"
+                    data-testid="ocr-derived-banner"
+                >
+                    <span className="text-[10px] font-semibold text-amber-800">Detected using OCR — review recommended</span>
+                    <span className="mx-1.5 text-amber-300" aria-hidden>
+                        ·
+                    </span>
+                    <span className="text-[10px] font-medium text-amber-800" data-testid="ocr-confidence">
+                        {ocrConfidenceLabel(ocrProvenance?.confidence ?? 0)}
+                    </span>
+                    <span className="ml-1 text-[9px] text-amber-700/70">({ocrProvenance?.confidence ?? 0}% overall)</span>
+                    <p className="mt-0.5 text-[9px] text-amber-700/80">
+                        Read from a scanned/image document — verify each field against the original before publishing.
+                    </p>
+                </div>
+            ) : null}
 
             {creating ? (
                 <ProcessingNativeFormCreatingState
@@ -955,6 +1022,10 @@ export default function PosTemplateSetupColumn({
                                     onIgnore={toggleIgnoreQuestion}
                                     onRemove={removeQuestion}
                                     onStartMapping={startMapping}
+                                    sectionInfo={sectionInfo}
+                                    onSectionDisposition={(title, disposition) =>
+                                        setDispositionOverrides((prev) => ({ ...prev, [title]: disposition }))
+                                    }
                                 />
                                 <button
                                     type="button"

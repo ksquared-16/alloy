@@ -26,8 +26,8 @@ import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContex
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import {
-    buildSummaryDocFromOrder,
     entryInstanceId,
+    mergeFocusPanelSummaryWorkingDoc,
     readSummaryCardOrder,
     updateSummaryCardConfig,
     type SummaryCardOrderEntry,
@@ -38,6 +38,7 @@ import {
     loadFocusPanelSummaryLayout,
     publishFocusPanelSummary,
     saveFocusPanelSummaryDraft,
+    FOCUS_PANEL_SUMMARY_NESTED_SAVED_EVENT,
     type FocusPanelSummaryLayoutState,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryLayoutService";
 import { validateNestedSurfacesForPublish } from "@/lib/adminV2/settings/surfaces/nestedSurfaceConfigService";
@@ -213,6 +214,8 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
 
     // Publish loop state (configure → publish → operate).
     const [layoutState, setLayoutState] = useState<FocusPanelSummaryLayoutState>({ draft: null, published: null });
+    /** Latest canonical doc — mutations merge onto this rather than rebuilding from a partial projection. */
+    const [baseDoc, setBaseDoc] = useState(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
     const [loaded, setLoaded] = useState(false);
     const [dirty, setDirty] = useState(false);
     // Published row/width layout (Composition V2). Null → runtime keeps its auto
@@ -226,29 +229,52 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
 
     useEffect(() => {
         let active = true;
+        const hydrate = (state: FocusPanelSummaryLayoutState) => {
+            if (!active) return;
+            setLayoutState(state);
+            const seedDoc = state.draft?.doc ?? state.published?.doc ?? FOCUS_PANEL_SUMMARY_DEFAULT_DOC;
+            setBaseDoc(seedDoc);
+            const seeded = readSummaryCardOrder(seedDoc);
+            if (seeded.length > 0) setOrder(seeded);
+            // Prefer authored layout; only fall back to defaults when the surface has none.
+            setRowLayout(
+                readFocusPanelPublishedLayout(seedDoc)
+                    ?? (state.draft || state.published
+                        ? null
+                        : readFocusPanelPublishedLayout(FOCUS_PANEL_SUMMARY_DEFAULT_DOC)),
+            );
+            const nested = readNestedSurfacesFromDoc(seedDoc);
+            setNestedConfigs(nested);
+            setNestedConfigsSeed(nested);
+            setLoaded(true);
+        };
         loadFocusPanelSummaryLayout()
-            .then((state) => {
-                if (!active) return;
-                setLayoutState(state);
-                const seedDoc = state.draft?.doc ?? state.published?.doc ?? FOCUS_PANEL_SUMMARY_DEFAULT_DOC;
-                const seeded = readSummaryCardOrder(seedDoc);
-                if (seeded.length > 0) setOrder(seeded);
-                setRowLayout(
-                    readFocusPanelPublishedLayout(seedDoc)
-                        ?? readFocusPanelPublishedLayout(FOCUS_PANEL_SUMMARY_DEFAULT_DOC),
-                );
-                const nested = readNestedSurfacesFromDoc(seedDoc);
-                setNestedConfigs(nested);
-                setNestedConfigsSeed(nested);
-                setLoaded(true);
-            })
+            .then(hydrate)
             .catch((e: unknown) => {
                 if (!active) return;
                 setStatusNote((e as Error).message);
                 setLoaded(true);
             });
+        const onNestedSaved = () => {
+            loadFocusPanelSummaryLayout()
+                .then((state) => {
+                    if (!active) return;
+                    setLayoutState(state);
+                    const seedDoc = state.draft?.doc ?? state.published?.doc ?? FOCUS_PANEL_SUMMARY_DEFAULT_DOC;
+                    setBaseDoc(seedDoc);
+                    const nested = readNestedSurfacesFromDoc(seedDoc);
+                    setNestedConfigs(nested);
+                    setNestedConfigsSeed(nested);
+                    // Do not reset order/rowLayout here — parent may have unsaved composition edits.
+                })
+                .catch(() => {
+                    /* keep local state if refresh fails */
+                });
+        };
+        window.addEventListener(FOCUS_PANEL_SUMMARY_NESTED_SAVED_EVENT, onNestedSaved);
         return () => {
             active = false;
+            window.removeEventListener(FOCUS_PANEL_SUMMARY_NESTED_SAVED_EVENT, onNestedSaved);
         };
     }, []);
 
@@ -261,20 +287,18 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
         [order],
     );
 
-    // The summary doc carries the card instances/config (from order) AND, when the
-    // operator has composed one, the published row/width layout in metadata that the
-    // runtime renders exactly. No authored layout → no metadata → auto fallback.
+    // Merge typed working edits onto the loaded canonical doc (lossless for untouched metadata).
     const buildDocWithLayout = useCallback(() => {
-        const doc = buildSummaryDocFromOrder(order);
-        const layoutMeta = rowLayout ? withPublishedLayoutMetadata(doc.metadata, rowLayout) : doc.metadata ?? {};
-        return {
-            ...doc,
-            metadata: {
-                ...layoutMeta,
-                nestedSurfaces: reconcileNestedConfigsForPublish(nestedConfigs),
-            },
-        };
-    }, [order, rowLayout, nestedConfigs]);
+        const publishedLayoutMetadata = rowLayout
+            ? withPublishedLayoutMetadata({}, rowLayout)
+            : null;
+        return mergeFocusPanelSummaryWorkingDoc({
+            base: baseDoc,
+            order,
+            publishedLayoutMetadata,
+            nestedSurfaces: reconcileNestedConfigsForPublish(nestedConfigs),
+        });
+    }, [baseDoc, order, rowLayout, nestedConfigs]);
 
     const handleNestedConfigsChange = useCallback((configs: Record<string, NestedSurfaceConfig>) => {
         setNestedConfigs(configs);
@@ -324,8 +348,18 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
         setSaving(true);
         setStatusNote(null);
         try {
-            const saved = await saveFocusPanelSummaryDraft(layoutState, buildDocWithLayout());
-            setLayoutState((s) => ({ ...s, draft: { id: saved.id, version: saved.version, doc: saved.doc } }));
+            const nextDoc = buildDocWithLayout();
+            const saved = await saveFocusPanelSummaryDraft(layoutState, nextDoc);
+            setBaseDoc(saved.doc);
+            setLayoutState((s) => ({
+                ...s,
+                draft: {
+                    id: saved.id,
+                    version: saved.version,
+                    doc: saved.doc,
+                    updatedAt: saved.updatedAt ?? null,
+                },
+            }));
             setDirty(false);
             setStatusNote("Draft saved");
         } catch (e) {
@@ -347,9 +381,15 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
             }
             const draft = await saveFocusPanelSummaryDraft(layoutState, nextDoc);
             const published = await publishFocusPanelSummary(draft.id);
+            setBaseDoc(published.doc);
             setLayoutState({
                 draft: null,
-                published: { id: published.id, version: published.version, doc: published.doc },
+                published: {
+                    id: published.id,
+                    version: published.version,
+                    doc: published.doc,
+                    updatedAt: published.updatedAt ?? null,
+                },
             });
             setDirty(false);
             setStatusNote(`Published v${published.version}`);

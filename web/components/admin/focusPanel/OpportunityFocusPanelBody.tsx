@@ -13,7 +13,7 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
-import type { FocusPanelSubjectSnapshot } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 
 /** Enriched (settled drawer VM) input — present once Settlement has resolved the record VM. */
 export type FocusPanelEnrichedInput = {
@@ -29,7 +29,7 @@ export type FocusPanelCommitCriticalInput = {
     publishedStageInputs: PublishedStageInputsForCurrentWork | null;
     situation: { stageKey: string; stageLabel: string; purpose: string | null } | null;
     primaryAction: { actionRef: string; label: string } | null;
-    subjectSnapshot: FocusPanelSubjectSnapshot | null;
+    subjectIdentityTruth: SubjectIdentityTruth | null;
 };
 
 type Props = {
@@ -90,7 +90,7 @@ export default function OpportunityFocusPanelBody({
                 publishedStageInputs: commitCritical.publishedStageInputs,
                 situation: commitCritical.situation,
                 primaryAction: commitCritical.primaryAction,
-                subjectSnapshot: commitCritical.subjectSnapshot,
+                subjectIdentityTruth: commitCritical.subjectIdentityTruth,
             });
         }
         return null;

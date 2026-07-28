@@ -10,7 +10,6 @@ import { completionOutcomesForPicker } from "@/lib/workIntent/stageWorkOutcomeEf
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import { resolveOutgoingProcessTransitions } from "@/lib/lifecycle/resolveOutgoingProcessTransitions";
-import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 
 import {
     actionsFromConfigRefs,
@@ -43,6 +42,7 @@ import { resolveCurrentWorkTemplateAction } from "./resolveCurrentWorkTemplateAc
 import { resolveStageWorkOutcomeCompletionState } from "./resolveStageWorkOutcomeCompletionState";
 import { isGenericUmbrellaLifecycleAction } from "./currentWorkActionSurfacePolicy";
 import { resolveWorkTemplateExecutionMode } from "@/lib/lifecycle/resolveWorkTemplateExecutionMode";
+import { buildProcessAwareActionAllowlist } from "@/lib/lifecycle/processRuntimeCommandProjection";
 
 export type BuildCurrentWorkSurfaceVMInput = {
     context: OperationalContext;
@@ -479,30 +479,23 @@ function filterOutcomesByTemplateRefs(
 function contextAllowedActionKeys(args: {
     actionCatalog: StageActionCatalogV1 | null | undefined;
     templateConfig: CurrentWorkTemplateConfigOverlay | null | undefined;
-}): ReadonlySet<string> {
-    const keys = new Set<string>();
-    for (const candidate of args.actionCatalog?.candidate_actions ?? []) {
-        const key = candidate.action_key.trim();
-        if (!key) continue;
-        keys.add(key);
-        keys.add(normalizeActionRefToIntentKey(key));
-    }
+    commandProjection?: import("@/lib/lifecycle/processRuntimeCommandProjection").ProcessRuntimeCommandProjection | null;
+}): { keys: ReadonlySet<string>; enforce: boolean } {
     const template = args.templateConfig;
-    const refs = [
+    const explicitTemplateRefs = [
         template?.primary_action?.action_ref,
         ...(template?.helpful_actions ?? []).map((row) => row.action_ref),
         ...(template?.alternate_paths ?? []).flatMap((row) =>
             "action_ref" in row ? [row.action_ref] : [],
         ),
         ...(template?.communication_actions ?? []).map((row) => row.action_ref),
-    ];
-    for (const ref of refs) {
-        const key = ref?.trim();
-        if (!key) continue;
-        keys.add(key);
-        keys.add(normalizeActionRefToIntentKey(key));
-    }
-    return keys;
+    ].filter((ref): ref is string => Boolean(ref?.trim()));
+
+    return buildProcessAwareActionAllowlist({
+        projection: args.commandProjection,
+        stageActionCatalog: args.actionCatalog,
+        explicitTemplateRefs,
+    });
 }
 
 /**
@@ -565,14 +558,17 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
             ? CURRENT_WORK_RECORD_OUTCOME_CTA
             : null;
 
+    const allowlist = contextAllowedActionKeys({
+        actionCatalog: context.publishedStageInputs?.actionCatalog ?? null,
+        templateConfig,
+        commandProjection: context.publishedStageInputs?.commandProjection ?? null,
+    });
     const classified = classifyRecordHeaderActionsForCurrentWork({
         recordHeaderSlots: context.recordHeaderActions ?? null,
         showOutcomeCompletion,
         primaryActionLabel,
-        allowedActionKeys: contextAllowedActionKeys({
-            actionCatalog: context.publishedStageInputs?.actionCatalog ?? null,
-            templateConfig,
-        }),
+        allowedActionKeys: allowlist.keys,
+        enforceActionAllowlist: allowlist.enforce,
     });
 
     const configCompletedKeys = new Set(completedChecklistKeys ?? []);

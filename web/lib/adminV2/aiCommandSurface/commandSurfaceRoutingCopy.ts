@@ -67,6 +67,8 @@ function routeSpecialistLabel(kind: CommandSurfaceRouteKind): string {
             return "Config Assist";
         case "job_layout":
             return "Job overview layout";
+        case "operational_question":
+            return "Operational Intelligence";
         default:
             return "Orchestrator";
     }
@@ -93,6 +95,9 @@ export function buildCommandSurfaceRoutingNotice(input: CommandSurfaceRoutingNot
             break;
         case "job_layout":
             detail = "job overview layout change";
+            break;
+        case "operational_question":
+            detail = "Future Room Capacity";
             break;
         default:
             detail = "this request";

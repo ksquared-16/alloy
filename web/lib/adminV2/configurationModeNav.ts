@@ -3,7 +3,10 @@
  * Settings Home and sidebar share this IA (Organization · Data Model · Operations · Business).
  * @see docs/system/configuration-ownership-doctrine.md
  */
-import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    adminSettingsSubpathHref,
+    CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF,
+} from "@/lib/admin/canonicalAdminRoutes";
 import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
 
 const settings = adminSettingsSubpathHref;
@@ -114,9 +117,9 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
                 testId: "config-mode-nav-relationships",
             },
             {
-                href: dataModelSectionHref("calculations"),
-                label: "Operational Calculations",
-                description: "Metrics, formulas, targets, and derived values.",
+                href: CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF,
+                label: "Operational Intelligence",
+                description: "Measurements, goals, health, lifecycle, and history.",
                 icon: "analytics",
                 testId: "config-mode-nav-analytics",
             },
@@ -127,6 +130,13 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         label: "Operations",
         description: "Configure how work gets done.",
         items: [
+            {
+                href: "/admin/workflows",
+                label: "Automation",
+                description: "Workflow triggers and platform-triggered behavior.",
+                icon: "automation",
+                testId: "config-mode-nav-automation",
+            },
             {
                 href: settings("processes"),
                 label: "Processes",
@@ -140,13 +150,6 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
                 description: "Design Surfaces for queues, rows, Focus Panel, and cards.",
                 icon: "layouts",
                 testId: "config-mode-nav-surfaces",
-            },
-            {
-                href: "/admin/workflows",
-                label: "Automation",
-                description: "Workflow triggers and platform-triggered behavior.",
-                icon: "automation",
-                testId: "config-mode-nav-automation",
             },
         ],
     },
@@ -169,11 +172,19 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
 /** Internal / developer catalog — not shown in primary operator nav. */
 export const CONFIGURATION_MODE_INTERNAL_NAV_ITEMS: readonly ConfigurationModeNavItem[] = [
     {
-        href: settings("actions"),
-        label: "Action definitions",
-        description: "Platform action definition catalog (developer metadata).",
+        href: "/adminV2/settings/actions",
+        label: "Action definitions (legacy)",
+        description: "Transitional action definition / placement catalog (developer).",
         icon: "integrations",
         testId: "config-mode-nav-action-definitions",
+        internal: true,
+    },
+    {
+        href: "/organization/commands",
+        label: "Command capability diagnostics",
+        description: "Internal Capability Registry inspection — not organization configuration.",
+        icon: "integrations",
+        testId: "config-mode-nav-commands-diagnostics",
         internal: true,
     },
 ] as const;
@@ -235,6 +246,17 @@ export function configurationModeNavItemActive(
             || p.startsWith("/settings/users-roles/")
         );
     }
+    if (h === "/organization/commands") {
+        return (
+            p === h
+            || p.startsWith(`${h}/`)
+            || p.startsWith("/adminV2/settings/organization/commands")
+            || p.startsWith("/configuration/commands")
+        );
+    }
+    if (h === "/adminV2/settings/actions") {
+        return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/actions");
+    }
     if (h === settings("processes")) {
         return (
             p === h
@@ -251,6 +273,18 @@ export function configurationModeNavItemActive(
             || p.startsWith("/settings/layouts")
         );
     }
+    if (hrefPath === "/organization/operational-intelligence") {
+        return (
+            p === "/organization/operational-intelligence"
+            || p.startsWith("/organization/operational-intelligence")
+            || p === "/settings/calculations"
+            || p.startsWith("/settings/calculations")
+            || p === "/settings/analytics"
+            || p.startsWith("/settings/analytics")
+            || p === "/settings/kpis"
+            || p.startsWith("/settings/kpis")
+        );
+    }
     if (hrefPath === "/organization/data-model" || hrefPath.includes("/settings/entities")) {
         const onDataModel =
             p === "/organization/data-model"
@@ -265,10 +299,6 @@ export function configurationModeNavItemActive(
             || p.startsWith("/settings/option-sets")
             || p === "/settings/relationships"
             || p.startsWith("/settings/relationships")
-            || p === "/settings/calculations"
-            || p.startsWith("/settings/calculations")
-            || p === "/settings/analytics"
-            || p.startsWith("/settings/analytics")
             || p === settings("entity-labels")
             || p.startsWith(`${settings("entity-labels")}/`)
             || p === settings("label-entities")

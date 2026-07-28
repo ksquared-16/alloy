@@ -70,6 +70,8 @@ export type CreateLeadPayload = {
     status_key?: string | null;
     stage_key?: string | null;
     work_unit_id?: string | null;
+    /** Lead site — cascades to opportunity.location_id on create. */
+    location_id?: string | null;
 };
 
 export type UpdateLeadPayload = {

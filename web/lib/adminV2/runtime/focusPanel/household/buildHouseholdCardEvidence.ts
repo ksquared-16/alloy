@@ -41,6 +41,7 @@ import { resolveLeadDrawerHeaderContext } from "@/lib/layout/runtime/resolveLead
 import { resolveOpportunitySecondaryContactPerson } from "@/lib/layout/runtime/resolveOpportunityRoleContactPerson";
 import { formatPhoneUS } from "@/lib/adminFormatters";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import { resolveIdentityPhotoUrlFromRaw } from "@/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     householdRelationshipSectionTitle,
@@ -183,7 +184,10 @@ function splitContactName(name: string): { firstName: string | null; lastName: s
     return { firstName: parts[0]!, lastName: parts.slice(1).join(" ") || null };
 }
 
-function toEvidenceContact(row: DrawerHouseholdContactRow): HouseholdEvidenceContact {
+function toEvidenceContact(
+    row: DrawerHouseholdContactRow,
+    imageUrl?: string | null,
+): HouseholdEvidenceContact {
     const explicitFirst = trimOrNull((row as { first_name?: string | null }).first_name);
     const explicitLast = trimOrNull((row as { last_name?: string | null }).last_name);
     const split = splitContactName(row.display_name);
@@ -197,6 +201,7 @@ function toEvidenceContact(row: DrawerHouseholdContactRow): HouseholdEvidenceCon
         phone: formatPhoneForDisplay(row.phone),
         email: row.email,
         initials: row.initials || initialsFor(row.display_name),
+        imageUrl: imageUrl ?? null,
     };
 }
 
@@ -270,6 +275,17 @@ function buildPrimaryContact(
         trimOrNull(familyPrimary?.email) ??
         trimOrNull(record["person.secondary_email"]);
 
+    const imageUrl =
+        resolveIdentityPhotoUrlFromRaw(
+            (familyPrimary as unknown as Record<string, unknown> | null | undefined) ?? null,
+        )
+        ?? resolveIdentityPhotoUrlFromRaw({
+            photo_url: record["person.primary_photo_url"],
+            avatar_url: record["person.primary_avatar_url"],
+            profile_photo_url: record["person.primary_profile_photo_url"],
+            metadata: record["person.metadata"],
+        });
+
     return {
         personId: primaryPersonId ?? "primary",
         name,
@@ -278,6 +294,7 @@ function buildPrimaryContact(
         phone,
         email,
         initials: personDrawerHouseholdInitials(name),
+        imageUrl,
     };
 }
 
@@ -305,6 +322,10 @@ function appendSecondaryParentFromRecord(
         phone: formatPhoneForDisplay(secondary.phone),
         email: trimOrNull(secondary.email),
         initials: personDrawerHouseholdInitials(secondary.displayName),
+        imageUrl: resolveIdentityPhotoUrlFromRaw({
+            photo_url: (secondary as { photo_url?: string | null }).photo_url,
+            avatar_url: (secondary as { avatar_url?: string | null }).avatar_url,
+        }),
     });
 }
 
@@ -389,7 +410,10 @@ export function buildHouseholdCardEvidence(
             email: trimOrNull(row.email),
             initials: personDrawerHouseholdInitials(trimOrNull(row.name) ?? "Unnamed"),
         };
-        const evidence = toEvidenceContact(drawerRow);
+        const evidence = toEvidenceContact(
+            drawerRow,
+            resolveIdentityPhotoUrlFromRaw(row as unknown as Record<string, unknown>),
+        );
 
         const sectionKey = nestedConfig
             ? resolveHouseholdContactSectionKey({
@@ -439,6 +463,9 @@ export function buildHouseholdCardEvidence(
                 phone: trimOrNull(item.person_fields.phone),
                 email: trimOrNull(item.person_fields.email),
                 initials: personDrawerHouseholdInitials(item.person_display_name),
+                imageUrl: resolveIdentityPhotoUrlFromRaw(
+                    item.person_fields as unknown as Record<string, unknown>,
+                ),
             });
         }
     }
@@ -446,26 +473,32 @@ export function buildHouseholdCardEvidence(
     // Children rows — belonging-first; optional operational facts only when configured.
     const childFieldKeys = nestedConfig ? householdGroupFieldKeys(nestedConfig, "children") : [];
     const includeChildOperationalFields = childFieldKeys.length > 0;
-    const childRows = mapRawInquiryChildrenToDrawerRows(
-        (record._inquiry_children as unknown[]) ?? [],
-    ).map<HouseholdEvidenceChild>((row) => {
-        const id = row.id || row.display_name || "child";
-        const name = trimOrNull(row.display_name) ?? trimOrNull(row.first_name) ?? "Child";
-        if (!includeChildOperationalFields) {
-            return { id, name };
-        }
-        return {
-            id,
-            name,
-            dob: trimOrNull(row.dob)?.slice(0, 10) ?? null,
-            dobAge: formatFocusPanelDobAgeLine(row.dob, row.age),
-            age: trimOrNull(row.age),
-            program: trimOrNull(row.desired_program_label),
-            schedule: trimOrNull(row.desired_schedule_label),
-            startDate: formatFocusPanelDate(row.start_date),
-            status: trimOrNull(row.outcome_status_label) ?? trimOrNull(row.outcome_status_key),
-        };
-    });
+    const rawInquiryChildren = (record._inquiry_children as unknown[]) ?? [];
+    const childRows = mapRawInquiryChildrenToDrawerRows(rawInquiryChildren).map<HouseholdEvidenceChild>(
+        (row, index) => {
+            const id = row.id || row.display_name || "child";
+            const name = trimOrNull(row.display_name) ?? trimOrNull(row.first_name) ?? "Child";
+            const imageUrl = resolveIdentityPhotoUrlFromRaw(
+                (rawInquiryChildren[index] as Record<string, unknown> | undefined)
+                    ?? (row as unknown as Record<string, unknown>),
+            );
+            if (!includeChildOperationalFields) {
+                return { id, name, imageUrl };
+            }
+            return {
+                id,
+                name,
+                imageUrl,
+                dob: trimOrNull(row.dob)?.slice(0, 10) ?? null,
+                dobAge: formatFocusPanelDobAgeLine(row.dob, row.age),
+                age: trimOrNull(row.age),
+                program: trimOrNull(row.desired_program_label),
+                schedule: trimOrNull(row.desired_schedule_label),
+                startDate: formatFocusPanelDate(row.start_date),
+                status: trimOrNull(row.outcome_status_label) ?? trimOrNull(row.outcome_status_key),
+            };
+        },
+    );
 
     const primaryPhone = primaryContact?.phone ?? formatPhoneForDisplay(record["person.primary_phone"]);
     const primaryEmail = primaryContact?.email ?? trimOrNull(record["person.primary_email"]);

@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-14
+last_reviewed: 2026-07-28
 supersedes: []
 ---
 
@@ -31,6 +31,23 @@ Detailed behavior always lives in the **canonical owner** documents linked below
 **Status:** Active | Superseded
 **Superseded by:** link when applicable.
 ```
+
+---
+
+## 2026-07 — BOS Command Runtime Convergence (Mission 1)
+
+**Decision:**
+BOS is a Command placement, not a mutation engine. Business Process `command_set_v1` owns process-wide Command selection. Surfaces do not configure Commands. A standalone Organization Commands operator product is rejected. Confirmed BOS invokes go through one shared bridge into Command Runtime; domain executors remain authoritative. Representative families prove the architecture; not every Command must be conversational.
+
+**Why:**
+Create Lead–centric BOS paths and bespoke family clients would not scale and risked inventing Commands outside Process authority.
+
+**Consequences:**
+Future BOS adapters prepare only and execute via `executePlatformCommandViaActionsApi`. Conversation Runtime is a separate mission. Coverage ledger honesty is required. Do not reopen Surface Command Exposure or a standalone Commands product.
+
+**Canonical owners:** [`../milestones/bos-command-runtime-convergence-closeout.md`](../milestones/bos-command-runtime-convergence-closeout.md), [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md), [`../modules/ai-platform.md`](../modules/ai-platform.md).
+
+**Status:** Active
 
 ---
 
@@ -265,6 +282,28 @@ No privileged client-side service-role shortcuts “for AI.” Recommendations s
 - [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md)  
 - [`../../system/bos-identity-doctrine.md`](../../system/bos-identity-doctrine.md)  
 - [`../../product/bos-foundation.md`](../../product/bos-foundation.md)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — BOS actionable interface binds to Operational Command Runtime
+
+**Decision:**  
+BOS is Alloy’s **universal conversational command interface** for registered operational commands, but it is a **placement** over the **Operational Command Runtime** — not a parallel mutation, identity, form, or Processing engine. Confirmed Create Lead execution uses existing `POST /api/admin/actions/execute` / registered `create_lead`. Conversation and Form share one `BosCommandDraft`. Processing owns inbound identity resolution at the established approval/commit boundary. V1 stops at the Create Lead reference flow + Actions placement convergence; slash commands and daily briefing are deferred foundations.
+
+**Why:**  
+Operators need one trusted command surface without duplicating authority. Binding BOS to the registered action path preserves permissions, eligibility, audit, idempotency, and Processing identity guarantees.
+
+**Consequences:**  
+No new foundational execute API for BOS Create Lead. No Processing Case on first paste. No auto-open Focus Panel on success. No new identity tables for V1 session state (sessionStorage). Modal Create Lead remains a compatibility host behind an explicit flag.
+
+**Canonical owners:**  
+- [`../modules/ai-platform.md`](../modules/ai-platform.md)  
+- [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md)  
+- [`../../sprints/active/bos-actionable-interface/`](../../sprints/active/bos-actionable-interface/)
 
 **Status:** Active  
 

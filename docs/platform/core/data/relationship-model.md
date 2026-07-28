@@ -179,6 +179,33 @@ Relationships are **edges** between canonical entities — not duplicate copies 
 
 ---
 
+## Command Runtime delegation (P3.S1 / P3.S2)
+
+Relationship **semantics and mutation ownership** remain in the Relationship Action Framework
+(`executeRelationshipAction`, registries, role resolution). The Command Runtime may delegate
+exact operator capabilities through `POST /api/admin/actions/execute`:
+
+| Capability | Notes |
+|------------|-------|
+| `add_parent_guardian` | Fixed guardian role via registry; create or link person as today |
+| `link_existing_person` | Existing identity + role only; no identity creation |
+| `add_emergency_contact` | Fixed emergency_contact; create or link; does not imply pickup/guardian |
+| `add_authorized_pickup` | Fixed authorized_pickup; create or link; does not imply guardian/billing |
+| `add_billing_contact` | Fixed billing_contact; create or link; does not imply financial-account ownership |
+| `add_child` | Create or link child person; may attach household member / opportunity participation **only** via existing Relationship Framework path |
+| `link_existing_child` | Existing child person id only; no createChildDraft |
+
+`make_primary_contact` (external executor) and the Add Family Member hub remain outside facade
+execution. Dedicated `/api/admin/relationship-actions/*` routes remain.
+
+**Primary contact designation (P3.S4 / P4.S2):** Owned by `setHouseholdPrimaryContactForCustomer`
+(customer API), not `executeRelationshipAction`. Displaces prior household primary (**replacement**).
+P4.S2: Command Runtime facade preview + correlated commit enabled for `make_primary_contact` only.
+Direct `PATCH /api/admin/customers/:id/household-primary-contact` remains available without preview
+tokens (compatibility; Option A).
+
+---
+
 ## Reusable widget potential
 
 | Widget | Canonical source |

@@ -21,6 +21,7 @@ import { WorkspaceHeader } from "./WorkspaceHeader";
 import { ProcessGrid } from "./ProcessGrid";
 import { WorkspaceRightRailActions } from "@/components/presentation/rightRail/WorkspaceRightRailActions";
 import { CreateLeadEventHost } from "@/components/presentation/rightRail/CreateLeadEventHost";
+import { BosWorkspaceScopeSync } from "@/components/presentation/rightRail/BosWorkspaceScopeSync";
 import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
 
 export function WorkspaceSurface() {
@@ -42,6 +43,9 @@ export function WorkspaceSurface() {
             // position is restored on return (RETAINED-TRUTH §scroll).
             className={`flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto${model.ready ? " motion-surface-enter-back" : ""}`}
         >
+            {model.ready ? (
+                <BosWorkspaceScopeSync departmentId={model.defaultDepartmentId} />
+            ) : null}
             {!model.ready ? (
                 // ONE canonical operational-canvas loading owner — the SAME centered enlarged
                 // "Thinking…" the Work Unit uses (AlloyOperationalBootShell content mode), never a

@@ -16,6 +16,10 @@ import type { AvailableField, AvailableFieldEntityNamespace } from "@/lib/adminV
 import { assembleFocusPanelNestedProviders } from "@/lib/fields/consumerCanonicalProviderAssembly";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import { canonicalPickerIdentityForRefKey } from "@/lib/fields/canonicalProviderDedup";
+import {
+    COMPUTED_DISPLAY_OFFERED_REFS,
+    isIdentityFieldOfferedInPicker,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldPickerParity";
 
 /** Derived display fields — not selectable as independent editable identity fields. */
 const NON_SELECTABLE_DERIVED_REFS = new Set<string>([
@@ -112,8 +116,16 @@ export function assembleSurfaceComposerFieldCatalog(args: {
         const readOnlyDerived =
             NON_SELECTABLE_DERIVED_REFS.has(provider.refKey)
             || READ_ONLY_PROJECTION_REFS.has(provider.refKey)
-            || provider.kind === "calculated_field";
-        const selectable = !readOnlyDerived && !exclude.has(canonicalRef) && !exclude.has(provider.refKey);
+            || provider.kind === "calculated_field"
+            || COMPUTED_DISPLAY_OFFERED_REFS.has(canonicalRef);
+        // Computed display fields remain selectable (display-only); other derived refs stay hidden.
+        const computedDisplayOffered = COMPUTED_DISPLAY_OFFERED_REFS.has(canonicalRef);
+        const parityAllows = isIdentityFieldOfferedInPicker(canonicalRef, args.namespaces);
+        const selectable =
+            parityAllows
+            && (computedDisplayOffered || !readOnlyDerived)
+            && !exclude.has(canonicalRef)
+            && !exclude.has(provider.refKey);
 
         const option: SurfaceComposerFieldOption = {
             key: canonicalRef,

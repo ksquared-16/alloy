@@ -8,7 +8,6 @@ import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneCon
 import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBootstrap";
 import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTimezoneServer";
 import { loadEntityLabelsMapForOrgId, type EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
-import { loadOperatorLifecycleLandingCardsServer } from "@/lib/admin/loadOperatorLifecycleLandingServer";
 import { composeWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
 import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
 
@@ -29,9 +28,11 @@ async function loadOrgDisplayName(orgId: string): Promise<string | null> {
     }
 }
 
-async function loadViewerTimezoneSafe(userId: string): Promise<AdminViewerTimezoneValue> {
+async function loadViewerTimezoneSafe(userId: string, orgId: string): Promise<AdminViewerTimezoneValue> {
     try {
-        return await loadAdminViewerTimezoneBootstrap(userId);
+        // Pass the already-authoritative org id so viewer-tz resolution reuses it instead of re-running
+        // the ~1s access-core resolution (`getAdminOrgIdForUser`) the layout already performed.
+        return await loadAdminViewerTimezoneBootstrap(userId, orgId);
     } catch (e) {
         console.error("[adminV2/workspace/layout] viewer timezone bootstrap failed:", e);
         return { iana: "UTC", source: "utc_fallback" };
@@ -71,10 +72,10 @@ export default async function AdminV2WorkspaceLayout({
         return <AlloyOperationalBootShell variant="workspace" chrome="content" />;
     }
 
-    const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels, lifecycleCards] =
+    const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels] =
         await Promise.all([
             loadOrgDisplayName(orgId),
-            loadViewerTimezoneSafe(auth.user.id),
+            loadViewerTimezoneSafe(auth.user.id, orgId),
             loadOperationalTimezoneSafe(orgId),
             getAdminAccessContextCached(),
             // Known org id (no redundant access-core resolve) + a hard timeout so a slow cold industry
@@ -83,9 +84,6 @@ export default async function AdminV2WorkspaceLayout({
             loadEntityLabelsMapForOrgId(orgId, { timeoutMs: 150 }).catch(
                 (): EntityLabelsBootstrapMap => ({})
             ),
-            // First-paint lifecycle tiles for the workspace Route VM. Loads in parallel with the
-            // existing bundle; graceful [] on no-access/error keeps the client refinement path intact.
-            loadOperatorLifecycleLandingCardsServer(),
         ]);
 
     if (!access.ok) {
@@ -93,11 +91,13 @@ export default async function AdminV2WorkspaceLayout({
     }
     const accessScopeFingerprint = buildAccessScopeCacheFingerprint(scopeDimensionsFromAccess(access));
 
-    // Canonical server-composed workspace Route VM (the single first-paint payload). Assembled from
-    // the parallel-loaded parts above; consumed by the index page via the Route VM context.
+    // Canonical server-composed workspace Route VM **context** (org identity), shared by every
+    // workspace route. The landing-only `firstPaint.lifecycleCards` is NOT loaded here — the landing
+    // route loads its own seed and merges it in (`WorkspaceLandingRouteVmBridge`), so work-unit routes
+    // never pay for a landing-only seed. Work-unit routes read no part of this VM.
     const workspaceRouteVm = composeWorkspaceRouteVm({
         context: { orgId, orgName, accessScopeFingerprint },
-        lifecycleCards,
+        lifecycleCards: [],
     });
 
     if (process.env.NODE_ENV === "development") {

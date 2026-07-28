@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-28
 supersedes: []
 ---
 
@@ -44,6 +44,106 @@ Tokenized public actions: `/api/action/[token]/consume` → event → workflows.
 | **Eligibility resolvers** | `web/lib/adminV2/actions/actionEligibility.ts` |
 | **Config validation** | `web/lib/adminV2/actions/configValidation.ts` |
 | **Eligibility API** | `POST /api/admin/actions/eligibility` |
+| **Capability Registry (P0.S1)** | `web/lib/platform/commands/capabilityRegistry.ts` — classification honesty |
+| **Command Runtime Facade (P1–P4.S1)** | `web/lib/platform/commands/runtime/*` — prepare + RegisteredAction + Lead/Enrollment Mutation + Relationship (exact keys) execute; **P4.S1** destructive/replacement safety foundation (commit disabled) |
+
+---
+
+## Platform Capability Registry (P0.S1 — classification spine)
+
+**Status:** Shipped as an honesty/classification layer (July 2026). Does **not** replace Domain
+Executors. Does **not** execute Commands.
+
+`web/lib/platform/commands/capabilityRegistry.ts` owns **capability identity honesty**:
+
+- maturity (`executable` \| `adapted` \| `legacy` \| `navigation_only` \| … \| `placeholder` \| `unavailable`)
+- execution owner (RegisteredAction, Mutation Runtime, Relationship Runtime, tour domain, …)
+- organization Command catalog visibility
+
+A row in `action_definitions` never implies executable behavior by itself. Placeholder and
+unavailable identities are excluded from Settings “add Command” catalog flows and are treated
+as non-runnable in configured-key partitioning / process option support checks.
+
+**Execution remains distributed** behind existing owners for capabilities not yet adapted to the
+Command Runtime facade (`executeAdminAction`, remaining Relationship Framework keys, tour booking
+services).
+
+## Command Runtime Facade (preparation + gated execute)
+
+**Status:** Preparation (P1.S1). RegisteredAction execute (P1.S2). Lead Status Mutation execute
+(P2.S1). Child Enrollment Mutation execute (P2.S2). Relationship Runtime adapter (P3.S1–P3.S3).
+Destructive allowlist commit (P4.S2–S3: `make_primary_contact`, `delete_lead`, `cancel_tour`).
+Tour domain adapter (P5). Process `command_set_v1` authority (P6). Organization Commands **operator configuration product rejected** (P7–P8 product-boundary correction): `/organization/commands` is internal capability diagnostics only. Fallback disposition ledger + telemetry (P9). Remaining
+`executeAdminAction` keys are classified intentional compatibility / unsupported — not silently
+deleted.
+
+`prepareCommandInvocation` remains **side-effect free**.
+
+`executeCommandInvocation` is server-authoritative and **fail-closed**:
+
+- **RegisteredAction** (`create_lead`, `update_status`, `confirm_tour`, `schedule.create`) →
+  `runRegisteredAction`
+- **Lead Status Mutation** (`update_lead_status`, `close_lead` exact keys only) → `executeMutation`
+  → existing Lead Status domain handler
+- **Child Enrollment Mutation** (`update_child_enrollment_status`, `waitlist_child`, `enroll_child`
+  exact keys only) → `executeMutation` → existing Enrollment Status domain handler
+- **Relationship Runtime** (exact keys only) → `executeRelationshipAction`:
+  - P3.S1: `add_parent_guardian`, `link_existing_person`
+  - P3.S2: `add_emergency_contact`, `add_authorized_pickup`, `add_billing_contact`
+  - P3.S3: `add_child`, `link_existing_child`
+  (Relationship Framework remains mutation authority; each key retains distinct Command identity)
+- `mutation_runtime` / `relationship_runtime` are **not** enabled as global owner gates — only
+  explicit exact keys
+- `mark_lost` remains on legacy compatibility (`executeAdminAction`); not consolidated
+- Enrollment aliases (`move_to_waitlist`, `approve_enrollment`) remain outside exact-key facade cutover
+- Remaining Relationship keys (Add Family Member hub) remain outside facade cutover
+- **P4.S2:** `make_primary_contact` — replacement adapter → `setHouseholdPrimaryContactForCustomer`
+- **P4.S3:** `delete_lead` — destructive adapter → `executeDeleteOpportunityLead` (hard delete; typed
+  confirm + preview token). Direct `POST .../opportunities/:id/delete` remains compatibility (Option A).
+  Archive / cancel tour / withdraw remain commit-disabled. **P4.S4:** `archive_lead` certified
+  Disposition B (unavailable — no production executor; not adapted).
+- **P5.S1:** `reschedule_tour` — Tour adapter → `rescheduleTourBooking` (exact key; `tour_domain`
+  owner remains globally false). Direct booking reschedule route unchanged. Automations may later
+  invoke the same Command / react to Tour domain events; Automations do not own Tour mutation
+  execution.
+- **P5.S2:** `cancel_tour` — destructive preview + strong confirm → `cancelTourBooking`. Direct
+  `POST .../bookings/:id/cancel` remains compatibility (Option A). Recovery: schedule a new Tour
+  (`reopen_tour` unavailable).
+- **P5.S3:** `complete_tour` and `no_show_tour` (alias `mark_tour_no_show`) — Tour terminal adapter →
+  `markTourBookingCompleted` / `markTourBookingNoShow`. Distinct capability, event, and BP
+  integration identities retained. Direct complete/no-show routes unchanged. `schedule_tour`
+  remains uncut; `reopen_tour` unavailable.
+- **P6.S1:** Business Process `command_set_v1` — typed process-wide Command selection authority
+  hosted on lifecycle builder process JSON. Effective resolver + legacy compatibility precedence.
+  Stage `action_catalog_v1` is recommendation/evaluation only. Enrollment Lead proof only;
+  editor authority switch and full migration remain later P6 slices. Automations product not shipped.
+- **P6.S2:** Runtime consumers (Current Work allowlist/catalog fallback, process-aware stage
+  evaluation, optional BOS process-effective slash filter) read through
+  `projectProcessRuntimeCommands`. Editors / Work Template authoring unchanged until P6.S3.
+- **P6.S3:** Process saves stamp `command_set_v1`; Work Template option authoring gates to process
+  selection; publish validates orphans. Process Command picker UI deferred (P6.S4). P6 certified.
+
+### Destructive / replacement Command policy (P4.S1)
+
+Shared server contract under `web/lib/platform/commands/runtime/destructive/`:
+
+- **Impact classes:** delete, archive, deactivate, remove, revoke, cancel, withdraw, end, void, **replace**
+- **Replacement ≠ delete** — e.g. `make_primary_contact` displaces prior primary while keeping the link
+- Every classified capability requires **preview**, explicit confirmation (`confirm` |
+  `strong_confirm` | `typed_confirm`), and a **permission class** (server-owned; client cannot weaken)
+- Preview correlation: HMAC-SHA256 token (compact claims; no full payload; TTL + version match)
+- Domain adapters own real impact discovery; shared runtime does not scan domain tables
+- **P4.S1 state:** destructive preview framework enabled; commit globally disabled until exact allowlist
+- **P4.S2–S3 exact commit allowlist:** `make_primary_contact`, `delete_lead` only
+- Representative policies also classify (commit still disabled): `archive_lead`, `cancel_tour`,
+  `withdraw_child` — existing routes/UI unchanged for those keys
+
+`POST /api/admin/actions/execute` remains the operator/API route name. Dedicated
+`/api/admin/relationship-actions/execute` remains available. `/api/admin/mutations/execute`
+remains available and unchanged. Command capability diagnostics (internal only) remain at
+`/organization/commands`. `/settings/actions` redirects to developer Action Buttons CRUD
+(`/adminV2/settings/actions`). Exactly-once applies **per route invocation**,
+not distributed idempotency.
 
 ---
 
@@ -93,10 +193,18 @@ For compatibility, legacy child rules without timing are still downgraded to rec
 
 | Layer | Controls |
 |-------|----------|
-| **Business Process** | Which actions are available for a stage/process (DB placements + lifecycle builder matrix) |
+| **Capability Registry** | Whether a Command identity exists, maturity, and execution owner (honesty — not authorization) |
+| **Capability Registry** | Platform-owned Command identities and honesty | Code registry; not inventable by Surfaces/BOS |
+| **Process Command selection** | `command_set_v1` on Business Processes | Stages recommend/evaluate selected Commands only |
+| **Surface exposure** | Placements / Surfaces product | Where operators encounter effective Commands |
+| **Internal diagnostics** | `/organization/commands` | Read-only Capability Registry inspection — not org configuration |
+| **Business Process `command_set_v1`** | Which Commands the process selects (sole target process-wide authority; P6.S1) |
+| **Stage `action_catalog_v1`** | Stage recommendation / evaluation metadata for selected Commands only |
 | **Experience Builder** | Where actions appear on a layout surface (contact row, section, related list) |
-| **BOS** | Can propose/fill canonical action requests (adapters shipped; full rail UI wiring is follow-up) |
-| **Executors** | Perform durable writes (admin execute, relationship wizard, dedicated modals) |
+| **BOS** | Command-session placement: discover process-effective ∩ adapter-ready Commands, prepare inputs, confirm, invoke shared Runtime bridge (`executePlatformCommandViaActionsApi`) |
+| **Command Runtime / Executors** | Invocation governance, authorization, exactly-once delegation, and durable writes |
+
+Legacy note: DB placements + lifecycle builder matrix remain **compatibility / availability** inputs until process migration completes; they are not equal process-wide selection authorities once `command_set_v1` is present.
 
 The **same canonical action key** may launch from:
 
@@ -242,7 +350,33 @@ Shared **guided wizard** + **idempotent executor** — confirmation required bef
 | `link_existing_child` | Link existing household child |
 | `make_primary_contact` | **Layout contact-row only** — see below |
 
-Code: `relationshipActionRegistry.ts`, `relationshipActionClient.ts`, `RelationshipActionGuidedModal`.
+Code: `relationshipActionRegistry.ts`, `relationshipActionClient.ts`, `RelationshipActionGuidedModal`,
+`executeRelationshipAction`.
+
+**Command Runtime (P3.S1 / P3.S2):** Exact keys may also reach `executeRelationshipAction` through
+`POST /api/admin/actions/execute` → Command Runtime facade → thin `relationshipExecutionAdapter`:
+
+| Capability | Fixed registry role (server-owned) |
+|------------|-------------------------------------|
+| `add_parent_guardian` | `guardian` |
+| `link_existing_person` | operator-selected `roleKey` (domain-validated) |
+| `add_emergency_contact` | `emergency_contact` |
+| `add_authorized_pickup` | `authorized_pickup` |
+| `add_billing_contact` | `billing_contact` |
+| `add_child` | child identity create/link (`createChildDraft` \| `selectedChildPersonId`) |
+| `link_existing_child` | existing child person only (`selectedChildPersonId`) |
+
+Relationship kind/role/cardinality/identity resolution remain Relationship Framework–owned.
+Contact-role and child Commands share infrastructure but remain distinct identities.
+`make_primary_contact` and the Add Family Member hub are not cut over.
+
+**`make_primary_contact` (P3.S4 classification):** Not Relationship Framework. Household primary
+designation via `PATCH /api/admin/customers/:id/household-primary-contact` →
+`setHouseholdPrimaryContactForCustomer` (displaces prior `is_primary`, syncs opportunity
+`primary_person_id`, emits `household.primary_contact_changed`). Confirm modal required.
+**P4.S2 cutover:** Facade preview + correlated commit via destructive replacement adapter.
+Capability owner: `admin_action`. Domain authority unchanged.
+P4.S1 classifies impact as **`replace`** (strong_confirm, displaced impact required).
 
 ### Make Primary Contact
 
@@ -250,7 +384,12 @@ Code: `relationshipActionRegistry.ts`, `relationshipActionClient.ts`, `Relations
 - **Layout contexts only:** contact block, household contacts widget, contact related-list row.
 - **Hidden** from generic header/rail/workspace resolve (`stripMakePrimaryContactFromResolvedActionsBySlot`).
 - Requires **target person** at runtime; registry path disabled without target.
-- Primary row: read-only **badge**; non-primary row: **Make Primary Contact** button → confirm → PATCH household primary.
+- Primary row: read-only **badge**; non-primary row: **Make Primary Contact** button → confirm →
+  `PATCH /api/admin/customers/:id/household-primary-contact` → `setHouseholdPrimaryContactForCustomer`.
+- Displaces prior household primary (`is_primary`); previous contact remains linked.
+- **Command Runtime:** P4.S2 facade allowlisted for preview/commit (replacement adapter). Domain
+  write remains `setHouseholdPrimaryContactForCustomer`. Capability owner `admin_action` — not
+  `executeRelationshipAction`. Direct customer PATCH remains compatibility (Option A).
 
 ---
 
@@ -314,7 +453,14 @@ Product language is **Lead**, not **Inquiry**. The internal `new_inquiry` status
 ## BOS readiness
 
 - Relationship and enrollment status adapters produce **canonical action requests** with confirmation policy.
-- Full BOS rail UI wiring for action proposals is **follow-up** — executors and modals are runtime-ready from drawer/rail/layout paths.
+- **BOS Command Runtime Convergence (Mission 1 — frozen):** BOS is a placement over Command Runtime.
+  Live slash discovery is process-effective ∩ `bosCommandAdapterRegistry`. Confirmed invoke always
+  uses `executePlatformCommandViaActionsApi` → `/api/admin/actions/execute` →
+  `executeCommandInvocation`. Representative BOS-ready families: `create_lead` (owner-accepted
+  reference), `update_lead_status`, `add_parent_guardian`, `cancel_tour`. Create Lead legacy modal
+  remains behind `NEXT_PUBLIC_BOS_CREATE_LEAD_SESSION=0`. Coverage honesty and remaining adapters:
+  `../milestones/bos-command-runtime-convergence-closeout.md` and the mission coverage ledger.
+  **Surfaces do not configure Commands** — Business Process `command_set_v1` owns selection.
 
 ---
 
@@ -457,14 +603,15 @@ guard (`isOperatorSafeCopy`) proving no payload keys / action keys / runtime enu
 `CreateLeadModal.tsx` is protected and not rewritten; convergence is at the model level with
 modal-body convergence documented as the next step.
 
-**First end-to-end operator wiring (V3).** Every Create Lead entry point (Work Unit Actions,
-BOS-launched intake, manual rail) now renders the platform host
-`CreateLeadCommandSurface.tsx`, which hosts the unchanged `CreateLeadModal` as the intake body
-but owns execution and success. Execution runs through the single shared client adapter
+**First end-to-end operator wiring (V3 → V6).** Create Lead still has **one** execute path:
 `executeCreateLeadCommand.ts` → `POST /api/admin/actions/execute` registered `create_lead`
-(no forked mutation path); success/refresh derive from `buildCreateLeadSuccess`. Replacing the
-modal's visible chrome with `CommandSurfaceShell` remains deferred to avoid regressing the rich
-intake.
+(no forked mutation path); success/refresh derive from `buildCreateLeadSuccess`. **Primary
+operator entry (V6):** Work Unit / Workspace Actions open a BOS command session (Conversation +
+Form over `BosCommandDraft`, then Processing identity review / success in-session). **Compatibility
+entry:** `CreateLeadCommandSurface` (rich `CreateLeadModal` body) when
+`NEXT_PUBLIC_BOS_CREATE_LEAD_SESSION=0`. Form mode inside the session reuses the same strong
+gather controls (`ActionWorkspaceGatherFields`) so intake richness is not replaced by a weaker
+generic form.
 
 See `docs/sprints/archive/06_2026/command_surface_v3.md`, `command_surface_v2.md`, `command_surface_v1.md`.
 

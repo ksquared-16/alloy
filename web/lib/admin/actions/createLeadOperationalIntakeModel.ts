@@ -47,7 +47,7 @@ function fieldForPayloadKey(
             payload_key: payloadKey,
             field_label: payloadKey,
             section: "person",
-            section_label: "Parent / guardian",
+            section_label: "Person",
             tier: "optional",
             value_kind: "text",
         }

@@ -17,6 +17,14 @@ describe("resolveChildPhotoUrlFromRaw", () => {
         ).toBe("https://cdn.example/profile.png");
     });
 
+    it("reads persons.metadata photo keys", () => {
+        expect(
+            resolveChildPhotoUrlFromRaw({
+                metadata: { avatar_url: "https://cdn.example/meta-avatar.png" },
+            }),
+        ).toBe("https://cdn.example/meta-avatar.png");
+    });
+
     it("returns null when no photo source exists", () => {
         expect(resolveChildPhotoUrlFromRaw({ custom_fields: {} })).toBeNull();
     });

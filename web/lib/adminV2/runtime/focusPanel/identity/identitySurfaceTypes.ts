@@ -83,6 +83,12 @@ export type IdentitySurfaceConfig = {
     sections: IdentitySectionConfig[];
 };
 
+/** Inline edit control resolved from the field's published type (not hardcoded text). */
+export type IdentityFieldEditControlVM =
+    | { kind: "text"; inputType: "text" | "email" | "tel" }
+    | { kind: "date" }
+    | { kind: "select"; optionSetKey: string };
+
 export type IdentityFieldCellVM = {
     fieldRef: string;
     label: string;
@@ -95,8 +101,12 @@ export type IdentityFieldCellVM = {
     linkLabel?: string | null;
     linkDestination?: FocusPanelCardKey | null;
     linkTarget?: import("@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract").IdentityFieldLinkTarget | null;
+    /** Operator explanation when value is derived (e.g. Program from primary classroom). */
+    derivedSourceLabel?: string | null;
     hideWhenEmpty: boolean;
     width: NestedSurfaceFieldLayoutWidth;
+    /** Control type for inline edit — select/date/text from field definition. */
+    editControl?: IdentityFieldEditControlVM;
 };
 
 export type IdentityFieldRowVM = {

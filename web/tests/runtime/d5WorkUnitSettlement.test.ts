@@ -100,6 +100,13 @@ describe("D5 — Settlement enriches, never constructs", () => {
         expect(out.selectedSubject).toBe(m.selectedSubject);
     });
 
+    it("department scope can settle even when Actions already committed from the snapshot", () => {
+        const m = { ...reservedModel(), rightRailActions: [{ key: "create_lead" } as never], departmentId: null };
+        const out = mergeWorkUnitSettlement(m, settlement({ rightRailActions: null, departmentId: "dept-1" }));
+        expect(out.departmentId).toBe("dept-1");
+        expect(out.rightRailActions).toBe(m.rightRailActions);
+    });
+
     it("15. settlement touches ONLY reserved regions — operational truth is byte-identical", () => {
         const m = reservedModel();
         const out = mergeWorkUnitSettlement(m, settlement({ kpiValues: { "enrollment.active_leads": kpiItem("150") } as WorkUnitSettlement["kpiValues"], viewCounts: new Map([["new_leads", 150]]) }));

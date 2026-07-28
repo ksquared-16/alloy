@@ -32,9 +32,9 @@ async function emitOperatorScheduleChangedIfNeeded(
     await emitScheduleAssignmentChangedEvent({
         orgId: input.orgId,
         assignmentId: assignment.id,
-        enrollmentAgreementId: assignment.enrollment_agreement_id,
+        enrollmentAgreementId: assignment.enrollment_agreement_id!,
         schedulePatternId: assignment.schedule_pattern_id,
-        customerMemberId: assignment.customer_member_id,
+        customerMemberId: assignment.customer_member_id!,
         startDate: assignment.start_date,
         supersedesAssignmentId: prior?.id ?? assignment.supersedes_assignment_id,
         priorAssignmentCloseDate: prior?.closeDate ?? null,
@@ -65,7 +65,9 @@ export async function getOperationalScheduleAssignmentForAgreement(
         .from("schedule_assignments")
         .select("*")
         .eq("org_id", orgId)
+        .eq("subject_type", "child")
         .eq("enrollment_agreement_id", enrollmentAgreementId)
+        .eq("is_primary", true)
         .in("status", ["planned", "active", "ending"])
         .maybeSingle();
 
@@ -171,9 +173,12 @@ export async function createInitialScheduleAssignment(
 
     const row = {
         org_id: input.orgId,
+        subject_type: "child",
         enrollment_agreement_id: input.enrollmentAgreementId,
         schedule_pattern_id: schedulePatternId,
         customer_member_id: agreement.customer_member_id,
+        subject_person_id: null,
+        is_primary: true,
         start_date: startDate,
         end_date: null,
         status,
@@ -195,6 +200,13 @@ export async function createInitialScheduleAssignment(
         throw new OperationalEnrollmentServiceError("db_error", error?.message ?? "insert failed");
     }
     const assignment = data as ScheduleAssignmentRow;
+    if (
+        assignment.subject_type !== "child" ||
+        !assignment.enrollment_agreement_id ||
+        !assignment.customer_member_id
+    ) {
+        throw new OperationalEnrollmentServiceError("db_error", "Created assignment has an invalid child subject shape");
+    }
     await emitOperatorScheduleChangedIfNeeded(input, assignment);
     return assignment;
 }
@@ -280,9 +292,12 @@ export async function supersedeScheduleAssignment(
 
     const row = {
         org_id: input.orgId,
+        subject_type: "child",
         enrollment_agreement_id: input.enrollmentAgreementId,
         schedule_pattern_id: schedulePatternId,
         customer_member_id: agreement.customer_member_id,
+        subject_person_id: null,
+        is_primary: true,
         start_date: newStartDate,
         end_date: null,
         status,
@@ -304,6 +319,13 @@ export async function supersedeScheduleAssignment(
         throw new OperationalEnrollmentServiceError("db_error", error?.message ?? "insert failed");
     }
     const assignment = data as ScheduleAssignmentRow;
+    if (
+        assignment.subject_type !== "child" ||
+        !assignment.enrollment_agreement_id ||
+        !assignment.customer_member_id
+    ) {
+        throw new OperationalEnrollmentServiceError("db_error", "Superseded assignment has an invalid child subject shape");
+    }
     await emitOperatorScheduleChangedIfNeeded(input, assignment, {
         id: prior.id,
         closeDate: closeDate,

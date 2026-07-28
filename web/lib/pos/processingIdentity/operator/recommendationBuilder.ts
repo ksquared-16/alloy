@@ -237,7 +237,33 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
                 break;
             case "lead":
                 if (sub.decision === "create") {
-                    operations.push({ ...common, opKind: "create", commandKey: IDENTITY_COMMAND_KEYS.createLead, payload: { household_id: `@${sub.householdRef}`, primary_person_id: sub.values?.primary_person_id ?? `@${sub.dependsOn?.[0] ?? ""}`, name: String(sub.values?.name ?? "Lead") }, after: { name: sub.values?.name }, dependsOnRefs: sub.dependsOn ?? (sub.householdRef ? [sub.householdRef] : []), reason: "new lead" });
+                    // work_unit_id carries the lifecycle binding resolved at intake (create_lead_intake).
+                    // Without it the opportunity is created with work_unit_id NULL, which the canonical
+                    // Work-Unit lead membership predicate (workUnitLeadMembership.ts, `.eq(work_unit_id)`)
+                    // excludes — so the new lead never appears in its Work Unit Work View.
+                    const leadWorkUnitId =
+                        typeof sub.values?.work_unit_id === "string" && sub.values.work_unit_id.trim()
+                            ? sub.values.work_unit_id
+                            : null;
+                    const leadLocationId =
+                        typeof sub.values?.location_id === "string" && sub.values.location_id.trim()
+                            ? sub.values.location_id.trim()
+                            : null;
+                    operations.push({
+                        ...common,
+                        opKind: "create",
+                        commandKey: IDENTITY_COMMAND_KEYS.createLead,
+                        payload: {
+                            household_id: `@${sub.householdRef}`,
+                            primary_person_id: sub.values?.primary_person_id ?? `@${sub.dependsOn?.[0] ?? ""}`,
+                            name: String(sub.values?.name ?? "Lead"),
+                            ...(leadWorkUnitId ? { work_unit_id: leadWorkUnitId } : {}),
+                            ...(leadLocationId ? { location_id: leadLocationId } : {}),
+                        },
+                        after: { name: sub.values?.name },
+                        dependsOnRefs: sub.dependsOn ?? (sub.householdRef ? [sub.householdRef] : []),
+                        reason: "new lead",
+                    });
                 } else if (sub.decision === "update") {
                     operations.push({ ...common, opKind: "update", commandKey: IDENTITY_COMMAND_KEYS.updateLead, targetId: sub.selectedRecordId ?? null, payload: { lead_id: sub.selectedRecordId, name: sub.values?.name }, after: { name: sub.values?.name }, preconditionRecordVersion: sub.preconditionRecordVersion ?? null, reason: "update lead" });
                 }

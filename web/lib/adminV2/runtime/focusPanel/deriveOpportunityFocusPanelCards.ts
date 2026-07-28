@@ -497,14 +497,14 @@ export function buildSchedulingCardModel(record: Record<string, unknown>): Focus
     const collection = schedulingCollectionItems(record);
     const insight =
         count === 0
-            ? "No children to schedule"
+            ? "No children to assign"
             : count === 1
-              ? "1 child · schedule not set"
-              : `${count} children · schedule not set`;
+              ? "1 child · no assignments yet"
+              : `${count} children · assignments vary`;
     void collection;
     return card({
         key: "scheduling",
-        title: "Scheduling",
+        title: "Assignments",
         insight,
         tier: "reference",
         span: 2,
@@ -514,7 +514,7 @@ export function buildSchedulingCardModel(record: Record<string, unknown>): Focus
         // The card component renders per-child status + opens the work surface on
         // click; no card-level primary action or collection payload.
         primaryAction: null,
-        secondaryInsight: count > 0 ? "Open a child to build their schedule" : null,
+        secondaryInsight: count > 0 ? "Open a child to view or add assignments" : null,
     });
 }
 

@@ -1,10 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 
-import OpportunityRecordCreateWorkModal from "@/components/admin/opportunity/OpportunityRecordCreateWorkModal";
-import SendFormToOpportunityModal from "@/components/admin/opportunity/SendFormToOpportunityModal";
-import OpportunityEnrollmentPacketModal from "@/components/admin/opportunity/OpportunityEnrollmentPacketModal";
+// These three modals are rendered ONLY while their `*Open` flag is true (`{open ? <Modal/> : null}`),
+// i.e. after an explicit operator action — never at first paint. Statically importing them (esp. the
+// ~958-line OpportunityEnrollmentPacketModal + its forms/packet builder) forced that weight into the
+// initial Work Unit chunk that must download+hydrate before the first provisioning request. Lazy-load
+// on open (ssr:false) so they leave the first-paint critical path.
+const OpportunityRecordCreateWorkModal = dynamic(
+    () => import("@/components/admin/opportunity/OpportunityRecordCreateWorkModal"),
+    { ssr: false },
+);
+const SendFormToOpportunityModal = dynamic(
+    () => import("@/components/admin/opportunity/SendFormToOpportunityModal"),
+    { ssr: false },
+);
+const OpportunityEnrollmentPacketModal = dynamic(
+    () => import("@/components/admin/opportunity/OpportunityEnrollmentPacketModal"),
+    { ssr: false },
+);
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
 import { RecordTourOutcomeModal } from "@/components/admin/opportunity/actions/RecordTourOutcomeModal";
 import { AddNoteModal } from "@/components/admin/opportunity/actions/AddNoteModal";

@@ -1,0 +1,99 @@
+openers=2
+ALL=
+✕
+LK
+Lennon Kurzman
+Apr 2, 2024 · 2y
+Proposed
+Starts Aug 24, 2026
+ASSIGNMENTS
++ Add Assignment
+All
+Mon
+Tue
+Wed
+Thu
+Fri
+PRIMARY
+Primary Classroom
+Proposed
+Pre-K
+Mon–Fri
+8:30 AM–4:00 PM
+Aug 24, 2026
+Before Care
+Proposed
+Toddler 1
+Mon–Fri
+7:00 AM–8:30 AM
+Aug 24, 2026
+Therapy
+Proposed
+Infant A
+Wed
+9:00 AM–10:00 AM
+Oct 1, 2026
+Enrichment
+Proposed
+Preschool 2
+Tue
+10:00 AM–11:00 AM
+Aug 24, 2026
+After Care
+Proposed
+Toddler 2
+Mon–Fri
+4:00 PM–6:00 PM
+Aug 24, 2026
+times=5
+financialNoise=no
+tueRows=4
+TUE=
+✕
+LK
+Lennon Kurzman
+Apr 2, 2024 · 2y
+Proposed
+Starts Aug 24, 2026
+ASSIGNMENTS
++ Add Assignment
+All
+Mon
+Tue
+Wed
+Thu
+Fri
+Before Care
+Proposed
+Toddler 1
+7:00 AM–8:30 AM
+PRIMARY
+Primary Classroom
+Proposed
+Pre-K
+8:30 AM–4:00 PM
+Enrichment
+Overlap
+Proposed
+Preschool 2
+10:00 AM–11:00 AM
+After Care
+Proposed
+Toddler 2
+4:00 PM–6:00 PM
+wedRows=4
+DETAIL=
+← All assignments
+Primary Classroom
+PRIMARY
+Proposed
+Pre-K
+Mon–Fri · 8:30 AM–4:00 PM
+Starts Aug 24, 2026
+OPERATIONAL EFFECTS
+Planning only — not attendance or billing truth
+View history →
+Edit Assignment
+This Assignment can only become active after enrollment is completed.
+kindLead=1
+ROOM_MS=50 opts=7

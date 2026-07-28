@@ -35,9 +35,7 @@ export default function RootLayout({
         <GhlScript />
         <StagingBanner />
         <QuoteModalProvider>
-          <QuoteModalProvider>
           <ConditionalSiteLayout>{children}</ConditionalSiteLayout>
-        </QuoteModalProvider>
         </QuoteModalProvider>
       </body>
     </html>

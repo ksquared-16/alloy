@@ -5,7 +5,10 @@
  * Details inherits Context Facts plus Detail Fields (detail tier wins duplicate refs in the detail block).
  */
 
-import type { IdentityFieldRowVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import type {
+    IdentityFieldRowVM,
+    IdentityRecordVM,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 
 function fieldRefsInRows(rows: IdentityFieldRowVM[]): string[] {
     return rows.flatMap((row) => row.cells.map((cell) => cell.fieldRef));
@@ -54,4 +57,36 @@ export function composeSummaryAndContextFacts(
 /** @deprecated Context Facts may overlap Summary keys; returns keys unchanged. */
 export function sanitizeContextFactKeys(_summaryKeys: readonly string[], contextFactKeys: readonly string[]): string[] {
     return [...contextFactKeys];
+}
+
+/**
+ * Children Focus Details is an identity-group surface, but Context Facts (and half-row
+ * layouts / editable policies) are authored on the roster group. Merge roster context
+ * (and roster details when identity details are empty) onto the focused identity record
+ * so published Context Facts survive select → Details.
+ */
+export function mergeChildrenRosterIntoFocusedIdentityRecord(
+    identity: IdentityRecordVM,
+    roster: IdentityRecordVM,
+): IdentityRecordVM {
+    const contextFactRows =
+        roster.contextFactRows.length > 0 ? cloneIdentityFieldRows(roster.contextFactRows) : identity.contextFactRows;
+    const detailRows =
+        identity.detailRows.length > 0
+            ? identity.detailRows
+            : roster.detailRows.length > 0
+              ? cloneIdentityFieldRows(roster.detailRows)
+              : identity.detailRows;
+    const contextRows = composeContextCollectionRows(contextFactRows);
+    const canShowDetails = detailRows.length > 0 || contextFactRows.length > 0;
+    return {
+        ...identity,
+        contextFactRows,
+        contextRows,
+        detailRows,
+        detailsRows: detailRows,
+        expandedRows: detailRows,
+        canShowDetails,
+        canExpand: canShowDetails,
+    };
 }

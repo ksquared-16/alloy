@@ -1,0 +1,234 @@
+Digital Mailroom
+
+Where operational work happens.
+
+Close
+Work
+Studio
+Overview
+Queue
+
+TODAY'S ACTIVITY
+
+12Active Work
+
+↑ 4 today
+
+11Needs Review
+
+↓ 42%
+
+1Ready to Publish
+
+↑ 6 today
+
+3Published
+
+Today
+
+QUEUE
+Import document
+Incoming
+12
+NEEDS REVIEW · 11
+Upload 1784950670572 — 07/24/2026
+11h
+Needs review
+·
+Manual review
+Review
+Upload 1784950279947 — 07/24/2026
+11h
+Needs review
+·
+Manual review
+Review
+Upload 1784949778647 — 07/24/2026
+11h
+Needs review
+·
+Manual review
+Review
+Upload 1784938115642 — 07/24/2026
+15h
+Needs review
+·
+Manual review
+Review
+Upload 1784937623709 — 07/24/2026
+15h
+Needs review
+·
+Manual review
+Review
+Upload 1784937223777 — 07/24/2026
+15h
+Needs review
+·
+Manual review
+Review
+Upload 1784936787878 — 07/24/2026
+15h
+Needs review
+·
+Manual review
+Review
+Untitled source
+17h
+Needs review
+·
+Manual review
+Review
+Untitled source
+17h
+Needs review
+·
+Manual review
+Review
+Firefly Lead Capture
+3d
+Needs review
+·
+Route for review
+Review
+Wi3 Slice5c Qa 1783742158836 Needs Review — 07/10/2026
+Jul 10
+Needs review
+·
+Manual review
+Review
+READY TO PUBLISH · 1
+MO School Age Child Health Report
+Jul 10
+Ready to publish
+·
+Manual review
+Review
+Enrollment
+0
+Medical
+1
+Subsidy
+0
+Licensing
+0
+Completed
+5
+Import
+·
+Review
+·
+Generate
+·
+Edit
+
+Form · AcroForm fields detected · 7 questions · Ready to generate
+
+SOURCE DOCUMENT
+Regions
+PDF
+Add field
+Fit page
+Fit width
+50%
+PAGE 1 · 4 FIELDS
+Firefly Early Learning — Enrollment
+Child Information
+Child full name
+Child date of birth
+Known allergies
+Home address
+PAGE 2 · 1 FIELD
+Parent Handbook
+Please read before enrolling
+Handbook
+PAGE 3 · 1 FIELD
+Consent & Acknowledgement
+Policy agreement
+Acknowledgement
+PAGE 4 · 1 FIELD
+Parent / Guardian Signature
+Sign to certify
+I certify the information provided is ac…
+Parent / guardian signature
+Question
+Selected
+REVIEW QUESTIONS
+Questions
+Text
+
+7 active questions
+
+PAGE 1
+4
+THIS SECTION IS
+Digital fields
+Generated document
+Static reference (read-only)
+Acknowledgement
+Upload request
+Signature
+Initials
+High confidence
+Child Full Name
+Child Full Name
+Text · mapped · Form field only
+Child Dob
+Child Dob
+Date · mapped · High confidence
+Allergies
+Allergies
+Text · mapped · High confidence
+Home Address
+Home Address
+Text · mapped · Form field only
+PAGE 2
+1
+THIS SECTION IS
+Digital fields
+Generated document
+Static reference (read-only)
+Acknowledgement
+Upload request
+Signature
+Initials
+High confidence
+Handbook Intro
+Handbook Intro
+Text · mapped · Form field only
+PAGE 3
+1
+THIS SECTION IS
+Digital fields
+Generated document
+Static reference (read-only)
+Acknowledgement
+Upload request
+Signature
+Initials
+High confidence
+Handbook Ack
+Handbook Ack
+Text · mapped · Form field only
+PAGE 4
+1
+THIS SECTION IS
+Digital fields
+Generated document
+Static reference (read-only)
+Acknowledgement
+Upload request
+Signature
+Initials
+Review recommended
+Parent Signature
+Parent Signature
+Text · mapped · Form field only
+Add question
+
+Questions without a highlighted area can still be captured, but won't yet map back to the official PDF.
+
+When you're done reviewing, continue to generate your native form.
+
+Re-detect questions
+Continue to generate

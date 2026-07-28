@@ -26,16 +26,18 @@ describe("operator drawer URL stability", () => {
         expect(src).toMatch(/if \(isOperatorWorkUnitRecordIdOnlyPathChange\(/);
     });
 
-    it("WorkUnitSlugRouteHost syncs drawer URLs without remounting on recordId changes", () => {
+    it("WorkUnitSlugRouteHost is seed-only (writes route identity, owns no drawer/url-sync effects)", () => {
+        // RA-2: the host is a synchronous seed of route identity. It runs NO effects and owns no
+        // record-open / URL-sync behavior — the Surface Host renders, `?subject_id` selects the record.
         const host = read("components/admin/workspace/WorkUnitSlugRouteHost.tsx");
-        expect(host).toContain("syncOperatorWorkUnitUrlInBrowser");
-        expect(host).toContain("peekWorkUnitSlugRouteCache");
-        expect(host).toMatch(/\}, \[workUnitSlug\]\);/);
-        expect(host).toContain("routeRecordIdFromPath");
+        expect(host).toContain("putWorkUnitSlugRouteCache");
+        expect(host).toMatch(/\}, \[workUnitSlug, initialRouteMeta\]\);/);
+        expect(host).not.toContain("syncOperatorWorkUnitUrlInBrowser");
+        expect(host).not.toContain("useEffect");
         expect(host).not.toContain("fetchQueueItems");
     });
 
-    it("recordId-only path changes are detected for canonical and rewrite aliases", () => {
+    it("same-base path changes are detected for canonical and rewrite aliases", () => {
         expect(
             isOperatorWorkUnitRecordIdOnlyPathChange(
                 "/workspace/work-unit/new-leads",

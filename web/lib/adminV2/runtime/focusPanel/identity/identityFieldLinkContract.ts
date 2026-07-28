@@ -67,7 +67,7 @@ const DEFAULT_LINK_DESTINATIONS: Readonly<Record<string, FocusPanelCardKey>> = {
 };
 
 export const IDENTITY_LINK_CARD_OPTIONS: ReadonlyArray<{ value: FocusPanelCardKey; label: string }> = [
-    { value: "scheduling", label: "Scheduling" },
+    { value: "scheduling", label: "Assignments" },
     { value: "children", label: "Children" },
     { value: "household", label: "Household" },
     { value: "current_work", label: "What's Next" },
@@ -141,7 +141,7 @@ export function resolveIdentityFieldLinkContract(fieldRef: string): IdentityFiel
     }
     const dest = defaultTarget.toCard;
     const linkLabel =
-        dest === "scheduling" ? "Schedule"
+        dest === "scheduling" ? "Assignments"
         : dest === "household" ? "Household"
         : dest === "children" ? "Children"
         : dest === "communications" ? "Contacts"
@@ -177,7 +177,11 @@ export function summarizeIdentityFieldLinkTarget(
     const subject =
         IDENTITY_LINK_SUBJECT_OPTIONS.find((opt) => opt.value === target.subject)?.label
         ?? target.subject;
-    return `Linked → ${card} · ${open} · ${subject}`;
+    // Operator-facing: describe the destination in plain language (Advanced may still show keys).
+    if (target.toCard === "scheduling" && target.open === "detail") {
+        return `Displays the child’s Primary Assignment summary`;
+    }
+    return `Opens ${card} · ${open} · ${subject}`;
 }
 
 export function normalizeIdentityFieldLinkTarget(

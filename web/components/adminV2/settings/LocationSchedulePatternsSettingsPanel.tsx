@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * Canonical `schedule_patterns` · shared with Locations — this panel lists/creates/updates
+ * rows through the same `/api/admin/schedule-patterns` endpoints that the Scheduling
+ * Studio → Patterns editor uses (`SchedulingWorkspace.tsx`'s `onMutatePattern`). There is
+ * no separate Locations-only pattern store; Studio is simply another client of this API.
+ */
+
 import { useCallback, useEffect, useState } from "react";
 import {
     createSchedulePattern,

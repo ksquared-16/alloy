@@ -82,36 +82,36 @@ export async function enrichOpportunityRowsWithCrmProjection(
         string,
         { email: string | null; phone: string | null; first_name: string | null; last_name: string | null }
     >();
-    if (personIds.length) {
-        const { data } = await supabase
-            .from("persons")
-            .select("id, email, phone, first_name, last_name")
-            .eq("org_id", orgId)
-            .in("id", personIds);
-        for (const p of data ?? []) {
-            const row = p as {
-                id: string;
-                email: string | null;
-                phone: string | null;
-                first_name: string | null;
-                last_name: string | null;
-            };
-            personById.set(row.id, {
-                email: row.email,
-                phone: row.phone,
-                first_name: row.first_name,
-                last_name: row.last_name,
-            });
-        }
-    }
-
     const locationById = new Map<string, string | null>();
-    if (locationIds.length) {
-        const { data } = await supabase.from("locations").select("id, label").eq("org_id", orgId).in("id", locationIds);
-        for (const loc of data ?? []) {
-            const row = loc as { id: string; label: string | null };
-            locationById.set(row.id, row.label ?? null);
-        }
+
+    // Persons + locations are INDEPENDENT batched reads — run them concurrently (was serial), removing
+    // ~1 round-trip from the enrichment that sits on the commit-critical compose path.
+    const [personsRes, locationsRes] = await Promise.all([
+        personIds.length
+            ? supabase.from("persons").select("id, email, phone, first_name, last_name").eq("org_id", orgId).in("id", personIds)
+            : Promise.resolve({ data: [] as unknown[] }),
+        locationIds.length
+            ? supabase.from("locations").select("id, label").eq("org_id", orgId).in("id", locationIds)
+            : Promise.resolve({ data: [] as unknown[] }),
+    ]);
+    for (const p of personsRes.data ?? []) {
+        const row = p as {
+            id: string;
+            email: string | null;
+            phone: string | null;
+            first_name: string | null;
+            last_name: string | null;
+        };
+        personById.set(row.id, {
+            email: row.email,
+            phone: row.phone,
+            first_name: row.first_name,
+            last_name: row.last_name,
+        });
+    }
+    for (const loc of locationsRes.data ?? []) {
+        const row = loc as { id: string; label: string | null };
+        locationById.set(row.id, row.label ?? null);
     }
 
     for (const r of rows) {

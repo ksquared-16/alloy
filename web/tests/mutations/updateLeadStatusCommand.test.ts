@@ -35,8 +35,12 @@ describe("update_lead_status domain mapping", () => {
         expect(LEAD_STATUS_DOMAIN.subjectType).toBe("opportunity");
     });
 
-    it("does NOT map update_child_enrollment_status (different domain — not in V1 slice)", () => {
-        expect(resolveDomainForCommand("update_child_enrollment_status")).toBeNull();
+    it("maps update_child_enrollment_status to enrollment_status (not lead_status)", () => {
+        // P2.S2 / enrollment domain registry: child enrollment is a distinct Mutation domain.
+        const domain = resolveDomainForCommand("update_child_enrollment_status");
+        expect(domain).not.toBeNull();
+        expect(domain?.key).toBe("enrollment_status");
+        expect(domain?.key).not.toBe("lead_status");
     });
 
     it("does NOT map generic update_status (no domain — rejected by runtime)", () => {

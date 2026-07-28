@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { setCurrentWorkspaceScope } from "@/lib/workspace/currentWorkspaceScope";
 
 type WorkspaceOrgValue = {
@@ -41,13 +41,13 @@ export function WorkspaceOrgProvider({
   useEffect(() => {
     setCurrentWorkspaceScope({ orgId: orgId ?? null, userId: principalUserId ?? null, scopeFingerprint: fp });
   }, [orgId, principalUserId, fp]);
-  return (
-    <WorkspaceOrgContext.Provider
-      value={{ orgName, orgId: orgId ?? null, principalUserId: principalUserId ?? null, accessScopeFingerprint: fp }}
-    >
-      {children}
-    </WorkspaceOrgContext.Provider>
+  // Stable value identity (all primitives): consumers re-render only when a field actually changes,
+  // not on every unrelated parent render — this provider wraps the whole runtime tree.
+  const value = useMemo<WorkspaceOrgValue>(
+    () => ({ orgName, orgId: orgId ?? null, principalUserId: principalUserId ?? null, accessScopeFingerprint: fp }),
+    [orgName, orgId, principalUserId, fp],
   );
+  return <WorkspaceOrgContext.Provider value={value}>{children}</WorkspaceOrgContext.Provider>;
 }
 
 export function useWorkspaceOrg(): WorkspaceOrgValue {

@@ -6,6 +6,7 @@ import {
     buildMilestonesCardModel,
     deriveOpportunityFocusPanelPresentation,
 } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { buildFocusPanelCardSection } from "@/lib/adminV2/runtime/focusPanel/focusPanelLayoutDocModel";
 import { readSummaryCardOrder } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryDocOps";
 import {
     ENROLLMENT_DEFAULT_LINKED_CARD_KEYS,
@@ -46,30 +47,52 @@ describe("Focus Panel card visibility model", () => {
             expect(laidOut).not.toContain(linked);
         }
         expect(inputs.linkedCardKeys).toEqual([...ENROLLMENT_DEFAULT_LINKED_CARD_KEYS]);
-        expect(inputs.visibilityByCardKey.get("scheduling")).toBe("linked");
+        expect(inputs.visibilityByCardKey.get("scheduling")).toBe("visible");
         expect(inputs.cellResolution.has("scheduling")).toBe(true);
     });
 
     it("moving Visible ↔ Linked preserves card identity", () => {
         const order = readSummaryCardOrder(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
-        const after = setSummaryCardVisibility(order, "scheduling", "visible");
-        expect(after.find((e) => e.key === "scheduling")?.visibility).toBe("visible");
+        const after = setSummaryCardVisibility(order, "scheduling", "linked");
+        expect(after.find((e) => e.key === "scheduling")?.visibility).toBe("linked");
         expect(after.find((e) => e.key === "scheduling")?.instanceId).toBe("scheduling");
-        const back = setSummaryCardVisibility(after, "scheduling", "linked");
-        expect(back.find((e) => e.key === "scheduling")?.visibility).toBe("linked");
+        const back = setSummaryCardVisibility(after, "scheduling", "visible");
+        expect(back.find((e) => e.key === "scheduling")?.visibility).toBe("visible");
     });
 
-    it("Linked cards are omitted from published layout filter (leave Visible composition)", () => {
+    it("Assignments (scheduling) is Visible in the default published layout", () => {
         const order = readSummaryCardOrder(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
         const inputs = deriveFocusPanelSummaryCompositionInputs(
             FOCUS_PANEL_SUMMARY_DEFAULT_DOC,
         );
         expect(inputs.publishedLayout).not.toBeNull();
         const keys = publishedLayoutReadingOrder(inputs.publishedLayout!);
-        expect(keys).not.toContain("scheduling");
-        expect(partitionSummaryCardsByVisibility(order).linked.map((e) => e.key)).toContain(
+        expect(keys).toContain("scheduling");
+        expect(partitionSummaryCardsByVisibility(order).visible.map((e) => e.key)).toContain(
             "scheduling",
         );
+        expect(partitionSummaryCardsByVisibility(order).linked.map((e) => e.key)).not.toContain(
+            "scheduling",
+        );
+    });
+
+    it("honors Assignments Linked authorship — Linked stays off initial settle", () => {
+        const order = setSummaryCardVisibility(
+            readSummaryCardOrder(FOCUS_PANEL_SUMMARY_DEFAULT_DOC),
+            "scheduling",
+            "linked",
+        );
+        // Keep default published layout geometry; visibility filter must drop Linked cards.
+        const linkedDoc = {
+            ...FOCUS_PANEL_SUMMARY_DEFAULT_DOC,
+            sections: order.map((meta) => buildFocusPanelCardSection(meta)),
+        };
+        const inputs = deriveFocusPanelSummaryCompositionInputs(linkedDoc);
+        expect(inputs.visibilityByCardKey.get("scheduling")).toBe("linked");
+        expect(inputs.linkedCardKeys).toContain("scheduling");
+        expect(publishedLayoutReadingOrder(inputs.publishedLayout!)).not.toContain("scheduling");
+        // Linked cards remain resolvable for overlay open / link destinations.
+        expect(inputs.cellResolution.has("scheduling")).toBe(true);
     });
 
     it("Milestones is enrollment Linked default and composer-capable (model + renderer)", () => {

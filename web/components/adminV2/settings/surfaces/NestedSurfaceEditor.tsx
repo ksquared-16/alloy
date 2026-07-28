@@ -306,9 +306,9 @@ export default function NestedSurfaceEditor({
     const statusLabel = loading
         ? "Loading…"
         : dirty
-          ? "Unpublished changes"
+          ? "Unsaved changes"
           : publishedAt
-            ? "Published"
+            ? "Saved to draft"
             : "No changes";
 
     return (
@@ -353,7 +353,7 @@ export default function NestedSurfaceEditor({
                     onClick={handlePublish}
                     disabled={!dirty || publishing || loading}
                 >
-                    {publishing ? "Publishing…" : "Publish"}
+                    {publishing ? "Saving…" : "Save draft"}
                 </ConfigurationPrimaryButton>
             </div>
 

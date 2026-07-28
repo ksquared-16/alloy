@@ -1,0 +1,54 @@
+header=Kurzman Family
+links=[
+  {
+    "tag": "BUTTON",
+    "text": "Assignments — rooms, types, and operational placement",
+    "testid": null,
+    "cardLink": null,
+    "fpLink": null,
+    "card": null,
+    "href": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "Schedule tour",
+    "testid": null,
+    "cardLink": null,
+    "fpLink": null,
+    "card": null,
+    "href": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "Children →",
+    "testid": null,
+    "cardLink": null,
+    "fpLink": null,
+    "card": null,
+    "href": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "View details →",
+    "testid": null,
+    "cardLink": null,
+    "fpLink": null,
+    "card": null,
+    "href": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "View household →",
+    "testid": null,
+    "cardLink": null,
+    "fpLink": null,
+    "card": null,
+    "href": null
+  }
+]
+scheduleBtnCount=1
+afterChildren schedule=1
+surfaces=[{"key":"current_work","sched":null,"surface":null,"list":null},{"key":"household","sched":null,"surface":null,"list":null}]
+openers=2
+no list
+rows=0 dayFilter=0

@@ -115,6 +115,17 @@ export async function createFormFromCaseDraft(
             // Surfaced in POS → Forms so document-originated forms show provenance + size.
             source_document_title: preview.title,
             field_count: preview.fields.length,
+            // Lineage: preserve OCR provenance from source → published form for scanned/image sources.
+            ...(preview.ocr?.derived
+                ? {
+                      ocr_source: {
+                          method: preview.ocr.method,
+                          confidence: preview.ocr.confidence,
+                          low_confidence: preview.ocr.low_confidence,
+                          ...(preview.ocr.source_kind ? { source_kind: preview.ocr.source_kind } : {}),
+                      },
+                  }
+                : {}),
         },
     });
 

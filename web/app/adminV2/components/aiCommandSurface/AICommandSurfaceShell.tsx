@@ -34,6 +34,17 @@ import {
   BosRailHeader,
   BosRailStarterCards,
 } from "@/app/adminV2/components/aiCommandSurface/bosRail/BosRailPresentation";
+import { BosCommandSessionHost } from "@/app/adminV2/components/aiCommandSurface/commandSession/BosCommandSessionHost";
+import {
+  dispatchStartBosCommandSession,
+  useBosCommandSessionOptional,
+} from "@/contexts/BosCommandSessionContext";
+import {
+  isBosSlashComposerQuery,
+  queryBosSlashCatalog,
+} from "@/lib/bos/commandSession/slash";
+import type { BosSlashCommandDescriptor } from "@/lib/bos/commandSession/types";
+import { useBosProcessEffectiveCommandKeys } from "@/app/adminV2/components/aiCommandSurface/commandSession/useBosProcessEffectiveCommandKeys";
 import {
   JobLayoutOperationalProposalCard,
   type JobLayoutCardUiState,
@@ -656,6 +667,8 @@ export default function AICommandSurfaceShell({
   const adminDrawer = useAdminDrawerOptional();
 
   const globalAssistant = useGlobalAssistantOptional();
+  const bosCommandSession = useBosCommandSessionOptional();
+  const activeCommandSession = bosCommandSession?.session ?? null;
   const { labels: entityLabelMap } = useEntityLabelsOptional();
   const opportunitySingular = entityLabelMap.opportunities?.singular ?? "Lead";
   const siteFilter = useWorkspaceSiteFilter();
@@ -664,6 +677,66 @@ export default function AICommandSurfaceShell({
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [commandText, setCommandText] = useState("");
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const workspaceDepartmentId =
+    globalAssistant?.workspaceScope?.department_id?.trim() || null;
+  const { keys: processEffectiveCommandKeys } =
+    useBosProcessEffectiveCommandKeys(workspaceDepartmentId);
+  const slashItems = useMemo(() => {
+    if (!isBosSlashComposerQuery(commandText)) return [];
+    return queryBosSlashCatalog({
+      query: commandText,
+      processEffectiveCommandKeys,
+    });
+  }, [commandText, processEffectiveCommandKeys]);
+  useEffect(() => {
+    setSlashActiveIndex(0);
+  }, [commandText]);
+  const selectSlashCommand = useCallback(
+    (item: BosSlashCommandDescriptor) => {
+      if (!item.eligible) return;
+      setCommandText("");
+      const ws = globalAssistant?.workspaceScope;
+      dispatchStartBosCommandSession({
+        actionKey: item.actionKey,
+        displayLabel: item.displayLabel,
+        placement: "bos_slash",
+        contextResolution: "bos_proposal",
+        workspace: {
+          departmentId: ws?.department_id?.trim() || null,
+          workUnitId: ws?.work_unit_id?.trim() || null,
+          surface: ws?.work_unit_id?.trim() ? "work_unit" : "workspace",
+        },
+      });
+    },
+    [globalAssistant?.workspaceScope]
+  );
+  const onSlashKeyNavigate = useCallback(
+    (direction: "up" | "down" | "enter" | "escape") => {
+      if (direction === "escape") {
+        setCommandText("");
+        return true;
+      }
+      if (slashItems.length === 0) return false;
+      if (direction === "down") {
+        setSlashActiveIndex((i) => Math.min(i + 1, slashItems.length - 1));
+        return true;
+      }
+      if (direction === "up") {
+        setSlashActiveIndex((i) => Math.max(i - 1, 0));
+        return true;
+      }
+      if (direction === "enter") {
+        const item = slashItems[slashActiveIndex] ?? slashItems[0];
+        if (item?.eligible) {
+          selectSlashCommand(item);
+          return true;
+        }
+      }
+      return false;
+    },
+    [selectSlashCommand, slashActiveIndex, slashItems]
+  );
   const [localThread, setLocalThread] = useState<CommandSurfaceThreadState>(() => createEmptyThreadState());
   const [localJobCardUi, setLocalJobCardUi] = useState<
     Record<
@@ -1835,6 +1908,40 @@ export default function AICommandSurfaceShell({
           case "task_assist":
             await runTaskAssistRoute(cmd, routed.taskAssistIntent, routed.slots);
             break;
+          case "operational_question": {
+            try {
+              const res = await fetch("/api/admin/operational-questions/bos", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: cmd }),
+              });
+              const json = (await res.json()) as {
+                transcript_lines?: string[];
+                clarify?: string | null;
+                error?: string;
+              };
+              const lines =
+                json.transcript_lines && json.transcript_lines.length > 0
+                  ? json.transcript_lines
+                  : [json.clarify || json.error || "I couldn’t answer that operational question."];
+              for (const line of lines) {
+                setThread((prev) =>
+                  appendThreadTurn(prev, {
+                    kind: "assistant_notice",
+                    text: line,
+                  }),
+                );
+              }
+            } catch {
+              setThread((prev) =>
+                appendThreadTurn(prev, {
+                  kind: "assistant_notice",
+                  text: "I couldn’t reach Operational Intelligence for that question.",
+                }),
+              );
+            }
+            break;
+          }
         }
       } finally {
         setBusy(false);
@@ -2234,6 +2341,10 @@ export default function AICommandSurfaceShell({
             contextPills={bosContextPills}
             statusLabel={threadStatusLabel}
           />
+          {activeCommandSession && activeCommandSession.phase !== "discarded" ? (
+            <BosCommandSessionHost />
+          ) : (
+            <>
           <div className="bos-rail-upper shrink-0">
             <BosRailAttentionSection attention={bosRailAttention} onCta={onBosRailAttentionCta} />
             {hasThread ? null : (
@@ -2298,7 +2409,14 @@ export default function AICommandSurfaceShell({
             onChange={setCommandText}
             onSubmit={() => void handleSubmit()}
             inputRef={inputRef}
+            slashItems={slashItems}
+            slashActiveIndex={slashActiveIndex}
+            onSlashHighlight={setSlashActiveIndex}
+            onSlashSelect={selectSlashCommand}
+            onSlashKeyNavigate={onSlashKeyNavigate}
           />
+            </>
+          )}
         </>
       :   null}
       {presentation !== "rail" && hasThread ? (
