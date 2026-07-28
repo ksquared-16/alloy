@@ -1,11 +1,13 @@
 import { findDateInText, INTAKE_US_DATE_RE, parseFlexibleDate } from "@/lib/intake/normalize/date";
 import { splitPersonName } from "@/lib/intake/normalize/personName";
+import { stripGenderFromName, type ParsedGender } from "@/lib/intake/normalize/gender";
 
 export type ParsedChildBlockEntry = {
     first_name: string;
     last_name: string | null;
     dob: string | null;
     raw_name: string;
+    gender: ParsedGender;
 };
 
 const CHILD_BLOCK_HEADER_RE =
@@ -73,26 +75,31 @@ function stripDateTokensFromFragment(fragment: string): string {
         .trim();
 }
 
-function parseNameFromFragment(fragment: string): { first_name: string; last_name: string | null; raw_name: string } | null {
+function parseNameFromFragment(fragment: string): { first_name: string; last_name: string | null; raw_name: string; gender: ParsedGender } | null {
     const trimmed = fragment.trim();
     if (!trimmed) return null;
 
     const withoutDates = stripDateTokensFromFragment(trimmed);
-    const split = splitPersonName(withoutDates);
+    // Strip gender tokens (girl/boy/…) BEFORE name splitting so "Caitlyn Girl" parses as first "Caitlyn"
+    // (not last name "Girl"); the parent surname is then inferred downstream.
+    const { name: withoutGender, gender } = stripGenderFromName(withoutDates);
+    const split = splitPersonName(withoutGender);
     if (split) {
         return {
             first_name: split.first,
             last_name: split.last,
             raw_name: `${split.first} ${split.last}`.trim(),
+            gender,
         };
     }
 
-    const firstOnly = withoutDates.match(/^([A-Za-z][\w'\-]+)/);
+    const firstOnly = withoutGender.match(/^([A-Za-z][\w'\-]+)/);
     if (firstOnly?.[1]) {
         return {
             first_name: firstOnly[1],
             last_name: null,
             raw_name: firstOnly[1],
+            gender,
         };
     }
 
@@ -116,6 +123,7 @@ export function parseChildBlockEntries(line: string): ParsedChildBlockEntry[] {
             last_name: name.last_name,
             dob: parseDobFromFragment(fragment),
             raw_name: name.raw_name,
+            gender: name.gender,
         });
     }
 
