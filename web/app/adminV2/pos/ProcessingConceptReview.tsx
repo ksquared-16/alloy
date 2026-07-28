@@ -118,6 +118,9 @@ export default function ProcessingConceptReview({
     onDecision,
     onBulkAcceptHighConfidence,
     onOpenDetailed,
+    onApply,
+    applying = false,
+    applicationCounts = null,
 }: {
     discovery: ConfigurationDiscoveryResult;
     conceptById: Map<string, BusinessConceptCandidate>;
@@ -125,6 +128,9 @@ export default function ProcessingConceptReview({
     onDecision: (proposalId: string, state: ProposalDecisionState) => void;
     onBulkAcceptHighConfidence: () => void;
     onOpenDetailed: () => void;
+    onApply?: () => void;
+    applying?: boolean;
+    applicationCounts?: Record<string, number> | null;
 }) {
     const grouped = useMemo(() => {
         const map = new Map<DiscoveryCategory, ConfigurationProposal[]>();
@@ -244,13 +250,34 @@ export default function ProcessingConceptReview({
                     ))}
                 </div>
 
+                {applicationCounts ? (
+                    <div className="mt-5 rounded-xl border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.04] px-4 py-3" data-testid="concept-application-result">
+                        <p className="text-[12px] font-semibold text-alloy-midnight">Configuration applied</p>
+                        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-alloy-midnight/60">
+                            {Object.entries(applicationCounts)
+                                .filter(([, n]) => n > 0)
+                                .map(([k, n]) => (
+                                    <span key={k}>
+                                        <span className="font-semibold text-alloy-midnight">{n}</span> {k.replace(/_/g, " ")}
+                                    </span>
+                                ))}
+                        </div>
+                    </div>
+                ) : null}
+
                 <div className="mt-6 flex items-center justify-end gap-2 border-t border-alloy-stone/12 pt-3">
                     <p className="mr-auto text-[11px] text-alloy-midnight/45">
-                        Approving prepares a form + requirement draft. New fields are proposed — never created until you approve.
+                        Applying binds questions to existing fields and prepares new-field/requirement proposals — new
+                        fields are never created until you confirm.
                     </p>
-                    <button type="button" onClick={onOpenDetailed} className={WS_ACTION_PRIMARY} data-testid="concept-continue">
-                        Continue to form
+                    <button type="button" onClick={onOpenDetailed} className={WS_ACTION_SECONDARY} data-testid="concept-continue">
+                        Detailed form
                     </button>
+                    {onApply ? (
+                        <button type="button" onClick={onApply} disabled={applying} className={WS_ACTION_PRIMARY} data-testid="concept-apply">
+                            {applying ? "Applying…" : "Apply approved configuration"}
+                        </button>
+                    ) : null}
                 </div>
             </div>
         </div>
