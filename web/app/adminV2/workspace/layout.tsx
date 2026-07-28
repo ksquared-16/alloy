@@ -8,7 +8,6 @@ import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneCon
 import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBootstrap";
 import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTimezoneServer";
 import { loadEntityLabelsMapForOrgId, type EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
-import { loadOperatorLifecycleLandingCardsServer } from "@/lib/admin/loadOperatorLifecycleLandingServer";
 import { composeWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
 import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
 
@@ -49,20 +48,6 @@ async function loadOperationalTimezoneSafe(orgId: string): Promise<string> {
     }
 }
 
-/** Cap a first-paint seed load so a slow/N+1 query can never gate the shared layout composition;
- *  on timeout (or error) degrade to `fallback` and let the client refinement path fill it in. */
-async function withTimeoutOrDefault<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<T>((resolve) => {
-        timer = setTimeout(() => resolve(fallback), timeoutMs);
-    });
-    try {
-        return await Promise.race([promise.catch(() => fallback), timeout]);
-    } finally {
-        if (timer) clearTimeout(timer);
-    }
-}
-
 export default async function AdminV2WorkspaceLayout({
     children,
 }: {
@@ -87,7 +72,7 @@ export default async function AdminV2WorkspaceLayout({
         return <AlloyOperationalBootShell variant="workspace" chrome="content" />;
     }
 
-    const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels, lifecycleCards] =
+    const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels] =
         await Promise.all([
             loadOrgDisplayName(orgId),
             loadViewerTimezoneSafe(auth.user.id, orgId),
@@ -99,13 +84,6 @@ export default async function AdminV2WorkspaceLayout({
             loadEntityLabelsMapForOrgId(orgId, { timeoutMs: 150 }).catch(
                 (): EntityLabelsBootstrapMap => ({})
             ),
-            // First-paint lifecycle tiles for the workspace Route VM. Loads in parallel with the
-            // existing bundle; graceful [] on no-access/error keeps the client refinement path intact.
-            // TIMEOUT (same doctrine as entity-labels above): this is a landing-only seed with a
-            // per-unit N+1, so on a WORK-UNIT route it is dead weight, and even on the landing the
-            // client refinement path fills it in. Cap it so it can never gate the shared layout's first
-            // composition — degrade to [] and let the client refine, rather than block the reveal.
-            withTimeoutOrDefault(loadOperatorLifecycleLandingCardsServer(), 600, []),
         ]);
 
     if (!access.ok) {
@@ -113,11 +91,13 @@ export default async function AdminV2WorkspaceLayout({
     }
     const accessScopeFingerprint = buildAccessScopeCacheFingerprint(scopeDimensionsFromAccess(access));
 
-    // Canonical server-composed workspace Route VM (the single first-paint payload). Assembled from
-    // the parallel-loaded parts above; consumed by the index page via the Route VM context.
+    // Canonical server-composed workspace Route VM **context** (org identity), shared by every
+    // workspace route. The landing-only `firstPaint.lifecycleCards` is NOT loaded here — the landing
+    // route loads its own seed and merges it in (`WorkspaceLandingRouteVmBridge`), so work-unit routes
+    // never pay for a landing-only seed. Work-unit routes read no part of this VM.
     const workspaceRouteVm = composeWorkspaceRouteVm({
         context: { orgId, orgName, accessScopeFingerprint },
-        lifecycleCards,
+        lifecycleCards: [],
     });
 
     if (process.env.NODE_ENV === "development") {
