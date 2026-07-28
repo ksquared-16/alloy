@@ -431,6 +431,19 @@ function worktreeHasUncommittedWork(path) {
 }
 
 function resolveRunSlot(requested) {
+  const req = (typeof requested === "string" && /^-?\d+$/.test(requested)) ? Number(requested) : requested;
+  // Auto / default / explicit champion → the CHAMPION (slot 0): Vacilando's OWN
+  // dedicated mission worktree. Missions run here — never auto-landing in a human
+  // sprint slot (1–6). This is the whole point of the champion: a clean, owned
+  // worktree so a mission can't co-tenant and corrupt someone else's sprint.
+  if (!Number.isInteger(req) || req === 0) {
+    const champ = resolveSlotIdentity(0);
+    if (champ.ok && champ.worktree_path) return { slot: 0 };
+    return { error: "no_champion", detail: champ.conflict?.detail || "The champion mission worktree (slot 0) is not resolvable.", available: [] };
+  }
+  // Explicit worker-slot pick (1–6): permitted, but NEVER onto an occupied sprint
+  // tree (a live Vacilando mission or uncommitted external-sprint work). Silent
+  // co-tenancy is exactly what mixed two sprints; refuse it and point back to slot 0.
   const ids = listSlotIdentities().filter((i) => i.ok && i.worktree_name);
   const liveIds = new Set(liveMissionIds());
   const busy = new Set(
@@ -438,21 +451,13 @@ function resolveRunSlot(requested) {
       .filter((m) => liveIds.has(m.mission_id) || MISSION_BUSY.has(m.status))
       .map((m) => m.worker_slot)
   );
-  // A slot is OCCUPIED if a Vacilando mission is live on it OR its worktree carries
-  // uncommitted work from an external sprint. Never dispatch onto either — not on
-  // Auto, and not on an explicit pick (silent co-tenancy is what mixed two sprints).
   const occupiedById = new Map(ids.map((i) => [i.slot, busy.has(i.slot) || worktreeHasUncommittedWork(i.worktree_path)]));
-  const available = ids.filter((i) => !occupiedById.get(i.slot)).map((i) => i.slot).sort((a, b) => a - b);
-  if (Number.isInteger(requested)) {
-    if (requested < 1 || requested > 6) return { error: "bad_slot", detail: `slot ${requested} out of range`, available };
-    const target = ids.find((i) => i.slot === requested);
-    if (!target) return { error: "slot_not_occupied", detail: `slot ${requested} has no worker`, available };
-    if (occupiedById.get(requested)) return { error: "slot_occupied", detail: `slot ${requested} (${target.worktree_name}) already has a sprint in progress — a live mission or uncommitted work is there. Dispatching would mix two sprints in one worktree.`, available };
-    return { slot: requested };
-  }
-  if (available.length) return { slot: available[0] };
-  if (ids.length) return { error: "all_workers_busy", detail: "every worker slot is occupied by a sprint (live mission or uncommitted work) — free a slot or dedicate a clean worktree before dispatching", available: [] };
-  return { error: "no_workers", detail: "no worker slots to dispatch to", available: [] };
+  const available = [0, ...ids.filter((i) => !occupiedById.get(i.slot)).map((i) => i.slot)].sort((a, b) => a - b);
+  if (req < 1 || req > 6) return { error: "bad_slot", detail: `slot ${req} out of range`, available };
+  const target = ids.find((i) => i.slot === req);
+  if (!target) return { error: "slot_not_occupied", detail: `slot ${req} has no worker`, available };
+  if (occupiedById.get(req)) return { error: "slot_occupied", detail: `slot ${req} (${target.worktree_name}) already has a sprint in progress — dispatching would mix two sprints. Use the champion (slot 0).`, available };
+  return { slot: req };
 }
 
 /** Warm the expensive keys in the background so the first operator read is instant. */
