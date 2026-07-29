@@ -58,6 +58,67 @@ describe("lifecycleFieldRuleEvaluator", () => {
         expect(violations.some((v) => v.label.includes("Email"))).toBe(true);
     });
 
+    it("reserves judgment on child rules when the children binding is absent", () => {
+        // Unknown is not empty. A surface that never carried children must not report captured
+        // names and DOBs as missing — that is what made What's Next claim a child already visible
+        // on the same screen still needed a first name.
+        const ctx: CompletionEvaluationContext = {
+            phase: "action",
+            entity_type: "opportunity",
+            entity_id: "opp-1",
+            action_key: "schedule_tour",
+            values: {},
+            related: {},
+        };
+        const violations = evaluateFieldRulesForStage(ctx, "lead", {
+            required_rule_ids: ["child:first_name", "child:last_name", "child:date_of_birth"],
+            recommended_rule_ids: [],
+        });
+        expect(violations).toEqual([]);
+    });
+
+    it("still reports missing child fields when the household genuinely has no children", () => {
+        const ctx: CompletionEvaluationContext = {
+            phase: "action",
+            entity_type: "opportunity",
+            entity_id: "opp-1",
+            action_key: "schedule_tour",
+            values: {},
+            related: { inquiry_children: [] },
+        };
+        const violations = evaluateFieldRulesForStage(ctx, "lead", {
+            required_rule_ids: ["child:date_of_birth"],
+            recommended_rule_ids: [],
+        });
+        expect(violations.length).toBeGreaterThan(0);
+    });
+
+    it("does not report a captured child DOB as missing", () => {
+        const ctx: CompletionEvaluationContext = {
+            phase: "action",
+            entity_type: "opportunity",
+            entity_id: "opp-1",
+            action_key: "schedule_tour",
+            values: {},
+            related: {
+                inquiry_children: [
+                    {
+                        id: "cm-1",
+                        customer_member_id: "cm-1",
+                        first_name: "Ember",
+                        last_name: "Fitz",
+                        dob: "2024-06-06",
+                    },
+                ],
+            },
+        };
+        const violations = evaluateFieldRulesForStage(ctx, "lead", {
+            required_rule_ids: ["child:first_name", "child:last_name", "child:date_of_birth"],
+            recommended_rule_ids: [],
+        });
+        expect(violations).toEqual([]);
+    });
+
     it("evaluateLifecycleActionRequirements respects lead field_rules on schedule_tour", () => {
         const metadata = buildLifecycleFieldRulesOverridePatch({
             stage: "lead",

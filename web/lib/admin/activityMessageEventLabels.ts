@@ -8,23 +8,26 @@ function readChannel(payload: Record<string, unknown>): string {
     return typeof ch === "string" ? ch.trim().toLowerCase() : "";
 }
 
-function channelPhrase(channel: string, kind: "sent" | "received" | "queued"): string | null {
-    if (channel === "email") {
-        if (kind === "sent") return "Email sent";
-        if (kind === "received") return "Email received";
-        return "Email queued";
-    }
-    if (channel === "sms") {
-        if (kind === "sent") return "SMS sent";
-        if (kind === "received") return "SMS received";
-        return "SMS queued";
-    }
-    if (channel === "in_app") {
-        if (kind === "sent") return "Message sent";
-        if (kind === "received") return "Message received";
-        return "Message queued";
-    }
-    return null;
+type MessageEventKind = "sent" | "received" | "queued" | "delivered" | "failed";
+
+const CHANNEL_NOUNS: Record<string, string> = {
+    email: "Email",
+    sms: "SMS",
+    in_app: "Message",
+};
+
+const KIND_VERBS: Record<MessageEventKind, string> = {
+    sent: "sent",
+    received: "received",
+    queued: "queued",
+    delivered: "delivered",
+    failed: "failed",
+};
+
+function channelPhrase(channel: string, kind: MessageEventKind): string | null {
+    const noun = CHANNEL_NOUNS[channel];
+    if (!noun) return null;
+    return `${noun} ${KIND_VERBS[kind]}`;
 }
 
 export function resolveCommunicationMessageEventTitle(
@@ -37,6 +40,10 @@ export function resolveCommunicationMessageEventTitle(
     if (et === "message_sent") return channelPhrase(ch, "sent") ?? "Message sent";
     if (et === "message_received") return channelPhrase(ch, "received") ?? "Message received";
     if (et === "message_queued") return channelPhrase(ch, "queued") ?? "Message queued";
+    // The SMS delivery worker emits `message_delivered` right after `message_sent`, so for SMS it is
+    // always the newest event — leaving it unmapped is what surfaced the raw key to operators.
+    if (et === "message_delivered") return channelPhrase(ch, "delivered") ?? "Message delivered";
+    if (et === "message_failed") return channelPhrase(ch, "failed") ?? "Message failed";
 
     return null;
 }

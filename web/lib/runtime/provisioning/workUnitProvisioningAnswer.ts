@@ -652,6 +652,13 @@ export async function composeWorkUnitProvisioningAnswer(
             label: activeView.label,
             lifecycle_key: process.key,
             subject_grain: "case",
+            // Configured stages are the only runtime stage vocabulary, so the row pill can name the
+            // stage a record actually holds in the operator's own words.
+            stage_labels_by_key: Object.fromEntries(
+                stages
+                    .filter((s) => s.key.trim() && s.label.trim())
+                    .map((s) => [s.key.trim(), s.label.trim()])
+            ),
         },
     });
     void enrichedPromise.catch(() => {});
@@ -769,7 +776,19 @@ export async function composeWorkUnitProvisioningAnswer(
     const primaryContactName = strOrNull(chosenPrimaryContact.display_name);
     const primaryContactPhone = strOrNull(chosenPrimaryContact.phone);
     const primaryContactEmail = strOrNull(chosenPrimaryContact.email);
-    const inquiryChildren = subjectMetadata?.inquiry_children ?? null;
+    // `metadata.inquiry_children` is the LEGACY intake snapshot — Create Lead never writes it (the
+    // child is written to persons + customer_members + process_instances), so sourcing children
+    // from it alone left every Create-Lead lead looking childless and its captured names and DOBs
+    // reported as missing. The real children were already resolved in this same request by the
+    // queue-row enrichment; prefer them, and keep the snapshot as the fallback for legacy records.
+    const chosenEnrichedRow = (enriched.find(
+        (r) => String((r as Record<string, unknown>).id) === chosen.entityId
+    ) ?? {}) as Record<string, unknown>;
+    const householdChildren = chosenEnrichedRow._household_children;
+    const inquiryChildren =
+        (Array.isArray(householdChildren) && householdChildren.length
+            ? householdChildren
+            : subjectMetadata?.inquiry_children) ?? null;
     const subjectIdentityTruthBindings: SubjectIdentityTruth = {
         ...(primaryContactName ? { "person.primary_contact_name": primaryContactName } : {}),
         ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),

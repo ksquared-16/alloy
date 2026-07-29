@@ -92,6 +92,12 @@ export async function associateOutboundCommunicationToContactAttempt(
         if (!stageKey) continue;
         const stageRecord =
             process.stages.find((s) => s.key === stageKey && s.is_active) ?? null;
+        // NOTE: deliberately the explicit-plan resolver, not `resolveEffectiveStageOperatingPlan`.
+        // Sufficiency is opt-in: an unconfigured tenant must derive nothing rather than silently
+        // inherit the enrollment default (asserted by contactFamilyExecution.test.ts). This does
+        // leave a real asymmetry — the work item the operator sees is projected from the EFFECTIVE
+        // plan, so a department can show a "Contact family" step the default spawned while a send
+        // finds no explicit plan to satisfy it. Closing that is a policy decision, not a fix.
         const plan = resolveStageOperatingPlanForStage(stageRecord ?? {}, stageKey);
         if (!plan) continue;
 
