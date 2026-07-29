@@ -43,6 +43,19 @@ dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 
 const FIXTURE = path.join(process.cwd(), "tests/pos/fixtures/enrollment-record-8.25.pdf");
 
+/**
+ * Certification fixture manifest (certification/fixtures/configuration-discovery-v1-fixture.sql).
+ * Namespaced `cdc10000-` so teardown is exact. Only meaningful on the local cert stack.
+ */
+const FX = {
+    customerId: "cdc10000-0000-4000-8000-000000000001",
+    childA: "cdc10000-0000-4000-8000-00000000000a",
+    siblingB: "cdc10000-0000-4000-8000-00000000000b",
+    guardianPerson: "cdc10000-0000-4000-8000-000000000101",
+    multiRolePerson: "cdc10000-0000-4000-8000-000000000103",
+};
+const ON_CERT_STACK = (process.env.PLAYWRIGHT_BASE_URL ?? "").includes("3018");
+
 
 type Json = Record<string, any>;
 
@@ -87,6 +100,9 @@ test.describe("Configuration Discovery — proving journey", () => {
     let versionId = "";
     let generatedSchema: Json;
     let flatBefore = 0;
+    let publicToken = "";
+    let submissionId = "";
+    let submissionCaseId: string | null = null;
 
     test("1. import a NEW case and detect (native layout → discovery)", async ({ page }) => {
         await ensureAdminPlaywrightSession(page);
@@ -442,6 +458,133 @@ test.describe("Configuration Discovery — proving journey", () => {
         );
         expect(suppressed.length, "source questions were deleted rather than retained as evidence").toBeGreaterThan(0);
         console.log(`JOURNEY LINEAGE retained suppressed source questions=${suppressed.length}`);
+    });
+
+    test("8. submit real collection responses through the supported public form path", async ({ page }) => {
+        test.skip(!ON_CERT_STACK, "Live submission runs only against the local certification stack");
+        await ensureAdminPlaywrightSession(page);
+        const req = page.request;
+
+        // Mint a public link. pos_connected + lead_capture are what make the submission open a
+        // Processing case — this is the supported distribution path, not a test hook.
+        const link = await okJson(
+            await req.post(`/api/admin/forms/${formId}/public-links`, {
+                data: {
+                    metadata: { pos_connected: true, lead_capture: true },
+                    pinned_form_definition_version_id: versionId,
+                    is_active: true,
+                    label: "CDV1 certification",
+                },
+            }),
+            "public-links",
+        );
+        publicToken = link.data.plaintext_token;
+        expect(publicToken, "no plaintext token returned").toBeTruthy();
+
+        // Resolve the PUBLISHED schema to get the real group + nested field ids the product created.
+        const resolved = await okJson(
+            await req.get(`/api/public/forms/${publicToken}/resolve`),
+            "public resolve",
+        );
+        const schema = resolved.schema_json ?? resolved.data?.schema_json;
+        const groups = collectGroups(schema.fields ?? []).filter(
+            (g) => g.collection_binding?.collection_provider_ref,
+        );
+        expect(groups.length, "published form exposes no collection groups").toBe(3);
+
+        const groupFor = (ref: string) =>
+            groups.find((g) => g.collection_binding.collection_provider_ref === ref)!;
+        const nestedId = (g: Json, fieldKey: string) =>
+            (g.fields ?? []).find((f: Json) => f.field_source?.field_key === fieldKey)?.id;
+
+        const parents = groupFor("person.contact_role.parents");
+        const emergency = groupFor("person.contact_role.emergency_contacts");
+        const pickups = groupFor("person.contact_role.authorized_pickups");
+
+        const payload = {
+            values: {},
+            groups: {
+                // GUARDIAN — an EXISTING canonical Person, linked not created.
+                [parents.id]: [
+                    {
+                        instance_key: "cdv1-guardian-1",
+                        values: { [nestedId(parents, "full_name")!]: "Dana CDV1Guardian" },
+                        collection: {
+                            provider_ref: "person.contact_role.parents",
+                            origin: "existing",
+                            item_id: FX.guardianPerson,
+                            iteration_entity_type: "person",
+                        },
+                    },
+                ],
+                // EMERGENCY CONTACT — respondent-added, so Processing must CREATE the Person.
+                [emergency.id]: [
+                    {
+                        instance_key: "cdv1-emergency-1",
+                        values: {
+                            [nestedId(emergency, "full_name")!]: "Rosa CDV1Emergency",
+                            [nestedId(emergency, "phone")!]: "5550102",
+                        },
+                        collection: {
+                            provider_ref: "person.contact_role.emergency_contacts",
+                            origin: "respondent_added",
+                            iteration_entity_type: "person",
+                        },
+                    },
+                ],
+                // AUTHORIZED PICKUP — the SAME canonical Person who will also hold another role.
+                [pickups.id]: [
+                    {
+                        instance_key: "cdv1-pickup-1",
+                        values: { [nestedId(pickups, "full_name")!]: "Sam CDV1MultiRole" },
+                        collection: {
+                            provider_ref: "person.contact_role.authorized_pickups",
+                            origin: "existing",
+                            item_id: FX.multiRolePerson,
+                            iteration_entity_type: "person",
+                        },
+                    },
+                ],
+            },
+        };
+
+        const draft = await okJson(
+            await req.post(`/api/public/forms/${publicToken}/submissions`, { data: { payload } }),
+            "create submission",
+        );
+        submissionId = draft.id ?? draft.data?.id;
+        expect(submissionId, "no submission id").toBeTruthy();
+
+        const submitted = await okJson(
+            await req.post(`/api/public/forms/${publicToken}/submissions/${submissionId}/submit`, {
+                data: { payload },
+            }),
+            "submit",
+        );
+        const row = submitted.data ?? submitted;
+        console.log(`JOURNEY SUBMIT id=${submissionId} status=${row.status}`);
+
+        // The submission must PRESERVE collection metadata rather than flattening to field pairs.
+        const savedGroups = row.payload?.groups ?? {};
+        const allRows: Json[] = Object.values(savedGroups).flat() as Json[];
+        expect(allRows.length, "submission lost its collection rows").toBe(3);
+        for (const r of allRows) {
+            expect(r.collection?.provider_ref, "row lost provider_ref").toBeTruthy();
+            expect(r.instance_key, "row lost instance identity").toBeTruthy();
+            expect(r.collection?.origin, "row lost origin").toBeTruthy();
+            expect(r.collection?.iteration_entity_type).toBe("person");
+        }
+        const byRef = Object.fromEntries(allRows.map((r) => [r.collection.provider_ref, r]));
+        expect(byRef["person.contact_role.parents"].collection.origin).toBe("existing");
+        expect(byRef["person.contact_role.parents"].collection.item_id).toBe(FX.guardianPerson);
+        expect(byRef["person.contact_role.emergency_contacts"].collection.origin).toBe("respondent_added");
+        expect(byRef["person.contact_role.emergency_contacts"].collection.item_id).toBeUndefined();
+        expect(byRef["person.contact_role.authorized_pickups"].collection.item_id).toBe(FX.multiRolePerson);
+
+        submissionCaseId = row.payload?.meta?.processing_case_id ?? null;
+        console.log(
+            `JOURNEY SUBMIT preserved refs=${JSON.stringify(Object.keys(byRef))} processingCase=${submissionCaseId}`,
+        );
     });
 });
 
