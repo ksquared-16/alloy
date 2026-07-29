@@ -28,6 +28,7 @@ import {
     type RelationshipCommitRequest,
 } from "@/lib/pos/processingCase/commit/verifyRelationshipCommitAuthorization";
 import { executeCommandInvocation } from "@/lib/platform/commands/runtime/executeCommandInvocation";
+import { resolveRelationshipAnchor, type AnchorCandidate } from "@/lib/pos/processingCase/commit/resolveRelationshipAnchor";
 import type { RelatedRecordProposalDecision } from "@/lib/intake/proposals/decisions";
 
 /** Structured commit outcomes surfaced to product consumers. */
@@ -77,8 +78,17 @@ function ledgerFrom(metadata: Record<string, unknown>): Record<string, Relations
 }
 
 /** Stable across retries of the same proposal + resolved semantics. */
-function idempotencyKey(proposalId: string, commandKey: string, roleKey: string, scope: string): string {
-    return `rel:${proposalId}:${commandKey}:${roleKey}:${scope}`;
+function idempotencyKey(
+    proposalId: string,
+    commandKey: string,
+    roleKey: string,
+    scope: string,
+    memberIds: readonly string[],
+): string {
+    // The anchor is part of the identity: the same role for a DIFFERENT child is a different commit,
+    // not a retry. Sorted so member order never changes the key.
+    const anchorPart = [...memberIds].sort().join(",");
+    return `rel:${proposalId}:${commandKey}:${roleKey}:${scope}:${anchorPart}`;
 }
 
 /** Split a submitted full name into the Person draft shape, without inventing data. */
@@ -107,8 +117,14 @@ export async function executeRelationshipProposalCommit(args: {
     proposalId: string;
     decision: RelatedRecordProposalDecision;
     metadata: Record<string, unknown>;
-    /** Anchor the relationship attaches to — resolved from the case, never from the client. */
+    /**
+     * Explicit anchor for the commit. NEVER inferred: a child-scoped relationship without a child
+     * anchor is rejected rather than resolved to "the only child" or expanded to every child.
+     */
     anchorCustomerMemberId: string | null;
+    selectedCustomerMemberIds?: readonly string[] | null;
+    /** Household children loaded server-side — the only ids an anchor may reference. */
+    householdChildren: readonly AnchorCandidate[];
     /** Optional caller-supplied extras. Only `scope` is honoured; assertions are compared and rejected. */
     request?: Partial<RelationshipCommitRequest>;
 }): Promise<RelationshipCommitOutcome> {
@@ -160,14 +176,6 @@ export async function executeRelationshipProposalCommit(args: {
     }
 
     const { definition, resolved } = auth;
-    const key = idempotencyKey(args.proposalId, resolved.commandKey, resolved.roleKey, resolved.scope);
-
-    // IDEMPOTENCY — a retry of the same proposal under the same resolved semantics is a no-op.
-    const prior = ledgerFrom(args.metadata)[key];
-    if (prior && prior.outcome === "applied") {
-        return { ok: true, status: 200, record: { ...prior, outcome: "already_applied" } };
-    }
-
     const anchorCustomerId = proposalContext!.expectedCustomerId;
     if (!anchorCustomerId) {
         return {
@@ -181,6 +189,44 @@ export async function executeRelationshipProposalCommit(args: {
                 code: "missing_anchor_household",
             },
         };
+    }
+
+    // ── anchor resolution (definition-driven; never inferred, never silently expanded) ──────────
+    const anchor = resolveRelationshipAnchor({
+        definition,
+        orgId: args.orgId,
+        householdChildren: args.householdChildren,
+        request: {
+            customerId: anchorCustomerId,
+            scope: resolved.scope,
+            customerMemberId: args.anchorCustomerMemberId,
+            selectedCustomerMemberIds: args.selectedCustomerMemberIds,
+        },
+    });
+    if (!anchor.ok) {
+        return {
+            ok: false,
+            status: anchor.status,
+            record: {
+                ...base,
+                outcome: "failed",
+                definition_key: definition.definition_key,
+                role_key: resolved.roleKey,
+                scope: resolved.scope,
+                command_key: resolved.commandKey,
+                persistence_destination: definition.persists_to,
+                reason: anchor.reason,
+                code: anchor.code,
+            },
+        };
+    }
+
+    // Idempotency identity includes the resolved anchor: the same role for a DIFFERENT child is a
+    // distinct commit, not a retry.
+    const key = idempotencyKey(args.proposalId, resolved.commandKey, resolved.roleKey, anchor.scope, anchor.memberIds);
+    const prior = ledgerFrom(args.metadata)[key];
+    if (prior && prior.outcome === "applied") {
+        return { ok: true, status: 200, record: { ...prior, outcome: "already_applied" } };
     }
 
     // Identity: link the canonical Person when known, otherwise propose one from the submitted facts.
@@ -208,13 +254,14 @@ export async function executeRelationshipProposalCommit(args: {
             invocation: {
                 commandKey: resolved.commandKey,
                 origin: "processing_commit",
-                providedSubject: { entityType: "child", entityId: args.anchorCustomerMemberId ?? anchorCustomerId },
+                providedSubject: { entityType: "child", entityId: anchor.anchorCustomerMemberId ?? anchorCustomerId },
                 inputValues: {
                     sourceEntityType: "child",
-                    sourceRecordId: args.anchorCustomerMemberId ?? anchorCustomerId,
+                    sourceRecordId: anchor.anchorCustomerMemberId ?? anchorCustomerId,
                     sourceCustomerId: anchorCustomerId,
-                    anchorCustomerMemberId: args.anchorCustomerMemberId,
-                    scope: resolved.scope,
+                    anchorCustomerMemberId: anchor.anchorCustomerMemberId,
+                    selectedChildCustomerMemberIds: anchor.memberIds,
+                    scope: anchor.scope,
                     ...(resolved.existingPersonId ? { selectedPersonId: resolved.existingPersonId } : {}),
                     ...(draft ? { createPersonDraft: draft } : {}),
                     confirmationRequired: true,
@@ -222,7 +269,7 @@ export async function executeRelationshipProposalCommit(args: {
             },
             mode: "execute",
             confirmation: { confirmed: true },
-            executionSubject: { entityType: "child", entityId: args.anchorCustomerMemberId ?? anchorCustomerId },
+            executionSubject: { entityType: "child", entityId: anchor.anchorCustomerMemberId ?? anchorCustomerId },
         },
         server: {
             orgId: args.orgId,
