@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
 import {
     deriveOperationalViewsFromQueueDefinition,
     relabelPrimaryPillSectionWorkView,
@@ -56,7 +57,7 @@ describe("Focus Panel Universal Card presentation", () => {
         expect(spec).toContain('historical: "history"');
     });
 
-    it("summary overview is scoped to the Core Four operational cards", () => {
+    it("summary overview renders the default composition — and never the dormant readiness_kpi", () => {
         const { grid } = deriveOpportunityFocusPanelPresentation({
             mode: "summary",
             displayVm: baseVm,
@@ -67,13 +68,23 @@ describe("Focus Panel Universal Card presentation", () => {
         });
 
         const keys = grid.rows.flatMap((row) => row.cells.map((c) => c.key));
-        expect(keys).toEqual(["household", "readiness_kpi", "children", "current_work"]);
-        // Suppressed (not deleted) from Overview for the Core Four validation pass.
+
+        // The Summary grid is GENERATED from the default composition — assert against that source of
+        // truth, not a hand-copied list, so the two can never drift apart again. The previous
+        // assertion here (`["household","readiness_kpi","children","current_work"]`) locked the
+        // retired `SUMMARY_GRID` authority and had been red ever since; `communications` and
+        // `tour_summary` are also present now, as `linked`, so the old negatives for them were false.
+        expect(keys).toEqual(FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION.map((entry) => entry.key));
+
+        // `readiness_kpi` is COMMIT-CRITICAL but placed by no composition — dormant capability, not
+        // dead code (a tenant may publish it). Its absence here is the fact that makes the
+        // commit-critical build unconditional w.r.t. placement; see focusPanelCommitCriticalCardParticipation.test.ts.
+        expect(keys).not.toContain("readiness_kpi");
+
+        // Still suppressed from Overview.
         expect(keys).not.toContain("attention");
         expect(keys).not.toContain("current_mission");
-        expect(keys).not.toContain("communications");
         expect(keys).not.toContain("documents");
-        expect(keys).not.toContain("tour_summary");
         expect(keys).not.toContain("health");
     });
 
