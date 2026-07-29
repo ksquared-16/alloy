@@ -57,6 +57,10 @@ import {
     mapRegistrySurfaceToEnrollmentSource,
     resolveEnrollmentStatusActionFromResolvedAction,
 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionClient";
+import {
+    dispatchOpenChangeLeadLocationModal,
+    resolveChangeLeadLocationActionFromResolvedAction,
+} from "@/lib/admin/actions/changeLeadLocationActionClient";
 import type { EnrollmentStatusTransitionScope } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 
 export type RegistryActionSurfaceContext = {
@@ -94,6 +98,8 @@ export type ApplyRegistryResolvedActionHost = {
         sourceSurface?: import("@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract").EnrollmentStatusTransitionSourceSurface;
         initialScope?: Partial<EnrollmentStatusTransitionScope>;
     }) => void;
+    /** Change lead location — family default site modal. */
+    openChangeLeadLocation?: (input: { opportunityId: string }) => void;
     /** Dedicated modal — household primary contact (requires contact row target). */
     openMakePrimaryContact?: (input: { opportunityId: string; targetPersonId: string }) => void;
     openCreateLead?: () => void;
@@ -221,6 +227,22 @@ export async function applyRegistryResolvedActionClient(
             source_surface: sourceSurface,
             scope: initialScope,
         });
+        return { ok: true };
+    }
+
+    if (resolveChangeLeadLocationActionFromResolvedAction(a)) {
+        const oid = host.entityId?.trim();
+        if (!oid) {
+            return {
+                ok: false,
+                error: "Select a record first.",
+            };
+        }
+        if (host.openChangeLeadLocation) {
+            host.openChangeLeadLocation({ opportunityId: oid });
+            return { ok: true };
+        }
+        dispatchOpenChangeLeadLocationModal({ opportunity_id: oid });
         return { ok: true };
     }
 

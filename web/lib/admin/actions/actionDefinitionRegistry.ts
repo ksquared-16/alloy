@@ -95,6 +95,18 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         defaultSlot: "primary",
     },
     {
+        key: "change_lead_location",
+        label: "Change lead location",
+        category: "workflow",
+        settingsConfigurable: true,
+        description:
+            "Set the family default site (opportunities.location_id). Children keep their own sites; optional update for children still inheriting the lead default.",
+        defaultSurface: "record_header",
+        defaultSlot: "secondary",
+        interactionHost: "inline_form",
+        icon: "MapPin",
+    },
+    {
         key: "close_lead",
         label: "Close Lead",
         category: "status_lifecycle",

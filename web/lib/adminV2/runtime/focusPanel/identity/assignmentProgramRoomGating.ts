@@ -1,7 +1,9 @@
 /**
- * When a primary operational assignment exists, Program/Room display derives from
- * the assignment classroom. Before that, Desired Program is independently editable
- * (inquiry participation select). Room without a primary still routes to Assignments.
+ * When a committed primary operational assignment exists, Program/Room display
+ * derives from the assignment classroom. Proposed drafts (pre-enrollment or
+ * OA `commitment_kind=proposed`) do **not** own those identity fields — Desired
+ * Program stays independently editable until a committed schedule exists.
+ * Room without a primary still routes to Assignments.
  */
 
 import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
@@ -14,12 +16,15 @@ export function primaryAssignmentFromScheduling(
     scheduling: ChildScheduling | null | undefined,
 ): { program: string | null; room: string | null } | null {
     if (!scheduling) return null;
+    const status = scheduling.status;
+    // Proposed-only / needs-placement never lock Program/Room on identity cards.
+    if (status !== "scheduled" && status !== "upcoming-only") return null;
     const view = scheduling.current ?? scheduling.proposed;
     if (!view?.assignments?.length) return null;
     const primary = view.assignments.find((a) => a.isPrimary) ?? view.assignments[0];
     if (!primary) return null;
-    const status = scheduling.status;
-    if (status !== "scheduled" && status !== "proposed" && status !== "upcoming-only") return null;
+    // Synthetic / OA proposed rows are planning-only — not identity Program owners.
+    if (primary.commitmentKind === "proposed") return null;
     // Prefer assignment room.program; fall back to subject program from placement.
     const program =
         primary.room.program?.trim()

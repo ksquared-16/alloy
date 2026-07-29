@@ -111,7 +111,11 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
     "child.date_of_birth": (subject) => {
         if (subject.kind !== "child") return null;
         const child = subject.value;
-        return ("dobAge" in child ? child.dobAge : null) ?? ("dob" in child ? child.dob : null) ?? null;
+        // ISO date for type=date edit controls — never the formatted dobAge line.
+        const iso =
+            ("dob" in child && child.dob != null ? String(child.dob).trim().slice(0, 10) : "")
+            || "";
+        return iso.length > 0 ? iso : null;
     },
     "child.dob_age": (subject) => {
         if (subject.kind !== "child") return null;
