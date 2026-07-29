@@ -185,6 +185,45 @@ chain, and it is what blocks proving-journey steps 6-10.
 Pinned by `web/playwright/tests/configuration-discovery-proving-journey.spec.ts` test 6, which
 asserts the gap so that closing it fails the test and forces the journey to be extended.
 
+### Open defect — collection projection can break public lead-capture intake
+
+Found by live certification on the local stack, not by inspection.
+
+Projecting guardians into a collection SUPPRESSES the flat guardian contact questions — verified on
+the enrollment fixture, where `Email`, `Home Phone`, `Cell Phone` and `Work Phone` inside the
+"Parent or Guardian #1/#2" sections are all marked `suppressed_by_collection=col_parents_guardians`.
+
+The public form's CRM-intake path reads FLAT guardian fields. With them suppressed, a lead-capture
+submission records:
+
+```
+intake_resolution_path = "skipped_missing_config"
+intake_skip_reason     = "Guardian email or phone is required for intake — map fields via link
+                          intake_field_paths or use default guardian_* field ids."
+```
+
+so **no Processing case is opened**, and the journey cannot reach Processing proposals, approval or
+guarded commit through the public path.
+
+Two mechanisms are running in parallel and only one understands collections:
+
+- `collection_submission_envelope` IS stamped correctly on the submission (proven live: 3 groups,
+  3 rows, origins `existing/existing/respondent_added`, carrying provider_ref, instance_key and the
+  canonical person ids). The Part 2 contract works.
+- CRM intake, which is what actually OPENS the Processing case for a public link, does not read that
+  envelope — it looks for flat `guardian_*` values or an explicit `intake_field_paths` mapping.
+
+Options, in preference order:
+
+1. Teach intake to resolve guardian contact from the collection envelope when the form projects
+   guardians into a collection. This keeps the projection lossless and needs no per-form config.
+2. Have the projection emit `intake_field_paths` on the published form/link pointing at the nested
+   guardian email/phone, so existing intake keeps working unchanged.
+3. Leave guardian contact questions unsuppressed when a form is lead-capture — the weakest option;
+   it reintroduces the duplicate flat questions the projection exists to remove.
+
+Until one lands, a collection-projected form is not safe to publish as a public lead-capture link.
+
 ### Open follow-up — an unguarded write path
 
 `POST /api/admin/relationship-actions/execute` calls `executeRelationshipAction` **directly**,

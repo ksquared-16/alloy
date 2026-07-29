@@ -55,6 +55,8 @@ const FX = {
     multiRolePerson: "cdc10000-0000-4000-8000-000000000103",
 };
 const ON_CERT_STACK = (process.env.PLAYWRIGHT_BASE_URL ?? "").includes("3018");
+/** The local certification tenant's single vertical (Childcare). */
+const CERT_VERTICAL_ID = "d7a48ba5-2602-4dcd-8e5f-598f32436350";
 
 
 type Json = Record<string, any>;
@@ -476,7 +478,26 @@ test.describe("Configuration Discovery — proving journey", () => {
         const link = await okJson(
             await req.post(`/api/admin/forms/${formId}/public-links`, {
                 data: {
-                    metadata: { pos_connected: true, lead_capture: true },
+                    // The canonical Processing-intake link shape the product's own builder produces
+                    // (buildProcessingPublicLinkMetadata): form_context_mode is what routes a public
+                    // submission into Processing. `lead_capture` alone does not.
+                    metadata: {
+                        form_context_mode: "processing_intake",
+                        // BOTH markers are required: form_context_mode routes the link into
+                        // Processing, and lead_capture is what makes the public submit path actually
+                        // run intake. Without it the submission records
+                        // intake_resolution_path="skipped_intake_disabled" and opens no case.
+                        lead_capture: true,
+                        // CRM intake requires the link to name its vertical. The local certification
+                        // tenant has exactly one (Childcare); a real Studio-minted link carries this
+                        // from the form's operational intent.
+                        default_vertical_id: CERT_VERTICAL_ID,
+                        pos_connected: true,
+                        source: "processing_studio",
+                        embed_mode: true,
+                        label: "CDV1 certification",
+                        purpose: "Public form — submissions enter Processing for review.",
+                    },
                     pinned_form_definition_version_id: versionId,
                     is_active: true,
                     label: "CDV1 certification",
@@ -601,7 +622,27 @@ test.describe("Configuration Discovery — proving journey", () => {
         expect(byRef["person.contact_role.emergency_contacts"].collection.item_id).toBeUndefined();
         expect(byRef["person.contact_role.authorized_pickups"].collection.item_id).toBe(FX.multiRolePerson);
 
+        // The server stamps a collection envelope onto the submission — this is the structured
+        // handoff Processing consumes, and the reason a collection response is not flattened into
+        // ordinary question/value pairs.
+        const envelope = row.payload?.meta?.collection_submission_envelope ?? {};
+        const envelopeRows: Json[] = Object.values(envelope).flat() as Json[];
+        expect(envelopeRows.length, "no collection envelope stamped on the submission").toBe(3);
+        for (const r of envelopeRows) {
+            expect(r.provider_ref).toBeTruthy();
+            expect(r.instance_key).toBeTruthy();
+            expect(r.iteration_entity_type).toBe("person");
+        }
+        console.log(
+            `JOURNEY ENVELOPE groups=${Object.keys(envelope).length} rows=${envelopeRows.length} ` +
+                `origins=${JSON.stringify(envelopeRows.map((r) => r.origin))}`,
+        );
+
         submissionCaseId = row.payload?.meta?.processing_case_id ?? null;
+        expect(
+            submissionCaseId,
+            `submission opened no Processing case (path=${row.payload?.meta?.intake_resolution_path}, reason=${row.payload?.meta?.intake_skip_reason})`,
+        ).toBeTruthy();
         console.log(
             `JOURNEY SUBMIT preserved refs=${JSON.stringify(Object.keys(byRef))} processingCase=${submissionCaseId}`,
         );
