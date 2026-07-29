@@ -42,9 +42,24 @@ export type FocusPanelCardReadiness = "ready" | "reserved" | "not_applicable";
 /** Which producer built the model. DIAGNOSTIC ONLY — the grid must never branch on it. */
 export type FocusPanelWorkModeSource = "provisioning_answer" | "drawer_vm";
 
+/**
+ * How far the surface has advanced — a DECLARED fact, not an inference from provenance.
+ *
+ *   commit  — the commit-critical answer is in hand; cards outside it are genuinely still settling.
+ *   settled — settlement has run; a card that is still not ready is RESOLVED-empty, not loading.
+ *
+ * This exists because the renderer used to derive it from `source === "drawer_vm"`, i.e. from the
+ * producer's NAME — which both contradicts the "never branch on it" rule above and silently blocks a
+ * second surface: a Child producer would have had to call itself `drawer_vm` to get settled
+ * semantics. Producers declare their phase; the grid reads the phase.
+ */
+export type FocusPanelSettlementPhase = "commit" | "settled";
+
 export type FocusPanelWorkModeModel = {
     /** Diagnostic provenance. The grid renders identically regardless of this. */
     source: FocusPanelWorkModeSource;
+    /** Declared surface phase — the grid reads THIS, never `source`. */
+    phase: FocusPanelSettlementPhase;
     mode: FocusPanelMode;
     /**
      * Committed subject identity (Record of Attention). Grain-agnostic PLATFORM contract: the subject

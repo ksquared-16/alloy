@@ -136,6 +136,8 @@ export function focusPanelWorkModeModelFromProvisioningAnswer(
 
     return {
         source: "provisioning_answer",
+        // Commit-critical: cards outside the ready set are genuinely still settling.
+        phase: "commit",
         mode: input.mode,
         subject: { id: input.subjectId, type: "opportunity", label: input.title },
         context,
