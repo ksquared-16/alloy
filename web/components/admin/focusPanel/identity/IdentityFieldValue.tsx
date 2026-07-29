@@ -97,12 +97,16 @@ function IdentityInlineEditInput({
     const programCategoryId =
         editControl.kind === "placement_select" ? (editControl.programCategoryId ?? "").trim() : "";
     const placement = useOperationalPlacementOptions(siteLocationId, programCategoryId);
-    const selectOptions =
-        editControl.kind === "select"
-            ? (optionsBySetKey[editControl.optionSetKey] ?? [])
-            : editControl.kind === "placement_select"
-              ? (placement.programCategoryIdOptions ?? placement.programOptions)
-              : [];
+    const selectOptions = useMemo(() => {
+        if (editControl.kind === "select") {
+            return optionsBySetKey[editControl.optionSetKey] ?? [];
+        }
+        if (editControl.kind === "placement_select") {
+            // Category-id values only — Focus Panel saves `program_category_id` FK.
+            return placement.programCategoryIdOptions ?? [];
+        }
+        return [];
+    }, [editControl, optionsBySetKey, placement.programCategoryIdOptions]);
 
     // Display may store the option label; `<select>` values are keys — map label → value on edit.
     const selectValue = useMemo(() => {

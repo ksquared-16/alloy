@@ -31,6 +31,7 @@ import {
     type SurfaceFieldVisibility,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import { identityFieldVisibilityOptionsForBuilder } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldEditContract";
+import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
 import {
     IDENTITY_LINK_CARD_OPTIONS,
     IDENTITY_LINK_OPEN_OPTIONS,
@@ -41,7 +42,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
-import { availableFieldsForNamespaces } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { identityPickerFieldsForNamespaces } from "@/lib/adminV2/settings/surfaces/identityPickerFieldCatalog";
 import NestedSurfaceAddField from "@/components/admin/focusPanel/drillIn/NestedSurfaceAddField";
 
 export type LayoutSurfaceFieldMeta = {
@@ -66,21 +67,47 @@ type Props = {
 
 function humanizeFieldKey(fieldKey: string): string {
     const leaf = fieldKey.includes(".") ? fieldKey.slice(fieldKey.lastIndexOf(".") + 1) : fieldKey;
-    return leaf.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    // Never surface storage suffixes like location_id → "Location Id" in Builder.
+    const withoutIdSuffix = leaf.replace(/_id$/i, "");
+    return withoutIdSuffix.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Never return raw canonical refs in Builder UI. */
+/** Never return raw canonical refs / storage keys in Builder UI. */
 function catalogLabelFor(
     surfaceId: string,
     groupKey: string,
     fieldKey: string,
     tenantDefs: ReturnType<typeof useTenantFieldDefinitions>["tenantFieldDefinitions"],
 ): string {
+    const canonical = resolveCanonicalIdentityFieldLabel(fieldKey, tenantDefs).trim();
+    if (
+        canonical
+        && canonical !== fieldKey
+        && !/^[a-z_]+\./i.test(canonical)
+        && !/_id$/i.test(canonical)
+        && canonical.toLowerCase() !== "location id"
+    ) {
+        return canonical;
+    }
+
     const namespaces = namespacesForNestedGroupPicker(surfaceId, groupKey);
-    const all = namespaces.length > 0 ? availableFieldsForNamespaces(namespaces, tenantDefs) : [];
-    const fromCatalog = all.find((f) => f.key === fieldKey)?.label?.trim();
-    if (fromCatalog && fromCatalog !== fieldKey && !/^[a-z_]+\./i.test(fromCatalog)) return fromCatalog;
-    if (fromCatalog && fromCatalog !== fieldKey) return humanizeFieldKey(fieldKey);
+    const picker = namespaces.length > 0
+        ? identityPickerFieldsForNamespaces({ namespaces, tenantFieldDefinitions: tenantDefs })
+        : [];
+    const fromPicker = picker.find((f) => f.key === fieldKey)?.label?.trim();
+    if (
+        fromPicker
+        && fromPicker !== fieldKey
+        && !/^[a-z_]+\./i.test(fromPicker)
+        && fromPicker.toLowerCase() !== "location id"
+    ) {
+        // Prefer the placement operator noun ("Location") over longer Settings copy.
+        if (fieldKey === "inquiry_child.location_id" || fieldKey === "child.location") {
+            return "Location";
+        }
+        return fromPicker;
+    }
+
     return humanizeFieldKey(fieldKey) || "Unavailable field";
 }
 
