@@ -87,15 +87,13 @@ cd /Users/Kelly/Alloy && RAW="$(grep -E '^DATABASE_URL=' web/.env.local|cut -d= 
 
 ---
 
-## 3. Outstanding — three decisions for Kelly
+## 3. Outstanding — resolved this session
 
-These are **decisions, not tickets**. Each was deliberately left unimplemented because picking a
-side is a product call. Background for each is in §4.
-
-1. **Command-result sufficiency: expose the control, or apply the platform default?**
-2. **`close_record` semantics: is the classifier too broad, or the validator too strict?**
-3. **Tour action lifecycle: build reschedule/cancel swap now?** (This one is scope, not doctrine.)
-
+1. **Command-result sufficiency** — implemented effective resolution (explicit → platform
+   default for canonical templates → none). No Firefly-only DB write.
+2. **`close_record` semantics** — classifier narrowed to terminal/closed status for the
+   correct domain; unclearable blocking error downgraded to actionable warning.
+3. **Tour action lifecycle** — shipped in `af794bbcf`.
 ---
 
 ## 4. Background on each

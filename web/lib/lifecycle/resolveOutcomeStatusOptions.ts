@@ -68,6 +68,39 @@ function normalizeEntityType(entityType: string): string {
     return t || "opportunities";
 }
 
+/** Operator-facing status domain name for validation copy. */
+export function statusDomainOperatorLabel(entityType: string): string {
+    const entity = normalizeEntityType(entityType);
+    if (entity === "opportunity_customer_members") return "child enrollment status";
+    if (entity === "persons") return "person status";
+    if (entity === "customers") return "account status";
+    return "lead status";
+}
+
+/**
+ * Canonical closed-status check for a status key in a status domain.
+ * Reuses `isConfiguredClosedStatus` — never duplicate terminal/is_terminal/is_closed interpretation.
+ */
+export function isClosedStatusKeyForEntity(input: {
+    statusKey: string | null | undefined;
+    entityType: string;
+    configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+}): boolean {
+    const key = trimKey(input.statusKey);
+    if (!key) return false;
+    const entityType = normalizeEntityType(input.entityType);
+    const rows = input.configuredStatuses ?? [];
+    const found = rows.find(
+        (row) => trimKey(row.status_key) === key && normalizeEntityType(row.entity_type) === entityType,
+    );
+    const row: OutcomeStatusConfiguredRow = found ?? {
+        status_key: key,
+        status_label: key,
+        entity_type: entityType,
+    };
+    return isConfiguredClosedStatus(row);
+}
+
 /**
  * Closed-semantic detection against an already-configured catalog row.
  * Does not invent status keys — only classifies rows present in config.
@@ -160,7 +193,7 @@ export function resolveOutcomeStatusOptions(
             available: false,
             unavailableReason:
                 input.purpose === "close_record"
-                    ? "No configured closed statuses are available for this entity."
+                    ? `No closed ${statusDomainOperatorLabel(entityType)} values are configured. Add one under Organization → Statuses (${statusDomainOperatorLabel(entityType)}), then select it for this close outcome.`
                     : "No configured statuses are available for this entity.",
         };
     }
