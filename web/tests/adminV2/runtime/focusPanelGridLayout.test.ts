@@ -222,6 +222,37 @@ describe("focusPanelGridLayoutOps", () => {
         });
     });
 
+    it("does not shrink a full-width card when the pointer drifts toward the right half", () => {
+        const grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "household", colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 3 },
+                { card: "children", colStart: 1, colSpan: 12, rowStart: 4, rowSpan: 4 },
+            ],
+        };
+        const moving = grid.areas.find((a) => a.card === "children")!;
+        // Pointer near right half must not collapse Children to a 6-col tile.
+        const snapped = snapMoveTarget(grid, moving, 8, 1);
+        expect(snapped.colSpan).toBe(12);
+        expect(snapped.rowStart).toBe(1);
+    });
+
+    it("moveArea places Children above Household in a full-width stack", () => {
+        let grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "household", colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 3 },
+                { card: "children", colStart: 1, colSpan: 12, rowStart: 4, rowSpan: 4 },
+            ],
+        };
+        grid = moveArea(grid, "children", 1, 1);
+        const children = grid.areas.find((a) => a.card === "children")!;
+        const household = grid.areas.find((a) => a.card === "household")!;
+        expect(children.rowStart).toBe(1);
+        expect(children.colSpan).toBe(12);
+        expect(household.rowStart).toBeGreaterThanOrEqual(children.rowStart + children.rowSpan);
+    });
+
     it("snapMoveTarget inserts above a same-column neighbor when dropping on its top edge", () => {
         const grid: FocusPanelGridLayout = {
             columns: 12,

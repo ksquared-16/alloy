@@ -238,7 +238,24 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     useEffect(() => {
         if (!siblingViewIds || typeof window === "undefined") return;
         const ids = siblingViewIds.split(",");
+        let retryTimer: ReturnType<typeof setTimeout> | undefined;
+        // AMPLIFICATION FIX (same shape as the workspace surface's destination warms). Each sibling
+        // view costs a FULL provisioning compose plus a drawer-VM compose, and
+        // `requestIdleCallback(timeout:2000)` fires them within 2s regardless of what the reveal is
+        // doing — measured landing four of each squarely inside the selected panel's reveal window,
+        // where they compete with the very fetch the operator is waiting on. The reveal gate already
+        // guards neighbour-subject warms (`prewarmSubjectDestination`) and the workspace surface's
+        // destination warms; this speculative sweep was the one path that missed it. Hold and
+        // re-check — the siblings still warm, just not on top of the commit-critical path.
+        //
+        // Gated HERE, at the speculative scheduling site, and deliberately NOT inside
+        // `prefetchWorkView`: that same callback serves the pill hover/focus warm
+        // (`WorkUnitSurface` `onPrefetch`), which is operator INTENT and must never be deferred.
         const run = () => {
+            if (isWorkUnitPrimaryRevealActive()) {
+                retryTimer = setTimeout(run, 500);
+                return;
+            }
             for (const id of ids) prefetchWorkView(id);
         };
         const w = window as Window & {
@@ -247,10 +264,16 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         };
         if (w.requestIdleCallback) {
             const handle = w.requestIdleCallback(run, { timeout: 2000 });
-            return () => w.cancelIdleCallback?.(handle);
+            return () => {
+                w.cancelIdleCallback?.(handle);
+                if (retryTimer) clearTimeout(retryTimer);
+            };
         }
         const timer = window.setTimeout(run, 250);
-        return () => window.clearTimeout(timer);
+        return () => {
+            window.clearTimeout(timer);
+            if (retryTimer) clearTimeout(retryTimer);
+        };
     }, [siblingViewIds, prefetchWorkView]);
 
     // ── #6 ADJACENT SUBJECT PREPARATION — warm the selected subject's NEIGHBOURS on commit. ──────

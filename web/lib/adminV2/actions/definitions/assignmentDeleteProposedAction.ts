@@ -1,19 +1,25 @@
 /**
  * Registered action: Delete a Proposed assignment (`assignment.delete_proposed`).
  *
- * Proposed (planning-only) rows carry no attendance/billing history and no
- * primary-uniqueness invariant, so the operator can remove them outright — unlike
- * committed assignments, which must be archived/superseded, never deleted. This
- * writes its own `action_executed` audit event because the row (the only place
- * archive-style history would otherwise live) no longer exists after execution.
+ * Covers:
+ * 1. Real OA rows with `commitment_kind=proposed` — hard delete the assignment row.
+ * 2. Synthetic pre-enrollment drafts (`proposed:<customer_member_id>`) projected from
+ *    `process_instances.metadata` — clear schedule draft facts via participation edit.
+ *
+ * Committed assignments are never eligible (archive/supersede instead).
  */
 
 import { randomUUID } from "crypto";
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { applyChildParticipationEdit } from "@/lib/childcareOperational/applyChildParticipationEdit";
 import { deleteProposedOperationalAssignment } from "@/lib/operationalAssignments/operationalAssignmentService";
 import { operatorFacingAssignmentError } from "@/lib/operationalAssignments/operatorAssignmentErrors";
 import { emitEvent } from "@/lib/emitEvent";
+import {
+    customerMemberIdFromProposedDraftAssignmentId,
+    isProposedDraftAssignmentId,
+} from "@/lib/scheduling/projection/proposedDraftAssignmentId";
 
 export const ASSIGNMENT_DELETE_PROPOSED_ACTION_KEY = "assignment.delete_proposed";
 
@@ -53,7 +59,10 @@ export const assignmentDeleteProposedAction: RegisteredAction = {
     async buildPreview() {
         return {
             summary: "Delete this Proposed assignment permanently.",
-            changes: ["Remove the assignment row", "Excluded from all planning/occupancy projections", "Committed assignments are never eligible for this action"],
+            changes: [
+                "Remove the proposed schedule from planning projections",
+                "Committed assignments are never eligible for this action",
+            ],
         };
     },
 
@@ -61,6 +70,74 @@ export const assignmentDeleteProposedAction: RegisteredAction = {
         const correlationId = randomUUID();
         try {
             const assignmentId = t(payload.assignment_id) || invocation.entityId;
+
+            // Pre-enrollment draft projected as `proposed:<member_id>` — clear PI metadata.
+            if (isProposedDraftAssignmentId(assignmentId)) {
+                const memberId =
+                    customerMemberIdFromProposedDraftAssignmentId(assignmentId)
+                    || t(invocation.entityId);
+                if (!memberId) {
+                    return {
+                        ok: false,
+                        correlationId,
+                        status: 422,
+                        error: "Could not resolve the child for this proposed schedule.",
+                    };
+                }
+                const cleared = await applyChildParticipationEdit(supabase, {
+                    orgId: ctx.orgId,
+                    customerMemberId: memberId,
+                    actorUserId: ctx.userId ?? null,
+                    patch: {
+                        schedule_type: null,
+                        program_room_cohort_key: null,
+                        start_date: null,
+                        end_date: null,
+                        weekdays: null,
+                        scheduleTimes: null,
+                    },
+                });
+                if (!cleared.ok) {
+                    return {
+                        ok: false,
+                        correlationId,
+                        status: 422,
+                        error: operatorFacingAssignmentError(cleared.error ?? "Could not clear proposed schedule."),
+                    };
+                }
+
+                try {
+                    await emitEvent({
+                        org_id: ctx.orgId,
+                        event_type: "action_executed",
+                        entity_type: invocation.entityType,
+                        entity_id: invocation.entityId,
+                        payload: {
+                            action_key: ASSIGNMENT_DELETE_PROPOSED_ACTION_KEY,
+                            actor_user_id: ctx.userId ?? null,
+                            assignment_id: assignmentId,
+                            customer_member_id: memberId,
+                            draft_cleared: true,
+                            routed: cleared.routed,
+                        },
+                    });
+                } catch (e) {
+                    console.warn("[assignmentDeleteProposedAction] action_executed emit failed", e);
+                }
+
+                return {
+                    ok: true,
+                    correlationId,
+                    result: {
+                        actionKey: ASSIGNMENT_DELETE_PROPOSED_ACTION_KEY,
+                        entityType: invocation.entityType,
+                        entityId: invocation.entityId,
+                        affectedId: memberId,
+                        detail: { assignment_id: assignmentId, deleted: true, draft_cleared: true },
+                    },
+                };
+            }
+
             const row = await deleteProposedOperationalAssignment(supabase, {
                 orgId: ctx.orgId,
                 assignmentId,

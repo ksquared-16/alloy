@@ -17,11 +17,14 @@ import {
 import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { useOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
+import { useOperationalPlacementOptions } from "@/lib/childcareOperational/useOperationalPlacementOptions";
 import type { IdentityFieldCellVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import {
     resolveIdentityFieldEditControl,
     type IdentityFieldEditControl,
 } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldEditControl";
+import { formatFocusPanelDate } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
+import { normalizeDob } from "@/lib/identity/normalizeDob";
 
 type InlineEditProps = {
     isEditing: boolean;
@@ -91,21 +94,56 @@ function IdentityInlineEditInput({
     const optionSetKeys =
         editControl.kind === "select" && inlineEdit.isEditing ? [editControl.optionSetKey] : [];
     const { optionsBySetKey } = useOptionSetSelectOptions(optionSetKeys);
-    const selectOptions =
-        editControl.kind === "select" ? (optionsBySetKey[editControl.optionSetKey] ?? []) : [];
+    const siteLocationId =
+        editControl.kind === "placement_select" ? (editControl.siteLocationId ?? "").trim() : "";
+    const programCategoryId =
+        editControl.kind === "placement_select" ? (editControl.programCategoryId ?? "").trim() : "";
+    const placement = useOperationalPlacementOptions(siteLocationId, programCategoryId);
+    const selectOptions = useMemo(() => {
+        if (editControl.kind === "select") {
+            return optionsBySetKey[editControl.optionSetKey] ?? [];
+        }
+        if (editControl.kind === "placement_select") {
+            if (editControl.placement === "site") {
+                return placement.siteOptions ?? [];
+            }
+            // Category-id values only — Focus Panel saves `program_category_id` FK.
+            return placement.programCategoryIdOptions ?? [];
+        }
+        return [];
+    }, [
+        editControl,
+        optionsBySetKey,
+        placement.programCategoryIdOptions,
+        placement.siteOptions,
+    ]);
 
     // Display may store the option label; `<select>` values are keys — map label → value on edit.
     const selectValue = useMemo(() => {
-        if (editControl.kind !== "select") return controlledDraft;
+        if (editControl.kind !== "select" && editControl.kind !== "placement_select") {
+            return controlledDraft;
+        }
         const raw = controlledDraft.trim();
-        if (!raw) return "";
+        if (!raw) {
+            // Prefer stored FK when display value is the label or empty (incl. lead→child inherit).
+            if (editControl.kind === "placement_select" && editControl.placement === "site" && siteLocationId) {
+                return siteLocationId;
+            }
+            if (editControl.kind === "placement_select" && programCategoryId) return programCategoryId;
+            return "";
+        }
         if (selectOptions.some((o) => o.value === raw)) return raw;
         const byLabel = selectOptions.find((o) => o.label === raw);
         return byLabel?.value ?? raw;
-    }, [controlledDraft, editControl.kind, selectOptions]);
+    }, [controlledDraft, editControl, selectOptions, programCategoryId, siteLocationId]);
 
     useEffect(() => {
-        if (editControl.kind !== "select" || !inlineEdit.isEditing) return;
+        if (
+            (editControl.kind !== "select" && editControl.kind !== "placement_select")
+            || !inlineEdit.isEditing
+        ) {
+            return;
+        }
         if (selectValue === controlledDraft) return;
         if (shared) {
             inlineEdit.onDraftChange?.(selectValue);
@@ -124,17 +162,20 @@ function IdentityInlineEditInput({
     };
 
     let control: ReactNode;
-    if (editControl.kind === "select") {
+    if (editControl.kind === "select" || editControl.kind === "placement_select") {
         const useAlloySelect =
             cell.fieldRef === "child.gender"
             || cell.fieldRef.endsWith(".gender")
             || cell.fieldRef.includes("assignment")
             || cell.fieldRef.includes("program")
+            || cell.fieldRef.includes("location")
             || cell.fieldRef.includes("room")
             || cell.fieldRef.includes("schedule");
-        // Disable only while busy saving — not while options load. A stuck/cancelled
-        // option fetch previously left Gender permanently disabled with only Select….
-        const selectDisabled = Boolean(inlineEdit.busy);
+        const selectDisabled =
+            Boolean(inlineEdit.busy)
+            || (editControl.kind === "placement_select"
+                && editControl.placement === "program"
+                && placement.programDisabled);
         control = useAlloySelect ? (
             <AlloySelect
                 value={selectValue}
@@ -243,12 +284,19 @@ export default function IdentityFieldValue({
     const inputRef = useRef<HTMLInputElement>(null);
 
     const shared = Boolean(inlineEdit?.sharedSession);
-    const controlledDraft = shared ? (inlineEdit?.draftValue ?? cell.value ?? "") : draft;
 
     const editControl = useMemo(
         () => cell.editControl ?? resolveIdentityFieldEditControl(cell.fieldRef),
         [cell.editControl, cell.fieldRef],
     );
+
+    const controlledDraft = (() => {
+        const raw = shared ? (inlineEdit?.draftValue ?? cell.value ?? "") : draft;
+        if (editControl.kind === "date" && inlineEdit?.isEditing) {
+            return normalizeDob(raw) ?? raw;
+        }
+        return raw;
+    })();
 
     useEffect(() => {
         if (shared) return;
@@ -260,11 +308,20 @@ export default function IdentityFieldValue({
     useEffect(() => {
         if (shared) return;
         if (!inlineEdit?.isEditing) return;
-        setDraft(cell.value ?? "");
-        if (editControl.kind === "select") return;
+        const seed = (() => {
+            if (editControl.kind === "placement_select" && editControl.programCategoryId?.trim()) {
+                return editControl.programCategoryId.trim();
+            }
+            if (editControl.kind === "date") {
+                return normalizeDob(cell.value) ?? "";
+            }
+            return cell.value ?? "";
+        })();
+        setDraft(seed);
+        if (editControl.kind === "select" || editControl.kind === "placement_select") return;
         inputRef.current?.focus();
         inputRef.current?.select();
-    }, [inlineEdit?.isEditing, cell.value, shared, editControl.kind]);
+    }, [inlineEdit?.isEditing, cell.value, shared, editControl]);
 
     const Icon = resolveIcon(cell.icon);
     const showLabel = cell.labelMode !== "hidden";
@@ -273,13 +330,20 @@ export default function IdentityFieldValue({
     const canLegacyEdit = Boolean(cell.editable && onEdit && !inlineEdit);
     const canLink = Boolean(cell.linked && onLink && !canInlineEdit);
     const valueText = cell.value?.trim() ?? "";
+    const displayValueText =
+        editControl.kind === "date" && valueText
+            ? (formatFocusPanelDate(valueText) ?? valueText)
+            : valueText;
     // Empty/hidden fields are removed in `resolveIdentityFieldRows` before packing.
     // Never return null here — late nulls leave pair/triple grid holes (field collision).
 
     const commit = async () => {
         if (!inlineEdit || inlineEdit.busy) return;
         // Prefer selectValue when editing a choice field so Save writes the option key, not the label.
-        const value = shared ? controlledDraft : draft;
+        // Date fields must commit ISO YYYY-MM-DD (never a formatted display string).
+        const raw = shared ? controlledDraft : draft;
+        const value =
+            editControl.kind === "date" ? (normalizeDob(raw) ?? raw.trim()) : raw;
         await inlineEdit.onCommit(value);
     };
 
@@ -343,13 +407,13 @@ export default function IdentityFieldValue({
                                 }
                             }}
                         >
-                            {valueText || "—"}
+                            {displayValueText || "—"}
                         </button>
                     ) : canLink && onLink ? (
                         <button
                             type="button"
                             className="identity-field-value__value identity-field-value__value--clickable identity-field-value__value--linked"
-                            title={cell.linkLabel ? `${cell.linkLabel}: ${valueText || cell.label}` : `Open ${cell.label}`}
+                            title={cell.linkLabel ? `${cell.linkLabel}: ${displayValueText || cell.label}` : `Open ${cell.label}`}
                             onClick={onLink}
                             onKeyDown={(event) => {
                                 if (event.key === "Enter" || event.key === " ") {
@@ -358,7 +422,7 @@ export default function IdentityFieldValue({
                                 }
                             }}
                         >
-                            <span className="identity-field-value__linked-text">{valueText || "—"}</span>
+                            <span className="identity-field-value__linked-text">{displayValueText || "—"}</span>
                             <span className="identity-field-value__nav-cue" aria-hidden>
                                 →
                             </span>
@@ -366,9 +430,9 @@ export default function IdentityFieldValue({
                     ) : (
                         <span
                             className="identity-field-value__value"
-                            title={valueText || undefined}
+                            title={displayValueText || undefined}
                         >
-                            {valueText || "—"}
+                            {displayValueText || "—"}
                         </span>
                     )}
                     {savedFlash ? (

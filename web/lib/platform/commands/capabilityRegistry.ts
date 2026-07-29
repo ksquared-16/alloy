@@ -210,6 +210,21 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         reason: "Runtime-internal umbrella; operator catalog prefers close_lead.",
     }),
     def({
+        capabilityKey: "change_lead_location",
+        canonicalCommandKey: "change_lead_location",
+        operatorLabel: "Change lead location",
+        family: "workflow",
+        maturity: "adapted",
+        executionOwner: "admin_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity"],
+        supportsPreview: false,
+        confirmationPolicy: "domain_owned",
+        implementationStatus: "production",
+        reason:
+            "Manage modal → PATCH opportunities.location_id (family default); optional OCM updates for inheriting children.",
+    }),
+    def({
         capabilityKey: "close_lead",
         canonicalCommandKey: "close_lead",
         operatorLabel: "Close Lead",

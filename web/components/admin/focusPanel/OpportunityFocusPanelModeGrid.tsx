@@ -557,12 +557,12 @@ export default function OpportunityFocusPanelModeGrid({
                     const readiness = cardReadiness.get(typeKey) ?? "reserved";
                     const baseModel = cards.get(typeKey);
                     if (readiness !== "ready" || !baseModel) {
-                        // Once the ENRICHED VM has landed (`source === "drawer_vm"`) settlement is done:
-                        // any card still not ready — `not_applicable`, or simply never produced for this
-                        // record (e.g. milestones on a lead) — is RESOLVED-empty, not loading. Before
-                        // that (commit-critical answer), a not-ready card is genuinely still settling →
+                        // Once the surface declares `phase === "settled"`, any card still not ready —
+                        // `not_applicable`, or simply never produced for this record — is RESOLVED-empty,
+                        // not loading. In the `commit` phase a not-ready card is genuinely still settling →
                         // the calm reserve. This stops a resolved card from appearing to load forever.
-                        const settled = model.source === "drawer_vm" || readiness === "not_applicable";
+                        // Read the DECLARED phase, never the producer's name (`model.source` is diagnostic).
+                        const settled = model.phase === "settled" || readiness === "not_applicable";
                         return <ReservedFocusPanelCell typeKey={typeKey} settled={settled} />;
                     }
                     const cardModel = composeEffectiveCardModel(baseModel, resolution?.config ?? null, record);

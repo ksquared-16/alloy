@@ -17,11 +17,11 @@ import type {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import {
-    footprintToGridSpan,
     system5DefaultActionForCard,
-    system5FootprintForCard,
     system5IconForCard,
 } from "@/lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec";
+import { deriveFocusPanelGridFromLayoutDoc } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelCardsFromLayoutDoc";
+import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import { system5ArchetypeForCard } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
 import {
     buildReadinessCardEvidence,
@@ -814,9 +814,15 @@ function buildCardModels(input: {
         card({
             key: "billing_preview",
             title: "Billing Preview",
+            // DEFERRED SOURCE — no verdict from unwired plumbing. `billing_configured` and
+            // `tuition_rate_label` are read here but written NOWHERE in the platform, so the old
+            // `?? "Billing not configured"` asserted a business conclusion on every record from
+            // fields nothing populates. The authoritative source is the financial-config API,
+            // resolved by `buildBillingPreviewCardEvidence` (which BillingPreviewCard renders);
+            // this base model only holds the cell until then. See CARD-READINESS-LIFECYCLE.md.
             insight: record["billing_configured"]
                 ? "Billing configured"
-                : trimOrNull(record["tuition_rate_label"]) ?? "Billing not configured",
+                : trimOrNull(record["tuition_rate_label"]) ?? "",
             tier: "context",
             span: 1,
             density: "compact",
@@ -829,89 +835,32 @@ function buildCardModels(input: {
 }
 
 /**
- * Overview (Summary) composition — Core Four validation pass.
+ * THE Work composition. This one IS the render: `OpportunityFocusPanelModeGrid` hands it to
+ * `FocusPanelCardGrid` as `rows` with no `publishedLayout` and no `composeCards`, so the legacy
+ * responsive grid paints it. Only `key`, cell ORDER and `span` reach the DOM (`legacyGridRows`
+ * drops `tier`/`density`; `resolveFocusPanelCellGridSpan` maps `span` to `gridColumn`).
  *
- * Scoped intentionally to the four production operational cards so the operating
- * model can be evaluated cleanly:
- *   Household (wide) · Children (wide) · Current Work (narrow) · Readiness (medium)
+ * Browser-measured on the Work surface (prod build, :3013, 1440px): strategy `legacy-grid`,
+ * 3 columns, cells attention(row, 875px) · workflow_steps(1, 285px) · required_information(1) ·
+ * work_launcher(1) · tasks(1) · automations(1) · primary_next_action(row) — this order and
+ * emphasis exactly. At 520px the grid collapses to 1 column and every cell goes full width.
  *
- * Why Now, Current Mission, Enrollment Health, Tour, Communications and Documents
- * are NOT deleted — their card models are still built (and used by Work / Activity
- * and the Experience Builder catalog). They are temporarily suppressed from the
- * Overview grid while we converge the Core Four visual rhythm.
+ * ONE composition, not two: the former WORK_GRID_ACTIVE was byte-identical to this except
+ * `workflow_steps.density: "standard"`, a field the legacy grid path discards — so the
+ * `workflowActive` branch selected between two grids that rendered identically. `workflowActive`
+ * remains a real runtime state (it drives `data-focus-panel-work-state`), it just does not change
+ * composition. `focusPanelWorkCompositionParity.test.ts` locks the rendered shape.
  *
- * Cell widths come from the archetype footprint system (`system5FootprintForCard`),
- * not a flat `span: 1`. Each row pairs a wide identity/collection card with its
- * adjacent assessment/work card so the Overview holds a calm two-row rhythm at the
- * verified three-column width.
- *
- * Exported as the single source of truth for the config-driven slice:
- * `buildFocusPanelSummaryDefaultDoc()` re-encodes this grid into a `LayoutDoc`,
- * and the parity test asserts the round-trip is identical.
+ * NOTE: `work` is not currently offered in the mode switch (`FOCUS_PANEL_SWITCH_MODES` is
+ * `["summary","activity"]`), but it stays reachable via a persisted session mode, so this is live
+ * compatibility surface — not dead code.
  */
-const summaryCell = (
-    key: FocusPanelCardKey,
-    density: FocusPanelCardGridSpec["rows"][number]["cells"][number]["density"],
-    tier: FocusPanelCardGridSpec["rows"][number]["cells"][number]["tier"],
-) => ({
-    key,
-    span: footprintToGridSpan(system5FootprintForCard(key)),
-    density,
-    tier,
-});
-
-export const SUMMARY_GRID: FocusPanelCardGridSpec = {
-    rows: [
-        {
-            cells: [
-                summaryCell("current_work", "standard", "work"),
-                summaryCell("household", "standard", "reference"),
-            ],
-        },
-        {
-            cells: [
-                summaryCell("children", "standard", "reference"),
-                summaryCell("readiness_kpi", "compact", "metric"),
-            ],
-        },
-        {
-            cells: [
-                summaryCell("tour_summary", "compact", "context"),
-                summaryCell("communications", "standard", "reference"),
-            ],
-        },
-        {
-            cells: [summaryCell("documents", "standard", "reference")],
-        },
-    ],
-};
-
-const WORK_GRID_SPLIT: FocusPanelCardGridSpec = {
+const WORK_GRID: FocusPanelCardGridSpec = {
     rows: [
         { cells: [{ key: "attention", span: "row", density: "compact", tier: "attention" }] },
         {
             cells: [
                 { key: "workflow_steps", span: 1, density: "compact", tier: "work" },
-                { key: "required_information", span: 1, density: "compact", tier: "work" },
-            ],
-        },
-        { cells: [{ key: "work_launcher", span: 1, density: "compact", tier: "work" }] },
-        {
-            cells: [
-                { key: "tasks", span: 1, density: "compact", tier: "work" },
-                { key: "automations", span: 1, density: "compact", tier: "context" },
-            ],
-        },
-        { cells: [{ key: "primary_next_action", span: "row", density: "compact", tier: "work" }] },
-    ],
-};
-
-const WORK_GRID_ACTIVE: FocusPanelCardGridSpec = {
-    rows: [
-        { cells: [{ key: "attention", span: "row", density: "compact", tier: "attention" }] },
-        {
-            cells: [
-                { key: "workflow_steps", span: 1, density: "standard", tier: "work" },
                 { key: "required_information", span: 1, density: "compact", tier: "work" },
             ],
         },
@@ -947,10 +896,19 @@ export function deriveOpportunityFocusPanelPresentation(input: {
 
 /**
  * The code default grid-spec for a mode — the source-agnostic composition selector the grid uses when
- * it consumes a `FocusPanelWorkModeModel` (Summary composition is overridden by the published doc).
+ * it consumes a `FocusPanelWorkModeModel`.
+ *
+ * Work owns its composition here (this IS the Work render path). Summary does NOT: it resolves from
+ * the active `LayoutDoc` — the org's published doc, else the code-owned default composition — so this
+ * branch derives from that same authority rather than declaring a second, independently-authored one.
+ * (`OpportunityFocusPanelModeGrid` takes Summary's cells and cell resolution from
+ * `deriveFocusPanelSummaryCompositionInputs`, so the Summary value here is not a render fallback.)
  */
 export function resolveFocusPanelModeGrid(mode: FocusPanelMode, workflowActive: boolean): FocusPanelCardGridSpec {
-    if (mode === "work") return workflowActive ? WORK_GRID_ACTIVE : WORK_GRID_SPLIT;
+    // `workflowActive` no longer selects a composition — see WORK_GRID. Kept in the signature
+    // because it is a real runtime state and callers pass it.
+    void workflowActive;
+    if (mode === "work") return WORK_GRID;
     if (mode === "activity") return ACTIVITY_GRID;
-    return SUMMARY_GRID;
+    return deriveFocusPanelGridFromLayoutDoc(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
 }

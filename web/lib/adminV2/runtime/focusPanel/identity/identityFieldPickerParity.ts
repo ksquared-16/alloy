@@ -7,7 +7,6 @@
  * appear as display-only.
  */
 
-import { isChildcareHiddenRefKey } from "@/lib/layout/childcareLayoutFieldCatalog";
 import { isIdentityFieldSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
 import { resolveIdentityFieldEditContract } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldEditContract";
 
@@ -109,16 +108,6 @@ export function classifyIdentityFieldParity(
         };
     }
 
-    if (isChildcareHiddenRefKey(trimmed) && !COMPUTED_DISPLAY_OFFERED_REFS.has(trimmed)) {
-        return {
-            fieldRef: trimmed,
-            classification: "unsupported_in_context",
-            offeredInPicker: false,
-            editable: false,
-            reason: "Hidden from childcare / identity pickers",
-        };
-    }
-
     if (COMPUTED_DISPLAY_OFFERED_REFS.has(trimmed) || edit.reason === "computed") {
         return {
             fieldRef: trimmed,
@@ -149,12 +138,14 @@ export function classifyIdentityFieldParity(
         };
     }
 
+    // /fields catalog fields are offered even without a mutation binding yet.
+    // Editability stays false until a binding exists — do not invent writes.
     return {
         fieldRef: trimmed,
-        classification: "unsupported_in_context",
-        offeredInPicker: false,
+        classification: "configurable_writable",
+        offeredInPicker: true,
         editable: false,
-        reason: "No display provider or mutation binding for this context",
+        reason: "Listed in Fields catalog; display until a mutation binding exists",
     };
 }
 

@@ -240,14 +240,16 @@ export function isLayoutRuntimeReadPathEnabled(): boolean {
 /**
  * Enrollment Focus Panel Summary — config-driven composition.
  *
- * Default: ON. The Focus Panel Summary grid is derived from a `LayoutDoc`
- * (config read path); the card models + renderer are unchanged, so output is
- * visually identical to the legacy hardcoded `SUMMARY_GRID` (parity verified by
- * the round-trip test). No env var is required to QA the config-driven path.
+ * Default: ON. The Focus Panel Summary grid is derived from a `LayoutDoc` — the org's published
+ * doc, else the code-owned default composition
+ * (`composition/focusPanelSummaryDefaultComposition.ts`).
  *
- * Emergency kill switch only: `FOCUS_PANEL_LAYOUT_RUNTIME_ENABLED=0` (server),
- * `NEXT_PUBLIC_FOCUS_PANEL_LAYOUT_RUNTIME_ENABLED=0` (client) restore the
- * hardcoded grid.
+ * ⚠️ THE TWO READERS BELOW HAVE NO CONSUMERS. Nothing branches on them, so setting
+ * `FOCUS_PANEL_LAYOUT_RUNTIME_ENABLED=0` / `NEXT_PUBLIC_FOCUS_PANEL_LAYOUT_RUNTIME_ENABLED=0` does
+ * nothing — there is no kill switch, and no hardcoded grid left to fall back to. The legacy
+ * `SUMMARY_GRID` this docblock promised parity with was retired: it never rendered (Summary takes
+ * its cells and cell resolution from `deriveFocusPanelSummaryCompositionInputs`) and its card set
+ * had drifted from the default doc. Wire these or delete them before anyone relies on them.
  */
 export function isFocusPanelLayoutRuntimeEnabledServer(): boolean {
     return readFlag(process.env.FOCUS_PANEL_LAYOUT_RUNTIME_ENABLED, true);

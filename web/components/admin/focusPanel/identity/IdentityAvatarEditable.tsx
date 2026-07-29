@@ -62,12 +62,21 @@ export default function IdentityAvatarEditable({
     const [resolvedUrl, setResolvedUrl] = useState<string | null>(imageUrl ?? null);
     const [resolvedPersonId, setResolvedPersonId] = useState<string | null>(personId ?? null);
 
+    // Reset when the identity record changes; do not wipe a just-uploaded URL when
+    // evidence is still catching up with a null imageUrl on the same record.
     useEffect(() => {
         setResolvedUrl(imageUrl ?? null);
+        setResolvedPersonId(personId ?? null);
+        // Intentionally keyed on recordId only — same-record null imageUrl must not clear upload.
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on identity change
+    }, [recordId]);
+
+    useEffect(() => {
+        if (imageUrl) setResolvedUrl(imageUrl);
     }, [imageUrl]);
 
     useEffect(() => {
-        setResolvedPersonId(personId ?? null);
+        if (personId) setResolvedPersonId(personId);
     }, [personId]);
 
     if (!visible) return null;

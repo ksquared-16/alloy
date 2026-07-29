@@ -64,6 +64,7 @@ export const EXECUTE_ADMIN_ACTION_FALLBACK_LEDGER: readonly ExecuteAdminActionFa
     { key: "add_person", disposition: "direct_domain_compatibility", note: "Capture-first person add" },
     { key: "add_sibling", disposition: "direct_domain_compatibility", note: "Partial; overlaps add_child" },
     { key: "update_enrollment_status", disposition: "direct_domain_compatibility", note: "Legacy status form path" },
+    { key: "change_lead_location", disposition: "direct_domain_compatibility", note: "Manage modal; family default location PATCH" },
     { key: "update_status_add_note", disposition: "direct_domain_compatibility", note: "Legacy combined status+note" },
     { key: "mark_won", disposition: "direct_domain_compatibility", note: "Legacy enrollment overlap" },
     { key: "quick_message", disposition: "direct_domain_compatibility", note: "Partial admin_action composer" },

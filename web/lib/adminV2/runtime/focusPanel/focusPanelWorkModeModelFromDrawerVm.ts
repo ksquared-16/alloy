@@ -64,6 +64,8 @@ export function focusPanelWorkModeModelFromDrawerVm(
 
     return {
         source: "drawer_vm",
+        // Settlement has run: a card still not ready here is resolved-empty, not loading.
+        phase: "settled",
         mode,
         subject: { id: displayVm.entity.id, type: "opportunity", label: title },
         context,

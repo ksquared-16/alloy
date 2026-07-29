@@ -45,10 +45,13 @@ import {
     normalizeFieldVisibility,
     type SurfaceFieldVisibility,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import { resolveIdentityFieldEditContract } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldEditContract";
 import {
-    COMPUTED_DISPLAY_OFFERED_REFS,
-    RELATIONSHIP_SCOPED_DISPLAY_REFS,
-} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldPickerParity";
+    defaultIdentityFieldLinkTarget,
+    normalizeIdentityFieldLinkTarget,
+    resolveIdentityFieldLinkContract,
+    type IdentityFieldLinkTarget,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import type { NestedSurfaceFieldLayoutWidth, NestedSurfaceFieldDropZone } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import {
     chunkNestedSurfaceFieldsForHalfRowLayout,
@@ -75,11 +78,6 @@ import {
     type IdentityEvidenceCollectionConfig,
 } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { splitDefaultFieldsForIdentityGroup } from "@/lib/adminV2/settings/surfaces/identityDisclosureDefaults";
-import {
-    defaultIdentityFieldLinkTarget,
-    normalizeIdentityFieldLinkTarget,
-    type IdentityFieldLinkTarget,
-} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 
 export const HOUSEHOLD_SURFACE_ID = "household_surface";
 export const CHILDREN_SURFACE_ID = "children_surface";
@@ -370,7 +368,10 @@ export function availableFieldsForNestedGroup(
     groupKey: string,
     config: NestedSurfaceConfig,
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
-    options?: { tier?: IdentityFieldTier },
+    options?: {
+        tier?: IdentityFieldTier;
+        sectionRegistry?: readonly import("@/lib/admin/fieldSectionSelectOptions").FieldSectionRegistryRow[];
+    },
 ): AvailableField[] {
     const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
     if (!def) return [];
@@ -383,11 +384,13 @@ export function availableFieldsForNestedGroup(
     return identityPickerFieldsForNamespaces({
         namespaces,
         tenantFieldDefinitions,
+        sectionRegistry: options?.sectionRegistry,
         excludeKeys: selected,
     }).map((field) => ({
         key: field.key,
         label: field.label,
         entityNamespace: field.entityNamespace,
+        categoryKey: field.categoryKey,
         displayHint: field.displayHint,
         isSystemField: field.isSystemField,
     }));
@@ -434,9 +437,39 @@ function seedFieldPlacementForAdd(
         row: nextRow,
         column: 1,
         width: "full",
-        policy: group.fieldPolicies?.[fieldKey] ?? defaultFieldVisibility(surfaceId, group.key),
+        policy: group.fieldPolicies?.[fieldKey] ?? defaultVisibilityForAddedField(surfaceId, group.key, fieldKey),
     });
     return placements;
+}
+
+/**
+ * New /fields catalog entries must never default to Editable without a write path —
+ * that fails publish. Prefer Linked when a card link exists; otherwise read-only display.
+ */
+function defaultVisibilityForAddedField(
+    surfaceId: string,
+    groupKey: string,
+    fieldKey: string,
+): SurfaceFieldVisibility {
+    const contract = resolveIdentityFieldEditContract(fieldKey);
+    // Placement site + desired program default to Editable (operators set before Assignments).
+    if (
+        contract.canOfferEditable
+        && (fieldKey === "inquiry_child.program"
+            || fieldKey === "inquiry_child.program_category_id"
+            || fieldKey === "child.program"
+            || fieldKey === "inquiry_child.location_id"
+            || fieldKey === "child.location")
+    ) {
+        return "editable";
+    }
+    if (contract.canOfferEditable) {
+        return defaultFieldVisibility(surfaceId, groupKey);
+    }
+    if (resolveIdentityFieldLinkContract(fieldKey).canOfferLinked) {
+        return "linked";
+    }
+    return "read-only";
 }
 
 function patchGroupWithField(
@@ -451,6 +484,9 @@ function patchGroupWithField(
     const keys = [...fieldKeysForConfigurationPurpose(group, purpose)];
     if (!keys.includes(fieldKey)) keys.push(fieldKey);
     const storageTier = normalizeIdentityStorageTier(tier);
+    const policy =
+        group.fieldPolicies?.[fieldKey]
+        ?? defaultVisibilityForAddedField(config.surfaceId, groupKey, fieldKey);
 
     const nextGroup: NestedSurfaceGroupConfig = {
         ...group,
@@ -463,11 +499,7 @@ function patchGroupWithField(
         },
         fieldPolicies: {
             ...(group.fieldPolicies ?? {}),
-            [fieldKey]:
-                group.fieldPolicies?.[fieldKey]
-                ?? (COMPUTED_DISPLAY_OFFERED_REFS.has(fieldKey) || RELATIONSHIP_SCOPED_DISPLAY_REFS.has(fieldKey)
-                    ? "read-only"
-                    : defaultFieldVisibility(config.surfaceId, groupKey)),
+            [fieldKey]: policy,
         },
         fieldPlacements: seedFieldPlacementForAdd(config.surfaceId, group, fieldKey, storageTier),
     };
