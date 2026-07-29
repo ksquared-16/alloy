@@ -60,6 +60,29 @@ export function mergeOpportunityDrawerDisplayRecordPatch(
         merged._inquiry_children = incoming._inquiry_children;
     }
 
+    // Scheduling projection is a bag with per-member children — merge byMemberId so a
+    // single-child reload after assignment delete refreshes Children / Schedule cards.
+    const prevSched = prev._scheduling_projection;
+    const incSched = incoming._scheduling_projection;
+    if (incSched && typeof incSched === "object" && !Array.isArray(incSched)) {
+        const prevBag =
+            prevSched && typeof prevSched === "object" && !Array.isArray(prevSched)
+                ? (prevSched as Record<string, unknown>)
+                : {};
+        const nextBag: Record<string, unknown> = { ...prevBag, ...(incSched as Record<string, unknown>) };
+        const prevBy = prevBag.byMemberId;
+        const incBy = (incSched as Record<string, unknown>).byMemberId;
+        if (incBy && typeof incBy === "object" && !Array.isArray(incBy)) {
+            nextBag.byMemberId = {
+                ...(prevBy && typeof prevBy === "object" && !Array.isArray(prevBy)
+                    ? (prevBy as Record<string, unknown>)
+                    : {}),
+                ...(incBy as Record<string, unknown>),
+            };
+        }
+        merged._scheduling_projection = nextBag;
+    }
+
     const prevAddr = prev._person_address_by_id;
     const incAddr = incoming._person_address_by_id;
     if (incAddr && typeof incAddr === "object" && !Array.isArray(incAddr)) {

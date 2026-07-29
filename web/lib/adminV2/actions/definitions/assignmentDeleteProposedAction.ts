@@ -144,6 +144,32 @@ export const assignmentDeleteProposedAction: RegisteredAction = {
                 actorUserId: ctx.userId ?? null,
             });
 
+            // Clearing the participation draft prevents buildSchedulingProjection from
+            // regenerating a synthetic `proposed:<member>` assignment after the last
+            // ledger proposed row is removed (no agreement → draft fallback).
+            const memberId = t(row.customer_member_id);
+            if (memberId) {
+                const cleared = await applyChildParticipationEdit(supabase, {
+                    orgId: ctx.orgId,
+                    customerMemberId: memberId,
+                    actorUserId: ctx.userId ?? null,
+                    patch: {
+                        schedule_type: null,
+                        program_room_cohort_key: null,
+                        start_date: null,
+                        end_date: null,
+                        weekdays: null,
+                        scheduleTimes: null,
+                    },
+                });
+                if (!cleared.ok) {
+                    console.warn(
+                        "[assignmentDeleteProposedAction] participation draft clear failed after OA delete",
+                        cleared.error,
+                    );
+                }
+            }
+
             try {
                 await emitEvent({
                     org_id: ctx.orgId,
@@ -158,6 +184,7 @@ export const assignmentDeleteProposedAction: RegisteredAction = {
                         room_location_id: row.room_location_id,
                         schedule_pattern_id: row.schedule_pattern_id,
                         start_date: row.start_date,
+                        draft_cleared: Boolean(memberId),
                     },
                 });
             } catch (e) {
@@ -172,7 +199,11 @@ export const assignmentDeleteProposedAction: RegisteredAction = {
                     entityType: invocation.entityType,
                     entityId: invocation.entityId,
                     affectedId: row.id,
-                    detail: { assignment_id: row.id, deleted: true },
+                    detail: {
+                        assignment_id: row.id,
+                        deleted: true,
+                        draft_cleared: Boolean(memberId),
+                    },
                 },
             };
         } catch (err) {

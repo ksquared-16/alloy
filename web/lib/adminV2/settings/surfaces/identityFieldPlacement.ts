@@ -43,15 +43,39 @@ export type IdentityFieldPlacement = {
     hideWhenEmpty?: boolean;
 };
 
+export type IdentityFieldLayoutPurpose = "summary" | "context_facts" | "details";
+
 export type IdentityPlacementGroupLike = {
     fieldModes?: Record<string, { showLabel?: boolean }>;
     selectedFieldKeys: string[];
     contextFieldKeys?: string[];
     expandedFieldKeys?: string[];
+    /** Legacy shared widths — treated as summary-tier fallback for older publishes. */
     fieldLayoutWidths?: Record<string, NestedSurfaceFieldLayoutWidth>;
+    /** Per-disclosure-purpose row widths — Summary / Context Facts / Details are independent. */
+    fieldLayoutWidthsByPurpose?: Partial<
+        Record<IdentityFieldLayoutPurpose, Record<string, NestedSurfaceFieldLayoutWidth>>
+    >;
     fieldPolicies?: Record<string, SurfaceFieldVisibility>;
     fieldPlacements?: IdentityFieldPlacement[];
 };
+
+function layoutPurposeForStorageTier(tier: "summary" | "context_fact" | "details"): IdentityFieldLayoutPurpose {
+    return tier === "context_fact" ? "context_facts" : tier;
+}
+
+/** Resolve layout width for one field on one authoring purpose. */
+export function identityFieldLayoutWidthForPurpose(
+    group: IdentityPlacementGroupLike,
+    fieldRef: string,
+    purpose: IdentityFieldLayoutPurpose,
+): NestedSurfaceFieldLayoutWidth {
+    return (
+        group.fieldLayoutWidthsByPurpose?.[purpose]?.[fieldRef]
+        ?? (purpose === "summary" ? group.fieldLayoutWidths?.[fieldRef] : undefined)
+        ?? "full"
+    );
+}
 
 function seedPlacement(args: {
     fieldRef: string;
@@ -112,8 +136,9 @@ export function generateDefaultIdentityFieldPlacements(
     const placements: IdentityFieldPlacement[] = [];
 
     const appendTier = (tier: "summary" | "context_fact" | "details", fieldRefs: readonly string[]) => {
+        const purpose = layoutPurposeForStorageTier(tier);
         const layoutFor = (fieldRef: string): NestedSurfaceFieldLayoutWidth =>
-            group.fieldLayoutWidths?.[fieldRef] ?? "full";
+            identityFieldLayoutWidthForPurpose(group, fieldRef, purpose);
         // Same pairing rules as runtime IdentityFieldGrid / NestedSurfaceFieldLayoutSurface.
         // (Do not use a 3-unit half=2 packer — two halves must share one row.)
         const chunks = chunkNestedSurfaceFieldsForHalfRowLayout(fieldRefs, layoutFor);

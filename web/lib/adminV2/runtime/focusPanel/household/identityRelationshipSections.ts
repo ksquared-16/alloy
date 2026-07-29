@@ -3,7 +3,7 @@
  */
 
 import type { NestedSurfaceConfig, NestedSurfaceGroupConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { nestedGroupLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { isOptionalNestedGroup, nestedGroupLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     householdRelationshipSectionDefinition,
     householdRelationshipSectionDefinitionForLegacyGroup,
@@ -102,7 +102,12 @@ export function shouldShowRelationshipSection(args: {
     const visibility = group.sectionVisibility ?? "when_nonempty";
     if (visibility === "hidden") return false;
     if (visibility === "always") return true;
-    return args.count > 0 || Boolean(args.hasAddressLine);
+    if (args.count > 0 || Boolean(args.hasAddressLine)) return true;
+    // Operator-enabled optional sections stay visible when empty (Add CTAs / 0 counts).
+    return (
+        group.enabled === true
+        && isOptionalNestedGroup(migrated.surfaceId, args.sectionKey)
+    );
 }
 
 export function householdRelationshipSectionTitle(

@@ -64,4 +64,39 @@ describe("assignment.delete_proposed — synthetic draft", () => {
         );
         expect(deleteProposedOperationalAssignment).not.toHaveBeenCalled();
     });
+
+    it("after deleting a ledger proposed row, also clears participation draft", async () => {
+        vi.mocked(deleteProposedOperationalAssignment).mockResolvedValue({
+            id: "oa-1",
+            customer_member_id: "member-1",
+            room_location_id: "room-1",
+            schedule_pattern_id: "pat-1",
+            start_date: "2026-09-01",
+            commitment_kind: "proposed",
+        } as never);
+
+        const result = await assignmentDeleteProposedAction.execute({
+            supabase: {} as never,
+            ctx: { orgId: "org-1", userId: "user-1" } as never,
+            invocation: { entityType: "child", entityId: "member-1" } as never,
+            payload: { assignment_id: "oa-1" },
+        } as never);
+
+        expect(result.ok).toBe(true);
+        expect(deleteProposedOperationalAssignment).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ orgId: "org-1", assignmentId: "oa-1" }),
+        );
+        expect(applyChildParticipationEdit).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                customerMemberId: "member-1",
+                patch: expect.objectContaining({
+                    schedule_type: null,
+                    program_room_cohort_key: null,
+                    start_date: null,
+                }),
+            }),
+        );
+    });
 });

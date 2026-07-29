@@ -208,7 +208,8 @@ export function buildChildrenCardEvidence(
         const program =
             primaryAssignment?.program
             ?? trimOrNull(schedulingProjection?.child?.program)
-            ?? trimOrNull(row.desired_program_label);
+            ?? trimOrNull(row.desired_program_label)
+            ?? trimOrNull((raw as { desired_program_label?: unknown }).desired_program_label);
         const childLocationId =
             trimOrNull(row.location_id)
             ?? trimOrNull((raw as { location_id?: unknown }).location_id)
@@ -310,7 +311,9 @@ export function buildChildrenCardEvidence(
                 ?? trimOrNull((raw as { age_band?: unknown }).age_band)
                 ?? trimOrNull((raw as { age_band_label?: unknown }).age_band_label),
             initial: name.charAt(0).toUpperCase(),
-            imageUrl: resolveChildPhotoUrlFromRaw(raw),
+            imageUrl:
+                resolveChildPhotoUrlFromRaw(raw)
+                ?? resolveChildPhotoUrlFromRaw(row as unknown as Record<string, unknown>),
             dobAge,
             program,
             location,

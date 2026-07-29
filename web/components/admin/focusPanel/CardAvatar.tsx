@@ -42,7 +42,7 @@ export default function CardAvatar({
                 width: dimension,
                 height: dimension,
                 fontSize: `${Math.round(size * 0.4)}px`,
-                ...(avatar.imageUrl ? { backgroundImage: `url("${avatar.imageUrl}")` } : {}),
+                ...(avatar.imageUrl ? { backgroundImage: `url(${JSON.stringify(avatar.imageUrl)})` } : {}),
             }}
         >
             {avatar.imageUrl ? null : <span aria-hidden="true">{avatar.initials}</span>}

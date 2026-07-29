@@ -60,6 +60,8 @@ import {
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import {
     generateDefaultIdentityFieldPlacements,
+    identityFieldLayoutWidthForPurpose,
+    type IdentityFieldLayoutPurpose,
     type IdentityFieldPlacement,
     type IdentityFieldTier,
 } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
@@ -153,8 +155,15 @@ export type NestedSurfaceGroupConfig = {
     fieldPolicies?: Record<string, SurfaceFieldVisibility>;
     /** Operator-facing presentation labels (never schema names). */
     fieldLabels?: Record<string, string>;
-    /** Per-field row width — `half` pairs with the next consecutive half field on one row. */
+    /** Per-field row width — legacy shared map (summary fallback for older publishes). */
     fieldLayoutWidths?: Record<string, NestedSurfaceFieldLayoutWidth>;
+    /**
+     * Per-purpose row widths — Summary / Context Facts / Details placements are independent.
+     * Pairing phone+email on Context Facts must not rewrite Summary widths for the same refs.
+     */
+    fieldLayoutWidthsByPurpose?: Partial<
+        Record<IdentityFieldLayoutPurpose, Record<string, NestedSurfaceFieldLayoutWidth>>
+    >;
     /** Shared identity placements — summary, context, and details tiers with row/column metadata. */
     fieldPlacements?: IdentityFieldPlacement[];
     /** Explicit per-field icon override (catalog icon used when absent). */
@@ -493,9 +502,22 @@ function patchGroupWithField(
         selectedFieldKeys: purpose === "summary" ? keys : group.selectedFieldKeys,
         contextFieldKeys: purpose === "context_facts" ? keys : group.contextFieldKeys,
         expandedFieldKeys: purpose === "details" ? keys : group.expandedFieldKeys,
-        fieldLayoutWidths: {
-            ...(group.fieldLayoutWidths ?? {}),
-            [fieldKey]: group.fieldLayoutWidths?.[fieldKey] ?? "full",
+        fieldLayoutWidths:
+            purpose === "summary"
+                ? {
+                      ...(group.fieldLayoutWidths ?? {}),
+                      [fieldKey]: group.fieldLayoutWidths?.[fieldKey] ?? "full",
+                  }
+                : group.fieldLayoutWidths,
+        fieldLayoutWidthsByPurpose: {
+            ...(group.fieldLayoutWidthsByPurpose ?? {}),
+            [purpose]: {
+                ...(group.fieldLayoutWidthsByPurpose?.[purpose] ?? {}),
+                [fieldKey]:
+                    group.fieldLayoutWidthsByPurpose?.[purpose]?.[fieldKey]
+                    ?? (purpose === "summary" ? group.fieldLayoutWidths?.[fieldKey] : undefined)
+                    ?? "full",
+            },
         },
         fieldPolicies: {
             ...(group.fieldPolicies ?? {}),
@@ -553,17 +575,29 @@ export function removeFieldFromNestedGroup(
     let next = patchGroupFieldKeysForPurpose(config, groupKey, purpose, keys);
     next = {
         ...next,
-        groups: next.groups.map((g) =>
-            g.key === groupKey
-                ? {
-                      ...g,
-                      fieldPlacements: removeFieldPlacement(g, fieldKey, options?.tier),
-                      fieldLayoutWidths: Object.fromEntries(
-                          Object.entries(g.fieldLayoutWidths ?? {}).filter(([key]) => key !== fieldKey),
-                      ),
-                  }
-                : g,
-        ),
+        groups: next.groups.map((g) => {
+            if (g.key !== groupKey) return g;
+            const nextByPurpose = { ...(g.fieldLayoutWidthsByPurpose ?? {}) };
+            const purposeWidths = { ...(nextByPurpose[purpose] ?? {}) };
+            delete purposeWidths[fieldKey];
+            if (Object.keys(purposeWidths).length > 0) {
+                nextByPurpose[purpose] = purposeWidths;
+            } else {
+                delete nextByPurpose[purpose];
+            }
+            return {
+                ...g,
+                fieldPlacements: removeFieldPlacement(g, fieldKey, options?.tier),
+                fieldLayoutWidthsByPurpose:
+                    Object.keys(nextByPurpose).length > 0 ? nextByPurpose : undefined,
+                fieldLayoutWidths:
+                    purpose === "summary"
+                        ? Object.fromEntries(
+                              Object.entries(g.fieldLayoutWidths ?? {}).filter(([key]) => key !== fieldKey),
+                          )
+                        : g.fieldLayoutWidths,
+            };
+        }),
     };
     next = unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, keys);
     return next;
@@ -766,11 +800,14 @@ export function fieldLayoutWidthForNestedGroup(
     config: NestedSurfaceConfig,
     groupKey: string,
     fieldKey: string,
+    options?: { purpose?: IdentityFieldLayoutPurpose },
 ): NestedSurfaceFieldLayoutWidth {
-    return config.groups.find((g) => g.key === groupKey)?.fieldLayoutWidths?.[fieldKey] ?? "full";
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (!group) return "full";
+    return identityFieldLayoutWidthForPurpose(group, fieldKey, options?.purpose ?? "summary");
 }
 
-/** Rewrite group.fieldPlacements from authoritative key order + fieldLayoutWidths. */
+/** Rewrite group.fieldPlacements from authoritative key order + purpose-scoped fieldLayoutWidths. */
 export function resyncIdentityFieldPlacementsInGroup(
     config: NestedSurfaceConfig,
     groupKey: string,
@@ -790,17 +827,28 @@ export function setFieldLayoutWidthInNestedGroup(
     groupKey: string,
     fieldKey: string,
     layoutWidth: NestedSurfaceFieldLayoutWidth,
+    options?: { purpose?: IdentityFieldLayoutPurpose },
 ): NestedSurfaceConfig {
+    const purpose = options?.purpose ?? "summary";
     const next = {
         ...config,
-        groups: config.groups.map((g) =>
-            g.key === groupKey
-                ? {
-                      ...g,
-                      fieldLayoutWidths: { ...(g.fieldLayoutWidths ?? {}), [fieldKey]: layoutWidth },
-                  }
-                : g,
-        ),
+        groups: config.groups.map((g) => {
+            if (g.key !== groupKey) return g;
+            return {
+                ...g,
+                fieldLayoutWidths:
+                    purpose === "summary"
+                        ? { ...(g.fieldLayoutWidths ?? {}), [fieldKey]: layoutWidth }
+                        : g.fieldLayoutWidths,
+                fieldLayoutWidthsByPurpose: {
+                    ...(g.fieldLayoutWidthsByPurpose ?? {}),
+                    [purpose]: {
+                        ...(g.fieldLayoutWidthsByPurpose?.[purpose] ?? {}),
+                        [fieldKey]: layoutWidth,
+                    },
+                },
+            };
+        }),
     };
     return resyncIdentityFieldPlacementsInGroup(next, groupKey);
 }
@@ -862,15 +910,17 @@ function unpairOrphanedHalfFields(
     config: NestedSurfaceConfig,
     groupKey: string,
     keys: readonly string[],
+    purpose: IdentityFieldLayoutPurpose = "summary",
 ): NestedSurfaceConfig {
     let next = config;
-    const layoutFor = (fieldKey: string) => fieldLayoutWidthForNestedGroup(next, groupKey, fieldKey);
+    const layoutFor = (fieldKey: string) =>
+        fieldLayoutWidthForNestedGroup(next, groupKey, fieldKey, { purpose });
     const chunks = chunkNestedSurfaceFieldsForHalfRowLayout(keys, layoutFor);
     for (const chunk of chunks) {
         if (chunk.length === 1) {
             const key = chunk[0]!;
             if (isNestedSurfaceFieldHalfWidth(layoutFor(key))) {
-                next = setFieldLayoutWidthInNestedGroup(next, groupKey, key, "full");
+                next = setFieldLayoutWidthInNestedGroup(next, groupKey, key, "full", { purpose });
             }
         }
     }
@@ -883,8 +933,7 @@ function unpairOrphanedHalfFieldsForPurpose(
     purpose: Exclude<IdentityConfigurationPurpose, "evidence">,
     keys: readonly string[],
 ): NestedSurfaceConfig {
-    void purpose;
-    return unpairOrphanedHalfFields(config, groupKey, keys);
+    return unpairOrphanedHalfFields(config, groupKey, keys, purpose);
 }
 
 /**
@@ -924,13 +973,14 @@ export function applyNestedSurfaceFieldDrop(
         const reordered = [...withoutDragged];
         reordered.splice(targetPos + 1, 0, draggedKey);
         let next = patchGroupFieldKeysForPurpose(config, groupKey, purpose, reordered);
-        next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "half");
-        next = setFieldLayoutWidthInNestedGroup(next, groupKey, targetKey, "half");
+        next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "half", { purpose });
+        next = setFieldLayoutWidthInNestedGroup(next, groupKey, targetKey, "half", { purpose });
         next = unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
         return resyncIdentityFieldPlacementsInGroup(next, groupKey);
     }
 
-    const layoutFor = (fieldKey: string) => fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey);
+    const layoutFor = (fieldKey: string) =>
+        fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey, { purpose });
     const rowChunks = chunkNestedSurfaceFieldsForHalfRowLayout(keys, layoutFor);
     const targetRow = rowChunks.find((chunk) => chunk.includes(targetKey));
     if (!targetRow) return config;
@@ -943,7 +993,7 @@ export function applyNestedSurfaceFieldDrop(
     reordered.splice(insertAfter + 1, 0, draggedKey);
 
     let next = patchGroupFieldKeysForPurpose(config, groupKey, purpose, reordered);
-    next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "full");
+    next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "full", { purpose });
     next = unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
     return resyncIdentityFieldPlacementsInGroup(next, groupKey);
 }
@@ -1077,6 +1127,10 @@ export function setNestedGroupEnabled(
                     ),
                     sectionSemantic: options?.sectionSemantic,
                     sectionLabel: options?.sectionLabel,
+                    sectionVisibility:
+                        enabled && isOptionalNestedGroup(config.surfaceId, groupKey)
+                            ? "always"
+                            : undefined,
                 },
             ],
         };
@@ -1096,6 +1150,12 @@ export function setNestedGroupEnabled(
                 selectedFieldKeys,
                 sectionSemantic: options?.sectionSemantic ?? g.sectionSemantic,
                 sectionLabel: options?.sectionLabel ?? g.sectionLabel,
+                // Operator-added optional sections should appear empty with Add CTAs,
+                // not wait for the first member before becoming visible.
+                sectionVisibility:
+                    enabled && isOptionalNestedGroup(config.surfaceId, groupKey)
+                        ? (g.sectionVisibility === "hidden" ? "hidden" : "always")
+                        : g.sectionVisibility,
             };
         }),
     };
@@ -1222,6 +1282,19 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
             fieldLabels: found.fieldLabels ? { ...found.fieldLabels } : undefined,
             roleOverride: found.roleOverride,
             fieldLayoutWidths: found.fieldLayoutWidths ? { ...found.fieldLayoutWidths } : undefined,
+            fieldLayoutWidthsByPurpose: found.fieldLayoutWidthsByPurpose
+                ? {
+                      summary: found.fieldLayoutWidthsByPurpose.summary
+                          ? { ...found.fieldLayoutWidthsByPurpose.summary }
+                          : undefined,
+                      context_facts: found.fieldLayoutWidthsByPurpose.context_facts
+                          ? { ...found.fieldLayoutWidthsByPurpose.context_facts }
+                          : undefined,
+                      details: found.fieldLayoutWidthsByPurpose.details
+                          ? { ...found.fieldLayoutWidthsByPurpose.details }
+                          : undefined,
+                  }
+                : undefined,
             fieldPlacements: found.fieldPlacements ? [...found.fieldPlacements] : undefined,
             fieldIcons: found.fieldIcons ? { ...found.fieldIcons } : undefined,
             sectionSemantic: found.sectionSemantic,

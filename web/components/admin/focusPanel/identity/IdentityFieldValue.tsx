@@ -29,7 +29,10 @@ import { normalizeDob } from "@/lib/identity/normalizeDob";
 type InlineEditProps = {
     isEditing: boolean;
     onStartEdit: () => void;
-    onCommit: (value: string) => void | Promise<void>;
+    onCommit: (
+        value: string,
+        meta?: { displayLabel?: string | null },
+    ) => void | Promise<void>;
     onCancel: () => void;
     busy?: boolean;
     /**
@@ -89,7 +92,7 @@ function IdentityInlineEditInput({
     setDraft: (value: string) => void;
     inputId: string;
     inputRef: RefObject<HTMLInputElement | null>;
-    commit: () => void | Promise<void>;
+    commit: (meta?: { displayLabel?: string | null; valueOverride?: string }) => void | Promise<void>;
 }) {
     const optionSetKeys =
         editControl.kind === "select" && inlineEdit.isEditing ? [editControl.optionSetKey] : [];
@@ -161,6 +164,19 @@ function IdentityInlineEditInput({
         }
     };
 
+    const commitWithMeta = () => {
+        if (editControl.kind === "select" || editControl.kind === "placement_select") {
+            const label =
+                selectOptions.find((o) => o.value === selectValue)?.label
+                ?? null;
+            return commit({
+                displayLabel: selectValue.trim() ? label : null,
+                valueOverride: selectValue,
+            });
+        }
+        return commit();
+    };
+
     let control: ReactNode;
     if (editControl.kind === "select" || editControl.kind === "placement_select") {
         const useAlloySelect =
@@ -209,7 +225,7 @@ function IdentityInlineEditInput({
                 onKeyDown={(event) => {
                     if (event.key === "Enter") {
                         event.preventDefault();
-                        if (!shared) void commit();
+                        if (!shared) void commitWithMeta();
                     }
                     if (event.key === "Escape") {
                         event.preventDefault();
@@ -232,7 +248,7 @@ function IdentityInlineEditInput({
                 onKeyDown={(event) => {
                     if (event.key === "Enter") {
                         event.preventDefault();
-                        if (!shared) void commit();
+                        if (!shared) void commitWithMeta();
                     }
                     if (event.key === "Escape") {
                         event.preventDefault();
@@ -253,7 +269,7 @@ function IdentityInlineEditInput({
                         type="button"
                         className="identity-field-value__edit"
                         disabled={inlineEdit.busy}
-                        onClick={() => void commit()}
+                        onClick={() => void commitWithMeta()}
                     >
                         Save
                     </button>
@@ -337,14 +353,14 @@ export default function IdentityFieldValue({
     // Empty/hidden fields are removed in `resolveIdentityFieldRows` before packing.
     // Never return null here — late nulls leave pair/triple grid holes (field collision).
 
-    const commit = async () => {
+    const commit = async (meta?: { displayLabel?: string | null; valueOverride?: string }) => {
         if (!inlineEdit || inlineEdit.busy) return;
         // Prefer selectValue when editing a choice field so Save writes the option key, not the label.
         // Date fields must commit ISO YYYY-MM-DD (never a formatted display string).
-        const raw = shared ? controlledDraft : draft;
+        const raw = meta?.valueOverride ?? (shared ? controlledDraft : draft);
         const value =
             editControl.kind === "date" ? (normalizeDob(raw) ?? raw.trim()) : raw;
-        await inlineEdit.onCommit(value);
+        await inlineEdit.onCommit(value, meta);
     };
 
     return (

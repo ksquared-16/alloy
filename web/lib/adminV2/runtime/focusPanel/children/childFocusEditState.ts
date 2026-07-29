@@ -103,6 +103,14 @@ export type ChildFocusSavePatch = {
     identityPatch: InquiryChildIdentityPatch;
     ocmPatch: InquiryChildOcmPatch;
     profilePatch?: Record<string, unknown>;
+    /**
+     * Client-only display labels to merge into Focus Panel truth after OCM/FK writes.
+     * Not sent to the participation API — keeps Program/Location from reverting to `—`.
+     */
+    displayPatch?: {
+        desired_program_label?: string | null;
+        location_label?: string | null;
+    };
 };
 
 /** Build identity + OCM patches including only editable, changed fields. Pure. */

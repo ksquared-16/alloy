@@ -153,7 +153,7 @@ describe("tier-aware nested surface field drop", () => {
         expect(identityConfigurationFieldKeys(config, "primary_contact", "summary")).toContain("person.secondary_phone");
         expect(identityConfigurationFieldKeys(config, "primary_contact", "summary")).toContain("person.preferred_language");
         expect(identityConfigurationFieldKeys(config, "primary_contact", "context_facts")).not.toContain("person.preferred_language");
-        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.preferred_language")).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.preferred_language", { purpose: "summary" })).toBe("half");
     });
 
     it("drop into Context Facts creates a context_fact placement only", () => {
@@ -173,8 +173,55 @@ describe("tier-aware nested surface field drop", () => {
         );
         expect(identityConfigurationFieldKeys(config, "primary_contact", "summary")).not.toContain("person.employer");
         expect(identityConfigurationFieldKeys(config, "primary_contact", "details")).not.toContain("person.employer");
-        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.employer")).toBe("half");
-        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.role_label")).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.employer", { purpose: "context_facts" })).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.role_label", { purpose: "context_facts" })).toBe("half");
+    });
+
+    it("keeps Summary and Context Facts layout widths independent for the same field refs", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.phone", { tier: "summary" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.email", { tier: "summary" });
+        config = setFieldLayoutWidthInNestedGroup(config, "primary_contact", "person.phone", "full", {
+            purpose: "summary",
+        });
+        config = setFieldLayoutWidthInNestedGroup(config, "primary_contact", "person.email", "full", {
+            purpose: "summary",
+        });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.phone", { tier: "context_fact" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.email", { tier: "context_fact" });
+        config = applyNestedSurfaceFieldDrop(
+            config,
+            "primary_contact",
+            "person.email",
+            "person.phone",
+            "beside",
+            { tier: "context_fact" },
+        );
+
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.phone", { purpose: "summary" })).toBe(
+            "full",
+        );
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.email", { purpose: "summary" })).toBe(
+            "full",
+        );
+        expect(
+            fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.phone", { purpose: "context_facts" }),
+        ).toBe("half");
+        expect(
+            fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.email", { purpose: "context_facts" }),
+        ).toBe("half");
+
+        const placements = config.groups.find((g) => g.key === "primary_contact")?.fieldPlacements ?? [];
+        const summaryPhone = placements.find((p) => p.fieldRef === "person.phone" && p.tier === "summary");
+        const summaryEmail = placements.find((p) => p.fieldRef === "person.email" && p.tier === "summary");
+        const contextPhone = placements.find((p) => p.fieldRef === "person.phone" && p.tier === "context_fact");
+        const contextEmail = placements.find((p) => p.fieldRef === "person.email" && p.tier === "context_fact");
+        expect(summaryPhone?.width).toBe("full");
+        expect(summaryEmail?.width).toBe("full");
+        expect(summaryPhone?.row).not.toBe(summaryEmail?.row);
+        expect(contextPhone?.width).toBe("half");
+        expect(contextEmail?.width).toBe("half");
+        expect(contextPhone?.row).toBe(contextEmail?.row);
     });
 
     it("drop into Details creates a details placement only", () => {
@@ -193,7 +240,7 @@ describe("tier-aware nested surface field drop", () => {
             expect.arrayContaining(["person.address_line1", "person.notes"]),
         );
         expect(identityConfigurationFieldKeys(config, "primary_contact", "summary")).not.toContain("person.notes");
-        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.notes")).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.notes", { purpose: "details" })).toBe("half");
     });
 
     it("dropping into one tier does not add the field to another tier", () => {
@@ -220,8 +267,8 @@ describe("tier-aware nested surface field drop", () => {
         config = applyNestedSurfaceFieldDrop(config, "identity", "child.status", "child.room", "beside", {
             tier: "context_fact",
         });
-        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.room")).toBe("half");
-        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.status")).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.room", { purpose: "context_facts" })).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.status", { purpose: "context_facts" })).toBe("half");
 
         config = addFieldToNestedGroup(config, "identity", "child.date_of_birth", { tier: "details" });
         config = addFieldToNestedGroup(config, "identity", "child.notes_summary", { tier: "details" });
@@ -233,8 +280,8 @@ describe("tier-aware nested surface field drop", () => {
             "beside",
             { tier: "details" },
         );
-        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.date_of_birth")).toBe("half");
-        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.notes_summary")).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.date_of_birth", { purpose: "details" })).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.notes_summary", { purpose: "details" })).toBe("half");
     });
 
     it("reordering persists in all three tiers", () => {
@@ -278,14 +325,22 @@ describe("tier-aware nested surface field drop", () => {
             { tier: "context_fact" },
         );
         config = addFieldToNestedGroup(config, "primary_contact", "person.notes", { tier: "details" });
-        config = setFieldLayoutWidthInNestedGroup(config, "primary_contact", "person.notes", "half");
+        config = setFieldLayoutWidthInNestedGroup(config, "primary_contact", "person.notes", "half", {
+            purpose: "details",
+        });
 
         const reconciled = reconcileNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID, config);
         expect(identityConfigurationFieldKeys(reconciled, "primary_contact", "context_facts")).toEqual(
             expect.arrayContaining(["person.employer", "person.role_label"]),
         );
-        expect(fieldLayoutWidthForNestedGroup(reconciled, "primary_contact", "person.employer")).toBe("half");
+        expect(
+            fieldLayoutWidthForNestedGroup(reconciled, "primary_contact", "person.employer", {
+                purpose: "context_facts",
+            }),
+        ).toBe("half");
         expect(identityConfigurationFieldKeys(reconciled, "primary_contact", "details")).toContain("person.notes");
-        expect(fieldLayoutWidthForNestedGroup(reconciled, "primary_contact", "person.notes")).toBe("half");
+        expect(
+            fieldLayoutWidthForNestedGroup(reconciled, "primary_contact", "person.notes", { purpose: "details" }),
+        ).toBe("half");
     });
 });

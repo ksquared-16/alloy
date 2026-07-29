@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { SURFACE_COMPOSER_LIBRARY_ATTR } from "@/lib/adminV2/settings/surfaces/surfaceComposer";
@@ -37,6 +37,19 @@ export default function SurfaceItemLibraryPanel<TItem>({
     headerNote,
 }: SurfaceItemLibraryPanelProps<TItem>) {
     const [search, setSearch] = useState("");
+    const searchRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (!open) {
+            setSearch("");
+            return;
+        }
+        const frame = window.requestAnimationFrame(() => {
+            searchRef.current?.focus();
+            searchRef.current?.select();
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [open]);
 
     const filteredCategories = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -78,6 +91,7 @@ export default function SurfaceItemLibraryPanel<TItem>({
                 </header>
                 <div className="border-b border-alloy-stone/10 px-4 py-2">
                     <input
+                        ref={searchRef}
                         type="search"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}

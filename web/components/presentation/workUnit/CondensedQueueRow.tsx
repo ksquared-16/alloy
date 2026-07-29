@@ -45,7 +45,6 @@ import {
     QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
     QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
     QUEUE_ROW_CARD_SHELL_CLASS,
-    QUEUE_ROW_SELECTED_RAIL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
 
 const CARD_BUTTON_CLASS =
@@ -54,10 +53,6 @@ const CARD_BUTTON_CLASS =
 const CARD_IDLE_CLASS = ` ${QUEUE_ROW_CARD_IDLE_BORDER_CLASS}`;
 
 const CARD_SELECTED_CLASS = ` ${QUEUE_ROW_CARD_SELECTED_BORDER_CLASS}`;
-
-function SelectedRail() {
-    return <span aria-hidden className={QUEUE_ROW_SELECTED_RAIL_CLASS} />;
-}
 
 /** 32px circular subject chip — tinted background, subject initial. */
 function AvatarChip({ name }: { name: string }) {
@@ -99,7 +94,7 @@ export function CondensedQueueRow({
      */
     onPrefetch?: (row: QueueRowModel) => void;
     isFirst?: boolean;
-    /** Row's record is the one open in the inline Focus Panel — persistent selected rail. */
+    /** Row's record is the one open in the inline Focus Panel — perimeter + tint selected state. */
     isSelected?: boolean;
     /**
      * Resolved Subject Focus for this row's variant (Phase 3). When present, it decides WHICH
@@ -145,7 +140,6 @@ export function CondensedQueueRow({
                 onClick={() => onOpen(row)}
                 className={cardClass}
             >
-                {isSelected ? <SelectedRail /> : null}
                 <span className="block min-w-0 truncate text-[13px] leading-4 text-alloy-midnight/70">
                     {row.entityId}
                 </span>
@@ -227,7 +221,6 @@ export function CondensedQueueRow({
             onClick={() => onOpen(row)}
             className={cardClass}
         >
-            {isSelected ? <SelectedRail /> : null}
             <span className="flex items-start gap-2.5">
                 <AvatarChip name={displayName} />
                 <span className="min-w-0 flex-1">

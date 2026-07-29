@@ -127,6 +127,8 @@ export type FocusPanelMutation = {
         customerMemberId: string;
         childPersonId?: string | null;
     }) => void;
+    /** Open the add-authorized-pickup relationship modal (household scope). */
+    openAddAuthorizedPickup: () => void;
     /** Patch canonical relationship fields (not Person-owned fields). */
     savePersonChildRelationship: (
         relationshipId: string,
@@ -338,6 +340,17 @@ export function mergeInquiryChildIntoFocusPanelTruth(
         if (ocm.location_id !== undefined) next.location_id = ocm.location_id;
         if (ocm.start_date !== undefined) next.start_date = ocm.start_date;
         if (ocm.notes !== undefined) next.notes = ocm.notes;
+        const display = args.patch.displayPatch;
+        if (display?.desired_program_label !== undefined) {
+            next.desired_program_label = display.desired_program_label;
+        } else if (ocm.program_category_id !== undefined && !ocm.program_category_id) {
+            // Cleared program FK — drop the stale display label so evidence does not keep
+            // a prior Program name after the operator empties the field.
+            next.desired_program_label = null;
+        }
+        if (display?.location_label !== undefined) {
+            next.location_label = display.location_label;
+        }
         if (args.patch.profilePatch) {
             for (const [key, value] of Object.entries(args.patch.profilePatch)) {
                 next[key] = value;
@@ -574,6 +587,25 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                     anchorCustomerMemberId: customerMemberId.trim(),
                     scope: "this_child",
                     selectedChildCustomerMemberIds: [customerMemberId.trim()],
+                },
+            });
+        },
+        openAddAuthorizedPickup: () => {
+            const customerId =
+                typeof truth.customer_id === "string" ? truth.customer_id.trim() : "";
+            dispatchOpenRelationshipActionModal({
+                action_key: "add_authorized_pickup",
+                opportunity_id: opportunityId,
+                source_surface: "opportunity_drawer",
+                initial_proposal: {
+                    actionKey: "add_authorized_pickup",
+                    sourceSurface: "opportunity_drawer",
+                    sourceRecordId: opportunityId,
+                    sourceEntityType: "opportunity",
+                    sourceOpportunityId: opportunityId,
+                    sourceCustomerId: customerId,
+                    scope: "all_children_in_household",
+                    confirmationRequired: true,
                 },
             });
         },

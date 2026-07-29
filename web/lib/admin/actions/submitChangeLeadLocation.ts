@@ -8,10 +8,7 @@ import {
     type InquiryChildLocationRow,
 } from "@/lib/admin/actions/changeLeadLocationContract";
 import { patchOpportunityCustomerMemberFromInquiryChild } from "@/lib/admin/drawer/inquiryChildFieldEdit";
-import {
-    patchOpportunityNativeFromLayoutDrawer,
-    syncOpportunityLocationDisplayLabel,
-} from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
+import { syncOpportunityLocationDisplayLabel } from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 export type ChangeLeadLocationSubmitInput = {
@@ -22,6 +19,7 @@ export type ChangeLeadLocationSubmitInput = {
     applyToInheritingChildren: boolean;
     inquiryChildren: readonly InquiryChildLocationRow[];
     record?: Record<string, unknown> | null;
+    fetchFn?: typeof fetch;
 };
 
 export type ChangeLeadLocationSubmitResult = {
@@ -29,6 +27,27 @@ export type ChangeLeadLocationSubmitResult = {
     updatedChildCount: number;
     nextRecord: ProofRuntimeRecord | null;
 };
+
+export async function patchOpportunityLeadLocation(params: {
+    opportunityId: string;
+    locationId: string;
+    fetchFn?: typeof fetch;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+    const fetchImpl = params.fetchFn ?? fetch;
+    const res = await fetchImpl(
+        `/api/admin/opportunities/${encodeURIComponent(params.opportunityId)}/lead-location`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ location_id: params.locationId }),
+        },
+    );
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+        return { ok: false, error: json.error ?? "Lead location save failed" };
+    }
+    return { ok: true };
+}
 
 export async function submitChangeLeadLocation(
     input: ChangeLeadLocationSubmitInput,
@@ -38,9 +57,10 @@ export async function submitChangeLeadLocation(
     if (!opportunityId) throw new Error("Lead id is required.");
     if (!locationId) throw new Error("Select a location.");
 
-    const leadPatch = await patchOpportunityNativeFromLayoutDrawer({
+    const leadPatch = await patchOpportunityLeadLocation({
         opportunityId,
-        body: { location_id: locationId },
+        locationId,
+        fetchFn: input.fetchFn,
     });
     if (!leadPatch.ok) throw new Error(leadPatch.error);
 
