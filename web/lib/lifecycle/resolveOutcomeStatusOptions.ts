@@ -77,7 +77,15 @@ export function isConfiguredClosedStatus(row: OutcomeStatusConfiguredRow): boole
     if (row.is_active === false) return false;
     const meta = row.metadata;
     if (meta && typeof meta === "object") {
-        if (meta.is_closed === true || meta.closes_record === true || meta.is_terminal === true) {
+        // `terminal` is the key the status migrations actually write; `is_terminal` is spelled
+        // nowhere in the database layer, so reading only that made every seeded closing status
+        // (lost / withdrawn / not_a_fit / aged_out) invisible to closed-status detection.
+        if (
+            meta.is_closed === true
+            || meta.closes_record === true
+            || meta.is_terminal === true
+            || meta.terminal === true
+        ) {
             return true;
         }
         if (meta.is_closed === false || meta.closes_record === false) return false;
