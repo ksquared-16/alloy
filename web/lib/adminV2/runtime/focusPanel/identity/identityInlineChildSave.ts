@@ -1,8 +1,8 @@
 /**
  * Identity-card inline child save routing — real writes for scalar profile fields.
  *
- * Enrollment fields (program / room / schedule / start) are link-only on identity cards;
- * they save through ChildFocusEdit, not this path.
+ * Location / Program enrollment fields also save through this ChildrenCard path via
+ * `buildChildFocusSavePatch` (OCM). Room / Schedule stay Linked → Assignments.
  */
 
 import {

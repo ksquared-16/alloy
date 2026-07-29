@@ -6,6 +6,7 @@
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import {
     OPPORTUNITY_DISPLAY_NO_LOCATION_LABEL,
+    opportunityDisplayLocationFromRecord,
     opportunityDisplayLocationLabel,
 } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 
@@ -178,9 +179,13 @@ export function resolveFocusPanelStatusTone(statusKey: string | null | undefined
     return "neutral";
 }
 
-/** Location chip when a real site/location is known — skips placeholder copy. */
+/** Location chip when a real site/location is known — skips placeholder copy.
+ * Uses child-site aggregate (with lead inherit) so siblings at South + North surface as multi.
+ */
 export function resolveFocusPanelLocationChip(record: Record<string, unknown>): string | null {
-    const label = opportunityDisplayLocationLabel(record)?.trim();
+    const resolved = opportunityDisplayLocationFromRecord(record);
+    if (resolved.kind === "none") return null;
+    const label = resolved.label?.trim();
     if (!label || label === OPPORTUNITY_DISPLAY_NO_LOCATION_LABEL) return null;
     return label;
 }

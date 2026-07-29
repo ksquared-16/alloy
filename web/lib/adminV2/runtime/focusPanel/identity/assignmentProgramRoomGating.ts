@@ -8,6 +8,7 @@ import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProj
 
 const PROGRAM_FIELD_REFS = new Set(["inquiry_child.program", "inquiry_child.program_category_id", "child.program"]);
 const ROOM_FIELD_REFS = new Set(["child.room", "inquiry_child.program_room_cohort_key"]);
+const LOCATION_FIELD_REFS = new Set(["inquiry_child.location_id", "child.location"]);
 
 export function primaryAssignmentFromScheduling(
     scheduling: ChildScheduling | null | undefined,
@@ -36,6 +37,11 @@ export function isProgramIdentityFieldRef(fieldRef: string): boolean {
 
 export function isRoomIdentityFieldRef(fieldRef: string): boolean {
     return ROOM_FIELD_REFS.has(fieldRef.trim());
+}
+
+/** Site / school location — Editable per child (and lead); not Assignments-owned. */
+export function isLocationIdentityFieldRef(fieldRef: string): boolean {
+    return LOCATION_FIELD_REFS.has(fieldRef.trim());
 }
 
 export function assignmentOwnsProgramRoomField(fieldRef: string): boolean {

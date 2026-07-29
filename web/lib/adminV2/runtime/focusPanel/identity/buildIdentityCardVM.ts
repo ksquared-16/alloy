@@ -44,7 +44,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
 import { composeContextCollectionRows } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import { resolveIdentityFieldEditControl } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldEditControl";
-import { assignmentOwnsProgramRoomField, isProgramIdentityFieldRef, isRoomIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
+import { assignmentOwnsProgramRoomField, isLocationIdentityFieldRef, isProgramIdentityFieldRef, isRoomIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
 import { trimOrNull } from "@/lib/completion/valueEmpty";
 import {
     enabledEvidenceSections,
@@ -186,13 +186,22 @@ function buildRecordRows(args: {
         const assignmentOwned = assignmentOwnsProgramRoomField(placement.fieldRef);
         const isProgramField = isProgramIdentityFieldRef(placement.fieldRef);
         const isRoomField = isRoomIdentityFieldRef(placement.fieldRef);
+        const isLocationField = isLocationIdentityFieldRef(placement.fieldRef);
+        const childEvidence =
+            args.subject.kind === "child" ? (args.subject.value as ChildrenEvidenceChild) : null;
         // Program: Editable before primary assignment (desired program select). Once a
         // primary classroom exists, Assignments owns Program (derived / Linked).
+        // Location: Editable per child (siblings may differ; sites change). Legacy Linked
+        // configs coerce to Editable — Location is never Assignments-owned.
         // Room: Linked → Assignments (room is never a free inquiry dropdown here).
         // Older configs authored Program as Linked — without a primary, that is treated
         // as Editable so operators can set Desired Program from a dropdown.
         const effectivePolicy = (() => {
             if (assignmentOwned && childHasPrimary) return "linked";
+            if (isLocationField) {
+                if (policy === "read-only" || policy === "hidden") return policy;
+                return "editable";
+            }
             if (isProgramField && !childHasPrimary) {
                 if (policy === "read-only" || policy === "hidden") return policy;
                 return "editable";
@@ -210,10 +219,7 @@ function buildRecordRows(args: {
             (fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked)
             || (assignmentOwned && childHasPrimary && linkContract.canOfferLinked)
             || (isRoomField && !hasExplicitPolicy && linkContract.canOfferLinked);
-        const primaryRoomName =
-            args.subject.kind === "child"
-                ? trimOrNull((args.subject.value as ChildrenEvidenceChild).room)
-                : null;
+        const primaryRoomName = childEvidence ? trimOrNull(childEvidence.room) : null;
         const derivedSourceLabel =
             assignmentOwned && childHasPrimary && primaryRoomName
                 ? `Determined by primary classroom: ${primaryRoomName}`
@@ -221,7 +227,9 @@ function buildRecordRows(args: {
                   ? "Determined by primary classroom"
                   : isRoomField && !childHasPrimary
                     ? "Set up in Assignments"
-                    : null;
+                    : isLocationField && childEvidence?.locationInherited
+                      ? "Inherited from lead"
+                      : null;
         const linkTarget = linked
             ? normalizeIdentityFieldLinkTarget(placement.linkTarget, placement.fieldRef)
                 ?? linkContract.defaultTarget
@@ -266,17 +274,21 @@ function buildRecordRows(args: {
                     placement.fieldRef,
                     args.tenantFieldDefinitions,
                 );
-                if (
-                    control.kind === "placement_select"
-                    && control.placement === "program"
-                    && args.subject.kind === "child"
-                ) {
+                if (control.kind === "placement_select" && args.subject.kind === "child") {
                     const child = args.subject.value as ChildrenEvidenceChild;
-                    return {
-                        ...control,
-                        siteLocationId: child.locationId ?? null,
-                        programCategoryId: child.programCategoryId ?? null,
-                    };
+                    if (control.placement === "program") {
+                        return {
+                            ...control,
+                            siteLocationId: child.locationId ?? null,
+                            programCategoryId: child.programCategoryId ?? null,
+                        };
+                    }
+                    if (control.placement === "site") {
+                        return {
+                            ...control,
+                            siteLocationId: child.locationId ?? null,
+                        };
+                    }
                 }
                 return control;
             })(),

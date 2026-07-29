@@ -160,4 +160,55 @@ describe("children identity published config parity", () => {
             /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
         );
     });
+
+    it("treats Location as Editable (not Linked), including legacy Linked policies", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "identity", "inquiry_child.location_id", {
+            tier: "context_facts",
+        });
+        const group = config.groups.find((g) => g.key === "identity");
+        if (group) {
+            group.fieldPolicies = {
+                ...(group.fieldPolicies ?? {}),
+                "inquiry_child.location_id": "linked",
+            };
+        }
+        const vm = buildChildIdentityRecordVM({
+            config,
+            child: sampleChild({
+                location: "North Campus",
+                locationId: "site-north",
+                locationInherited: false,
+                hasCommittedPrimaryAssignment: false,
+            }),
+            groupKey: "identity",
+            canMutate: true,
+        });
+        const location = flatCells(vm).find((c) => c.fieldRef === "inquiry_child.location_id");
+        expect(location?.editable).toBe(true);
+        expect(location?.linked).toBe(false);
+        expect(location?.editControl).toMatchObject({ kind: "placement_select", placement: "site" });
+    });
+
+    it("annotates Location when display inherits the lead site", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "identity", "inquiry_child.location_id", {
+            tier: "context_facts",
+        });
+        const vm = buildChildIdentityRecordVM({
+            config,
+            child: sampleChild({
+                location: "North Campus",
+                locationId: "site-north",
+                locationOwnedId: null,
+                locationInherited: true,
+                hasCommittedPrimaryAssignment: false,
+            }),
+            groupKey: "identity",
+            canMutate: true,
+        });
+        const location = flatCells(vm).find((c) => c.fieldRef === "inquiry_child.location_id");
+        expect(location?.derivedSourceLabel).toMatch(/Inherited from lead/i);
+        expect(location?.editable).toBe(true);
+    });
 });
