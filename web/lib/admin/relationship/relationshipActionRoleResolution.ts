@@ -6,19 +6,17 @@ import {
     loadActiveMemberContactRoleKeys,
     pickFirstAvailableMemberContactRoleKey,
     resolveBillingMemberContactRoleKey,
-    resolveEmergencyMemberContactRoleKey,
-    resolveGuardianMemberContactRoleKey,
 } from "@/lib/admin/actions/createLeadChildScopedContactPersistence";
+import { relationshipDefinitionForCommandKey } from "@/lib/fields/relationship/relationshipDefinitions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RelationshipActionKey, RelationshipRoleKey } from "@/lib/admin/relationship/relationshipActionContract";
 
-const AUTHORIZED_PICKUP_ROLE_CANDIDATES = ["authorized_pickup", "pickup"] as const;
-
-const ROLE_CANDIDATES_BY_ACTION: Partial<Record<RelationshipActionKey, readonly string[]>> = {
-    add_emergency_contact: ["emergency_contact", "emergency"],
-    add_authorized_pickup: AUTHORIZED_PICKUP_ROLE_CANDIDATES,
+/**
+ * Candidates for the NATIVE commands that have no relationship definition.
+ * Definition-backed commands resolve from their own `role_resolution` / `role_key_candidates`.
+ */
+const NATIVE_ROLE_CANDIDATES_BY_ACTION: Partial<Record<RelationshipActionKey, readonly string[]>> = {
     add_billing_contact: ["billing_contact", "payer", "billing", "billing_responsible"],
-    add_parent_guardian: ["guardian", "parent_guardian", "parent", "secondary_guardian"],
     link_existing_person: [],
 };
 
@@ -42,22 +40,39 @@ export function resolveRelationshipRoleKeyForAction(input: {
         if (input.activeRoleKeys.has(normalized)) return normalized;
     }
 
+    // ── definition-backed commands resolve from the relationship model, not a per-action switch ──
+    const def = relationshipDefinitionForCommandKey(input.actionKey);
+    if (def) {
+        const policy = def.role_resolution;
+        const candidates = policy?.primary_candidates && input.isPrimaryGuardian
+            ? policy.primary_candidates
+            : policy?.default_candidates ?? def.role_key_candidates;
+        const picked = pickFirstAvailableMemberContactRoleKey(candidates, input.activeRoleKeys);
+        if (picked) return picked;
+        if (!policy?.required) return null;
+        // "required" policy: never return null — fall back to the canonical guardian key, then any
+        // active role, else surface the org-config error. Mirrors resolveGuardianMemberContactRoleKey.
+        if (input.activeRoleKeys.has("guardian")) return "guardian";
+        const first = [...input.activeRoleKeys][0];
+        if (!first) {
+            throw new Error(
+                "No active customer_member_contact_roles configured for this org. Seed guardian/emergency/billing role keys before creating leads.",
+            );
+        }
+        return first;
+    }
+
+    // ── native commands (no definition row) ──
     switch (input.actionKey) {
-        case "add_emergency_contact":
-            return resolveEmergencyMemberContactRoleKey(input.activeRoleKeys);
-        case "add_authorized_pickup":
-            return pickFirstAvailableMemberContactRoleKey(AUTHORIZED_PICKUP_ROLE_CANDIDATES, input.activeRoleKeys);
         case "add_billing_contact":
             return resolveBillingMemberContactRoleKey(input.activeRoleKeys);
-        case "add_parent_guardian":
-            return resolveGuardianMemberContactRoleKey(Boolean(input.isPrimaryGuardian), input.activeRoleKeys);
         case "link_existing_person":
             return requested ?? null;
         default:
             break;
     }
 
-    const candidates = ROLE_CANDIDATES_BY_ACTION[input.actionKey];
+    const candidates = NATIVE_ROLE_CANDIDATES_BY_ACTION[input.actionKey];
     if (candidates?.length) {
         return pickFirstAvailableMemberContactRoleKey(candidates, input.activeRoleKeys);
     }

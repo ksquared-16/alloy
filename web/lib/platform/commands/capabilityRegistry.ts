@@ -10,6 +10,7 @@
  */
 
 import { ALL_IDENTITY_COMMAND_KEYS } from "@/lib/pos/processingIdentity/commands/commandKeys";
+import { RELATIONSHIP_DEFINITIONS } from "@/lib/fields/relationship/relationshipDefinitions";
 import type {
     CapabilityCatalogVisibility,
     CapabilityExecutionOwner,
@@ -282,48 +283,9 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
 
     // ── Relationship Runtime (adapted) ─────────────────────────────────────
     def({
-        capabilityKey: "add_emergency_contact",
-        canonicalCommandKey: "add_emergency_contact",
-        operatorLabel: "Add Emergency Contact",
-        family: "relationships",
-        maturity: "adapted",
-        executionOwner: "relationship_runtime",
-        catalogVisibility: "organization_command_catalog",
-        supportedSubjects: ["child", "person"],
-        supportsPreview: false,
-        confirmationPolicy: "confirm",
-        implementationStatus: "production",
-    }),
-    def({
-        capabilityKey: "add_authorized_pickup",
-        canonicalCommandKey: "add_authorized_pickup",
-        operatorLabel: "Add Authorized Pickup",
-        family: "relationships",
-        maturity: "adapted",
-        executionOwner: "relationship_runtime",
-        catalogVisibility: "organization_command_catalog",
-        supportedSubjects: ["child", "person"],
-        supportsPreview: false,
-        confirmationPolicy: "confirm",
-        implementationStatus: "production",
-    }),
-    def({
         capabilityKey: "add_billing_contact",
         canonicalCommandKey: "add_billing_contact",
         operatorLabel: "Add Billing Contact",
-        family: "relationships",
-        maturity: "adapted",
-        executionOwner: "relationship_runtime",
-        catalogVisibility: "organization_command_catalog",
-        supportedSubjects: ["child", "person", "opportunity"],
-        supportsPreview: false,
-        confirmationPolicy: "confirm",
-        implementationStatus: "production",
-    }),
-    def({
-        capabilityKey: "add_parent_guardian",
-        canonicalCommandKey: "add_parent_guardian",
-        operatorLabel: "Add Parent / Guardian",
         family: "relationships",
         maturity: "adapted",
         executionOwner: "relationship_runtime",
@@ -844,6 +806,35 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
     }),
 ];
 
+/**
+ * Relationship capabilities — DERIVED, one per relationship definition.
+ *
+ * These were hand-authored, so a newly configured relationship had no capability and could never be
+ * resolved by the command runtime (the facade gate requires one). `add_billing_contact`, `add_child`,
+ * `link_existing_*` and `make_primary_contact` stay hand-authored above: they are not relationship
+ * definitions. @see docs/platform/core/data/relationship-model.md
+ */
+const RELATIONSHIP_DEFINITION_CAPABILITIES: readonly PlatformCapabilityDefinition[] =
+    RELATIONSHIP_DEFINITIONS.map((rel) =>
+        def({
+            capabilityKey: rel.apply_command_key,
+            canonicalCommandKey: rel.apply_command_key,
+            operatorLabel: rel.command_presentation?.label ?? `Add ${rel.label}`,
+            family: "relationships",
+            maturity: "adapted",
+            executionOwner: "relationship_runtime",
+            catalogVisibility: "organization_command_catalog",
+            // A relationship anchored on a child is operable from the child and person subjects;
+            // household-scoped commands additionally surface on the opportunity.
+            supportedSubjects: rel.command_presentation?.allowed_surfaces?.includes("opportunity_drawer")
+                ? ["child", "person", "opportunity"]
+                : ["child", "person"],
+            supportsPreview: false,
+            confirmationPolicy: "confirm",
+            implementationStatus: "production",
+        }),
+    );
+
 /** Processing Identity keys — namespaced to avoid colliding with operator `create_lead`. */
 const PROCESSING_CAPABILITIES: readonly PlatformCapabilityDefinition[] = ALL_IDENTITY_COMMAND_KEYS.map(
     (identityKey) =>
@@ -868,6 +859,7 @@ const PROCESSING_CAPABILITIES: readonly PlatformCapabilityDefinition[] = ALL_IDE
 
 const ALL_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
     ...CAPABILITY_DEFINITIONS,
+    ...RELATIONSHIP_DEFINITION_CAPABILITIES,
     ...PROCESSING_CAPABILITIES,
 ];
 

@@ -13,6 +13,7 @@
 
 import type { DocumentStructureCandidate } from "@/lib/pos/processingCase/structure/types";
 import type { SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
+import { relationshipDetectionPattern } from "@/lib/fields/relationship/relationshipDefinitions";
 import {
     DISCOVERY_CONTRACT_VERSION,
     type SemanticBlockRole,
@@ -30,8 +31,12 @@ export function normalizeKey(s: string): string {
         .replace(/^_+|_+$/g, "");
 }
 
-// No trailing \b so the plural ("Emergency Contacts", "Guardians") still matches.
-const PERSON_GROUP_RE = /\b(parent|guardian|emergency\s*contact|pick\s*up|pickup|authorized)/i;
+// DERIVED from the canonical relationship definitions — a configured role becomes detectable the
+// moment its definition row exists. Detection used to be a hardcoded regex here, which made a new
+// role undetectable and its (already generic) apply path unreachable.
+// No trailing \b so plurals ("Emergency Contacts", "Guardians") still match.
+// @see docs/platform/core/data/relationship-model.md
+const PERSON_GROUP_RE = relationshipDetectionPattern();
 
 function fieldRole(label: string, dataType: string, disposition: SectionDisposition): SemanticBlockRole {
     if (dataType === "signature") return "signature";

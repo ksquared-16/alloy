@@ -17,7 +17,11 @@
  * resolution is Layer 5 (configurationMatching), which reuses the platform matchers.
  */
 
-import type { PersonChildOperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipEntity";
+import type { OperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipEntity";
+import {
+    detectRelationshipDefinitionForTitle,
+    relationshipDefinitionForRole,
+} from "@/lib/fields/relationship/relationshipDefinitions";
 import {
     DISCOVERY_CONTRACT_VERSION,
     type BusinessConceptCandidate,
@@ -34,16 +38,17 @@ import {
 
 interface SectionContext {
     subject: ConceptSubject;
-    role?: PersonChildOperationalRoleKey;
+    role?: OperationalRoleKey;
     role_scope?: "child" | "household";
     internal?: boolean;
 }
 
 function classifySection(section: SemanticSection): SectionContext {
     const t = section.title.toLowerCase();
-    if (/\bemergency\s*contact/.test(t)) return { subject: "person", role: "emergency_contact", role_scope: "child" };
-    if (/\b(pick\s*up|pickup|authorized)\b/.test(t)) return { subject: "person", role: "authorized_pickup", role_scope: "child" };
-    if (/\b(parent|guardian)\b/.test(t)) return { subject: "person", role: "guardian", role_scope: "child" };
+    // Definition-derived: the relationship model owns which titles denote which role, and in what
+    // precedence (detection_priority). A newly configured role classifies with no edit here.
+    const def = detectRelationshipDefinitionForTitle(t);
+    if (def) return { subject: "person", role: def.operational_role_key, role_scope: def.relationship_scope };
     if (/\bdirector\b/.test(t)) return { subject: "internal", internal: true };
     if (/signature/.test(t)) return { subject: "person" };
     if (/authoriz|permission|consent/.test(t)) return { subject: "household" };
@@ -101,7 +106,7 @@ export function discoverConcepts(model: SemanticDocumentModel): BusinessConceptC
     const seen = new Set<string>(); // concept_key dedup for active (non-output) scalars
 
     // group repeated-person sections by role so #1/#2 collapse into one relationship concept
-    const relBuckets = new Map<PersonChildOperationalRoleKey, SemanticSection[]>();
+    const relBuckets = new Map<OperationalRoleKey, SemanticSection[]>();
 
     for (const section of model.sections) {
         const ctx = classifySection(section);
@@ -234,7 +239,9 @@ export function discoverConcepts(model: SemanticDocumentModel): BusinessConceptC
     for (const [role, sects] of relBuckets) {
         const first = sects[0];
         const gathered = sects.flatMap((s) => s.fields.map((f) => f.label));
-        const label = role === "guardian" ? "Guardians" : role === "emergency_contact" ? "Emergency contacts" : role === "authorized_pickup" ? "Authorized pickup people" : role;
+        // Label comes from the definition; a configured role is never rendered as a raw key.
+        const def = relationshipDefinitionForRole(role);
+        const label = def?.discovery_group_label ?? def?.label ?? role;
         concepts.push({
             contract_version: DISCOVERY_CONTRACT_VERSION,
             id: conceptId(first.page, `role_${role}`, "relationship"),

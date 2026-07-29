@@ -441,7 +441,7 @@ export async function executeRelationshipAction(
             Boolean(roleKey)
             && memberIds.length > 0
             && (
-                shouldWriteChildScopedRelationshipsToPcr({ executorKind: entry.executorKind, roleKey })
+                shouldWriteChildScopedRelationshipsToPcr({ executorKind: entry.executorKind, roleKey, actionKey })
                 || entry.writeTargets.includes("customer_member_contacts")
             );
 
@@ -452,7 +452,7 @@ export async function executeRelationshipAction(
                 role_key: roleKey!,
                 source: "explicit_child",
             }));
-            if (shouldWriteChildScopedRelationshipsToPcr({ executorKind: entry.executorKind, roleKey })) {
+            if (shouldWriteChildScopedRelationshipsToPcr({ executorKind: entry.executorKind, roleKey, actionKey })) {
                 const pcrWrite = await applyCanonicalChildScopedRelationships(supabase, {
                     orgId,
                     customerId,

@@ -10,6 +10,7 @@
  */
 
 import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
+import { relationshipDefinitionCommandKeys } from "@/lib/fields/relationship/relationshipDefinitions";
 import type { CapabilityExecutionOwner } from "@/lib/platform/commands/capabilityTypes";
 import {
     isDestructiveCapabilityCommitEnabled,
@@ -56,18 +57,25 @@ export type ChildEnrollmentMutationFacadeCommandKey =
  * P3.S3: child relationship commands (create/link child identity)
  * Not included: Add Family Member hub. make_primary_contact → P4.S2 destructive allowlist.
  */
-export const RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS = [
-    "add_parent_guardian",
+const NATIVE_RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS = [
     "link_existing_person",
-    "add_emergency_contact",
-    "add_authorized_pickup",
     "add_billing_contact",
     "add_child",
     "link_existing_child",
 ] as const;
 
+/**
+ * DERIVED: every relationship definition's canonical command, plus the native commands that have no
+ * definition row. This was an exact-key allowlist, which meant a newly configured relationship could
+ * never execute. Definitions come first so the relationship model is the authority for its own keys.
+ */
+export const RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS: readonly string[] = [
+    ...relationshipDefinitionCommandKeys(),
+    ...NATIVE_RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS,
+];
+
 export type RelationshipRuntimeFacadeCommandKey =
-    (typeof RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS)[number];
+    (typeof NATIVE_RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS)[number] | (string & {});
 
 /**
  * @deprecated Prefer {@link isCommandRuntimeFacadeExecutionSupported}.
