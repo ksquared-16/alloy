@@ -62,7 +62,8 @@ export async function ensureAdminPlaywrightSession(page: Page): Promise<void> {
 
         const tokenResponse = page.waitForResponse(
             (r) => r.url().includes("/auth/v1/token") && r.request().method() === "POST",
-            { timeout: 120_000 },
+            // Generous: a cold dev-server route compile on a loaded machine can exceed two minutes.
+            { timeout: 300_000 },
         );
         await page.getByRole("button", { name: /sign in/i }).click();
         const authRes = await tokenResponse;

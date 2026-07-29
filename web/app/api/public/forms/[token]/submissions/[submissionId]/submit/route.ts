@@ -220,6 +220,11 @@ export async function POST(
             values: finalPayload.values as Record<string, unknown>,
             linkMetadata: metaRecord,
             submissionId,
+            // Structured collection responses are the PREFERRED intake source: when a form projects
+            // guardians into a collection its flat guardian questions are suppressed, so flat-only
+            // resolution would find nothing and silently open no case.
+            collectionEnvelope: collectionEnvelope as never,
+            schema,
         });
 
         if (!built.ok) {
