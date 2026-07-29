@@ -85,21 +85,21 @@ _Do not stop because one track reaches A-. Do not defer the other tracks. "Large
 
 | Category | Current | Target | Trend | Completion % | Confidence % | Tasks Done / Total | Milestone |
 |---|:--:|:--:|:--:|--:|--:|:--:|:--:|
-| Runtime Architecture | **A- (was B+)** ✓target | A- | → | 100% | 88% | 3 / 3 | M1 |
-| Critical Path | **B+ (was B)** | A- | ↑ | 58% | 82% | 3 / 5 | M2 |
-| TypeScript Architecture | C+ (was C) | B+ (A later) | → | 50% | 75% | 2 / 3 | M3 |
-| Dependency Graph | B | A- | → | 40% | 70% | 2 / 5 | M1 |
-| Maintainability | B (was C-) | A- | → | 70% | 80% | 1 / 2 | M3 |
-| Scalability | C | A- | ↑ | 15% | 55% | 0 / 2 | M2 |
-| Testing | C- | A | ↑ | 45% | 80% | 3 / 7 | M4 |
-| Documentation | B (was C) | A- | → | 60% | 80% | 1 / 3 | M3 |
-| Performance | **A- (was B)** ✓target (warm) | A- | ↑ | 72% | 82% | 3 / 4 | M2 |
-| Code Quality | B- | A- | ↑ | 66% | 74% | 2 / 3 | M1 |
+| Runtime Architecture | **A-** ✓target | A- | → | 100% | 90% | 3 / 3 | M1 |
+| Critical Path | **B+** | A- | ↑ | 62% | 83% | 3 / 5 | M2 |
+| TypeScript Architecture | C+ | B+ (A later) | → | 50% | 75% | 2 / 3 | M3 |
+| Dependency Graph | B | A- | → | 42% | 70% | 2 / 5 | M1 |
+| Maintainability | B | A- | ↑ | 78% | 84% | 1 / 2 | M3 |
+| Scalability | **C+ (was C)** | A- | ↑ | 25% | 62% | 1 / 3 | M2 |
+| Testing | **C (was C-)** | A | ↑ | 52% | 80% | 3 / 7 | M4 |
+| Documentation | B | A- | ↑ | 68% | 82% | 1 / 3 | M3 |
+| Performance | **A-** ✓target (warm) | A- | → | 72% | 82% | 3 / 4 | M2 |
+| Code Quality | **B (was B-)** | A- | ↑ | 74% | 78% | 2 / 3 | M1 |
 
 **Confidence %** = how confident a fresh architecture review would re-assign this grade, given the committed
 evidence (tests / cert / measurements / review). It rises only with evidence and drops when new findings surface.
 
-**Overall initiative completion (weighted, coarse): ~60%.** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade. **Runtime Architecture (M1) CERTIFIED A-. Performance reaches its A- criterion on the PROD-verified WARM evidence (first-meaningful <3s = 1851–2566ms; fully-settled panel = loads-as-one spread 0ms ≈ 1.85s; both prod, video-captured) — but note the FINAL certification standard additionally requires "materially improved cold load" (cold primary-usable ~6.5s is NOT yet improved; PE-3 + Lane 1A remain), so the initiative is NOT complete even with two categories at target.**
+**Overall initiative completion (weighted, coarse): ~63% (was ~60%; Step 2 placement CLOSED).** Trend is measured session-over-session (↑ improved, → unchanged, ↓ regressed). Certification target: every row at target grade. **Runtime Architecture (M1) CERTIFIED A-. Performance reaches its A- criterion on the PROD-verified WARM evidence (first-meaningful <3s = 1851–2566ms; fully-settled panel = loads-as-one spread 0ms ≈ 1.85s; both prod, video-captured) — but note the FINAL certification standard additionally requires "materially improved cold load" (cold primary-usable ~6.5s is NOT yet improved; PE-3 + Lane 1A remain), so the initiative is NOT complete even with two categories at target.**
 
 Task status legend: **NS** Not Started · **IP** In Progress · **BL** Blocked (an engineering dependency is not yet DONE) · **EEC** Execution Environment Constraint (the engineering is **READY**; only *this workstation* cannot perform trustworthy certification — a build/measure/browser loop under memory saturation. The Runtime is not blocked; the local machine is) · **NV** Needs Validation · **DONE** Completed.
 
@@ -173,12 +173,13 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 | ~~PE-2 Warm fully-settled < 6 s~~ | Performance | High | — | ✓ | **DONE** (loads-as-one spread 0 ms ≈ 1.85 s, prod + video) |
 | PE-3 Cold TTFB / cold primary-usable mitigation | Performance | **High (was Low)** | — | ✓ | **READY** (cold ~6.5 s — Lane 1A) |
 | CP-3 Gate prewarm storm | Critical Path | Low | — | ✓ | READY (low value — see note) |
-| RegC-2 Registry concern: **placement** | Scalability/CQ | High | — | ✓ | **READY** (Lane 2A #2 — needs a per-MODE placement composer, not a flat field) |
-| RegC-3 Registry concern: **loadingPolicy** (isKnowable; defer build) | Scalability/CQ | High | RegC-2 | ✓ | READY (Lane 2A #3 — reveal-path cert-sensitive) |
+| ~~RegC-2 Registry concern: **placement**~~ | Scalability/CQ | High | — | ✓ | **DONE — ANSWERED NEGATIVELY, WITH EVIDENCE (Step 2, `fea89061b`·`30c63f308`·`6203a70ca`·`19f2018c3`).** Placement does **NOT** become a registry concern: it fails the registry's own law (2)(3) — no card property was shown to be a placement default or capability, and Summary/Work place **disjoint** card sets so cross-surface reuse is unfalsifiable today. Instead placement converged on ONE code-owned **surface** composition per surface (12-column vocabulary), tenant docs override it, `SUMMARY_GRID` retired as unreachable, two duplicate Work grids collapsed. Card-owned tier stays intentionally EMPTY. Full analysis: `CARD-PLACEMENT-OWNERSHIP.md`. |
+| RegC-3 Registry concern: **loadingPolicy** (isKnowable; defer build) | Scalability/CQ | High | RegC-2✓ | ✓ | **READY — NEXT. Inventory done:** `loadingPolicy` does not exist in code (registry ledger only); `participatesInInitialPanelReadiness` has **zero** references anywhere (vocabulary, not machinery); the real seed `COMMIT_CRITICAL_CARD_SPECS` (`{key,isKnowable,build}`) already has ONE consumer that iterates it with no per-card blocks (`focusPanelWorkModeModelFromProvisioningAnswer.ts:113-117`). **First action: test the seed against the registry's 5 criteria before folding anything** — the likely real gap is the DEFERRED half (Billing / enriched second phase), which has no contract at all. Do not fold a concern that is already correctly factored. |
 | B1-dedup Background duplicate-request fix | Critical Path | High | — | ✓ | **READY — PROD TRACE CAPTURED (authed, 31 API reqs):** `provisioning-answer ×4` @ t=6210 ms (the 4 sibling work-view prefetches, fired together post-commit — the prewarm storm; ×4 is normalized-URL, distinct `?work_view_id`) + `drawer-recipients ×2` @ t=6189/13224 (two callers ~7 s apart). `family-workspace`/`queue-view-totals` did NOT duplicate on this subject/build. Next: dedup drawer-recipients (2 callers / inflight-join) + evaluate the 4× sibling prefetch cost vs record-switch benefit. Fixes auth-independent; re-cert needs a fresh auth window. |
 | PROVE family_alerts dynamic-card test | Scalability | High | RegC-2, RegC-3 | ✗ | blocked (Lane 2B — after placement+loadingPolicy) |
 | ~~LEAK Provisioning domain→platform leaks (FocusPanelSubjectSnapshot + truth-key assembly)~~ | Runtime Arch | High | — | ✓ | **DONE — BROWSER-CERTIFIED (prod).** Generic `SubjectIdentityTruth` bag replaces the opportunity-shaped type through the reveal chain (7 files, `fceaf14f0`); domain composer declares the truth keys, platform forwards opaquely; boundary guard `b28c98048`. **PROD browser cert PASSED:** Household + Children both render from the bag (Chapmap childless → children honest-empty; Wenc has child → Children ready-at-commit showing Ava's known info); warm primary-usable **1905 ms (<2s)**; subject switch clean (no stale-subject flash); content correct (screenshots). tsc 0; +0 unit (84=84). |
-| BND-1 Runtime import-direction boundary map + enforcement | Dependency Graph | Medium | RegC-2 | ✗ | Lane 3 (after 1–2 concerns expose seams) |
+| BND-1 Runtime import-direction boundary map + enforcement | Dependency Graph | Medium | RegC-2✓ | ✓ | **READY (unblocked by Step 2).** Seams now exposed: `composition/` owns surface composition; the doc encoder is a pure consumer of it; `deriveOpportunityFocusPanelCards` now imports the default doc (new edge to justify or invert). Also fold in R-07's `/dev` route boundary once the deployment fact is known. |
+| SEC-1 `/dev` harness routes ship unguarded (R-07) | Dependency Graph / Security | **High if exposed** | — | ✓ | **READY — needs one deployment fact first.** Only `household-card-verify` gates on `NODE_ENV`; 6 sibling `/dev` routes do not, there is no `app/dev/layout.tsx`, and `/dev` is outside `requiresOperatorSession`. Nothing in `next.config.ts`/`middleware.ts` excludes them; infra-level exclusion UNKNOWN from this repo. **Separate from placement — do not bundle into a runtime change.** |
 | ~~SURF-2 Second-surface proving-slice DESIGN~~ | Scalability | High | — | ✓ | **DONE** — `SECOND-SURFACE-CERTIFICATION-DESIGN.md` (surface = **Child/participant**; min slice; PASS/FAIL; exposes SC-1 + Leak 2C as the first blockers) |
 | SC-1 Generalize subject contract | Scalability | **High** | — | ✓ | **IP — platform model core DONE:** `FocusPanelWorkModeModel.subject` widened `"opportunity"` literal → generic `OperationalSubjectRef`; PoC `subjectContractGeneralization.test.ts` proves opportunity+child+person compile (4/4); tsc 0; +0 failures. **NB — `OperationalSubjectRef.type` + `OperationalContext.grain` were ALREADY generic; the literal was the only platform hardcode.** REMAINING = provisioning `FocusPanelSubjectSnapshot` generalization = **Leak 2C** (reveal-path cert-sensitive, batch w/ browser loop) |
 | TE-6 Perf regression assertions | Testing | Medium | PE-1✓, PE-2✓ | ✓ | READY (Lane 4 — warm/loads-as-one/switch budgets) |
