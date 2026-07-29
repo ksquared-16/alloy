@@ -45,7 +45,9 @@ architecture concern. Recorded, not optimized.
 ### O1 — Smallest tactical correction: seed from the page segment, using `searchParams`
 `page.tsx` *does* receive `searchParams`; compose the requested subject there.
 
-**Already tried and reverted, with measurement.** `page.tsx:1-8` records that a page-segment seed
+**WITHDRAWN 2026-07-29 — see `DEEPLINK-COMPOSE-OWNERSHIP.md` §2a.** The evidence below is circular: no commit ever landed a page seed, and the iter-1 experiment's seed was never mounted because the layout discarded `children`. The original text is kept for the record.
+
+**Was recorded as: already tried and reverted, with measurement.** `page.tsx:1-8` records that a page-segment seed
 hydrates in a later streaming boundary than the shell's Surface Host, so K2's cold consume fires
 first and the seed loses the race. Listed for completeness and to stop a future session re-deriving
 it. **Rejected on existing evidence.**
