@@ -23,11 +23,58 @@ export async function ensureAdminPlaywrightSession(page: Page): Promise<void> {
     const email = process.env.PLAYWRIGHT_ADMIN_EMAIL?.trim();
     const password = process.env.PLAYWRIGHT_ADMIN_PASSWORD?.trim();
     if (email && password) {
-        await page.goto("/login", { waitUntil: "networkidle", timeout: 120_000 });
-        await page.locator("#email").fill(email);
-        await page.locator("#password").fill(password);
+        await page.goto("/login", { waitUntil: "domcontentloaded", timeout: 120_000 });
+
+        // The login inputs are CONTROLLED React fields. Filling before hydration completes lets
+        // React re-render and wipe the value — the field looks typed, then silently empties, and the
+        // sign-in posts blank credentials. Fill, then assert the value actually stuck, and retry.
+        const emailBox = page.locator("#email");
+        const passwordBox = page.locator("#password");
+        await emailBox.waitFor({ state: "visible", timeout: 120_000 });
+
+        // Settle hydration before typing at all: React replaces the DOM value on hydrate, so a value
+        // that "stuck" a moment ago can still be wiped. Wait for the form to stop changing, fill,
+        // confirm the value survives a beat, and re-verify immediately before submitting.
+        const fillAndConfirm = async (): Promise<boolean> => {
+            await emailBox.fill(email);
+            await passwordBox.fill(password);
+            await page.waitForTimeout(750);
+            const [e, p] = await Promise.all([emailBox.inputValue(), passwordBox.inputValue()]);
+            return e === email && p === password;
+        };
+
+        let ready = false;
+        for (let attempt = 0; attempt < 8 && !ready; attempt += 1) {
+            ready = await fillAndConfirm();
+            if (!ready) await page.waitForTimeout(1000);
+        }
+        if (!ready) throw new Error("Login form kept clearing its values (hydration race)");
+
+        // Sign in, and wait for the AUTH RESPONSE rather than for a client-side redirect. In dev,
+        // Next's Fast Refresh can rebuild mid-navigation and swallow the router.push, leaving the
+        // page on /login even though the session was created successfully. Waiting on the token
+        // response proves authentication; the explicit goto then lands the session.
+        // Final guard: refill if anything cleared between confirmation and submit.
+        if ((await emailBox.inputValue()) !== email || (await passwordBox.inputValue()) !== password) {
+            await emailBox.fill(email);
+            await passwordBox.fill(password);
+        }
+
+        const tokenResponse = page.waitForResponse(
+            (r) => r.url().includes("/auth/v1/token") && r.request().method() === "POST",
+            { timeout: 120_000 },
+        );
         await page.getByRole("button", { name: /sign in/i }).click();
-        await page.waitForURL(/\/(admin|workspace)/, { timeout: 120_000 });
+        const authRes = await tokenResponse;
+        if (authRes.status() !== 200) {
+            throw new Error(`Sign-in failed ${authRes.status()}: ${(await authRes.text()).slice(0, 300)}`);
+        }
+
+        await page.goto("/workspace", { waitUntil: "domcontentloaded", timeout: 120_000 });
+        const landed = new URL(page.url()).pathname;
+        if (landed === "/login" || landed.startsWith("/unauthorized")) {
+            throw new Error(`Authenticated session did not unlock workspace (landed on ${landed})`);
+        }
         return;
     }
 

@@ -1,15 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { ensureAdminPlaywrightSession } from "../helpers/adminSessionAuth";
 
 const EMAIL = process.env.CERT_OPERATOR_EMAIL ?? "qa.operator@northwind.invalid";
 const PASSWORD = process.env.CERT_OPERATOR_PASSWORD ?? "alloy-local-cert";
 const CUSTOMER = "cdc10000-0000-4000-8000-000000000001";
 
 test("cert gate: authenticate, read, and write through supported APIs", async ({ page }) => {
-    await page.goto("/login", { waitUntil: "domcontentloaded", timeout: 120_000 });
-    await page.locator("#email").fill(EMAIL);
-    await page.locator("#password").fill(PASSWORD);
-    await page.getByRole("button", { name: /sign in/i }).click();
-    await page.waitForURL(/\/(admin|workspace|adminV2)/i, { timeout: 120_000 });
+    await ensureAdminPlaywrightSession(page);
     console.log(`GATE authenticated -> ${new URL(page.url()).pathname}`);
 
     // READ through a supported admin API

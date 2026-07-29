@@ -93,6 +93,20 @@ async function uploadFreshCase(request: APIRequestContext): Promise<{ caseId: st
 test.describe("Configuration Discovery — proving journey", () => {
     test.describe.configure({ mode: "serial", timeout: 900_000 });
 
+    // ONE browser context, authenticated ONCE, shared across the serial journey. Re-logging in per
+    // test is both slow and fragile in dev (Fast Refresh can wipe the controlled login inputs
+    // mid-submit), and the journey is a single operator session by nature.
+    let page: import("@playwright/test").Page;
+
+    test.beforeAll(async ({ browser }) => {
+        page = await browser.newPage();
+        await ensureAdminPlaywrightSession(page);
+    });
+
+    test.afterAll(async () => {
+        await page?.close();
+    });
+
     let caseId = "";
     let documentId = "";
     let discovery: ConfigurationDiscoveryResult;
@@ -104,8 +118,7 @@ test.describe("Configuration Discovery — proving journey", () => {
     let submissionId = "";
     let submissionCaseId: string | null = null;
 
-    test("1. import a NEW case and detect (native layout → discovery)", async ({ page }) => {
-        await ensureAdminPlaywrightSession(page);
+    test("1. import a NEW case and detect (native layout → discovery)", async () => {
         const req = page.request;
 
         const fresh = await uploadFreshCase(req);
@@ -140,8 +153,7 @@ test.describe("Configuration Discovery — proving journey", () => {
         expect(relRoles.length, "no relationship_binding proposals discovered").toBeGreaterThan(0);
     });
 
-    test("2. record operator decisions (accept all resolvable) and reload them", async ({ page }) => {
-        await ensureAdminPlaywrightSession(page);
+    test("2. record operator decisions (accept all resolvable) and reload them", async () => {
         const req = page.request;
 
         // Baseline reconciliation on a case with no stored decisions.
@@ -177,8 +189,7 @@ test.describe("Configuration Discovery — proving journey", () => {
         console.log(`JOURNEY decisions stored=${after.data.decisions.length}`);
     });
 
-    test("3. apply — governed, and idempotent on retry", async ({ page }) => {
-        await ensureAdminPlaywrightSession(page);
+    test("3. apply — governed, and idempotent on retry", async () => {
         const req = page.request;
 
         const confirmedNewFields = discovery.proposals
@@ -231,8 +242,7 @@ test.describe("Configuration Discovery — proving journey", () => {
         expect(retryCounts.failed).toBe(0);
     });
 
-    test("4. save the BOUND draft, generate the form, publish it", async ({ page }) => {
-        await ensureAdminPlaywrightSession(page);
+    test("4. save the BOUND draft, generate the form, publish it", async () => {
         const req = page.request;
 
         // Re-read the bound draft and echo it back — save rebuilds from posted fields, so the
@@ -322,8 +332,7 @@ test.describe("Configuration Discovery — proving journey", () => {
         console.log(`JOURNEY published version=${published.data.version_number}`);
     });
 
-    test("5. reopen the published form — bindings, providers and lineage survive", async ({ page }) => {
-        await ensureAdminPlaywrightSession(page);
+    test("5. reopen the published form — bindings, providers and lineage survive", async () => {
         const req = page.request;
 
         const form = await okJson(await req.get(`/api/admin/forms/${formId}`), "GET form (reopen)");
@@ -357,8 +366,7 @@ test.describe("Configuration Discovery — proving journey", () => {
         console.log(`JOURNEY decisions after publish=${decisions.data.decisions.length}`);
     });
 
-    test("6. the published form carries the three relationship COLLECTIONS", async ({ page }) => {
-        await ensureAdminPlaywrightSession(page);
+    test("6. the published form carries the three relationship COLLECTIONS", async () => {
         const req = page.request;
 
         const relProposals = discovery.proposals.filter((p) => p.disposition === "relationship_binding");
@@ -405,8 +413,7 @@ test.describe("Configuration Discovery — proving journey", () => {
         expect(flatAfter, "projection did not reduce the flat question count").toBeLessThan(flatBefore);
     });
 
-    test("7. reopen — collection bindings and lineage survive publish", async ({ page }) => {
-        await ensureAdminPlaywrightSession(page);
+    test("7. reopen — collection bindings and lineage survive publish", async () => {
         const req = page.request;
 
         const version = await okJson(
@@ -460,9 +467,8 @@ test.describe("Configuration Discovery — proving journey", () => {
         console.log(`JOURNEY LINEAGE retained suppressed source questions=${suppressed.length}`);
     });
 
-    test("8. submit real collection responses through the supported public form path", async ({ page }) => {
+    test("8. submit real collection responses through the supported public form path", async () => {
         test.skip(!ON_CERT_STACK, "Live submission runs only against the local certification stack");
-        await ensureAdminPlaywrightSession(page);
         const req = page.request;
 
         // Mint a public link. pos_connected + lead_capture are what make the submission open a
@@ -501,8 +507,22 @@ test.describe("Configuration Discovery — proving journey", () => {
         const emergency = groupFor("person.contact_role.emergency_contacts");
         const pickups = groupFor("person.contact_role.authorized_pickups");
 
+        // The document requires signatures, and the projection correctly preserved them — a real
+        // respondent signs. Typed signatures for every signature field the published form exposes.
+        const signatureFields = walkFields(schema.fields ?? []).filter((f) => f.type === "signature");
+        const signatures: Record<string, Json> = {};
+        for (const f of signatureFields) {
+            signatures[f.id] = {
+                kind: "typed",
+                typed_full_name: "Dana CDV1Guardian",
+                acknowledged_at: new Date().toISOString(),
+            };
+        }
+        console.log(`JOURNEY SUBMIT signing ${signatureFields.length} signature field(s)`);
+
         const payload = {
             values: {},
+            signatures,
             groups: {
                 // GUARDIAN — an EXISTING canonical Person, linked not created.
                 [parents.id]: [
