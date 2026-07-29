@@ -86,6 +86,7 @@ test.describe("Configuration Discovery — proving journey", () => {
     let formId = "";
     let versionId = "";
     let generatedSchema: Json;
+    let flatBefore = 0;
 
     test("1. import a NEW case and detect (native layout → discovery)", async ({ page }) => {
         await ensureAdminPlaywrightSession(page);
@@ -103,6 +104,7 @@ test.describe("Configuration Discovery — proving journey", () => {
         const preview = detect.data?.form_draft_preview;
         expect(preview, "no form_draft_preview returned").toBeTruthy();
 
+        flatBefore = (preview.fields ?? []).length;
         discovery = preview.configuration_discovery;
         expect(
             discovery,
@@ -286,8 +288,11 @@ test.describe("Configuration Discovery — proving journey", () => {
         const schema = version.data.schema_json;
         const groups = collectGroups(schema.fields ?? []);
         const boundGroups = groups.filter((g) => g.collection_binding?.collection_provider_ref);
+        const flatQuestions = walkFields(schema.fields ?? []).filter(
+            (f) => f.type !== "group" && f.type !== "text_block",
+        ).length;
         console.log(
-            `JOURNEY generated schema: fields=${(schema.fields ?? []).length} groups=${groups.length} collectionBoundGroups=${JSON.stringify(
+            `JOURNEY generated schema: flatQuestions=${flatQuestions} groups=${groups.length} collectionBoundGroups=${JSON.stringify(
                 boundGroups.map((g) => g.collection_binding.collection_provider_ref),
             )}`,
         );
@@ -336,36 +341,107 @@ test.describe("Configuration Discovery — proving journey", () => {
         console.log(`JOURNEY decisions after publish=${decisions.data.decisions.length}`);
     });
 
-    test("6. GAP PIN — relationship bindings do not become collection-bound form groups", async ({ page }) => {
+    test("6. the published form carries the three relationship COLLECTIONS", async ({ page }) => {
         await ensureAdminPlaywrightSession(page);
         const req = page.request;
 
-        // Discovery DID resolve all three relationship groups to their canonical providers.
         const relProposals = discovery.proposals.filter((p) => p.disposition === "relationship_binding");
         expect(relProposals.length, "expected relationship proposals from this fixture").toBeGreaterThanOrEqual(3);
 
         const version = await okJson(
             await req.get(`/api/admin/forms/${formId}/versions/${versionId}`),
-            "GET form version (gap pin)",
+            "GET form version (collections)",
         );
-        const groups = collectGroups(version.data.schema_json.fields ?? []);
+        const schema = version.data.schema_json;
+        const groups = collectGroups(schema.fields ?? []);
         const boundGroups = groups.filter((g) => g.collection_binding?.collection_provider_ref);
+        const refs = boundGroups.map((g) => g.collection_binding.collection_provider_ref).sort();
 
-        console.log(
-            `JOURNEY GAP: ${relProposals.length} relationship proposals -> ${boundGroups.length} collection-bound groups in the published form`,
+        const flatAfter = walkFields(schema.fields ?? []).filter(
+            (f) => f.type !== "group" && f.type !== "text_block",
+        ).length;
+
+        console.log(`JOURNEY PROJECTION flatBefore=${flatBefore} flatAfter=${flatAfter}`);
+        console.log(`JOURNEY PROJECTION collectionGroups=${boundGroups.length} refs=${JSON.stringify(refs)}`);
+        for (const g of boundGroups) {
+            console.log(
+                `JOURNEY PROJECTION group ${g.collection_binding.collection_provider_ref} alias=${g.collection_binding.iteration_alias} entity=${g.collection_binding.iteration_entity_type} nested=${JSON.stringify(
+                    (g.fields ?? []).map((n: Json) => n.field_source?.field_key ?? n.label),
+                )}`,
+            );
+        }
+
+        // The three relationship concepts must be represented as collection-bound groups.
+        expect(boundGroups.length, "relationship concepts did not project into collection groups").toBe(3);
+        expect(refs).toEqual([
+            "person.contact_role.authorized_pickups",
+            "person.contact_role.emergency_contacts",
+            "person.contact_role.parents",
+        ]);
+
+        // Each carries definition-derived nested Person fields.
+        for (const g of boundGroups) {
+            expect((g.fields ?? []).length, `${g.label} has no nested fields`).toBeGreaterThan(0);
+            expect(g.collection_binding.iteration_entity_type).toBe("person");
+        }
+
+        // The flat questions the groups replaced must be gone from participant execution.
+        expect(flatAfter, "projection did not reduce the flat question count").toBeLessThan(flatBefore);
+    });
+
+    test("7. reopen — collection bindings and lineage survive publish", async ({ page }) => {
+        await ensureAdminPlaywrightSession(page);
+        const req = page.request;
+
+        const version = await okJson(
+            await req.get(`/api/admin/forms/${formId}/versions/${versionId}`),
+            "GET form version (reopen collections)",
         );
+        const boundGroups = collectGroups(version.data.schema_json.fields ?? []).filter(
+            (g) => g.collection_binding?.collection_provider_ref,
+        );
+        expect(boundGroups.length, "collection bindings lost after publish/reopen").toBe(3);
 
-        // THIS ASSERTION DOCUMENTS A GAP, NOT DESIRED BEHAVIOUR.
-        //
-        // When form generation learns to project an accepted relationship_binding into a
-        // collection-bound group (provider_ref, iteration_entity_type, iteration_alias and
-        // nested_field_keys are ALL already on the relationship definition), flip this to
-        // toBe(relProposals.length); journey steps 7-10 (submission -> Processing -> canonical
-        // execution -> idempotency) then become reachable and should be written here.
-        expect(
-            boundGroups.length,
-            "collection groups now exist — CLOSE THIS GAP PIN and extend the journey to submission/Processing/execution",
-        ).toBe(0);
+        // Draft-side lineage: the projection is retained with its source evidence.
+        const caseRead = await okJson(
+            await req.get(`/api/admin/processing/cases/${caseId}`),
+            "GET case (collection lineage)",
+        );
+        const collections = caseRead.data.detail?.formDraftPreview?.collections ?? [];
+        expect(collections.length, "draft lost its projected collections").toBe(3);
+        for (const c of collections) {
+            expect(c.source_concept_id, `${c.id} lost concept lineage`).toBeTruthy();
+            expect(c.source_labels.length, `${c.id} lost source question evidence`).toBeGreaterThan(0);
+            expect(c.operational_role_key).toBeTruthy();
+            console.log(
+                `JOURNEY LINEAGE ${c.id} role=${c.operational_role_key} scope=${c.relationship_scope} observedInstances=${c.observed_instance_count} sourceLabels=${c.source_labels.length} sections=${JSON.stringify(c.source_section_titles)}`,
+            );
+            // A projection must never claim an output copy or a non-field section: the classroom copy
+            // reproduces earlier questions, and a "…Signatures" section collects a signature, not a
+            // related person. Claiming either double-counts cardinality and suppresses real questions.
+            for (const t of c.source_section_titles as string[]) {
+                expect(t, `${c.id} claimed an output-copy section`).not.toMatch(/\bcopy\b/i);
+                expect(t, `${c.id} claimed a signature section`).not.toMatch(/signature/i);
+            }
+        }
+
+        // The signature question the document requires must survive projection.
+        const publishedVersion = await okJson(
+            await req.get(`/api/admin/forms/${formId}/versions/${versionId}`),
+            "GET form version (signature survival)",
+        );
+        const signatures = walkFields(publishedVersion.data.schema_json.fields ?? []).filter(
+            (f) => f.type === "signature",
+        );
+        expect(signatures.length, "projection suppressed the form's signature field(s)").toBeGreaterThan(0);
+        console.log(`JOURNEY LINEAGE signature fields surviving=${signatures.length}`);
+
+        // Suppressed source questions are RETAINED on the draft as evidence, not deleted.
+        const suppressed = (caseRead.data.detail?.formDraftPreview?.fields ?? []).filter(
+            (f: Json) => f.suppressed_by_collection,
+        );
+        expect(suppressed.length, "source questions were deleted rather than retained as evidence").toBeGreaterThan(0);
+        console.log(`JOURNEY LINEAGE retained suppressed source questions=${suppressed.length}`);
     });
 });
 

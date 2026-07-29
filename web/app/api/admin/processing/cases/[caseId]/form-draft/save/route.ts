@@ -145,13 +145,34 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             .eq("org_id", ctx.orgId)
             .eq("id", caseId)
             .maybeSingle();
-        const priorDiscovery = parseStoredFormDraftPreview((caseMetaRow as { metadata?: unknown } | null)?.metadata)?.configuration_discovery;
+        const priorPreview = parseStoredFormDraftPreview((caseMetaRow as { metadata?: unknown } | null)?.metadata);
+        const priorDiscovery = priorPreview?.configuration_discovery;
+        // Relationship collections projected by apply are configuration, not operator-typed questions —
+        // save rebuilds the draft from posted fields, so without this they would be silently dropped
+        // and the generated form would fall back to flat questions (POS-FP17).
+        const priorCollections = priorPreview?.collections;
+        const suppressedByCollection = new Map(
+            (priorPreview?.fields ?? [])
+                .filter((f) => f.suppressed_by_collection)
+                .map((f) => [f.label.trim().toLowerCase(), f.suppressed_by_collection!]),
+        );
+
+        const rebuilt = buildManualFormDraft({ title, sourceDocumentId, fields, sectionDispositions });
+        // Re-apply suppression to the rebuilt questions by label, so a question replaced by a
+        // collection group does not reappear as a flat question after a save.
+        if (suppressedByCollection.size > 0) {
+            for (const f of rebuilt.fields) {
+                const groupId = suppressedByCollection.get(f.label.trim().toLowerCase());
+                if (groupId) f.suppressed_by_collection = groupId;
+            }
+        }
 
         const draft = stampFormDraftPreview({
-            ...buildManualFormDraft({ title, sourceDocumentId, fields, sectionDispositions }),
+            ...rebuilt,
             ...(generatedFormName ? { generated_form_name: generatedFormName } : {}),
             ...(ocr ? { ocr } : {}),
             ...(priorDiscovery ? { configuration_discovery: priorDiscovery } : {}),
+            ...(priorCollections?.length ? { collections: priorCollections } : {}),
         });
         const stored = await dbStoreFormDraftPreview(supabase, { orgId: ctx.orgId, caseId, draft });
         return jsonData({ caseId, form_draft_preview: stored });
