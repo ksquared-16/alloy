@@ -38,6 +38,9 @@ import {
     programCategoryIdForRoom,
     resolveProgramOnRoomChange,
 } from "@/lib/operationalAssignments/assignmentProgramRoomResolution";
+import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
+import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -177,6 +180,66 @@ async function executeAssignmentAction(body: Record<string, unknown>): Promise<v
                   : `Action failed (${res.status})`;
         throw new Error(operatorFacingAssignmentError(message));
     }
+}
+
+/**
+ * After an assignment mutation, push the reloaded child projection into Focus Panel
+ * truth so Children / Household / Schedule cards recompose together.
+ */
+function publishScheduleProjectionToFocusPanel(args: {
+    opportunityId: string | null;
+    memberId: string;
+    fresh: ChildProj | null;
+    truth: Record<string, unknown>;
+    clearInquiryScheduleDraft: boolean;
+}): void {
+    const opportunityId = args.opportunityId?.trim() || "";
+    const memberId = args.memberId.trim();
+    if (!opportunityId || !memberId) return;
+
+    const prevBag =
+        args.truth._scheduling_projection && typeof args.truth._scheduling_projection === "object"
+            ? ({ ...(args.truth._scheduling_projection as Record<string, unknown>) } as Record<string, unknown>)
+            : {};
+    const prevBy =
+        prevBag.byMemberId && typeof prevBag.byMemberId === "object" && !Array.isArray(prevBag.byMemberId)
+            ? { ...(prevBag.byMemberId as Record<string, unknown>) }
+            : {};
+    if (args.fresh) {
+        prevBy[memberId] = args.fresh;
+    } else {
+        delete prevBy[memberId];
+    }
+
+    const patch: Record<string, unknown> = {
+        ...args.truth,
+        _scheduling_projection: { ...prevBag, byMemberId: prevBy },
+    };
+
+    if (args.clearInquiryScheduleDraft && Array.isArray(args.truth._inquiry_children)) {
+        patch._inquiry_children = (args.truth._inquiry_children as unknown[]).map((raw) => {
+            if (!raw || typeof raw !== "object") return raw;
+            const row = raw as Record<string, unknown>;
+            const id = String(row.id ?? "").trim();
+            const cm = String(row.customer_member_id ?? "").trim();
+            if (id !== memberId && cm !== memberId) return raw;
+            return {
+                ...row,
+                schedule_type: null,
+                program_room_cohort_key: null,
+                program_room_cohort_label: null,
+                desired_schedule_label: null,
+                start_date: null,
+            };
+        });
+    }
+
+    dispatchOpportunityDrawerRecordPatch(opportunityId, patch);
+    dispatchDrawerLayoutRuntimeBodyRecordPatch({
+        entityType: "opportunities",
+        entityId: opportunityId,
+        record: patch,
+    });
 }
 
 /** Shared create payload — proposed when no agreement, committed when agreement exists. */
@@ -389,6 +452,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                         opportunityId={opportunityId}
                         projection={projById[activeChild.id] ?? null}
                         config={schedConfig}
+                        truth={context.truth as Record<string, unknown>}
                         reloadChild={() => reloadChild(activeChild.id, activeChild.name)}
                         coordination={coordination}
                         onClose={() => setActiveChildId(null)}
@@ -494,6 +558,7 @@ function ScheduleWorkSurface({
     opportunityId,
     projection,
     config,
+    truth,
     reloadChild,
     coordination,
     onClose,
@@ -503,6 +568,7 @@ function ScheduleWorkSurface({
     opportunityId: string | null;
     projection: ChildProj | null;
     config: SchedConfig;
+    truth: Record<string, unknown>;
     reloadChild: () => Promise<ChildProj | null>;
     coordination?: FocusPanelCoordination;
     onClose: () => void;
@@ -516,6 +582,7 @@ function ScheduleWorkSurface({
     const [pendingTypeId, setPendingTypeId] = useState<string | null>(null);
     const [actionBusy, setActionBusy] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     /** Persist Assignments day filter across singular detail drill-in. */
     const [listDayFilter, setListDayFilter] = useState<number | null>(null);
 
@@ -599,9 +666,16 @@ function ScheduleWorkSurface({
         </div>
     );
 
-    const onSaved = async () => {
+    const onSaved = async (opts?: { clearInquiryScheduleDraft?: boolean }) => {
         const fresh = await reloadChild();
         setProj(fresh);
+        publishScheduleProjectionToFocusPanel({
+            opportunityId,
+            memberId: child.id,
+            fresh,
+            truth,
+            clearInquiryScheduleDraft: Boolean(opts?.clearInquiryScheduleDraft),
+        });
         setMode("detail");
         setActiveAssignmentId(null);
         setEditingAssignmentId(null);
@@ -622,17 +696,20 @@ function ScheduleWorkSurface({
         setMode("pick-type");
     };
 
-    const runAction = async (body: {
-        action_key: string;
-        entity_type: string;
-        entity_id: string;
-        payload: Record<string, unknown>;
-    }): Promise<boolean> => {
+    const runAction = async (
+        body: {
+            action_key: string;
+            entity_type: string;
+            entity_id: string;
+            payload: Record<string, unknown>;
+        },
+        opts?: { clearInquiryScheduleDraft?: boolean },
+    ): Promise<boolean> => {
         setActionBusy(true);
         setActionError(null);
         try {
             await executeAssignmentAction(body);
-            await onSaved();
+            await onSaved(opts);
             return true;
         } catch (e) {
             setActionError(e instanceof Error ? e.message : "Action failed");
@@ -731,27 +808,7 @@ function ScheduleWorkSurface({
                     }
                     onDelete={
                         activeAssignment.commitmentKind === "proposed"
-                            ? () => {
-                                  if (
-                                      typeof window !== "undefined" &&
-                                      !window.confirm(
-                                          "Delete this proposed assignment? This can't be undone."
-                                      )
-                                  ) {
-                                      return;
-                                  }
-                                  void runAction({
-                                      action_key: "assignment.delete_proposed",
-                                      entity_type: "child",
-                                      entity_id: child.id,
-                                      payload: { assignment_id: activeAssignment.id },
-                                  }).then((ok) => {
-                                      if (ok) {
-                                          setActiveAssignmentId(null);
-                                          setMode("detail");
-                                      }
-                                  });
-                              }
+                            ? () => setDeleteConfirmOpen(true)
                             : undefined
                     }
                     onPromote={
@@ -775,6 +832,36 @@ function ScheduleWorkSurface({
                             ? "This Assignment can only become active after enrollment is completed."
                             : null
                     }
+                />
+                <AdminDeleteConfirmModal
+                    isOpen={deleteConfirmOpen}
+                    onClose={() => setDeleteConfirmOpen(false)}
+                    isLoading={actionBusy}
+                    entityTypeLabel="proposed assignment"
+                    recordLabel={
+                        [
+                            activeAssignment.assignmentType.label,
+                            activeAssignment.room.name || activeAssignment.room.program,
+                        ]
+                            .filter(Boolean)
+                            .join(" · ") || child.name
+                    }
+                    onConfirm={async () => {
+                        const ok = await runAction(
+                            {
+                                action_key: "assignment.delete_proposed",
+                                entity_type: "child",
+                                entity_id: child.id,
+                                payload: { assignment_id: activeAssignment.id },
+                            },
+                            { clearInquiryScheduleDraft: true },
+                        );
+                        if (ok) {
+                            setDeleteConfirmOpen(false);
+                            setActiveAssignmentId(null);
+                            setMode("detail");
+                        }
+                    }}
                 />
             </div>
         );

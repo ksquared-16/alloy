@@ -84,9 +84,11 @@ export default function ChildProfileAvatarComposer({
         ?? imageUrl;
     const showAvatar = config ? groupShowAvatarForNestedGroup(config, groupKey) : true;
     const useProfilePhotos = config ? groupUseProfilePhotosForNestedGroup(config, groupKey) : true;
+    // Session/local preview always wins — do not hide a just-uploaded photo behind
+    // a published `useProfilePhotos: false` gate (Surfaces can toggle that later).
     const { imageUrl: displayUrl } = resolveSurfaceAvatarRuntime({
         showAvatar,
-        useProfilePhotos,
+        useProfilePhotos: useProfilePhotos || Boolean(localPreviewUrl || composer?.childAvatarPreviewUrl(childId)),
         imageUrl: previewUrl,
     });
 

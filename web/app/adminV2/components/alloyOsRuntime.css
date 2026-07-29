@@ -806,14 +806,15 @@ html[data-alloy-os-runtime-split="true"]
  */
 .adminv2-os-crow {
   display: grid;
-  grid-template-columns: 3px 32px minmax(0, 1fr) minmax(72px, 88px);
+  /* Rail column retired — selected state is perimeter + tint on the card shell. */
+  grid-template-columns: 32px minmax(0, 1fr) minmax(72px, 88px);
   align-items: stretch;
   column-gap: 8px;
   width: 100%;
   min-height: var(--alloy-os-compressed-row-min-height, 76px);
   height: var(--alloy-os-compressed-row-height, 80px);
   max-height: var(--alloy-os-compressed-row-max-height, 84px);
-  padding: 8px 10px 8px 0;
+  padding: 8px 10px;
   border: 0;
   background: transparent;
   text-align: left;
@@ -827,18 +828,9 @@ html[data-alloy-os-runtime-split="true"]
   outline-offset: -2px;
 }
 
-/* Selected rail — driven by the shell's active state (open Focus Panel subject). */
+/* Selected accent rail — retired. Selected state is perimeter + tint only. */
 .adminv2-os-crow__rail {
-  width: 3px;
-  height: 100%;
-  border-radius: 0 2px 2px 0;
-  background: transparent;
-}
-html[data-alloy-os-runtime-split="true"]
-  [data-ws-surface="work_unit"].adminv2-ws-wu-v2
-  .adminv2-ws-wu-queue-card[data-queue-row-active="true"]
-  .adminv2-os-crow__rail {
-  background: var(--alloy-os-bend-pine, #00a283);
+  display: none;
 }
 
 /* Grain / avatar — fixed column; never overlaps main text. */
@@ -1136,7 +1128,8 @@ html[data-alloy-os-runtime-split="true"]
   [data-ws-surface="work_unit"].adminv2-ws-wu-v2
   .adminv2-ws-wu-queue-card[data-queue-row-active="true"] {
   background: var(--alloy-os-selected, rgba(0, 162, 131, 0.12));
-  box-shadow: inset 3px 0 0 0 var(--alloy-os-bend-pine, #00a283);
+  /* No inset left accent — card shell owns a uniform selected perimeter. */
+  box-shadow: none;
 }
 
 /* ── Focus Panel shell polish (State 2) ────────────────────────────────────────────
@@ -1633,7 +1626,12 @@ html[data-alloy-os-runtime="on"]
 }
 .alloy-os-queue-row-card.alloy-os-queue-row-card--selected,
 .alloy-os-queue-row-card[data-queue-row-active="true"] {
-  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 42%, var(--alloy-os-fp-card-border));
+  /* Uniform Bend Pine perimeter — same weight on every side (no left rail / inset). */
+  border-width: 1px;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, var(--alloy-os-fp-card-border));
+  border-left-width: 1px;
+  border-left-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, var(--alloy-os-fp-card-border));
   box-shadow: var(--alloy-os-queue-row-shadow-hover, var(--alloy-os-fp-card-shadow-hover));
 }
 
@@ -7806,6 +7804,39 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   padding: 2px 6px;
   font: inherit;
   font-size: 11.5px;
+}
+
+/* Card dropdowns — white field + bend-pine value text (Focus Panel identity + edit). */
+.identity-field-value__select,
+.identity-field-value select,
+.alloy-os-fp-card select,
+.alloy-os-household select,
+.alloy-os-children select,
+.alloy-os-card-edit__row select,
+.alloy-os-universal-card select {
+  background-color: #fff;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.identity-field-value__select option,
+.identity-field-value select option,
+.alloy-os-fp-card select option,
+.alloy-os-household select option,
+.alloy-os-children select option,
+.alloy-os-card-edit__row select option,
+.alloy-os-universal-card select option {
+  background-color: #fff;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* Change lead location Manage modal — same select chrome as Focus Panel cards. */
+[data-change-lead-location-select] select {
+  background-color: #fff !important;
+  color: var(--alloy-os-bend-pine, #00a283) !important;
+}
+[data-change-lead-location-select] select option {
+  background-color: #fff;
+  color: var(--alloy-os-bend-pine, #00a283);
 }
 
 .identity-field-value__inline-actions {

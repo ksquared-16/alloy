@@ -16,6 +16,14 @@ import { resolveOpportunityLeadLocationFields } from "@/lib/opportunities/resolv
 
 const SUCCESS_DISMISS_MS = 1600;
 
+/** Modal primary action — Bend Pine fill (Manage / action doctrine). */
+const SAVE_BUTTON_CLASS =
+    "rounded-lg bg-alloy-bend-pine px-3 py-2 text-sm font-semibold text-white hover:bg-alloy-bend-pine/90 disabled:opacity-50";
+
+/** Lead location select — white field + bend-pine value text. */
+const LOCATION_SELECT_CLASS =
+    "!bg-white !text-alloy-bend-pine [&_option]:bg-white [&_option]:text-alloy-bend-pine";
+
 type Props = {
     open: boolean;
     opportunityId: string;
@@ -117,7 +125,7 @@ export function ChangeLeadLocationModal({
                     :   <>
                             <div>
                                 <div className={label}>Lead location</div>
-                                <div className="mt-1.5">
+                                <div className="mt-1.5" data-change-lead-location-select="true">
                                     <AlloySelect
                                         value={locationId}
                                         onChange={setLocationId}
@@ -125,6 +133,7 @@ export function ChangeLeadLocationModal({
                                         disabled={busy}
                                         aria-label="Lead location"
                                         testId="change-lead-location-select"
+                                        className={LOCATION_SELECT_CLASS}
                                     />
                                 </div>
                             </div>
@@ -199,7 +208,7 @@ export function ChangeLeadLocationModal({
                                     setBusy(false);
                                 }
                             }}
-                            className="rounded-lg bg-alloy-midnight px-3 py-2 text-sm font-semibold text-white hover:bg-alloy-midnight/90 disabled:opacity-50"
+                            className={SAVE_BUTTON_CLASS}
                         >
                             {busy ? "Saving…" : "Save"}
                         </button>

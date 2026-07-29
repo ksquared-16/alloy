@@ -272,8 +272,39 @@ export default function ChildrenCard({
                       editableKeys,
                       opportunityStartDate,
                   });
+                  const label = args.displayLabel?.trim() || null;
+                  if (valueKey === "program_category_id" && patch.ocmPatch.program_category_id !== undefined) {
+                      // Only write a display label when we resolved one — never wipe a prior
+                      // label because placement options had not loaded yet at Save time.
+                      if (!patch.ocmPatch.program_category_id) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              desired_program_label: null,
+                          };
+                      } else if (label) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              desired_program_label: label,
+                          };
+                      }
+                  }
+                  if (valueKey === "location_id" && patch.ocmPatch.location_id !== undefined) {
+                      if (!patch.ocmPatch.location_id) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              location_label: null,
+                          };
+                      } else if (label) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              location_label: label,
+                          };
+                      }
+                  }
                   const hasChanges =
-                      Object.keys(patch.identityPatch).length > 0 || Object.keys(patch.ocmPatch).length > 0;
+                      Object.keys(patch.identityPatch).length > 0
+                      || Object.keys(patch.ocmPatch).length > 0
+                      || Boolean(patch.displayPatch && Object.keys(patch.displayPatch).length > 0);
                   if (!hasChanges) return { ok: true as const };
                   return mutation.saveInquiryChild({
                       childId: seed.childId,

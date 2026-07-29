@@ -162,13 +162,14 @@ describe("CondensedQueueRow — published surface config (visibility + labels)",
         expect(el.textContent).toContain("Avery Lee");
     });
 
-    it("selected rail present when isSelected", () => {
+    it("selected state uses active attribute without a left rail", () => {
         const el = render(
             <CondensedQueueRow row={row(fullContext())} onOpen={vi.fn()} isSelected />,
         );
         expect(el.querySelector('[data-queue-row-active="true"]')).not.toBeNull();
-        // Rail element (juniper bar) rendered.
-        expect(el.querySelector(".bg-alloy-juniper")).not.toBeNull();
+        expect(el.querySelector(".bg-alloy-bend-pine")).toBeNull();
+        expect(el.querySelector('[class*="w-[3px]"]')).toBeNull();
+        expect(el.querySelector(".alloy-os-queue-row-card--selected")).not.toBeNull();
     });
 
     it("row is a button that opens on click", () => {

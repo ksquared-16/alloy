@@ -564,13 +564,6 @@ export function AssignmentDetailView({
                 </div>
             </header>
 
-            {effects ? (
-                <section data-assignment-operational-effects="true" style={softDivider()}>
-                    <SectionLabel>Operational effects</SectionLabel>
-                    <div style={{ marginTop: 6, fontSize: 12.5, color: T.forge, fontWeight: 500 }}>{effects}</div>
-                </section>
-            ) : null}
-
             {!isPlanning && hasRealFinancial(assignment) ? (
                 <section data-assignment-financial="true" style={softDivider()}>
                     <SectionLabel>Financial</SectionLabel>
@@ -583,15 +576,6 @@ export function AssignmentDetailView({
                     Recurring tuition eligible
                 </div>
             ) : null}
-
-            <button
-                type="button"
-                data-assignment-view-history="true"
-                onClick={() => setHistoryOpen(true)}
-                style={{ ...linkBtn, ...softDivider(), width: "fit-content" }}
-            >
-                View history
-            </button>
 
             <section data-assignment-actions="true" style={softDivider()}>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
@@ -697,6 +681,22 @@ export function AssignmentDetailView({
                     </div>
                 </div>
             </section>
+
+            {effects ? (
+                <section data-assignment-operational-effects="true" style={softDivider()}>
+                    <SectionLabel>Operational effects</SectionLabel>
+                    <div style={{ marginTop: 6, fontSize: 12.5, color: T.forge, fontWeight: 500 }}>{effects}</div>
+                </section>
+            ) : null}
+
+            <button
+                type="button"
+                data-assignment-view-history="true"
+                onClick={() => setHistoryOpen(true)}
+                style={{ ...linkBtn, ...softDivider(), width: "fit-content" }}
+            >
+                View history
+            </button>
         </div>
     );
 }

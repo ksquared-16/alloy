@@ -204,6 +204,38 @@ describe("child save refresh", () => {
         expect(afterChild.gender).toBe("Male");
     });
 
+    it("rebuilt children evidence keeps Program label after program_category_id save", () => {
+        const merged = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
+            childId: "child-1",
+            row: { person_id: null },
+            patch: {
+                identityPatch: {},
+                ocmPatch: { program_category_id: "cat-toddler" },
+                displayPatch: { desired_program_label: "Toddler" },
+            },
+            savedPerson: null,
+        });
+        const afterChild = buildChildrenCardEvidence(householdCtx(merged)).children[0]!;
+        expect(afterChild.programCategoryId).toBe("cat-toddler");
+        expect(afterChild.program).toBe("Toddler");
+    });
+
+    it("rebuilt children evidence shows photo_url after profile photo merge", () => {
+        const merged = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
+            childId: "child-1",
+            row: { person_id: "p-emma" },
+            patch: {
+                identityPatch: {},
+                ocmPatch: {},
+                profilePatch: { photo_url: "https://cdn.example/emma.jpg" },
+            },
+            savedPerson: null,
+        });
+        const afterChild = buildChildrenCardEvidence(householdCtx(merged)).children[0]!;
+        expect(afterChild.imageUrl).toBe("https://cdn.example/emma.jpg");
+        expect(afterChild.personId).toBe("p-emma");
+    });
+
     it("unsupported expanded field does not expose edit affordance", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = addFieldToNestedGroup(config, "readiness", "child.readiness_summary");

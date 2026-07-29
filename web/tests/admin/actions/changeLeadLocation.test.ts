@@ -11,7 +11,6 @@ import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegi
 import type { ApplyRegistryResolvedActionHost } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 
 vi.mock("@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit", () => ({
-    patchOpportunityNativeFromLayoutDrawer: vi.fn().mockResolvedValue({ ok: true }),
     syncOpportunityLocationDisplayLabel: vi.fn((record, locationId, locationLabel) => ({
         ...record,
         location_id: locationId,
@@ -24,7 +23,6 @@ vi.mock("@/lib/admin/drawer/inquiryChildFieldEdit", () => ({
 }));
 
 import { submitChangeLeadLocation } from "@/lib/admin/actions/submitChangeLeadLocation";
-import { patchOpportunityNativeFromLayoutDrawer } from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
 import { patchOpportunityCustomerMemberFromInquiryChild } from "@/lib/admin/drawer/inquiryChildFieldEdit";
 
 describe("change_lead_location", () => {
@@ -104,7 +102,11 @@ describe("change_lead_location", () => {
         })).toBe(true);
     });
 
-    it("patches lead location and optional inheriting children", async () => {
+    it("patches lead location via dedicated route and optional inheriting children", async () => {
+        const fetchFn = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ ok: true, location_id: "site-north" }),
+        });
         const result = await submitChangeLeadLocation({
             opportunityId: "opp-1",
             locationId: "site-north",
@@ -115,16 +117,37 @@ describe("change_lead_location", () => {
                 { id: "ocm-inherit", location_id: null },
             ],
             record: { id: "opp-1", location_id: "site-old" },
+            fetchFn,
         });
         expect(result.ok).toBe(true);
         expect(result.updatedChildCount).toBe(1);
-        expect(patchOpportunityNativeFromLayoutDrawer).toHaveBeenCalledWith({
-            opportunityId: "opp-1",
-            body: { location_id: "site-north" },
-        });
+        expect(fetchFn).toHaveBeenCalledWith(
+            "/api/admin/opportunities/opp-1/lead-location",
+            expect.objectContaining({
+                method: "PATCH",
+                body: JSON.stringify({ location_id: "site-north" }),
+            }),
+        );
         expect(patchOpportunityCustomerMemberFromInquiryChild).toHaveBeenCalledWith("ocm-inherit", {
             location_id: "site-north",
         });
         expect(patchOpportunityCustomerMemberFromInquiryChild).toHaveBeenCalledTimes(1);
+    });
+
+    it("surfaces lead-location API errors without drawer field-policy wording", async () => {
+        const fetchFn = vi.fn().mockResolvedValue({
+            ok: false,
+            json: async () => ({ error: "Location not found" }),
+        });
+        await expect(
+            submitChangeLeadLocation({
+                opportunityId: "opp-1",
+                locationId: "missing-site",
+                locationLabel: "Missing",
+                applyToInheritingChildren: false,
+                inquiryChildren: [],
+                fetchFn,
+            }),
+        ).rejects.toThrow("Location not found");
     });
 });

@@ -9,6 +9,8 @@ export type IdentityFieldSaveArgs = {
     personId: string;
     fieldRef: string;
     value: string;
+    /** Option label when `value` is a select/placement key — keeps display truth in sync. */
+    displayLabel?: string | null;
 };
 
 export type IdentityFieldBatchEditSession = {
@@ -117,7 +119,7 @@ export default function IdentityFieldGrid({
                                                 busy: saving,
                                                 onStartEdit: () => setEditingFieldRef(cell.fieldRef),
                                                 onCancel: () => setEditingFieldRef(null),
-                                                onCommit: async (value) => {
+                                                onCommit: async (value, meta) => {
                                                     if (!personId || !onSaveField) return;
                                                     setSaving(true);
                                                     try {
@@ -125,6 +127,7 @@ export default function IdentityFieldGrid({
                                                             personId,
                                                             fieldRef: cell.fieldRef,
                                                             value,
+                                                            displayLabel: meta?.displayLabel,
                                                         });
                                                         if (!result || result.ok !== false) {
                                                             setEditingFieldRef(null);
