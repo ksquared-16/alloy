@@ -58,8 +58,11 @@ Right:     BOS | Manage
 - Stage-movement primary CTA (e.g. “Move to qualification”)
 - Repeated entity/status labels
 - Debug mission copy
+- Inline edit of lead location (use Manage → **Change lead location**)
 
 Status appears **once** as a human label in a read-only chip. Lifecycle changes flow through Manage → **Update Status** or a specific operational action (Schedule Tour, Withdraw Child, Enroll, etc.).
+
+Lead / family default site changes flow through Manage → **Change lead location** (`change_lead_location`). That writes `opportunities.location_id` only. Child site authority stays on each child’s participation (`OCM.location_id`); the command may optionally materialize the new default onto children that still inherit (no owned site). The header location chip remains a readout (including multi-site aggregates).
 
 ---
 

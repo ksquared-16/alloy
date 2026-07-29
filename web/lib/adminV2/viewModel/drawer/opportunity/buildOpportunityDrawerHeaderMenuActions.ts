@@ -4,6 +4,11 @@ import {
     type ResolvedActionsBySlot,
 } from "@/lib/admin/actions/types";
 import { flattenOpportunityRecordHeaderActionsForMenu } from "@/lib/admin/actions/flattenOpportunityRecordHeaderActionsForMenu";
+import {
+    CHANGE_LEAD_LOCATION_ACTION_KEY,
+    CHANGE_LEAD_LOCATION_FORM_KEY,
+    CHANGE_LEAD_LOCATION_LABEL,
+} from "@/lib/admin/actions/changeLeadLocationContract";
 
 function relabelScheduleTourWhenActive(
     actions: ResolvedActionForClient[]
@@ -30,6 +35,25 @@ function relabelResolvedActionsForActiveTour(
     };
 }
 
+/** Platform-guaranteed Manage item — present even before DB seed is applied. */
+function ensureChangeLeadLocationInMenu(actions: ResolvedActionForClient[]): ResolvedActionForClient[] {
+    if (actions.some((a) => a.key === CHANGE_LEAD_LOCATION_ACTION_KEY)) return actions;
+    return [
+        ...actions,
+        {
+            key: CHANGE_LEAD_LOCATION_ACTION_KEY,
+            label: CHANGE_LEAD_LOCATION_LABEL,
+            description: null,
+            action_type: "ui_intent",
+            icon: null,
+            style: null,
+            display_style: "outline",
+            payload: { form_key: CHANGE_LEAD_LOCATION_FORM_KEY },
+            workflow_id: null,
+        },
+    ];
+}
+
 /**
  * Flatten registry record_header slots for the BOS command rail when copilot routing is enabled.
  */
@@ -38,7 +62,9 @@ export function buildOpportunityDrawerHeaderMenuActions(
     hasActiveTourBooking: boolean
 ): ResolvedActionForClient[] {
     const base = resolved ?? emptyResolvedActionsBySlot();
-    return flattenOpportunityRecordHeaderActionsForMenu(
-        relabelResolvedActionsForActiveTour(base, hasActiveTourBooking)
+    return ensureChangeLeadLocationInMenu(
+        flattenOpportunityRecordHeaderActionsForMenu(
+            relabelResolvedActionsForActiveTour(base, hasActiveTourBooking),
+        ),
     );
 }
