@@ -1,7 +1,13 @@
 import WorkUnitSlugRouteHost from "@/components/admin/workspace/WorkUnitSlugRouteHost";
 import ProvisioningAnswerSeed from "@/components/admin/workspace/ProvisioningAnswerSeed";
+import RouteTimingSeed from "@/components/admin/workspace/RouteTimingSeed";
 import { loadWorkUnitSlugRouteMetaServer } from "@/lib/admin/loadWorkUnitSlugRouteServer";
 import { composeProvisioningAnswerForRoute } from "@/lib/runtime/provisioning/composeProvisioningAnswerForRoute";
+import {
+    routeTimingEnabled,
+    timedSpan,
+    type RouteTimingMarks,
+} from "@/lib/perf/routeTimingDiagnostic";
 
 type LayoutProps = {
     children: React.ReactNode;
@@ -46,15 +52,32 @@ export default async function OperatorWorkUnitSlugLayout({ params }: LayoutProps
         .then((r) => (r.ok && r.answer.terminal !== "error" ? r.answer : null))
         .catch(() => null);
 
-    const [initialRouteMeta, answer] = await Promise.all([
-        loadWorkUnitSlugRouteMetaServer(workUnitSlug),
-        answerP,
+    // Diagnostic only (PE-3): the spans are measured around the SAME promises the route already
+    // awaits, so enabling the flag cannot reorder or serialize anything.
+    const timing = routeTimingEnabled();
+    const layoutEntryEpochMs = timing ? Date.now() : 0;
+    const layoutStarted = timing ? performance.now() : 0;
+
+    const [[initialRouteMeta, routeMetaMs], [answer, composeWallMs]] = await Promise.all([
+        timedSpan(loadWorkUnitSlugRouteMetaServer(workUnitSlug)),
+        timedSpan(answerP),
     ]);
+
+    const marks: RouteTimingMarks | null = timing
+        ? {
+              layout_entry_epoch_ms: layoutEntryEpochMs,
+              route_meta_ms: Math.round(routeMetaMs),
+              compose_wall_ms: Math.round(composeWallMs),
+              layout_total_ms: Math.round(performance.now() - layoutStarted),
+              seeded: answer != null,
+          }
+        : null;
 
     return (
         <>
             <WorkUnitSlugRouteHost workUnitSlug={workUnitSlug} initialRouteMeta={initialRouteMeta} />
             <ProvisioningAnswerSeed target={workUnitSlug} answer={answer} />
+            <RouteTimingSeed marks={marks} />
         </>
     );
 }
