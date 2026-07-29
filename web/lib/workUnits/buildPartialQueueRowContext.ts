@@ -82,11 +82,16 @@ function readInquiryChildrenFromRow(row: Record<string, unknown>): unknown[] {
     return [];
 }
 
+/**
+ * Case / household identity for queue row subject + `customer.display_name`.
+ * Prefer `_customer_name` (household) over opportunity `title` — lead titles are
+ * often the primary contact name, which must not displace authored household name.
+ */
 function resolveCaseDisplayName(row: Record<string, unknown>): string {
     return (
+        trimOrNull(row._customer_name) ??
         trimOrNull(row.title) ??
         trimOrNull(row.name) ??
-        trimOrNull(row._customer_name) ??
         "Case"
     );
 }
@@ -316,6 +321,71 @@ function buildRelatedSubjectsSummary(
     return [];
 }
 
+/**
+ * Process / lifecycle stage label for the queue row Stage field.
+ * Prefer the record's stage_key (or membership stage_key) — never the Work View /
+ * queue lane label (e.g. "New Leads"), which is a filter surface, not the stage.
+ */
+function resolveProcessStageLabel(
+    row: Record<string, unknown>,
+    queue: PartialQueueRowContextQueueMeta,
+): string {
+    const fromRow =
+        trimOrNull(row._lifecycle_stage_title)
+        ?? trimOrNull(row.stage_label)
+        ?? trimOrNull(row._stage_label)
+        ?? trimOrNull(row.enrollment_track_stage_label);
+    if (fromRow) return fromRow;
+
+    const stageKey =
+        trimOrNull(row.stage_key)
+        ?? trimOrNull(queue.stage_key);
+    if (stageKey) return humanizeSnakeCaseToken(stageKey);
+
+    // Legacy lanes without a stage_key — last resort only.
+    return queue.label.trim() || queue.key;
+}
+
+/**
+ * Lead / opportunity site when children do not yet carry placement on the row.
+ * Create Lead persists opportunity.location_id; compact enrichment must surface it.
+ */
+function resolveOpportunityPlacementFallback(
+    row: Record<string, unknown>,
+): SubjectPlacementContext | undefined {
+    const location_id = trimOrNull(row.location_id) ?? trimOrNull(row._location_id);
+    const location_label =
+        trimOrNull(row._location_label)
+        ?? trimOrNull(row._location_name)
+        ?? trimOrNull(row._room_label);
+    if (!location_id && !location_label) return undefined;
+    return {
+        location_id,
+        location_label,
+        program_key: null,
+        program_label: null,
+        room_id: null,
+        room_label: null,
+        schedule_key: null,
+        schedule_label: null,
+    };
+}
+
+function mergePlacementWithOpportunityFallback(
+    fromChildren: SubjectPlacementContext | undefined,
+    row: Record<string, unknown>,
+): SubjectPlacementContext | undefined {
+    const fromOpportunity = resolveOpportunityPlacementFallback(row);
+    if (!fromChildren) return fromOpportunity;
+    if (fromChildren.location_id || fromChildren.location_label) return fromChildren;
+    if (!fromOpportunity) return fromChildren;
+    return {
+        ...fromChildren,
+        location_id: fromOpportunity.location_id ?? fromChildren.location_id,
+        location_label: fromOpportunity.location_label ?? fromChildren.location_label,
+    };
+}
+
 function resolveLifecycleKey(queue: PartialQueueRowContextQueueMeta): string {
     return trimOrNull(queue.lifecycle_key) ?? "enrollment";
 }
@@ -401,7 +471,10 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
 
     const boringCaseLabel = resolveBoringCaseStatusLabel(statusKey, statusLabel);
     const inquiryChildren = readInquiryChildrenFromRow(row);
-    const placement_context = resolveRowPlacementContextFromInquiryChildren(inquiryChildren);
+    const placement_context = mergePlacementWithOpportunityFallback(
+        resolveRowPlacementContextFromInquiryChildren(inquiryChildren),
+        row,
+    );
 
     return {
         contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
@@ -410,7 +483,7 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
             subject_id: subjectId,
             display_name: subjectDisplayName,
         },
-        row_stage: input.queue.label.trim() || input.queue.key,
+        row_stage: resolveProcessStageLabel(row, input.queue),
         lifecycle_key: lifecycleKey,
         row_status_key: statusKey,
         row_status_label: statusLabel,
