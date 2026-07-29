@@ -104,8 +104,8 @@ generically with no new code. The gaps are in the layers that still keep their o
 | 9 | **A second definition registry still live** | `focusPanel/household/householdRelationshipSectionDefinitions.ts` | Six hand-authored sections with literal `roleKeys` — no Focus Panel section for a new role |
 | 10 | One BOS adapter file per role; NL intent→role is an if-else ladder | `bosCommandAdapterRegistry.ts`, `addParentGuardianAdapter.ts`, `relationshipActionBosAdapter.ts` | The role is not conversational |
 | 11 | Processing keeps its own guardian/emergency taxonomy | `questionResolutionModel.ts`, `processingReviewFieldCatalog.ts`, `requirementResponsibility.ts` | Question resolution and responsibility have no non-guardian participant kind |
-| 13 | ~~`iteration_alias` decided by a per-ref ternary in Forms~~ **CLOSED** | `formsCollectionRepeatBinding.ts` | Alias is now a definition column; natives keep their literal aliases |
 | 12 | Presentation long tail (~40 Admin V2 / Layout / Person-Drawer files) | §Admin V2 registries | The role does not appear in drawers, cards, or pickers |
+| 13 | ~~`iteration_alias` decided by a per-ref ternary in Forms~~ **CLOSED** | `formsCollectionRepeatBinding.ts` | Alias is now a definition column; natives keep their literal aliases |
 
 Gap #9 is the one to watch: it is a *second canonical registry* of the exact kind this architecture
 forbids. It must be collapsed into a projection of `RELATIONSHIP_DEFINITIONS`, not maintained in
@@ -129,6 +129,30 @@ of implicit code branches:
   role**, because the matcher closes with `\b` and fails on the plural. Captured as
   `detection_word_suffix`. Worth revisiting; not changed here because it would alter detection output
   for existing documents.
+
+### Open gap — Discovery's relationship bindings never reach the form
+
+Configuration Discovery resolves each relationship group to its canonical provider and write command
+(`apply-discovery` returns `provider_ref` + `relationship_apply.command_key` for guardian, emergency
+contact and authorized pickup). **Nothing then translates that into a collection-bound form group.**
+
+- `applyDiscovery`'s `relationship_binding` branch only *records* the resolution; it does not mutate
+  the draft.
+- `createFormFromCaseDraft` has no `collection_binding` handling at all.
+- The only writers of `collection_binding` are the manual Forms authoring surfaces
+  (`useFormSchemaFieldAuthoring`, `DocumentCompositionEditor`, `FormGroupAuthoringCard`).
+
+Live result on a freshly imported enrollment record: 3 relationship proposals → a published form with
+**112 flat fields and 0 collection groups**. A respondent cannot supply emergency contacts as a
+collection, so no collection metadata reaches Processing and the canonical relationship executor is
+never invoked from a form.
+
+Everything needed to close it is already on the definition row — `provider_ref`,
+`item_entity_type`, `iteration_alias`, `nested_field_keys`. This is the last unbuilt link in the
+chain, and it is what blocks proving-journey steps 6-10.
+
+Pinned by `web/playwright/tests/configuration-discovery-proving-journey.spec.ts` test 6, which
+asserts the gap so that closing it fails the test and forces the journey to be extended.
 
 ### Open follow-up — an unguarded write path
 
