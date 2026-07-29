@@ -43,6 +43,10 @@ import { resolveStageWorkOutcomeCompletionState } from "./resolveStageWorkOutcom
 import { isGenericUmbrellaLifecycleAction } from "./currentWorkActionSurfacePolicy";
 import { resolveWorkTemplateExecutionMode } from "@/lib/lifecycle/resolveWorkTemplateExecutionMode";
 import { buildProcessAwareActionAllowlist } from "@/lib/lifecycle/processRuntimeCommandProjection";
+import {
+    applyActiveTourScheduleActionSwap,
+    applyActiveTourScheduleActionSwapAll,
+} from "./applyActiveTourScheduleActionSwap";
 
 export type BuildCurrentWorkSurfaceVMInput = {
     context: OperationalContext;
@@ -721,10 +725,17 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
 
     // Command integrity (Slice F): thread each action's resolved execution state onto the VM so
     // the card renders enabled only what is provably executable, and config errors stay observable.
-    const withActionExecution = <T extends CurrentWorkActionVM | null | undefined>(action: T): T =>
-        action ? ({ ...action, execution: resolveCurrentWorkActionExecution(action) } as T) : action;
+    // Tour presentation: when an active booking exists, remapped schedule_tour → Reschedule / Cancel.
+    const tourScheduled = context.signals.tour.scheduled === true;
+    const withActionExecution = <T extends CurrentWorkActionVM | null | undefined>(action: T): T => {
+        if (!action) return action;
+        const swapped = applyActiveTourScheduleActionSwap(action, tourScheduled);
+        return { ...swapped, execution: resolveCurrentWorkActionExecution(swapped) } as T;
+    };
     const withActionExecutionAll = (actions: CurrentWorkActionVM[]): CurrentWorkActionVM[] =>
-        actions.map((action) => withActionExecution(action)!);
+        applyActiveTourScheduleActionSwapAll(actions, tourScheduled).map(
+            (action) => ({ ...action, execution: resolveCurrentWorkActionExecution(action) }),
+        );
 
     const resolvedAlternatePaths = withActionExecutionAll(alternatePaths);
     const resolvedOutcomeBlockReason = showOutcomeCompletion

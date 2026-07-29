@@ -48,7 +48,7 @@ describe("buildOpportunityDrawerHeaderMenuActions", () => {
         expect(menu.map((a) => a.key)).toEqual(["send_form", "schedule_tour"]);
     });
 
-    it("relabels schedule_tour when an active booking exists", () => {
+    it("remaps schedule_tour to reschedule_tour when an active booking exists", () => {
         const menu = buildOpportunityDrawerHeaderMenuActions(
             {
                 ...emptyResolvedActionsBySlot(),
@@ -68,6 +68,7 @@ describe("buildOpportunityDrawerHeaderMenuActions", () => {
             },
             true
         );
+        expect(menu[0]?.key).toBe("reschedule_tour");
         expect(menu[0]?.label).toBe("Reschedule tour");
     });
 });
@@ -100,7 +101,8 @@ describe("Opportunity VM tour first paint", () => {
     it("compose stores active_tour_bookings on summaries", () => {
         const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
         expect(compose).toContain("active_tour_bookings");
-        expect(compose).toContain("buildOpportunityDrawerHeaderMenuActions");
+        const initial = read("lib/adminV2/viewModel/drawer/opportunity/initialPanelResource.ts");
+        expect(initial).toContain("buildOpportunityDrawerHeaderMenuActions");
     });
 
     it("overview passes shared tour bookings when first_paint tour_bookings is settled", () => {

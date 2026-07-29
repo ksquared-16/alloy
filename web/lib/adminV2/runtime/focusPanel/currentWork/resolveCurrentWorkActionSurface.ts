@@ -7,6 +7,7 @@
 
 import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
 
+import { isManageActiveTourAction } from "./applyActiveTourScheduleActionSwap";
 import type { CurrentWorkActionVM } from "./currentWorkSurfaceTypes";
 
 export type CurrentWorkActionSurface =
@@ -15,6 +16,7 @@ export type CurrentWorkActionSurface =
     | "header_delegate"
     | "form_delivery"
     | "process_transition"
+    | "tour_lifecycle_choice"
     | "unsupported";
 
 function actionRegistryKey(action: Pick<CurrentWorkActionVM, "key" | "handlerKey" | "actionRef" | "resolved">): string {
@@ -49,6 +51,11 @@ export function resolveCurrentWorkActionSurface(
 ): CurrentWorkActionSurface {
     const key = actionRegistryKey(action);
     if (!key || key === "mutation_command") return "unsupported";
+
+    // Presentation-only host: schedule_tour remapped when an active booking exists.
+    if (isManageActiveTourAction(action)) {
+        return "tour_lifecycle_choice";
+    }
 
     if (isProcessTransitionAction(action)) {
         return "process_transition";
