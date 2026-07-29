@@ -7,6 +7,16 @@ export type FormIntakeGuardianHint = {
     phone?: string | null;
     first_name?: string | null;
     last_name?: string | null;
+    /** Canonical person id when the guardian came from an EXISTING collection instance. */
+    person_id?: string | null;
+};
+
+/** One guardian instance as submitted in a collection-bound group. */
+export type FormIntakeGuardianInstance = FormIntakeGuardianHint & {
+    group_id?: string;
+    instance_key?: string;
+    origin?: "existing" | "respondent_added";
+    order_index?: number;
 };
 
 export type FormIntakeChildHint = {
@@ -40,6 +50,12 @@ export type FormIntakeMeta = {
     opportunity?: FormIntakeOpportunityHint | null;
     /** Caller-supplied stable key; combined with submission id for idempotency trace only */
     idempotency_key?: string | null;
+    /** Which representation the guardian was resolved from. */
+    guardian_source?: "collection_envelope" | "flat_values";
+    /** Set when flat values materially disagreed with the submitted collection — needs operator review. */
+    guardian_conflict?: string | null;
+    /** EVERY guardian the family submitted. Selecting a lead contact must not discard the others. */
+    guardians?: FormIntakeGuardianInstance[] | null;
 };
 
 export function parseFormIntakeMeta(payloadMeta: unknown): FormIntakeMeta | null {

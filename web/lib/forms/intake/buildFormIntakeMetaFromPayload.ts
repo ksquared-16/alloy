@@ -169,7 +169,7 @@ export function buildFormIntakeMetaFromPayload(input: {
 
     // A structured guardian that cannot be contacted is a REAL failure, not a reason to fall back to
     // flat values — falling back would quietly ignore what the respondent actually submitted.
-    if (!structuredGuardian && structured.reason_code === "no_usable_contact") {
+    if (!structured.ok && structured.reason_code === "no_usable_contact") {
         return { ok: false, reason_code: "missing_guardian_contact", reason: structured.reason };
     }
 
