@@ -8,6 +8,9 @@ import type {
     StageWorkTemplateV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
+/** Capability identity the communications send path publishes results under. */
+export const COMMUNICATIONS_SEND_CAPABILITY_KEY = "communications_send";
+
 function finiteInt(value: unknown): number | null {
     if (typeof value !== "number" || !Number.isFinite(value)) return null;
     return Math.max(0, Math.floor(value));
@@ -107,6 +110,44 @@ export function completionPolicyForWorkTemplate(
 }
 
 /**
+ * Platform-owned default command-result sufficiency for recognized canonical work templates.
+ * Operators never see these runtime result keys — they are engine vocabulary only.
+ * Explicit `completion_policy.sufficient_command_results` on a work template always wins.
+ */
+export const PLATFORM_DEFAULT_SUFFICIENT_COMMAND_RESULTS: Readonly<
+    Record<string, readonly StageWorkSufficientCommandResultV1[]>
+> = {
+    contact_family: [
+        {
+            capability: COMMUNICATIONS_SEND_CAPABILITY_KEY,
+            result: "sent",
+            satisfies_outcome_key: "left_message",
+        },
+    ],
+};
+
+function canonicalWorkTemplateKey(
+    template:
+        | Partial<Pick<StageWorkTemplateV1, "template_key" | "work_definition_key">>
+        | null
+        | undefined,
+): string | null {
+    if (!template) return null;
+    const fromDef = typeof template.work_definition_key === "string" ? template.work_definition_key.trim() : "";
+    if (fromDef) return fromDef;
+    const fromKey = typeof template.template_key === "string" ? template.template_key.trim() : "";
+    return fromKey || null;
+}
+
+/** True when the template authors an explicit sufficient_command_results list. */
+export function hasExplicitSufficientCommandResults(
+    template: Pick<StageWorkTemplateV1, "completion_policy"> | null | undefined,
+): boolean {
+    const entries = completionPolicyForWorkTemplate(template)?.sufficient_command_results;
+    return Boolean(entries?.length);
+}
+
+/**
  * Resolve the authored outcome that an objective capability result satisfies for a
  * work template (R2). Returns null when configuration does not declare this result
  * sufficient — in which case a successful command must NOT auto-complete the work.
@@ -130,6 +171,36 @@ export function resolveSufficientCommandResultOutcome(
         }
     }
     return null;
+}
+
+/**
+ * Effective sufficiency resolution (product decision, July 2026):
+ * 1. Explicit work-item `sufficient_command_results` wins (including reply-required overrides).
+ * 2. Else platform default for recognized canonical templates (e.g. contact_family).
+ * 3. Else no inference — unknown/custom work never auto-completes from a send.
+ */
+export function resolveEffectiveSufficientCommandResultOutcome(
+    template:
+        | (Pick<StageWorkTemplateV1, "completion_policy"> &
+              Partial<Pick<StageWorkTemplateV1, "template_key" | "work_definition_key">>)
+        | null
+        | undefined,
+    capability: string,
+    result: string,
+): string | null {
+    if (hasExplicitSufficientCommandResults(template)) {
+        return resolveSufficientCommandResultOutcome(template, capability, result);
+    }
+
+    const canonicalKey = canonicalWorkTemplateKey(template);
+    const defaults = canonicalKey ? PLATFORM_DEFAULT_SUFFICIENT_COMMAND_RESULTS[canonicalKey] : undefined;
+    if (!defaults?.length) return null;
+
+    return resolveSufficientCommandResultOutcome(
+        { completion_policy: { sufficient_command_results: [...defaults] } },
+        capability,
+        result,
+    );
 }
 
 export function shouldRepeatWorkAfterRetryOutcome(

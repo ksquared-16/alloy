@@ -59,8 +59,10 @@ export type StageWorkCompletionPolicyV1 = {
     repeat_due_days?: number;
     /**
      * Objective capability results configuration declares sufficient to satisfy
-     * this requirement (R2). Empty/absent → a successful command does not
-     * auto-complete the work.
+     * this requirement (R2). When absent on a recognized canonical work template
+     * (e.g. contact_family), the platform default may apply at runtime; unknown
+     * or custom work never infers sufficiency. Explicit entries always win.
+     * Operators never see raw runtime result keys in UI.
      */
     sufficient_command_results?: StageWorkSufficientCommandResultV1[];
 };
