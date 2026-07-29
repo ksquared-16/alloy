@@ -229,6 +229,41 @@ describe("business process editor UI wiring", () => {
         expect(card).toContain("Attempt");
     });
 
+    it("normalize preserves command-result sufficiency alongside attempt fields", () => {
+        // `sufficient_command_results` has no control in the work-item editor, so it must survive
+        // every round-trip through it — otherwise editing attempts silently destroys the mapping
+        // that lets a sent message satisfy the step.
+        const policy = normalizeCompletionPolicy({
+            min_attempts: 3,
+            sufficient_command_results: [
+                {
+                    capability: "communications_send",
+                    result: "sent",
+                    satisfies_outcome_key: "left_message",
+                },
+            ],
+        });
+        expect(policy?.sufficient_command_results).toHaveLength(1);
+
+        // Turning "Require multiple attempts" off must clear the attempt fields ONLY.
+        const attemptsOff = normalizeCompletionPolicy({
+            sufficient_command_results: policy?.sufficient_command_results,
+        });
+        expect(attemptsOff?.sufficient_command_results).toHaveLength(1);
+        expect(attemptsOff?.min_attempts).toBeUndefined();
+    });
+
+    it("turning attempts off in the editor does not discard sufficiency", () => {
+        const editor = readFileSync(
+            join(
+                webRoot,
+                "components/adminV2/settings/lifecycle/LifecycleStageWorkCompletionPolicyEditor.tsx"
+            ),
+            "utf8"
+        );
+        expect(editor).toContain("sufficient_command_results: current.sufficient_command_results");
+    });
+
     it("executeStageOperatingOutcome supports reopen_work target", () => {
         const execute = readFileSync(join(webRoot, "lib/lifecycle/stageOutcomeRuleTargetExecutor.ts"), "utf8");
         expect(execute).toContain('case "reopen_work"');
