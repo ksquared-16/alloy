@@ -22,14 +22,17 @@ export default function ProvisioningAnswerSeed({
     lens = null,
     subject = null,
     answer,
+    producer = "unlabelled",
 }: {
     target: string;
     lens?: string | null;
     subject?: string | null;
     answer: ProvisioningAnswer | null;
+    /** TEMPORARY (producer search): which render site mounted this seed. Diagnostic only. */
+    producer?: string;
 }) {
     useMemo(() => {
-        seedProvisioningForRoute({ target, lens, subject }, answer);
-    }, [target, lens, subject, answer]);
+        seedProvisioningForRoute({ target, lens, subject }, answer, undefined, producer);
+    }, [target, lens, subject, answer, producer]);
     return null;
 }

@@ -55,6 +55,7 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
             lens={requestedWorkViewId}
             subject={requestedSubjectId}
             answer={answer}
+            producer={`page(subject=${requestedSubjectId ?? "null"})`}
         />
     );
 }

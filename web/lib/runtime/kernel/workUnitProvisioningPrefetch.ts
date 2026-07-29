@@ -74,6 +74,7 @@ export function prefetchWorkUnitProvisioning(
             throw err;
         });
     cache.set(url, { promise, startedAt: now });
+    traceSeedEvent("register", "prefetch", url, null);
     // Keep the stored promise "handled" so a prefetch that is never consumed (or errors) does not surface
     // as an unhandled rejection. Consumers (K2) attach their own try/catch when they await it.
     void promise.catch(() => {});
@@ -101,13 +102,14 @@ function seedProvisioning(
     url: string,
     answer: ProvisioningAnswer | null,
     now: number = Date.now(),
+    producer: string = "unlabelled",
 ): void {
     if (typeof window === "undefined" || answer == null || answer.terminal === "error") return;
     const existing = cache.get(url);
     if (existing && isFresh(existing, now)) return; // never clobber a fresher warm entry
     cache.set(url, { promise: Promise.resolve(answer), startedAt: now });
     logCurrentWorkInit("provisioning.seed", { cacheKey: url, cache: "seed", preloadSource: "seed", note: "server-composed answer seeded" });
-    traceSeedEvent("seed", url, answer);
+    traceSeedEvent("register", producer, url, answer);
 }
 
 /**
@@ -126,7 +128,8 @@ function seedProvisioning(
  * To be removed once durable guards land.
  */
 function traceSeedEvent(
-    kind: "seed" | "consume-hit" | "consume-miss",
+    kind: "register" | "consume-hit" | "consume-miss",
+    producer: string,
     url: string,
     answer: ProvisioningAnswer | null,
 ): void {
@@ -136,15 +139,32 @@ function traceSeedEvent(
     } catch {
         return;
     }
+    // The caller's own stack, so a registration's identity is READ rather than inferred from timing or
+    // from which label happened to be threaded through. This is what distinguishes "the same producer
+    // registered twice" from "two producers share a key".
+    let stack: string | null = null;
+    try {
+        stack = (new Error().stack ?? "")
+            .split("\n")
+            .slice(2, 7)
+            .map((l) => l.trim().replace(/^at\s+/, "").replace(/\s*\(.*$/, ""))
+            .filter(Boolean)
+            .join(" < ");
+    } catch {
+        stack = null;
+    }
     const w = window as unknown as { __alloySeedTrace?: unknown[] };
     (w.__alloySeedTrace ??= []).push({
         kind,
+        producer,
         t: Math.round(typeof performance !== "undefined" ? performance.now() : 0),
         url,
         subjectInKey: new URL(url, "http://x").searchParams.get("subject_id"),
+        lensInKey: new URL(url, "http://x").searchParams.get("work_view_id"),
         composedSubject:
             answer != null && answer.terminal === "operational" ? answer.recordOfAttention?.id ?? null : null,
         terminal: answer?.terminal ?? null,
+        stack,
     });
 }
 
@@ -163,9 +183,11 @@ export function seedProvisioningForRoute(
     route: ProvisioningRouteIdentity,
     answer: ProvisioningAnswer | null,
     now: number = Date.now(),
+    /** TEMPORARY (producer search): who registered this seed. Diagnostic only. */
+    producer: string = "unlabelled",
 ): void {
     if (!route.target) return;
-    seedProvisioning(provisioningAnswerUrl(route.target, route.lens ?? null, route.subject ?? null), answer, now);
+    seedProvisioning(provisioningAnswerUrl(route.target, route.lens ?? null, route.subject ?? null), answer, now, producer);
 }
 
 export type ProvisioningFetchResult =
@@ -225,15 +247,15 @@ export function consumeFreshProvisioning(
 ): Promise<ProvisioningAnswer> | null {
     const entry = cache.get(url);
     if (!entry) {
-        traceSeedEvent("consume-miss", url, null);
+        traceSeedEvent("consume-miss", "kernel-consume", url, null);
         return null;
     }
     cache.delete(url);
     if (!isFresh(entry, now)) {
-        traceSeedEvent("consume-miss", url, null);
+        traceSeedEvent("consume-miss", "kernel-consume", url, null);
         return null;
     }
-    traceSeedEvent("consume-hit", url, null);
+    traceSeedEvent("consume-hit", "kernel-consume", url, null);
     return entry.promise;
 }
 

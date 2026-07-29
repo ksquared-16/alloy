@@ -51,7 +51,8 @@ for (const [label, url] of cases) {
     const panel = document.querySelector("[data-inline-focus-panel]");
     return {
       trace: (window.__alloySeedTrace ?? []).map((e) => ({
-        kind: e.kind, t: e.t, subjectInKey: e.subjectInKey, composedSubject: e.composedSubject, terminal: e.terminal,
+        kind: e.kind, producer: e.producer, t: e.t, subjectInKey: e.subjectInKey, lensInKey: e.lensInKey,
+        composedSubject: e.composedSubject, terminal: e.terminal, stack: e.stack,
       })),
       visibleSubject: panel?.getAttribute("data-inline-focus-panel-subject") ?? null,
       operational: panel?.getAttribute("data-focus-panel-operational") ?? null,
@@ -60,7 +61,7 @@ for (const [label, url] of cases) {
     };
   });
 
-  const seeds = out.trace.filter((e) => e.kind === "seed");
+  const seeds = out.trace.filter((e) => e.kind === "register");
   const hits = out.trace.filter((e) => e.kind === "consume-hit");
   const misses = out.trace.filter((e) => e.kind === "consume-miss");
   const subjSeed = seeds.find((s) => s.subjectInKey);
@@ -68,7 +69,10 @@ for (const [label, url] of cases) {
 
   console.log(`\n### ${label}`);
   console.log(`  trace (${out.trace.length} events):`);
-  out.trace.forEach((e) => console.log(`     ${String(e.t).padStart(6)}ms ${e.kind.padEnd(13)} key.subject=${String(e.subjectInKey).slice(0, 12).padEnd(12)} composed=${String(e.composedSubject).slice(0, 12)} terminal=${e.terminal}`));
+  out.trace.forEach((e) => {
+    console.log(`     ${String(e.t).padStart(6)}ms ${String(e.kind).padEnd(13)} producer=${String(e.producer).padEnd(26)} key.subject=${String(e.subjectInKey).slice(0, 12).padEnd(12)} key.lens=${String(e.lensInKey).slice(0, 16).padEnd(16)} composed=${String(e.composedSubject).slice(0, 12)} terminal=${e.terminal}`);
+    if (e.kind === "register") console.log(`               via: ${e.stack}`);
+  });
   console.log(`  seeds=${seeds.length} consume-hit=${hits.length} consume-miss=${misses.length}`);
   console.log(`  subject-keyed seed BEFORE its consume-hit: ${subjSeed && subjHit ? (subjSeed.t <= subjHit.t ? `YES (${subjSeed.t}ms <= ${subjHit.t}ms)` : `NO (${subjSeed.t}ms > ${subjHit.t}ms)`) : "n/a"}`);
   console.log(`  client provisioning fetches: ${provisioningFetches.length} -> subjects ${JSON.stringify(provisioningFetches.slice(0, 6))}`);
