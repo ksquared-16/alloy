@@ -20,12 +20,22 @@ export type IdentityFieldEditControl =
     | { kind: "date" }
     | { kind: "select"; optionSetKey: string }
     /** Site-scoped program categories (`location_program_categories.id`). */
-    | { kind: "placement_select"; placement: "program"; siteLocationId?: string | null; programCategoryId?: string | null };
+    | {
+          kind: "placement_select";
+          placement: "program" | "site";
+          siteLocationId?: string | null;
+          programCategoryId?: string | null;
+      };
 
 const PROGRAM_PLACEMENT_SELECT_REFS = new Set([
     "inquiry_child.program",
     "inquiry_child.program_category_id",
     "child.program",
+]);
+
+const SITE_PLACEMENT_SELECT_REFS = new Set([
+    "inquiry_child.location_id",
+    "child.location",
 ]);
 
 function childConfigKeyFromRef(fieldRef: string): string | null {
@@ -55,6 +65,10 @@ export function resolveIdentityFieldEditControl(
 ): IdentityFieldEditControl {
     const trimmed = fieldRef.trim();
     if (!trimmed) return { kind: "text", inputType: "text" };
+
+    if (SITE_PLACEMENT_SELECT_REFS.has(trimmed)) {
+        return { kind: "placement_select", placement: "site" };
+    }
 
     if (PROGRAM_PLACEMENT_SELECT_REFS.has(trimmed)) {
         return { kind: "placement_select", placement: "program" };

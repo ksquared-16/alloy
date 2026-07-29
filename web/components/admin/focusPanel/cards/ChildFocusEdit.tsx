@@ -252,8 +252,10 @@ function ChildFocusEditRow({
     locationLabel: string | null;
     onChange: (key: keyof ChildFocusEditValues, value: string) => void;
 }) {
+    // Site select uses effective location; Program options cascade from draft.location_id.
+    const placementSiteId = draft.location_id.trim() || locationId || "";
     const placement = useOperationalPlacementOptions(
-        locationId ?? "",
+        placementSiteId,
         draft.program_category_id,
     );
 
@@ -275,8 +277,26 @@ function ChildFocusEditRow({
     const readOnly = !row.editable;
     const isLocation = row.valueKey === "location_id";
     const isProgram = row.valueKey === "program_category_id";
-    const displayValue = isLocation ? (locationLabel ?? "") : draft[row.valueKey];
-    const locationLocked = isLocation;
+
+    if (isLocation && !readOnly) {
+        const selectValue = draft.location_id.trim() || locationId || "";
+        return (
+            <label
+                className="alloy-os-card-edit__row"
+                data-child-edit-field={row.configKey}
+            >
+                <span className="alloy-os-card-edit__label">{row.label}</span>
+                <AlloySelect
+                    value={selectValue}
+                    onChange={(next) => onChange("location_id", next)}
+                    options={placement.siteOptions ?? []}
+                    disabled={locked}
+                    aria-label={row.label}
+                    testId="child-edit-location_id"
+                />
+            </label>
+        );
+    }
 
     if (isProgram && !readOnly) {
         const options = placement.programCategoryIdOptions ?? placement.programOptions;
@@ -298,11 +318,13 @@ function ChildFocusEditRow({
         );
     }
 
+    const displayValue = isLocation ? (locationLabel ?? "") : draft[row.valueKey];
+
     return (
         <label
             className="alloy-os-card-edit__row"
             data-child-edit-field={row.configKey}
-            data-child-edit-readonly={readOnly || locationLocked ? "true" : undefined}
+            data-child-edit-readonly={readOnly ? "true" : undefined}
         >
             <span className="alloy-os-card-edit__label">{row.label}</span>
             <input
@@ -315,11 +337,11 @@ function ChildFocusEditRow({
                             || draft.program_category_id)
                         : displayValue
                 }
-                disabled={locked || readOnly || locationLocked || isProgram}
-                readOnly={readOnly || locationLocked || isProgram}
+                disabled={locked || readOnly || isProgram}
+                readOnly={readOnly || isProgram}
                 placeholder={isLocation && !locationLabel ? "Not set" : undefined}
                 onChange={(e) => {
-                    if (locationLocked || isProgram) return;
+                    if (isProgram) return;
                     onChange(row.valueKey!, e.target.value);
                 }}
             />

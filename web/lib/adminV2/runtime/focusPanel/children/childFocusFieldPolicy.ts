@@ -27,7 +27,7 @@ import {
     inputTypeForIdentityFieldRef,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
-import { assignmentOwnsProgramRoomField } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
+import { assignmentOwnsProgramRoomField, isLocationIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
 
 /** Editable child focus values sent through the inquiry-child save path. */
 export type ChildFocusEditValues = {
@@ -91,7 +91,14 @@ export function resolveChildFocusEditPolicy(
         const displayed = fieldShouldRender(visibility);
         const blockedByAssignment =
             opts?.hasCommittedPrimaryAssignment === true && assignmentOwnsProgramRoomField(fieldKey);
-        const editable = displayed && saveSupported && fieldIsSaveable(visibility) && !blockedByAssignment;
+        // Location is Editable (never Linked). Legacy Linked policies coerce so Save works.
+        const effectiveVisibility =
+            isLocationIdentityFieldRef(fieldKey)
+            && visibility !== "read-only"
+            && visibility !== "hidden"
+                ? "editable"
+                : visibility;
+        const editable = displayed && saveSupported && fieldIsSaveable(effectiveVisibility) && !blockedByAssignment;
         const unsupported = displayed && (!saveSupported || blockedByAssignment);
         const inputType = inputTypeForIdentityFieldRef(fieldKey);
         return [

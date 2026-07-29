@@ -88,7 +88,12 @@ export type IdentityFieldEditControlVM =
     | { kind: "text"; inputType: "text" | "email" | "tel" }
     | { kind: "date" }
     | { kind: "select"; optionSetKey: string }
-    | { kind: "placement_select"; placement: "program"; siteLocationId?: string | null; programCategoryId?: string | null };
+    | {
+          kind: "placement_select";
+          placement: "program" | "site";
+          siteLocationId?: string | null;
+          programCategoryId?: string | null;
+      };
 
 export type IdentityFieldCellVM = {
     fieldRef: string;

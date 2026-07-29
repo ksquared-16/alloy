@@ -1475,7 +1475,7 @@ function FocusedChild({
                                 outcome_status_label: child.status,
                                 notes: null,
                                 start_date: child.startDate,
-                                location_id: null,
+                                location_id: child.locationId ?? null,
                                 location_label: child.location ?? null,
                                 program_room_cohort_key: null,
                                 program_room_cohort_label: child.room,
@@ -1486,7 +1486,7 @@ function FocusedChild({
                                 ocm_id: null,
                             },
                             values: {
-                                location_id: "",
+                                location_id: child.locationId ?? "",
                                 program_category_id: "",
                                 program_room_cohort_key: "",
                                 schedule_type: "",

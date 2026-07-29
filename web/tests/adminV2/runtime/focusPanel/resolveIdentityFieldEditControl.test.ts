@@ -28,4 +28,22 @@ describe("resolveIdentityFieldEditControl", () => {
         const control = resolveIdentityFieldEditControl("child.date_of_birth");
         expect(control).toEqual({ kind: "date" });
     });
+
+    it("binds Location fields to site placement select (Editable, not Linked)", () => {
+        expect(resolveIdentityFieldEditControl("inquiry_child.location_id")).toEqual({
+            kind: "placement_select",
+            placement: "site",
+        });
+        expect(resolveIdentityFieldEditControl("child.location")).toEqual({
+            kind: "placement_select",
+            placement: "site",
+        });
+    });
+
+    it("binds Program fields to program placement select", () => {
+        expect(resolveIdentityFieldEditControl("inquiry_child.program")).toEqual({
+            kind: "placement_select",
+            placement: "program",
+        });
+    });
 });

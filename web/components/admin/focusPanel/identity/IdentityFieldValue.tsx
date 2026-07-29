@@ -102,11 +102,19 @@ function IdentityInlineEditInput({
             return optionsBySetKey[editControl.optionSetKey] ?? [];
         }
         if (editControl.kind === "placement_select") {
+            if (editControl.placement === "site") {
+                return placement.siteOptions ?? [];
+            }
             // Category-id values only — Focus Panel saves `program_category_id` FK.
             return placement.programCategoryIdOptions ?? [];
         }
         return [];
-    }, [editControl, optionsBySetKey, placement.programCategoryIdOptions]);
+    }, [
+        editControl,
+        optionsBySetKey,
+        placement.programCategoryIdOptions,
+        placement.siteOptions,
+    ]);
 
     // Display may store the option label; `<select>` values are keys — map label → value on edit.
     const selectValue = useMemo(() => {
@@ -115,14 +123,17 @@ function IdentityInlineEditInput({
         }
         const raw = controlledDraft.trim();
         if (!raw) {
-            // Prefer stored FK when display value is the label or empty.
+            // Prefer stored FK when display value is the label or empty (incl. lead→child inherit).
+            if (editControl.kind === "placement_select" && editControl.placement === "site" && siteLocationId) {
+                return siteLocationId;
+            }
             if (editControl.kind === "placement_select" && programCategoryId) return programCategoryId;
             return "";
         }
         if (selectOptions.some((o) => o.value === raw)) return raw;
         const byLabel = selectOptions.find((o) => o.label === raw);
         return byLabel?.value ?? raw;
-    }, [controlledDraft, editControl.kind, selectOptions, programCategoryId]);
+    }, [controlledDraft, editControl, selectOptions, programCategoryId, siteLocationId]);
 
     useEffect(() => {
         if (
@@ -155,11 +166,14 @@ function IdentityInlineEditInput({
             || cell.fieldRef.endsWith(".gender")
             || cell.fieldRef.includes("assignment")
             || cell.fieldRef.includes("program")
+            || cell.fieldRef.includes("location")
             || cell.fieldRef.includes("room")
             || cell.fieldRef.includes("schedule");
         const selectDisabled =
             Boolean(inlineEdit.busy)
-            || (editControl.kind === "placement_select" && placement.programDisabled);
+            || (editControl.kind === "placement_select"
+                && editControl.placement === "program"
+                && placement.programDisabled);
         control = useAlloySelect ? (
             <AlloySelect
                 value={selectValue}

@@ -48,6 +48,7 @@ const RELATIONSHIP_ACTION_ONLY_REFS = new Set<string>([
 /**
  * Desired Program is linkable to Assignments (when a primary classroom owns it) AND
  * editable as an inquiry participation select before assignment exists.
+ * Location is Editable-only (removed from Linked) — sites are per-child / per-lead.
  * Schedule/Room stay Linked-only — they are not simple inquiry dropdowns.
  */
 const LINKABLE_AND_EDITABLE_REFS = new Set<string>([

@@ -71,12 +71,17 @@ export function findInquiryChildRow(
 export function seedChildFocusEditValues(truth: Record<string, unknown>, childId: string): ChildFocusEditSeed | null {
     const row = findInquiryChildRow(truth, childId);
     if (!row?.customer_member_id?.trim()) return null;
+    // Effective site for the select: child-owned authority, else lead/opportunity default.
+    // Save still writes OCM.location_id only when the operator changes the value.
+    const opportunitySiteId =
+        trimStr(truth.location_id) || trimStr(truth._location_id) || trimStr(truth["opportunity.location_id"]);
+    const ownedSiteId = trimStr(row.location_id);
     return {
         childId: row.id,
         row,
         identityBaseline: identityBaselineForRow(row),
         values: {
-            location_id: trimStr(row.location_id),
+            location_id: ownedSiteId || opportunitySiteId,
             program_category_id: trimStr(row.program_category_id),
             program_room_cohort_key: trimStr(row.program_room_cohort_key),
             schedule_type: trimStr(row.schedule_type),

@@ -57,11 +57,18 @@ export type ChildrenEvidenceChild = {
     ageBand?: string | null;
     /**
      * Site / school location display label (never the raw `location_id` UUID).
-     * Sourced from inquiry-child `location_label` enrichment.
+     * Child-owned label when set; otherwise inherits the lead/opportunity site label.
      */
     location?: string | null;
-    /** Site location id for placement-scoped Program selects. */
+    /**
+     * Effective site id for Program options + Location selects:
+     * child-owned `location_id`, else lead/opportunity site.
+     */
     locationId?: string | null;
+    /** Child-owned site id only (null when unset — display may still inherit lead). */
+    locationOwnedId?: string | null;
+    /** True when display/effective site comes from the lead because the child has none. */
+    locationInherited?: boolean;
     /** Stored program category FK — used when editing Program (select value). */
     programCategoryId?: string | null;
     initial: string;
@@ -308,6 +315,8 @@ export function buildChildrenCardEvidence(
             program,
             location,
             locationId: childLocationId ?? opportunitySiteId,
+            locationOwnedId: childLocationId,
+            locationInherited: !childLocationId && Boolean(opportunitySiteId),
             programCategoryId:
                 trimOrNull(row.program_category_id)
                 ?? trimOrNull((raw as { program_category_id?: unknown }).program_category_id),
