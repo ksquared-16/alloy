@@ -18,6 +18,7 @@ import {
     setSummaryCardVisibility,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardVisibility";
 import { publishedLayoutReadingOrder } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
+import { isCardProviderUnavailable } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProviders";
 import { focusPanelCardCatalogLabel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
 import { minimalSettledOpportunityDrawerViewModel } from "@/tests/adminV2/viewModel/fixtures/minimalSettledOpportunityDrawerViewModel";
 import { readFileSync } from "node:fs";
@@ -46,7 +47,19 @@ describe("Focus Panel card visibility model", () => {
         for (const linked of ENROLLMENT_DEFAULT_LINKED_CARD_KEYS) {
             expect(laidOut).not.toContain(linked);
         }
-        expect(inputs.linkedCardKeys).toEqual([...ENROLLMENT_DEFAULT_LINKED_CARD_KEYS]);
+        // Two runtime laws meet here, and the stricter one wins. Authoring says these cards are
+        // `linked`; CAPABILITY AVAILABILITY says a card whose authoritative provider is not
+        // registered may not participate in production AT ALL — not visible, not even linked —
+        // because reaching it would emit a business conclusion from wiring that does not exist.
+        // `milestones` is authored linked (the doc above still lists it, and that assertion still
+        // holds) but has no registered provider, so it is withheld here and will re-participate
+        // automatically the moment one registers. See `focusPanelCardProviders`.
+        const expectedLinked = ENROLLMENT_DEFAULT_LINKED_CARD_KEYS.filter(
+            (key) => !isCardProviderUnavailable(key),
+        );
+        expect(inputs.linkedCardKeys).toEqual(expectedLinked);
+        expect(inputs.visibilityByCardKey.get("milestones")).toBe("hidden");
+        expect(isCardProviderUnavailable("milestones")).toBe(true);
         expect(inputs.visibilityByCardKey.get("scheduling")).toBe("visible");
         expect(inputs.cellResolution.has("scheduling")).toBe(true);
     });
