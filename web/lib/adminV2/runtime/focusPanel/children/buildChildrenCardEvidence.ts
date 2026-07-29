@@ -53,6 +53,9 @@ export type ChildrenEvidenceChild = {
     age?: string | null;
     /** Person gender label when present on the child row (display only unless write contract exists). */
     gender?: string | null;
+    allergies?: string | null;
+    medicalNotes?: string | null;
+    specialInstructions?: string | null;
     /** Age band label when present on the child row (computed / projected — read-only). */
     ageBand?: string | null;
     /**
@@ -285,7 +288,13 @@ export function buildChildrenCardEvidence(
                 : null;
 
         return {
-            id: trimOrNull(row.id) ?? trimOrNull(row.person_id) ?? `child-${index}`,
+            id:
+                trimOrNull(row.id)
+                ?? trimOrNull((row as { customer_member_id?: unknown }).customer_member_id)
+                ?? trimOrNull(row.person_id)
+                ?? trimOrNull(raw.customer_member_id)
+                ?? trimOrNull(raw.person_id)
+                ?? `child-${index}`,
             name,
             customerMemberId:
                 trimOrNull((row as { customer_member_id?: unknown }).customer_member_id)
@@ -305,6 +314,15 @@ export function buildChildrenCardEvidence(
                 ?? resolveInquiryChildGenderLabelFromRaw(raw)
                 ?? trimOrNull((row as { gender_label?: unknown }).gender_label)
                 ?? trimOrNull((row as { gender?: unknown }).gender),
+            allergies:
+                trimOrNull((raw as { allergies?: unknown }).allergies)
+                ?? trimOrNull((row as { allergies?: unknown }).allergies),
+            medicalNotes:
+                trimOrNull((raw as { medical_notes?: unknown }).medical_notes)
+                ?? trimOrNull((row as { medical_notes?: unknown }).medical_notes),
+            specialInstructions:
+                trimOrNull((raw as { special_instructions?: unknown }).special_instructions)
+                ?? trimOrNull((row as { special_instructions?: unknown }).special_instructions),
             ageBand:
                 trimOrNull((row as { age_band?: unknown }).age_band)
                 ?? trimOrNull((row as { age_band_label?: unknown }).age_band_label)

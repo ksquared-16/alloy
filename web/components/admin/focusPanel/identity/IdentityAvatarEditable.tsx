@@ -14,6 +14,10 @@ import {
     resolvePersonIdForProfilePhoto,
     uploadPersonProfilePhotoDocument,
 } from "@/lib/adminV2/runtime/focusPanel/persistPersonProfilePhoto";
+import {
+    getChildAvatarSessionPreview,
+    setChildAvatarSessionPreview,
+} from "@/lib/adminV2/runtime/focusPanel/children/childAvatarSessionPreview";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 
 export type IdentityAvatarPhotoSave = (args: {
@@ -44,6 +48,19 @@ type Props = {
     disabled?: boolean;
 };
 
+function resolveInitialUrl(args: {
+    recordId?: string;
+    imageUrl?: string | null;
+    composerPreview: string | null;
+}): string | null {
+    return (
+        args.composerPreview
+        ?? (args.recordId ? getChildAvatarSessionPreview(args.recordId) : null)
+        ?? args.imageUrl
+        ?? null
+    );
+}
+
 export default function IdentityAvatarEditable({
     name,
     imageUrl,
@@ -63,30 +80,27 @@ export default function IdentityAvatarEditable({
     const [error, setError] = useState<string | null>(null);
     const sessionPreview =
         recordId && composer ? composer.childAvatarPreviewUrl(recordId) : null;
-    const [resolvedUrl, setResolvedUrl] = useState<string | null>(
-        sessionPreview ?? imageUrl ?? null,
+    const [resolvedUrl, setResolvedUrl] = useState<string | null>(() =>
+        resolveInitialUrl({ recordId, imageUrl, composerPreview: sessionPreview }),
     );
     const [resolvedPersonId, setResolvedPersonId] = useState<string | null>(personId ?? null);
 
-    // Reset when the identity record changes; prefer session preview over stale null evidence.
+    const applyPreview = (url: string | null) => {
+        setResolvedUrl(url);
+        if (recordId) {
+            setChildAvatarSessionPreview(recordId, url);
+            composer?.setChildAvatarPreviewUrl(recordId, url);
+        }
+    };
+
+    // Prefer evidence URL once truth catches up; otherwise keep session/local preview.
     useEffect(() => {
-        const preview = recordId && composer ? composer.childAvatarPreviewUrl(recordId) : null;
-        setResolvedUrl(preview ?? imageUrl ?? null);
+        const preview =
+            (recordId && composer ? composer.childAvatarPreviewUrl(recordId) : null)
+            ?? (recordId ? getChildAvatarSessionPreview(recordId) : null);
+        setResolvedUrl(imageUrl?.trim() || preview || null);
         setResolvedPersonId(personId ?? null);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on identity change
-    }, [recordId]);
-
-    useEffect(() => {
-        if (imageUrl) setResolvedUrl(imageUrl);
-    }, [imageUrl]);
-
-    useEffect(() => {
-        if (sessionPreview) setResolvedUrl(sessionPreview);
-    }, [sessionPreview]);
-
-    useEffect(() => {
-        if (personId) setResolvedPersonId(personId);
-    }, [personId]);
+    }, [recordId, imageUrl, personId, composer, sessionPreview]);
 
     if (!visible) return null;
 
@@ -118,9 +132,7 @@ export default function IdentityAvatarEditable({
                 documentId: uploaded.documentId,
             });
             if (!result.ok) throw new Error(result.error || "Could not save profile photo");
-            const nextUrl = result.photoUrl ?? null;
-            setResolvedUrl(nextUrl);
-            composer?.setChildAvatarPreviewUrl(recordId, nextUrl);
+            applyPreview(result.photoUrl ?? null);
         } catch (e) {
             setError(e instanceof Error ? e.message : "Upload failed");
         } finally {
@@ -143,13 +155,11 @@ export default function IdentityAvatarEditable({
             if (onClearPhoto) {
                 const result = await onClearPhoto({ childId: recordId, personId: resolved.personId });
                 if (!result.ok) throw new Error(result.error || "Could not remove photo");
-                setResolvedUrl(result.photoUrl || null);
-                composer?.setChildAvatarPreviewUrl(recordId, result.photoUrl || null);
+                applyPreview(result.photoUrl || null);
             } else {
                 const result = await clearPersonProfilePhoto({ personId: resolved.personId });
                 if (!result.ok) throw new Error(result.error);
-                setResolvedUrl(null);
-                composer?.setChildAvatarPreviewUrl(recordId, null);
+                applyPreview(null);
             }
         } catch (e) {
             setError(e instanceof Error ? e.message : "Remove failed");

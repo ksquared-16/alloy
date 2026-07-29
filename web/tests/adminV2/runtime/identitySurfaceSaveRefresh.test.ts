@@ -236,6 +236,21 @@ describe("child save refresh", () => {
         expect(afterChild.personId).toBe("p-emma");
     });
 
+    it("photo merge falls back to unique person_id when childId is synthetic", () => {
+        const merged = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
+            childId: "child-0",
+            row: { person_id: "p-emma" },
+            patch: {
+                identityPatch: {},
+                ocmPatch: {},
+                profilePatch: { photo_url: "https://cdn.example/fallback.jpg" },
+            },
+            savedPerson: null,
+        });
+        const afterChild = buildChildrenCardEvidence(householdCtx(merged)).children[0]!;
+        expect(afterChild.imageUrl).toBe("https://cdn.example/fallback.jpg");
+    });
+
     it("unsupported expanded field does not expose edit affordance", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = addFieldToNestedGroup(config, "readiness", "child.readiness_summary");

@@ -384,14 +384,20 @@ export default function IdentityFieldValue({
         >
             {showLabel ? (
                 <span className={clsx("identity-field-value__label", eyebrow && "identity-field-value__label--eyebrow")}>
-                    {Icon ? <Icon className="identity-field-value__icon" aria-hidden /> : null}
+                    <span className="identity-field-value__icon-slot" aria-hidden>
+                        {Icon ? <Icon className="identity-field-value__icon" /> : null}
+                    </span>
                     {cell.label}
                 </span>
             ) : null}
             {inlineEdit?.isEditing ? (
                 <span className="identity-field-value__value-row">
-                    {!showLabel && Icon ? (
-                        <Icon className="identity-field-value__icon identity-field-value__icon--solo" aria-hidden />
+                    {!showLabel ? (
+                        <span className="identity-field-value__icon-slot" aria-hidden>
+                            {Icon ? (
+                                <Icon className="identity-field-value__icon identity-field-value__icon--solo" />
+                            ) : null}
+                        </span>
                     ) : null}
                     <IdentityInlineEditInput
                         cell={cell}
@@ -407,8 +413,12 @@ export default function IdentityFieldValue({
                 </span>
             ) : (
                 <span className="identity-field-value__value-row">
-                    {!showLabel && Icon ? (
-                        <Icon className="identity-field-value__icon identity-field-value__icon--solo" aria-hidden />
+                    {!showLabel ? (
+                        <span className="identity-field-value__icon-slot" aria-hidden>
+                            {Icon ? (
+                                <Icon className="identity-field-value__icon identity-field-value__icon--solo" />
+                            ) : null}
+                        </span>
                     ) : null}
                     {canInlineEdit && inlineEdit ? (
                         <button

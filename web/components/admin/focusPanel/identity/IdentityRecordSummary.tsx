@@ -114,10 +114,18 @@ export default function IdentityRecordSummary({
             return;
         }
         setBatchBusy(true);
+        // Predictive accept: leave edit mode immediately so summary reflects drafts while save runs.
+        const pendingDrafts = { ...batchDrafts };
+        setBatchEditing(false);
+        setBatchDrafts({});
         try {
             if (onSaveFields) {
                 const result = await onSaveFields({ personId: record.id, fields });
-                if (result && result.ok === false) return;
+                if (result && result.ok === false) {
+                    setBatchDrafts(pendingDrafts);
+                    setBatchEditing(true);
+                    return;
+                }
             } else if (onSaveField) {
                 for (const field of fields) {
                     const result = await onSaveField({
@@ -125,13 +133,17 @@ export default function IdentityRecordSummary({
                         fieldRef: field.fieldRef,
                         value: field.value,
                     });
-                    if (result && result.ok === false) return;
+                    if (result && result.ok === false) {
+                        setBatchDrafts(pendingDrafts);
+                        setBatchEditing(true);
+                        return;
+                    }
                 }
             } else {
+                setBatchDrafts(pendingDrafts);
+                setBatchEditing(true);
                 return;
             }
-            setBatchEditing(false);
-            setBatchDrafts({});
         } finally {
             setBatchBusy(false);
         }

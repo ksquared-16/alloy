@@ -26,6 +26,11 @@ type Props = {
     /** Live Work Unit avatar upload (canonical person profile photo). */
     personId?: string | null;
     customerMemberId?: string | null;
+    /**
+     * Ungated photo URL from evidence (`child.imageUrl`). Prefer over
+     * `record.avatar.imageUrl`, which may be null when useProfilePhotos is off.
+     */
+    photoUrl?: string | null;
     onSavePhoto?: IdentityAvatarPhotoSave;
     onClearPhoto?: IdentityAvatarPhotoClear;
     avatarSlot?: ReactNode;
@@ -45,6 +50,7 @@ export default function IdentityDisclosureSurface({
     onEnterEvidence,
     personId,
     customerMemberId,
+    photoUrl = null,
     onSavePhoto,
     onClearPhoto,
     avatarSlot,
@@ -57,7 +63,7 @@ export default function IdentityDisclosureSurface({
               ? (
                     <IdentityAvatarEditable
                         name={record.title}
-                        imageUrl={record.avatar?.imageUrl}
+                        imageUrl={photoUrl ?? record.avatar?.imageUrl}
                         visible={true}
                         role={record.avatar?.role}
                         recordId={record.id}
