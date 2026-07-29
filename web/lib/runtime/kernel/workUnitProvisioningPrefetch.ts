@@ -118,15 +118,24 @@ function seedProvisioning(
  * This records the seed/consume sequence and the subject each event carried, so the ordering can be
  * READ rather than inferred.
  *
- * Off unless `ALLOY_ROUTE_TIMING=1` — the same default-off flag the PE-3 spans use. To be removed once
- * durable guards land.
+ * Gated on `localStorage.ALLOY_SEED_TRACE === "1"`, default off — deliberately NOT on a bare
+ * `process.env` flag. This function runs in the BROWSER, and Next only exposes `NEXT_PUBLIC_*` to the
+ * client bundle, so a `process.env.ALLOY_ROUTE_TIMING` check here would compile to `undefined` and the
+ * trace would silently never fire — producing an empty result that reads exactly like "the seed was
+ * never registered". localStorage is the same prod-capable pattern `platformSurfacePerfEnabled` uses.
+ * To be removed once durable guards land.
  */
 function traceSeedEvent(
     kind: "seed" | "consume-hit" | "consume-miss",
     url: string,
     answer: ProvisioningAnswer | null,
 ): void {
-    if (typeof window === "undefined" || process.env.ALLOY_ROUTE_TIMING !== "1") return;
+    if (typeof window === "undefined") return;
+    try {
+        if (window.localStorage?.getItem("ALLOY_SEED_TRACE") !== "1") return;
+    } catch {
+        return;
+    }
     const w = window as unknown as { __alloySeedTrace?: unknown[] };
     (w.__alloySeedTrace ??= []).push({
         kind,
