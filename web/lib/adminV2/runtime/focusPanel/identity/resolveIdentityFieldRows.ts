@@ -32,9 +32,9 @@ export function resolveIdentityFieldRows(
     const visible = inputs.filter((input) => {
         if (input.policy === "hidden") return false;
         const empty = !input.value?.trim();
-        // Filter before pack so empty/hidden cells never leave pair/triple holes.
+        // Explicit hideWhenEmpty drops the cell. Hidden label/icon alone must keep
+        // placement — runtime renders "—" so the next field does not shift up.
         if (empty && input.placement.hideWhenEmpty) return false;
-        if (empty && (input.placement.labelMode ?? "visible") === "hidden") return false;
         return true;
     });
     if (visible.length === 0) return [];

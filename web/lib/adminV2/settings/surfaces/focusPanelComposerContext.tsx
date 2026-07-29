@@ -4,7 +4,9 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
+    useRef,
     useState,
     type ReactNode,
 } from "react";
@@ -114,6 +116,16 @@ export function FocusPanelComposerProvider({
     const [activeConfigPurpose, setActiveConfigPurpose] = useState<IdentityConfigurationPurpose>("summary");
     const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null);
     const [composeCanvasMode, setComposeCanvasMode] = useState<"configure" | "preview">("configure");
+    // Surfaces editor hydrates nested configs after mount. useState(initial) alone would
+    // keep {} → Configure would open default empty layouts and look like a wipe.
+    // Parent only replaces `initialNestedConfigs` on hydrate / nested-saved (not on each
+    // keystroke), so syncing on reference change is safe for in-progress edits.
+    const seededNestedConfigsRef = useRef(initialNestedConfigs);
+    useEffect(() => {
+        if (seededNestedConfigsRef.current === initialNestedConfigs) return;
+        seededNestedConfigsRef.current = initialNestedConfigs;
+        setNestedConfigs(initialNestedConfigs);
+    }, [initialNestedConfigs]);
 
     const configFor = useCallback(
         (surfaceId: string) => {
