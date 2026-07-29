@@ -70,9 +70,8 @@ function splitFullName(full: string | null): { first_name: string | null; last_n
 }
 
 /** Nested field id → canonical field key, taken from the schema's own bindings (never from labels). */
-function nestedFieldKeyMap(group: FormField): Map<string, string> {
+function nestedFieldKeyMap(group: FormGroupField): Map<string, string> {
     const out = new Map<string, string>();
-    if (group.type !== "group") return out;
     for (const f of group.fields ?? []) {
         const key = f.field_source?.field_key?.trim().toLowerCase();
         if (key) out.set(f.id, key);
@@ -80,8 +79,11 @@ function nestedFieldKeyMap(group: FormField): Map<string, string> {
     return out;
 }
 
-function collectGroups(fields: FormField[]): FormField[] {
-    const out: FormField[] = [];
+/** The group variant of FormField — `collection_binding` and `fields` only exist here. */
+type FormGroupField = Extract<FormField, { type: "group" }>;
+
+function collectGroups(fields: FormField[]): FormGroupField[] {
+    const out: FormGroupField[] = [];
     for (const f of fields) {
         if (f.type === "group") {
             out.push(f);
