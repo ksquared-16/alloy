@@ -45,7 +45,7 @@ describe("buildOpportunityDrawerHeaderMenuActions", () => {
             },
             false
         );
-        expect(menu.map((a) => a.key)).toEqual(["send_form", "schedule_tour"]);
+        expect(menu.map((a) => a.key)).toEqual(["send_form", "schedule_tour", "change_lead_location"]);
     });
 
     it("remaps schedule_tour to reschedule_tour when an active booking exists", () => {
