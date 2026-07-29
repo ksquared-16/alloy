@@ -11,7 +11,7 @@ function baseContext(over: Partial<QueueRowContext> = {}): QueueRowContext {
     return {
         contract_version: "1.1-partial",
         row_subject: { subject_type: "case", subject_id: "opp-1", display_name: "Jordan Lee" },
-        row_stage: "New Leads",
+        row_stage: "Lead",
         lifecycle_key: "enrollment",
         row_status_key: "open",
         row_status_label: "Open",
@@ -34,11 +34,9 @@ function baseContext(over: Partial<QueueRowContext> = {}): QueueRowContext {
 }
 
 describe("resolveQueueRowFieldLabelsFromContext", () => {
-    it("Stage resolves process lane label from row_stage, not row status", () => {
-        expect(resolveQueueRowProcessStageLabel(baseContext())).toBe("New Leads");
-        expect(resolveQueueRowProcessStageLabel(baseContext({ row_stage: "Tour Scheduled" }))).toBe(
-            "Tour Scheduled",
-        );
+    it("Stage resolves process stage from row_stage, not Work View or status", () => {
+        expect(resolveQueueRowProcessStageLabel(baseContext())).toBe("Lead");
+        expect(resolveQueueRowProcessStageLabel(baseContext({ row_stage: "Tour" }))).toBe("Tour");
     });
 
     it("Stage falls back to drawer stage_focus_key when row_stage is empty", () => {

@@ -22,6 +22,9 @@ export type OpportunityCrmProjection = {
     /** Single line for row chrome: name · email · phone (sparse parts omitted). The DEFAULT contact line;
      *  never the value of the authored `person.primary_contact_name` field. */
     _primary_contact_line?: string | null;
+    /** Operator-facing site label for opportunity.location_id. */
+    _location_label?: string | null;
+    /** @deprecated Prefer `_location_label` — retained for older readers. */
     _room_label?: string | null;
     _tour_timing?: string | null;
     _notes_preview?: string | null;
@@ -143,7 +146,11 @@ export async function enrichOpportunityRowsWithCrmProjection(
         }
 
         if (r.location_id) {
-            e._room_label = locationById.get(r.location_id) ?? null;
+            const label = locationById.get(r.location_id) ?? null;
+            // Canonical location display key for queue/focus — keep `_room_label` as a
+            // legacy alias for older readers until they migrate.
+            e._location_label = label;
+            e._room_label = label;
         }
 
         const tour = formatTourTiming(r.job_date, r.job_time_window, tourIso || undefined);

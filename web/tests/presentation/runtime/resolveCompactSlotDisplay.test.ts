@@ -251,6 +251,30 @@ describe("resolveCompactSlotDisplay", () => {
         );
     });
 
+    it("customer.display_name uses case household name, not primary contact", () => {
+        const slots = {
+            visible: true,
+            label: "Household",
+            fieldKeys: ["customer.display_name"],
+        } as const;
+        const ctx = familyContext({
+            row_subject: { subject_type: "case", subject_id: "opp-1", display_name: "Ravi Almead" },
+            case_context: {
+                case_id: "opp-1",
+                display_name: "Almead Family",
+                case_type_label: "Enrollment",
+                case_status_key: "open",
+                case_status_label: "Open",
+            },
+            primary_contact: {
+                display_name: "Ravi Almead",
+                phone: "(556) 965-2536",
+            },
+        });
+        expect(resolveCompactSlotDisplay("subject", ctx, slots, null)).toBe("Almead Family");
+        expect(resolveCompactSlotDisplay("subject", ctx, slots, null)).not.toBe("Ravi Almead");
+    });
+
     it("does not emit builder labels when runtime values exist", () => {
         const slots = {
             visible: true,
