@@ -23,6 +23,8 @@ import {
     resolveIdentityFieldEditControl,
     type IdentityFieldEditControl,
 } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldEditControl";
+import { formatFocusPanelDate } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
+import { normalizeDob } from "@/lib/identity/normalizeDob";
 
 type InlineEditProps = {
     isEditing: boolean;
@@ -282,12 +284,19 @@ export default function IdentityFieldValue({
     const inputRef = useRef<HTMLInputElement>(null);
 
     const shared = Boolean(inlineEdit?.sharedSession);
-    const controlledDraft = shared ? (inlineEdit?.draftValue ?? cell.value ?? "") : draft;
 
     const editControl = useMemo(
         () => cell.editControl ?? resolveIdentityFieldEditControl(cell.fieldRef),
         [cell.editControl, cell.fieldRef],
     );
+
+    const controlledDraft = (() => {
+        const raw = shared ? (inlineEdit?.draftValue ?? cell.value ?? "") : draft;
+        if (editControl.kind === "date" && inlineEdit?.isEditing) {
+            return normalizeDob(raw) ?? raw;
+        }
+        return raw;
+    })();
 
     useEffect(() => {
         if (shared) return;
@@ -299,10 +308,15 @@ export default function IdentityFieldValue({
     useEffect(() => {
         if (shared) return;
         if (!inlineEdit?.isEditing) return;
-        const seed =
-            editControl.kind === "placement_select" && editControl.programCategoryId?.trim()
-                ? editControl.programCategoryId.trim()
-                : (cell.value ?? "");
+        const seed = (() => {
+            if (editControl.kind === "placement_select" && editControl.programCategoryId?.trim()) {
+                return editControl.programCategoryId.trim();
+            }
+            if (editControl.kind === "date") {
+                return normalizeDob(cell.value) ?? "";
+            }
+            return cell.value ?? "";
+        })();
         setDraft(seed);
         if (editControl.kind === "select" || editControl.kind === "placement_select") return;
         inputRef.current?.focus();
@@ -316,13 +330,20 @@ export default function IdentityFieldValue({
     const canLegacyEdit = Boolean(cell.editable && onEdit && !inlineEdit);
     const canLink = Boolean(cell.linked && onLink && !canInlineEdit);
     const valueText = cell.value?.trim() ?? "";
+    const displayValueText =
+        editControl.kind === "date" && valueText
+            ? (formatFocusPanelDate(valueText) ?? valueText)
+            : valueText;
     // Empty/hidden fields are removed in `resolveIdentityFieldRows` before packing.
     // Never return null here — late nulls leave pair/triple grid holes (field collision).
 
     const commit = async () => {
         if (!inlineEdit || inlineEdit.busy) return;
         // Prefer selectValue when editing a choice field so Save writes the option key, not the label.
-        const value = shared ? controlledDraft : draft;
+        // Date fields must commit ISO YYYY-MM-DD (never a formatted display string).
+        const raw = shared ? controlledDraft : draft;
+        const value =
+            editControl.kind === "date" ? (normalizeDob(raw) ?? raw.trim()) : raw;
         await inlineEdit.onCommit(value);
     };
 
@@ -386,13 +407,13 @@ export default function IdentityFieldValue({
                                 }
                             }}
                         >
-                            {valueText || "—"}
+                            {displayValueText || "—"}
                         </button>
                     ) : canLink && onLink ? (
                         <button
                             type="button"
                             className="identity-field-value__value identity-field-value__value--clickable identity-field-value__value--linked"
-                            title={cell.linkLabel ? `${cell.linkLabel}: ${valueText || cell.label}` : `Open ${cell.label}`}
+                            title={cell.linkLabel ? `${cell.linkLabel}: ${displayValueText || cell.label}` : `Open ${cell.label}`}
                             onClick={onLink}
                             onKeyDown={(event) => {
                                 if (event.key === "Enter" || event.key === " ") {
@@ -401,7 +422,7 @@ export default function IdentityFieldValue({
                                 }
                             }}
                         >
-                            <span className="identity-field-value__linked-text">{valueText || "—"}</span>
+                            <span className="identity-field-value__linked-text">{displayValueText || "—"}</span>
                             <span className="identity-field-value__nav-cue" aria-hidden>
                                 →
                             </span>
@@ -409,9 +430,9 @@ export default function IdentityFieldValue({
                     ) : (
                         <span
                             className="identity-field-value__value"
-                            title={valueText || undefined}
+                            title={displayValueText || undefined}
                         >
-                            {valueText || "—"}
+                            {displayValueText || "—"}
                         </span>
                     )}
                     {savedFlash ? (

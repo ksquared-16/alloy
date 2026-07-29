@@ -47,6 +47,25 @@ describe("assignmentProgramRoomGating", () => {
         ).toBe(true);
     });
 
+    it("does not treat proposed-only drafts as Program owners", () => {
+        const scheduling = {
+            status: "proposed",
+            current: null,
+            proposed: {
+                assignments: [
+                    {
+                        isPrimary: true,
+                        commitmentKind: "proposed",
+                        room: { program: "Toddler", name: "Toddler 2" },
+                    },
+                ],
+            },
+            child: { id: "m1", name: "Lennon", program: null, ageGroup: null, siteId: null, siteName: null },
+        } as unknown as ChildScheduling;
+        expect(primaryAssignmentFromScheduling(scheduling)).toBeNull();
+        expect(programRoomEditableWhenNoPrimaryAssignment("inquiry_child.program", scheduling)).toBe(true);
+    });
+
     it("falls back to subject program when assignment room.program is empty", () => {
         const scheduling = {
             status: "scheduled",

@@ -220,16 +220,20 @@ function buildRecordRows(args: {
             || (assignmentOwned && childHasPrimary && linkContract.canOfferLinked)
             || (isRoomField && !hasExplicitPolicy && linkContract.canOfferLinked);
         const primaryRoomName = childEvidence ? trimOrNull(childEvidence.room) : null;
+        // Program never shows "Determined by primary classroom…" — the field value IS the program.
+        // Room may still point operators to Assignments before a primary exists.
         const derivedSourceLabel =
-            assignmentOwned && childHasPrimary && primaryRoomName
-                ? `Determined by primary classroom: ${primaryRoomName}`
-                : assignmentOwned && childHasPrimary
-                  ? "Determined by primary classroom"
-                  : isRoomField && !childHasPrimary
-                    ? "Set up in Assignments"
-                    : isLocationField && childEvidence?.locationInherited
-                      ? "Inherited from lead"
-                      : null;
+            isProgramField
+                ? null
+                : assignmentOwned && childHasPrimary && primaryRoomName
+                  ? `Determined by primary classroom: ${primaryRoomName}`
+                  : assignmentOwned && childHasPrimary
+                    ? "Determined by primary classroom"
+                    : isRoomField && !childHasPrimary
+                      ? "Set up in Assignments"
+                      : isLocationField && childEvidence?.locationInherited
+                        ? "Inherited from lead"
+                        : null;
         const linkTarget = linked
             ? normalizeIdentityFieldLinkTarget(placement.linkTarget, placement.fieldRef)
                 ?? linkContract.defaultTarget
@@ -260,11 +264,13 @@ function buildRecordRows(args: {
             editable,
             linked,
             linkLabel: linked
-                ? (childHasPrimary && derivedSourceLabel
+                ? (childHasPrimary && isProgramField
                     ? "Change in Assignments"
-                    : isRoomField && !childHasPrimary
-                      ? "Set up in Assignments"
-                      : linkContract.linkLabel)
+                    : childHasPrimary && derivedSourceLabel
+                      ? "Change in Assignments"
+                      : isRoomField && !childHasPrimary
+                        ? "Set up in Assignments"
+                        : linkContract.linkLabel)
                 : null,
             linkDestination: linked ? (linkTarget?.toCard ?? linkContract.destinationCard) : null,
             linkTarget,

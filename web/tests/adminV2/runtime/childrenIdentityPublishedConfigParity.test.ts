@@ -135,7 +135,7 @@ describe("children identity published config parity", () => {
         expect(program?.value).toBe("Pre-K");
         expect(program?.linked).toBe(true);
         expect(program?.linkLabel).toMatch(/Change in Assignments/i);
-        expect(program?.derivedSourceLabel).toMatch(/primary classroom/i);
+        expect(program?.derivedSourceLabel).toBeNull();
     });
 
     it("displays Location as the site label, never the location_id UUID", () => {
