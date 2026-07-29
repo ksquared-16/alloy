@@ -18,6 +18,10 @@ type Body = {
     asserted_role_key?: string;
     asserted_command_key?: string;
     expected_proposal_status?: string;
+    /** Explicit child anchor — validated against the server-loaded household. */
+    anchor_customer_member_id?: string;
+    /** Explicit selection for selected-children scope — every id is validated. */
+    selected_customer_member_ids?: unknown[];
 };
 
 function parseDecision(body: Body, proposalId: string): RelatedRecordProposalDecision | NextResponse {
@@ -78,6 +82,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             proposalContext = null;
         }
         if (proposalContext?.proposal.execution_kind === "configured_relationship") {
+            // Load the household's children SERVER-SIDE. These are the only ids an anchor may
+            // reference — a participant can never name a child outside the active household.
+            const { data: childRows } = await supabase
+                .from("customer_members")
+                .select("id, customer_id, org_id")
+                .eq("org_id", ctx.orgId)
+                .eq("customer_id", proposalContext.expectedCustomerId ?? "")
+                .eq("relationship", "child")
+                .eq("is_active", true);
+            const householdChildren = (childRows ?? []).map(
+                (r: { id: string; customer_id: string; org_id: string }) => ({
+                    customer_member_id: r.id,
+                    customer_id: r.customer_id,
+                    org_id: r.org_id,
+                }),
+            );
+
             const relOutcome = await executeRelationshipProposalCommit({
                 supabase,
                 orgId: ctx.orgId,
@@ -92,7 +113,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 // null anchor the executor resolves scope across the household's children, which is
                 // correct for household-scoped commits; child-specific anchoring is supplied by the
                 // caller's scope choice. Resolving a precise anchor member is a live-journey concern.
-                anchorCustomerMemberId: null,
+                householdChildren,
+                // The anchor is an explicit operator/runtime choice. It is validated against the
+                // household above; it is never inferred from "the only child" and never expanded.
+                anchorCustomerMemberId:
+                    typeof body.anchor_customer_member_id === "string" ? body.anchor_customer_member_id : null,
+                selectedCustomerMemberIds: Array.isArray(body.selected_customer_member_ids)
+                    ? body.selected_customer_member_ids.filter((x): x is string => typeof x === "string")
+                    : null,
                 // Only `scope` is honoured; role/command assertions are compared and rejected by the gate.
                 request: {
                     proposalId,
