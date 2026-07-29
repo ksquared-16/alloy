@@ -814,9 +814,15 @@ function buildCardModels(input: {
         card({
             key: "billing_preview",
             title: "Billing Preview",
+            // DEFERRED SOURCE — no verdict from unwired plumbing. `billing_configured` and
+            // `tuition_rate_label` are read here but written NOWHERE in the platform, so the old
+            // `?? "Billing not configured"` asserted a business conclusion on every record from
+            // fields nothing populates. The authoritative source is the financial-config API,
+            // resolved by `buildBillingPreviewCardEvidence` (which BillingPreviewCard renders);
+            // this base model only holds the cell until then. See CARD-READINESS-LIFECYCLE.md.
             insight: record["billing_configured"]
                 ? "Billing configured"
-                : trimOrNull(record["tuition_rate_label"]) ?? "Billing not configured",
+                : trimOrNull(record["tuition_rate_label"]) ?? "",
             tier: "context",
             span: 1,
             density: "compact",

@@ -7,7 +7,7 @@ last_reviewed: 2026-07-28
 # Focus Panel card placement — ownership
 
 **Frozen conclusion (2026-07-28, Kelly-approved): there is no `CardPlacementProfile`, and the
-card-owned placement tier is intentionally EMPTY.** No card property in this codebase has been shown
+card-owned placement capability layer remains intentionally empty.** No card property in this codebase has been shown
 to be a placement default or capability. Do not create one speculatively — populate it only when the
 proving experiment below produces evidence.
 
@@ -19,7 +19,7 @@ This document exists so the emptiness reads as a *decision with evidence*, not a
 
 | Tier | Owns | Where |
 |---|---|---|
-| **CardPresentationCapability** | *(intentionally empty — nothing qualifies yet)* | — |
+| **Card-owned placement capability layer** | *(remains intentionally empty — nothing qualifies yet)* | — |
 | **SurfaceDefaultComposition** | key · reading order · tier · default visibility · `colStart/colSpan/rowStart/rowSpan` (Summary) or `span` emphasis (Work) | `composition/focusPanelSummaryDefaultComposition.ts` · `WORK_GRID` in `deriveOpportunityFocusPanelCards.ts` |
 | **TenantPublishedComposition** | a persisted override of the surface default | `entity_layouts` (`layout_key = focus_panel_summary`), read via `usePublishedFocusPanelSummaryDoc` / seeded server-side by `workUnitProvisioningAnswer` |
 | **Runtime** | resolves ONE composition source, then applies provider-availability + visibility filtering and responsive interpretation | `deriveFocusPanelSummaryCompositionInputs` → `planPublishedLayout` → `FocusPanelCardGrid` |
@@ -64,7 +64,7 @@ The queued Child second surface is the first opportunity to generate real eviden
    which today nothing does, because no minimum is enforced anywhere.
 4. If a property differs per surface, it is surface-owned. Leave it in the surface composition.
 
-Until step 3 produces a positive result, this tier stays empty.
+Until step 3 produces a positive result, the card-owned placement capability layer remains intentionally empty.
 
 ## 4. What was retired, and why it is safe
 

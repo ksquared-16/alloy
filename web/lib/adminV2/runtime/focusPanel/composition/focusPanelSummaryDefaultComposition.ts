@@ -25,7 +25,7 @@
  * the encode/schema boundary for compatibility (stored docs, validators, the editor round-trip) and
  * carry no authority. Removing them is a schema migration, not a placement change.
  *
- * Card-owned placement defaults are intentionally ABSENT: no card property in this codebase has been
+ * The card-owned placement capability layer remains intentionally empty: no card property has been
  * shown to travel across surfaces (Summary and Work place disjoint card sets). See
  * `docs/runtime/CARD-PLACEMENT-OWNERSHIP.md`.
  */
