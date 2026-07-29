@@ -35,10 +35,21 @@ export async function ensureAdminPlaywrightSession(page: Page): Promise<void> {
         // Settle hydration before typing at all: React replaces the DOM value on hydrate, so a value
         // that "stuck" a moment ago can still be wiped. Wait for the form to stop changing, fill,
         // confirm the value survives a beat, and re-verify immediately before submitting.
+        // pressSequentially, NOT fill. `fill` sets the DOM value directly; if React has not yet
+        // attached its onChange the DOM looks correct while React state stays EMPTY, and the submit
+        // handler then posts blank credentials ("missing email or phone"). inputValue() reads the
+        // DOM, so it cannot detect that. Real key events make React register every character.
+        const typeInto = async (box: typeof emailBox, value: string) => {
+            await box.click();
+            await box.press("ControlOrMeta+a").catch(() => undefined);
+            await box.press("Backspace").catch(() => undefined);
+            await box.pressSequentially(value, { delay: 12 });
+        };
+
         const fillAndConfirm = async (): Promise<boolean> => {
-            await emailBox.fill(email);
-            await passwordBox.fill(password);
-            await page.waitForTimeout(750);
+            await typeInto(emailBox, email);
+            await typeInto(passwordBox, password);
+            await page.waitForTimeout(500);
             const [e, p] = await Promise.all([emailBox.inputValue(), passwordBox.inputValue()]);
             return e === email && p === password;
         };
@@ -66,8 +77,8 @@ export async function ensureAdminPlaywrightSession(page: Page): Promise<void> {
         let authRes: Awaited<ReturnType<typeof page.waitForResponse>> | null = null;
         for (let attempt = 0; attempt < 4 && !authRes; attempt += 1) {
             if ((await emailBox.inputValue()) !== email || (await passwordBox.inputValue()) !== password) {
-                await emailBox.fill(email);
-                await passwordBox.fill(password);
+                await typeInto(emailBox, email);
+                await typeInto(passwordBox, password);
             }
             const pending = page
                 .waitForResponse(

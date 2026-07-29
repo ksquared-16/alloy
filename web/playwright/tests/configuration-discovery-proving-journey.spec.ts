@@ -549,7 +549,13 @@ test.describe("Configuration Discovery — proving journey", () => {
                 [parents.id]: [
                     {
                         instance_key: "cdv1-guardian-1",
-                        values: { [nestedId(parents, "full_name")!]: "Dana CDV1Guardian" },
+                        // A respondent filling the guardian block supplies contact details; the form
+                        // asks for them, and intake needs a way to reach the family.
+                        values: {
+                            [nestedId(parents, "full_name")!]: "Dana CDV1Guardian",
+                            [nestedId(parents, "email")!]: "dana.guardian@cdv1.invalid",
+                            [nestedId(parents, "phone")!]: "5550100",
+                        },
                         collection: {
                             provider_ref: "person.contact_role.parents",
                             origin: "existing",
