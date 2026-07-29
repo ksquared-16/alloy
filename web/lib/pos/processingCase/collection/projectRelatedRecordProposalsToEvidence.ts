@@ -114,6 +114,10 @@ function buildInstanceEvidence(
     const values = valuesFromFieldProposals(inst);
     return {
         proposal_id: inst.proposal_id,
+        // Server-derived; pass through untouched so nothing downstream re-derives relationship
+        // authority from the payload.
+        ...(inst.execution_kind ? { execution_kind: inst.execution_kind } : {}),
+        ...(inst.relationship_intent ? { relationship_intent: inst.relationship_intent } : {}),
         collection_provider_ref: inst.collection_provider_ref,
         collection_label: collectionLabel,
         iteration_entity_type: inst.item_entity_type,

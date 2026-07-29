@@ -653,6 +653,84 @@ test.describe("Configuration Discovery — proving journey", () => {
             `JOURNEY SUBMIT preserved refs=${JSON.stringify(Object.keys(byRef))} processingCase=${submissionCaseId}`,
         );
     });
+
+    test("9. Processing produces relationship proposals with SERVER-DERIVED intent", async () => {
+        test.skip(!ON_CERT_STACK, "Runs only against the local certification stack");
+        expect(submissionCaseId, "step 8 did not open a Processing case").toBeTruthy();
+        const req = page.request;
+
+        const caseRead = await okJson(
+            await req.get(`/api/admin/processing/cases/${submissionCaseId}`),
+            "GET processing case (proposals)",
+        );
+        const detail = caseRead.data?.detail ?? caseRead.data;
+        console.log(`JOURNEY PROPOSALS caseType=${detail?.caseType} status=${detail?.status}`);
+
+        // Collection evidence lives on the case EVIDENCE list, not under detail.sources.
+        const evidence: Json[] = caseRead.data?.evidence ?? [];
+        const groups = evidence.flatMap((e: Json) => e?.collectionEvidence?.groups ?? []);
+        const instances: Json[] = groups.flatMap((g: Json) => g?.instances ?? []);
+        console.log(
+            `JOURNEY PROPOSALS groups=${groups.length} instances=${instances.length} refs=${JSON.stringify(
+                [...new Set(instances.map((i) => i.collection_provider_ref))].sort(),
+            )}`,
+        );
+
+        expect(groups.length, "Processing received no collection evidence").toBe(3);
+        expect(instances.length, "Processing received no collection instances").toBe(3);
+
+        // ALL THREE collections must survive — a guardian-only case would lose the others.
+        const byRef = Object.fromEntries(instances.map((i) => [i.collection_provider_ref, i]));
+        for (const ref of [
+            "person.contact_role.parents",
+            "person.contact_role.emergency_contacts",
+            "person.contact_role.authorized_pickups",
+        ]) {
+            expect(byRef[ref], `Processing lost the ${ref} collection`).toBeTruthy();
+        }
+
+        for (const inst of instances) {
+            const intent = inst.relationship_intent;
+            expect(intent, `no server-derived intent on ${inst.collection_provider_ref}`).toBeTruthy();
+            expect(inst.execution_kind).toBe("configured_relationship");
+            // None of this was submitted — it is resolved from provider_ref server-side.
+            expect(intent.definition_key).toBeTruthy();
+            expect(intent.operational_role_key).toBeTruthy();
+            expect(intent.apply_command_key).toBeTruthy();
+            expect(intent.supported_scopes.length).toBeGreaterThan(0);
+            console.log(
+                `JOURNEY INTENT ${inst.collection_provider_ref} role=${intent.operational_role_key} ` +
+                    `cmd=${intent.apply_command_key} action=${intent.identity_action} ` +
+                    `person=${intent.existing_person_id ?? "(create)"} scope=${intent.default_scope} status=${inst.status}`,
+            );
+        }
+
+        // create-vs-link must match what the respondent actually did
+        expect(byRef["person.contact_role.parents"].relationship_intent.identity_action).toBe("link_existing_person");
+        expect(byRef["person.contact_role.parents"].relationship_intent.existing_person_id).toBe(FX.guardianPerson);
+        expect(byRef["person.contact_role.authorized_pickups"].relationship_intent.identity_action).toBe("link_existing_person");
+        expect(byRef["person.contact_role.authorized_pickups"].relationship_intent.existing_person_id).toBe(FX.multiRolePerson);
+        expect(byRef["person.contact_role.emergency_contacts"].relationship_intent.identity_action).toBe("create_proposed_person");
+        expect(byRef["person.contact_role.emergency_contacts"].relationship_intent.existing_person_id).toBeUndefined();
+
+        // the respondent-added emergency contact carries its proposed Person facts
+        const facts = byRef["person.contact_role.emergency_contacts"].relationship_intent.proposed_person_facts ?? [];
+        expect(facts.length, "respondent-added person lost its proposed facts").toBeGreaterThan(0);
+        console.log(`JOURNEY INTENT emergency proposedFacts=${JSON.stringify(facts.map((f: Json) => f.field_key))}`);
+
+        // proposal ids are stable across reads (idempotent commit keying depends on this)
+        const second = await okJson(
+            await req.get(`/api/admin/processing/cases/${submissionCaseId}`),
+            "GET processing case (stability)",
+        );
+        const secondIds = ((second.data?.evidence ?? []) as Json[])
+            .flatMap((e: Json) => e?.collectionEvidence?.groups ?? [])
+            .flatMap((g: Json) => g?.instances ?? [])
+            .map((i: Json) => i.proposal_id)
+            .sort();
+        expect(secondIds).toEqual(instances.map((i) => i.proposal_id).sort());
+        console.log(`JOURNEY PROPOSALS ids stable across reads=${secondIds?.length}`);
+    });
 });
 
 /** Collect group-type fields (one level of nesting is all Forms allows). */

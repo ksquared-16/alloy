@@ -47,6 +47,14 @@ export type ProcessingCollectionInstanceLineage = {
 
 export type ProcessingCollectionInstanceProposal = {
     proposal_id: string;
+    /**
+     * Which execution path this instance takes — the DEFINITION decides. Carried through so the
+     * operator review surface and the guarded commit read the same server-derived answer rather
+     * than re-deriving (or worse, guessing) it.
+     */
+    execution_kind?: import("@/lib/intake/proposals/types").CollectionExecutionKind;
+    /** Server-derived relationship intent; present only for configured relationship collections. */
+    relationship_intent?: import("@/lib/intake/proposals/types").RelatedRecordRelationshipIntent;
     collection_provider_ref: string;
     collection_label: string;
     iteration_entity_type: string;
