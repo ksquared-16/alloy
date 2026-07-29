@@ -22,6 +22,7 @@ import {
     buildCurrentWorkCardModel,
     buildHouseholdCardModel,
     buildReadinessCardModel,
+    buildSchedulingCardModel,
 } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -67,5 +68,19 @@ export const COMMIT_CRITICAL_CARD_SPECS: readonly CommitCriticalCardSpec[] = [
         key: "readiness_kpi",
         isKnowable: hasSubjectIdentityTruth,
         build: (context) => buildReadinessCardModel(context),
+    },
+    {
+        // Scheduling was waiting ~5.5s on the enriched drawer VM for data that fetch does not carry.
+        // `buildSchedulingCardModel` reads exactly ONE field — `_inquiry_children` — the same field
+        // `children` above already gates on, and the answer builds it in the shape the shared builder
+        // consumes. Its collection helper hardcodes "Needs a room" for every child by design
+        // (operational assignments do not exist until enrollment), so no assignment data is read at
+        // all. Same builder + same input ⇒ byte-identical model, just at commit instead of settlement.
+        //
+        // Gated on the field's PRESENCE, not on a count: absent truth must stay reserved rather than
+        // render "No children to assign", which would be a business conclusion drawn from missing data.
+        key: "scheduling",
+        isKnowable: (context) => context.truth._inquiry_children != null,
+        build: (context) => buildSchedulingCardModel(context.truth),
     },
 ];
