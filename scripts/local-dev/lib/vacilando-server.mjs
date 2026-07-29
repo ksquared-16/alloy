@@ -52,7 +52,7 @@ import { readMissions, getMission, recoverMissions } from "./vacilando/commands/
 import { getPackage } from "./vacilando/commands/mission-packages.mjs";
 import { readMissionOutputs, readTurnOutput, liveMissionIds } from "./vacilando/mission-executor.mjs";
 import { providerResumable } from "./vacilando/provider-runtime.mjs";
-import { compileMissionForIntent, recompileMission, reframeMission, answerQuestions, defineCapability, addProductDecision, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, close as directorClose, previewAction, readAcceptance, setObjectiveMode, prepareNextPhase, readObjective } from "./vacilando/mission-director.mjs";
+import { compileMissionForIntent, recompileMission, reframeMission, answerQuestions, defineCapability, addProductDecision, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, close as directorClose, previewAction, readAcceptance, setObjectiveMode, prepareNextPhase, readObjective, conductObjectiveNext } from "./vacilando/mission-director.mjs";
 import { listCapabilities, getCapability, registerCapability } from "./vacilando/capability.mjs";
 import { assembleConversation, listConversations } from "./vacilando/conversation.mjs";
 import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
@@ -577,12 +577,15 @@ async function refreshDisk({ act = false } = {}) {
  * actions still preview→confirm. Never rubber-stamps judgment.
  */
 const autoResumeTries = new Map(); // mission_id -> resume attempts (in-memory, resets on restart)
+const conductCooldown = new Map(); // capability_id -> last re-launch attempt (avoid spamming a failing phase)
 function conductorTick() {
   try {
+    const autoObjectives = new Set();
     for (const m of readMissions(null, 200)) {
       if (!m.capability_id) continue;
       const obj = readObjective(m.capability_id);
       if (!obj || obj.mode !== "autonomous") continue;
+      autoObjectives.add(m.capability_id);
       // A finished phase whose gate fully passes → auto-accept (advances the objective).
       if (m.status === "waiting_for_acceptance") {
         const ev = directorEvaluate({ mission_id: m.mission_id });
@@ -595,6 +598,14 @@ function conductorTick() {
         const tries = autoResumeTries.get(m.mission_id) || 0;
         if (tries < 3) { autoResumeTries.set(m.mission_id, tries + 1); directorSteer({ mission_id: m.mission_id, instruction: "Continue where you left off; complete the mission.", confirm: true }); }
       }
+    }
+    // Self-heal: for each autonomous objective, ensure its current pending phase is
+    // being worked — re-launch a phase whose last attempt failed (e.g. an auth
+    // expiry now fixed), in the objective's own slot. Cooldown avoids a spin loop.
+    for (const capId of autoObjectives) {
+      if (Date.now() - (conductCooldown.get(capId) || 0) < 90000) continue;
+      conductCooldown.set(capId, Date.now());
+      conductObjectiveNext({ capability_id: capId }).catch(() => {});
     }
   } catch { /* best-effort; the operator path always still works */ }
 }

@@ -55,6 +55,7 @@ export function ensureObjective(capability, { intent } = {}) {
     title: `${capability.name} V2`,
     intent: intent || null,
     mode: "gated",
+    worker_slot: null,       // the objective's OWN workspace — all phases run here (set on first accept)
     phases: phasesFor(capability),
     current: 0,              // index of the phase in flight / next to run
     proposed_next: null,     // { phase, intent } surfaced to the operator (gated)
@@ -92,10 +93,13 @@ export function intentForPhase(capability, phase) {
  * phase. If the objective doesn't exist yet (e.g. the capability had no roadmap),
  * returns { complete:true } so the caller simply stops.
  */
-export function advanceOnAccept(capability, { mission_id } = {}) {
+export function advanceOnAccept(capability, { mission_id, worker_slot } = {}) {
   const capId = capability?.capability_id;
   let o = read(capId) || ensureObjective(capability);
   if (!o) return { objective: null, next: null, complete: true };
+  // The objective adopts the slot its first mission ran in — every phase runs in
+  // that one workspace, never grabbing a fresh slot per phase.
+  if (worker_slot != null && (o.worker_slot == null || o.worker_slot === undefined)) o.worker_slot = worker_slot;
   const cur = o.phases.find((p) => p.status !== "done");
   if (cur) { cur.status = "done"; cur.mission_id = mission_id || cur.mission_id; cur.accepted_at = iso(); }
   o.current = o.phases.findIndex((p) => p.status !== "done");

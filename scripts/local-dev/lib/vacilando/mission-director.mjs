@@ -18,7 +18,7 @@ import { retrieveForCapability } from "./knowledge.mjs";
 import { analyzeGap, parseIntent } from "./gap-analysis.mjs";
 import { deriveVerdict } from "./director-review.mjs";
 import { compile } from "./mission-compiler.mjs";
-import { createMission, getMission, updateMission } from "./commands/missions.mjs";
+import { createMission, getMission, updateMission, readMissions } from "./commands/missions.mjs";
 import { getPackage, packageForMission, updatePackage } from "./commands/mission-packages.mjs";
 import { checkStartPreconditions, runMissionTurn, stopMission, isLive, readLatestReport } from "./mission-executor.mjs";
 import { evaluateMission, readAcceptance } from "./acceptance.mjs";
@@ -30,6 +30,7 @@ import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { TOOLKIT_DIR } from "./commands/executor.mjs";
 import { freeDiskGb, runGc } from "./disk-hygiene.mjs";
+import { precheckProvider } from "./provider-runtime.mjs";
 import { ensureObjective, getObjective, advanceOnAccept, intentForPhase, clearProposedNext, setMode, adoptPhases } from "./objective.mjs";
 
 const PROVISION_HARD_GB = 5; // pre-provision floor: below this, reclaim then fail fast
@@ -44,10 +45,19 @@ function conductNext(capability, phase, { autonomous } = {}) {
   try {
     const intent = intentForPhase(capability, phase);
     if (!intent) return null;
-    // Auto slot resolution lives in the server; the conductor compiles onto a free
-    // slot the same way the operator's Compile does — reuse a dedicated helper so
-    // the phase mission is bound + provisionable exactly like a hand-started one.
-    const out = compileMissionForIntent({ slot: pickFreeSlotForConductor(), intent });
+    // Run the phase in the OBJECTIVE'S OWN workspace (the slot its plan ran in) —
+    // one coherent worktree for the whole objective, never grabbing a fresh slot
+    // per phase. Prefer the stored slot; else infer it from a completed phase's
+    // mission; else fall back to a free slot.
+    const obj = getObjective(capability.capability_id);
+    let slot = obj?.worker_slot;
+    if (slot == null) {
+      const done = (obj?.phases || []).find((p) => p.status === "done" && p.mission_id);
+      if (done) slot = getMission(done.mission_id)?.worker_slot ?? null;
+    }
+    slot = slot ?? pickFreeSlotForConductor();
+    if (slot == null) return { ok: false, error: "no_slot_available" };
+    const out = compileMissionForIntent({ slot, intent });
     if (!out.ok) return { ok: false, error: out.reason || out.error };
     // Tag the mission to its objective + phase so accept advances the right slot.
     updateMission(out.mission.mission_id, { objective_capability_id: capability.capability_id, phase_id: phase.id });
@@ -345,6 +355,31 @@ export function prepareNextPhase({ capability_id }) {
 /** Read the objective (phase spine + mode + proposed next) for a capability. */
 export function readObjective(capability_id) { return getObjective(capability_id); }
 
+/**
+ * Autonomous self-heal: ensure the current pending phase is being worked. If no
+ * mission for it is active (its last attempt failed — e.g. an auth expiry the
+ * operator has since fixed), (re)launch it in the objective's own slot. No-op if a
+ * mission for the phase is already running/waiting, or the objective is complete.
+ */
+export async function conductObjectiveNext({ capability_id }) {
+  try {
+    const cap = getCapability(capability_id);
+    const o = getObjective(capability_id);
+    if (!cap || !o || o.mode !== "autonomous") return { ok: false, error: "not_autonomous" };
+    const phase = o.phases.find((p) => p.status !== "done");
+    if (!phase) return { ok: false, complete: true };
+    const ACTIVE = new Set(["starting", "running", "provisioning", "waiting_for_acceptance", "waiting_for_operator"]);
+    const active = readMissions(null, 300).some((m) => m.objective_capability_id === capability_id && m.phase_id === phase.id && ACTIVE.has(m.status));
+    if (active) return { ok: true, active: true };
+    // Don't relaunch into an auth wall — wait until the provider is reconnected, so
+    // a claude/cursor OAuth expiry self-heals the moment the operator reconnects.
+    const provider = cap.owner?.provider_default || "claude";
+    const pre = await precheckProvider(provider);
+    if (!pre.ok) return { ok: false, waiting: "provider_auth", provider };
+    return conductNext(cap, phase, { autonomous: true }) || { ok: false };
+  } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+}
+
 /** Build a preview for a consequential mission action (pure; never executes). */
 export function previewAction(action, mission_id) {
   const mission = getMission(mission_id);
@@ -564,7 +599,7 @@ export function accept({ mission_id, confirm }) {
       if (!isImplement) {
         try { const rep = readLatestReport(mission_id); if (rep?.implementation_phases?.length) adoptPhases(cap, rep.implementation_phases); } catch { /* plan without structured phases → spine stays as-is */ }
       }
-      const adv = advanceOnAccept(cap, { mission_id });
+      const adv = advanceOnAccept(cap, { mission_id, worker_slot: mission.worker_slot });
       conductor = { complete: adv.complete, next: adv.next || null, mode: adv.objective?.mode || "gated" };
       if (!adv.complete && conductor.mode === "autonomous") {
         conductor.conducted = conductNext(cap, adv.next, { autonomous: true });
