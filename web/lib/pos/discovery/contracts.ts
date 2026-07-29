@@ -19,14 +19,14 @@
  * index. This is what lets detector reruns preserve accepted operator decisions.
  *
  * REUSE, DON'T DUPLICATE: matching targets are the EXISTING platform vocabularies —
- * `FormFieldSource` (canonical fields), `PersonChildOperationalRoleKey` (relationships), and the
+ * `FormFieldSource` (canonical fields), `OperationalRoleKey` (relationships), and the
  * frozen `RequirementType` (requirements). This module owns no parallel storage.
  */
 
 import type { FormFieldSource } from "@/lib/forms/schema";
 import type { SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
 import type { RequirementType } from "@/lib/pos/packet/requirementResponsibility";
-import type { PersonChildOperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipEntity";
+import type { OperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipEntity";
 
 export const DISCOVERY_CONTRACT_VERSION = "fp16.0";
 
@@ -159,7 +159,7 @@ export interface BusinessConceptCandidate {
     /** How many of this concept the document collects (a group is `multiple`). */
     cardinality: "single" | "multiple";
     /** For relationship concepts: the child- or household-scoped operational role. */
-    relationship_role?: PersonChildOperationalRoleKey;
+    relationship_role?: OperationalRoleKey;
     relationship_scope?: "child" | "household";
     /** For requirement concepts: the frozen requirement type this maps to. */
     requirement_type?: RequirementType;
@@ -231,7 +231,7 @@ export interface ConfigurationProposal {
     /** Matched existing canonical/org field binding (reuse_* dispositions). */
     target_field_source?: FormFieldSource;
     /** Matched relationship role (relationship_binding). */
-    target_relationship_role?: PersonChildOperationalRoleKey;
+    target_relationship_role?: OperationalRoleKey;
     /** Matched requirement type (upload/acknowledgement/signature). */
     target_requirement_type?: RequirementType;
     /** Proposed new field (create_proposed_field only). */

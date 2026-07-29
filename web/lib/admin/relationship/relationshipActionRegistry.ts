@@ -15,26 +15,18 @@ import type {
     RelationshipActionSourceSurface,
     RelationshipRoleKey,
 } from "@/lib/admin/relationship/relationshipActionContract";
+import {
+    RELATIONSHIP_DEFINITIONS,
+    type RelationshipDefinition,
+    type RelationshipWriteTarget,
+    type RelationshipExecutorKind,
+} from "@/lib/fields/relationship/relationshipDefinitions";
 
 export type RelationshipIdentityKind = "person" | "child" | "either";
 
-export type RelationshipWriteTarget =
-    | "persons"
-    | "contacts"
-    | "customer_persons"
-    | "customer_members"
-    | "opportunity_persons"
-    | "opportunity_customer_members"
-    | "customer_member_contacts";
-
-export type RelationshipExecutorKind =
-    | "child_scoped_contact"
-    | "guardian"
-    | "billing"
-    | "add_child"
-    | "link_person"
-    | "link_child"
-    | "make_primary_external";
+// Write-path vocabulary now lives on the canonical side (definitions → registry). Re-exported here so
+// existing importers are unaffected.
+export type { RelationshipWriteTarget, RelationshipExecutorKind } from "@/lib/fields/relationship/relationshipDefinitions";
 
 export type RelationshipActionRegistryEntry = {
     actionKey: RelationshipActionKey;
@@ -56,44 +48,59 @@ export type RelationshipActionRegistryEntry = {
     externalExecutor?: boolean;
 };
 
-export const RELATIONSHIP_ACTION_REGISTRY: RelationshipActionRegistryEntry[] = [
-    {
-        actionKey: "add_emergency_contact",
-        label: "Add Emergency Contact",
-        description: "Add or link an emergency contact scoped to this child or siblings.",
+/**
+ * Project ONE relationship definition into its action-registry entry.
+ *
+ * Every semantic field comes off the definition (`apply_command_key`, `operational_role_key`,
+ * `scopes`, `write_targets`, `executor_kind`); presentation falls back to definition-derived defaults
+ * so a NEW relationship row produces a working command with no edit here. This is what removes the
+ * per-role allowlist from the execution layer.
+ *
+ * @see docs/platform/core/data/relationship-model.md
+ */
+export function relationshipCommandPresentation(def: RelationshipDefinition): RelationshipActionRegistryEntry {
+    const p = def.command_presentation ?? {};
+    return {
+        actionKey: def.apply_command_key as RelationshipActionKey,
+        label: p.label ?? `Add ${def.label}`,
+        description: p.description ?? def.help_text,
+        // Definition-backed relationships always resolve a person identity onto a child/household.
         identityKind: "person",
-        defaultRoleKey: "emergency_contact",
+        defaultRoleKey: def.operational_role_key as RelationshipRoleKey,
+        // Fixed-role by construction: the definition names the role, so operators cannot repoint it.
         roleEditable: false,
-        allowedSurfaces: ["child_drawer"],
-        allowedContexts: ["section_row", "contact_block"],
-        allowedScopes: ["this_child", "selected_children", "all_children_in_household"],
-        allowedSourceSurfaces: ["child_drawer", "bos_rail"],
-        writeTargets: ["contacts", "customer_persons"],
-        executorKind: "child_scoped_contact",
-        confirmationCopy: "This will link the person as an emergency contact on the selected child record(s).",
-        bosExamples: [
-            "Add Grandma Susan as emergency contact for Billie and her siblings.",
-            "Add emergency contact Pat for this child only.",
-        ],
+        allowedSurfaces: (p.allowed_surfaces ?? ["child_drawer"]) as readonly DrawerLayoutEditorSurfaceKey[],
+        allowedContexts: (p.allowed_contexts ?? ["section_row", "contact_block"]) as readonly RelationshipActionPickerContext[],
+        allowedScopes: def.scopes as readonly RelationshipActionScope[],
+        allowedSourceSurfaces: (p.allowed_source_surfaces ?? ["child_drawer", "bos_rail"]) as readonly RelationshipActionSourceSurface[],
+        writeTargets: def.write_targets,
+        executorKind: def.executor_kind,
+        confirmationCopy:
+            p.confirmation_copy
+            ?? `This will link the person as ${def.label.toLowerCase()} on the selected child record(s).`,
+        bosExamples: p.bos_examples ?? [],
         runtimeWired: true,
-    },
-    {
-        actionKey: "add_authorized_pickup",
-        label: "Add Authorized Pickup",
-        description: "Authorize a person for pickup on this child or selected siblings.",
-        identityKind: "person",
-        defaultRoleKey: "authorized_pickup",
-        roleEditable: false,
-        allowedSurfaces: ["child_drawer"],
-        allowedContexts: ["section_row", "contact_block"],
-        allowedScopes: ["this_child", "selected_children", "all_children_in_household"],
-        allowedSourceSurfaces: ["child_drawer", "bos_rail"],
-        writeTargets: ["contacts"],
-        executorKind: "child_scoped_contact",
-        confirmationCopy: "This will link the person as authorized pickup on the selected child record(s).",
-        bosExamples: ["Add Uncle Mike as authorized pickup for Riley."],
-        runtimeWired: true,
-    },
+    };
+}
+
+/** Registry entries owned by the relationship model — one per definition, derived. */
+export function deriveRelationshipCommandEntries(): RelationshipActionRegistryEntry[] {
+    return RELATIONSHIP_DEFINITIONS.map(relationshipCommandPresentation);
+}
+
+/**
+ * Commands that are NOT relationship definitions and stay hand-authored:
+ *
+ *  • `add_billing_contact` — a financial responsibility command (`executorKind: "billing"`, writes
+ *    `customer_member_contacts` + `opportunity_persons`). It has no definition row and must keep
+ *    flowing through its own executor untouched.
+ *  • `add_child` / `link_existing_child` — child IDENTITY and household membership, not relationship
+ *    edges. Same reasoning as the native structural collections (`children`, `household.members`).
+ *  • `link_existing_person` — role-agnostic by design; the operator picks the role at runtime
+ *    (`roleEditable: true`), so it cannot derive a role from any single definition.
+ *  • `make_primary_contact` — external executor (household primary designation), not this path.
+ */
+const NATIVE_RELATIONSHIP_ACTION_ENTRIES: RelationshipActionRegistryEntry[] = [
     {
         actionKey: "add_billing_contact",
         label: "Add Billing Contact",
@@ -115,23 +122,6 @@ export const RELATIONSHIP_ACTION_REGISTRY: RelationshipActionRegistryEntry[] = [
         executorKind: "billing",
         confirmationCopy: "This will assign billing responsibility and link contacts on affected records.",
         bosExamples: ["Add Taylor as billing contact for this enrollment and household."],
-        runtimeWired: true,
-    },
-    {
-        actionKey: "add_parent_guardian",
-        label: "Add Parent / Guardian",
-        description: "Add or link a parent/guardian for this child or household.",
-        identityKind: "person",
-        defaultRoleKey: "guardian",
-        roleEditable: false,
-        allowedSurfaces: ["child_drawer", "opportunity_drawer"],
-        allowedContexts: ["section_row", "contact_block"],
-        allowedScopes: ["this_child", "selected_children", "all_children_in_household", "household"],
-        allowedSourceSurfaces: ["child_drawer", "opportunity_drawer", "bos_rail"],
-        writeTargets: ["contacts", "customer_persons", "customer_member_contacts"],
-        executorKind: "guardian",
-        confirmationCopy: "This will link the person as a guardian on the selected child record(s) and household.",
-        bosExamples: ["Add Jordan Lee as guardian for both children."],
         runtimeWired: true,
     },
     {
@@ -211,6 +201,17 @@ export const RELATIONSHIP_ACTION_REGISTRY: RelationshipActionRegistryEntry[] = [
     },
 ];
 
+/**
+ * The action registry = relationship-model-derived commands + the hand-authored native commands.
+ *
+ * Derived entries come first so that a relationship definition is always the authority for its own
+ * command; a duplicate native entry for the same key would be shadowed rather than silently winning.
+ */
+export const RELATIONSHIP_ACTION_REGISTRY: RelationshipActionRegistryEntry[] = [
+    ...deriveRelationshipCommandEntries(),
+    ...NATIVE_RELATIONSHIP_ACTION_ENTRIES,
+];
+
 const REGISTRY_BY_KEY = new Map(RELATIONSHIP_ACTION_REGISTRY.map((entry) => [entry.actionKey, entry]));
 
 export function relationshipActionRegistryEntry(
@@ -232,15 +233,23 @@ export function listRelationshipActionsForBuilder(input: {
     );
 }
 
+/**
+ * Roles an operator may pick for the role-agnostic `link_existing_person` command.
+ *
+ * Derived: every candidate declared by a relationship definition, plus the native financial roles
+ * that have no definition row. A new relationship definition widens this picker automatically.
+ */
 export function listEditableRelationshipRoles(): RelationshipRoleKey[] {
-    return [
-        "emergency_contact",
-        "authorized_pickup",
-        "billing_contact",
-        "payer",
-        "guardian",
-        "parent_guardian",
-        "parent",
-        "secondary_guardian",
-    ];
+    const NATIVE_EDITABLE_ROLES = ["billing_contact", "payer"];
+    const seen = new Set<string>();
+    const out: RelationshipRoleKey[] = [];
+    for (const key of [
+        ...RELATIONSHIP_DEFINITIONS.flatMap((d) => d.role_key_candidates),
+        ...NATIVE_EDITABLE_ROLES,
+    ]) {
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(key);
+    }
+    return out;
 }

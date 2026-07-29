@@ -93,14 +93,14 @@ generically with no new code. The gaps are in the layers that still keep their o
 
 | # | Gap | Location | Effect on a new role |
 |---|-----|----------|----------------------|
-| 1 | Operational role vocabulary is a closed platform constant | `personChildRelationshipEntity.ts` (`PERSON_CHILD_OPERATIONAL_ROLE_KEYS`) | **Compile-time block** — `operational_role_key` is typed against it, so the row cannot be written at all |
+| 1 | ~~Closed operational role vocabulary~~ **CLOSED** | `personChildRelationshipEntity.ts` | `OperationalRoleKey` is now an open union; platform-fixed keys keep autocomplete. Full vocabulary via `operationalRoleVocabulary()` |
 | 2 | ~~Forms collection providers hand-authored~~ **CLOSED** | `canonicalFormsRelationshipProviderDerivation.ts` | Now derived from `collectableRelationshipDefinitions()`. Fixed the live defect that stranded `emergency_contacts` and `authorized_pickups` |
 | 3 | ~~Two-entry authoring allowlist~~ **CLOSED** | `formsRelationshipOperationalSupport.ts` | Now derived; a definition row widens Forms authoring **and** Processing submission acceptance together |
-| 4 | Write path enumerates commands per role | `relationshipActionRegistry.ts`, `relationshipActionContract.ts`, `relationshipActionRoleResolution.ts` | `apply_command_key` resolves to nothing; no write path exists |
-| 5 | Discovery *detection* is regex-per-role | `semanticModel.ts`, `conceptDiscovery.ts` | The role is never detected, so the correct generic apply path is unreachable |
+| 4 | ~~Write path enumerates commands per role~~ **CLOSED** | `relationshipActionRegistry.ts`, `relationshipActionRoleResolution.ts` | Registry entries + role resolution derive from definitions; the per-action switch is gone |
+| 5 | ~~Discovery detection is regex-per-role~~ **CLOSED** | `semanticModel.ts`, `conceptDiscovery.ts` | Detection patterns, precedence, scope and group label are definition columns |
 | 6 | ~~Prefill hardcodes `role: "parents"`~~ **CLOSED** | `formsCollectionPrefillResolver.ts` | Role now derives from the bound collection; unmapped collections resolve from generic person columns. The legacy bridge is contained in `formsLegacyContactRoleCompatibility.ts` and needs no entry for a new definition |
 | 7 | Parallel role axis (`primary/parents/billing/emergency/secondary`) unrelated to `operational_role_key` | `FormsRelationshipRoleKey`, `layoutEditorContactRoles.ts`, `relationshipSemanticShape.ts`, `relationshipRoleResolutionPolicy.ts` | Root cause of #2 and #6 |
-| 8 | Four separate command allowlists | `capabilityRegistry.ts`, `relationshipExecutionAdapter.ts`, `commandRuntimeExecutionGate.ts`, `canonicalActionAvailability.ts` | Each must gain the key before the API route will execute |
+| 8 | ~~Command allowlists~~ **MOSTLY CLOSED** | `capabilityRegistry.ts`, `relationshipExecutionAdapter.ts`, `commandRuntimeExecutionGate.ts` | Capabilities, the facade gate and the fixed-role set all derive. `canonicalActionAvailability.ts` stage lists remain — read-path visibility only, does not gate execution |
 | 9 | **A second definition registry still live** | `focusPanel/household/householdRelationshipSectionDefinitions.ts` | Six hand-authored sections with literal `roleKeys` — no Focus Panel section for a new role |
 | 10 | One BOS adapter file per role; NL intent→role is an if-else ladder | `bosCommandAdapterRegistry.ts`, `addParentGuardianAdapter.ts`, `relationshipActionBosAdapter.ts` | The role is not conversational |
 | 11 | Processing keeps its own guardian/emergency taxonomy | `questionResolutionModel.ts`, `processingReviewFieldCatalog.ts`, `requirementResponsibility.ts` | Question resolution and responsibility have no non-guardian participant kind |
@@ -110,6 +110,34 @@ generically with no new code. The gaps are in the layers that still keep their o
 Gap #9 is the one to watch: it is a *second canonical registry* of the exact kind this architecture
 forbids. It must be collapsed into a projection of `RELATIONSHIP_DEFINITIONS`, not maintained in
 parallel.
+
+### The smell test now passes for the core chain
+
+`web/tests/fields/relationshipDefinitionSmellTest.test.ts` injects a `physicians` definition and
+asserts the whole chain picks it up with **no other edit**: collection provider, Forms binding +
+authoring + alias, Discovery detection + precedence, action-registry entry, platform capability,
+facade gate, role resolution, and the PCR write fork. It also asserts the three shipped roles are
+unchanged. If anyone reintroduces a per-role allowlist in that chain, this test fails.
+
+Two behaviours are deliberately preserved rather than "fixed", and are now explicit columns instead
+of implicit code branches:
+
+- **`add_parent_guardian` writes `customer_member_contacts`, not `person_child_relationships`.** It
+  always has — `executor_kind: "guardian"` was excluded from the PCR fork. Now stated as
+  `persists_to`, so flipping guardian to PCR is a one-row config change plus a data migration.
+- **A section titled "Guardians" is seen as a person group but is NOT classified as the guardian
+  role**, because the matcher closes with `\b` and fails on the plural. Captured as
+  `detection_word_suffix`. Worth revisiting; not changed here because it would alter detection output
+  for existing documents.
+
+### Open follow-up — an unguarded write path
+
+`POST /api/admin/relationship-actions/execute` calls `executeRelationshipAction` **directly**,
+bypassing the command adapter. The adapter deliberately ignores a client-supplied `role_key` for
+fixed-role commands (anti-spoof); this route honours it, validating only against the org's active
+role keys. It is the live UI path for the relationship modals. Not changed here — it is a
+pre-existing authorization concern, not a consequence of this refactor — but it should be brought
+behind the same rule.
 
 ---
 
