@@ -130,6 +130,37 @@ of implicit code branches:
   `detection_word_suffix`. Worth revisiting; not changed here because it would alter detection output
   for existing documents.
 
+### Persistence destinations — an intentional compatibility boundary
+
+The canonical invariant is:
+
+> ONE canonical Person identity → may hold MULTIPLE operational relationship roles → each role is
+> applied through the persistence destination declared by its Relationship Definition.
+
+**Separate persistence destinations are not duplicate identity.** As shipped:
+
+| Definition | `persists_to` | Physical destination |
+|---|---|---|
+| `parents_guardians` (guardian/parent) | `customer_member_contacts` | legacy member-contact links |
+| `emergency_contacts` | `person_child_relationships` | PCR + `person_child_relationship_roles` |
+| `authorized_pickups` | `person_child_relationships` | PCR + `person_child_relationship_roles` |
+
+The layering that makes this safe:
+
+- **Relationship Definition is canonical.** It declares the role, command, scope and destination.
+- **`persists_to` chooses the compatibility writer** — it is a storage decision, not a semantic one.
+- **The execution adapter hides physical persistence.** Callers name a relationship, never a table.
+- **Consumers operate on normalized relationship semantics.** Forms, Configuration Discovery,
+  Processing and (future) Conversation Runtime resolve a definition and read/write through it. None
+  of them branch on which physical table a role happens to land in. This is enforced by
+  `web/tests/fields/relationshipStorageAbstraction.test.ts`.
+
+**This is explicitly NOT the desired final storage architecture.** Converging guardian storage onto
+`person_child_relationships` requires a SEPARATE migration mission with its own data migration,
+dual-read/backfill strategy, compatibility testing and product approval. It is deliberately out of
+scope for Configuration Discovery V1, and `persists_to` is the seam that makes that later migration a
+configuration change plus a backfill rather than a rewrite.
+
 ### Open gap — Discovery's relationship bindings never reach the form
 
 Configuration Discovery resolves each relationship group to its canonical provider and write command
