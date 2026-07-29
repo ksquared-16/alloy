@@ -696,6 +696,24 @@ export async function composeWorkUnitProvisioningAnswer(
     const requested = req.requestedSubjectId
         ? subjectRows.find((s) => s.entityId === req.requestedSubjectId) ?? null
         : null;
+    if (req.requestedSubjectId && !requested) {
+        // SUBJECT AUTHORITY. A caller that NAMES a subject is stating intent, not offering a hint.
+        // Falling through to the default here answered a request for record X with record Y under a
+        // `terminal: "operational"` banner — measured: a well-formed but off-page id returned the
+        // default family with no error and no signal, while the URL still read `subject_id=X`. In this
+        // domain that is an operator acting on the wrong family, which is the most consequential form
+        // the fabrication defect can take.
+        //
+        // Absence here does NOT mean "no such record" — the id may be beyond the page cap, outside the
+        // active lens, or in another work unit. It means THIS surface cannot honestly present it, which
+        // is exactly what the honest terminal below already exists to say. Substituting is never the
+        // truthful answer; the default subject remains reachable by asking for it without a subject id.
+        return fail(
+            "subject_unavailable",
+            `the requested subject is not present in this work unit's evaluated page — refusing to substitute a different subject`,
+            workUnit,
+        );
+    }
     const chosen =
         requested ??
         resolveDefaultOperationalSubject(subjectRows, strategy, { currentUserId: req.currentUserId ?? null });
