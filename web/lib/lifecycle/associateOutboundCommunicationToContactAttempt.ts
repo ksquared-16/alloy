@@ -1,12 +1,17 @@
 /**
  * After an outbound email/SMS is accepted by the platform, satisfy an open Current
- * Work requirement IF — and only if — configuration declares the objective
- * communication result sufficient (completion_policy.sufficient_command_results).
+ * Work requirement when effective command-result sufficiency maps the objective
+ * result to an authored outcome.
+ *
+ * Precedence (product decision, July 2026):
+ * 1. Explicit work-item `sufficient_command_results` wins.
+ * 2. Else platform default for recognized canonical templates (contact_family).
+ * 3. Else no inference — unknown/custom work never auto-completes from a send.
  *
  * The integrated communication capability publishes what objectively occurred
- * ("sent"); configuration decides what that result means for the Business Process.
- * There is no hardcoded outcome and no hardcoded stage/definition list: an
- * unconfigured successful send never completes Current Work.
+ * ("sent"); configuration (or the platform default for canonical templates)
+ * decides what that result means for the Business Process. Failed sends never
+ * satisfy a success-mapped requirement. Operators never see raw runtime result keys.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -18,11 +23,14 @@ import {
     lifecycleBuilderFromDepartmentMetadata,
     activeLifecycleProcess,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
-import { resolveSufficientCommandResultOutcome } from "@/lib/lifecycle/stageWorkCompletionPolicy";
+import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
+import {
+    COMMUNICATIONS_SEND_CAPABILITY_KEY,
+    resolveEffectiveSufficientCommandResultOutcome,
+} from "@/lib/lifecycle/stageWorkCompletionPolicy";
 
 /** Capability identity the communications send path publishes results under. */
-export const COMMUNICATIONS_SEND_CAPABILITY = "communications_send";
+export const COMMUNICATIONS_SEND_CAPABILITY = COMMUNICATIONS_SEND_CAPABILITY_KEY;
 
 export type AssociateCommunicationToContactAttemptInput = {
     supabase: SupabaseClient;
@@ -84,21 +92,16 @@ export async function associateOutboundCommunicationToContactAttempt(
     if (!openTasks.length) return { associated: false, reason: "no_open_work" };
 
     // Find the first open work item whose stage template declares this objective
-    // communication result sufficient. This replaces the hardcoded stage/def sets +
-    // the hardcoded `sent_text` outcome with configuration.
+    // communication result sufficient (explicit config or platform default for
+    // recognized canonical templates).
     for (const task of openTasks) {
         const work = parseOperationalWorkViewFromTaskRow(task);
         const stageKey = work.context_snapshot?.lifecycle_stage_key?.trim() ?? "";
         if (!stageKey) continue;
-        const stageRecord =
-            process.stages.find((s) => s.key === stageKey && s.is_active) ?? null;
-        // NOTE: deliberately the explicit-plan resolver, not `resolveEffectiveStageOperatingPlan`.
-        // Sufficiency is opt-in: an unconfigured tenant must derive nothing rather than silently
-        // inherit the enrollment default (asserted by contactFamilyExecution.test.ts). This does
-        // leave a real asymmetry — the work item the operator sees is projected from the EFFECTIVE
-        // plan, so a department can show a "Contact family" step the default spawned while a send
-        // finds no explicit plan to satisfy it. Closing that is a policy decision, not a fix.
-        const plan = resolveStageOperatingPlanForStage(stageRecord ?? {}, stageKey);
+        const { plan } = resolveEffectiveStageOperatingPlan({
+            departmentMetadata: metadata,
+            builderStageKey: stageKey,
+        });
         if (!plan) continue;
 
         // Prefer the task's own template; otherwise any template at this stage whose
@@ -111,7 +114,7 @@ export async function associateOutboundCommunicationToContactAttempt(
         });
 
         for (const template of candidateTemplates) {
-            const outcomeKey = resolveSufficientCommandResultOutcome(
+            const outcomeKey = resolveEffectiveSufficientCommandResultOutcome(
                 template,
                 COMMUNICATIONS_SEND_CAPABILITY,
                 result,
