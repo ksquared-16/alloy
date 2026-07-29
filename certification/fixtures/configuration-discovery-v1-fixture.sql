@@ -44,6 +44,13 @@ where not exists (
     where r.org_id = :org_id::uuid and r.role_key = v.role_key
 );
 
+-- ── storage ──────────────────────────────────────────────────────────────────────────────
+-- The cert stack ships no storage buckets, so document import 503s with
+-- STORAGE_BUCKET_NOT_FOUND. `org_documents` is the default ADMIN_DOCUMENTS_BUCKET.
+insert into storage.buckets (id, name, public)
+select 'org_documents', 'org_documents', false
+where not exists (select 1 from storage.buckets where id = 'org_documents');
+
 -- ── household ────────────────────────────────────────────────────────────────────────────
 insert into public.customers (id, org_id, name, customer_number, status_key)
 select :customer_id::uuid, :org_id::uuid, 'CDV1 CERT Household',
