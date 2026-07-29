@@ -84,11 +84,14 @@ describe("CondensedQueueRow — published surface config (visibility + labels)",
     });
 
     it("hidden slot → that slot absent (config visible:false hides it)", () => {
+        // Any visible:false flips compactSlotsUsePublishedAuthority → true, so work must
+        // carry fieldKeys (generic visible-only slots no longer fall through to frozen context).
         const cfg: CompactRowSlots = {
             ...GENERIC,
             status: { visible: false, label: null },
             contact: { visible: false, label: null },
             attention: { visible: false, label: null },
+            work: { visible: true, label: null, fieldKeys: ["queue_row.work_summary"] },
         };
         const el = render(<CondensedQueueRow row={row(fullContext())} rowConfig={cfg} onOpen={vi.fn()} />);
         const text = el.textContent ?? "";
