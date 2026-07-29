@@ -33,14 +33,24 @@ export default function LifecycleStageWorkCompletionPolicyEditor({ policy, onCha
                         type="checkbox"
                         checked={enabled}
                         onChange={(e) => {
-                            if (!e.target.checked) onChange(undefined);
-                            else
-                                update({
-                                    min_attempts: 1,
-                                    max_attempts: 1,
-                                    window_days: 7,
-                                    repeat_until_outcome: false,
-                                });
+                            if (!e.target.checked) {
+                                // Clear the ATTEMPT fields only. `sufficient_command_results` lives
+                                // on the same policy but has no control in this editor, so dropping
+                                // the whole policy silently destroyed configuration the operator
+                                // could not see and had no way to restore.
+                                onChange(
+                                    normalizeCompletionPolicy({
+                                        sufficient_command_results: current.sufficient_command_results,
+                                    }),
+                                );
+                                return;
+                            }
+                            update({
+                                min_attempts: 1,
+                                max_attempts: 1,
+                                window_days: 7,
+                                repeat_until_outcome: false,
+                            });
                         }}
                         data-testid={`${testIdPrefix}-completion-policy-enabled`}
                     />
