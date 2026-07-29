@@ -60,13 +60,30 @@ export async function ensureAdminPlaywrightSession(page: Page): Promise<void> {
             await passwordBox.fill(password);
         }
 
-        const tokenResponse = page.waitForResponse(
-            (r) => r.url().includes("/auth/v1/token") && r.request().method() === "POST",
-            // Generous: a cold dev-server route compile on a loaded machine can exceed two minutes.
-            { timeout: 300_000 },
-        );
-        await page.getByRole("button", { name: /sign in/i }).click();
-        const authRes = await tokenResponse;
+        // Retry the CLICK, not just the wait. A click landing before the submit handler is attached
+        // is silently swallowed — no navigation, no request — so one click plus a long wait simply
+        // hangs for the whole timeout. Short bounded attempts surface that instead of stalling.
+        let authRes: Awaited<ReturnType<typeof page.waitForResponse>> | null = null;
+        for (let attempt = 0; attempt < 4 && !authRes; attempt += 1) {
+            if ((await emailBox.inputValue()) !== email || (await passwordBox.inputValue()) !== password) {
+                await emailBox.fill(email);
+                await passwordBox.fill(password);
+            }
+            const pending = page
+                .waitForResponse(
+                    (r) => r.url().includes("/auth/v1/token") && r.request().method() === "POST",
+                    { timeout: 45_000 },
+                )
+                .catch(() => null);
+            await page
+                .getByRole("button", { name: /sign in/i })
+                .click({ timeout: 30_000 })
+                .catch(() => undefined);
+            authRes = await pending;
+        }
+        if (!authRes) {
+            throw new Error("Sign-in produced no auth request after repeated attempts (form never became interactive)");
+        }
         if (authRes.status() !== 200) {
             throw new Error(`Sign-in failed ${authRes.status()}: ${(await authRes.text()).slice(0, 300)}`);
         }
