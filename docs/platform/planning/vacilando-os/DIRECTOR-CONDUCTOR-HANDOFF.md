@@ -58,12 +58,19 @@ reload (the server streams them fresh from disk).
 - **Slot binding:** the objective runs entirely in **slot 1** (its plan ran there).
   `objective.worker_slot` is `null` for this objective (it predates the fix) but the
   conductor **infers** slot 1 from the completed plan phase's mission.
-- **Blocked because:** Phase 0's first launch failed with `error_code: auth`
-  ("Claude needs to reconnect"). A stray earlier attempt that landed on slot 2 was
-  stopped/cleaned. **Reconnect claude → it resumes on slot 1.**
+- **Blocked because:** Claude's OAuth is `needs_auth`. Claude was **never
+  reconnected**, so the objective has sat idle for ~12 h — the conductor is
+  *correctly waiting* (it will not launch a phase into an auth wall). The
+  conversation still reads **"Reviewing"** (the plan's stage) because Phase 0 has
+  never started; that is a stale label, not progress. **Reconnect claude → within
+  ~90 s Phase 0 launches on slot 1.**
+- **Slot cleanup done (2026-07-29):** the stray Phase 0 attempt had provisioned a
+  DUPLICATE `wt2-vac-access-roles` on slot 2. Freed it with `alloy-sprint-finish 2`
+  (slot freed, worktree preserved/archived). **Only `wt1-vac-access-roles` (slot 1)
+  remains — the real objective workspace.**
 
-All six worker slots (1–6) currently have worktrees (busy with other sprints),
-which is *why* running each phase in the objective's own slot matters — see §3.
+The other worker slots (1,3,4,5,6) have worktrees (other sprints), which is *why*
+running each phase in the objective's own slot matters — see §3.
 
 ---
 
@@ -166,10 +173,18 @@ banner; Auto dispatched onto an occupied sprint (co‑tenancy).
    via `alloy-sprint-finish <slot> --acknowledge-uncommitted` (keeps the worktree,
    reclaimable). Kelly pre‑approved the behavior; not wired.
 
-5. **Optional UX:** relabel the entry ("Name the work" / "Brief Director") to make the
+5. **UX gap — surface the "waiting on provider auth" state.** When the objective is
+   autonomous and the conductor is waiting for a reconnect, the conversation shows a
+   stale **"Reviewing"** (the last mission's stage) with no reason. The operator can't
+   tell it's blocked on auth vs. genuinely stuck. Surface an explicit objective state
+   like *"Waiting — reconnect claude to continue"* on the conductor strip. (This is the
+   confusion that made the run look dead for 12 h.)
+
+6. **Optional UX:** relabel the entry ("Name the work" / "Brief Director") to make the
    two‑message model obvious. Kelly was offered this; undecided.
 
-6. **wt5‑vac‑access‑roles leftover** from an earlier launcher run may want End Work.
+7. **wt5‑vac‑access‑roles leftover** from the pre‑reset launcher run may want End Work.
+   (`wt2‑vac‑access‑roles` duplicate was already freed — see §2.)
 
 ---
 
