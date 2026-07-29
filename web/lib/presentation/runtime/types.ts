@@ -524,9 +524,9 @@ function queueRowLocationLabel(context: QueueRowContext): string | null {
     const placement = context.placement_context;
     if (!placement) return null;
     return (
+        placement.location_label?.trim() ||
         placement.room_label?.trim() ||
         placement.program_label?.trim() ||
-        placement.location_label?.trim() ||
         null
     );
 }

@@ -1,8 +1,9 @@
 /**
  * Queue row Stage vs Status label resolution from frozen `QueueRowContext`.
  *
- * Stage = process / lifecycle instance stage (New Leads, Tour Scheduled, Enrolling, …).
- * Status = record / row disposition (Open, Tour scheduled, Waitlisted, …).
+ * Stage = process / lifecycle stage on the record (Lead, Tour, Enrolling, …).
+ * Status = record disposition (Open, New Lead, Waitlisted, …).
+ * Work View names (New Leads, Active Pipeline) are lane filters — not Stage.
  */
 
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";

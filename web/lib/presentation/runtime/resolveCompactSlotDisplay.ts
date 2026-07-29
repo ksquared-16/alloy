@@ -62,8 +62,22 @@ export function resolveQueueRowFieldValueFromContext(
         case "opportunity.status_label":
             return resolveQueueRowRecordStatusLabel(context);
         case "customer.display_name":
+            // Household / customer name — not primary contact. case_context is built from
+            // `_customer_name` first; do not fall back to primary_contact when household is empty.
+            return (
+                context.case_context?.display_name?.trim()
+                || queueRowSubjectDisplayName(context).trim()
+                || null
+            );
         case "queue_row.subject_label":
             return queueRowSubjectDisplayName(context).trim() || null;
+        case "opportunity.location":
+        case "child.location":
+            return (
+                context.placement_context?.location_label?.trim()
+                || context.placement_context?.room_label?.trim()
+                || null
+            );
         case "person.primary_contact_name":
             return context.primary_contact?.display_name?.trim() || null;
         case "person.phone":
