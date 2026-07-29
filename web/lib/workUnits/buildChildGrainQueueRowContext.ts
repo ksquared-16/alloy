@@ -54,11 +54,12 @@ function trimOrNull(raw: unknown): string | null {
     return t || null;
 }
 
+/** Prefer household `_customer_name` over opportunity title (often primary contact). */
 function resolveCaseDisplayName(row: Record<string, unknown>): string {
     return (
+        trimOrNull(row._customer_name) ??
         trimOrNull(row.title) ??
         trimOrNull(row.name) ??
-        trimOrNull(row._customer_name) ??
         "Case"
     );
 }
@@ -349,7 +350,16 @@ function resolveLifecycleKey(queue: PartialQueueRowContextQueueMeta): string {
     return trimOrNull(queue.lifecycle_key) ?? "enrollment";
 }
 
-function resolveStageLabel(queue: PartialQueueRowContextQueueMeta): string {
+function resolveStageLabel(queue: PartialQueueRowContextQueueMeta, row?: Record<string, unknown>): string {
+    const fromRow =
+        row
+            ? trimOrNull(row.enrollment_track_stage_label)
+                ?? trimOrNull(row._lifecycle_stage_title)
+                ?? trimOrNull(row.stage_label)
+            : null;
+    if (fromRow) return fromRow;
+    const stageKey = trimOrNull(queue.stage_key);
+    if (stageKey) return humanizeSnakeCaseToken(stageKey);
     return queue.label.trim() || queue.key;
 }
 
@@ -397,7 +407,7 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
     const stageKey = resolveStageKey(input.queue, active.stageKey);
     const rowStage =
         trimOrNull(row.enrollment_track_stage_label) ??
-        resolveStageLabel(input.queue);
+        resolveStageLabel(input.queue, row);
 
     const caseStatusKey =
         trimOrNull(row.opportunity_status_key) ?? trimOrNull(row.status_key) ?? "open";

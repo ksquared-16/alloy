@@ -28,7 +28,8 @@ describe("buildPartialQueueRowContext", () => {
             subject_id: "opp-1",
             display_name: "Smith Household",
         });
-        expect(ctx.row_stage).toBe("Tours");
+        // Process stage from membership stage_key ("tour"), not Work View label ("Tours").
+        expect(ctx.row_stage).toBe("Tour");
         expect(ctx.lifecycle_key).toBe("enrollment");
         expect(ctx.row_status_key).toBe("tour_scheduled");
         expect(ctx.row_status_label).toBe("Tour scheduled");
@@ -38,6 +39,22 @@ describe("buildPartialQueueRowContext", () => {
         expect(ctx.drawer_open.entity_id).toBe("opp-1");
         expect(ctx.drawer_open.active_subject!.subject_type).toBe("case");
         expect(ctx.drawer_open.active_subject!.stage_key).toBe("tour");
+    });
+
+    it("prefers household _customer_name over opportunity title for case display", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-2",
+                title: "Ravi Almead",
+                _customer_name: "Almead Family",
+                status_key: "open",
+                _primary_contact_name: "Ravi Almead",
+            },
+            queue,
+        });
+        expect(ctx.row_subject.display_name).toBe("Almead Family");
+        expect(ctx.case_context.display_name).toBe("Almead Family");
+        expect(ctx.primary_contact?.display_name).toBe("Ravi Almead");
     });
 
     it("maps boring case label for open-like keys", () => {
@@ -260,7 +277,7 @@ describe("buildPartialQueueRowContext", () => {
             ...DEFAULT_CHILDREN_COLLECTION_PRESENTATION,
             includedFields: ["first_name", "age", "gender"],
         });
-        expect(display).toMatch(/Lennon \(\d+[ym]\)/i);
+        expect(display).toMatch(/Lennon · \d+[ym]/i);
         expect(display).toMatch(/female/i);
     });
 
@@ -292,11 +309,33 @@ describe("buildPartialQueueRowContext", () => {
     });
 
     it("attaches _queue_row_context without mutating source row fields", () => {
-        const row = { id: "opp-2", name: "Jones Family", status_key: "new_inquiry" };
-        const out = attachPartialQueueRowContext(row, { key: "new_leads", label: "New Leads" });
+        const row = { id: "opp-2", name: "Jones Family", status_key: "new_inquiry", stage_key: "lead" };
+        const out = attachPartialQueueRowContext(row, {
+            key: "new_leads",
+            label: "New Leads",
+            stage_key: "lead",
+        });
         expect(out._queue_row_context).toBeDefined();
-        expect((out._queue_row_context as { row_stage: string }).row_stage).toBe("New Leads");
+        // Stage field = process stage (Lead), not Work View label (New Leads).
+        expect((out._queue_row_context as { row_stage: string }).row_stage).toBe("Lead");
         expect(row).not.toHaveProperty("_queue_row_context");
+    });
+
+    it("uses opportunity location when inquiry children lack placement", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-loc",
+                name: "Fitz Family",
+                status_key: "new_inquiry",
+                stage_key: "lead",
+                location_id: "loc-north",
+                _location_label: "North Campus",
+            },
+            queue: { key: "new_leads", label: "New Leads", stage_key: "lead" },
+        });
+        expect(ctx.row_stage).toBe("Lead");
+        expect(ctx.placement_context?.location_label).toBe("North Campus");
+        expect(ctx.placement_context?.location_id).toBe("loc-north");
     });
 
     it("renders the New Lead status label for a lead — never the raw new_inquiry key", () => {
