@@ -31,13 +31,18 @@ type LayoutProps = {
  * affected; on a COLD cache it adds the compose to TTFB (~2-4s), paid back by removing the ~3-4s
  * post-hydration provisioning round-trip. The seed is co-located with `WorkUnitSlugRouteHost` — the same
  * early-hydrating boundary whose render-phase write precedes the Surface Host's cold-load consume (a
- * page-segment seed is dropped: this layout renders the Host, not `children`).
+ * same commit, ahead of the Host's consume effect).
  *
- * Only the DEFAULT subject is seeded (this layout has no `searchParams`); a `?subject_id` / `?work_view_id`
- * deep link keys differently and falls back to K2's live fetch. Any gate failure / non-operational terminal
- * seeds nothing → K2's existing fetch. The seed can only help, never trap the surface.
+ * Only the DEFAULT subject is seeded here — this layout has no `searchParams`, by framework design. A
+ * `?subject_id` / `?work_view_id` deep link keys differently, so the PAGE segment now owns that case:
+ * it is the only server boundary that receives `searchParams`. This layout therefore renders
+ * `{children}` (it previously discarded them, which is why an earlier page-seed experiment never
+ * mounted at all — see `page.tsx` and DEEPLINK-COMPOSE-OWNERSHIP.md §2a).
+ *
+ * Any gate failure / non-operational terminal seeds nothing → K2's existing fetch. The seed can only
+ * help, never trap the surface.
  */
-export default async function OperatorWorkUnitSlugLayout({ params }: LayoutProps) {
+export default async function OperatorWorkUnitSlugLayout({ children, params }: LayoutProps) {
     const { workUnitSlug } = await params;
 
     // Compose concurrently with route-meta; hand the seed only an operational/empty terminal (an `error`
@@ -78,6 +83,9 @@ export default async function OperatorWorkUnitSlugLayout({ params }: LayoutProps
             <WorkUnitSlugRouteHost workUnitSlug={workUnitSlug} initialRouteMeta={initialRouteMeta} />
             <ProvisioningAnswerSeed target={workUnitSlug} answer={answer} />
             <RouteTimingSeed marks={marks} />
+            {/* The page segment carries the subject-specific seed for `?subject_id=` deep links. It
+                renders no UI; without this it would never mount. */}
+            {children}
         </>
     );
 }

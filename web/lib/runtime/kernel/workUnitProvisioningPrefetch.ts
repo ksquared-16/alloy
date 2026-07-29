@@ -107,6 +107,36 @@ function seedProvisioning(
     if (existing && isFresh(existing, now)) return; // never clobber a fresher warm entry
     cache.set(url, { promise: Promise.resolve(answer), startedAt: now });
     logCurrentWorkInit("provisioning.seed", { cacheKey: url, cache: "seed", preloadSource: "seed", note: "server-composed answer seeded" });
+    traceSeedEvent("seed", url, answer);
+}
+
+/**
+ * TEMPORARY — Option B ordering experiment (DEEPLINK-COMPOSE-OWNERSHIP.md §2a).
+ *
+ * Whether a page-owned seed is REGISTERED BEFORE the Host CONSUMES it is the whole question, and it is
+ * not safely answerable from timings: the failure mode is silent (a wasted compose, not a broken page).
+ * This records the seed/consume sequence and the subject each event carried, so the ordering can be
+ * READ rather than inferred.
+ *
+ * Off unless `ALLOY_ROUTE_TIMING=1` — the same default-off flag the PE-3 spans use. To be removed once
+ * durable guards land.
+ */
+function traceSeedEvent(
+    kind: "seed" | "consume-hit" | "consume-miss",
+    url: string,
+    answer: ProvisioningAnswer | null,
+): void {
+    if (typeof window === "undefined" || process.env.ALLOY_ROUTE_TIMING !== "1") return;
+    const w = window as unknown as { __alloySeedTrace?: unknown[] };
+    (w.__alloySeedTrace ??= []).push({
+        kind,
+        t: Math.round(typeof performance !== "undefined" ? performance.now() : 0),
+        url,
+        subjectInKey: new URL(url, "http://x").searchParams.get("subject_id"),
+        composedSubject:
+            answer != null && answer.terminal === "operational" ? answer.recordOfAttention?.id ?? null : null,
+        terminal: answer?.terminal ?? null,
+    });
 }
 
 /** A route's attention identity — the coordinates the kernel keys its cache on. */
@@ -185,9 +215,16 @@ export function consumeFreshProvisioning(
     now: number = Date.now(),
 ): Promise<ProvisioningAnswer> | null {
     const entry = cache.get(url);
-    if (!entry) return null;
+    if (!entry) {
+        traceSeedEvent("consume-miss", url, null);
+        return null;
+    }
     cache.delete(url);
-    if (!isFresh(entry, now)) return null;
+    if (!isFresh(entry, now)) {
+        traceSeedEvent("consume-miss", url, null);
+        return null;
+    }
+    traceSeedEvent("consume-hit", url, null);
     return entry.promise;
 }
 
