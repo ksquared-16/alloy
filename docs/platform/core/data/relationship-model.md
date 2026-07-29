@@ -104,8 +104,8 @@ generically with no new code. The gaps are in the layers that still keep their o
 | 9 | **A second definition registry still live** | `focusPanel/household/householdRelationshipSectionDefinitions.ts` | Six hand-authored sections with literal `roleKeys` — no Focus Panel section for a new role |
 | 10 | One BOS adapter file per role; NL intent→role is an if-else ladder | `bosCommandAdapterRegistry.ts`, `addParentGuardianAdapter.ts`, `relationshipActionBosAdapter.ts` | The role is not conversational |
 | 11 | Processing keeps its own guardian/emergency taxonomy | `questionResolutionModel.ts`, `processingReviewFieldCatalog.ts`, `requirementResponsibility.ts` | Question resolution and responsibility have no non-guardian participant kind |
-| 13 | ~~`iteration_alias` decided by a per-ref ternary in Forms~~ **CLOSED** | `formsCollectionRepeatBinding.ts` | Alias is now a definition column; natives keep their literal aliases |
 | 12 | Presentation long tail (~40 Admin V2 / Layout / Person-Drawer files) | §Admin V2 registries | The role does not appear in drawers, cards, or pickers |
+| 13 | ~~`iteration_alias` decided by a per-ref ternary in Forms~~ **CLOSED** | `formsCollectionRepeatBinding.ts` | Alias is now a definition column; natives keep their literal aliases |
 
 Gap #9 is the one to watch: it is a *second canonical registry* of the exact kind this architecture
 forbids. It must be collapsed into a projection of `RELATIONSHIP_DEFINITIONS`, not maintained in
@@ -129,6 +129,55 @@ of implicit code branches:
   role**, because the matcher closes with `\b` and fails on the plural. Captured as
   `detection_word_suffix`. Worth revisiting; not changed here because it would alter detection output
   for existing documents.
+
+### Persistence destinations — an intentional compatibility boundary
+
+The canonical invariant is:
+
+> ONE canonical Person identity → may hold MULTIPLE operational relationship roles → each role is
+> applied through the persistence destination declared by its Relationship Definition.
+
+**Separate persistence destinations are not duplicate identity.** As shipped:
+
+| Definition | `persists_to` | Physical destination |
+|---|---|---|
+| `parents_guardians` (guardian/parent) | `customer_member_contacts` | legacy member-contact links |
+| `emergency_contacts` | `person_child_relationships` | PCR + `person_child_relationship_roles` |
+| `authorized_pickups` | `person_child_relationships` | PCR + `person_child_relationship_roles` |
+
+The layering that makes this safe:
+
+- **Relationship Definition is canonical.** It declares the role, command, scope and destination.
+- **`persists_to` chooses the compatibility writer** — it is a storage decision, not a semantic one.
+- **The execution adapter hides physical persistence.** Callers name a relationship, never a table.
+- **Consumers operate on normalized relationship semantics.** Forms, Configuration Discovery,
+  Processing and (future) Conversation Runtime resolve a definition and read/write through it. None
+  of them branch on which physical table a role happens to land in. This is enforced by
+  `web/tests/fields/relationshipStorageAbstraction.test.ts`.
+
+**This is explicitly NOT the desired final storage architecture.** Converging guardian storage onto
+`person_child_relationships` requires a SEPARATE migration mission with its own data migration,
+dual-read/backfill strategy, compatibility testing and product approval. It is deliberately out of
+scope for Configuration Discovery V1, and `persists_to` is the seam that makes that later migration a
+configuration change plus a backfill rather than a rewrite.
+
+### Closed — Discovery's relationship bindings now reach the form
+
+Configuration Discovery resolves each relationship group to its canonical provider and write command
+(`apply-discovery` returns `provider_ref` + `relationship_apply.command_key` for guardian, emergency
+contact and authorized pickup), and that resolution is now **projected into collection-bound form
+groups** rather than merely recorded.
+
+- `applyDiscovery` calls `projectRelationshipCollections`, which mutates the draft.
+- `draftFormToFormSchemaV1` emits `collection_binding` for the projected groups.
+
+The definition row already carried everything needed — `provider_ref`, `item_entity_type`,
+`iteration_alias`, `nested_field_keys` — and that is what the projection consumes.
+
+> **Promotion note.** This section previously documented the gap as open, which was accurate when it
+> was written. The bridge that closes it is promoted in the same change as this document, so the
+> original text would have contradicted the code it shipped beside. The proving-journey spec that
+> pinned the gap travels with the certification slice and is not promoted here.
 
 ### Open follow-up — an unguarded write path
 
