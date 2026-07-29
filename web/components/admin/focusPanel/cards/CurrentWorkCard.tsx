@@ -270,6 +270,14 @@ export default function CurrentWorkCard({
                 }
                 setActivePanelAction(plan.action);
                 return;
+            case "tour_lifecycle_choice":
+                setHandoffNotice(null);
+                if (!isWorkspace) {
+                    openWorkspace({ kind: "action", actionKey: plan.action.key });
+                    return;
+                }
+                setActivePanelAction(plan.action);
+                return;
             case "process_transition":
                 setHandoffNotice(null);
                 if (!isWorkspace) {

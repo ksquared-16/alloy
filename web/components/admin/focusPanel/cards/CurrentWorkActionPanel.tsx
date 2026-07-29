@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import dynamic from "next/dynamic";
 
 import CurrentWorkStageTransitionPanel from "@/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel";
@@ -44,6 +44,8 @@ type Props = {
     onComplete: () => void;
 };
 
+type TourLifecycleChoice = "choose" | "reschedule" | "cancel_confirm";
+
 function UnsupportedPanelBody({ action, surface }: { action: CurrentWorkActionVM; surface: CurrentWorkActionSurface }) {
     const reason =
         action.disabledReason
@@ -57,6 +59,148 @@ function UnsupportedPanelBody({ action, surface }: { action: CurrentWorkActionVM
             <p className="alloy-os-currentwork__action-panel-hint">
                 Use drawer header actions or the owning card when this action becomes available.
             </p>
+        </div>
+    );
+}
+
+function TourLifecycleChoiceBody({
+    context,
+    mutation,
+    tourFields,
+    onClose,
+    onComplete,
+}: {
+    context: OperationalContext;
+    mutation?: FocusPanelMutation;
+    tourFields: ReturnType<typeof resolveOpportunityTourScheduleFromTruth>;
+    onClose: () => void;
+    onComplete: () => void;
+}) {
+    const opportunityId = context.subject.id;
+    const bookingId = context.signals.tour.bookingId;
+    const [choice, setChoice] = useState<TourLifecycleChoice>("choose");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleRescheduleComplete = useCallback(async () => {
+        mutation?.tour.dispatchTourUpdated(opportunityId, "reschedule_tour");
+        onComplete();
+    }, [mutation, onComplete, opportunityId]);
+
+    const handleCancelConfirm = useCallback(async () => {
+        if (!mutation || !bookingId) {
+            setError("No active tour booking is available to cancel.");
+            return;
+        }
+        setBusy(true);
+        setError(null);
+        const result = await mutation.tour.cancelTour(bookingId);
+        setBusy(false);
+        if (result.ok) {
+            onComplete();
+            return;
+        }
+        setError(result.error);
+    }, [bookingId, mutation, onComplete]);
+
+    if (choice === "reschedule") {
+        return (
+            <OpportunityTourScheduleActionModal
+                open
+                variant="embedded"
+                title="Reschedule tour"
+                submitLabel="Reschedule tour"
+                opportunityId={opportunityId}
+                locationId={tourFields.locationId}
+                initialTourDate={tourFields.initialTourDate}
+                initialTourTime={tourFields.initialTourTime}
+                onClose={onClose}
+                onSlotBooked={async () => {
+                    await handleRescheduleComplete();
+                }}
+                onLegacySubmit={async (payload) => {
+                    await submitTourScheduleLegacyFromPanel({
+                        opportunityId,
+                        locationId: tourFields.locationId,
+                        actionKey: "reschedule_tour",
+                        payload,
+                    });
+                    await handleRescheduleComplete();
+                }}
+            />
+        );
+    }
+
+    if (choice === "cancel_confirm") {
+        return (
+            <div
+                className="alloy-os-currentwork__action-panel-body"
+                data-tour-lifecycle-choice="cancel_confirm"
+            >
+                <p className="alloy-os-household__row-detail">
+                    Cancel this tour booking? The family will no longer have a scheduled visit.
+                </p>
+                {error ?
+                    <p className="alloy-os-ucard__inline-error" data-tour-lifecycle-error>
+                        {error}
+                    </p>
+                :   null}
+                <div className="flex flex-wrap items-center gap-2" data-tour-lifecycle-actions>
+                    <button
+                        type="button"
+                        className="alloy-os-ucard__action alloy-os-ucard__action--system5 alloy-os-ucard__action--destructive"
+                        disabled={busy || !bookingId}
+                        onClick={() => void handleCancelConfirm()}
+                        data-tour-lifecycle-action="cancel_confirm"
+                    >
+                        {busy ? "Canceling…" : "Confirm cancel"}
+                    </button>
+                    <button
+                        type="button"
+                        className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                        disabled={busy}
+                        onClick={() => {
+                            setError(null);
+                            setChoice("choose");
+                        }}
+                        data-tour-lifecycle-action="cancel_back"
+                    >
+                        Back
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="alloy-os-currentwork__action-panel-body" data-tour-lifecycle-choice="choose">
+            <p className="alloy-os-household__row-detail">
+                A tour is already scheduled. Choose how to update it.
+            </p>
+            {error ?
+                <p className="alloy-os-ucard__inline-error" data-tour-lifecycle-error>
+                    {error}
+                </p>
+            :   null}
+            <div className="flex flex-wrap items-center gap-2" data-tour-lifecycle-actions>
+                <button
+                    type="button"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                    onClick={() => setChoice("reschedule")}
+                    data-tour-lifecycle-action="reschedule"
+                >
+                    Reschedule tour
+                </button>
+                <button
+                    type="button"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5 alloy-os-ucard__action--destructive"
+                    disabled={!bookingId}
+                    onClick={() => setChoice("cancel_confirm")}
+                    data-tour-lifecycle-action="cancel"
+                >
+                    Cancel tour
+                </button>
+            </div>
         </div>
     );
 }
@@ -166,6 +310,14 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
                                 : "This action is not available."),
                     }}
                     surface={surface}
+                />
+            : surface === "tour_lifecycle_choice" ?
+                <TourLifecycleChoiceBody
+                    context={context}
+                    mutation={mutation}
+                    tourFields={tourFields}
+                    onClose={onClose}
+                    onComplete={onComplete}
                 />
             : surface === "inline_form" ?
                 // `inline_form` is the scheduling capability's declared interaction host (metadata,

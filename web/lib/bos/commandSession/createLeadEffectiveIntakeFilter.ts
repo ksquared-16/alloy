@@ -11,6 +11,21 @@ import {
     effectiveCreateLeadEntities,
     effectiveCreateLeadPayloadKeys,
 } from "@/lib/bos/commandSession/createLeadFormSectionProjection";
+import { CREATE_LEAD_HOUSEHOLD_COMMIT_PAYLOAD_KEY } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
+import { CREATE_LEAD_INTAKE_HOUSEHOLD_KEY } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
+
+/**
+ * Structural envelope keys — they carry the whole multi-member household, not a single intake
+ * field. They are never present in the spec's field key set, so gating them on it silently
+ * reduced every household to its primary parent + primary child. Entity-level filtering of their
+ * contents is `filterCommitSelectionToEffectiveIntake`'s job, not the payload key filter's.
+ */
+const HOUSEHOLD_ENVELOPE_KEYS = new Set([
+    CREATE_LEAD_HOUSEHOLD_COMMIT_PAYLOAD_KEY,
+    CREATE_LEAD_INTAKE_HOUSEHOLD_KEY,
+    "household_commit",
+    "household",
+]);
 
 const CHILD_FLAT_KEYS = new Set([
     "child_first_name",
@@ -83,7 +98,7 @@ export function filterPayloadToEffectiveIntake(
     const entities = effectiveCreateLeadEntities(spec);
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(payload)) {
-        if (key === "household_commit" || key === "household") {
+        if (HOUSEHOLD_ENVELOPE_KEYS.has(key)) {
             out[key] = value;
             continue;
         }

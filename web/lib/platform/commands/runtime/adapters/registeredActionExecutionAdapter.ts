@@ -33,6 +33,8 @@ export type RegisteredActionExecutionInput = {
     capability: PlatformCapabilityDefinition;
     invocation: CommandInvocationRequest;
     executionSubject: CommandExecutionSubject;
+    /** Department scope lives on the request envelope, not on `CommandInvocationRequest`. */
+    departmentId: string | null;
     mode: ActionExecutionMode;
     supabase: SupabaseClient;
     runtimeContext: ActionRuntimeContext;
@@ -50,6 +52,7 @@ function mapActionInvocation(input: {
     actionKey: string;
     executionSubject: CommandExecutionSubject;
     invocation: CommandInvocationRequest;
+    departmentId: string | null;
 }): ActionInvocation {
     const origin =
         input.invocation.origin === "bos"
@@ -63,6 +66,7 @@ function mapActionInvocation(input: {
         entityId: input.executionSubject.entityId,
         context: {
             surface: input.invocation.surface ?? null,
+            department_id: input.departmentId ?? null,
             work_unit_id: input.invocation.workUnitId ?? null,
             process_key: input.invocation.processKey ?? null,
             origin,
@@ -110,6 +114,7 @@ export async function executeRegisteredActionViaAdapter(
         actionKey: registered.actionKey,
         executionSubject: input.executionSubject,
         invocation: input.invocation,
+        departmentId: input.departmentId,
     });
 
     const actionResult = await run(

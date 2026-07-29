@@ -12,7 +12,15 @@ type WorkflowEventRow = {
     payload: unknown;
 };
 
-const MESSAGE_EVENT_TYPES = new Set(["message_sent", "message_received", "message_queued"]);
+// Delivery/failure events need the channel backfilled too, or an SMS reads as a generic
+// "Message delivered" instead of "SMS delivered".
+const MESSAGE_EVENT_TYPES = new Set([
+    "message_sent",
+    "message_received",
+    "message_queued",
+    "message_delivered",
+    "message_failed",
+]);
 
 function readPayloadRecord(payload: unknown): Record<string, unknown> {
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};

@@ -41,6 +41,19 @@ describe("resolveCurrentWorkActionSurface", () => {
         ).toBe("inline_form");
     });
 
+    it("routes manage_active_tour to tour_lifecycle_choice", () => {
+        expect(
+            resolveCurrentWorkActionSurface(
+                action({
+                    key: "schedule_tour",
+                    label: "Reschedule / Cancel tour",
+                    handlerKey: "manage_active_tour",
+                    actionRef: "manage_active_tour",
+                }),
+            ),
+        ).toBe("tour_lifecycle_choice");
+    });
+
     it("routes communication actions to communications_composer", () => {
         expect(
             resolveCurrentWorkActionSurface(

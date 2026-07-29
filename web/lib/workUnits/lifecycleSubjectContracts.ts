@@ -189,6 +189,13 @@ export type QueueRowContext = {
 
     /** Operator stage label for the queue lane (e.g. "Tours", "New Leads"). */
     row_stage: string;
+    /**
+     * Configured stage key → the tenant's authored label. Additive and optional: configured stages
+     * are the only runtime stage vocabulary, so a per-row stage can render in the operator's own
+     * words ("Tours") rather than a humanized key ("Tour"). Absent when no stage list is in scope,
+     * in which case the key is humanized.
+     */
+    stage_labels_by_key?: Record<string, string>;
     lifecycle_key: string;
     row_status_key: string;
     row_status_label: string;

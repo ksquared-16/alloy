@@ -27,6 +27,8 @@ const ICON_BY_HANDLER: Record<string, LucideIcon> = {
     quick_message: MessageSquare,
     schedule_tour: Calendar,
     reschedule_tour: Calendar,
+    manage_active_tour: Calendar,
+    cancel_tour: Calendar,
     send_form: Send,
     send_enrollment_packet: Send,
     record_outcome: CheckCircle2,

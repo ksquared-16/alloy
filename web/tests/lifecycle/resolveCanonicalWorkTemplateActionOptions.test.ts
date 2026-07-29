@@ -98,4 +98,41 @@ describe("resolveCanonicalWorkTemplateActionOptions", () => {
         expect(waitlistActions).toHaveLength(1);
         expect(options.some((row) => row.ref === "move_to_stage:waitlist")).toBe(true);
     });
+
+    it("does not gate to nothing when a legacy process derives an empty selection", () => {
+        // A process with no command_set_v1 and no stage action catalog derives an EMPTY legacy
+        // selection. Treating that as "the operator selected no Commands" emptied the work-item
+        // action picker entirely, leaving the work item unconfigurable in the product.
+        const options = resolveCanonicalWorkTemplateActionOptions({
+            actionRegistry: [],
+            stageActionCatalog: {
+                version: 1,
+                candidate_actions: [{ action_key: "schedule_tour", recommendation: "ready" }],
+            },
+            stageDefinition: { journey_segment: "family" },
+            process: { id: "proc-1", key: "enrollment", stages: [] } as never,
+        });
+
+        expect(options.some((row) => row.ref === "schedule_tour")).toBe(true);
+    });
+
+    it("still honors an explicit empty command_set_v1 selection", () => {
+        // An operator who explicitly selected no Commands is a real answer and must be respected.
+        const options = resolveCanonicalWorkTemplateActionOptions({
+            actionRegistry: [],
+            stageActionCatalog: {
+                version: 1,
+                candidate_actions: [{ action_key: "schedule_tour", recommendation: "ready" }],
+            },
+            stageDefinition: { journey_segment: "family" },
+            process: {
+                id: "proc-1",
+                key: "enrollment",
+                stages: [],
+                command_set_v1: { version: 1, commands: [] },
+            } as never,
+        });
+
+        expect(options).toHaveLength(0);
+    });
 });

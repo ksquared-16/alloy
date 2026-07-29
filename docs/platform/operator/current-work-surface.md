@@ -53,7 +53,7 @@ Requirement timing affects checklist truth as follows:
 - `stage_exit` rules may appear as progression gaps, with copy such as “Needed before the configured next step,” but they do not make the record invalid.
 - Transition blocking happens in the stage/status preflight path only when explicit `stage_exit` metadata applies to the selected transition.
 | **Checklist handoff** | `inferWorkItemOwner()` + scope from field-rule entity | blocked operator copy — never silent no-op |
-| **Primary CTA (Summary)** | Work-primary card (`expand_work`) from template title; optional `primary_action` when configured | `"No current work configured"` |
+| **Primary CTA (Summary)** | Work-primary card (`expand_work`) from template title; optional `primary_action` when configured. When `schedule_tour` is configured and an active tour booking exists, the button remaps to **Reschedule / Cancel tour** (routes to existing `reschedule_tour` / `cancel_tour`). | `"No current work configured"` |
 | **Record outcome CTA** | `"Record outcome"` when `showOutcomeCompletion` | disabled + `outcomeCompletionBlockReason` |
 | **Outcomes list** | Active work template `outcome_refs` filter canonical stage outcomes; legacy uses `item.outcomes` from runtime | honest gap copy — **never invent lists** |
 | **Helpful actions** | Active work template `helpful_actions` (explicit order) | stage `action_catalog_v1` fallback → `record_header` registry |

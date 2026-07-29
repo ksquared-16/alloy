@@ -110,12 +110,10 @@ export function summarizeWorkflowEventForSignal(
 ): string {
     const t = (ev.event_type ?? "").trim();
     const p = (ev.payload && typeof ev.payload === "object" ? ev.payload : {}) as Record<string, unknown>;
-    if (t === "message_received") {
-        return resolveCommunicationMessageEventTitle(t, p) ?? "Message received";
-    }
-    if (t === "message_sent") {
-        return resolveCommunicationMessageEventTitle(t, p) ?? "Message sent";
-    }
+    // Route ALL communication lifecycle events through the shared channel-aware labeller, so a newly
+    // emitted one (delivered / failed) can never fall through to the raw key.
+    const communicationTitle = resolveCommunicationMessageEventTitle(t, p);
+    if (communicationTitle) return communicationTitle;
     if (t === "opportunity_status_changed" || t === "entity_status_changed" || t === "child_lifecycle_status_changed") {
         const oRaw =
             p.old_status_key != null
@@ -153,7 +151,8 @@ export function summarizeWorkflowEventForSignal(
         const s = p.summary != null && String(p.summary).trim() ? String(p.summary).trim() : "";
         if (s) return s;
     }
-    return t || "Activity";
+    // Never surface a raw event key to an operator — humanize whatever is left.
+    return t ? humanizeSnakeCaseToken(t) : "Activity";
 }
 
 export function formatActivityRelativeShort(iso: string | null, nowMs: number): string | null {

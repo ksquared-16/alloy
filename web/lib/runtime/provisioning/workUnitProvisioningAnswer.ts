@@ -652,6 +652,13 @@ export async function composeWorkUnitProvisioningAnswer(
             label: activeView.label,
             lifecycle_key: process.key,
             subject_grain: "case",
+            // Configured stages are the only runtime stage vocabulary, so the row pill can name the
+            // stage a record actually holds in the operator's own words.
+            stage_labels_by_key: Object.fromEntries(
+                stages
+                    .filter((s) => s.key.trim() && s.label.trim())
+                    .map((s) => [s.key.trim(), s.label.trim()])
+            ),
         },
     });
     void enrichedPromise.catch(() => {});
@@ -793,6 +800,8 @@ export async function composeWorkUnitProvisioningAnswer(
     // the `_inquiry_children` raw shape the shared `buildChildrenCardModel` consumes so the committed
     // card matches the enriched one. `metadata.inquiry_children` (legacy authored path, empty for most
     // subjects) wins when present, preserving prior behaviour for subjects that carry it.
+    // Create Lead does not write `metadata.inquiry_children` (children land in persons + members);
+    // related_subjects_summary is the live path that keeps those children visible.
     const relatedSubjectsSummary = Array.isArray(chosenRowContext.related_subjects_summary)
         ? (chosenRowContext.related_subjects_summary as Array<Record<string, unknown>>)
         : [];

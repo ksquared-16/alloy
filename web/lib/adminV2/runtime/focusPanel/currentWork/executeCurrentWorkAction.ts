@@ -18,6 +18,7 @@ export type CurrentWorkActionExecutionPlan =
     | { kind: "communications_composer" }
     | { kind: "header_delegate"; action: CurrentWorkActionVM }
     | { kind: "process_transition"; action: CurrentWorkActionVM; nextStatusKey: string }
+    | { kind: "tour_lifecycle_choice"; action: CurrentWorkActionVM }
     | { kind: "blocked"; reason: string }
     | { kind: "unsupported"; reason: string; action: CurrentWorkActionVM };
 
@@ -49,6 +50,8 @@ export function planCurrentWorkActionExecution(
         case "inline_form":
         case "form_delivery":
             return { kind: "open_inline_panel", action, surface };
+        case "tour_lifecycle_choice":
+            return { kind: "tour_lifecycle_choice", action };
         case "process_transition": {
             const nextStatusKey = (action.actionRef ?? action.key).trim();
             if (!nextStatusKey) {

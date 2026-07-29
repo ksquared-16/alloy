@@ -10,28 +10,34 @@ import {
     CHANGE_LEAD_LOCATION_LABEL,
 } from "@/lib/admin/actions/changeLeadLocationContract";
 
-function relabelScheduleTourWhenActive(
+/**
+ * When an active tour booking exists, remap `schedule_tour` → `reschedule_tour`
+ * (key + label) so the header opens the reschedule path rather than a duplicate schedule.
+ */
+function remapScheduleTourWhenActive(
     actions: ResolvedActionForClient[]
 ): ResolvedActionForClient[] {
     return actions.map((a) =>
-        a.key === "schedule_tour" ? { ...a, label: "Reschedule tour" } : a
+        a.key === "schedule_tour"
+            ? { ...a, key: "reschedule_tour", label: "Reschedule tour" }
+            : a
     );
 }
 
-function relabelResolvedActionsForActiveTour(
+function remapResolvedActionsForActiveTour(
     resolved: ResolvedActionsBySlot,
     hasActiveTourBooking: boolean
 ): ResolvedActionsBySlot {
     if (!hasActiveTourBooking) return resolved;
-    const relabel = relabelScheduleTourWhenActive;
+    const remap = remapScheduleTourWhenActive;
     return {
         ...resolved,
-        primary: relabel(resolved.primary ?? []),
-        secondary: relabel(resolved.secondary ?? []),
-        overflow: relabel(resolved.overflow ?? []),
-        right_rail: relabel(resolved.right_rail ?? []),
-        row_inline: relabel(resolved.row_inline ?? []),
-        header: relabel(resolved.header ?? []),
+        primary: remap(resolved.primary ?? []),
+        secondary: remap(resolved.secondary ?? []),
+        overflow: remap(resolved.overflow ?? []),
+        right_rail: remap(resolved.right_rail ?? []),
+        row_inline: remap(resolved.row_inline ?? []),
+        header: remap(resolved.header ?? []),
     };
 }
 
@@ -64,7 +70,7 @@ export function buildOpportunityDrawerHeaderMenuActions(
     const base = resolved ?? emptyResolvedActionsBySlot();
     return ensureChangeLeadLocationInMenu(
         flattenOpportunityRecordHeaderActionsForMenu(
-            relabelResolvedActionsForActiveTour(base, hasActiveTourBooking),
+            remapResolvedActionsForActiveTour(base, hasActiveTourBooking),
         ),
     );
 }

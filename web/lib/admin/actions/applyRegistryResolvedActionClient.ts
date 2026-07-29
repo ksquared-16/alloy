@@ -348,7 +348,12 @@ export async function applyRegistryResolvedActionClient(
             }
             if (typeof window !== "undefined") {
                 window.dispatchEvent(
-                    new CustomEvent(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, { detail: { opportunity_id: oid } })
+                    new CustomEvent(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, {
+                        detail: {
+                            opportunity_id: oid,
+                            action_key: a.key === "reschedule_tour" ? "reschedule_tour" : "schedule_tour",
+                        },
+                    })
                 );
             }
             return { ok: true };

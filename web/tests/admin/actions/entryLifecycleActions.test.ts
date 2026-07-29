@@ -6,6 +6,7 @@ import {
 } from "@/lib/admin/actions/entryLifecycleActions";
 import { CREATE_LEAD_ACTION_ENTITY_ID, isCreateLeadExecuteRequest } from "@/lib/admin/actions/createLeadActionConstants";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
+import { resolveCreateLeadEntryDepartmentForOrg } from "@/lib/lifecycle/resolveCreateLeadEntryDepartment";
 
 vi.mock("@/lib/admin/statusDefinitionsResolve", () => ({
     assertAllowedStatusKey: vi.fn().mockResolvedValue({ ok: true }),
@@ -44,6 +45,12 @@ vi.mock("@/lib/lifecycle/lifecycleRuntimeBinding", () => ({
         work_unit_id: "wu-enrollment",
         status_key: "",
     }),
+}));
+
+// Workspace-level fallback used when the caller's department resolves no binding. Defaults to
+// "no configured entry department" so the fail-closed expectations below still hold.
+vi.mock("@/lib/lifecycle/resolveCreateLeadEntryDepartment", () => ({
+    resolveCreateLeadEntryDepartmentForOrg: vi.fn().mockResolvedValue({ state: "none" }),
 }));
 
 vi.mock("@/lib/admin/actions/createLeadChildOcmPersistence", () => ({
@@ -413,6 +420,39 @@ describe("executeCreateLeadAction validation", () => {
             expect(res.error).toMatch(/not configured for this process\/location/i);
         }
         // No opportunity row was inserted.
+        expect(sb.getCapturedOppInsert()).toBeNull();
+    });
+
+    it("resolves the entry department from configuration when the caller names none", async () => {
+        // Workspace surfaces ("All locations", slash Create Lead) send no department. Configuration
+        // is the authority — the lead must still land on the configured entry work unit.
+        vi.mocked(resolveCreateLeadEntryDepartmentForOrg).mockResolvedValueOnce({
+            state: "resolved",
+            departmentId: "dept-enrollment",
+            workUnitId: "wu-entry",
+        });
+        const sb = supabaseForCreate("vert-1");
+        const res = await executeCreateLeadAction(sb as never, ctx as never, {
+            merged: { first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" },
+        });
+        expect(res.ok).toBe(true);
+        if (res.ok) expect(res.work_unit_id).toBe("wu-entry");
+    });
+
+    it("asks rather than guessing when several processes can create leads", async () => {
+        vi.mocked(resolveCreateLeadEntryDepartmentForOrg).mockResolvedValueOnce({
+            state: "ambiguous",
+            departmentIds: ["dept-a", "dept-b"],
+        });
+        const sb = supabaseForCreate("vert-1");
+        const res = await executeCreateLeadAction(sb as never, ctx as never, {
+            merged: { first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" },
+        });
+        expect(res.ok).toBe(false);
+        if (!res.ok) {
+            expect(res.status).toBe(422);
+            expect(res.error).toMatch(/more than one process/i);
+        }
         expect(sb.getCapturedOppInsert()).toBeNull();
     });
 });
