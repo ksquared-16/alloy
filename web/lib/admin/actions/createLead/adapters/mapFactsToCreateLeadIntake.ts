@@ -118,6 +118,39 @@ export function mapFactsToCreateLeadIntake(input: {
         mapCreateLeadPrimaryChild(candidates, seen, input.spec, primaryChild, push);
     }
 
+    // Contact fallback: an email/phone provided WITHOUT a (re-stated) parent name in the same message
+    // must still populate the primary-contact fields. Otherwise, when the operator sends contact info
+    // on its own turn (the parent name came in an earlier BOS turn), `household.parents` is empty for
+    // this extraction, mapCreateLeadPrimaryParent never runs, and the email/phone are silently dropped
+    // ("I still need: Email"). The `seen` guard means this never overrides a per-parent mapping above.
+    const parentKeys = CREATE_LEAD_HOUSEHOLD_FIELD_KEYS.primary_parent;
+    if (!seen.has(parentKeys.email)) {
+        const emailFact = input.extraction.facts.find((f) => f.fact_type === "email");
+        if (emailFact) {
+            push({
+                payload_key: parentKeys.email,
+                rule_id: fieldByPayloadKey(input.spec, parentKeys.email)?.rule_id ?? "person:email",
+                value: String(emailFact.normalized_value ?? emailFact.raw_value).trim(),
+                confidence: emailFact.validation_state === "invalid" ? "invalid" : "high",
+                fact_ids: [emailFact.fact_id],
+                validation_state: emailFact.validation_state ?? "valid",
+            });
+        }
+    }
+    if (!seen.has(parentKeys.phone)) {
+        const phoneFact = input.extraction.facts.find((f) => f.fact_type === "phone");
+        if (phoneFact) {
+            push({
+                payload_key: parentKeys.phone,
+                rule_id: fieldByPayloadKey(input.spec, parentKeys.phone)?.rule_id ?? "person:phone",
+                value: String(phoneFact.normalized_value ?? phoneFact.raw_value).trim(),
+                confidence: phoneFact.validation_state === "invalid" ? "invalid" : "high",
+                fact_ids: [phoneFact.fact_id],
+                validation_state: phoneFact.validation_state ?? "valid",
+            });
+        }
+    }
+
     if (household.source && !seen.has(keys.source)) {
         push({
             payload_key: keys.source,

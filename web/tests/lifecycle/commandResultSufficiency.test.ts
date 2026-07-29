@@ -11,7 +11,10 @@
 import { describe, it, expect } from "vitest";
 
 import { normalizeCompletionPolicy } from "@/lib/lifecycle/stageWorkCompletionPolicy";
-import { resolveSufficientCommandResultOutcome } from "@/lib/lifecycle/stageWorkCompletionPolicy";
+import {
+    resolveEffectiveSufficientCommandResultOutcome,
+    resolveSufficientCommandResultOutcome,
+} from "@/lib/lifecycle/stageWorkCompletionPolicy";
 import type { StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 const tpl = (policy: unknown): Pick<StageWorkTemplateV1, "completion_policy"> => ({
@@ -99,6 +102,45 @@ describe("resolveSufficientCommandResultOutcome — config decides sufficiency",
         // never resolve through the result-sufficiency path.
         expect(resolveSufficientCommandResultOutcome(childcareContact, "communications_send", "reached_family"))
             .toBeNull();
+    });
+});
+
+describe("resolveEffectiveSufficientCommandResultOutcome — explicit → default → none", () => {
+    it("uses platform default for canonical contact_family when sufficiency is absent", () => {
+        const bare = {
+            template_key: "contact_family",
+            work_definition_key: "contact_family",
+            completion_policy: { min_attempts: 3 },
+        };
+        expect(resolveEffectiveSufficientCommandResultOutcome(bare, "communications_send", "sent")).toBe(
+            "left_message",
+        );
+        expect(resolveEffectiveSufficientCommandResultOutcome(bare, "communications_send", "failed")).toBeNull();
+    });
+
+    it("preserves no inference for unknown/custom work", () => {
+        const custom = {
+            template_key: "custom_outreach",
+            work_definition_key: "custom_outreach",
+            completion_policy: undefined,
+        };
+        expect(resolveEffectiveSufficientCommandResultOutcome(custom, "communications_send", "sent")).toBeNull();
+    });
+
+    it("explicit reply-required overrides the platform default", () => {
+        const replyRequired = {
+            template_key: "contact_family",
+            work_definition_key: "contact_family",
+            completion_policy: {
+                sufficient_command_results: [
+                    { capability: "communications_send", result: "replied", satisfies_outcome_key: "reached_family" },
+                ],
+            },
+        };
+        expect(resolveEffectiveSufficientCommandResultOutcome(replyRequired, "communications_send", "sent")).toBeNull();
+        expect(resolveEffectiveSufficientCommandResultOutcome(replyRequired, "communications_send", "replied")).toBe(
+            "reached_family",
+        );
     });
 });
 

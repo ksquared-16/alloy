@@ -59,10 +59,10 @@ describe("queryBosSlashCatalog", () => {
         expect(items.find((i) => i.actionKey === "create_lead")?.eligible).toBe(true);
     });
 
-    it("fails closed without process-effective keys", () => {
+    it("fails closed for entity-scoped Commands without process-effective keys", () => {
         const unknown = queryBosSlashCatalog({ query: "/" });
-        expect(unknown.find((i) => i.actionKey === "create_lead")?.eligible).toBe(false);
-        expect(unknown.find((i) => i.actionKey === "create_lead")?.ineligibleReason).toMatch(
+        expect(unknown.find((i) => i.actionKey === "cancel_tour")?.eligible).toBe(false);
+        expect(unknown.find((i) => i.actionKey === "cancel_tour")?.ineligibleReason).toMatch(
             /Business Process/i
         );
 
@@ -70,10 +70,24 @@ describe("queryBosSlashCatalog", () => {
             query: "/",
             processEffectiveCommandKeys: new Set(),
         });
-        expect(empty.find((i) => i.actionKey === "create_lead")?.eligible).toBe(false);
-        expect(empty.find((i) => i.actionKey === "create_lead")?.ineligibleReason).toMatch(
+        expect(empty.find((i) => i.actionKey === "cancel_tour")?.eligible).toBe(false);
+        expect(empty.find((i) => i.actionKey === "cancel_tour")?.ineligibleReason).toMatch(
             /selected for this process/i
         );
+    });
+
+    it("keeps entry Commands runnable with no process context", () => {
+        // Create Lead creates the record a process operates on, so an open process cannot be its
+        // precondition — gating it there left it permanently gray in BOS while the workspace
+        // Actions rail offered the very same command.
+        const unknown = queryBosSlashCatalog({ query: "/" });
+        expect(unknown.find((i) => i.actionKey === "create_lead")?.eligible).toBe(true);
+
+        const empty = queryBosSlashCatalog({
+            query: "/",
+            processEffectiveCommandKeys: new Set(),
+        });
+        expect(empty.find((i) => i.actionKey === "create_lead")?.eligible).toBe(true);
     });
 
     it("marks unselected Commands ineligible even when adapter-ready", () => {

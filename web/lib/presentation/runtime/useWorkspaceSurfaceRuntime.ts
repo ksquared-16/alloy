@@ -168,8 +168,16 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         };
     }, [orgId]);
 
-    // Default department for org-level workspace actions (Create Lead) — the first process's dept.
+    // Workspace SCOPE hint — what BOS reads to load an intake spec and the process-effective slash
+    // catalog. A hint may be approximate, so the first process is fine here; nulling it would strip
+    // BOS of process context entirely and gray every slash command.
     const defaultDepartmentId = cards[0]?.departmentId ?? null;
+
+    // The department ASSERTED when creating a record, which is a different question: "first by sort
+    // order" is a config artifact, not operator intent, and asserting it silently books the lead
+    // against the wrong department. Implied only when the org has a single process; otherwise the
+    // workspace names none and the server resolves the entry department from configuration.
+    const createLeadDepartmentId = cards.length === 1 ? (cards[0]?.departmentId ?? null) : null;
 
     // ── Work View counts: canonical-location totals (ONE count source) ─────────────────
     // Each configured view's nav entry carries its canonical location (host work unit +
@@ -456,6 +464,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
             processConfig: visibleProcessSnapshot?.config ?? processConfig,
             rightRailActions,
             defaultDepartmentId,
+            createLeadDepartmentId,
             // Header + process tiles commit only when config + metrics + counts have settled,
             // or from the previous complete snapshot during refresh. Prevents default-header
             // flash and partial KPI morphs. A retained return is ready immediately from its seed
@@ -476,6 +485,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
             processConfig,
             rightRailActions,
             defaultDepartmentId,
+            createLeadDepartmentId,
             processSnapshotSelection.ready,
             retainedReady,
         ],

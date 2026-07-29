@@ -36,6 +36,8 @@ const OPPORTUNITY_EVENT_TYPE_LABELS: Record<string, string> = {
     child_lifecycle_status_changed: "Child lifecycle changed",
     message_received: "Message received",
     message_sent: "Message sent",
+    message_delivered: "Message delivered",
+    message_failed: "Message failed",
     note_added: "Note added",
     action_executed: "Action completed",
     opportunity_enrollment_packet_created: "Enrollment packet created",

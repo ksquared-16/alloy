@@ -35,6 +35,11 @@ export type PartialQueueRowContextQueueMeta = {
     count_unit?: QueueRowCountUnit;
     location_scope_source?: string | null;
     included_disposition_keys?: readonly string[];
+    /**
+     * Configured stage key → the tenant's authored label, so a per-row stage renders in the
+     * operator's own words. Supplied by callers that already hold the process stage list.
+     */
+    stage_labels_by_key?: Record<string, string>;
 };
 
 /**

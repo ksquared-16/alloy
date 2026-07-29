@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { linkedPersonIdFromCommitRecord } from "@/lib/intake/resolve/applyResolutionToCommitSelection";
 import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
+import { resolveCreateLeadEntryDepartmentForOrg } from "@/lib/lifecycle/resolveCreateLeadEntryDepartment";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
 import { ingestCreateLeadThroughProcessing } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
@@ -117,6 +118,36 @@ export async function executeCreateLeadAction(
         // Operator-configured entry-stage status wins when present (department-level ownership).
         if (binding.status_key?.trim()) {
             statusKeyForLead = binding.status_key.trim();
+        }
+    }
+
+    // Workspace-level surfaces cannot name a department, and historically sent whichever one
+    // sorted first — so a missing binding here does NOT mean "the operator's process is
+    // unconfigured". Resolve the entry department from configuration before failing closed;
+    // ambiguity is surfaced rather than guessed.
+    if (!workUnitId) {
+        const entry = await resolveCreateLeadEntryDepartmentForOrg(
+            supabase,
+            ctx.orgId,
+            ctx.accessScope ?? null
+        );
+        if (entry.state === "ambiguous") {
+            return {
+                ok: false,
+                error: "More than one process can create leads. Choose a process, then create the lead.",
+                status: 422,
+            };
+        }
+        if (entry.state === "resolved") {
+            workUnitId = entry.workUnitId;
+            const binding = await resolveLifecycleCreateLeadBinding(
+                supabase,
+                ctx.orgId,
+                entry.departmentId
+            );
+            if (binding.status_key?.trim()) {
+                statusKeyForLead = binding.status_key.trim();
+            }
         }
     }
 
