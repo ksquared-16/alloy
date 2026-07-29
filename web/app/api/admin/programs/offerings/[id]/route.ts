@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import type { OfferingStatus } from "@/lib/programs/programOfferings";
+import { operatorFriendlyProgramOfferingError } from "@/lib/programs/operatorFriendlyProgramOfferingError";
 
 const VALID_STATUSES = new Set<OfferingStatus>([
     "active", "draft", "coming_soon", "seasonal", "retired", "archived",
@@ -11,7 +12,8 @@ const VALID_STATUSES = new Set<OfferingStatus>([
 /**
  * PATCH /api/admin/programs/offerings/[id]
  * Update label, status, sort_order, effective_start, effective_end, is_active, metadata.
- * attendance_type changes are blocked if variants with rates exist.
+ * attendance_type changes are blocked if variants with rates exist, and rejected when
+ * another offering already owns the same (org, program_key, attendance_type).
  */
 export async function PATCH(
     request: NextRequest,
@@ -61,34 +63,72 @@ export async function PATCH(
                 : {};
     }
 
+    const supabase = createAdminClient();
+    const { data: existingRow } = await supabase
+        .from("program_offerings")
+        .select("id, program_key, label, attendance_type")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+
+    if (!existingRow) {
+        return NextResponse.json({ error: "Offering not found" }, { status: 404 });
+    }
+
+    const existing = existingRow as {
+        id: string;
+        program_key: string;
+        label: string;
+        attendance_type: string;
+    };
+
     if (body.attendance_type !== undefined) {
-        const supabase = createAdminClient();
-        const { data: current } = await supabase
-            .from("program_offerings")
-            .select("attendance_type")
-            .eq("id", id)
-            .eq("org_id", ctx.orgId)
-            .maybeSingle();
         const nextAttendance = String(body.attendance_type);
-        const currentAttendance = current ? String((current as { attendance_type?: string }).attendance_type ?? "") : "";
+        const currentAttendance = String(existing.attendance_type ?? "");
         // Idempotent: same care format is not a change — do not block metadata/location saves.
         if (currentAttendance !== nextAttendance) {
-            const { count } = await supabase
-                .from("commercial_tuition_rates")
-                .select("id", { count: "exact", head: true })
-                .in(
-                    "variant_id",
-                    (
-                        await supabase
-                            .from("program_offering_variants")
-                            .select("id")
-                            .eq("offering_id", id)
-                            .eq("org_id", ctx.orgId)
-                    ).data?.map((v: { id: string }) => v.id) ?? [],
-                );
-            if (count && count > 0) {
+            const { data: conflict } = await supabase
+                .from("program_offerings")
+                .select("id, label")
+                .eq("org_id", ctx.orgId)
+                .eq("program_key", existing.program_key)
+                .eq("attendance_type", nextAttendance)
+                .neq("id", id)
+                .maybeSingle();
+            if (conflict) {
                 return NextResponse.json(
-                    { error: "Cannot change attendance type — variants have rates. Remove rates first." },
+                    {
+                        error: operatorFriendlyProgramOfferingError("program_offerings_unique", {
+                            programLabel: existing.program_key,
+                            careFormat: nextAttendance,
+                            planName: String((conflict as { label?: string }).label ?? ""),
+                        }),
+                    },
+                    { status: 409 },
+                );
+            }
+
+            const { data: variantRows } = await supabase
+                .from("program_offering_variants")
+                .select("id")
+                .eq("offering_id", id)
+                .eq("org_id", ctx.orgId);
+            const variantIds = (variantRows ?? []).map((v: { id: string }) => v.id);
+            let rateCount = 0;
+            if (variantIds.length > 0) {
+                const { count } = await supabase
+                    .from("commercial_tuition_rates")
+                    .select("id", { count: "exact", head: true })
+                    .in("variant_id", variantIds);
+                rateCount = count ?? 0;
+            }
+            if (rateCount > 0) {
+                return NextResponse.json(
+                    {
+                        error: operatorFriendlyProgramOfferingError(
+                            "Cannot change attendance type — variants have rates. Remove rates first.",
+                        ),
+                    },
                     { status: 409 },
                 );
             }
@@ -100,7 +140,6 @@ export async function PATCH(
         return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    const supabase = createAdminClient();
     const { data, error } = await supabase
         .from("program_offerings")
         .update(patch)
@@ -111,7 +150,18 @@ export async function PATCH(
         )
         .maybeSingle();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+        return NextResponse.json(
+            {
+                error: operatorFriendlyProgramOfferingError(error.message, {
+                    programLabel: existing.program_key,
+                    careFormat: String(patch.attendance_type ?? existing.attendance_type),
+                    planName: String(patch.label ?? existing.label),
+                }),
+            },
+            { status: error.code === "23505" ? 409 : 400 },
+        );
+    }
     if (!data) return NextResponse.json({ error: "Offering not found" }, { status: 404 });
 
     logAdminAudit({
@@ -193,7 +243,12 @@ export async function DELETE(
         .eq("id", id)
         .eq("org_id", ctx.orgId);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+        return NextResponse.json(
+            { error: operatorFriendlyProgramOfferingError(error.message) },
+            { status: 400 },
+        );
+    }
 
     logAdminAudit({
         entity: "program_offerings",

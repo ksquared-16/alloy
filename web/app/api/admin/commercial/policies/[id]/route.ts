@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { validateCommercialPolicyValue, type CommercialPolicyType } from "@/lib/commercial/execution/policy/policyTypes";
+import { operatorFriendlyCommercialError } from "@/lib/commercial/operatorFriendlyCommercialError";
 import { SELECT_COLS, mapPolicyRow, resolveScopeColumns } from "@/app/api/admin/commercial/policies/route";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -48,7 +49,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (Object.keys(patch).length <= 1) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
 
     const { data, error } = await supabase.from("commercial_policies").update(patch).eq("id", id).eq("org_id", ctx.orgId).select(SELECT_COLS).maybeSingle();
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+        return NextResponse.json(
+            { error: operatorFriendlyCommercialError(error.message, "Could not update policy.") },
+            { status: error.code === "23505" ? 409 : 400 },
+        );
+    }
     if (!data) return NextResponse.json({ error: "Policy not found" }, { status: 404 });
     return NextResponse.json({ policy: mapPolicyRow(data as Record<string, unknown>) });
 }
@@ -63,6 +69,11 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     if (!existing) return NextResponse.json({ error: "Policy not found" }, { status: 404 });
 
     const { error } = await supabase.from("commercial_policies").delete().eq("id", id).eq("org_id", ctx.orgId);
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+        return NextResponse.json(
+            { error: operatorFriendlyCommercialError(error.message, "Could not delete policy.") },
+            { status: 400 },
+        );
+    }
     return NextResponse.json({ deleted: true });
 }

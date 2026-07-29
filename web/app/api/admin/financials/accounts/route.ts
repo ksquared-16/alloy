@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
+import { operatorFriendlyCommercialError } from "@/lib/commercial/operatorFriendlyCommercialError";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +86,12 @@ export async function POST(request: NextRequest) {
         .single();
 
     if (insertErr) {
-        return NextResponse.json({ error: insertErr.message }, { status: 500 });
+        return NextResponse.json(
+            {
+                error: operatorFriendlyCommercialError(insertErr.message, "Could not create GL code."),
+            },
+            { status: insertErr.code === "23505" ? 409 : 500 },
+        );
     }
     const row = inserted as { id: string; code: string; name: string };
     try {

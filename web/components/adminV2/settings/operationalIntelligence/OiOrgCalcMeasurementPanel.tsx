@@ -1,0 +1,563 @@
+"use client";
+
+/**
+ * Organization-backed measurement detail — Overview / History / Settings.
+ * Exact-version behavior preserved; advanced library is one click deeper.
+ */
+
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import {
+    ConfigurationPrimaryButton,
+    ConfigurationSecondaryButton,
+} from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import {
+    ConfigEditorSection,
+    ConfigWorkspaceCard,
+    ConfigWorkspaceTabBar,
+} from "@/components/adminV2/settings/configurationRuntime/workspace";
+import { organizationCalculationLibraryHref } from "@/lib/admin/canonicalAdminRoutes";
+import { capacityRecipeFromProductTypeLabel } from "@/lib/adminV2/settings/operationalIntelligence/oiCapacityRecipeCopy";
+import type { OiOrgCalcHealth, OiOrgCalcMeasurement, OiOrgCalcObservation } from "@/lib/metrics/oiOrgCalcMeasurements";
+import { formatOiOrgCalcTargetLabel } from "@/lib/metrics/oiOrgCalcTargetFormat";
+
+type RoomOption = { id: string; label: string; siteLabel: string };
+type Tab = "overview" | "history" | "settings";
+
+const TABS: Array<{ key: Tab; label: string }> = [
+    { key: "overview", label: "Overview" },
+    { key: "history", label: "History" },
+    { key: "settings", label: "Settings" },
+];
+
+function measurementRecipeSentence(measurement: OiOrgCalcMeasurement): string {
+    const name = `${measurement.name} ${measurement.description ?? ""} ${measurement.source.calculation_name}`.toLowerCase();
+    if (measurement.unit === "percent" || name.includes("utilization")) {
+        if (name.includes("fte") || name.includes("equivalent") || name.includes("full-time")) {
+            return "Room utilization converts active children into full-time equivalents, divides by effective capacity, and shows a percentage.";
+        }
+        return "Room utilization divides active children by effective capacity and shows a percentage.";
+    }
+    if (measurement.unit === "children" || name.includes("equivalent child")) {
+        return "Equivalent children counts the selected population using your equivalency definition.";
+    }
+    return capacityRecipeFromProductTypeLabel(measurement.description ?? measurement.source.calculation_name)
+        .recipeSentence;
+}
+
+function healthLabel(h: OiOrgCalcHealth): string {
+    if (h === "on_goal") return "On goal";
+    if (h === "below_goal") return "Below range";
+    if (h === "above_goal") return "Above range";
+    if (h === "no_target") return "No goal";
+    return "Not available";
+}
+
+function formatAnswerValue(value: number | null, unit: "seats" | "percent" | "children"): string {
+    if (value == null) return "Not available";
+    if (unit === "percent") return `${Math.round(value * 10) / 10}%`;
+    if (unit === "children") return `${Math.round(value * 1000) / 1000} children`;
+    return `${value} seats`;
+}
+
+export default function OiOrgCalcMeasurementPanel({
+    measurementId,
+}: {
+    measurementId: string;
+}) {
+    const [tab, setTab] = useState<Tab>("overview");
+    const [measurement, setMeasurement] = useState<OiOrgCalcMeasurement | null>(null);
+    const [history, setHistory] = useState<OiOrgCalcObservation[]>([]);
+    const [rooms, setRooms] = useState<RoomOption[]>([]);
+    const [roomId, setRoomId] = useState("");
+    const [effectiveAt, setEffectiveAt] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        return d.toISOString().slice(0, 10);
+    });
+    const [observation, setObservation] = useState<OiOrgCalcObservation | null>(null);
+    const [health, setHealth] = useState<OiOrgCalcHealth>("not_available");
+    const [targetDraft, setTargetDraft] = useState("");
+    const [targetMaxDraft, setTargetMaxDraft] = useState("");
+    const [newerVersions, setNewerVersions] = useState<Array<{ id: string; version_number: number }>>([]);
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const reload = useCallback(async () => {
+        const res = await fetch(`/api/admin/metrics/oi-org-calc-measurements/${measurementId}`);
+        const json = (await res.json()) as {
+            measurement?: OiOrgCalcMeasurement;
+            history?: OiOrgCalcObservation[];
+            error?: string;
+        };
+        if (!res.ok) throw new Error(json.error ?? "Load failed");
+        setMeasurement(json.measurement ?? null);
+        setHistory(json.history ?? []);
+        const t = json.measurement?.target;
+        if (t?.kind === "rate_range") {
+            setTargetDraft(String(t.min));
+            setTargetMaxDraft(String(t.max));
+        } else if (t?.kind === "count_min") {
+            setTargetDraft(String(t.value));
+            setTargetMaxDraft("");
+        } else {
+            setTargetDraft("");
+            setTargetMaxDraft("");
+        }
+    }, [measurementId]);
+
+    useEffect(() => {
+        void reload().catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
+        void (async () => {
+            const res = await fetch("/api/admin/locations?hierarchy=1");
+            const json = (await res.json()) as {
+                locations?: Array<{
+                    id: string;
+                    label?: string | null;
+                    location_type?: string | null;
+                    parent_location_id?: string | null;
+                }>;
+            };
+            if (!res.ok) return;
+            const locs = json.locations ?? [];
+            const byId = new Map(locs.map((l) => [l.id, l]));
+            const opts = locs
+                .filter((l) => String(l.location_type ?? "").toLowerCase() === "unit")
+                .map((l) => ({
+                    id: l.id,
+                    label: String(l.label ?? "").trim() || "Untitled room",
+                    siteLabel: String(byId.get(l.parent_location_id ?? "")?.label ?? "").trim() || "Site",
+                }));
+            setRooms(opts);
+            if (opts[0]) setRoomId(opts[0].id);
+        })();
+    }, [reload]);
+
+    useEffect(() => {
+        if (!measurement) return;
+        void (async () => {
+            const res = await fetch(
+                `/api/admin/organization-calculations/${measurement.source.calculation_id}`,
+            );
+            const json = (await res.json()) as {
+                versions?: Array<{ id: string; version_number: number; immutable: boolean }>;
+            };
+            if (!res.ok) return;
+            setNewerVersions(
+                (json.versions ?? []).filter(
+                    (v) =>
+                        v.immutable
+                        && v.id !== measurement.source.calculation_version_id
+                        && v.version_number > measurement.source.version_number,
+                ),
+            );
+        })();
+    }, [measurement]);
+
+    const observe = async () => {
+        if (!roomId) {
+            setError("Choose a room.");
+            return;
+        }
+        setBusy(true);
+        setError(null);
+        try {
+            const room = rooms.find((r) => r.id === roomId);
+            const res = await fetch(`/api/admin/metrics/oi-org-calc-measurements/${measurementId}/observe`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    roomId,
+                    effectiveAt,
+                    roomLabel: room ? `${room.siteLabel} / ${room.label}` : null,
+                }),
+            });
+            const json = (await res.json()) as {
+                observation?: OiOrgCalcObservation;
+                health?: OiOrgCalcHealth;
+                error?: string;
+            };
+            if (!res.ok) throw new Error(friendlyError(json.error ?? "Check failed"));
+            setObservation(json.observation ?? null);
+            setHealth(json.health ?? "not_available");
+            await reload();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Check failed");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const saveTarget = async () => {
+        setBusy(true);
+        setError(null);
+        try {
+            const isPercent = measurement?.unit === "percent";
+            const body =
+                isPercent ?
+                    {
+                        target_min_pct: targetDraft.trim() ? Number(targetDraft) : null,
+                        target_max_pct: targetMaxDraft.trim() ? Number(targetMaxDraft) : null,
+                    }
+                :   {
+                        target_min_seats: targetDraft.trim() ? Number(targetDraft) : null,
+                    };
+            const res = await fetch(`/api/admin/metrics/oi-org-calc-measurements/${measurementId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            const json = (await res.json()) as { measurement?: OiOrgCalcMeasurement; error?: string };
+            if (!res.ok) throw new Error(json.error ?? "Could not save goal");
+            await reload();
+            if (observation && json.measurement) {
+                const t = json.measurement.target;
+                if (observation.availability !== "resolved" || observation.value == null) {
+                    setHealth("not_available");
+                } else if (!t) {
+                    setHealth("no_target");
+                } else if (t.kind === "count_min") {
+                    setHealth(observation.value >= t.value ? "on_goal" : "below_goal");
+                } else if (observation.value < t.min) {
+                    setHealth("below_goal");
+                } else if (observation.value > t.max) {
+                    setHealth("above_goal");
+                } else {
+                    setHealth("on_goal");
+                }
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not save goal");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const useNewerVersion = async (versionId: string) => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/metrics/oi-org-calc-measurements/${measurementId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ calculation_version_id: versionId }),
+            });
+            const json = (await res.json()) as { error?: string };
+            if (!res.ok) throw new Error(json.error ?? "Could not use the newer definition");
+            setObservation(null);
+            await reload();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not use the newer definition");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (!measurement) {
+        return <p className="config-typo-sublabel">Loading measurement…</p>;
+    }
+
+    const recipeSentence = measurementRecipeSentence(measurement);
+    const calcHref = organizationCalculationLibraryHref({
+        calculationId: measurement.source.calculation_id,
+    });
+
+    return (
+        <div className="min-w-0 space-y-2.5" data-testid="oi-org-calc-measurement">
+            <div className="process-config-setup-card p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                        <h2 className="text-lg font-semibold text-alloy-midnight" data-testid="oi-org-calc-selected-name">
+                            {measurement.name}
+                        </h2>
+                        <p className="config-typo-sublabel mt-0.5" data-testid="oi-org-calc-recipe-sentence">
+                            {recipeSentence}
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 text-[11px]">
+                        <span className="rounded border border-alloy-stone/20 bg-white px-2 py-0.5 font-semibold capitalize text-alloy-midnight/70">
+                            {measurement.status === "active" ? "Measuring" : measurement.status}
+                        </span>
+                        <span className="rounded border border-alloy-stone/20 bg-white px-2 py-0.5 font-semibold text-alloy-midnight/70">
+                            {formatOiOrgCalcTargetLabel(measurement.target, measurement.unit)}
+                        </span>
+                        <span className="rounded border border-alloy-stone/20 bg-white px-2 py-0.5 font-semibold text-alloy-midnight/70">
+                            {healthLabel(health)}
+                        </span>
+                    </div>
+                </div>
+                <ConfigWorkspaceTabBar
+                    tabs={TABS}
+                    activeSection={tab}
+                    onSectionChange={setTab}
+                    ariaLabel="Measurement sections"
+                    testId="oi-org-calc-tabs"
+                    testIdPrefix="oi-org-calc-tab"
+                />
+            </div>
+
+            {tab === "overview" ?
+                <div className="space-y-2.5" data-testid="oi-org-calc-overview">
+                    <div className="process-config-setup-card space-y-3 p-4" data-testid="oi-org-calc-observe">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                            Current answer
+                        </p>
+                        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                            <label className="block space-y-1">
+                                <span className="config-typo-field-label">Room</span>
+                                <select
+                                    className="config-runtime-input"
+                                    value={roomId}
+                                    onChange={(e) => setRoomId(e.target.value)}
+                                    data-testid="oi-org-calc-room"
+                                >
+                                    {rooms.map((r) => (
+                                        <option key={r.id} value={r.id}>
+                                            {r.siteLabel} / {r.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="block space-y-1">
+                                <span className="config-typo-field-label">Date</span>
+                                <input
+                                    type="date"
+                                    className="config-runtime-input"
+                                    value={effectiveAt}
+                                    onChange={(e) => setEffectiveAt(e.target.value)}
+                                    data-testid="oi-org-calc-effective-at"
+                                />
+                            </label>
+                            <div className="flex items-end">
+                                <ConfigurationPrimaryButton
+                                    className="config-primary-btn--sm"
+                                    disabled={busy}
+                                    onClick={() => void observe()}
+                                    data-testid="oi-org-calc-run-observe"
+                                >
+                                    {busy ? "Checking…" : "Get answer"}
+                                </ConfigurationPrimaryButton>
+                            </div>
+                        </div>
+                        {observation ?
+                            <div
+                                className="rounded-md border border-alloy-stone/20 bg-white/80 p-3"
+                                data-testid="oi-org-calc-observation"
+                            >
+                                <div className="flex flex-wrap items-end justify-between gap-2">
+                                    <p className="text-2xl font-semibold tracking-tight text-alloy-midnight">
+                                        {formatAnswerValue(observation.value, measurement.unit)}
+                                    </p>
+                                    <p className="text-sm text-alloy-midnight/65">
+                                        {healthLabel(health)}
+                                        {measurement.target ?
+                                            ` · ${formatOiOrgCalcTargetLabel(measurement.target, measurement.unit)}`
+                                        :   ""}
+                                    </p>
+                                </div>
+                                {observation.unavailable_reason ?
+                                    <p className="mt-2 text-sm text-amber-900" data-testid="oi-org-calc-unavailable">
+                                        {observation.unavailable_reason}
+                                    </p>
+                                :   null}
+                                {observation.explanation_summary.length > 0 ?
+                                    <details className="mt-2 text-xs text-alloy-midnight/70">
+                                        <summary className="cursor-pointer font-medium text-[#007d68]">
+                                            How we got this number
+                                        </summary>
+                                        <ol className="mt-2 list-decimal space-y-1 pl-4">
+                                            {observation.explanation_summary.map((line) => (
+                                                <li key={line}>{line}</li>
+                                            ))}
+                                        </ol>
+                                    </details>
+                                :   null}
+                            </div>
+                        :   <p className="text-sm text-alloy-midnight/55">
+                                Choose a room and date to see the current answer.
+                            </p>
+                        }
+                    </div>
+                </div>
+            : null}
+
+            {tab === "history" ?
+                <ConfigWorkspaceCard testId="oi-org-calc-history">
+                    <ConfigEditorSection
+                        title="History"
+                        description="Prior answers for rooms and dates you’ve checked."
+                    >
+                        {history.length === 0 ?
+                            <p className="config-typo-sublabel">
+                                No history yet. Get an answer on Overview to begin.
+                            </p>
+                        :   <div className="overflow-x-auto">
+                                <table className="min-w-full text-left text-xs">
+                                    <thead className="text-alloy-midnight/45">
+                                        <tr>
+                                            <th className="py-1 pr-3 font-semibold">Room</th>
+                                            <th className="py-1 pr-3 font-semibold">Date</th>
+                                            <th className="py-1 pr-3 font-semibold">Answer</th>
+                                            <th className="py-1 pr-3 font-semibold">Status</th>
+                                            <th className="py-1 font-semibold">Checked</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {history.map((row) => (
+                                            <tr key={row.id} className="border-t border-alloy-stone/15">
+                                                <td className="py-1.5 pr-3">{row.room_label ?? "Room"}</td>
+                                                <td className="py-1.5 pr-3">{row.effective_at}</td>
+                                                <td className="py-1.5 pr-3">
+                                                    {row.value == null ?
+                                                        "—"
+                                                    :   formatAnswerValue(row.value, measurement.unit)}
+                                                </td>
+                                                <td className="py-1.5 pr-3">
+                                                    {row.availability === "resolved" ?
+                                                        "Ready"
+                                                    :   row.unavailable_reason ?? "Not available"}
+                                                </td>
+                                                <td className="py-1.5">
+                                                    {new Date(row.evaluated_at).toLocaleString()}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </ConfigEditorSection>
+                </ConfigWorkspaceCard>
+            : null}
+
+            {tab === "settings" ?
+                <div className="space-y-3" data-testid="oi-org-calc-settings">
+                    <ConfigWorkspaceCard testId="oi-org-calc-target-panel">
+                        <ConfigEditorSection
+                            title="Goal"
+                            description={
+                                measurement.unit === "percent" ?
+                                    "Set a healthy utilization range. Below or above the range needs attention."
+                                :   "Warn when expected capacity drops below this number of seats."
+                            }
+                        >
+                            {measurement.unit === "percent" ?
+                                <label className="flex flex-wrap items-center gap-2 text-sm">
+                                    <span className="text-alloy-midnight/70">Healthy between</span>
+                                    <input
+                                        className="config-runtime-input w-16"
+                                        value={targetDraft}
+                                        onChange={(e) => setTargetDraft(e.target.value)}
+                                        data-testid="oi-org-calc-target-min"
+                                    />
+                                    <span className="text-alloy-midnight/60">%</span>
+                                    <span className="text-alloy-midnight/70">and</span>
+                                    <input
+                                        className="config-runtime-input w-16"
+                                        value={targetMaxDraft}
+                                        onChange={(e) => setTargetMaxDraft(e.target.value)}
+                                        data-testid="oi-org-calc-target-max"
+                                    />
+                                    <span className="text-alloy-midnight/60">%</span>
+                                </label>
+                            :   <label className="block max-w-xs space-y-1">
+                                    <span className="config-typo-field-label">Warn me when capacity is below</span>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            className="config-runtime-input"
+                                            value={targetDraft}
+                                            onChange={(e) => setTargetDraft(e.target.value)}
+                                            data-testid="oi-org-calc-target-input"
+                                        />
+                                        <span className="text-sm text-alloy-midnight/60">seats</span>
+                                    </div>
+                                </label>
+                            }
+                            <div className="mt-3">
+                                <ConfigurationPrimaryButton
+                                    className="config-primary-btn--sm"
+                                    disabled={busy}
+                                    onClick={() => void saveTarget()}
+                                    data-testid="oi-org-calc-save-target"
+                                >
+                                    Save goal
+                                </ConfigurationPrimaryButton>
+                            </div>
+                        </ConfigEditorSection>
+                    </ConfigWorkspaceCard>
+
+                    <ConfigWorkspaceCard testId="oi-org-calc-source">
+                        <ConfigEditorSection
+                            title="How this is measured"
+                            description="Future updates won’t change this measurement until you choose to use a newer definition."
+                        >
+                                    <p className="text-sm text-alloy-midnight" data-testid="oi-org-calc-source-line">
+                                        {recipeSentence}
+                                    </p>
+                                    <p className="mt-3">
+                                        <Link
+                                            href={calcHref}
+                                            className="text-sm font-semibold text-[#007d68] hover:underline"
+                                            data-testid="oi-org-calc-open-definition"
+                                        >
+                                            View definition
+                                        </Link>
+                                    </p>
+                                    {newerVersions.length > 0 ?
+                                        <div className="mt-3 space-y-2">
+                                            <p className="text-xs text-alloy-midnight/60">
+                                                A newer definition is available.
+                                            </p>
+                                            {newerVersions.map((v) => (
+                                                <ConfigurationSecondaryButton
+                                                    key={v.id}
+                                                    disabled={busy}
+                                                    onClick={() => void useNewerVersion(v.id)}
+                                                    data-testid={`oi-org-calc-rebind-v${v.version_number}`}
+                                                >
+                                                    Use the newer definition
+                                                </ConfigurationSecondaryButton>
+                                            ))}
+                                        </div>
+                                    :   null}
+
+                                    <button
+                                        type="button"
+                                        className="mt-3 text-xs font-semibold text-[#007d68] hover:underline"
+                                        onClick={() => setShowAdvanced((v) => !v)}
+                                        data-testid="oi-org-calc-toggle-advanced"
+                                    >
+                                        {showAdvanced ? "Hide advanced" : "Advanced"}
+                                    </button>
+                                    {showAdvanced ?
+                                        <div className="mt-2 space-y-2 text-sm" data-testid="oi-org-calc-version-panel">
+                                            <p className="config-typo-sublabel" data-testid="oi-org-calc-bound-version">
+                                                Using definition version {measurement.source.version_number}
+                                            </p>
+                                            <p className="text-xs text-alloy-midnight/50">
+                                                Opens Calculation Library for versions and where used.
+                                            </p>
+                                        </div>
+                                    :   null}
+                        </ConfigEditorSection>
+                    </ConfigWorkspaceCard>
+                </div>
+            : null}
+
+            {error ?
+                <p className="text-sm text-red-800" role="alert" data-testid="oi-org-calc-error">
+                    {error}
+                </p>
+            :   null}
+        </div>
+    );
+}
+
+function friendlyError(message: string): string {
+    const m = message.toLowerCase();
+    if (m.includes("room not found") || m.includes("cross-org") || m.includes("inaccessible")) {
+        return "That room isn’t available in this organization.";
+    }
+    return message;
+}

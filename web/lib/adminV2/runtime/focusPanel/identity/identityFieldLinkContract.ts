@@ -19,16 +19,16 @@ import {
     type FocusPanelCardLinkNavState,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLinkNavigation";
 
-/** Enrollment / schedule ownership — inline edit is not offered on identity cards. */
+/** Enrollment / schedule ownership — navigate to Assignments instead of inline edit. */
 const LINKABLE_IDENTITY_FIELD_REFS = new Set<string>([
-    "inquiry_child.location_id",
+    // Location is NOT linkable — siblings can differ and sites change over time;
+    // child + lead each own an editable site select (child inherits lead when unset).
     "inquiry_child.program",
     "inquiry_child.program_category_id",
     "inquiry_child.program_room_cohort_key",
     "inquiry_child.schedule_type",
     "inquiry_child.desired_schedule_type",
     "inquiry_child.start_date",
-    "child.location",
     "child.program",
     "child.room",
     "child.schedule",
@@ -51,14 +51,12 @@ export type IdentityFieldLinkTarget = {
 };
 
 const DEFAULT_LINK_DESTINATIONS: Readonly<Record<string, FocusPanelCardKey>> = {
-    "inquiry_child.location_id": "scheduling",
     "inquiry_child.program": "scheduling",
     "inquiry_child.program_category_id": "scheduling",
     "inquiry_child.program_room_cohort_key": "scheduling",
     "inquiry_child.schedule_type": "scheduling",
     "inquiry_child.desired_schedule_type": "scheduling",
     "inquiry_child.start_date": "scheduling",
-    "child.location": "scheduling",
     "child.program": "scheduling",
     "child.room": "scheduling",
     "child.schedule": "scheduling",

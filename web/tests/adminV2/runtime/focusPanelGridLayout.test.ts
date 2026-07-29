@@ -222,7 +222,38 @@ describe("focusPanelGridLayoutOps", () => {
         });
     });
 
-    it("snapMoveTarget inserts above a same-column neighbor when dropping near its top", () => {
+    it("does not shrink a full-width card when the pointer drifts toward the right half", () => {
+        const grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "household", colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 3 },
+                { card: "children", colStart: 1, colSpan: 12, rowStart: 4, rowSpan: 4 },
+            ],
+        };
+        const moving = grid.areas.find((a) => a.card === "children")!;
+        // Pointer near right half must not collapse Children to a 6-col tile.
+        const snapped = snapMoveTarget(grid, moving, 8, 1);
+        expect(snapped.colSpan).toBe(12);
+        expect(snapped.rowStart).toBe(1);
+    });
+
+    it("moveArea places Children above Household in a full-width stack", () => {
+        let grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "household", colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 3 },
+                { card: "children", colStart: 1, colSpan: 12, rowStart: 4, rowSpan: 4 },
+            ],
+        };
+        grid = moveArea(grid, "children", 1, 1);
+        const children = grid.areas.find((a) => a.card === "children")!;
+        const household = grid.areas.find((a) => a.card === "household")!;
+        expect(children.rowStart).toBe(1);
+        expect(children.colSpan).toBe(12);
+        expect(household.rowStart).toBeGreaterThanOrEqual(children.rowStart + children.rowSpan);
+    });
+
+    it("snapMoveTarget inserts above a same-column neighbor when dropping on its top edge", () => {
         const grid: FocusPanelGridLayout = {
             columns: 12,
             areas: [
@@ -232,10 +263,85 @@ describe("focusPanelGridLayoutOps", () => {
             ],
         };
         const moving = grid.areas.find((a) => a.card === "children")!;
-        const snapped = snapMoveTarget(grid, moving, 7, 2);
-        // Near top of right column → insert above Household (not forced under it).
+        // Drop on Household's top edge → insert above (not forced under it).
+        const snapped = snapMoveTarget(grid, moving, 7, 1);
         expect(snapped.rowStart).toBe(1);
         expect(snapped.colStart).toBe(7);
+    });
+
+    it("snapMoveTarget stacks immediately beneath a tall neighbor without teleporting to top", () => {
+        const grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "current_work", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "children", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 4 },
+                { card: "household", colStart: 7, colSpan: 6, rowStart: 5, rowSpan: 3 },
+            ],
+        };
+        const moving = grid.areas.find((a) => a.card === "household")!;
+        // Drop one track into the lower half of Children — must land at Children bottom (5),
+        // not yank to row 1 via left-column alignTop.
+        const snapped = snapMoveTarget(grid, moving, 7, 3);
+        expect(snapped.rowStart).toBe(5);
+        expect(snapped.colStart).toBe(7);
+    });
+
+    it("after a card snaps to top, another card can reclaim the top slot", () => {
+        let grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "current_work", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "children", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "household", colStart: 7, colSpan: 6, rowStart: 4, rowSpan: 3 },
+            ],
+        };
+        grid = moveArea(grid, "household", 7, 1);
+        expect(grid.areas.find((a) => a.card === "household")!.rowStart).toBe(1);
+        grid = moveArea(grid, "children", 7, 1);
+        const children = grid.areas.find((a) => a.card === "children")!;
+        const household = grid.areas.find((a) => a.card === "household")!;
+        expect(children.rowStart).toBe(1);
+        expect(household.rowStart).toBeGreaterThanOrEqual(children.rowStart + children.rowSpan);
+    });
+
+    it("move first card to last and last card to first preserves deterministic reading order", () => {
+        let grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "household", colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 2 },
+                { card: "children", colStart: 1, colSpan: 12, rowStart: 3, rowSpan: 2 },
+                { card: "current_work", colStart: 1, colSpan: 12, rowStart: 5, rowSpan: 2 },
+            ],
+        };
+        expect(cardsInGrid(grid)).toEqual(["household", "children", "current_work"]);
+        grid = moveArea(grid, "household", 1, 7);
+        expect(cardsInGrid(grid)).toEqual(["children", "current_work", "household"]);
+        grid = moveArea(grid, "household", 1, 1);
+        expect(cardsInGrid(grid)).toEqual(["household", "children", "current_work"]);
+    });
+
+    it("repeated reorder operations before save stay stable", () => {
+        let grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "readiness_kpi", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 2 },
+                { card: "current_work", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 2 },
+                { card: "household", colStart: 1, colSpan: 6, rowStart: 3, rowSpan: 3 },
+                { card: "children", colStart: 7, colSpan: 6, rowStart: 3, rowSpan: 3 },
+            ],
+        };
+        for (let i = 0; i < 5; i += 1) {
+            grid = moveArea(grid, "household", 7, 1);
+            grid = moveArea(grid, "household", 1, 6);
+            grid = moveArea(grid, "children", 1, 1);
+            grid = moveArea(grid, "children", 7, 3);
+        }
+        const order = cardsInGrid(grid);
+        expect(new Set(order).size).toBe(4);
+        expect(order).toHaveLength(4);
+        const published = buildPublishedLayoutFromGrid(grid);
+        const roundTrip = gridFromPublishedLayout(published);
+        expect(cardsInGrid(roundTrip)).toEqual(order);
     });
 
     it("moveArea can place Household beside What's Next and push Children down", () => {

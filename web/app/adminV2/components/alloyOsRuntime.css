@@ -7771,6 +7771,14 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   transform: translateX(1px);
 }
 
+.identity-field-value__derived {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--alloy-os-text-tertiary, #6b7280);
+}
+
 .identity-field-value__value--clickable {
   appearance: none;
   border: 0;

@@ -12,6 +12,10 @@ import {
     type FocusPanelCoordination,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
+    createEmptyFocusPanelCardLinkNavState,
+    navigateCardLinkWithHistory,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLinkNavigation";
+import {
     useDismissSignal,
     useReportPerspective,
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
@@ -406,22 +410,70 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                                 }).compactLine ?? "No schedule yet";
                             return (
                                 <li key={child.id} data-scheduling-child={child.id}>
-                                    <button type="button" onClick={() => setActiveChildId(child.id)} data-scheduling-open={child.id} style={rowBtnStyle}>
-                                        <CardAvatar name={child.name} imageUrl={child.imageUrl} size={30} recordId={child.id} />
-                                        <span style={{ display: "grid", gap: 2, minWidth: 0, flex: 1 }}>
-                                            <span style={{ fontSize: 13.5, fontWeight: 600, color: T.forge }}>{child.name}</span>
-                                            <span
-                                                style={{ fontSize: 11.5, color: T.slate, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                                                data-scheduling-summary={child.id}
-                                            >
-                                                {detail}
+                                    <div style={{ ...rowBtnStyle, padding: 0, gap: 0 }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const result = navigateCardLinkWithHistory({
+                                                    coordination,
+                                                    link: {
+                                                        id: "default:scheduling:child_identity",
+                                                        fromCard: "scheduling",
+                                                        toCard: "children",
+                                                        fromFieldKey: "child.identity",
+                                                        label: "Children",
+                                                    },
+                                                    destinationFocus: child.id,
+                                                    sourceFocus: child.id,
+                                                    nav: createEmptyFocusPanelCardLinkNavState(),
+                                                });
+                                                if (!result.ok) {
+                                                    // Quiet fallback — keep operator on Assignments.
+                                                    setActiveChildId(child.id);
+                                                }
+                                            }}
+                                            aria-label={`View ${child.name} in Children`}
+                                            data-scheduling-focus-children={child.id}
+                                            title="View in Children"
+                                            style={{
+                                                appearance: "none",
+                                                border: 0,
+                                                background: "transparent",
+                                                padding: "8px 4px 8px 10px",
+                                                cursor: "pointer",
+                                                display: "flex",
+                                                alignItems: "center",
+                                            }}
+                                        >
+                                            <CardAvatar name={child.name} imageUrl={child.imageUrl} size={30} recordId={child.id} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveChildId(child.id)}
+                                            data-scheduling-open={child.id}
+                                            style={{
+                                                ...rowBtnStyle,
+                                                flex: 1,
+                                                border: 0,
+                                                background: "transparent",
+                                                padding: "8px 10px 8px 4px",
+                                            }}
+                                        >
+                                            <span style={{ display: "grid", gap: 2, minWidth: 0, flex: 1 }}>
+                                                <span style={{ fontSize: 13.5, fontWeight: 600, color: T.forge }}>{child.name}</span>
+                                                <span
+                                                    style={{ fontSize: 11.5, color: T.slate, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                                                    data-scheduling-summary={child.id}
+                                                >
+                                                    {detail}
+                                                </span>
                                             </span>
-                                        </span>
-                                        <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
-                                            <span data-scheduling-status={proj?.status} style={{ fontSize: 10.5, fontWeight: 700, color: chrome.color }}>{chrome.label}</span>
-                                            <span style={{ color: "#98a2b3" }}>›</span>
-                                        </span>
-                                    </button>
+                                            <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
+                                                <span data-scheduling-status={proj?.status} style={{ fontSize: 10.5, fontWeight: 700, color: chrome.color }}>{chrome.label}</span>
+                                                <span style={{ color: "#98a2b3" }}>›</span>
+                                            </span>
+                                        </button>
+                                    </div>
                                 </li>
                             );
                         })}

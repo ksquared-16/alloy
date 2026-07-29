@@ -10,9 +10,10 @@ import {
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import { resolveProgramKeyForRoomCascade } from "@/lib/admin/location/inquiryChildLocationMismatch";
 import {
-    resolveDefaultInquiryChildSiteId,
+    resolveProgramCategoryOptionsForSite,
     resolveProgramsOfferedForSite,
     resolveRoomsForSiteAndProgram,
+    resolveDefaultInquiryChildSiteId,
     type InquiryChildPlacementHierarchyRow,
     type InquiryChildProgramOptionSetItem,
 } from "@/lib/admin/location/inquiryChildPlacementOptions";
@@ -32,7 +33,10 @@ export function useInquiryChildPlacementCascade(params: {
     programCategoryId?: string;
 }): {
     siteOptions: { value: string; label: string }[];
+    /** Stable program keys — create_lead / key-valued flows. */
     programOptions: { value: string; label: string }[];
+    /** `location_program_categories.id` values — OCM / Focus Panel Program edits. */
+    programCategoryIdOptions: { value: string; label: string }[];
     roomOptions: { value: string; label: string }[];
     programDisabled: boolean;
     roomDisabled: boolean;
@@ -84,7 +88,19 @@ export function useInquiryChildPlacementCascade(params: {
         }));
     }, [siteFilter?.bootstrap?.sites, hierarchy]);
 
-    const siteId = params.locationValue.trim();
+    const defaultSiteId = useMemo(
+        () =>
+            resolveDefaultInquiryChildSiteId({
+                currentSiteId: params.locationValue,
+                headerSiteId: siteFilter?.selectedSiteId ?? null,
+                siteOptions,
+            }),
+        [params.locationValue, siteFilter?.selectedSiteId, siteOptions]
+    );
+
+    // Prefer explicit child/lead site; otherwise workspace / single-site default so Program
+    // options still resolve when Create Lead only set opportunity.location_id.
+    const siteId = params.locationValue.trim() || defaultSiteId || "";
     const programCategoryId = (params.programCategoryId ?? "").trim();
     const programValue = params.programValue.trim();
     const programFilterKey = useMemo(() => {
@@ -102,24 +118,20 @@ export function useInquiryChildPlacementCascade(params: {
         [hierarchy, siteId, programItems, locationCategories]
     );
 
+    const programCategoryIdOptions = useMemo(
+        () => resolveProgramCategoryOptionsForSite(siteId, locationCategories),
+        [siteId, locationCategories],
+    );
+
     const roomOptions = useMemo(
         () => resolveRoomsForSiteAndProgram(hierarchy, siteId, programFilterKey || undefined),
         [hierarchy, siteId, programFilterKey]
     );
 
-    const defaultSiteId = useMemo(
-        () =>
-            resolveDefaultInquiryChildSiteId({
-                currentSiteId: params.locationValue,
-                headerSiteId: siteFilter?.selectedSiteId ?? null,
-                siteOptions,
-            }),
-        [params.locationValue, siteFilter?.selectedSiteId, siteOptions]
-    );
-
     return {
         siteOptions,
         programOptions,
+        programCategoryIdOptions,
         roomOptions,
         programDisabled: !siteId,
         roomDisabled: !siteId,

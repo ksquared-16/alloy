@@ -6,7 +6,6 @@ import { Plus } from "lucide-react";
 import ComposerFloatingPopover from "@/components/admin/focusPanel/drillIn/ComposerFloatingPopover";
 import {
     addFieldToNestedGroup,
-    availableFieldsForNestedGroup,
     identityConfigurationFieldKeys,
     namespacesForNestedGroupPicker,
     type NestedSurfaceConfig,
@@ -18,6 +17,7 @@ import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPane
 import { householdAuthoringGroupKey } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
 import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
+import { useFieldSectionRegistries } from "@/lib/adminV2/settings/surfaces/useFieldSectionRegistries";
 
 type Props = {
     surfaceId: string;
@@ -38,13 +38,11 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
     const composing = composer?.isComposingSurface(surfaceId) ?? false;
     const config = composer?.configFor(surfaceId);
 
-    const available = useMemo(
-        () =>
-            config && composing
-                ? availableFieldsForNestedGroup(surfaceId, groupKey, config, tenantFieldDefinitions, { tier })
-                : [],
-        [config, composing, surfaceId, groupKey, tenantFieldDefinitions, tier],
+    const namespaces = useMemo(
+        () => namespacesForNestedGroupPicker(surfaceId, groupKey),
+        [surfaceId, groupKey],
     );
+    const { sectionRegistry } = useFieldSectionRegistries(namespaces);
 
     const placedKeys = useMemo(() => {
         if (!config) return new Set<string>();
@@ -53,15 +51,15 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
     }, [config, groupKey, tier]);
 
     const categories = useMemo(() => {
-        const namespaces = namespacesForNestedGroupPicker(surfaceId, groupKey);
         if (namespaces.length === 0) return [];
         return identityPickerCategoriesForNamespaces({
             namespaces,
             tenantFieldDefinitions,
+            sectionRegistry,
             excludeKeys: placedKeys,
             includeShowAll: true,
         });
-    }, [surfaceId, groupKey, tenantFieldDefinitions, placedKeys]);
+    }, [namespaces, tenantFieldDefinitions, sectionRegistry, placedKeys]);
 
     /** Search spans all applicable fields regardless of the active category tab. */
     const searchFilteredCategories = useMemo(() => {
@@ -131,13 +129,13 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
                 <Plus className="h-3.5 w-3.5" aria-hidden />
                 Add field
             </button>
-            {available.length === 0 && addOpen ? (
+            {categories.length === 0 && addOpen ? (
                 <p className="mt-2 text-[11px] text-alloy-midnight/50" data-add-field-empty="true">
                     No more fields available for this section.
                 </p>
             ) : null}
             <ComposerFloatingPopover
-                open={addOpen && available.length > 0}
+                open={addOpen && categories.length > 0}
                 anchorRef={triggerRef}
                 onClose={() => {
                     setAddOpen(false);

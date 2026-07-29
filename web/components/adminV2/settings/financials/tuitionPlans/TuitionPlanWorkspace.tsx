@@ -105,7 +105,7 @@ export function TuitionPlanWorkspace({
                                 onClick={onScheduleChange}
                                 data-testid="tuition-plan-schedule-change"
                             >
-                                Schedule Change
+                                Tuition Change
                             </ConfigurationSecondaryButton>
                             <div className="relative" ref={menuRef}>
                                 <ConfigurationSecondaryButton

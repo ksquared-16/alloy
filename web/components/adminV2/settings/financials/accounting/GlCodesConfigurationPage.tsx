@@ -23,6 +23,11 @@ import {
     organizationTuitionPlansHref,
 } from "@/lib/commercial/commercialChapterRoutes";
 import type { CommercialProduct } from "@/lib/commercial/commercialProducts";
+import {
+    accountTypeLabel,
+    sortAccountTypes,
+} from "@/lib/financials/gl/accountTypes";
+import { GL_ACCOUNT_TYPES } from "@/lib/financials/gl/glConfigTypes";
 
 type GlAccountRow = {
     id: string;
@@ -116,10 +121,27 @@ export default function GlCodesConfigurationPage() {
         return accounts
             .filter((row) => {
                 if (!query) return true;
-                return `${row.code} ${row.name} ${row.type}`.toLowerCase().includes(query);
+                return `${row.code} ${row.name} ${row.type} ${accountTypeLabel(row.type)}`
+                    .toLowerCase()
+                    .includes(query);
             })
             .sort((a, b) => a.code.localeCompare(b.code));
     }, [accounts, search]);
+
+    const accountsByType = useMemo(() => {
+        const groups = new Map<string, GlAccountRow[]>();
+        for (const row of visibleAccounts) {
+            const key = String(row.type ?? "").trim().toLowerCase() || "uncategorized";
+            const list = groups.get(key) ?? [];
+            list.push(row);
+            groups.set(key, list);
+        }
+        return sortAccountTypes([...groups.keys()]).map((type) => ({
+            type,
+            label: accountTypeLabel(type),
+            rows: groups.get(type) ?? [],
+        }));
+    }, [visibleAccounts]);
 
     const selected = accounts.find((row) => row.id === selectedId) ?? null;
 
@@ -230,7 +252,13 @@ export default function GlCodesConfigurationPage() {
 
     return (
         <div data-testid="gl-codes-configuration-page">
-            <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                    <p className="text-sm text-alloy-midnight/55">
+                        Account Types are labels on GL Codes (Revenue, Expense, Asset, Liability, Equity) — not a
+                        separate create flow. Commercial products reference GL Codes.
+                    </p>
+                </div>
                 <ConfigurationPrimaryButton className="gap-1" onClick={openCreate} data-testid="gl-codes-new">
                     <Plus className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
                     New GL Code
@@ -250,7 +278,9 @@ export default function GlCodesConfigurationPage() {
                         <aside className="locations-collection-rail process-config-setup-card hidden min-w-0 p-0 xl:block">
                             <header className="locations-collection-rail__header">
                                 <h2 className="locations-collection-rail__title">GL Codes</h2>
-                                <p className="locations-collection-rail__count">{visibleAccounts.length} accounts</p>
+                                <p className="locations-collection-rail__count">
+                                    Grouped by Account Type · {visibleAccounts.length} codes
+                                </p>
                             </header>
                             <div className="programs-collection-controls">
                                 <div className="programs-collection-controls__search-wrap">
@@ -264,39 +294,45 @@ export default function GlCodesConfigurationPage() {
                                     />
                                 </div>
                             </div>
-                            <div className="locations-collection-rail__list" role="listbox" aria-label="GL Codes">
-                                {visibleAccounts.map((row) => {
-                                    const selectedRow = row.id === selectedId;
-                                    const counts = usageByAccount.get(row.id);
-                                    const usedBy = (counts?.tuition ?? 0) + (counts?.catalog ?? 0);
-                                    return (
-                                        <button
-                                            key={row.id}
-                                            type="button"
-                                            role="option"
-                                            aria-selected={selectedRow}
-                                            className={`${QUEUE_ROW_CARD_SHELL_CLASS} locations-collection-row ${
-                                                selectedRow ? QUEUE_ROW_CARD_SELECTED_BORDER_CLASS : QUEUE_ROW_CARD_IDLE_BORDER_CLASS
-                                            }`}
-                                            onClick={() => {
-                                                setSelectedId(row.id);
-                                                setTab("overview");
-                                            }}
-                                            data-testid={`gl-code-${row.id}`}
-                                        >
-                                            {selectedRow ? <span aria-hidden className={QUEUE_ROW_SELECTED_RAIL_CLASS} /> : null}
-                                            <span className="locations-collection-row__body">
-                                                <span className="locations-collection-row__name">{row.code}</span>
-                                                <span className="locations-collection-row__place">{row.name}</span>
-                                                <span className="locations-collection-row__meta text-alloy-midnight/50">
-                                                    {row.type}
-                                                    {!row.is_active ? " · Inactive" : ""}
-                                                    {usedBy > 0 ? ` · Used by ${usedBy}` : ""}
-                                                </span>
-                                            </span>
-                                        </button>
-                                    );
-                                })}
+                            <div className="locations-collection-rail__list" role="listbox" aria-label="GL Codes by Account Type">
+                                {accountsByType.map((group) => (
+                                    <div key={group.type} className="mb-2" data-testid={`gl-account-type-${group.type}`}>
+                                        <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                            {group.label}
+                                        </p>
+                                        {group.rows.map((row) => {
+                                            const selectedRow = row.id === selectedId;
+                                            const counts = usageByAccount.get(row.id);
+                                            const usedBy = (counts?.tuition ?? 0) + (counts?.catalog ?? 0);
+                                            return (
+                                                <button
+                                                    key={row.id}
+                                                    type="button"
+                                                    role="option"
+                                                    aria-selected={selectedRow}
+                                                    className={`${QUEUE_ROW_CARD_SHELL_CLASS} locations-collection-row ${
+                                                        selectedRow ? QUEUE_ROW_CARD_SELECTED_BORDER_CLASS : QUEUE_ROW_CARD_IDLE_BORDER_CLASS
+                                                    }`}
+                                                    onClick={() => {
+                                                        setSelectedId(row.id);
+                                                        setTab("overview");
+                                                    }}
+                                                    data-testid={`gl-code-${row.id}`}
+                                                >
+                                                    {selectedRow ? <span aria-hidden className={QUEUE_ROW_SELECTED_RAIL_CLASS} /> : null}
+                                                    <span className="locations-collection-row__body">
+                                                        <span className="locations-collection-row__name">{row.code}</span>
+                                                        <span className="locations-collection-row__place">{row.name}</span>
+                                                        <span className="locations-collection-row__meta text-alloy-midnight/50">
+                                                            {!row.is_active ? "Inactive" : "Active"}
+                                                            {usedBy > 0 ? ` · Used by ${usedBy}` : ""}
+                                                        </span>
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ))}
                             </div>
                         </aside>
 
@@ -310,7 +346,7 @@ export default function GlCodesConfigurationPage() {
                                                     {selected.code} · {selected.name}
                                                 </h2>
                                                 <p className="mt-1 text-sm text-alloy-midnight/55">
-                                                    {selected.type}
+                                                    {accountTypeLabel(selected.type)}
                                                     {" · "}
                                                     {selected.is_active ? "Active" : "Inactive"}
                                                     {usage ?
@@ -388,8 +424,8 @@ export default function GlCodesConfigurationPage() {
                                                     <dd className="mt-0.5">{selected.name}</dd>
                                                 </div>
                                                 <div>
-                                                    <dt className="text-[11px] font-medium text-alloy-midnight/40">Category</dt>
-                                                    <dd className="mt-0.5 capitalize">{selected.type}</dd>
+                                                    <dt className="text-[11px] font-medium text-alloy-midnight/40">Account Type</dt>
+                                                    <dd className="mt-0.5">{accountTypeLabel(selected.type)}</dd>
                                                 </div>
                                                 <div>
                                                     <dt className="text-[11px] font-medium text-alloy-midnight/40">Status</dt>
@@ -489,18 +525,18 @@ export default function GlCodesConfigurationPage() {
                                 />
                             </label>
                             <label>
-                                <span className="config-typo-field-label">Category</span>
+                                <span className="config-typo-field-label">Account Type</span>
                                 <select
                                     value={type}
                                     onChange={(e) => setType(e.target.value)}
                                     className="config-runtime-select mt-1"
                                     data-testid="gl-code-dialog-type"
                                 >
-                                    <option value="revenue">Revenue</option>
-                                    <option value="liability">Liability</option>
-                                    <option value="asset">Asset</option>
-                                    <option value="expense">Expense</option>
-                                    <option value="equity">Equity</option>
+                                    {GL_ACCOUNT_TYPES.map((accountType) => (
+                                        <option key={accountType} value={accountType}>
+                                            {accountTypeLabel(accountType)}
+                                        </option>
+                                    ))}
                                 </select>
                             </label>
                         </div>

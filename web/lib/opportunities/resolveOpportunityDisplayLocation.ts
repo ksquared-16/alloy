@@ -126,17 +126,28 @@ export function opportunityDisplayLocationFromRecord(
     record: Record<string, unknown>
 ): OpportunityDisplayLocationResolved {
     const inquiryChildren = Array.isArray(record._inquiry_children) ? record._inquiry_children : [];
+    const opportunityLocationId = trimOrNull(record.location_id ?? record._location_id);
+    const opportunityLocationLabel = trimOrNull(record._location_label ?? record._location_name);
 
+    // Per-child site authority (OCM.location_id). When unset, inherit the lead default so
+    // siblings at different sites (one owned South, one inheriting North) surface as multi.
     const childLocations: OpportunityDisplayLocationChildInput[] = inquiryChildren
         .filter((row): row is Record<string, unknown> => !!row && typeof row === "object")
-        .map((row) => ({
-            locationId: trimOrNull(row.location_id),
-            locationLabel: trimOrNull(row.location_label),
-        }));
+        .map((row) => {
+            const ownedId = trimOrNull(row.location_id);
+            const ownedLabel = trimOrNull(row.location_label);
+            if (ownedId || ownedLabel) {
+                return { locationId: ownedId, locationLabel: ownedLabel };
+            }
+            return {
+                locationId: opportunityLocationId,
+                locationLabel: opportunityLocationLabel,
+            };
+        });
 
     return resolveOpportunityDisplayLocation({
-        opportunityLocationId: trimOrNull(record.location_id ?? record._location_id),
-        opportunityLocationLabel: trimOrNull(record._location_label ?? record._location_name),
+        opportunityLocationId,
+        opportunityLocationLabel,
         childLocations,
     });
 }

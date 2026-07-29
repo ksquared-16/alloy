@@ -16,11 +16,33 @@ import type { TuitionPlanDetailVm } from "@/lib/financials/tuitionPlans/tuitionP
 
 const CARE_FORMATS = Object.entries(ATTENDANCE_TYPE_LABELS) as [AttendanceType, string][];
 
+function FormSection({
+    title,
+    description,
+    children,
+}: {
+    title: string;
+    description?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <section className="space-y-3 border-b border-alloy-stone/15 pb-4 last:border-b-0 last:pb-0">
+            <div>
+                <h3 className="text-sm font-semibold text-alloy-midnight">{title}</h3>
+                {description ?
+                    <p className="mt-0.5 text-xs text-alloy-midnight/50">{description}</p>
+                :   null}
+            </div>
+            <div className="space-y-3">{children}</div>
+        </section>
+    );
+}
+
 export function TuitionPlanEditDialog({
     detail,
     cadences,
-    revenueCategories,
     locations,
+    occupiedCareFormats,
     initialLocationMode = "all",
     initialLocationIds = [],
     busy,
@@ -32,6 +54,8 @@ export function TuitionPlanEditDialog({
     cadences: BillingCadence[];
     revenueCategories?: { id: string; label: string }[];
     locations: { id: string; name: string }[];
+    /** Care formats already used by another plan in this program (exclude current). */
+    occupiedCareFormats?: ReadonlySet<AttendanceType>;
     initialLocationMode?: LocationApplicabilityMode;
     initialLocationIds?: string[];
     busy: boolean;
@@ -73,91 +97,121 @@ export function TuitionPlanEditDialog({
                     <h2 id="tuition-edit-title" className="text-lg font-semibold text-alloy-midnight">
                         Edit Tuition Plan
                     </h2>
-                    <p className="mt-1 text-sm text-alloy-midnight/55">Update plan details — prices are managed separately.</p>
+                    <p className="mt-1 text-sm text-alloy-midnight/55">
+                        Update plan identity, program fit, and accounting — prices are managed with Tuition Change.
+                    </p>
                 </div>
 
-                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
                     {error ?
                         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
                             {error}
                         </p>
                     :   null}
 
-                    <label>
-                        <span className="config-typo-field-label">Plan name *</span>
-                        <input
-                            value={name}
-                            onChange={(event) => setName(event.target.value)}
-                            className="config-runtime-input mt-1"
-                            data-testid="tuition-edit-name"
-                            autoFocus
+                    <FormSection title="Identity" description="What operators see when selecting this plan.">
+                        <label>
+                            <span className="config-typo-field-label">Plan name *</span>
+                            <input
+                                value={name}
+                                onChange={(event) => setName(event.target.value)}
+                                className="config-runtime-input mt-1"
+                                data-testid="tuition-edit-name"
+                                autoFocus
+                            />
+                        </label>
+                    </FormSection>
+
+                    <FormSection title="Program" description={detail.programLabel}>
+                        <p className="text-sm text-alloy-midnight/70">{detail.programLabel}</p>
+                    </FormSection>
+
+                    <FormSection
+                        title="Care Format"
+                        description="One Tuition Plan per care format within a program. Formats already in use are unavailable."
+                    >
+                        <label>
+                            <span className="config-typo-field-label">Care format</span>
+                            <select
+                                value={careFormat}
+                                onChange={(event) => setCareFormat(event.target.value as AttendanceType)}
+                                className="config-runtime-select mt-1"
+                                data-testid="tuition-edit-care-format"
+                            >
+                                {CARE_FORMATS.map(([value, label]) => {
+                                    const taken = occupiedCareFormats?.has(value) && value !== detail.careFormat;
+                                    return (
+                                        <option key={value} value={value} disabled={taken}>
+                                            {taken ? `${label} (already used)` : label}
+                                        </option>
+                                    );
+                                })}
+                            </select>
+                        </label>
+                    </FormSection>
+
+                    <FormSection title="Billing Frequency" description="How often Organization Prices are billed.">
+                        <label>
+                            <span className="config-typo-field-label">Billing Frequency</span>
+                            <select
+                                value={billingFrequencyKey}
+                                onChange={(event) => {
+                                    setBillingFrequencyKey(event.target.value);
+                                    setFrequencyWarning(true);
+                                }}
+                                className="config-runtime-select mt-1"
+                                data-testid="tuition-edit-frequency"
+                            >
+                                {cadences.map((cadence) => (
+                                    <option key={cadence.item_key} value={cadence.item_key}>
+                                        {cadenceLabel(cadence.item_key, cadences)}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        {billingChanged && frequencyWarning ?
+                            <p className="rounded-lg border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-sm text-alloy-midnight/70">
+                                Changing Billing Frequency affects how existing prices are interpreted. Review Tuition
+                                Options after saving.
+                            </p>
+                        :   null}
+                    </FormSection>
+
+                    <FormSection title="Revenue Mapping" description="Which GL this plan posts through.">
+                        <GlCodeSelect
+                            value={revenueCategoryId || null}
+                            onChange={(nextRevenueCategoryId) => setRevenueCategoryId(nextRevenueCategoryId ?? "")}
+                            testId="tuition-edit-gl"
+                            label="Revenue GL"
                         />
-                    </label>
-                    <label>
-                        <span className="config-typo-field-label">Care format</span>
-                        <select
-                            value={careFormat}
-                            onChange={(event) => setCareFormat(event.target.value as AttendanceType)}
-                            className="config-runtime-select mt-1"
-                            data-testid="tuition-edit-care-format"
-                        >
-                            {CARE_FORMATS.map(([value, label]) => (
-                                <option key={value} value={value}>
-                                    {label}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    <label>
-                        <span className="config-typo-field-label">Billing Frequency</span>
-                        <select
-                            value={billingFrequencyKey}
-                            onChange={(event) => {
-                                setBillingFrequencyKey(event.target.value);
-                                setFrequencyWarning(true);
-                            }}
-                            className="config-runtime-select mt-1"
-                            data-testid="tuition-edit-frequency"
-                        >
-                            {cadences.map((cadence) => (
-                                <option key={cadence.item_key} value={cadence.item_key}>
-                                    {cadenceLabel(cadence.item_key, cadences)}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    {billingChanged && frequencyWarning ?
-                        <p className="rounded-lg border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-sm text-alloy-midnight/70">
-                            Changing Billing Frequency affects how existing prices are interpreted. Review Tuition Options after saving.
-                        </p>
-                    :   null}
-                    <GlCodeSelect
-                        value={revenueCategoryId || null}
-                        onChange={(nextRevenueCategoryId) => setRevenueCategoryId(nextRevenueCategoryId ?? "")}
-                        testId="tuition-edit-gl"
-                        label="Revenue GL"
-                    />
-                    <label>
-                        <span className="config-typo-field-label">Status</span>
-                        <select
-                            value={status}
-                            onChange={(event) => setStatus(event.target.value as "active" | "draft" | "archived")}
-                            className="config-runtime-select mt-1"
-                            data-testid="tuition-edit-status"
-                        >
-                            <option value="active">Active</option>
-                            <option value="draft">Draft</option>
-                            <option value="archived">Archived</option>
-                        </select>
-                    </label>
-                    <LocationMultiSelect
-                        locations={locations}
-                        mode={locationMode}
-                        selectedIds={selectedLocationIds}
-                        onModeChange={setLocationMode}
-                        onSelectedIdsChange={setSelectedLocationIds}
-                        testId="tuition-edit-locations"
-                    />
+                    </FormSection>
+
+                    <FormSection title="Location Scope" description="Where this plan is available.">
+                        <LocationMultiSelect
+                            locations={locations}
+                            mode={locationMode}
+                            selectedIds={selectedLocationIds}
+                            onModeChange={setLocationMode}
+                            onSelectedIdsChange={setSelectedLocationIds}
+                            testId="tuition-edit-locations"
+                        />
+                    </FormSection>
+
+                    <FormSection title="Status">
+                        <label>
+                            <span className="config-typo-field-label">Status</span>
+                            <select
+                                value={status}
+                                onChange={(event) => setStatus(event.target.value as "active" | "draft" | "archived")}
+                                className="config-runtime-select mt-1"
+                                data-testid="tuition-edit-status"
+                            >
+                                <option value="active">Active</option>
+                                <option value="draft">Draft</option>
+                                <option value="archived">Archived</option>
+                            </select>
+                        </label>
+                    </FormSection>
                 </div>
 
                 <div className="flex justify-end gap-2 border-t border-alloy-stone/20 px-5 py-4">

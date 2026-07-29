@@ -45,6 +45,8 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **BOS Command Runtime Convergence (Mission 1 — frozen, July 2026):** Business Process selects effective Commands; BOS prepares and confirms; shared bridge invokes Command Runtime once; domain executors own writes. Standalone Organization Commands product rejected; Surfaces do not configure Commands. Closeout: **`platform/milestones/bos-command-runtime-convergence-closeout.md`**.
 
+**Operational Intelligence Platform V1 (frozen, July 2026):** Questions → Measurements → Definitions → Answers. Consumers present **Answers** (not Measurements). Freeze: **`platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`**. Product closeout: **`sprints/07_2026/operational-intelligence-expansion/OPERATIONAL-INTELLIGENCE-PLATFORM-V1-COMPLETE.md`**. Phase 2 consumption: **`sprints/07_2026/operational-intelligence-expansion/PHASE-2-CONSUMPTION-MODEL.md`**. Module: **`platform/modules/operational-intelligence-platform.md`**.
+
 ---
 
 ## What Alloy is

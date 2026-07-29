@@ -30,6 +30,7 @@ import type {
 } from "@/lib/childcareOperational/enrollmentOperationalTypes";
 import { compareIsoDates } from "@/lib/childcareOperational/effectiveDating";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { PROPOSED_DRAFT_ASSIGNMENT_ID_PREFIX } from "@/lib/scheduling/projection/proposedDraftAssignmentId";
 import type {
     Assignment,
     AssignmentRoom,
@@ -429,7 +430,7 @@ async function loadProposedDraftForChild(
     const depart = meta.scheduleTimes?.default?.depart ?? null;
     const effectiveFrom = startDate ?? "";
     const assignment: Assignment = {
-        id: `proposed:${customerMemberId}`,
+        id: `${PROPOSED_DRAFT_ASSIGNMENT_ID_PREFIX}${customerMemberId}`,
         subjectId: customerMemberId,
         subjectType: "child",
         childId: customerMemberId,

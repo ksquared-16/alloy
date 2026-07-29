@@ -87,7 +87,13 @@ export type IdentitySurfaceConfig = {
 export type IdentityFieldEditControlVM =
     | { kind: "text"; inputType: "text" | "email" | "tel" }
     | { kind: "date" }
-    | { kind: "select"; optionSetKey: string };
+    | { kind: "select"; optionSetKey: string }
+    | {
+          kind: "placement_select";
+          placement: "program" | "site";
+          siteLocationId?: string | null;
+          programCategoryId?: string | null;
+      };
 
 export type IdentityFieldCellVM = {
     fieldRef: string;
@@ -101,6 +107,8 @@ export type IdentityFieldCellVM = {
     linkLabel?: string | null;
     linkDestination?: FocusPanelCardKey | null;
     linkTarget?: import("@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract").IdentityFieldLinkTarget | null;
+    /** Operator explanation when value is derived (e.g. Program from primary classroom). */
+    derivedSourceLabel?: string | null;
     hideWhenEmpty: boolean;
     width: NestedSurfaceFieldLayoutWidth;
     /** Control type for inline edit — select/date/text from field definition. */

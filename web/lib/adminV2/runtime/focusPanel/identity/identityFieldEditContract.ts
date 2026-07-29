@@ -7,6 +7,7 @@
  * and rejected at publish.
  */
 
+import { reconcileLegacyChildEnrollmentAlias } from "@/lib/fields/canonicalFieldProjection";
 import {
     IDENTITY_UNSUPPORTED_SAVE_REFS,
     isIdentityFieldSaveSupported,
@@ -44,6 +45,18 @@ const RELATIONSHIP_ACTION_ONLY_REFS = new Set<string>([
     "person.relationship",
 ]);
 
+/**
+ * Desired Program is linkable to Assignments (when a primary classroom owns it) AND
+ * editable as an inquiry participation select before assignment exists.
+ * Location is Editable-only (removed from Linked) — sites are per-child / per-lead.
+ * Schedule/Room stay Linked-only — they are not simple inquiry dropdowns.
+ */
+const LINKABLE_AND_EDITABLE_REFS = new Set<string>([
+    "inquiry_child.program",
+    "inquiry_child.program_category_id",
+    "child.program",
+]);
+
 export type IdentityFieldEditContract = {
     fieldRef: string;
     canOfferEditable: boolean;
@@ -56,23 +69,24 @@ export type IdentityFieldEditContract = {
 
 export function resolveIdentityFieldEditContract(fieldRef: string): IdentityFieldEditContract {
     const trimmed = fieldRef.trim();
+    const normalized = reconcileLegacyChildEnrollmentAlias(trimmed);
     if (!trimmed) {
         return { fieldRef: trimmed, canOfferEditable: false, reason: "no_write_adapter" };
     }
-    if (COMPUTED_IDENTITY_FIELD_REFS.has(trimmed)) {
+    if (COMPUTED_IDENTITY_FIELD_REFS.has(trimmed) || COMPUTED_IDENTITY_FIELD_REFS.has(normalized)) {
         return { fieldRef: trimmed, canOfferEditable: false, reason: "computed" };
     }
-    if (RELATIONSHIP_ACTION_ONLY_REFS.has(trimmed)) {
+    if (RELATIONSHIP_ACTION_ONLY_REFS.has(trimmed) || RELATIONSHIP_ACTION_ONLY_REFS.has(normalized)) {
         return { fieldRef: trimmed, canOfferEditable: false, reason: "relationship_action" };
     }
     if (isIdentityFieldInlineSaveSupported(trimmed)) {
         return { fieldRef: trimmed, canOfferEditable: true, reason: "supported" };
     }
-    if (
-        isIdentityFieldSaveSupported(trimmed)
-        && !resolveIdentityFieldLinkContract(trimmed).canOfferLinked
-    ) {
-        return { fieldRef: trimmed, canOfferEditable: true, reason: "supported" };
+    if (isIdentityFieldSaveSupported(trimmed)) {
+        const linkable = resolveIdentityFieldLinkContract(trimmed).canOfferLinked;
+        if (!linkable || LINKABLE_AND_EDITABLE_REFS.has(normalized) || LINKABLE_AND_EDITABLE_REFS.has(trimmed)) {
+            return { fieldRef: trimmed, canOfferEditable: true, reason: "supported" };
+        }
     }
     return { fieldRef: trimmed, canOfferEditable: false, reason: "no_write_adapter" };
 }
@@ -81,10 +95,13 @@ export function identityFieldVisibilityOptionsForBuilder(
     fieldRef: string,
 ): SurfaceFieldVisibility[] {
     const contract = resolveIdentityFieldEditContract(fieldRef);
+    const link = resolveIdentityFieldLinkContract(fieldRef);
+    if (contract.canOfferEditable && link.canOfferLinked) {
+        return ["editable", "linked", "read-only", "hidden"];
+    }
     if (contract.canOfferEditable) {
         return ["editable", "read-only", "hidden"];
     }
-    const link = resolveIdentityFieldLinkContract(fieldRef);
     if (link.canOfferLinked) {
         return ["linked", "read-only", "hidden"];
     }
