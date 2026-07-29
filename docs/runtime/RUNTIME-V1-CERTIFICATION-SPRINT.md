@@ -205,22 +205,42 @@ _Future sessions append decisions here with the next `D-0xx` id; never silently 
 
 **Defect found and fixed en route (`fea89061b`):** `FocusPanelSummarySkeleton` passed `publishedLayout` but omitted `preferLanesFromGrid`, so the pending surface planned `published-grid` while the body planned `published-lanes` — a real DOM+geometry swap on settle. Its guard test was red for an unrelated stale reason ("composed", predating the published path) and masked it. This is why the strategy-sequence probe above is now part of the cert.
 
-> ## ⏸ RUNTIME V1 FOUNDATION PAUSE CHECKPOINT — 2026-07-28
+> ## ✅ RUNTIME V1 INTEGRATION CHECKPOINT — 2026-07-28 — merged to staging; sprint continues
 >
-> **Paused deliberately, not blocked.** Visual Atomicity, Placement Authority and Loading Authority are
-> certified; cold load is decomposed and bounded; CP-1's speculative prewarm storm is removed and
-> certified structurally; runtime phase is explicit; three truthfulness defects are fixed and a fourth
-> (dormant commit work) is declared. The branch is integrated with `origin/staging` 1d3ccfab5 and is a
-> **pure fast-forward** away from promotion.
+> **An integration checkpoint, not a stopping point.** Visual Atomicity, Placement Authority and
+> Loading Authority are certified; cold load is decomposed and bounded; CP-1's speculative prewarm
+> storm is removed and certified structurally; runtime phase is explicit; three truthfulness defects
+> are fixed and a fourth (dormant commit work) is declared.
+>
+> **Merge commit `2ff145679`** (branch `integration/runtime-v1-staging`) — first parent local staging
+> `c0a45e1a9`, second parent Runtime branch `fc57543be`. All **five** pre-existing unpushed staging
+> commits are preserved (verified individually as ancestors); zero overlapping files, so no conflict
+> arbitration was needed. **Gates on the merged result: `npm run build` exit 0 (`verify:module-imports
+> ok`, 8679 files), tsc 1 non-test error (inherited from staging), suite 74 failed / 1276 passed with
+> `comm -13` EMPTY vs the pure-staging baseline, 2 fixed.** Instrumentation (`ALLOY_ROUTE_TIMING`)
+> confirmed default-off; no temporary measurement artifacts tracked.
+>
+> **The `staging` REF has not yet been advanced to `2ff145679`.** It is a pure fast-forward, but every
+> git write in the canonical checkout — where `staging` is checked out — is refused by the harness
+> permission classifier, and git will not let a second worktree hold the same branch. Moving the ref
+> without updating that working tree would leave the canonical checkout showing a large phantom
+> reverse-diff, so it was not done. **One command completes it:**
+> `cd /Users/Kelly/Alloy && git merge --ff-only 2ff145679`. Nothing pushed.
 >
 > **CP-1 is structurally improved, NOT eliminated.** The enriched drawer-VM hop still gates settlement
 > and shows up as ~3.4s of record-switch hold. Measurement caveats stand: the host ran at load average
 > 7.8–15.6 and local `next start` is HTTP/1.1 (~45% of aggregate request time is connection stalling),
 > so **no absolute timing claim from this work is safe** — the certified wins are structural.
 >
-> **Restart:** `CP1-ENRICHED-VM-WATERFALL.md` §6–7 → `PE3-COLD-LOAD-DECOMPOSITION.md` §5–7.
-> Two owner decisions gate the next step (Billing's commit-time presentation; whether to build the
-> middleware→`headers()` channel). Do not start another Runtime architecture step before those.
+> **NEXT (sprint continues):** the deep-link duplicate-subject composition path — a `?subject_id=`
+> deep link composes the default subject server-side and the requested subject again on the client.
+> Treat as a **subject-authority investigation before implementation**: establish which layer owns the
+> authoritative requested subject and at what earliest server boundary it is known, then compare ≥5
+> options. Do **not** reach for a middleware→`headers()` channel merely because it is the most obvious
+> mechanism. Reading order: `CP1-ENRICHED-VM-WATERFALL.md` §6–7 → `PE3-COLD-LOAD-DECOMPOSITION.md` §3a, §5–7.
+>
+> Two owner decisions remain open but do **not** block that work: Billing's commit-time unresolved
+> presentation (`CARD-READINESS-LIFECYCLE.md:134`), and whether a header channel is acceptable at all.
 >
 > **→ RESUME HERE: read `docs/runtime/RUNTIME-V1-SESSION-HANDOFF.md` FIRST (env, baseline method, next work + reorder rationale). Then the 4-lane continuation sequence (§7).** Order: (1) tracker persisted ✓; (2) cold-path clean win — lifecycleCards ✓ (`fcce804a0`), orgName next; (3) registry concern **placement**; (4) background duplicate-request fix; (5) registry concern **loadingPolicy**; (6) `family_alerts` proving-card test; (7) first runtime-boundary enforcement; (8) cold auth/identity/compose (needs PROD build — EEC-gated on host quiescence); (9) second-surface proving-slice design; (10) TS project-reference; (11) permanent diagnostics + regression suite; (12) finish registry migrations + delete old orchestration. **CERTIFIED WARM (do NOT reopen): PE-1/PE-2 met (prod).** Remaining headline gap = COLD ~6.5 s (Lane 1A) + extensibility (Lane 2) + boundaries/TS (Lane 3) + diagnostics (Lane 4).
 
