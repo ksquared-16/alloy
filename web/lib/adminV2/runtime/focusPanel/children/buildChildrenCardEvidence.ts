@@ -174,6 +174,15 @@ export function buildChildrenCardEvidence(
 ): ChildrenCardEvidence {
     const { rows, rawRows } = normalizeFocusPanelChildrenRowsFromTruth(context.truth);
     const schedulingByMember = readSchedulingProjectionByMemberId(context.truth);
+    // Lead/opportunity site — Create Lead writes here even when child participation
+    // location_id is still empty; Program options and Location display inherit it.
+    const opportunitySiteId =
+        trimOrNull(context.truth.location_id)
+        ?? trimOrNull(context.truth._location_id);
+    const opportunitySiteLabel =
+        trimOrNull(context.truth._location_label)
+        ?? trimOrNull(context.truth._location_name)
+        ?? trimOrNull(context.truth["opportunity.location"]);
 
     const children: ChildrenEvidenceChild[] = rows.map((row, index) => {
         const raw = rawInquiryChildForRow(row, rawRows);
@@ -193,10 +202,19 @@ export function buildChildrenCardEvidence(
             primaryAssignment?.program
             ?? trimOrNull(schedulingProjection?.child?.program)
             ?? trimOrNull(row.desired_program_label);
+        const childLocationId =
+            trimOrNull(row.location_id)
+            ?? trimOrNull((raw as { location_id?: unknown }).location_id)
+            ?? trimOrNull(schedulingProjection?.child?.siteId);
         // Site name for Location fields — never expose the UUID storage key as display truth.
         const location =
             trimOrNull(row.location_label)
-            ?? trimOrNull((raw as { location_label?: unknown }).location_label);
+            ?? trimOrNull((raw as { location_label?: unknown }).location_label)
+            ?? trimOrNull(schedulingProjection?.child?.siteName)
+            ?? (childLocationId && opportunitySiteId && childLocationId === opportunitySiteId
+                ? opportunitySiteLabel
+                : null)
+            ?? (!childLocationId ? opportunitySiteLabel : null);
         const room =
             primaryAssignment?.room
             ?? scheduleCompact.roomLabel
@@ -289,9 +307,7 @@ export function buildChildrenCardEvidence(
             dobAge,
             program,
             location,
-            locationId:
-                trimOrNull(row.location_id)
-                ?? trimOrNull((raw as { location_id?: unknown }).location_id),
+            locationId: childLocationId ?? opportunitySiteId,
             programCategoryId:
                 trimOrNull(row.program_category_id)
                 ?? trimOrNull((raw as { program_category_id?: unknown }).program_category_id),

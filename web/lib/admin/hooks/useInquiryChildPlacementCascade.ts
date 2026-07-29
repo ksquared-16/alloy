@@ -88,7 +88,19 @@ export function useInquiryChildPlacementCascade(params: {
         }));
     }, [siteFilter?.bootstrap?.sites, hierarchy]);
 
-    const siteId = params.locationValue.trim();
+    const defaultSiteId = useMemo(
+        () =>
+            resolveDefaultInquiryChildSiteId({
+                currentSiteId: params.locationValue,
+                headerSiteId: siteFilter?.selectedSiteId ?? null,
+                siteOptions,
+            }),
+        [params.locationValue, siteFilter?.selectedSiteId, siteOptions]
+    );
+
+    // Prefer explicit child/lead site; otherwise workspace / single-site default so Program
+    // options still resolve when Create Lead only set opportunity.location_id.
+    const siteId = params.locationValue.trim() || defaultSiteId || "";
     const programCategoryId = (params.programCategoryId ?? "").trim();
     const programValue = params.programValue.trim();
     const programFilterKey = useMemo(() => {
@@ -114,16 +126,6 @@ export function useInquiryChildPlacementCascade(params: {
     const roomOptions = useMemo(
         () => resolveRoomsForSiteAndProgram(hierarchy, siteId, programFilterKey || undefined),
         [hierarchy, siteId, programFilterKey]
-    );
-
-    const defaultSiteId = useMemo(
-        () =>
-            resolveDefaultInquiryChildSiteId({
-                currentSiteId: params.locationValue,
-                headerSiteId: siteFilter?.selectedSiteId ?? null,
-                siteOptions,
-            }),
-        [params.locationValue, siteFilter?.selectedSiteId, siteOptions]
     );
 
     return {

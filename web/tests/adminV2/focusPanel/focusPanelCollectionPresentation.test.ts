@@ -150,6 +150,32 @@ describe("buildChildrenCardEvidence enrollment overlay", () => {
         const evidence = buildChildrenCardEvidence(withSite);
         expect(evidence.children[0]?.location).toBe("North Campus");
         expect(evidence.children[0]?.location).not.toBe(evidence.children[0]?.id);
+        expect(evidence.children[0]?.locationId).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         expect(evidence.children[0]?.room).toBeNull();
+    });
+
+    it("inherits opportunity site for Program options when child location_id is empty", () => {
+        const withOppSite = {
+            ...context,
+            truth: {
+                location_id: "site-north",
+                _location_label: "North Campus",
+                _inquiry_children: [
+                    {
+                        id: "cm-1",
+                        display_name: "Wrigley",
+                        first_name: "Wrigley",
+                        last_name: "Test",
+                        is_active: true,
+                        desired_program_label: null,
+                        desired_schedule_label: null,
+                        start_date: null,
+                    },
+                ],
+            },
+        } as unknown as OperationalContext;
+        const evidence = buildChildrenCardEvidence(withOppSite);
+        expect(evidence.children[0]?.locationId).toBe("site-north");
+        expect(evidence.children[0]?.location).toBe("North Campus");
     });
 });
