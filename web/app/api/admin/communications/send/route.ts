@@ -142,7 +142,14 @@ export async function POST(request: NextRequest) {
     }
 
     let contact_attempt_association:
-        | { associated: boolean; task_id?: string; outcome_key?: string; error?: string }
+        | {
+              associated: boolean;
+              task_id?: string;
+              outcome_key?: string;
+              /** Why nothing advanced (e.g. `no_configured_sufficiency`) — surfaced to the operator. */
+              reason?: string;
+              error?: string;
+          }
         | undefined;
     if (
         primaryEntityType === "opportunities" &&
@@ -165,7 +172,7 @@ export async function POST(request: NextRequest) {
             contact_attempt_association =
                 assoc.associated ?
                     { associated: true, task_id: assoc.task_id, outcome_key: assoc.outcome_key }
-                :   { associated: false, error: assoc.error };
+                :   { associated: false, reason: assoc.reason, error: assoc.error };
         } catch (e) {
             contact_attempt_association = {
                 associated: false,

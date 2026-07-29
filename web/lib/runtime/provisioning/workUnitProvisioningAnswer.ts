@@ -652,6 +652,13 @@ export async function composeWorkUnitProvisioningAnswer(
             label: activeView.label,
             lifecycle_key: process.key,
             subject_grain: "case",
+            // Configured stages are the only runtime stage vocabulary, so the row pill can name the
+            // stage a record actually holds in the operator's own words.
+            stage_labels_by_key: Object.fromEntries(
+                stages
+                    .filter((s) => s.key.trim() && s.label.trim())
+                    .map((s) => [s.key.trim(), s.label.trim()])
+            ),
         },
     });
     void enrichedPromise.catch(() => {});
@@ -787,12 +794,10 @@ export async function composeWorkUnitProvisioningAnswer(
     const primaryContactName = strOrNull(chosenPrimaryContact.display_name);
     const primaryContactPhone = strOrNull(chosenPrimaryContact.phone);
     const primaryContactEmail = strOrNull(chosenPrimaryContact.email);
-    // The committed Children card's roster. Primary source = the enriched queue-row context's
-    // `related_subjects_summary` — the SAME compact child projection the queue row's children band
-    // already resolved for this page (no extra DB read), sibling to `primary_contact` above. Mapped to
-    // the `_inquiry_children` raw shape the shared `buildChildrenCardModel` consumes so the committed
-    // card matches the enriched one. `metadata.inquiry_children` (legacy authored path, empty for most
-    // subjects) wins when present, preserving prior behaviour for subjects that carry it.
+    // The committed Children card's roster. Prefer enriched queue-row children (Create Lead never
+    // writes legacy `metadata.inquiry_children`). Primary source = `related_subjects_summary` —
+    // same compact child projection as the queue children band. Fall back to `_household_children`
+    // from enrichment, then the legacy intake snapshot for older records.
     const relatedSubjectsSummary = Array.isArray(chosenRowContext.related_subjects_summary)
         ? (chosenRowContext.related_subjects_summary as Array<Record<string, unknown>>)
         : [];
@@ -806,8 +811,15 @@ export async function composeWorkUnitProvisioningAnswer(
             age: strOrNull(s.age_label),
             outcome_status_label: strOrNull(s.status_label),
         }));
+    const chosenEnrichedRow = (enriched.find(
+        (r) => String((r as Record<string, unknown>).id) === chosen.entityId
+    ) ?? {}) as Record<string, unknown>;
+    const householdChildren = chosenEnrichedRow._household_children;
     const inquiryChildren =
-        subjectMetadata?.inquiry_children ?? (childrenFromContext.length ? childrenFromContext : null);
+        (childrenFromContext.length ? childrenFromContext : null)
+        ?? (Array.isArray(householdChildren) && householdChildren.length ? householdChildren : null)
+        ?? subjectMetadata?.inquiry_children
+        ?? null;
     const subjectIdentityTruthBindings: SubjectIdentityTruth = {
         ...(primaryContactName ? { "person.primary_contact_name": primaryContactName } : {}),
         ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),

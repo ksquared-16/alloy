@@ -390,8 +390,25 @@ function resolveLifecycleKey(queue: PartialQueueRowContextQueueMeta): string {
     return trimOrNull(queue.lifecycle_key) ?? "enrollment";
 }
 
-function resolveStageKey(queue: PartialQueueRowContextQueueMeta): string {
-    return trimOrNull(queue.stage_key) ?? queue.key;
+/**
+ * The SUBJECT's stage, not the lane's.
+ *
+ * A Work View scopes a list of stages, so rows inside one lane are routinely in different
+ * stages — taking the stage from the lane made every row in a view read identically. Stage is a
+ * persisted column written by outcome execution and intake (`lifecycle_stage_key` materialized by
+ * the Canonical Operational Projection, else the raw `stage_key`); the lane is only a last resort
+ * for rows that carry no stage of their own.
+ */
+function resolveStageKey(
+    row: Record<string, unknown>,
+    queue: PartialQueueRowContextQueueMeta
+): string {
+    return (
+        trimOrNull(row.lifecycle_stage_key)
+        ?? trimOrNull(row.stage_key)
+        ?? trimOrNull(queue.stage_key)
+        ?? queue.key
+    );
 }
 
 function resolveSubjectGrain(queue: PartialQueueRowContextQueueMeta): LifecycleSubjectType {
@@ -434,7 +451,7 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
     const statusLabel = resolveStatusLabel(row, statusKey);
     const caseDisplayName = resolveCaseDisplayName(row);
     const lifecycleKey = resolveLifecycleKey(input.queue);
-    const stageKey = resolveStageKey(input.queue);
+    const stageKey = resolveStageKey(row, input.queue);
     // Honest representation: opportunity preview rows are still case-shaped in production.
     // Declared queue grain (input.queue.subject_grain) may differ until phase 6 child/candidate rows ship.
     // TODO(phase-6): when queue returns child/candidate row ids, set row_subject from OCM/candidate.
@@ -484,6 +501,9 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
             display_name: subjectDisplayName,
         },
         row_stage: resolveProcessStageLabel(row, input.queue),
+        ...(input.queue.stage_labels_by_key
+            ? { stage_labels_by_key: input.queue.stage_labels_by_key }
+            : {}),
         lifecycle_key: lifecycleKey,
         row_status_key: statusKey,
         row_status_label: statusLabel,

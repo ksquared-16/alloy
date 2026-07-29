@@ -188,7 +188,14 @@ function evaluateCustomerMemberProfileRule(
     const profileField = binding?.customer_member_field ?? binding?.field_key;
     if (!binding || !profileField) return [];
 
-    const children = ctx.related?.inquiry_children ?? [];
+    // Unknown is not empty. `inquiry_children` is `undefined` when the surface never carried a
+    // children binding at all, and `[]` when there genuinely are none — collapsing both with `?? []`
+    // made an absent binding read as "this family has no children" and told the operator that
+    // already-captured names and DOBs were missing. Reserve judgment instead, exactly as the
+    // Children card does when the fact is unknowable.
+    const children = ctx.related?.inquiry_children;
+    if (children === undefined) return [];
+
     const violations: RequirementViolation[] = [];
     const blocking_level = blockingLevelForPersistedLevel(level);
     const fieldLabels: Record<string, string> = {
@@ -240,7 +247,11 @@ function evaluateChildRule(
 ): RequirementViolation[] {
     const binding = lifecycleFieldRuleBinding(ruleId);
     if (!binding?.ocm_field) return [];
-    const children = ctx.related?.inquiry_children ?? [];
+    // Unknown is not empty — see evaluateCustomerMemberProfileRule. An absent children binding must
+    // reserve judgment rather than report captured data as missing.
+    const children = ctx.related?.inquiry_children;
+    if (children === undefined) return [];
+
     const violations: RequirementViolation[] = [];
     const blocking_level = blockingLevelForPersistedLevel(level);
 
