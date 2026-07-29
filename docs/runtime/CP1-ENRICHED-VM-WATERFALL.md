@@ -126,9 +126,35 @@ So the card is not waiting on data. It is waiting because it has no entry in
 | Child-surface generalization | good | poor | medium | **excellent — the registry is the seam** | good | neutral |
 | Fabricated/stale truth risk | none | none | **stale risk** | **none — byte-identical model** | none | stale risk |
 
-## 6. Decision
+## 6. Decision — as taken, then corrected
 
-**Implement D + E. Defer A. Reject B, C, F for now.**
+**Implemented D + E. D was subsequently REVERTED at closeout. E stands.** Defer A. Reject B, C, F.
+
+> ### D was reverted — the dormant-capability law outranks the data precondition
+>
+> D's data precondition is sound and still holds: `scheduling`'s model is a pure function of
+> `_inquiry_children`, which the answer already carries (pinned by
+> `focusPanelSchedulingCommitCritical.test.ts`). What that argument missed is **participation**.
+>
+> The law established via `readiness_kpi` says commit-critical work may only be spent on a card that
+> participates in the **resolved** composition. `scheduling` participates in the *default* composition
+> but **not in Firefly's published doc**, which resolves to four cards without it. And the commit
+> producer cannot tell the difference: `FocusPanelWorkModeFromAnswerInput` carries no composition, and
+> the published doc arrives from a **separate client fetch** (`usePublishedFocusPanelSummaryDoc`,
+> observed at +10051ms) — long after commit. Gating the commit model on it would make the commit path
+> wait on a network round trip, which is the opposite of the intent.
+>
+> So on the only certified tenant the promotion bought nothing while spending commit work and
+> inflating `ready_count` / `card_ready` for a card never rendered there. Reverted rather than granted
+> an exception, and rather than inventing a coordinator during closeout. The precondition test is kept
+> green so the promotion can be re-made cheaply once the resolved composition is available at that
+> boundary — the **Child second surface**, which uses the default composition, is the natural proving
+> ground.
+>
+> **A limit this exposed in the guard test:** `focusPanelCommitCriticalCardParticipation.test.ts`
+> checks participation against the *default* composition, because that is the only one available
+> statically. A tenant-published composition that drops a card creates runtime dormancy the test
+> cannot see. Green there is necessary, not sufficient — now recorded in the test itself.
 
 - **D** is the smallest possible change that attacks the dominant product-controlled chain, and it is
   behaviour-preserving by construction: the *same* shared builder over the *same* input produces a

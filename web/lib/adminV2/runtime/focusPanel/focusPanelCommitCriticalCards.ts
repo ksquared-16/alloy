@@ -22,7 +22,6 @@ import {
     buildCurrentWorkCardModel,
     buildHouseholdCardModel,
     buildReadinessCardModel,
-    buildSchedulingCardModel,
 } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -69,18 +68,27 @@ export const COMMIT_CRITICAL_CARD_SPECS: readonly CommitCriticalCardSpec[] = [
         isKnowable: hasSubjectIdentityTruth,
         build: (context) => buildReadinessCardModel(context),
     },
-    {
-        // Scheduling was waiting ~5.5s on the enriched drawer VM for data that fetch does not carry.
-        // `buildSchedulingCardModel` reads exactly ONE field — `_inquiry_children` — the same field
-        // `children` above already gates on, and the answer builds it in the shape the shared builder
-        // consumes. Its collection helper hardcodes "Needs a room" for every child by design
-        // (operational assignments do not exist until enrollment), so no assignment data is read at
-        // all. Same builder + same input ⇒ byte-identical model, just at commit instead of settlement.
-        //
-        // Gated on the field's PRESENCE, not on a count: absent truth must stay reserved rather than
-        // render "No children to assign", which would be a business conclusion drawn from missing data.
-        key: "scheduling",
-        isKnowable: (context) => context.truth._inquiry_children != null,
-        build: (context) => buildSchedulingCardModel(context.truth),
-    },
 ];
+
+/**
+ * WHY `scheduling` IS NOT HERE — a promotion that was made, certified, and then reverted.
+ *
+ * Its data precondition holds: `buildSchedulingCardModel` reads exactly one field,
+ * `_inquiry_children`, which the answer already carries in the shape the shared builder consumes
+ * (pinned by `focusPanelSchedulingCommitCritical.test.ts`). So it *could* be built at commit, and on
+ * a default-composition surface it would rightly be.
+ *
+ * It is withheld because of the dormant-capability law established via `readiness_kpi`: commit-critical
+ * work may only be spent on a card that participates in the RESOLVED composition. Whether it
+ * participates is tenant-dependent — the Firefly published doc resolves to four cards and excludes
+ * `scheduling` — and this producer cannot tell: `FocusPanelWorkModeFromAnswerInput` carries no
+ * composition, and the published doc arrives from a SEPARATE client fetch
+ * (`usePublishedFocusPanelSummaryDoc`) long after commit. Gating on it would make the commit path
+ * wait on a network round trip, which is the opposite of the point.
+ *
+ * So promoting it buys nothing on the only certified tenant while spending commit work and inflating
+ * `ready_count`/`card_ready` for a card that tenant never renders. Reverted rather than granted an
+ * exception. Revisit when the resolved composition is available at this boundary — the Child second
+ * surface, which uses the default composition, is the natural place to prove it.
+ */
+

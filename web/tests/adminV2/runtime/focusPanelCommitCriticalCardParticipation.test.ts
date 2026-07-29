@@ -19,6 +19,15 @@
  * card may be admitted, and any NEW card that becomes dormant commit-critical work fails here loudly.
  *
  * The allowlist lives in the test, not in runtime code, so this carries no runtime behaviour change.
+ *
+ * KNOWN LIMIT OF THIS TEST — learned the hard way. It checks participation against the DEFAULT
+ * composition, which is the only composition available statically. A TENANT-PUBLISHED composition can
+ * exclude a card that the default includes, making that card dormant at runtime for that tenant while
+ * this test stays green. That is exactly what happened with `scheduling`: it participates in the
+ * default composition (so this test passed) but Firefly's published doc resolves to four cards without
+ * it, so promoting it to commit-critical spent work that tenant never used. The promotion was reverted.
+ * Treat a green result here as necessary, not sufficient — per-tenant dormancy needs the resolved
+ * composition, which is not available at the commit-composer boundary.
  */
 
 import { describe, expect, it } from "vitest";
