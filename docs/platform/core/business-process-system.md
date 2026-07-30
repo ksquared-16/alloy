@@ -309,9 +309,38 @@ On enrollment departments, the needs-attention queue usually lives **inside** `e
 
 Stage work surfaced in **Current Work** is the authoritative Business Process execution path. The same work may appear in **Work Items** under the Business Process source for cross-record queue visibility — it is not duplicated as separate operational truth.
 
+- **Shared identity:** `work_id` ≡ `operational_tasks.id` across What’s Next and Workspace Work Items.
 - Current Work → Work Items: deep link with same underlying task/work identity.
 - Work Items → Current Work: focus event on the record-scoped work surface.
 - Outcome completion remains on the authoritative BP / Current Work path.
+
+### Work identity and reconciliation across stage movement (July 2026)
+
+Durable BP work identity is **process subject + semantic work definition** (platform work definition / template key) — not the current stage. Stage determines expected work and applicability.
+
+When an outcome changes stage, a canonical reconciliation pass resolves each existing or destination-expected work item to exactly one lifecycle result: `completed` | `carried_forward` | `canceled` | `superseded` | `created`.
+
+- Carry-forward preserves the same `operational_tasks.id` and normalizes legacy stage-scoped fingerprints to the semantic form (`bpw:…`).
+- Completed work stays completed and remains visible in Activity / Work Items history.
+- Obsolete work is explicitly canceled or superseded — never silently deleted.
+- Destination work is created only when no valid existing identity satisfies it.
+- Reconciliation is idempotent across retries and projection refreshes.
+
+### Child-grain outcome execution (July 2026)
+
+Child-journey stages require a threaded child subject (`customer_member_id` / process instance). Outcomes must not silently fall back to family/case grain. `waitlist_child` converges onto the same outcome → disposition + stage path so status/stage are not double-written beside outcome rules. Multi-child families move only the selected child.
+
+### Transition-specific readiness blocking (July 2026)
+
+Before any stage-changing outcome commits, the platform evaluates configured `stage_exit` requirement timing and transition applicability. Missing fields are not universal blockers — only transition-scoped requirements block. On block: no stage mutation, no durable status mutation, no initiating-work completion, no destination work creation, no source-work cancellation. Child transitions evaluate the selected child’s canonical data (e.g. Program), not sibling or family defaults.
+
+### Stable Focus Panel after leaving the active Work View (July 2026)
+
+After a successful stage move, the Focus Panel stays on the same record. What’s Next, Work Items, Activity, queue rows, and Work View totals refresh from the **canonical operational projection** (one membership/count evaluator). The surface does **not** auto-navigate to the destination Work View. When the record is out of the active view, the operator sees an explicit affordance (e.g. “This record has moved to Tours. Open in Tours”). Latest committed outcome and record version win; stale responses are rejected.
+
+### Default plan vs published tenant plan precedence (July 2026)
+
+Code defaults (`defaultEnrollmentStageOperatingPlans`) apply when a stage has **no** published `stage_operating_plan_v1`. A published tenant operating plan **shadows** code defaults entirely for that stage — there is no deep merge at runtime. Org-safe re-seed helpers (e.g. Tour Scheduled defaults) may **add** missing canonical outcomes/rules/sufficient-command-results only where the tenant has not already configured a conflicting key; they must never overwrite intentional tenant configuration.
 
 ### Work Template action configuration (July 2026)
 
