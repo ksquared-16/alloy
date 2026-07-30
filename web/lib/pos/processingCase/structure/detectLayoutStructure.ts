@@ -19,6 +19,7 @@
 
 import type { SectionDisposition } from "../formDraft/sectionDisposition";
 import type { LayoutDocument, LayoutLine, LayoutPage } from "./pdfLayoutTypes";
+import { labelBbox, lineBbox } from "./layoutFieldGeometry";
 import type {
     DocumentStructureCandidate,
     DocumentStructureField,
@@ -234,6 +235,7 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
                     confidence: "medium",
                     evidence: `Single choice (check one)${options.length ? ` — options: ${options.join(" | ")}` : ""}${hasOther ? "" : ""}`,
                     page: page.page,
+                    bbox: lineBbox(l),
                     options,
                 });
                 continue;
@@ -263,6 +265,7 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
                         confidence: "medium",
                         evidence: "Yes / No question",
                         page: page.page,
+                        bbox: labelBbox(l, q),
                     });
                     if (EXPLAIN_RE.test(t)) {
                         sec.fields.push({
@@ -272,6 +275,7 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
                             confidence: "medium",
                             evidence: "Conditional explanation",
                             page: page.page,
+                            bbox: lineBbox(l),
                         });
                     }
                 }
@@ -285,11 +289,11 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
             if (curSig && curSig.kind === "signature" && BLANK_RE.test(t)) {
                 const sec = curSig;
                 if (/print\s+name/i.test(t)) {
-                    sec.fields.push({ label: "Print Name", suggested_type: "text", required: false, confidence: "high", evidence: "Signature block", page: page.page });
+                    sec.fields.push({ label: "Print Name", suggested_type: "text", required: false, confidence: "high", evidence: "Signature block", page: page.page, bbox: lineBbox(l) });
                 } else {
-                    sec.fields.push({ label: sec.title.replace(/s:?$/i, "").replace(/\bSignatures?\b/i, "Signature").trim() || "Signature", suggested_type: "signature", required: true, confidence: "high", evidence: "Signature line", page: page.page });
+                    sec.fields.push({ label: sec.title.replace(/s:?$/i, "").replace(/\bSignatures?\b/i, "Signature").trim() || "Signature", suggested_type: "signature", required: true, confidence: "high", evidence: "Signature line", page: page.page, bbox: lineBbox(l) });
                     if (/\bdate\b/i.test(t)) {
-                        sec.fields.push({ label: "Date", suggested_type: "date", required: false, confidence: "high", evidence: "Signature date", page: page.page });
+                        sec.fields.push({ label: "Date", suggested_type: "date", required: false, confidence: "high", evidence: "Signature date", page: page.page, bbox: lineBbox(l) });
                     }
                 }
                 continue;
@@ -303,7 +307,12 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
                 const labels = splitFieldLine(t).filter((lbl) => /^[A-Z0-9]/.test(lbl));
                 if (labels.length > 0) {
                     const sec = ensureSection(page.page);
+                    // Several labels can share one physical line. Each gets its OWN sub-box so the
+                    // highlights are distinguishable instead of stacking on top of each other.
+                    const seenLabelCounts = new Map<string, number>();
                     for (const label of labels) {
+                        const occurrence = seenLabelCounts.get(label) ?? 0;
+                        seenLabelCounts.set(label, occurrence + 1);
                         sec.fields.push({
                             label,
                             suggested_type: suggestType(label),
@@ -311,6 +320,7 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
                             confidence: "high",
                             evidence: "Labelled field",
                             page: page.page,
+                            bbox: labelBbox(l, label, occurrence),
                         });
                     }
                     continue;

@@ -27,6 +27,7 @@ import { detectLayoutStructure } from "../structure/detectLayoutStructure";
 import type { LayoutDocument } from "../structure/pdfLayoutTypes";
 import { discoverConfiguration } from "@/lib/pos/discovery/discoverConfiguration";
 import { buildFormDraftFromStructure } from "./buildFormDraftFromStructure";
+import { layoutPageContexts } from "../structure/layoutFieldGeometry";
 import { buildFormDraftFromAcroForm } from "./buildFormDraftFromAcroForm";
 import { deriveDocumentTitle } from "./deriveDocumentTitle";
 import { ocrProvenanceFromDocument } from "./ocrDraftProvenance";
@@ -127,6 +128,9 @@ export async function chooseDraftForCase(input: {
                         fileName: input.fileName,
                         classificationKey: input.classificationKey,
                         extractedTextAvailable: input.text.available,
+                        // Page dimensions travel with the draft so the review canvas can place the
+                        // field boxes the detector just produced.
+                        pdfPages: layoutPageContexts(layout.pages),
                     });
                     // Configuration Discovery runs on the structure (which still carries choice options
                     // and duplicate/output-copy flags the flat draft drops) — the concept-first review.

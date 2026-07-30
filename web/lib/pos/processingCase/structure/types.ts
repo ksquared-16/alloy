@@ -32,6 +32,12 @@ export interface DocumentStructureField {
     evidence?: string;
     /** 1-based source page (native-layout detector only). */
     page?: number;
+    /**
+     * Visual box of the text this field was read from — PDF user space, bottom-left origin
+     * [x0, y0, x1, y1]. Native-layout only; projected from coordinates extraction already produced,
+     * never inferred. This is what lets the review canvas show WHERE a question came from.
+     */
+    bbox?: [number, number, number, number];
     /** Choice options recognized from the document (select fields; native-layout only). */
     options?: string[];
 }
