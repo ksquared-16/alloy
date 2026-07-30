@@ -4,6 +4,13 @@
 > intelligent" framing. Returned **before expanding implementation** per the
 > Director Architecture Clarification.
 
+> **Supersession (kickoff authority):** [DIRECTOR-EXECUTION-SYSTEM-V2.md](./DIRECTOR-EXECUTION-SYSTEM-V2.md)
+> is now canonical for mission kickoff and plan ownership. The user supplies the
+> Mission Brief; Director operationalizes it. The Mission Compiler still
+> assembles worker packages from structured inputs — it must not invent a new
+> product plan from a capability roadmap when an approved Brief is bound.
+> Leadership counsel tone remains in [DIRECTOR-V2-LEADERSHIP-DOCTRINE.md](./DIRECTOR-V2-LEADERSHIP-DOCTRINE.md).
+
 ## The correction
 
 Director is **not** a reasoning model. Director does not become another GPT, does
