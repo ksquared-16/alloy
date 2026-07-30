@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# vac — short UX alias for the host-wide validation broker.
+#   vac run typecheck|typecheck:tests|test|build|playwright|imports [--force]
+#   vac status
+#   vac cancel <request_id>
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  vac run <kind> [--force]     Run a heavy validation kind in this worktree (brokered)
+  vac status                   Show active lease + FIFO queue
+  vac cancel <request_id>      Cancel a waiter or signal the holder
+
+Kinds: typecheck | typecheck:tests | test | build | playwright | imports
+
+Focused Vitest stays direct (not brokered):
+  npx vitest run path/to/file.test.ts
+EOF
+}
+
+case "${1:-}" in
+  -h|--help|"") usage; exit 0 ;;
+  status) exec "$SCRIPT_DIR/alloy-validate" status ;;
+  cancel)
+    shift
+    exec "$SCRIPT_DIR/alloy-validate" cancel "$@"
+    ;;
+  run)
+    shift
+    exec "$SCRIPT_DIR/vac-run" "$@"
+    ;;
+  *)
+    # Convenience: `vac typecheck` == `vac run typecheck`
+    exec "$SCRIPT_DIR/vac-run" "$@"
+    ;;
+esac
