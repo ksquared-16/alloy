@@ -51,10 +51,9 @@ const missionId = ingested.brief.missionId;
 approveMissionExecution(missionId, ingested.brief.version, { slot: 6, actor: "operator" });
 
 const rec = captureImprovement({
-  title: "Needs Me urgency labels unclear",
-  description: "Could not tell which Needs Me item was blocking vs advisory.",
+  whatHappened: "Could not tell which Needs Me item was blocking vs advisory.",
   expectedBehavior: "Urgency should map to plain language (blocks work / waiting on me).",
-  severity: "Medium",
+  interrupt: "Moderate",
   missionId,
   currentScreen: "Mission Dashboard",
   currentSection: "Needs Me",
@@ -67,7 +66,8 @@ assert(rec.missionTitle === "Access & Identity V2", "mission title enriched");
 assert(rec.currentPhase, "phase enriched");
 assert(rec.category, "category inferred");
 assert(rec.status === "New", "status New");
-assert(getImprovement(rec.id)?.title === rec.title, "persists");
+assert(rec.directorInterpretation?.directorInterpretation, "director interpretation");
+assert(getImprovement(rec.id)?.description === rec.description, "persists");
 
 const events = readTimeline(missionId);
 assert(events.some((e) => e.type === "improvement_captured"), "timeline event");

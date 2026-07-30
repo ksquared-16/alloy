@@ -26,7 +26,11 @@ import {
   listMissionsV2,
   projectMissionRow,
 } from "../director-summary.mjs";
-import { getKickoffState, reviewMissionReadiness } from "../mission-kickoff.mjs";
+import {
+  getKickoffState,
+  reviewMissionReadiness,
+  interpretMissionBrief,
+} from "../mission-kickoff.mjs";
 import {
   getMissionConfidence,
   estimateNextCheckpoint,
@@ -62,30 +66,108 @@ const WORKER_HEALTH_COPY = {
 };
 
 const TIMELINE_HEADLINES = {
-  mission_created: "Mission created",
-  mission_started: "Mission started",
-  phase_started: "Phase started",
-  phase_completed: "Phase completed",
-  assignment_started: "Worker began work",
-  assignment_completed: "Deliverable completed",
-  progress: "Progress update",
-  discovery: "Risk discovered",
-  blocker: "Work blocked",
-  decision_requested: "Decision requested",
-  decision_answered: "Decision answered",
+  mission_created: "Director reviewed your Mission Brief",
+  mission_started: "You approved execution",
+  phase_started: "Director assigned the first workstream",
+  phase_completed: "A workstream finished",
+  assignment_started: "A worker began the assignment",
+  assignment_completed: "A deliverable was accepted",
+  progress: "A worker reported progress",
+  discovery: "Director surfaced a risk",
+  blocker: "Work hit a blocker",
+  decision_requested: "Director needs a decision from you",
+  decision_answered: "You answered a decision",
   operator_message: "You messaged Director",
   director_response: "Director responded",
-  improvement_captured: "Improve Vacilando observation",
+  improvement_captured: "You told Director something felt off",
   worker_health: "Worker health changed",
-  recovery: "Director recovery attempted",
-  evidence_added: "Evidence added",
-  validation: "Validation run",
+  recovery: "Director attempted recovery",
+  evidence_added: "Evidence was attached",
+  validation: "Validation ran",
   mission_completed: "Mission completed",
-  context_invalidated: "Worker context refreshed",
-  commit: "Commit recorded",
-  resource_claim: "Resource claimed",
-  resource_release: "Resource released",
+  context_invalidated: "Worker context was refreshed",
+  commit: "A commit was recorded",
+  resource_claim: "A resource was claimed",
+  resource_release: "A resource was released",
 };
+
+/** Explicit worker startup / execution lifecycle — shared across dashboard surfaces. */
+export function deriveWorkerLifecycle(assignment, telemetry = null) {
+  if (!assignment) {
+    return { state: "none", label: "No assignment", explanation: "No deliverable is active yet." };
+  }
+  const status = assignment.status;
+  const hasWorker = Boolean(assignment.workerId || telemetry?.workerId);
+  const hasAck = Boolean(assignment.contextAcknowledgement);
+  const telStatus = telemetry?.status;
+
+  if (status === "blocked") {
+    return { state: "blocked", label: "Blocked", explanation: assignment.blocker?.message || "Work cannot continue until a blocker is cleared." };
+  }
+  if (status === "paused") {
+    return { state: "blocked", label: "Blocked", explanation: "Paused pending a decision or recovery." };
+  }
+  if (status === "waiting") {
+    return { state: "waiting_dependency", label: "Waiting on upstream work", explanation: "This deliverable starts after an earlier workstream finishes." };
+  }
+  if (status === "complete") {
+    return { state: "complete", label: "Complete", explanation: "Deliverable accepted." };
+  }
+  if (status === "failed" || telStatus === "failed") {
+    return { state: "launch_failed", label: "Launch failed", explanation: "Director could not keep this worker healthy — recovery may be needed." };
+  }
+  if (telStatus === "recovering") {
+    return { state: "retrying", label: "Retrying launch", explanation: "Director is recovering the worker." };
+  }
+  if (["unresponsive", "stalled"].includes(telStatus)) {
+    return { state: "retrying", label: "Retrying launch", explanation: "Worker stopped responding — Director is intervening." };
+  }
+  if (status === "verification") {
+    return { state: "active", label: "Worker active", explanation: "Work is under validation." };
+  }
+  if (status === "running" || telStatus === "healthy") {
+    return { state: "active", label: "Worker active", explanation: "Worker is executing this deliverable." };
+  }
+  if (status === "ready" && !hasWorker) {
+    return { state: "assigning", label: "Assigning worker", explanation: "Director is choosing a worker for this deliverable." };
+  }
+  if (status === "ready" && hasWorker && !hasAck) {
+    return { state: "waiting_ack", label: "Waiting for acknowledgement", explanation: "Worker is assigned and must acknowledge the package before starting." };
+  }
+  if ((status === "ready" && hasAck) || telStatus === "starting") {
+    return { state: "starting", label: "Starting worker", explanation: "Worker acknowledged the package and is starting." };
+  }
+  if (!hasWorker && ["ready", "running"].includes(status)) {
+    return { state: "waiting_capacity", label: "Waiting for capacity", explanation: "No worker slot is free yet — Director is waiting for capacity." };
+  }
+  return {
+    state: "assigning",
+    label: "Assigning worker",
+    explanation: "Director is preparing execution for this deliverable.",
+  };
+}
+
+function confidenceWhy(factors = []) {
+  const why = [];
+  for (const f of factors) {
+    const score = Number(f.score) || 0;
+    const note = String(f.note || "").toLowerCase();
+    if (f.id === "implementation" && score < 40) why.push("Implementation has not begun.");
+    else if (f.id === "implementation" && score < 70) why.push("Implementation is only partially complete.");
+    if (f.id === "evidence" && (score < 40 || /0 of|no acceptance|not been/.test(note))) {
+      why.push("Evidence has not been collected.");
+    }
+    if (f.id === "qa" && (score < 50 || /no validation|qa evidence/.test(note))) {
+      why.push("QA has not started.");
+    }
+    if (f.id === "dependencies" && score >= 70) why.push("Dependencies are clear.");
+    else if (f.id === "dependencies" && score < 50) why.push("Dependencies still create risk.");
+    if (f.id === "worker_health" && score < 50) why.push("Worker health needs attention.");
+    if (f.id === "architecture" && score >= 70) why.push("The Mission Brief structure looks solid.");
+  }
+  if (!why.length) why.push("Director is still forming a confidence picture.");
+  return [...new Set(why)].slice(0, 5);
+}
 
 function relTime(iso) {
   if (!iso) return "";
@@ -219,14 +301,32 @@ export function workItemVm(assignment) {
   };
 }
 
-/** Timeline event for operators */
+/** Timeline event for operators — story first; technical detail expandable. */
 export function timelineEventVm(ev) {
   const type = ev.type || "event";
-  const headline = ev.headline || TIMELINE_HEADLINES[type] || ev.summary || type.replace(/_/g, " ");
+  let headline = ev.headline || TIMELINE_HEADLINES[type] || null;
+  const summary = ev.summary || "";
+  // Rewrite legacy technical summaries into operator language.
+  if (!ev.headline) {
+    if (type === "mission_created" || /Mission Brief v\d+ ingested/i.test(summary)) {
+      headline = "Director reviewed your Mission Brief";
+    } else if (type === "mission_started" || /Kickoff approved/i.test(summary)) {
+      headline = "You approved execution";
+    } else if (type === "phase_started" || /^Phase started/i.test(summary)) {
+      const m = summary.match(/Phase started — (.+)/i);
+      headline = m ? `Director assigned the first workstream` : TIMELINE_HEADLINES.phase_started;
+    } else if (!headline) {
+      headline = TIMELINE_HEADLINES[type] || summary || type.replace(/_/g, " ");
+    }
+  }
   const actorMap = { operator: "You", director: "Director", system: "Vacilando" };
   const actor = actorMap[ev.actor] || (ev.actor?.startsWith("claude") || ev.actor?.startsWith("cursor")
     ? `Worker (${ev.actor})`
     : ev.actor || "System");
+  const technical = ev.detail?.technical || null;
+  const explanation = (summary && summary !== headline)
+    ? summary
+    : (ev.detail?.message || ev.detail?.question || "");
   return {
     kind: "timeline_event",
     eventId: ev.event_id || ev.eventId,
@@ -234,12 +334,13 @@ export function timelineEventVm(ev) {
     time: ev.at || ev.occurred_at,
     timeLabel: relTime(ev.at || ev.occurred_at),
     headline,
-    explanation: ev.summary && ev.summary !== headline ? ev.summary : (ev.detail?.message || ev.detail?.question || ""),
+    explanation,
     actor,
     evidenceIds: ev.evidence_ids || ev.evidenceIds || [],
     decisionId: ev.decision_id || ev.decisionId || null,
     assignmentId: ev.assignment_id || ev.assignmentId || null,
-    expandable: Boolean(ev.detail && Object.keys(ev.detail).length),
+    expandable: Boolean(technical || (ev.detail && Object.keys(ev.detail).length)),
+    technical,
     detail: ev.detail || null,
   };
 }
@@ -609,7 +710,8 @@ export function kickoffVm(missionId) {
     };
   }
   const readiness = state?.readiness || reviewMissionReadiness(brief);
-  const findings = (readiness.findings || []).map((f) => ({
+  const interpretation = interpretMissionBrief(brief, readiness);
+  const findings = (interpretation.findings || readiness.findings || []).map((f) => ({
     severity: f.blocking ? "blocking" : "info",
     message: f.message || f.code || JSON.stringify(f),
     kind: f.kind || (f.blocking ? "gap" : "note"),
@@ -623,8 +725,12 @@ export function kickoffVm(missionId) {
         ? "approval"
         : "executing",
     missionId,
-    title: brief.title,
-    objective: brief.objective,
+    title: interpretation.title || brief.title,
+    objective: interpretation.objective,
+    expectedOutcomes: interpretation.expectedOutcomes,
+    deliverables: interpretation.deliverables,
+    recommendedWorkerDisciplines: interpretation.recommendedWorkerDisciplines,
+    directorAssessment: interpretation.directorAssessment,
     phases: (brief.plan || []).map((p) => ({
       id: p.phaseId,
       title: p.title,
@@ -632,7 +738,7 @@ export function kickoffVm(missionId) {
       outputs: p.requiredOutputs || [],
     })),
     acceptanceCriteria: brief.acceptanceCriteria || [],
-    constraints: (brief.constraints || []).map((c) => (typeof c === "string" ? c : c.text)),
+    constraints: interpretation.constraints,
     sources: (brief.sourceMaterials || []).map((s) => s.ref || s.title || s.id),
     findings,
     assignmentCount: assignments.length || (brief.plan || []).length,
@@ -642,6 +748,7 @@ export function kickoffVm(missionId) {
       label: "Start mission",
       disabled: readiness.ready === false,
     },
+    rawBrief: brief,
   };
 }
 
@@ -667,27 +774,38 @@ export function missionDashboardVm(missionId) {
     const tel = workers.find((w) => w.assignmentId === a.assignmentId)
       || workers.find((w) => w.workerId && w.workerId === a.workerId);
     const handledBy = providerLabel(tel?.workerId || a.workerId, a.provider || tel?.provider);
+    const lifecycle = deriveWorkerLifecycle(a, tel);
+    const statusLabel = lifecycle.label;
+    let handledByLabel;
+    if (handledBy && ["active", "starting", "waiting_ack", "retrying"].includes(lifecycle.state)) {
+      handledByLabel = `Handled by ${handledBy}`;
+    } else if (lifecycle.state === "assigning" || lifecycle.state === "waiting_capacity") {
+      handledByLabel = lifecycle.label;
+    } else if (lifecycle.state === "waiting_dependency") {
+      handledByLabel = "Waiting on upstream work";
+    } else if (handledBy) {
+      handledByLabel = `Handled by ${handledBy}`;
+    } else {
+      handledByLabel = lifecycle.explanation;
+    }
     return {
       kind: "current_work",
       title: a.title,
       objective: a.objective,
       status: a.status,
-      statusLabel: ({
-        ready: "Ready",
-        running: "Implementing",
-        waiting: "Waiting",
-        verification: "Validating",
-        complete: "Accepted",
-        blocked: "Blocked",
-        paused: "Paused",
-        failed: "Failed",
-      })[a.status] || a.status,
+      statusLabel,
+      lifecycleState: lifecycle.state,
+      lifecycleLabel: lifecycle.label,
+      lifecycleExplanation: lifecycle.explanation,
       handledBy,
-      handledByLabel: handledBy ? `Handled by ${handledBy}` : "Unassigned",
-      progressSummary: (a.progress || []).slice(-1)[0]?.summary || null,
-      healthLabel: tel ? (WORKER_HEALTH_COPY[tel.status] || tel.status) : null,
+      handledByLabel,
+      progressSummary: (a.progress || []).slice(-1)[0]?.summary || lifecycle.explanation,
+      healthLabel: tel ? (WORKER_HEALTH_COPY[tel.status] || tel.status) : lifecycle.label,
     };
   });
+
+  const lifecycleActive = currentWork.filter((w) => ["active", "starting", "waiting_ack", "retrying"].includes(w.lifecycleState));
+  const lifecyclePending = currentWork.filter((w) => ["assigning", "waiting_capacity"].includes(w.lifecycleState));
 
   const providerRollup = { Claude: { active: 0, waiting: 0 }, Cursor: { active: 0, waiting: 0 } };
   for (const w of currentWork) {
@@ -760,7 +878,16 @@ export function missionDashboardVm(missionId) {
     if (openDecisions.length) return "I need a product call from you before this work can continue.";
     if (operatorRecoveries.length) return "I need your approval before a recovery can proceed.";
     if (directorManagedRecoveries.length) return "I am intervening on an unhealthy worker and preserving uncommitted work.";
-    if (runningAsg.length) return "Everything is progressing normally.";
+    if (lifecyclePending.length && !lifecycleActive.length) {
+      return `I am ${lifecyclePending[0].lifecycleLabel.toLowerCase()} for ${lifecyclePending[0].title}.`;
+    }
+    if (currentWork.some((w) => w.lifecycleState === "waiting_ack")) {
+      return "A worker is assigned and waiting to acknowledge the package before work begins.";
+    }
+    if (currentWork.some((w) => w.lifecycleState === "starting")) {
+      return "A worker is starting — you should see progress shortly.";
+    }
+    if (runningAsg.length || lifecycleActive.length) return "Everything is progressing normally.";
     if (assignments.some((a) => a.status === "verification")) return "I am validating completed work.";
     if (card.status === "awaiting_kickoff_approval") return "Waiting for you to approve kickoff.";
     if (assignments.every((a) => a.status === "complete") && assignments.length) {
@@ -811,6 +938,20 @@ export function missionDashboardVm(missionId) {
 
   const progress = row.progress || {};
   const phaseTitle = row.current_phase?.title || "No active phase yet";
+  const confFactors = Object.entries(confidence.factors || {}).map(([id, f]) => ({
+    id,
+    label: id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    score: f.score,
+    note: f.note,
+    weight: Math.round((confidence.weights?.[id] || 0) * 100),
+  }));
+  const workerCountLabel = lifecycleActive.length
+    ? `${lifecycleActive.length} active`
+    : lifecyclePending.length
+      ? lifecyclePending[0].lifecycleLabel
+      : currentWork.some((w) => w.lifecycleState === "waiting_dependency")
+        ? "Waiting on upstream work"
+        : `${activeWorkers.length} active`;
 
   return {
     kind: "mission_dashboard",
@@ -824,7 +965,11 @@ export function missionDashboardVm(missionId) {
       deliverablesAccepted: progress.accepted_deliverables ?? 0,
       deliverablesTotal: progress.total_deliverables ?? 0,
       deliverablesLabel: `${progress.accepted_deliverables ?? 0} / ${progress.total_deliverables ?? 0} accepted`,
-      activeWorkers: activeWorkers.length,
+      activeWorkers: lifecycleActive.length,
+      workerCountLabel,
+      executionLifecycle: lifecyclePending[0]?.lifecycleLabel
+        || lifecycleActive[0]?.lifecycleLabel
+        || (currentWork[0]?.lifecycleLabel || "No workers yet"),
       confidencePercent: confidence.percent,
       confidenceBand: confidence.bandLabel,
       nextCheckpoint: checkpoint.label,
@@ -832,7 +977,11 @@ export function missionDashboardVm(missionId) {
     },
     director: {
       assessment,
-      focus: directorFocus.length ? directorFocus : ["Monitoring mission state"],
+      focus: directorFocus.length
+        ? directorFocus
+        : (lifecyclePending.length
+          ? [`${lifecyclePending[0].lifecycleLabel}: ${lifecyclePending[0].title}`]
+          : ["Monitoring mission state"]),
       risks: risks.length ? risks : ["None"],
       recoveries: recoveries.length ? recoveries : ["None"],
       next: summary.questions?.find((q) => q.id === "next")?.answer || checkpoint.label,
@@ -858,13 +1007,8 @@ export function missionDashboardVm(missionId) {
       bandLabel: confidence.bandLabel,
       change: confidence.change,
       changes: confidence.changes || [],
-      factors: Object.entries(confidence.factors || {}).map(([id, f]) => ({
-        id,
-        label: id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-        score: f.score,
-        note: f.note,
-        weight: Math.round((confidence.weights?.[id] || 0) * 100),
-      })),
+      why: confidenceWhy(confFactors),
+      factors: confFactors,
     },
     // Compatibility for older clients still reading overview shape
     header: {

@@ -35,8 +35,12 @@ export function reviewMissionReadiness(brief, { slotsAvailable = null, repositor
   const operational_gaps = [];
   const mission_ambiguities = [];
 
-  if (!brief.title?.trim()) {
-    mission_ambiguities.push({ code: "missing_title", message: "Mission title is required" });
+  const titleTrim = String(brief.title || "").trim();
+  if (!titleTrim || /^untitled(\s+mission)?$/i.test(titleTrim)) {
+    mission_ambiguities.push({
+      code: "missing_title",
+      message: "Please confirm a mission title — Director could not infer one from the brief",
+    });
   }
   if (!brief.objective?.trim()) {
     mission_ambiguities.push({ code: "missing_objective", message: "Mission objective is required" });
@@ -121,11 +125,83 @@ export function reviewMissionReadiness(brief, { slotsAvailable = null, repositor
     mission_content_hash: brief.contentHash,
   };
 
+  const findings = [
+    ...mission_ambiguities.map((a) => ({
+      blocking: true,
+      message: a.message,
+      code: a.code,
+      kind: "ambiguity",
+      phaseId: a.phaseId || null,
+    })),
+    ...operational_gaps.map((g) => ({
+      blocking: g.resolvable === false,
+      message: g.message,
+      code: g.code,
+      kind: "operational",
+      resolvable: g.resolvable !== false,
+    })),
+  ];
+
   return {
     ready: mission_ambiguities.length === 0,
     operational_gaps,
     mission_ambiguities,
+    findings,
+    directorAssessment: mission_ambiguities.length === 0 ? "Ready" : "Needs clarification",
     kickoff_card,
+  };
+}
+
+/** Infer a human mission title — never leave "Untitled Mission". */
+export function inferMissionTitle({ title = "", objective = "", plan = [] } = {}) {
+  const raw = String(title || "").trim();
+  if (raw && !/^untitled(\s+mission)?$/i.test(raw) && raw !== "(untitled mission)") {
+    return raw;
+  }
+  const obj = String(objective || "").trim();
+  if (obj) {
+    const first = obj.split(/[.!\n]/)[0].trim();
+    if (first.length >= 8) {
+      return first.length > 72 ? `${first.slice(0, 69)}…` : first;
+    }
+  }
+  const phase = (plan || [])[0]?.title;
+  if (phase && String(phase).trim()) return String(phase).trim();
+  return null;
+}
+
+/** Operator-facing Mission Brief interpretation (raw document stays collapsed). */
+export function interpretMissionBrief(brief, readiness = null) {
+  const r = readiness || reviewMissionReadiness(brief);
+  const title = inferMissionTitle(brief) || brief?.title || null;
+  const outcomes = (brief?.acceptanceCriteria || []).map((c) => c.statement || c).filter(Boolean);
+  const deliverables = (brief?.plan || []).map((p) => ({
+    title: p.title,
+    objective: p.objective,
+    outputs: p.requiredOutputs || [],
+  }));
+  const constraints = (brief?.constraints || []).map((c) => (typeof c === "string" ? c : c.text)).filter(Boolean);
+  const disciplines = [];
+  const blob = `${brief?.objective || ""} ${(brief?.plan || []).map((p) => p.title).join(" ")}`.toLowerCase();
+  if (/auth|identity|role|permission|access/.test(blob)) disciplines.push("Platform / Access");
+  if (/ui|drawer|queue|dashboard|operator/.test(blob)) disciplines.push("Operator experience");
+  if (/schema|migration|rls|database/.test(blob)) disciplines.push("Data / Schema");
+  if (/workflow|director|runtime|worker/.test(blob)) disciplines.push("Runtime / Workflow");
+  if (!disciplines.length) disciplines.push("General engineering");
+
+  return {
+    title,
+    titleInferred: Boolean(title && title !== brief?.title),
+    objective: brief?.objective || "",
+    expectedOutcomes: outcomes,
+    deliverables,
+    constraints,
+    acceptanceCriteria: outcomes,
+    recommendedWorkerDisciplines: disciplines,
+    directorAssessment: r.directorAssessment || (r.ready ? "Ready" : "Needs clarification"),
+    findings: r.findings || [],
+    canStart: r.ready !== false,
+    rawBrief: brief,
   };
 }
 
@@ -134,12 +210,17 @@ export function reviewMissionReadiness(brief, { slotsAvailable = null, repositor
  * objective spine, timeline seed. Does NOT start execution.
  */
 export function ingestMissionBrief(input = {}, { slot = null, provider = "claude", actor = "operator", nowMs } = {}) {
-  const title = String(input.title || "").trim() || "(untitled mission)";
   const objectiveText = String(input.objective || "").trim();
+  const inferred = inferMissionTitle({
+    title: input.title,
+    objective: objectiveText,
+    plan: input.plan || [],
+  });
+  const title = inferred || String(input.title || "").trim() || "";
   const mission = createMission({
     slot,
     provider,
-    title,
+    title: title || "Mission title needed",
     objective: objectiveText,
     status: "draft",
     actor,
@@ -149,7 +230,7 @@ export function ingestMissionBrief(input = {}, { slot = null, provider = "claude
   const brief = createBrief({
     ...input,
     missionId: mission.mission_id,
-    title,
+    title: title || "",
     objective: objectiveText,
     createdBy: input.createdBy || actor,
   }, { actor, nowMs });
@@ -169,13 +250,15 @@ export function ingestMissionBrief(input = {}, { slot = null, provider = "claude
 
   appendTimelineEvent(mission.mission_id, {
     type: "mission_created",
-    summary: `Mission Brief v${brief.version} ingested — awaiting kickoff approval`,
+    summary: `Director reviewed your Mission Brief (v${brief.version}) and is waiting for kickoff approval`,
+    headline: "Director reviewed your Mission Brief",
     visibility: "summary",
     actor,
     detail: {
       mission_brief_version: brief.version,
       mission_content_hash: brief.contentHash,
       phase_count: (brief.plan || []).length,
+      technical: `Mission Brief v${brief.version} ingested`,
     },
     nowMs,
   });
@@ -187,6 +270,7 @@ export function ingestMissionBrief(input = {}, { slot = null, provider = "claude
     mission: getMission(mission.mission_id),
     objective,
     readiness,
+    interpretation: interpretMissionBrief(brief, readiness),
   };
 }
 
@@ -248,13 +332,15 @@ export function approveMissionExecution(briefId, version, { actor = "operator", 
 
   appendTimelineEvent(missionKey, {
     type: "mission_started",
-    summary: `Kickoff approved — executing Mission Brief v${brief.version}`,
+    summary: `You approved execution of Mission Brief v${brief.version}`,
+    headline: "You approved execution",
     visibility: "summary",
     actor,
     detail: {
       mission_brief_version: brief.version,
       mission_content_hash: brief.contentHash,
       phase_ids: (brief.plan || []).map((p) => p.phaseId),
+      technical: `Kickoff approved — executing Mission Brief v${brief.version}`,
     },
     nowMs,
   });
@@ -263,11 +349,12 @@ export function approveMissionExecution(briefId, version, { actor = "operator", 
   if (first) {
     appendTimelineEvent(missionKey, {
       type: "phase_started",
-      summary: `Phase started — ${first.title}`,
+      summary: `Director assigned the first workstream: ${first.title}`,
+      headline: "Director assigned the first workstream",
       visibility: "summary",
       phaseId: first.phaseId,
       actor: "director",
-      detail: { order: first.order },
+      detail: { order: first.order, technical: `Phase started — ${first.title}` },
       nowMs,
     });
   }

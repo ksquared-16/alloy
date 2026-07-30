@@ -1,8 +1,8 @@
 /**
  * Vacilando — Continuous Improvement runtime.
  *
- * Operator friction captured during real mission use. Not a bug tracker —
- * structured product feedback that drives future Vacilando evolution.
+ * Operator friction captured during real mission use — conversational feedback
+ * to Director, not a bug tracker. Director classifies and interprets.
  *
  * Persistence: ~/.local/state/alloy-dev/vacilando/improvements/
  */
@@ -22,9 +22,11 @@ import { join } from "node:path";
 import { appendTimelineEvent } from "./timeline.mjs";
 import { getBrief } from "./mission-brief.mjs";
 import { getMission, updateMission } from "./commands/missions.mjs";
-import { projectMissionRow } from "./director-summary.mjs";
+import { projectMissionRow, buildDirectorSummary } from "./director-summary.mjs";
 import { listAssignments } from "./worker-assignment.mjs";
 import { listDecisions } from "./decisions.mjs";
+import { getMissionConfidence } from "./mission-confidence.mjs";
+import { listWorkerTelemetry } from "./worker-health.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(os.homedir(), ".local", "state", "alloy-dev");
 const DIR = join(RUNTIME_ROOT, "vacilando", "improvements");
@@ -55,6 +57,14 @@ export const IMPROVEMENT_STATUSES = Object.freeze([
 
 export const IMPROVEMENT_SEVERITIES = Object.freeze(["Low", "Medium", "High", "Blocker"]);
 
+/** Operator interrupt language → internal severity (hidden from form). */
+export const INTERRUPT_LEVELS = Object.freeze({
+  Minor: "Low",
+  Moderate: "Medium",
+  Significant: "High",
+  "Blocked me": "Blocker",
+});
+
 const iso = (ms) => new Date(ms ?? Date.now()).toISOString();
 
 function ensureDir() {
@@ -65,18 +75,22 @@ function fileFor(id) {
   return join(DIR, `${id}.json`);
 }
 
+export function interruptToSeverity(interrupt) {
+  return INTERRUPT_LEVELS[interrupt] || (IMPROVEMENT_SEVERITIES.includes(interrupt) ? interrupt : "Medium");
+}
+
 /** Infer category from operator text + screen context. */
 export function inferImprovementCategory({ title = "", description = "", screen = "", section = "", route = "" } = {}) {
   const blob = `${title} ${description} ${screen} ${section} ${route}`.toLowerCase();
   const rules = [
     ["Decision", /decision|needs me|approve|recommend/],
-    ["Director", /director|chief of staff|assessment|ask director|clarif/],
-    ["Worker", /worker|claude|cursor|heartbeat|slot|assignment package/],
+    ["Director", /director|chief of staff|assessment|ask director|clarif|started|launch/],
+    ["Worker", /worker|claude|cursor|heartbeat|slot|assignment|acknowledg/],
     ["Evidence", /evidence|screenshot|certif|validation|qa artifact/],
-    ["Navigation", /nav|route|tab|breadcrumb|where am i|find|menu/],
-    ["Communication", /wording|copy|label|confus|unclear|message|prompt/],
+    ["Navigation", /nav|route|tab|breadcrumb|where am i|find|menu|couldn't find/],
+    ["Communication", /wording|copy|label|confus|unclear|message|prompt|explain|paused|why/],
     ["Performance", /slow|lag|freeze|load|spin|timeout/],
-    ["Workflow", /kickoff|brief|ready|flow|steps|resume|approve kickoff/],
+    ["Workflow", /kickoff|brief|ready|flow|steps|resume|approve kickoff|lifecycle/],
     ["UI", /layout|spacing|button|dialog|mobile|overflow|scroll|visual/],
     ["Architecture", /schema|runtime|contract|api|persist|ownership/],
   ];
@@ -84,6 +98,75 @@ export function inferImprovementCategory({ title = "", description = "", screen 
     if (re.test(blob)) return cat;
   }
   return "Other";
+}
+
+/**
+ * Director interpretation of an operator observation.
+ * Plain language — searchable later; not shown as a form field.
+ */
+export function interpretObservation({
+  description = "",
+  expectedBehavior = null,
+  category = "Other",
+  severity = "Medium",
+  screen = null,
+  section = null,
+} = {}) {
+  const text = `${description} ${expectedBehavior || ""}`.toLowerCase();
+  const categoryHints = {
+    Worker: "Likely a worker visibility or lifecycle communication issue.",
+    Director: "Likely a Director communication or guidance gap.",
+    Decision: "Likely a decision framing or recommendation clarity issue.",
+    Evidence: "Likely an evidence discovery or certification clarity issue.",
+    Navigation: "Likely a navigation or findability issue.",
+    Communication: "Likely a wording or explanation gap.",
+    Workflow: "Likely a workflow step or sequencing issue.",
+    Performance: "Likely a responsiveness or wait-state issue.",
+    UI: "Likely a presentation or interaction issue.",
+    Architecture: "Likely a platform contract or ownership issue.",
+    Other: "Likely a product experience gap worth reviewing.",
+  };
+  const expectation = expectedBehavior
+    ? ` Operator expected: ${String(expectedBehavior).trim().replace(/\s+/g, " ").slice(0, 180)}`
+    : "";
+  const place = screen
+    ? ` Seen on ${screen}${section ? ` · ${section}` : ""}.`
+    : "";
+
+  let focus = "Operator expected clearer guidance about what Vacilando was doing.";
+  if (/start|launch|worker|claude|cursor|ack/.test(text)) {
+    focus = "Operator expected assignment lifecycle visibility after kickoff.";
+  } else if (/pause|why|stuck|blocked/.test(text)) {
+    focus = "Operator expected a plain explanation for why work stopped.";
+  } else if (/evidence|proof|certif/.test(text)) {
+    focus = "Operator expected to find proof of progress without digging.";
+  } else if (/timeline|changed|what happened/.test(text)) {
+    focus = "Operator expected the timeline to narrate what changed.";
+  } else if (/decision|recommend/.test(text)) {
+    focus = "Operator expected clearer decision framing from Director.";
+  }
+
+  const potentialMission = ({
+    Worker: "Worker Visibility & Lifecycle",
+    Director: "Director Communication Clarity",
+    Decision: "Decision Framing Polish",
+    Evidence: "Evidence Findability",
+    Navigation: "Mission Control Navigation",
+    Communication: "Operator Language Pass",
+    Workflow: "Kickoff & Execution Flow",
+    Performance: "Runtime Responsiveness",
+    UI: "Mission Control Interaction Polish",
+    Architecture: "Runtime Contract Hardening",
+    Other: "Operator Friction Follow-up",
+  })[category] || "Operator Friction Follow-up";
+
+  return {
+    operatorObservation: String(description).trim(),
+    directorInterpretation: `${categoryHints[category] || categoryHints.Other} ${focus}${expectation}${place}`.replace(/\s+/g, " ").trim(),
+    potentialCategory: category,
+    potentialSeverity: severity,
+    potentialFutureMission: potentialMission,
+  };
 }
 
 function enrichContext({
@@ -102,6 +185,16 @@ function enrichContext({
     ? (listDecisions(missionId, { status: "open" })[0] || null)
     : null;
   const assignments = missionId ? listAssignments(missionId) : [];
+  const confidence = missionId ? getMissionConfidence(missionId) : null;
+  const directorSummary = missionId ? buildDirectorSummary(missionId) : null;
+  const telemetry = missionId
+    ? listWorkerTelemetry().filter((t) => t.missionId === missionId)
+    : [];
+  const primaryWorker = workerId
+    ? telemetry.find((t) => t.workerId === workerId)
+    : telemetry[0] || null;
+  const provider = primaryWorker?.provider
+    || (primaryWorker?.workerId?.startsWith("cursor") ? "cursor" : primaryWorker?.workerId?.startsWith("claude") ? "claude" : mission?.provider || null);
 
   return {
     missionId: missionId || null,
@@ -110,29 +203,55 @@ function enrichContext({
     currentScreen: currentScreen || null,
     currentSection: currentSection || null,
     currentRoute: currentRoute || null,
-    workerId: workerId || null,
+    workerId: workerId || primaryWorker?.workerId || null,
     decisionId: decisionId || openDecision?.decisionId || null,
     screenshotRef: screenshotRef || null,
+    missionVersion: brief?.version ?? mission?.mission_brief_version ?? null,
+    missionContentHash: brief?.contentHash || mission?.mission_content_hash || null,
+    provider,
+    model: primaryWorker?.model || null,
     directorContext: {
       status: row?.status_label || row?.status || null,
       directorState: row?.director_state || null,
+      directorSummary: directorSummary?.what_happens_next || directorSummary?.what_changed || null,
       openDecisionTitle: openDecision?.title || null,
       activeDeliverables: assignments
         .filter((a) => ["running", "paused", "ready", "waiting"].includes(a.status))
         .map((a) => a.title),
-      confidenceHint: null,
+      confidencePercent: confidence?.percent ?? null,
+      confidenceBand: confidence?.bandLabel ?? null,
+      workerState: telemetry.map((t) => ({
+        workerId: t.workerId,
+        status: t.status,
+        assignmentId: t.assignmentId || null,
+      })),
+      telemetrySnapshot: {
+        workerCount: telemetry.length,
+        assignmentCount: assignments.length,
+        openDecisions: openDecision ? 1 : 0,
+        capturedAt: iso(),
+      },
     },
   };
 }
 
+function deriveTitle(description) {
+  const line = String(description || "").trim().split(/\n/)[0].replace(/\s+/g, " ");
+  if (!line) return "Operator observation";
+  return line.length > 96 ? `${line.slice(0, 93)}…` : line;
+}
+
 /**
  * Capture an operator observation. Technical context is Director-enriched.
+ * Prefer whatHappened + expectedBehavior + interrupt (conversational).
  */
 export function captureImprovement({
-  title,
-  description,
+  title = null,
+  description = null,
+  whatHappened = null,
   expectedBehavior = null,
-  severity = "Medium",
+  severity = null,
+  interrupt = null,
   category = null,
   missionId = null,
   currentScreen = null,
@@ -144,12 +263,11 @@ export function captureImprovement({
   createdBy = "operator",
   nowMs,
 } = {}) {
-  const cleanTitle = String(title || "").trim();
-  const cleanDesc = String(description || "").trim();
-  if (!cleanTitle) throw new Error("improvement_requires_title");
+  const cleanDesc = String(whatHappened || description || "").trim();
   if (!cleanDesc) throw new Error("improvement_requires_description");
+  const cleanTitle = String(title || "").trim() || deriveTitle(cleanDesc);
+  const sev = interruptToSeverity(interrupt || severity || "Moderate");
 
-  const sev = IMPROVEMENT_SEVERITIES.includes(severity) ? severity : "Medium";
   const ctx = enrichContext({
     missionId,
     currentScreen,
@@ -169,13 +287,22 @@ export function captureImprovement({
       route: ctx.currentRoute,
     });
 
+  const interpretation = interpretObservation({
+    description: cleanDesc,
+    expectedBehavior,
+    category: inferred,
+    severity: sev,
+    screen: ctx.currentScreen,
+    section: ctx.currentSection,
+  });
+
   const id = "imp_" + createHash("sha256")
     .update(`${cleanTitle}:${Date.now()}:${Math.random()}`)
     .digest("hex")
     .slice(0, 14);
 
   const rec = {
-    schema_version: "vacilando.improvement.v1",
+    schema_version: "vacilando.improvement.v2",
     id,
     missionId: ctx.missionId,
     missionTitle: ctx.missionTitle,
@@ -185,6 +312,7 @@ export function captureImprovement({
     currentRoute: ctx.currentRoute,
     timestamp: iso(nowMs),
     severity: sev,
+    interrupt: interrupt || null,
     category: inferred,
     title: cleanTitle,
     description: cleanDesc,
@@ -192,9 +320,14 @@ export function captureImprovement({
     screenshotRef: ctx.screenshotRef,
     workerId: ctx.workerId,
     decisionId: ctx.decisionId,
+    provider: ctx.provider,
+    model: ctx.model,
+    missionVersion: ctx.missionVersion,
+    missionContentHash: ctx.missionContentHash,
     status: "New",
     createdBy,
     directorEnrichment: ctx.directorContext,
+    directorInterpretation: interpretation,
     updated_at: iso(nowMs),
   };
 
@@ -205,8 +338,8 @@ export function captureImprovement({
     try {
       appendTimelineEvent(ctx.missionId, {
         type: "improvement_captured",
-        summary: `Continuous improvement: ${cleanTitle}`,
-        headline: "Improve Vacilando observation",
+        summary: interpretation.directorInterpretation,
+        headline: "You told Director something felt off",
         visibility: "summary",
         actor: createdBy,
         detail: {
@@ -215,6 +348,7 @@ export function captureImprovement({
           severity: sev,
           screen: ctx.currentScreen,
           section: ctx.currentSection,
+          interpretation,
         },
         nowMs,
       });
@@ -284,10 +418,11 @@ export function improvementListVm(rec) {
     id: rec.id,
     title: rec.title,
     missionTitle: rec.missionTitle || "No mission",
-    category: rec.category,
-    severity: rec.severity,
+    category: rec.directorInterpretation?.potentialCategory || rec.category,
+    severity: rec.directorInterpretation?.potentialSeverity || rec.severity,
     status: rec.status,
     created: rec.timestamp,
+    interpretationPreview: rec.directorInterpretation?.directorInterpretation || null,
     href: `improvements/${rec.id}`,
   };
 }

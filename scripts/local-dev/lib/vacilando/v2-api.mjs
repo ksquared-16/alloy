@@ -288,10 +288,12 @@ export async function handleV2Post(path, body) {
   if (path === "/api/v2/improvements") {
     try {
       const rec = captureImprovement({
-        title: v.title,
-        description: v.description,
+        title: v.title || null,
+        description: v.description || null,
+        whatHappened: v.what_happened ?? v.whatHappened ?? v.description,
         expectedBehavior: v.expected_behavior ?? v.expectedBehavior,
-        severity: v.severity || "Medium",
+        interrupt: v.interrupt || null,
+        severity: v.severity || null,
         category: v.category || null,
         missionId: v.mission_id || v.missionId || null,
         currentScreen: v.current_screen || v.currentScreen || null,
@@ -302,7 +304,14 @@ export async function handleV2Post(path, body) {
         screenshotRef: v.screenshot_ref || v.screenshotRef || null,
         createdBy: v.actor || v.created_by || "operator",
       });
-      return { status: 201, body: { ok: true, improvement: rec } };
+      return {
+        status: 201,
+        body: {
+          ok: true,
+          improvement: rec,
+          interpretation: rec.directorInterpretation || null,
+        },
+      };
     } catch (e) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
     }

@@ -109,23 +109,26 @@
     document.querySelectorAll(".ov.ci-improve").forEach((el) => el.remove());
     const ov = document.createElement("div");
     ov.className = "ov ci-improve";
-    ov.innerHTML = `<div class="ov-card" role="dialog" aria-label="Improve Vacilando">
+    ov.innerHTML = `<div class="ov-card wide" role="dialog" aria-label="Improve Vacilando">
       <h3>Improve Vacilando</h3>
-      <p class="muted">Capture friction. Context is attached automatically.</p>
-      <label>Title<input id="ci-title" type="text" maxlength="160" placeholder="What felt wrong?" autofocus /></label>
-      <label>Severity
-        <select id="ci-severity">
-          <option>Low</option>
-          <option selected>Medium</option>
-          <option>High</option>
-          <option>Blocker</option>
-        </select>
+      <p class="mc-lead">Tell Director what slowed you down or felt confusing.
+We'll capture the context automatically.</p>
+      <label class="ci-q">What happened?
+        <textarea id="ci-happened" rows="5" autofocus placeholder="Examples:&#10;• I wasn't sure why the mission paused.&#10;• I expected Director to launch a worker.&#10;• I couldn't find the evidence.&#10;• The timeline didn't explain what changed."></textarea>
       </label>
-      <label>Description<textarea id="ci-desc" rows="3" placeholder="What happened?"></textarea></label>
-      <label>Expected behavior<textarea id="ci-expected" rows="2" placeholder="What should have happened?"></textarea></label>
+      <label class="ci-q">What should have happened?
+        <textarea id="ci-expected" rows="4" placeholder="Describe the experience you expected."></textarea>
+      </label>
+      <fieldset class="ci-interrupt">
+        <legend>How much did this interrupt you?</legend>
+        <label><input type="radio" name="ci-interrupt" value="Minor" /> Minor</label>
+        <label><input type="radio" name="ci-interrupt" value="Moderate" checked /> Moderate</label>
+        <label><input type="radio" name="ci-interrupt" value="Significant" /> Significant</label>
+        <label><input type="radio" name="ci-interrupt" value="Blocked me" /> Blocked me</label>
+      </fieldset>
       <div class="ov-actions">
         <button type="button" class="btn ghost" data-ci-cancel>Cancel</button>
-        <button type="button" class="btn" data-ci-save>Save</button>
+        <button type="button" class="btn" data-ci-save>Send to Director</button>
       </div>
     </div>`;
     document.body.appendChild(ov);
@@ -133,21 +136,19 @@
       if (ev.target === ov || ev.target.closest("[data-ci-cancel]")) ov.remove();
     });
     ov.querySelector("[data-ci-save]")?.addEventListener("click", async () => {
-      const title = ov.querySelector("#ci-title")?.value?.trim();
-      const description = ov.querySelector("#ci-desc")?.value?.trim();
+      const what = ov.querySelector("#ci-happened")?.value?.trim();
       const expected = ov.querySelector("#ci-expected")?.value?.trim();
-      const severity = ov.querySelector("#ci-severity")?.value || "Medium";
-      if (!title || !description) {
-        toast("Title and description are required.", "err");
+      const interrupt = ov.querySelector('input[name="ci-interrupt"]:checked')?.value || "Moderate";
+      if (!what) {
+        toast("Tell Director what happened.", "err");
         return;
       }
       const ctx = currentOperatorContext();
       try {
         await post("/api/v2/improvements", {
-          title,
-          description,
+          what_happened: what,
           expected_behavior: expected || null,
-          severity,
+          interrupt,
           mission_id: ctx.missionId,
           current_screen: ctx.currentScreen,
           current_section: ctx.currentSection,
@@ -163,7 +164,7 @@
         toast(String(e.message || e), "err");
       }
     });
-    setTimeout(() => ov.querySelector("#ci-title")?.focus(), 30);
+    setTimeout(() => ov.querySelector("#ci-happened")?.focus(), 30);
   }
 
   V2.openImproveDialog = openImproveDialog;
@@ -372,7 +373,7 @@
       <div class="mc-stat-grid">
         <div class="mc-stat"><div class="mc-stat-k">Phase</div><div class="mc-stat-v">${esc(s.phase)}</div></div>
         <div class="mc-stat"><div class="mc-stat-k">Deliverables</div><div class="mc-stat-v">${esc(s.deliverablesLabel)}</div></div>
-        <div class="mc-stat"><div class="mc-stat-k">Workers</div><div class="mc-stat-v">${esc(s.activeWorkers)} active</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Workers</div><div class="mc-stat-v">${esc(s.workerCountLabel || (s.activeWorkers + " active"))}</div></div>
         <div class="mc-stat"><div class="mc-stat-k">Confidence</div><div class="mc-stat-v">${esc(s.confidencePercent)}%</div></div>
         <div class="mc-stat"><div class="mc-stat-k">Next checkpoint</div><div class="mc-stat-v">${esc(s.nextCheckpoint)}</div></div>
       </div>
@@ -419,10 +420,10 @@
       <h3>Current Work</h3>
       ${work.length
         ? work.map((w) => `<div class="mc-work-row">
-            <div class="mc-card-h"><b>${esc(w.title)}</b><span class="mc-pill">${esc(w.statusLabel)}</span></div>
-            <div class="muted">${esc(w.handledByLabel || (w.handledBy ? `Handled by ${w.handledBy}` : "Unassigned"))}</div>
-            ${w.progressSummary ? `<div>${esc(w.progressSummary)}</div>` : ""}
-            ${w.healthLabel ? `<div class="muted">${esc(w.healthLabel)}</div>` : ""}
+            <div class="mc-card-h"><b>${esc(w.title)}</b><span class="mc-pill">${esc(w.lifecycleLabel || w.statusLabel)}</span></div>
+            <div class="muted">${esc(w.handledByLabel || w.lifecycleExplanation || "Director is preparing execution")}</div>
+            ${w.lifecycleExplanation && w.lifecycleExplanation !== w.handledByLabel ? `<div class="muted">${esc(w.lifecycleExplanation)}</div>` : ""}
+            ${w.progressSummary && w.progressSummary !== w.lifecycleExplanation ? `<div>${esc(w.progressSummary)}</div>` : ""}
           </div>`).join("")
         : `<div class="rempty">No work items yet</div>`}
     </section>`;
@@ -454,18 +455,27 @@
       ${timeline.length
         ? timeline.map((e) => `<div class="mc-tl-row">
             <div class="mc-tl-time">${esc(e.timeLabel)} · ${esc(e.actor)}</div>
-            <div><b>${esc(e.headline)}</b>${e.explanation ? `<div class="muted">${esc(e.explanation)}</div>` : ""}</div>
+            <div>
+              <b>${esc(e.headline)}</b>
+              ${e.explanation && e.explanation !== e.headline ? `<div class="muted">${esc(e.explanation)}</div>` : ""}
+              ${e.technical || e.expandable ? `<details class="mc-diag"><summary>Technical details</summary><pre class="mono">${esc(e.technical || JSON.stringify(e.detail || {}, null, 2))}</pre></details>` : ""}
+            </div>
           </div>`).join("")
         : `<div class="rempty">No timeline events</div>`}
       <button class="btn sm" data-nav="timeline/${esc(id)}">Full timeline</button>
     </section>`;
 
     const confSec = `<section class="mc-sec mc-confidence">
-      <h3>Mission Confidence · ${esc(conf.percent)}%</h3>
-      <p class="muted">${esc(conf.bandLabel || "")}${conf.change ? ` · ${esc(conf.change.summary)}` : ""}</p>
+      <h3>Mission Confidence</h3>
+      <div class="mc-conf-big">${esc(conf.percent)}%</div>
+      <p class="muted">${esc(conf.bandLabel || "")}</p>
       <div class="mc-conf-bar"><div class="mc-conf-fill" style="width:${Number(conf.percent) || 0}%"></div></div>
-      <div class="mc-conf-factors">${(conf.factors || []).map((f) =>
-        `<div class="mc-conf-f"><b>${esc(f.label)}</b> ${esc(f.score)} <span class="muted">(${esc(f.weight)}%) — ${esc(f.note)}</span></div>`).join("")}</div>
+      <h4>Why?</h4>
+      <ul class="mc-conf-why">${(conf.why || []).map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
+      <details class="mc-diag"><summary>Show technical calculation</summary>
+        <div class="mc-conf-factors">${(conf.factors || []).map((f) =>
+          `<div class="mc-conf-f"><b>${esc(f.label)}</b> ${esc(f.score)} <span class="muted">(${esc(f.weight)}%) — ${esc(f.note)}</span></div>`).join("")}</div>
+      </details>
     </section>`;
 
     return shell(s.title || "Mission Dashboard", {
@@ -743,39 +753,56 @@
     </section>`;
   }
 
-  function kickoffReviewHtml(k) {
-    return `<section class="mc-sec">
-      <h3>Review</h3>
-      <p><b>Objective</b></p><p>${esc(k.objective)}</p>
-      <p><b>Phases</b></p>
-      <ol>${(k.phases || []).map((p) => `<li><b>${esc(p.title)}</b> — ${esc(p.objective || "")}</li>`).join("")}</ol>
-      <p><b>Acceptance criteria</b></p>
-      <ul>${(k.acceptanceCriteria || []).map((c) => `<li>${esc(c.statement || c)}</li>`).join("")}</ul>
-      <p><b>Constraints</b></p>
-      <ul>${(k.constraints || []).map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
-      <p><b>Sources</b></p>
-      <ul>${(k.sources || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+  function kickoffInterpretationHtml(k) {
+    const title = k.title && !/^untitled/i.test(k.title) ? k.title : null;
+    const outcomes = k.expectedOutcomes || (k.acceptanceCriteria || []).map((c) => c.statement || c);
+    const deliverables = k.deliverables || (k.phases || []).map((p) => ({ title: p.title, objective: p.objective, outputs: p.outputs || [] }));
+    const findings = (k.findings || []).map((f) =>
+      `<div class="mc-card ${f.severity === "blocking" ? "warn" : ""}">${esc(f.message)}</div>`).join("");
+    const assessment = k.directorAssessment || (k.canStart === false ? "Needs clarification" : "Ready");
+    const raw = k.raw || k.rawBrief || null;
+    return `<section class="mc-sec mc-brief-interp">
+      <div class="mc-brief-head">
+        <div class="mc-stat-k">Mission</div>
+        <h2>${esc(title || "Title needed")}</h2>
+        ${!title ? `<p class="warn-text">Director could not infer a title — confirm one before starting.</p>` : ""}
+      </div>
+      <div class="mc-stat-k">Objective</div>
+      <p>${esc(k.objective || "—")}</p>
+      <div class="mc-stat-k">Expected outcomes</div>
+      <ul>${(outcomes || []).map((o) => `<li>${esc(o)}</li>`).join("") || "<li class=\"muted\">None listed</li>"}</ul>
+      <div class="mc-stat-k">Deliverables</div>
+      <ol>${(deliverables || []).map((d) => `<li><b>${esc(d.title)}</b>${d.objective ? ` — ${esc(d.objective)}` : ""}</li>`).join("")}</ol>
+      <div class="mc-stat-k">Constraints</div>
+      <ul>${(k.constraints || []).map((c) => `<li>${esc(c)}</li>`).join("") || "<li class=\"muted\">None listed</li>"}</ul>
+      <div class="mc-stat-k">Acceptance criteria</div>
+      <ul>${(outcomes || []).map((o) => `<li>${esc(o)}</li>`).join("") || "<li class=\"muted\">None listed</li>"}</ul>
+      <div class="mc-stat-k">Recommended worker disciplines</div>
+      <ul>${(k.recommendedWorkerDisciplines || ["General engineering"]).map((d) => `<li>${esc(d)}</li>`).join("")}</ul>
+      <div class="mc-stat-k">Director assessment</div>
+      <p><span class="mc-pill ${assessment === "Ready" ? "executing" : "decision_required"}">${esc(assessment)}</span></p>
+      ${findings}
+      <details class="mc-diag mc-raw-brief"><summary>Raw Mission Brief — View original document</summary>
+        <pre class="mono">${esc(raw ? JSON.stringify(raw, null, 2) : "Original document available after save.")}</pre>
+      </details>
       <div class="mc-actions">
         <button class="btn ghost" data-mc-kickoff-reset="1">Back</button>
-        <button class="btn" data-mc-kickoff-ingest="1">Continue to readiness</button>
+        ${k.missionId
+          ? `<button class="btn" data-mc-kickoff-start="${esc(k.missionId)}" ${k.canStart === false ? "disabled" : ""}>${esc(k.primaryAction?.label || "Start mission")}</button>`
+          : `<button class="btn" data-mc-kickoff-ingest="1">Continue to readiness</button>`}
       </div>
     </section>`;
   }
 
+  function kickoffReviewHtml(k) {
+    return kickoffInterpretationHtml(k);
+  }
+
   function kickoffReadinessHtml(k) {
-    const findings = (k.findings || []).map((f) =>
-      `<div class="mc-card ${f.severity === "blocking" ? "warn" : ""}">${esc(f.message)}</div>`).join("")
-      || `<div class="rempty">No operational gaps — ready to start.</div>`;
-    return `<section class="mc-sec">
-      <h3>Readiness</h3>
-      <p>Director-resolved operational gaps and mission ambiguities:</p>
-      ${findings}
-      <p><b>Initial assignment plan:</b> ${esc(k.assignmentCount ?? "—")} deliverable assignment(s)</p>
-      <p class="muted">Execution follows the Mission Brief phases. Director will not invent a new plan.</p>
-      <div class="mc-actions">
-        <button class="btn" data-mc-kickoff-start="${esc(k.missionId || "")}" ${k.canStart === false ? "disabled" : ""}>${esc(k.primaryAction?.label || "Start mission")}</button>
-      </div>
-    </section>`;
+    return kickoffInterpretationHtml({
+      ...k,
+      directorAssessment: k.directorAssessment || (k.canStart === false ? "Needs clarification" : "Ready"),
+    });
   }
 
   V2.viewSettings = function () {
@@ -851,29 +878,30 @@
     if (V2.state.improvementError) {
       return shell("Observation") + errPanel("Could not open observation", { message: V2.state.improvementError }) + `</div>`;
     }
-    const enrich = d.directorEnrichment || {};
+    const interp = d.directorInterpretation || {};
     return shell(d.title || "Observation", {
-      lead: `${esc(d.missionTitle || "No mission")} · ${esc(d.category)} · ${esc(d.severity)} · ${esc(d.status)}`,
+      lead: `${esc(d.missionTitle || "No mission")} · ${esc(interp.potentialCategory || d.category)} · ${esc(d.timestamp)}`,
       actions: `<button class="btn ghost" data-nav="improvements">Back</button>`,
     }) + `<section class="mc-sec">
-      <h3>Description</h3>
-      <p>${esc(d.description)}</p>
-      ${d.expectedBehavior ? `<h3>Expected behavior</h3><p>${esc(d.expectedBehavior)}</p>` : ""}
-      <h3>Context</h3>
+      <h3>Operator</h3>
+      <p>${esc(interp.operatorObservation || d.description)}</p>
+      ${d.expectedBehavior ? `<p class="muted">Expected: ${esc(d.expectedBehavior)}</p>` : ""}
+      <h3>Director</h3>
+      <p>${esc(interp.directorInterpretation || "Director has not interpreted this yet.")}</p>
       <ul>
-        <li>Phase: ${esc(d.currentPhase || "—")}</li>
-        <li>Screen: ${esc(d.currentScreen || "—")}</li>
-        <li>Section: ${esc(d.currentSection || "—")}</li>
-        <li>Route: ${esc(d.currentRoute || "—")}</li>
-        <li>Created: ${esc(d.timestamp)} by ${esc(d.createdBy)}</li>
+        <li>Potential category: ${esc(interp.potentialCategory || d.category || "—")}</li>
+        <li>Potential severity: ${esc(interp.potentialSeverity || d.severity || "—")}</li>
+        <li>Potential future mission: ${esc(interp.potentialFutureMission || "—")}</li>
       </ul>
-      <h3>Director enrichment</h3>
-      <ul>
-        <li>Status: ${esc(enrich.status || "—")}</li>
-        <li>Director state: ${esc(enrich.directorState || "—")}</li>
-        <li>Open decision: ${esc(enrich.openDecisionTitle || "—")}</li>
-        <li>Active deliverables: ${esc((enrich.activeDeliverables || []).join(", ") || "—")}</li>
-      </ul>
+      <details class="mc-diag"><summary>Attached context</summary>
+        <ul>
+          <li>Phase: ${esc(d.currentPhase || "—")}</li>
+          <li>Screen: ${esc(d.currentScreen || "—")}</li>
+          <li>Route: ${esc(d.currentRoute || "—")}</li>
+          <li>Confidence: ${esc(d.directorEnrichment?.confidencePercent ?? "—")}%</li>
+          <li>Provider: ${esc(d.provider || "—")}</li>
+        </ul>
+      </details>
     </section></div>`;
   };
 
@@ -1024,9 +1052,13 @@
       const md = document.getElementById("mc-brief-md")?.value?.trim() || "";
       if (!md) { alert("Paste a sprint brief first"); return; }
       const lines = md.split("\n");
-      const title = (lines.find((l) => l.startsWith("# ")) || "# Untitled mission").replace(/^#\s+/, "");
+      let title = (lines.find((l) => l.startsWith("# ")) || "").replace(/^#\s+/, "").trim();
       const bodyLines = lines.filter((l) => l && !l.startsWith("#"));
-      const objective = bodyLines.join(" ").trim() || title;
+      const objective = bodyLines.join(" ").trim();
+      if (!title || /^untitled(\s+mission)?$/i.test(title)) {
+        const fromObj = (objective.split(/[.!\n]/)[0] || "").trim();
+        title = fromObj.length >= 8 ? (fromObj.length > 72 ? fromObj.slice(0, 69) + "…" : fromObj) : "";
+      }
       const phaseLines = [];
       let inPhases = false;
       for (const line of lines) {
@@ -1034,7 +1066,8 @@
         if (inPhases && /^##\s+/.test(line)) break;
         if (inPhases && /^\s*[-*]\s+/.test(line)) phaseLines.push(line.replace(/^\s*[-*]\s+/, "").trim());
       }
-      const plan = (phaseLines.length ? phaseLines : ["Initial delivery"]).map((t, i) => ({
+      if (!title && phaseLines[0]) title = phaseLines[0];
+      const plan = (phaseLines.length ? phaseLines : (title ? [title] : [])).map((t, i) => ({
         phaseId: `p${i + 1}`,
         order: i + 1,
         title: t,
@@ -1044,24 +1077,33 @@
         dependencies: i ? [`p${i}`] : [],
       }));
       const j = {
-        title,
-        objective,
+        title: title || "",
+        objective: objective || title || "",
         plan,
         acceptanceCriteria: plan.map((p, i) => ({ id: `AC${i + 1}`, statement: `${p.title} is complete with evidence` })),
         constraints: [{ id: "C1", text: "Do not push, merge, or promote without approval" }],
         sourceMaterials: [],
       };
+      const needsTitle = !j.title;
       V2.state.kickoffDraft = {
         mode: "review",
-        title,
-        objective,
+        title: j.title,
+        objective: j.objective,
+        expectedOutcomes: j.acceptanceCriteria.map((c) => c.statement),
+        deliverables: plan.map((p) => ({ title: p.title, objective: p.objective, outputs: [] })),
+        recommendedWorkerDisciplines: /access|identity|role/i.test(`${j.title} ${j.objective}`)
+          ? ["Platform / Access", "Runtime / Workflow"]
+          : ["General engineering"],
+        directorAssessment: needsTitle ? "Needs clarification" : "Ready",
         phases: plan.map((p) => ({ id: p.phaseId, title: p.title, objective: p.objective, outputs: [] })),
         acceptanceCriteria: j.acceptanceCriteria,
         constraints: j.constraints.map((c) => c.text),
         sources: [],
         raw: j,
-        canStart: true,
-        findings: [],
+        canStart: !needsTitle && plan.length > 0,
+        findings: needsTitle
+          ? [{ severity: "blocking", message: "Please confirm a mission title — Director could not infer one from the brief" }]
+          : [],
         assignmentCount: plan.length,
         primaryAction: { label: "Start mission" },
       };
@@ -1078,19 +1120,26 @@
       post("/api/v2/missions/brief/ingest", draft.raw)
         .then((res) => {
           const mid = res.brief?.missionId || res.mission?.mission_id;
+          const interp = res.interpretation || {};
           V2.state.kickoffBusy = null;
           V2.state.kickoffDraft = {
             ...draft,
+            ...interp,
             missionId: mid,
+            title: interp.title || res.brief?.title || draft.title,
             mode: "approval",
-            findings: (res.readiness?.findings || []).map((f) => ({
+            findings: (res.readiness?.findings || interp.findings || []).map((f) => ({
               severity: f.blocking ? "blocking" : "info",
               message: f.message || f.code || "Finding",
             })),
+            directorAssessment: res.readiness?.directorAssessment || interp.directorAssessment
+              || (res.readiness?.ready === false ? "Needs clarification" : "Ready"),
             canStart: res.readiness?.ready !== false,
             assignmentCount: (draft.phases || []).length,
             primaryAction: { label: "Start mission" },
             version: res.brief?.version,
+            raw: res.brief || draft.raw,
+            rawBrief: res.brief || draft.raw,
           };
           V2.state.kickoffStep = "readiness";
           bump(); schedulePaint();
