@@ -99,12 +99,17 @@ export async function ensureAdminPlaywrightSession(page: Page): Promise<void> {
             throw new Error(`Sign-in failed ${authRes.status()}: ${(await authRes.text()).slice(0, 300)}`);
         }
 
-        await page.goto("/workspace", { waitUntil: "domcontentloaded", timeout: 120_000 });
-        const landed = new URL(page.url()).pathname;
-        if (landed === "/login" || landed.startsWith("/unauthorized")) {
-            throw new Error(`Authenticated session did not unlock workspace (landed on ${landed})`);
+        // The session cookie is written client-side by @supabase/ssr; the FIRST server render can race
+        // it and bounce back to /login even though auth succeeded. Retry the navigation rather than
+        // treating a propagation race as an auth failure.
+        let landed = "";
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+            await page.goto("/workspace", { waitUntil: "domcontentloaded", timeout: 120_000 });
+            landed = new URL(page.url()).pathname;
+            if (landed !== "/login" && !landed.startsWith("/unauthorized")) return;
+            await page.waitForTimeout(2000);
         }
-        return;
+        throw new Error(`Authenticated session did not unlock workspace after retries (landed on ${landed})`);
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();

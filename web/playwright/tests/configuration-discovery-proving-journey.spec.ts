@@ -119,6 +119,10 @@ test.describe("Configuration Discovery — proving journey", () => {
     let publicToken = "";
     let submissionId = "";
     let submissionCaseId: string | null = null;
+    let proposals: Json[] = [];
+    const commitResults: Record<string, { status: number; body: Json }> = {};
+    let resolvedHousehold: string | null = null;
+    let resolvedChild: string | null = null;
 
     test("1. import a NEW case and detect (native layout → discovery)", async () => {
         const req = page.request;
@@ -730,6 +734,110 @@ test.describe("Configuration Discovery — proving journey", () => {
             .sort();
         expect(secondIds).toEqual(instances.map((i) => i.proposal_id).sort());
         console.log(`JOURNEY PROPOSALS ids stable across reads=${secondIds?.length}`);
+    });
+
+    test("10a. resolve case identity through the supported Processing approve path", async () => {
+        test.skip(!ON_CERT_STACK, "Runs only against the local certification stack");
+        const req = page.request;
+
+        // A relationship needs a household to attach to. The case arrives as `needs_resolution`, so
+        // identity resolution runs FIRST — the guarded gate correctly refuses a commit before this
+        // ("Case has no anchor household"), which is why this step exists rather than being skipped.
+        const res = await req.post(`/api/admin/processing/cases/${submissionCaseId}/approve`, { timeout: 300_000 });
+        const body = await res.json();
+        const op = body.data?.operationalResult ?? body.operationalResult;
+        console.log(
+            `JOURNEY IDENTITY http=${res.status()} status=${body.data?.status ?? body.status} kind=${op?.kind} ` +
+                `records=${JSON.stringify(op?.records ? Object.keys(op.records) : [])} error=${body.error ?? ""}`,
+        );
+        if (op?.records) {
+            resolvedHousehold = op.records.household?.id ?? op.records.household ?? null;
+            resolvedChild = op.records.child?.customer_member_id ?? op.records.child?.id ?? null;
+            console.log(`JOURNEY IDENTITY household=${resolvedHousehold} child=${resolvedChild} person=${JSON.stringify(op.records.person)}`);
+        }
+        expect(res.status(), `identity approve failed: ${JSON.stringify(body).slice(0, 400)}`).toBe(200);
+        expect(resolvedHousehold, "identity resolution produced no household").toBeTruthy();
+    });
+
+    test("10b. approve each relationship proposal through the supported Processing path", async () => {
+        test.skip(!ON_CERT_STACK, "Runs only against the local certification stack");
+        const req = page.request;
+
+        const caseRead = await okJson(
+            await req.get(`/api/admin/processing/cases/${submissionCaseId}`),
+            "GET case (approve)",
+        );
+        proposals = ((caseRead.data?.evidence ?? []) as Json[])
+            .flatMap((e: Json) => e?.collectionEvidence?.groups ?? [])
+            .flatMap((g: Json) => g?.instances ?? []);
+        expect(proposals.length).toBe(3);
+
+        for (const p of proposals) {
+            const preview = await okJson(
+                await req.post(
+                    `/api/admin/processing/cases/${submissionCaseId}/related-record-proposals/${p.proposal_id}/preview`,
+                    {
+                        data: {
+                            decision: {
+                                proposal_id: p.proposal_id,
+                                instance_decision: "approve",
+                                field_decisions: [],
+                            },
+                        },
+                        timeout: 120_000,
+                    },
+                ),
+                `preview ${p.collection_provider_ref}`,
+            );
+            console.log(
+                `JOURNEY APPROVE ${p.collection_provider_ref} idempotencyKey=${String(preview.data?.idempotency_key).slice(0, 28)} decisionVersion=${preview.data?.decision_version}`,
+            );
+            expect(preview.data?.idempotency_key, "preview produced no idempotency key").toBeTruthy();
+            expect(preview.data?.decision_version, "preview produced no decision version").toBeTruthy();
+        }
+    });
+
+    test("11. commit through the REAL guarded route", async () => {
+        test.skip(!ON_CERT_STACK, "Runs only against the local certification stack");
+        const req = page.request;
+
+        for (const p of proposals) {
+            const res = await req.post(
+                `/api/admin/processing/cases/${submissionCaseId}/related-record-proposals/${p.proposal_id}/commit`,
+                {
+                    data: {
+                        decision: {
+                            proposal_id: p.proposal_id,
+                            instance_decision: "approve",
+                            field_decisions: [],
+                        },
+                        // Child-scoped relationships REQUIRE an explicit anchor — the child identity
+                        // resolution actually produced, never a guess.
+                        anchor_customer_member_id: resolvedChild ?? FX.childA,
+                        scope: "this_child",
+                    },
+                    timeout: 180_000,
+                },
+            );
+            const body = await res.json();
+            console.log(
+                `JOURNEY COMMIT ${p.collection_provider_ref} http=${res.status()} outcome=${body.data?.outcome ?? body.outcome} ` +
+                    `person=${body.data?.person_id ?? body.person_id} role=${body.data?.role_key ?? body.role_key} ` +
+                    `dest=${body.data?.persistence_destination ?? body.persistence_destination} ` +
+                    `members=${JSON.stringify(body.data?.affected_member_ids ?? body.affected_member_ids)} ` +
+                    `reason=${body.data?.reason ?? body.reason ?? body.error ?? ""}`,
+            );
+            commitResults[p.collection_provider_ref] = { status: res.status(), body: body.data ?? body };
+        }
+
+        for (const ref of Object.keys(commitResults)) {
+            const r = commitResults[ref]!;
+            expect(r.status, `${ref} commit failed: ${JSON.stringify(r.body).slice(0, 300)}`).toBe(200);
+            expect(r.body.outcome, `${ref} did not apply`).toBe("applied");
+            expect(r.body.person_id, `${ref} produced no person id`).toBeTruthy();
+            // The anchor must be exactly the child we named — never expanded to the sibling.
+            expect(r.body.affected_member_ids, `${ref} wrote to the wrong members`).toEqual([resolvedChild ?? FX.childA]);
+        }
     });
 });
 
