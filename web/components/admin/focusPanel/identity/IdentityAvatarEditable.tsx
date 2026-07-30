@@ -298,6 +298,7 @@ export default function IdentityAvatarEditable({
                                 data-child-avatar-cancel="true"
                                 disabled={uploading}
                                 onClick={onCancelDraft}
+                                title={uploading ? "Wait for save to finish or fail" : "Discard photo"}
                             >
                                 Cancel
                             </button>
