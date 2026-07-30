@@ -1039,11 +1039,20 @@ test.describe("Configuration Discovery — proving journey", () => {
             "the multi-role Person is presented more than once — persistence is leaking into presentation",
         ).toBe(1);
 
-        // And the payload must not name a physical table anywhere.
-        const raw = JSON.stringify(res);
-        for (const table of ["customer_member_contacts", "person_child_relationship_roles"]) {
-            expect(raw, `read payload leaks the physical table ${table}`).not.toContain(table);
+        // Storage must not be a PRODUCT-LEVEL distinction. Provenance is allowed, but only as
+        // developer diagnostics under `metadata` — never as a field a consumer would branch on.
+        for (const i of items) {
+            for (const productField of ["source", "store", "destination", "persists_to", "legacy"]) {
+                expect(
+                    Object.prototype.hasOwnProperty.call(i, productField),
+                    `read item exposes '${productField}' at product level — consumers could branch on storage`,
+                ).toBe(false);
+            }
         }
+        // The role/identity surface itself must be storage-agnostic: Sam's two roles arrive on ONE
+        // item regardless of the two different tables underneath.
+        const samItem = items.find((i) => (i.person_id ?? i.person?.id) === FX.multiRolePerson)!;
+        expect(samItem.operational_roles.sort()).toEqual(["authorized_pickup", "guardian"]);
     });
 });
 
