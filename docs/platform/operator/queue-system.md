@@ -82,6 +82,46 @@ Enrichment reads canonical tables for **display** — list remains preview.
 
 ---
 
+## Operational awareness on queue rows
+
+Two separate signals — do not conflate them with status, Needs Attention, selection, or a “New” badge.
+
+### Time in current operational state
+
+Compact age on the right edge (`12m`, `3h`, `2d`, `4w`, `3mo`) answers: **how long has this subject been in its current authoritative process stage / cohort?** It sits beside the stage pill (both show when present) — age never replaces stage.
+
+| Rule | Detail |
+|------|--------|
+| Owner | Persisted `stage_entered_at` on `opportunities` (family/case grain) and `process_instances` (child/participant grain) |
+| Resolver | `resolveOperationalStateEnteredAt` — grain-aware, org-scoped |
+| Precedence | (1) persisted `stage_entered_at` (2) intake `created_at` only when never-transitioned (3) unknown |
+| Forbidden | Unrelated `updated_at` / generic record modification time |
+| Work View | Filters/groups only — does **not** own stage age. Catch-all views still show the subject’s real stage membership age |
+| Formatter | `formatCompactRelativeDuration` — months use `mo`, never ambiguous `m` |
+
+Stage moves reset the clock at the authoritative transition write. Unrelated field edits do not.
+
+Accessible label example: `In this stage for 2 days`.
+
+### Personal seen / unseen
+
+Quiet juniper dot beside the subject name means **this operator has not intentionally opened this stage membership yet**.
+
+| Rule | Detail |
+|------|--------|
+| Scope | Stage-membership occurrence: org + user + subject + stage_key + stage_entered_at |
+| Persist | `operator_stage_membership_acks` (idempotent upsert) |
+| Mark seen | Explicit row click / keyboard open via `QueueRegion` → Focus Panel |
+| Do **not** mark | Queue load, prefetch/hover warm, default operational subject auto-open |
+| Isolation | One user’s open never marks seen for another |
+| Stale guard | Session overlay clears the dot immediately; refresh cannot restore unseen after local ack |
+
+Not a “NEW” badge. Distinct from Needs Attention (ember) and selected-row chrome (pine).
+
+Code: `operationalStateEnteredAt.ts`, `operatorStageMembershipAck.ts`, `queuePersonalSeenSession.ts`, `CondensedQueueRow`.
+
+---
+
 ## Route-owned selection
 
 URL `?queue=` + attention bucket aliases beat bootstrap default lane.

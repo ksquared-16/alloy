@@ -40,9 +40,13 @@ const QUEUE_META: PartialQueueRowContextQueueMeta = {
 function representativeEnrichedRow(): Record<string, unknown> {
     return {
         id: "opp-1001",
+        org_id: "org-1",
         title: "Nguyen Family",
         name: "Nguyen Family",
-        status_key: "new_lead",
+        status_key: "open",
+        stage_key: "lead",
+        stage_entered_at: "2026-07-28T12:00:00.000Z",
+        created_at: "2026-07-20T08:00:00.000Z",
         _status_display: "New Lead",
         _primary_contact_line: "Mai Nguyen",
         _primary_phone: "(503) 555-0199",
@@ -300,5 +304,15 @@ describe("compact queue-preview projection — predicate & row independence", ()
         expect(projected.related_subjects_summary).toEqual([]);
         expect(projected.placement_context).toBeUndefined();
         expect(projected.waitlist_context).toBeUndefined();
+    });
+
+    it("preserves operational_state age so CondensedQueueRow can render time-in-stage", () => {
+        const full = fullContext();
+        expect(full.operational_state?.entered_at).toBeTruthy();
+        expect(full.operational_state?.age_compact).toBeTruthy();
+        const projected = projectQueuePreviewRowContext(full);
+        expect(projected.operational_state?.entered_at).toBe(full.operational_state?.entered_at);
+        expect(projected.operational_state?.age_compact).toBe(full.operational_state?.age_compact);
+        expect(projected.operational_state?.age_accessible).toBe(full.operational_state?.age_accessible);
     });
 });

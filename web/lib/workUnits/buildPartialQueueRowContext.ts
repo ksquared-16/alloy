@@ -37,6 +37,7 @@ import {
     applyRelatedSubjectLocationVisibility,
     relatedSubjectVisibilityForLocation,
 } from "@/lib/queues/queueMembershipLocationScope";
+import { buildOperationalStateQueueContext } from "@/lib/workUnits/buildOperationalStateQueueContext";
 import {
     buildAttentionSummary,
     buildNextBestAction,
@@ -536,6 +537,19 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
             active_subject: activeSubject,
         },
         ...(placement_context ? { placement_context } : {}),
+        operational_state: buildOperationalStateQueueContext({
+            orgId: trimOrNull(row.org_id) ?? "",
+            grain: "case",
+            subjectType: "case",
+            subjectId: caseId,
+            currentStageKey: stageKey,
+            persistedStageEnteredAt: trimOrNull(row.stage_entered_at),
+            intakeCreatedAt: trimOrNull(row.created_at),
+            // Intake-only fallback: still in lead with no persisted entry stamp.
+            neverTransitioned:
+                !trimOrNull(row.stage_entered_at) &&
+                (trimOrNull(stageKey)?.toLowerCase() === "lead"),
+        }),
     };
 }
 
