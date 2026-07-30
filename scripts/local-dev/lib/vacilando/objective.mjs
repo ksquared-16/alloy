@@ -17,7 +17,7 @@
  * capability in V1 (the capability's current goal). Positional: phases advance in
  * order as missions are accepted, so exactly one mission runs at a time.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
 
@@ -32,6 +32,15 @@ function read(capId) {
 function write(obj) {
   try { mkdirSync(DIR, { recursive: true }); writeFileSync(file(obj.capability_id), JSON.stringify(obj, null, 2)); } catch { /* best-effort */ }
   return obj;
+}
+
+/** All durable objectives (for the conductor tick — not only those with recent missions). */
+export function listObjectives() {
+  try {
+    return readdirSync(DIR).filter((n) => n.endsWith(".json")).map((n) => {
+      try { return JSON.parse(readFileSync(join(DIR, n), "utf8")); } catch { return null; }
+    }).filter(Boolean);
+  } catch { return []; }
 }
 
 /** The phase spine for a capability: audit&plan, then one phase per roadmap item. */
@@ -64,6 +73,94 @@ export function ensureObjective(capability, { intent } = {}) {
 }
 
 export function getObjective(capId) { return read(capId); }
+
+/**
+ * Brief-origin objective (Execution System V2 Phase 1).
+ * Keyed by mission_id so legacy capability-roadmap objectives stay untouched.
+ * Phases/AC are copied from the immutable Mission Brief — titles may not change
+ * without a new brief version.
+ */
+export function createBriefObjective({ missionId, brief, status = "awaiting_kickoff_approval" } = {}) {
+  if (!missionId || !brief) return null;
+  const phases = (brief.plan || [])
+    .slice()
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map((p) => ({
+      id: p.phaseId,
+      title: p.title,
+      kind: "implement",
+      status: "pending",
+      mission_id: null,
+      order: p.order,
+      objective: p.objective || "",
+      acceptance_criteria_ids: p.acceptanceCriteriaIds || [],
+      required_outputs: p.requiredOutputs || [],
+      approval_gate: p.approvalGate || "none",
+      // Operational fields only (not plan mutation):
+      worker_slot: null,
+      branch_proposal: null,
+    }));
+  const existing = read(missionId);
+  const rec = {
+    schema_version: "vacilando.objective.v2",
+    origin: "mission_brief",
+    capability_id: missionId, // file key; not a product capability
+    mission_id: missionId,
+    mission_brief_id: brief.missionId || missionId,
+    mission_brief_version: brief.version,
+    mission_content_hash: brief.contentHash,
+    title: brief.title,
+    intent: brief.objective,
+    mode: "gated",
+    worker_slot: null,
+    phases,
+    acceptance_criteria: (brief.acceptanceCriteria || []).map((c) => ({ ...c })),
+    constraints: (brief.constraints || []).map((c) => ({ ...c })),
+    current: 0,
+    proposed_next: phases[0]
+      ? { phase: phases[0], intent: phases[0].objective || brief.objective }
+      : null,
+    status: status === "executing" ? "executing" : "awaiting_kickoff_approval",
+    created_at: existing?.created_at || iso(),
+    updated_at: iso(),
+  };
+  return write(rec);
+}
+
+export function getObjectiveByMission(missionId) {
+  if (!missionId) return null;
+  const o = read(missionId);
+  if (o && (o.origin === "mission_brief" || o.mission_id === missionId)) return o;
+  return null;
+}
+
+export function markObjectiveAwaitingKickoff(missionId) {
+  const o = read(missionId); if (!o) return null;
+  o.status = "awaiting_kickoff_approval";
+  o.updated_at = iso();
+  return write(o);
+}
+
+export function markObjectiveExecuting(missionId) {
+  const o = read(missionId); if (!o) return null;
+  o.status = "executing";
+  o.updated_at = iso();
+  return write(o);
+}
+
+/**
+ * Record operational fields on a brief-origin phase (slot / branch proposal).
+ * Does NOT change phase title/objective — those require a new brief version.
+ */
+export function setPhaseOperational(missionId, phaseId, { worker_slot, branch_proposal } = {}) {
+  const o = read(missionId); if (!o) return null;
+  const phase = (o.phases || []).find((p) => p.id === phaseId);
+  if (!phase) return null;
+  if (worker_slot !== undefined) phase.worker_slot = worker_slot;
+  if (branch_proposal !== undefined) phase.branch_proposal = branch_proposal;
+  o.updated_at = iso();
+  return write(o);
+}
 
 /** Flip the conductor between operator-gated and autonomous. */
 export function setMode(capId, mode) {
@@ -138,4 +235,94 @@ export function clearProposedNext(capId) {
   const o = read(capId); if (!o) return null;
   o.proposed_next = null; o.updated_at = iso();
   return write(o);
+}
+
+/**
+ * Record why the conductor is paused (e.g. provider auth) so the UI can say
+ * "Waiting — reconnect claude" instead of a stale mission stage. Pass null to clear.
+ * Shape: { kind: "provider_auth", provider, detail?, reconnect_cmd?, at }
+ */
+export function setWaitingOn(capId, waiting) {
+  const o = read(capId); if (!o) return null;
+  if (!waiting) {
+    if (!o.waiting_on) return o;
+    o.waiting_on = null;
+  } else {
+    o.waiting_on = { ...waiting, at: waiting.at || iso() };
+  }
+  o.updated_at = iso();
+  return write(o);
+}
+
+/**
+ * Live projection for the UI: what the objective is doing RIGHT NOW, independent
+ * of whichever (possibly stale) mission conversation the operator still has open.
+ * Callers pass a mission lookup so this module stays free of mission imports.
+ *
+ * @param {object} o objective
+ * @param {(id:string)=>object|null} getMission
+ * @param {()=>object[]} listMissions
+ */
+export function projectObjectiveLive(o, getMission, listMissions) {
+  if (!o) return null;
+  const done = (o.phases || []).filter((p) => p.status === "done").length;
+  const total = (o.phases || []).length;
+  const phase = (o.phases || []).find((p) => p.status !== "done") || null;
+  if (!phase) {
+    return { complete: true, operator_needed: false, status: "complete", label: "Objective complete",
+      progress: `${done}/${total}`, phase: null, mission_id: null, mission_status: null, last_activity_at: null };
+  }
+  if (o.waiting_on?.kind === "provider_auth") {
+    return {
+      complete: false, operator_needed: true, status: "waiting_auth",
+      label: `Waiting — reconnect ${o.waiting_on.provider || "provider"} to continue`,
+      progress: `${done}/${total}`, phase, mission_id: null, mission_status: null,
+      last_activity_at: o.waiting_on.at || null, waiting_on: o.waiting_on,
+    };
+  }
+  const ACTIVE = new Set(["starting", "running", "provisioning", "waiting_for_acceptance", "waiting_for_operator", "stopping"]);
+  const related = (typeof listMissions === "function" ? listMissions() : [])
+    .filter((m) => m.objective_capability_id === o.capability_id || m.capability_id === o.capability_id)
+    .filter((m) => m.phase_id === phase.id || (phase.mission_id && m.mission_id === phase.mission_id));
+  let mission = related.find((m) => ACTIVE.has(m.status))
+    || related.sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))[0]
+    || (phase.mission_id && typeof getMission === "function" ? getMission(phase.mission_id) : null)
+    || null;
+  // Fallback: any active mission tagged to this objective (phase_id may be missing on older records)
+  if (!mission && typeof listMissions === "function") {
+    mission = listMissions().find((m) => m.objective_capability_id === o.capability_id && ACTIVE.has(m.status)) || null;
+  }
+  const ms = mission?.status || null;
+  let status = "pending", label = `Next: ${phase.title}`, operator_needed = o.mode !== "autonomous";
+  if (["starting", "provisioning"].includes(ms)) { status = "launching"; label = `Launching — ${phase.title}`; operator_needed = false; }
+  else if (ms === "running" || ms === "stopping") { status = "conducting"; label = `Working — ${phase.title}`; operator_needed = false; }
+  else if (ms === "waiting_for_operator") { status = "needs_you"; label = `Needs you — ${phase.title}`; operator_needed = true; }
+  else if (ms === "waiting_for_acceptance") {
+    const gate = mission?.acceptance_gate;
+    // Judgment / fail gates always pull the operator in — even in autonomous mode.
+    // (Auto-accept only fires on gate=pass; the strip must not say "Nothing needed".)
+    if (gate === "needs_operator") {
+      status = "needs_you";
+      label = `Needs your judgment — ${phase.title}`;
+      operator_needed = true;
+    } else if (gate === "fail") {
+      status = "at_risk";
+      label = `Evidence failed — ${phase.title}`;
+      operator_needed = true;
+    } else {
+      status = "reviewing";
+      label = o.mode === "autonomous" ? `Checking evidence — ${phase.title}` : `Ready for your review — ${phase.title}`;
+      operator_needed = o.mode !== "autonomous";
+    }
+  }
+  else if (ms === "failed" || ms === "interrupted") { status = "at_risk"; label = `Paused — ${phase.title}`; operator_needed = true; }
+  else if (o.mode === "autonomous") { status = "queuing"; label = `Director will start — ${phase.title}`; operator_needed = false; }
+
+  return {
+    complete: false, operator_needed, status, label,
+    progress: `${done}/${total}`, phase, mission_id: mission?.mission_id || null,
+    mission_status: ms, last_activity_at: mission?.last_activity_at || mission?.updated_at || null,
+    current_phase: mission?.current_phase || null, latest_summary: mission?.latest_summary || null,
+    waiting_on: o.waiting_on || null,
+  };
 }

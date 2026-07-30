@@ -53,10 +53,21 @@ import { getPackage } from "./vacilando/commands/mission-packages.mjs";
 import { readMissionOutputs, readTurnOutput, liveMissionIds } from "./vacilando/mission-executor.mjs";
 import { providerResumable } from "./vacilando/provider-runtime.mjs";
 import { compileMissionForIntent, recompileMission, reframeMission, answerQuestions, defineCapability, addProductDecision, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, close as directorClose, previewAction, readAcceptance, setObjectiveMode, prepareNextPhase, readObjective, conductObjectiveNext } from "./vacilando/mission-director.mjs";
+import { terminateUnbrokeredHeavyProcesses } from "./vacilando/heavy-validation-guard.mjs";
+import { listObjectives, projectObjectiveLive, getObjectiveByMission } from "./vacilando/objective.mjs";
 import { listCapabilities, getCapability, registerCapability } from "./vacilando/capability.mjs";
 import { assembleConversation, listConversations } from "./vacilando/conversation.mjs";
 import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
 import { resolveSlotIdentity, runtimeHost, hostRegistration, listSlotIdentities, hostIdentity } from "./vacilando/identity.mjs";
+import {
+  ingestMissionBrief,
+  reviewMissionReadiness,
+  approveMissionExecution,
+  getKickoffState,
+} from "./vacilando/mission-kickoff.mjs";
+import { getBrief, getBriefVersion, listBriefVersions, proposeBriefRevision } from "./vacilando/mission-brief.mjs";
+import { readTimelineSummary, summarizeFromTimeline } from "./vacilando/timeline.mjs";
+import { handleV2Get, handleV2Post } from "./vacilando/v2-api.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUNTIME_ROOT_DIR = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(process.env.HOME || "", ".local", "state", "alloy-dev");
@@ -580,7 +591,35 @@ const autoResumeTries = new Map(); // mission_id -> resume attempts (in-memory, 
 const conductCooldown = new Map(); // capability_id -> last re-launch attempt (avoid spamming a failing phase)
 function conductorTick() {
   try {
+    // Host protection: terminate raw tsc / next build that bypassed the validation
+    // broker (Vacilando workers must use vac run). Runs every tick regardless of
+    // autonomous mode — Cursor sessions and stale package.json scripts also leak.
+    try {
+      const term = terminateUnbrokeredHeavyProcesses({ signal: "SIGTERM" });
+      if (term.killed?.length) {
+        try {
+          writeAuditEvent({
+            actor: "system",
+            command: "validation.broker.enforce",
+            input: { killed: term.killed.map((k) => ({ pid: k.pid, command: k.command })) },
+            target: { kind: "host", label: "heavy-validation" },
+            outcome: "succeeded",
+            preview_summary: `terminated ${term.killed.length} unbrokered heavy validator(s)`,
+          });
+        } catch { /* audit best-effort */ }
+        // Escalation if still alive next tick
+        setTimeout(() => {
+          try { terminateUnbrokeredHeavyProcesses({ signal: "SIGKILL" }); } catch { /* */ }
+        }, 4000);
+      }
+    } catch { /* never break conductor */ }
+
     const autoObjectives = new Set();
+    // Prefer durable objective records so an idle autonomous objective (no recent
+    // mission traffic) still self-heals once the provider reconnects.
+    for (const o of listObjectives()) {
+      if (o?.mode === "autonomous" && o.capability_id) autoObjectives.add(o.capability_id);
+    }
     for (const m of readMissions(null, 200)) {
       if (!m.capability_id) continue;
       const obj = readObjective(m.capability_id);
@@ -592,9 +631,10 @@ function conductorTick() {
         if (ev?.result?.gate === "pass") directorAccept({ mission_id: m.mission_id, confirm: true });
         continue;
       }
-      // A RESUMABLE inactivity timeout is a technical hiccup, not a decision —
+      // A RESUMABLE interruption (inactivity timeout OR server restart that
+      // captured a provider session) is a technical hiccup, not a decision —
       // self-heal by resuming (capped) rather than pulling the operator in.
-      if (m.status === "interrupted" && m.error_code === "timeout" && m.provider_session_id) {
+      if (m.status === "interrupted" && m.provider_session_id && (m.error_code === "timeout" || /server restart|interrupted by a Vacilando/i.test(m.error_message || ""))) {
         const tries = autoResumeTries.get(m.mission_id) || 0;
         if (tries < 3) { autoResumeTries.set(m.mission_id, tries + 1); directorSteer({ mission_id: m.mission_id, instruction: "Continue where you left off; complete the mission.", confirm: true }); }
       }
@@ -673,6 +713,24 @@ export function createVacilandoServer() {
     const url = new URL(req.url, `http://${LOOPBACK_HOST}`);
     const path = url.pathname;
 
+    // ---- V2 Mission Control API (Director Execution System) ----
+    if (path.startsWith("/api/v2/")) {
+      try {
+        if (req.method === "POST") {
+          const body = await readJsonBody(req);
+          if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+          const out = await handleV2Post(path, body.value);
+          if (out) return sendJson(res, out.status, out.body);
+        } else if (req.method === "GET") {
+          const out = handleV2Get(path, url);
+          if (out) return sendJson(res, out.status, out.body);
+        }
+        return sendJson(res, 404, { ok: false, error: "unknown_v2_route", path });
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, error: "v2_server_error", detail: String(e && e.message || e) });
+      }
+    }
+
     // ---- command runtime (POST; inert JSON only, routed through the registry) ----
     if (req.method === "POST" && (path === "/api/commands" || path === "/api/commands/preview")) {
       const body = await readJsonBody(req);
@@ -719,6 +777,55 @@ export function createVacilandoServer() {
       if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
       const out = prepareNextPhase({ capability_id: body.value?.capability_id });
       return sendJson(res, out.ok ? 200 : 409, out);
+    }
+
+    // Mission Brief kickoff (Execution System V2 Phase 1) — user-owned plan authority.
+    if (req.method === "POST" && path === "/api/missions/brief/ingest") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      try {
+        const out = ingestMissionBrief(body.value || {}, {
+          slot: body.value?.slot ?? null,
+          provider: body.value?.provider || "claude",
+          actor: body.value?.actor || "operator",
+        });
+        return sendJson(res, 201, out);
+      } catch (e) {
+        return sendJson(res, 400, { ok: false, error: String(e && e.message || e) });
+      }
+    }
+    if (req.method === "POST" && path === "/api/missions/brief/review") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      const briefId = body.value?.brief_id || body.value?.mission_id;
+      const ver = body.value?.version;
+      const brief = (ver != null ? getBriefVersion(briefId, ver) : null) || getBrief(briefId);
+      if (!brief) return sendJson(res, 404, { ok: false, error: "brief_not_found" });
+      return sendJson(res, 200, { ok: true, brief, readiness: reviewMissionReadiness(brief) });
+    }
+    if (req.method === "POST" && path === "/api/missions/brief/approve") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      const briefId = body.value?.brief_id || body.value?.mission_brief_id || body.value?.mission_id;
+      const out = approveMissionExecution(briefId, body.value?.version, {
+        actor: body.value?.actor || "operator",
+        slot: body.value?.slot ?? null,
+      });
+      return sendJson(res, out.ok ? 200 : 409, out);
+    }
+    if (req.method === "POST" && path === "/api/missions/brief/revise") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      try {
+        const brief = proposeBriefRevision(body.value?.brief_id || body.value?.mission_id, body.value?.patch || body.value || {}, {
+          actor: body.value?.actor || "operator",
+          changeSummary: body.value?.change_summary || body.value?.changeSummary,
+          approvalSource: body.value?.approval_source || "operator_edit",
+        });
+        return sendJson(res, 200, { ok: true, brief, readiness: reviewMissionReadiness(brief) });
+      } catch (e) {
+        return sendJson(res, 400, { ok: false, error: String(e && e.message || e) });
+      }
     }
 
     if (req.method === "POST" && path === "/api/disk/reclaim") {
@@ -1060,8 +1167,54 @@ export function createVacilandoServer() {
       if (!c) return sendJson(res, 404, { error: "unknown_conversation" });
       // Attach the objective (phase spine + mode + proposed next) so the UI can
       // render Director conducting the objective, not just the single mission.
-      const objective = c.capability_id ? readObjective(c.capability_id) : null;
-      return sendJson(res, 200, { conversation: c, objective });
+      // `live` is the authoritative NOW-state — even when the open conversation is
+      // a finished prior phase (the stale "Reviewing" trap).
+      // Prefer brief-origin objective (keyed by mission id) over capability roadmap.
+      let objective = getObjectiveByMission(id) || (c.capability_id ? readObjective(c.capability_id) : null);
+      if (objective) {
+        objective = {
+          ...objective,
+          live: projectObjectiveLive(objective, getMission, () => readMissions(null, 300)),
+        };
+      }
+      const kickoff = getKickoffState(id);
+      const timeline = readTimelineSummary(id, { limit: 40 });
+      const timeline_summary = summarizeFromTimeline(id);
+      return sendJson(res, 200, {
+        conversation: c,
+        objective,
+        kickoff: kickoff.ok ? kickoff : null,
+        timeline,
+        timeline_summary,
+      });
+    }
+    if (path === "/api/missions/brief") {
+      const id = url.searchParams.get("id") || url.searchParams.get("mission_id") || "";
+      const ver = url.searchParams.get("version");
+      const brief = (ver != null ? getBriefVersion(id, Number(ver)) : null) || getBrief(id);
+      if (!brief) return sendJson(res, 404, { ok: false, error: "brief_not_found" });
+      return sendJson(res, 200, {
+        ok: true,
+        brief,
+        versions: listBriefVersions(id).map((b) => ({ version: b.version, contentHash: b.contentHash, changeSummary: b.changeSummary })),
+        readiness: reviewMissionReadiness(brief),
+        kickoff: getKickoffState(id),
+      });
+    }
+    if (path === "/api/missions/timeline") {
+      const id = url.searchParams.get("id") || url.searchParams.get("mission_id") || "";
+      if (!id) return sendJson(res, 400, { ok: false, error: "missing_mission_id" });
+      return sendJson(res, 200, {
+        ok: true,
+        mission_id: id,
+        timeline: readTimelineSummary(id, { limit: 100 }),
+        summary: summarizeFromTimeline(id),
+      });
+    }
+    if (path === "/api/missions/kickoff") {
+      const id = url.searchParams.get("id") || url.searchParams.get("mission_id") || "";
+      const out = getKickoffState(id);
+      return sendJson(res, out.ok ? 200 : 404, out);
     }
 
     // Capability Runtime (registry). Read-only projections; enriched at read time.
