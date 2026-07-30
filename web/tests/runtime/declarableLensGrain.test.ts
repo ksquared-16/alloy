@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseWorkViewRow, type WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { stageKeysReferencedByWorkView } from "@/lib/lifecycle/stageGrainV1";
 import { lensStageKeys, resolveLensRowGrain } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 
 const stage = (key: string, grain: "family" | "child"): LifecycleBuilderStageRecord => ({
@@ -103,6 +104,27 @@ describe("a declaration resolves what derivation cannot", () => {
             ok: true,
             grain: "person",
         });
+    });
+});
+
+describe("the runtime and the builder read the stage predicate the same way", () => {
+    it("an empty stage value does not make a lens look stage-scoped", () => {
+        // The builder decides whether to offer a Row Type declaration by asking whether the view
+        // references any stage. If the runtime answered that question differently, a view could show
+        // a declaration field while being resolved as scoped to a stage key of "".
+        const blank = view({ filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: "" }] });
+        expect(lensStageKeys(blank)).toEqual([]);
+        expect(stageKeysReferencedByWorkView(blank.filters_v1)).toEqual([]);
+    });
+
+    it("they agree on a real stage set, whitespace and all", () => {
+        const padded = view({
+            filters_v1: [{ field_key: "opportunity_stage", operator: "is_any_of", value: [" waitlist ", "enrolling"] }],
+        });
+        expect(lensStageKeys(padded)).toEqual(["waitlist", "enrolling"]);
+        expect(stageKeysReferencedByWorkView(padded.filters_v1).sort()).toEqual(
+            [...lensStageKeys(padded)].sort(),
+        );
     });
 });
 

@@ -38,28 +38,99 @@ import { publishedLayoutOptionsForAssignmentSlot } from "@/lib/layout/layoutAssi
 import { GRAIN_LABELS, resolveWorkViewStageGrains, stageKeysReferencedByWorkView, validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
 import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
+/**
+ * ROW TYPE DECLARATION for a lens with no stage condition.
+ *
+ * Row type is normally INHERITED from the stages a view filters on, and that inheritance stays
+ * authoritative — a stage-scoped view shows it read-only below. A view with no stage condition has
+ * nothing to inherit from, and in a process whose stages are not all one row type the runtime cannot
+ * resolve it and refuses the view outright. Declaring it here is how such a view becomes usable.
+ *
+ * Only Family and Child are offered: they are the row types the Focus Panel can actually present.
+ * Person / Account / Work item exist in stage configuration but have no panel subject, so offering
+ * them would let an operator author a view that can only ever refuse.
+ */
+function WorkViewRowTypeDeclaration({
+    declaredGrain,
+    onDeclareGrain,
+    viewId,
+    helper,
+}: {
+    declaredGrain?: StageGrain;
+    onDeclareGrain: (grain: StageGrain | undefined) => void;
+    viewId: string;
+    helper: string;
+}) {
+    return (
+        <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-alloy-stone/20 bg-alloy-stone/[0.03] px-4 py-2.5"
+            data-testid="work-view-grain-declaration"
+        >
+            <label className="flex items-center gap-2">
+                <span className="text-[11px] font-medium text-alloy-midnight/60">Row type</span>
+                <select
+                    className="rounded border border-alloy-stone/40 bg-white px-2 py-1 text-[11px] text-alloy-midnight"
+                    value={declaredGrain ?? ""}
+                    onChange={(e) => onDeclareGrain((e.target.value || undefined) as StageGrain | undefined)}
+                    data-testid={`process-work-view-row-grain-${viewId}`}
+                >
+                    <option value="">Not declared</option>
+                    <option value="family">{GRAIN_LABELS.family}</option>
+                    <option value="child">{GRAIN_LABELS.child}</option>
+                </select>
+            </label>
+            <p className="text-[11px] leading-relaxed text-alloy-midnight/50">
+                {declaredGrain ?
+                    `Every row in this view is one ${GRAIN_LABELS[declaredGrain].toLowerCase()}, whatever stage it is at.`
+                :   helper}
+            </p>
+        </div>
+    );
+}
+
 function WorkViewGrainBanner({
     stageGrains,
     hasStageScope,
     catchAll = false,
+    declaredGrain,
+    onDeclareGrain,
+    viewId,
 }: {
     stageGrains: (StageGrain | undefined)[];
     /** True when the view filters by `opportunity_stage` — grain can be confirmed from stage config. */
     hasStageScope: boolean;
     /** Process-wide catch-all (`filters_v1: []`) — informational only, no mixed-grain warnings. */
     catchAll?: boolean;
+    /** The view's own Row Type declaration, for a view with no stage condition to inherit from. */
+    declaredGrain?: StageGrain;
+    onDeclareGrain: (grain: StageGrain | undefined) => void;
+    viewId: string;
 }) {
-    if (catchAll) {
+    // No stage condition — nothing to inherit from, so the view declares its own row type.
+    if (catchAll || !hasStageScope) {
         return (
-            <div
-                className="flex items-start gap-2 border-b border-alloy-bend-pine/15 bg-alloy-bend-pine/[0.04] px-4 py-2.5"
-                data-testid="work-view-grain-catch-all"
-            >
-                <span className="text-[11px] font-medium text-alloy-bend-pine">All work</span>
-                <p className="text-[11px] leading-relaxed text-alloy-midnight/55">
-                    {BUSINESS_PROCESS_WORK_VIEW_CATCH_ALL_HELPER}
-                </p>
-            </div>
+            <>
+                <WorkViewRowTypeDeclaration
+                    declaredGrain={declaredGrain}
+                    onDeclareGrain={onDeclareGrain}
+                    viewId={viewId}
+                    helper={
+                        "No stage condition, so there is no stage to inherit a row type from."
+                        + " Declare one — a process with more than one row type across its stages cannot resolve this view without it."
+                    }
+                />
+                {catchAll ?
+                    <div
+                        className="flex items-start gap-2 border-b border-alloy-bend-pine/15 bg-alloy-bend-pine/[0.04] px-4 py-2.5"
+                        data-testid="work-view-grain-catch-all"
+                    >
+                        <span className="text-[11px] font-medium text-alloy-bend-pine">All work</span>
+                        <p className="text-[11px] leading-relaxed text-alloy-midnight/55">
+                            {BUSINESS_PROCESS_WORK_VIEW_CATCH_ALL_HELPER}
+                        </p>
+                    </div>
+                :   null}
+            </>
         );
     }
 
@@ -80,20 +151,6 @@ function WorkViewGrainBanner({
     }
 
     if (defined.length === 0) {
-        if (!hasStageScope) {
-            return (
-                <div
-                    className="flex items-start gap-2 border-b border-alloy-stone/20 bg-alloy-stone/[0.03] px-4 py-2.5"
-                    data-testid="work-view-grain-unscoped"
-                >
-                    <span className="text-[11px] font-medium text-alloy-midnight/55">Row type</span>
-                    <p className="text-[11px] leading-relaxed text-alloy-midnight/50">
-                        No stage condition — row type is determined by the records that match at runtime.
-                        Add a stage condition to confirm a single row type, or split views when you need separate row types.
-                    </p>
-                </div>
-            );
-        }
         return (
             <div
                 className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2"
@@ -106,6 +163,24 @@ function WorkViewGrainBanner({
     }
 
     const grain = defined[0];
+    // A declaration that disagrees with the stages the view filters on is a contradiction, and the
+    // runtime refuses the view rather than picking a winner. Say so here, before it is published.
+    if (declaredGrain && declaredGrain !== grain) {
+        return (
+            <div
+                className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5"
+                data-testid="work-view-grain-declaration-conflict"
+                role="alert"
+            >
+                <span className="mt-px text-red-600">⚠</span>
+                <p className="text-[12px] text-red-800">
+                    This view declares its row type as {GRAIN_LABELS[declaredGrain]}, but the stages it
+                    includes are {GRAIN_LABELS[grain]}. The runtime refuses a view that contradicts
+                    itself — clear the declaration, or change the stage condition.
+                </p>
+            </div>
+        );
+    }
     return (
         <div
             className="flex items-center gap-3 border-b border-alloy-stone/20 bg-alloy-stone/[0.04] px-4 py-2"
@@ -255,6 +330,9 @@ export default function WorkViewProcessEditorCard({
                     stageGrainByKey ? resolveWorkViewStageGrains(view.filters_v1, stageGrainByKey) : stageGrains
                 }
                 hasStageScope={stageKeysReferencedByWorkView(view.filters_v1).length > 0}
+                declaredGrain={view.row_grain_v1}
+                onDeclareGrain={(grain) => onChange({ row_grain_v1: grain })}
+                viewId={view.id}
             />
 
             <div className="space-y-0 px-4 pb-4">

@@ -454,7 +454,13 @@ export function lensStageKeys(view: WorkViewConfigV1Stored): string[] {
     return (view.filters_v1 ?? [])
         .filter((f) => f.field_key === "opportunity_stage")
         .flatMap((f) => (Array.isArray(f.value) ? f.value : [f.value]))
-        .map((v) => String(v));
+        // Trim and drop empties, exactly as `stageKeysReferencedByWorkView` already does. The two are
+        // the runtime's and the builder's readers of the same predicate, and "is this lens stage-scoped"
+        // must not be answered differently by them: a filter carrying an empty stage value made the
+        // builder offer a Row Type declaration (nothing to inherit) while the runtime believed the lens
+        // was scoped to a stage key of "".
+        .map((v) => (typeof v === "string" ? v.trim() : String(v ?? "").trim()))
+        .filter((v) => v !== "");
 }
 
 /**
