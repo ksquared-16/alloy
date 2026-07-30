@@ -1,0 +1,268 @@
+{
+  "title": "Access & Identity V2 — Discovery & Specification",
+  "objective": "Access and Roles mission > **Create a complete, understandable, and configurable Identity, Authentication, Roles & Access system that lets an organization control who can log in, what operational surfaces they can see, what records they can access, and what actions they can perform—without exposing technical permission architecture to operators.** The Director should not begin implementation immed",
+  "phases": [
+    {
+      "id": "p_reuse_only",
+      "title": "Confirm reused specification corpus",
+      "objective": "No new discovery deliverables remain — confirm accepted artifacts cover the Mission Brief.",
+      "outputs": [],
+      "kind": "validation"
+    }
+  ],
+  "deliverables": [
+    {
+      "id": "d1_existing_state",
+      "title": "Existing-state inventory",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "Existing-state inventory",
+      "outputs": [
+        "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md"
+      ]
+    },
+    {
+      "id": "d2_surface_catalog",
+      "title": "Surface and capability access catalog",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "Surface and capability access catalog",
+      "outputs": [
+        "docs/platform/planning/vacilando-os/qa/access-identity-v2/05-command-enforcement-census.md"
+      ]
+    },
+    {
+      "id": "d3_identity_model",
+      "title": "Person ↔ user ↔ role ↔ scope model",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "Person ↔ user ↔ role ↔ scope model",
+      "outputs": [
+        "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md"
+      ]
+    },
+    {
+      "id": "d4_authentication",
+      "title": "Authentication model",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "Authentication model",
+      "outputs": [
+        "docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md"
+      ]
+    },
+    {
+      "id": "d5_effective_access",
+      "title": "Effective-access resolution model",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "Effective-access resolution model",
+      "outputs": [
+        "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md"
+      ]
+    },
+    {
+      "id": "d6_product_ia",
+      "title": "Product IA and principal flows",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "Product IA and principal flows",
+      "outputs": [
+        "docs/platform/planning/vacilando-os/qa/access-identity-v2/06-product-ia-and-flows.md"
+      ]
+    },
+    {
+      "id": "d7_security_matrix",
+      "title": "Security threat and enforcement matrix",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "Security threat and enforcement matrix",
+      "outputs": [
+        "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md"
+      ]
+    },
+    {
+      "id": "d8_gap_analysis",
+      "title": "Gap analysis",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "Gap analysis",
+      "outputs": [
+        "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md"
+      ]
+    },
+    {
+      "id": "d9_decisions",
+      "title": "Decisions requiring approval",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "Decisions requiring approval",
+      "outputs": [
+        "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md"
+      ]
+    },
+    {
+      "id": "d10_sequence",
+      "title": "Sequenced implementation / QA plan",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "Sequenced implementation / QA plan",
+      "outputs": [
+        "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md"
+      ]
+    },
+    {
+      "id": "d11_acceptance_rubric",
+      "title": "Director acceptance rubric",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "Director acceptance rubric",
+      "outputs": [
+        "docs/platform/planning/vacilando-os/qa/access-identity-v2/07-director-acceptance-rubric.md"
+      ]
+    },
+    {
+      "id": "d12_qa_evidence",
+      "title": "QA and evidence plan",
+      "status": "reused",
+      "statusLabel": "Reused",
+      "objective": "QA and evidence plan",
+      "outputs": [
+        "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md"
+      ]
+    }
+  ],
+  "reused": [
+    {
+      "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "title": "Existing-state inventory",
+      "coversDeliverableIds": [
+        "d1_existing_state"
+      ],
+      "status": "reused",
+      "bytes": 34402
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/05-command-enforcement-census.md",
+      "title": "Surface and capability access catalog",
+      "coversDeliverableIds": [
+        "d2_surface_catalog"
+      ],
+      "status": "reused",
+      "bytes": 10571
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "title": "Person ↔ user ↔ role ↔ scope model",
+      "coversDeliverableIds": [
+        "d3_identity_model"
+      ],
+      "status": "reused",
+      "bytes": 43952
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md",
+      "title": "Authentication model",
+      "coversDeliverableIds": [
+        "d4_authentication"
+      ],
+      "status": "reused",
+      "bytes": 13042
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "title": "Effective-access resolution model",
+      "coversDeliverableIds": [
+        "d5_effective_access"
+      ],
+      "status": "reused",
+      "bytes": 43952
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/06-product-ia-and-flows.md",
+      "title": "Product IA and principal flows",
+      "coversDeliverableIds": [
+        "d6_product_ia"
+      ],
+      "status": "reused",
+      "bytes": 10416
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "title": "Security threat and enforcement matrix",
+      "coversDeliverableIds": [
+        "d7_security_matrix"
+      ],
+      "status": "reused",
+      "bytes": 34402
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "title": "Gap analysis",
+      "coversDeliverableIds": [
+        "d8_gap_analysis"
+      ],
+      "status": "reused",
+      "bytes": 34402
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "title": "Decisions requiring approval",
+      "coversDeliverableIds": [
+        "d9_decisions"
+      ],
+      "status": "reused",
+      "bytes": 43952
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+      "title": "Sequenced implementation / QA plan",
+      "coversDeliverableIds": [
+        "d10_sequence"
+      ],
+      "status": "reused",
+      "bytes": 49719
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/07-director-acceptance-rubric.md",
+      "title": "Director acceptance rubric",
+      "coversDeliverableIds": [
+        "d11_acceptance_rubric"
+      ],
+      "status": "reused",
+      "bytes": 11880
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+      "title": "QA and evidence plan",
+      "coversDeliverableIds": [
+        "d12_qa_evidence"
+      ],
+      "status": "reused",
+      "bytes": 49719
+    }
+  ],
+  "newWork": [],
+  "confidence": 87,
+  "ready": true,
+  "assessment": "Ready to execute · confidence 87%",
+  "findings": [
+    {
+      "severity": "blocking",
+      "message": "Specification work already exists and conflicts with the requested execution plan. Recommendation: Reuse the accepted corpus — do not start an implementation phase.",
+      "kind": "compilation_warning",
+      "code": "conflicting_implement_vs_specify"
+    },
+    {
+      "severity": "info",
+      "message": "Ingested plan was a single truncated phase with empty outputs — compiler recovered structure from objective + accepted artifacts.",
+      "kind": "compilation_warning",
+      "code": "truncated_brief_plan"
+    },
+    {
+      "severity": "info",
+      "message": "Merge target not set — Director will default to staging unless told otherwise",
+      "kind": "operational"
+    }
+  ]
+}

@@ -7,6 +7,7 @@
 import { getBrief, getBriefVersion } from "./mission-brief.mjs";
 import { getObjectiveByMission } from "./objective.mjs";
 import { listDecisions } from "./decisions.mjs";
+import { getCompiledMission } from "./compiled-mission.mjs";
 
 export const EXECUTION_PROTOCOL_VERSION = "vacilando.worker.protocol.v1";
 export const SUPPORTED_PROTOCOL_VERSIONS = new Set([EXECUTION_PROTOCOL_VERSION]);
@@ -25,8 +26,11 @@ export function buildMissionContextPackage(missionId, {
     || null;
   if (!b) return null;
 
+  const compiled = getCompiledMission(missionId);
   const objective = getObjectiveByMission(missionId);
-  const phases = (b.plan || []).slice().sort((a, c) => a.order - c.order);
+  const phases = (compiled?.executionPhases?.length
+    ? compiled.executionPhases
+    : (b.plan || [])).slice().sort((a, c) => a.order - c.order);
   const activePhase = (phaseId && phases.find((p) => p.phaseId === phaseId))
     || phases.find((p) => {
       const op = (objective?.phases || []).find((x) => x.id === p.phaseId);
@@ -35,22 +39,31 @@ export function buildMissionContextPackage(missionId, {
     || phases[0]
     || null;
 
+  const acSource = compiled?.acceptanceCriteria?.length ? compiled.acceptanceCriteria : (b.acceptanceCriteria || []);
   const acIds = new Set(activePhase?.acceptanceCriteriaIds || []);
-  const relevantAcceptanceCriteria = (b.acceptanceCriteria || []).filter((c) =>
+  const relevantAcceptanceCriteria = acSource.filter((c) =>
     acIds.size === 0 || acIds.has(c.id));
 
   const decisions = listDecisions(missionId).filter((d) => d.status === "answered");
+  const exclusions = compiled?.exclusions?.length
+    ? compiled.exclusions
+    : (b.outOfScope || []);
 
   return {
     schema_version: "vacilando.mission_context.v1",
     missionId: b.missionId || missionId,
-    missionVersion: b.version,
-    missionContentHash: b.contentHash,
-    objective: b.objective,
+    missionVersion: compiled?.briefVersion ?? b.version,
+    missionContentHash: compiled?.briefContentHash ?? b.contentHash,
+    compiledMissionId: compiled?.compiledMissionId || null,
+    objective: compiled?.objective || b.objective,
     activePhase,
-    globalConstraints: b.constraints || [],
+    globalConstraints: [
+      ...(b.constraints || []),
+      ...(exclusions.map((e) => (typeof e === "string" ? { text: e } : e))),
+    ],
     relevantAcceptanceCriteria,
     requiredDoctrine: b.sourceMaterials || [],
+    reusedArtifacts: compiled?.referencedAcceptedArtifacts || [],
     recordedDecisions: decisions.map((d) => ({
       decisionId: d.decisionId,
       title: d.title,
@@ -67,8 +80,17 @@ export function buildMissionContextPackage(missionId, {
       preferVacBroker: true,
     },
     executionProtocolVersion: EXECUTION_PROTOCOL_VERSION,
-    outOfScope: b.outOfScope || [],
-    title: b.title,
+    outOfScope: exclusions,
+    title: compiled?.title || b.title,
+    // Director contract: execute Compiled Mission; do not reinterpret raw brief.
+    executionContract: compiled
+      ? {
+          source: "compiled_mission",
+          compiledMissionId: compiled.compiledMissionId,
+          readyToExecute: compiled.readyToExecute,
+          confidence: compiled.compilationConfidence,
+        }
+      : { source: "mission_brief_legacy", compiledMissionId: null },
   };
 }
 

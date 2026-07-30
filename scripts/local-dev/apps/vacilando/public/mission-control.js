@@ -870,40 +870,67 @@ We'll capture the context automatically.</p>
   function kickoffInterpretationHtml(k) {
     const title = k.title && !/^untitled/i.test(k.title) ? k.title : null;
     const outcomes = k.expectedOutcomes || (k.acceptanceCriteria || []).map((c) => c.statement || c);
-    const deliverables = k.deliverables || (k.phases || []).map((p) => ({ title: p.title, objective: p.objective, outputs: p.outputs || [] }));
+    const deliverables = k.deliverables || (k.phases || []).map((p) => ({ title: p.title, statusLabel: null, outputs: p.outputs || [] }));
     const findings = (k.findings || []).map((f) =>
       `<div class="mc-card ${f.severity === "blocking" ? "warn" : ""}">${esc(f.message)}</div>`).join("");
     const assessment = k.directorAssessment || (k.canStart === false ? "Needs clarification" : "Ready");
     const raw = k.raw || k.rawBrief || null;
-    return `<section class="mc-sec mc-brief-interp">
+    const phases = k.phases || [];
+    const reused = k.reusedArtifacts || [];
+    const conf = k.compilationConfidence != null ? `${k.compilationConfidence}%` : null;
+    const risks = k.risks || [];
+    const report = k.compilationReport;
+    return `<section class="mc-sec mc-brief-interp mc-compiled-review">
+      <p class="mc-stat-k">Mission Review — Compiled Mission</p>
       <div class="mc-brief-head">
         <div class="mc-stat-k">Mission</div>
         <h2>${esc(title || "Title needed")}</h2>
-        ${!title ? `<p class="warn-text">Director could not infer a title — confirm one before starting.</p>` : ""}
+        ${!title ? `<p class="warn-text">Compiler could not recover a title — confirm before starting.</p>` : ""}
       </div>
       <div class="mc-stat-k">Objective</div>
       <p>${esc(k.objective || "—")}</p>
-      <div class="mc-stat-k">Expected outcomes</div>
-      <ul>${(outcomes || []).map((o) => `<li>${esc(o)}</li>`).join("") || "<li class=\"muted\">None listed</li>"}</ul>
+      <div class="mc-stat-k">Execution phases</div>
+      <ol>${phases.map((p) => `<li><b>${esc(p.title)}</b>${p.objective ? ` — ${esc(p.objective)}` : ""}${p.kind ? ` <span class="muted">(${esc(p.kind)})</span>` : ""}</li>`).join("") || "<li class=\"muted\">None</li>"}</ol>
       <div class="mc-stat-k">Deliverables</div>
-      <ol>${(deliverables || []).map((d) => `<li><b>${esc(d.title)}</b>${d.objective ? ` — ${esc(d.objective)}` : ""}</li>`).join("")}</ol>
-      <div class="mc-stat-k">Constraints</div>
-      <ul>${(k.constraints || []).map((c) => `<li>${esc(c)}</li>`).join("") || "<li class=\"muted\">None listed</li>"}</ul>
+      <ul>${(deliverables || []).map((d) => `<li><b>${esc(d.title)}</b>${d.statusLabel ? ` · <span class="mc-pill ${d.status === "reused" ? "executing" : ""}">${esc(d.statusLabel)}</span>` : ""}</li>`).join("") || "<li class=\"muted\">None</li>"}</ul>
+      <div class="mc-stat-k">Accepted artifacts being reused</div>
+      <ul>${reused.map((a) => `<li><b>${esc(a.title)}</b> <span class="muted">${esc(a.path || "")}</span></li>`).join("") || "<li class=\"muted\">None reused</li>"}</ul>
+      <div class="mc-stat-k">Dependencies</div>
+      <ul>${phases.filter((p) => (p.outputs || []).length || p.objective).slice(0, 8).map((p) => `<li>${esc(p.title)}${(p.outputs || []).length ? ` → ${esc((p.outputs || []).join(", "))}` : ""}</li>`).join("") || "<li class=\"muted\">Phase order as listed above</li>"}</ul>
+      <div class="mc-stat-k">Expected decisions</div>
+      <ul>${(k.expectedDecisions || []).map((d) => `<li>${esc(d.title || d.prompt || JSON.stringify(d))}</li>`).join("") || "<li class=\"muted\">None expected at compile time</li>"}</ul>
+      <div class="mc-stat-k">Warnings / risks</div>
+      ${risks.length || findings
+        ? `<ul>${risks.map((r) => `<li class="warn">${esc(r)}</li>`).join("")}</ul>${findings}`
+        : `<ul><li class="muted">None</li></ul>`}
       <div class="mc-stat-k">Acceptance criteria</div>
-      <ul>${(outcomes || []).map((o) => `<li>${esc(o)}</li>`).join("") || "<li class=\"muted\">None listed</li>"}</ul>
-      <div class="mc-stat-k">Recommended worker disciplines</div>
+      <ul>${(outcomes || []).map((o) => `<li>${esc(typeof o === "string" ? o : o.statement || o)}</li>`).join("") || "<li class=\"muted\">None listed</li>"}</ul>
+      <div class="mc-stat-k">Worker disciplines</div>
       <ul>${(k.recommendedWorkerDisciplines || ["General engineering"]).map((d) => `<li>${esc(d)}</li>`).join("")}</ul>
+      <div class="mc-stat-k">Compilation confidence</div>
+      <p><span class="mc-pill ${k.readyToExecute ? "executing" : "decision_required"}">${esc(conf || assessment)}</span>
+        ${k.readyToExecute ? " · Ready to execute" : " · Not ready to execute"}</p>
       <div class="mc-stat-k">Director assessment</div>
-      <p><span class="mc-pill ${assessment === "Ready" ? "executing" : "decision_required"}">${esc(assessment)}</span></p>
-      ${findings}
-      <details class="mc-diag mc-raw-brief"><summary>Raw Mission Brief — View original document</summary>
+      <p>${esc(assessment)}</p>
+      ${report ? `<details class="mc-diag"><summary>Compilation Report</summary>
+        <pre class="mono">${esc(JSON.stringify({
+          reused: report.accepted_artifacts_reused,
+          new_work: report.new_work_identified,
+          warnings: report.warnings,
+          conflicts: report.conflicts,
+          decisions: report.compiler_decisions,
+          confidence: report.compilation_confidence,
+          execution: report.execution_summary,
+        }, null, 2))}</pre>
+      </details>` : ""}
+      <details class="mc-diag mc-raw-brief"><summary>View Source — Raw Mission Brief</summary>
         <pre class="mono">${esc(raw ? JSON.stringify(raw, null, 2) : "Original document available after save.")}</pre>
       </details>
       <div class="mc-actions">
         <button class="btn ghost" data-mc-kickoff-reset="1">Back</button>
         ${k.missionId
           ? `<button class="btn" data-mc-kickoff-start="${esc(k.missionId)}" ${k.canStart === false ? "disabled" : ""}>${esc(k.primaryAction?.label || "Start mission")}</button>`
-          : `<button class="btn" data-mc-kickoff-ingest="1">Continue to readiness</button>`}
+          : `<button class="btn" data-mc-kickoff-ingest="1">Compile & continue</button>`}
       </div>
     </section>`;
   }

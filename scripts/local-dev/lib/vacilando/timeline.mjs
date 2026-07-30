@@ -39,6 +39,15 @@ export const TIMELINE_EVENT_TYPES = new Set([
   "context_invalidated",
   "resource_claim",
   "resource_release",
+  "mission_archived",
+  "mission_restored",
+  "mission_compiled",
+  "compilation_reuse",
+  "compilation_conflict",
+  "compilation_ready",
+  "compilation_blocked",
+  "compilation_decision",
+  "director_execution_started",
 ]);
 
 const iso = (ms) => new Date(ms ?? Date.now()).toISOString();

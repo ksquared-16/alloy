@@ -31,6 +31,7 @@ import {
   reviewMissionReadiness,
   interpretMissionBrief,
 } from "../mission-kickoff.mjs";
+import { getCompiledMission } from "../compiled-mission.mjs";
 import {
   getMissionConfidence,
   estimateNextCheckpoint,
@@ -99,6 +100,13 @@ const TIMELINE_HEADLINES = {
   commit: "A commit was recorded",
   resource_claim: "A resource was claimed",
   resource_release: "A resource was released",
+  mission_compiled: "Mission compiled",
+  compilation_reuse: "Accepted artifacts reused",
+  compilation_conflict: "Compilation conflict detected",
+  compilation_ready: "Mission ready for approval",
+  compilation_blocked: "Mission cannot be compiled",
+  compilation_decision: "Compilation decision required",
+  director_execution_started: "Director launched execution",
 };
 
 /** Explicit worker startup / execution lifecycle — shared across dashboard surfaces. */
@@ -779,46 +787,92 @@ export function kickoffVm(missionId) {
       ],
     };
   }
+  const compiled = state?.compiled || getCompiledMission(brief.missionId || missionId);
   const readiness = state?.readiness || reviewMissionReadiness(brief);
   const interpretation = interpretMissionBrief(brief, readiness);
-  const findings = (interpretation.findings || readiness.findings || []).map((f) => ({
-    severity: f.blocking ? "blocking" : "info",
-    message: f.message || f.code || JSON.stringify(f),
-    kind: f.kind || (f.blocking ? "gap" : "note"),
-  }));
+  const findings = [
+    ...(compiled?.compilationErrors || []).map((e) => ({
+      severity: "blocking",
+      message: e.message,
+      kind: "compilation",
+      code: e.code,
+    })),
+    ...(compiled?.compilationWarnings || []).map((w) => ({
+      severity: w.severity === "conflict" ? "blocking" : "info",
+      message: w.message + (w.recommendation ? ` Recommendation: ${w.recommendation}` : ""),
+      kind: "compilation_warning",
+      code: w.code,
+    })),
+    ...(interpretation.findings || readiness.findings || []).map((f) => ({
+      severity: f.blocking ? "blocking" : "info",
+      message: f.message || f.code || JSON.stringify(f),
+      kind: f.kind || (f.blocking ? "gap" : "note"),
+    })),
+  ];
   const assignments = listAssignments(missionId);
+  const reused = compiled?.referencedAcceptedArtifacts || [];
+  const toExecute = (compiled?.deliverables || []).filter((d) => d.status === "to_execute");
+  const canStart = Boolean(
+    compiled?.readyToExecute
+    && readiness.ready !== false
+    && (state?.kickoff_status === "awaiting_kickoff_approval" || !state?.kickoff_status || !assignments.length),
+  );
   return {
     kind: "kickoff",
-    mode: readiness.ready === false && findings.some((f) => f.severity === "blocking")
-      ? "readiness_blocked"
-      : (state?.kickoff_status === "awaiting_kickoff_approval" || !assignments.length)
-        ? "approval"
-        : "executing",
+    mode: !compiled?.readyToExecute
+      ? "compilation_blocked"
+      : readiness.ready === false && findings.some((f) => f.severity === "blocking")
+        ? "readiness_blocked"
+        : (state?.kickoff_status === "awaiting_kickoff_approval" || !assignments.length)
+          ? "approval"
+          : "executing",
     missionId,
-    title: interpretation.title || brief.title,
-    objective: interpretation.objective,
-    expectedOutcomes: interpretation.expectedOutcomes,
-    deliverables: interpretation.deliverables,
-    recommendedWorkerDisciplines: interpretation.recommendedWorkerDisciplines,
-    directorAssessment: interpretation.directorAssessment,
-    phases: (brief.plan || []).map((p) => ({
-      id: p.phaseId,
+    title: compiled?.title || interpretation.title || brief.title,
+    objective: compiled?.objective || interpretation.objective,
+    expectedOutcomes: (compiled?.acceptanceCriteria || []).map((c) => c.statement).filter(Boolean)
+      || interpretation.expectedOutcomes,
+    deliverables: (compiled?.deliverables || []).map((d) => ({
+      id: d.id,
+      title: d.title,
+      status: d.status,
+      statusLabel: d.status === "reused" ? "Reused" : d.status === "to_execute" ? "To execute" : d.status,
+      objective: d.title,
+      outputs: d.expectedPath ? [d.expectedPath] : [],
+    })),
+    recommendedWorkerDisciplines: compiled?.workerDisciplines || interpretation.recommendedWorkerDisciplines,
+    directorAssessment: compiled?.readyToExecute
+      ? `Ready to execute · confidence ${compiled.compilationConfidence}%`
+      : (compiled?.status === "blocked" ? "Mission cannot be compiled" : interpretation.directorAssessment),
+    phases: (compiled?.executionPhases || brief.plan || []).map((p) => ({
+      id: p.phaseId || p.id,
       title: p.title,
       objective: p.objective,
-      outputs: p.requiredOutputs || [],
+      outputs: p.requiredOutputs || p.outputs || [],
+      kind: p.kind || null,
     })),
-    acceptanceCriteria: brief.acceptanceCriteria || [],
-    constraints: interpretation.constraints,
+    acceptanceCriteria: compiled?.acceptanceCriteria || brief.acceptanceCriteria || [],
+    constraints: [
+      ...(interpretation.constraints || []),
+      ...(compiled?.exclusions || []),
+    ],
     sources: (brief.sourceMaterials || []).map((s) => s.ref || s.title || s.id),
     findings,
-    assignmentCount: assignments.length || (brief.plan || []).length,
+    assignmentCount: assignments.length || (compiled?.executionPhases || brief.plan || []).length,
     kickoffStatus: state?.kickoff_status || null,
-    canStart: readiness.ready !== false && (state?.kickoff_status === "awaiting_kickoff_approval" || !state?.kickoff_status),
+    canStart,
     primaryAction: {
       label: "Start mission",
-      disabled: readiness.ready === false,
+      disabled: !canStart,
     },
     rawBrief: brief,
+    compiled,
+    compilationReport: compiled?.report || null,
+    reusedArtifacts: reused,
+    newWork: toExecute,
+    compilationConfidence: compiled?.compilationConfidence ?? null,
+    readyToExecute: compiled?.readyToExecute === true,
+    expectedDecisions: compiled?.expectedDecisions || [],
+    risks: (compiled?.compilationWarnings || []).map((w) => w.message),
   };
 }
 

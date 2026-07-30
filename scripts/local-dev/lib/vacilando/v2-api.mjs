@@ -147,7 +147,34 @@ export async function handleV2Post(path, body) {
         changeSummary: v.change_summary || v.changeSummary,
         approvalSource: v.approval_source || "operator_edit",
       });
-      return { status: 200, body: { ok: true, brief, readiness: reviewMissionReadiness(brief) } };
+      let compilation = null;
+      try {
+        const { compileMissionBrief } = await import("./mission-compiler.mjs");
+        compilation = compileMissionBrief(brief.missionId, { brief, actor: "mission_compiler" });
+      } catch { /* compile best-effort on revise */ }
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          brief,
+          readiness: reviewMissionReadiness(brief),
+          compiled: compilation?.compiled || null,
+          compilationReport: compilation?.report || null,
+        },
+      };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
+  }
+  if (path === "/api/v2/missions/compile") {
+    try {
+      const { compileMissionBrief } = await import("./mission-compiler.mjs");
+      const mid = v.mission_id || v.missionId || v.brief_id;
+      const out = compileMissionBrief(mid, {
+        actor: v.actor || "mission_compiler",
+        createCompilationDecision: v.create_decision !== false,
+      });
+      return { status: 200, body: out };
     } catch (e) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
     }
@@ -491,6 +518,14 @@ export async function handleV2Get(path, url) {
   if (path === "/api/v2/views/mission/kickoff") {
     const id = q("id") || q("mission_id");
     return { status: 200, body: { ok: true, ...kickoffVm(id) } };
+  }
+  if (path === "/api/v2/views/mission/compiled" || path === "/api/v2/missions/compiled") {
+    const id = q("id") || q("mission_id");
+    if (!id) return { status: 400, body: { ok: false, error: "missing_id" } };
+    const { getCompiledMission } = await import("./compiled-mission.mjs");
+    const compiled = getCompiledMission(id);
+    if (!compiled) return { status: 404, body: { ok: false, error: "compiled_mission_not_found" } };
+    return { status: 200, body: { ok: true, compiled, report: compiled.report || null } };
   }
   if (path === "/api/v2/views/decision") {
     const mid = q("mission_id");

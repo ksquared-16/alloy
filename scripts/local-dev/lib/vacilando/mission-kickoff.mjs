@@ -16,8 +16,10 @@ import {
   markObjectiveExecuting,
 } from "./objective.mjs";
 import { createMission, getMission, updateMission } from "./commands/missions.mjs";
-import { createAssignmentsFromBrief } from "./worker-assignment.mjs";
+import { createAssignmentsFromBrief, createAssignmentsFromCompiled } from "./worker-assignment.mjs";
 import { scheduleDispatchAfterKickoff } from "./assignment-dispatch.mjs";
+import { compileMissionBrief, getCompiledMission, compiledMissionReady } from "./mission-compiler.mjs";
+import { executionPlanFromCompiled } from "./mission-compiler.mjs";
 
 /**
  * Distinguish operational gaps (Director can resolve) from mission-level
@@ -251,8 +253,8 @@ export function ingestMissionBrief(input = {}, { slot = null, provider = "claude
 
   appendTimelineEvent(mission.mission_id, {
     type: "mission_created",
-    summary: `Director reviewed your Mission Brief (v${brief.version}) and is waiting for kickoff approval`,
-    headline: "Director reviewed your Mission Brief",
+    summary: `Mission Brief received (v${brief.version})`,
+    headline: "Mission Brief received",
     visibility: "summary",
     actor,
     detail: {
@@ -264,7 +266,43 @@ export function ingestMissionBrief(input = {}, { slot = null, provider = "claude
     nowMs,
   });
 
+  // Mission Compiler — Brief → Compiled Mission (before Director execution).
+  let compilation = null;
+  try {
+    compilation = compileMissionBrief(mission.mission_id, { brief, actor: "mission_compiler", nowMs });
+  } catch (e) {
+    return {
+      ok: false,
+      error: "compilation_failed",
+      detail: String(e && e.message || e),
+      brief,
+      mission: getMission(mission.mission_id),
+    };
+  }
+
   const readiness = reviewMissionReadiness(brief);
+  if (compilation?.compiled && !compilation.readyToExecute) {
+    readiness.ready = false;
+    readiness.directorAssessment = compilation.compiled.status === "blocked"
+      ? "Mission cannot be compiled"
+      : "Compilation needs your decision";
+    readiness.findings = [
+      ...(readiness.findings || []),
+      ...(compilation.compiled.compilationErrors || []).map((err) => ({
+        blocking: true,
+        message: err.message,
+        code: err.code,
+        kind: "compilation",
+      })),
+      ...(compilation.compiled.compilationWarnings || []).map((w) => ({
+        blocking: compilation.compiled.status === "needs_decision",
+        message: w.message,
+        code: w.code,
+        kind: "compilation_warning",
+      })),
+    ];
+  }
+
   return {
     ok: true,
     brief,
@@ -272,6 +310,8 @@ export function ingestMissionBrief(input = {}, { slot = null, provider = "claude
     objective,
     readiness,
     interpretation: interpretMissionBrief(brief, readiness),
+    compiled: compilation?.compiled || null,
+    compilationReport: compilation?.report || null,
   };
 }
 
@@ -309,19 +349,47 @@ export function approveMissionExecution(briefId, version, {
   }
 
   const readiness = reviewMissionReadiness(brief);
-  if (!readiness.ready) {
+  let compiled = getCompiledMission(brief.missionId);
+  if (!compiled) {
+    try {
+      compiled = compileMissionBrief(brief.missionId, { brief, actor: "mission_compiler", nowMs })?.compiled;
+    } catch { /* handled below */ }
+  }
+  if (!compiled || !compiledMissionReady(compiled)) {
+    return {
+      ok: false,
+      error: "not_compiled",
+      readiness,
+      compiled,
+      detail: compiled?.status === "blocked"
+        ? "Mission cannot be compiled — resolve compilation errors before execution"
+        : "Mission Compiler must produce a ready Compiled Mission before Director creates workers",
+    };
+  }
+  if (!readiness.ready && (readiness.mission_ambiguities || []).length) {
     return {
       ok: false,
       error: "not_ready",
       readiness,
+      compiled,
       detail: "Resolve mission-level ambiguities before approving execution",
     };
   }
 
   const missionKey = mission.mission_id;
+  const execPlan = executionPlanFromCompiled(compiled);
+  const briefForObjective = {
+    ...brief,
+    title: compiled.title || brief.title,
+    objective: compiled.objective || brief.objective,
+    plan: execPlan.length ? execPlan : brief.plan,
+    acceptanceCriteria: compiled.acceptanceCriteria?.length
+      ? compiled.acceptanceCriteria
+      : brief.acceptanceCriteria,
+  };
   const objective = createBriefObjective({
     missionId: missionKey,
-    brief,
+    brief: briefForObjective,
     status: "executing",
   });
   markObjectiveExecuting(missionKey);
@@ -330,28 +398,39 @@ export function approveMissionExecution(briefId, version, {
     mission_brief_id: brief.missionId,
     mission_brief_version: brief.version,
     mission_content_hash: brief.contentHash,
+    compiled_mission_id: compiled.compiledMissionId,
     kickoff_status: "executing",
     status: mission.status === "draft" ? "ready" : mission.status,
-    title: brief.title,
-    objective: brief.objective,
+    title: compiled.title || brief.title,
+    objective: compiled.objective || brief.objective,
   }, { nowMs });
 
   appendTimelineEvent(missionKey, {
     type: "mission_started",
-    summary: `You approved execution of Mission Brief v${brief.version}`,
-    headline: "You approved execution",
+    summary: `Execution approved — Director will run Compiled Mission ${compiled.compiledMissionId}`,
+    headline: "Execution approved",
     visibility: "summary",
     actor,
     detail: {
       mission_brief_version: brief.version,
       mission_content_hash: brief.contentHash,
-      phase_ids: (brief.plan || []).map((p) => p.phaseId),
-      technical: `Kickoff approved — executing Mission Brief v${brief.version}`,
+      compiled_mission_id: compiled.compiledMissionId,
+      phase_ids: execPlan.map((p) => p.phaseId),
+      technical: `Kickoff approved — executing Compiled Mission (brief v${brief.version})`,
     },
     nowMs,
   });
 
-  const first = (brief.plan || []).slice().sort((a, b) => a.order - b.order)[0];
+  appendTimelineEvent(missionKey, {
+    type: "director_execution_started",
+    summary: "Director launched execution from the Compiled Mission",
+    headline: "Director launched execution",
+    visibility: "summary",
+    actor: "director",
+    nowMs,
+  });
+
+  const first = execPlan.slice().sort((a, b) => a.order - b.order)[0];
   if (first) {
     appendTimelineEvent(missionKey, {
       type: "phase_started",
@@ -365,20 +444,29 @@ export function approveMissionExecution(briefId, version, {
     });
   }
 
-  // Create bounded worker assignments from the brief spine (not capability invent).
+  // Director consumes Compiled Mission — not raw brief structure.
   let assignments = [];
   try {
-    assignments = createAssignmentsFromBrief(missionKey, brief, {
+    assignments = createAssignmentsFromCompiled(missionKey, compiled, {
       slot,
       actor,
       nowMs,
+      brief,
     });
+    if (!assignments.length) {
+      assignments = createAssignmentsFromBrief(missionKey, briefForObjective, {
+        slot,
+        actor,
+        nowMs,
+      });
+    }
   } catch (e) {
     return {
       ok: false,
       error: "assignment_create_failed",
       detail: String(e && e.message || e),
       brief,
+      compiled,
       mission: getMission(missionKey),
       objective,
     };
@@ -395,6 +483,7 @@ export function approveMissionExecution(briefId, version, {
   return {
     ok: true,
     brief,
+    compiled,
     mission: getMission(missionKey),
     objective: getObjectiveByMission(missionKey) || objective,
     assignments,
@@ -413,10 +502,27 @@ export function getKickoffState(missionId) {
     ? getBriefVersion(briefId, mission.mission_brief_version)
     : null) || getBrief(briefId) || getBrief(missionId);
   if (!brief) return { ok: false, error: "brief_not_found" };
+  let compiled = getCompiledMission(brief.missionId || missionId);
+  if (!compiled) {
+    try {
+      compiled = compileMissionBrief(brief.missionId || missionId, {
+        brief,
+        actor: "mission_compiler",
+        createCompilationDecision: false,
+      })?.compiled;
+    } catch { /* leave null */ }
+  }
   const readiness = reviewMissionReadiness(brief);
+  if (compiled && !compiledMissionReady(compiled)) {
+    readiness.ready = false;
+    readiness.directorAssessment = compiled.status === "blocked"
+      ? "Mission cannot be compiled"
+      : "Compilation needs review";
+  }
   const objective = getObjectiveByMission(missionId) || getObjectiveByMission(brief.missionId);
   return {
     ok: true,
+    compiled,
     brief,
     mission,
     objective,

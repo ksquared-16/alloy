@@ -66,6 +66,91 @@ function defaultProhibited(brief) {
  * Create assignments from Mission Brief phases after kickoff approval.
  * Phase dependency order becomes assignment dependency graph.
  */
+/**
+ * Create assignments from a Compiled Mission execution plan (preferred).
+ * Falls back to Mission Brief phases only when no compiled mission exists.
+ */
+export function createAssignmentsFromCompiled(missionId, compiled, { slot = null, branch = null, actor = "director", nowMs, brief = null } = {}) {
+  if (!compiled) throw new Error(`compiled_mission_required:${missionId}`);
+  const b = brief || getBrief(missionId);
+  const store = readStore(missionId);
+  store.context_epoch = {
+    version: compiled.briefVersion ?? b?.version,
+    contentHash: compiled.briefContentHash ?? b?.contentHash,
+    compiledMissionId: compiled.compiledMissionId,
+  };
+
+  const plan = (compiled.executionPhases || []).slice().sort((a, c) => a.order - c.order);
+
+  const phaseToAssignment = new Map();
+  const created = [];
+  for (const phase of plan) {
+    const assignmentId = "asg_" + createHash("sha256")
+      .update(`${missionId}:${phase.phaseId}:${compiled.compiledMissionId}:${Math.random()}`)
+      .digest("hex").slice(0, 14);
+    const deps = (phase.dependencies || [])
+      .map((depPhaseId) => phaseToAssignment.get(depPhaseId))
+      .filter(Boolean);
+    const outputs = phase.requiredOutputs
+      || (compiled.deliverables || [])
+        .filter((d) => (phase.deliverableIds || []).includes(d.id) && d.status === "to_execute")
+        .map((d) => d.expectedPath || d.title);
+
+    const assignment = {
+      schema_version: "vacilando.worker_assignment.v1",
+      assignmentId,
+      missionId,
+      missionVersion: compiled.briefVersion ?? b?.version,
+      missionContentHash: compiled.briefContentHash ?? b?.contentHash,
+      compiledMissionId: compiled.compiledMissionId,
+      phaseId: phase.phaseId,
+      title: phase.title,
+      objective: phase.objective || compiled.objective,
+      scope: outputs,
+      prohibitedChanges: [
+        ...(compiled.exclusions || []).map((e) => `Out of scope: ${e}`),
+        "Do not reinterpret Compiled Mission intent — escalate if reality diverges",
+      ],
+      expectedDeliverables: outputs,
+      acceptanceCriteriaIds: phase.acceptanceCriteriaIds || [],
+      dependencies: deps,
+      repository: {
+        mergeTarget: b?.executionPreferences?.mergeTarget || "staging",
+      },
+      branch: branch || null,
+      slot: slot != null ? String(slot) : (b?.executionPreferences?.preferredSlots?.[0] || null),
+      port: null,
+      requiredValidation: (b?.executionPreferences?.requiredValidationProfiles || []).map((p) => ({ profile: p })),
+      requiredEvidence: ["log", "document"],
+      evidenceProfile: "execution_v1",
+      escalationRules: [{ kind: "product_behavior", escalate: true }],
+      completionContract: {
+        requireEvidence: true,
+        evidenceProfile: "code_only",
+        requireContextAck: true,
+      },
+      status: deps.length ? "waiting" : "ready",
+      workerId: null,
+      provider: null,
+      contextAcknowledgement: null,
+      startReport: null,
+      progress: [],
+      blockers: [],
+      completionReport: null,
+      validation: null,
+      paused_reason: null,
+      created_at: iso(nowMs),
+      updated_at: iso(nowMs),
+      created_by: actor,
+    };
+    phaseToAssignment.set(phase.phaseId, assignmentId);
+    store.assignments.push(assignment);
+    created.push(assignment);
+  }
+  writeStore(store);
+  return created;
+}
+
 export function createAssignmentsFromBrief(missionId, brief = null, { slot = null, branch = null, actor = "director", nowMs } = {}) {
   const b = brief || getBrief(missionId);
   if (!b) throw new Error(`brief_not_found:${missionId}`);

@@ -1,0 +1,160 @@
+{
+  "schema_version": "vacilando.compilation_report.v1",
+  "compiledMissionId": "cmp_5d48bcfda573a935",
+  "missionId": "msn_2d054741a54698fa4c",
+  "compiled_at": "2026-07-30T23:48:07.957Z",
+  "compiler_version": "vacilando.mission_compiler.brief.v1",
+  "inputs": {
+    "briefVersion": 1,
+    "briefContentHash": "2c0b0b8fee88469de91e37587a3bb242",
+    "acceptedArtifactRoots": [
+      "docs/platform/planning/access-identity-v2",
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2"
+    ],
+    "templates": [
+      "access_identity_discovery_v1"
+    ],
+    "platformCapabilities": [
+      "mission_control",
+      "claude_execution",
+      "decisions",
+      "evidence"
+    ],
+    "briefTitle": "Access and Roles mission > **Create a complete, understandable, and c…",
+    "forbidsImplementation": true,
+    "planTruncated": true
+  },
+  "accepted_artifacts_reused": [
+    {
+      "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "title": "Existing-state inventory",
+      "covers": [
+        "d1_existing_state"
+      ]
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/05-command-enforcement-census.md",
+      "title": "Surface and capability access catalog",
+      "covers": [
+        "d2_surface_catalog"
+      ]
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "title": "Person ↔ user ↔ role ↔ scope model",
+      "covers": [
+        "d3_identity_model"
+      ]
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md",
+      "title": "Authentication model",
+      "covers": [
+        "d4_authentication"
+      ]
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "title": "Effective-access resolution model",
+      "covers": [
+        "d5_effective_access"
+      ]
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/06-product-ia-and-flows.md",
+      "title": "Product IA and principal flows",
+      "covers": [
+        "d6_product_ia"
+      ]
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "title": "Security threat and enforcement matrix",
+      "covers": [
+        "d7_security_matrix"
+      ]
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "title": "Gap analysis",
+      "covers": [
+        "d8_gap_analysis"
+      ]
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "title": "Decisions requiring approval",
+      "covers": [
+        "d9_decisions"
+      ]
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+      "title": "Sequenced implementation / QA plan",
+      "covers": [
+        "d10_sequence"
+      ]
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/07-director-acceptance-rubric.md",
+      "title": "Director acceptance rubric",
+      "covers": [
+        "d11_acceptance_rubric"
+      ]
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+      "title": "QA and evidence plan",
+      "covers": [
+        "d12_qa_evidence"
+      ]
+    }
+  ],
+  "new_work_identified": [],
+  "warnings": [
+    {
+      "code": "conflicting_implement_vs_specify",
+      "severity": "conflict",
+      "message": "Specification work already exists and conflicts with the requested execution plan.",
+      "recommendation": "Reuse the accepted corpus — do not start an implementation phase."
+    },
+    {
+      "code": "truncated_brief_plan",
+      "message": "Ingested plan was a single truncated phase with empty outputs — compiler recovered structure from objective + accepted artifacts."
+    }
+  ],
+  "conflicts": [
+    {
+      "code": "conflicting_instructions",
+      "severity": "conflict",
+      "message": "Mission Brief forbids implementation, but the ingested plan looked like implementation (or was a truncated shell)."
+    }
+  ],
+  "compiler_decisions": [
+    {
+      "decision": "normalized_title",
+      "reason": "Brief title was truncated or missing — recovered a display title from intent",
+      "value": "Access & Identity V2 — Discovery & Specification"
+    },
+    {
+      "decision": "catalog_access_identity_v1",
+      "reason": "Brief matches Access & Identity — applied discovery deliverable catalog and scanned accepted artifacts",
+      "reused": 12,
+      "remaining": 0
+    },
+    {
+      "decision": "resolve_conflict_by_scoping_to_gaps",
+      "reason": "Compiler prefers reuse + remaining discovery over contradictory implementation",
+      "remainingDeliverables": []
+    }
+  ],
+  "execution_summary": {
+    "phaseCount": 1,
+    "deliverableCount": 12,
+    "reuseCount": 12,
+    "executeCount": 0,
+    "readyToExecute": true,
+    "status": "ready"
+  },
+  "compilation_confidence": 87
+}
