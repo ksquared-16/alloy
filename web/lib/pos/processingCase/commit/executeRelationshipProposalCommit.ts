@@ -346,8 +346,29 @@ export async function executeRelationshipProposalCommit(args: {
     } as never);
 
     if (!result.ok) {
-        const code = "code" in result ? String(result.code ?? "relationship_execution_failed") : "relationship_execution_failed";
-        const reason = "operatorMessage" in result ? String(result.operatorMessage ?? "Relationship execution failed.") : "Relationship execution failed.";
+        // The adapter reports failure as a NESTED shape — `error.operatorMessage` and
+        // `diagnostics[].message` — not as a top-level string. Reading only the top level produced a
+        // bare "Relationship execution failed.", which made a real certification failure impossible
+        // to diagnose from the response: the actual cause was a `contacts_email_unique` violation.
+        const r = result as Record<string, unknown>;
+        const nestedError = (r.error && typeof r.error === "object" ? r.error : {}) as Record<string, unknown>;
+        const diagnostics = Array.isArray(r.diagnostics) ? (r.diagnostics as Array<Record<string, unknown>>) : [];
+        const code = String(nestedError.code ?? (typeof r.code === "string" ? r.code : "") ?? "").trim() || "relationship_execution_failed";
+        const detail =
+            [
+                nestedError.operatorMessage,
+                nestedError.message,
+                r.operatorMessage,
+                r.message,
+                r.reason,
+                typeof r.error === "string" ? r.error : null,
+                diagnostics.map((d) => d?.message).find((m) => typeof m === "string" && m.trim()),
+            ]
+                .map((v) => (typeof v === "string" && v.trim() ? v.trim() : null))
+                .find(Boolean) ?? null;
+        const reason = detail
+            ? `${detail} (command=${resolved.commandKey})`
+            : `Relationship execution failed (command=${resolved.commandKey} code=${code}).`;
         return {
             ok: false,
             status: 400,
