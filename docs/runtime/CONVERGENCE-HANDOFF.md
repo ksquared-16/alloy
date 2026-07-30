@@ -12,8 +12,11 @@
 | `0fd5fb217` | **1** | Declarable lens grain + child participation membership |
 | `d5dfdf834` | **3A** | Canonical child participation identity |
 | `a9ef80898` | **3B** | Stage grain × plan journey segment reconciliation |
+| `be9b3a38c` | **3C** | Grain-aware scope resolution for a child subject |
 
-**Next: 3C** (grain-aware scope resolution) — §4 item 4, unchanged. Then Phase 4.
+**Next: Phase 4** — the child surface (§4 item 5). Every dependency it had is now in place.
+The one prerequisite left outside code: author the "All Children in Enrollment" Work View in Firefly
+tenant config (`row_grain_v1: "child"`, no stage predicate).
 
 Three things a future session should not re-derive:
 
@@ -108,11 +111,14 @@ stage still applies for DISPLAY, not membership.
    duplicate #1 closed). Note `resolveStageWorkOutcomeContext` reading `task.metadata` was KEPT — it
    reads the acted-on task's OWN identity, which is not the scrape.
 3. ~~**3B canonical grain translation**~~ — **DONE** `a9ef80898`. See §0 note 1 for the correction.
-4. **3C grain-aware scope resolution** — **the post-merge semantic collision.** Cursor's new scope code calls
-   `resolveFocusPanelScope({ record: subjectRow })` / `firstMatchingVisibleWorkView` on the subject row; a
-   CHILD row would be evaluated by an opportunity-shaped predicate. Unreachable today only because
-   `subject_surface_unavailable` refuses first — **it goes live the moment the child surface ships. Fix
-   before removing that refusal.**
+4. ~~**3C grain-aware scope resolution**~~ — **DONE** `be9b3a38c`. Classification is split from
+   membership: `resolveFocusPanelScopeForMembership` takes the rule as a parameter, the family path
+   passes the opportunity predicates unchanged, and `runtime/provisioning/childGrainScope.ts` supplies
+   the child rule (effective stage for a stage-scoped lens, always-true for a stage-independent one),
+   considering CHILD-grain lenses only. **Not yet wired into the answer** — it cannot be, while
+   `subject_surface_unavailable` refuses first. Phase 4 wires it at the same moment it removes that
+   refusal; the module and its proofs exist so that removal is safe. Note the lens readers are
+   INJECTED (`stageKeysForView` / `isChildLens`) to avoid a cycle back into the answer.
 5. **Phase 4 child surface** — BP supplies stage/state/readiness/blockers/outcomes/actions; Runtime supplies
    subject authority, identity, context, composition, navigation. No fabricated room/placement/schedule/
    attendance/agreement. Remove `subject_surface_unavailable` only when coherent.
