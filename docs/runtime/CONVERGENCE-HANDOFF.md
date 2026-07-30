@@ -1,9 +1,37 @@
 # Runtime × Business Process Convergence — SESSION HANDOFF (START HERE)
 
 **Date:** 2026-07-30. **Branch:** `agent/claude/3-runtime-bp-convergence`
-**HEAD:** `f2d8b2c128896575f095e18d7b1d11160d9c620f` · 21 ahead / **0 behind** `origin/staging` (`a8ca07c83`)
+**HEAD:** `a9ef80898` · 25 ahead / **0 behind** `origin/staging` (`a8ca07c83`)
 **Worktree:** `/Users/Kelly/Code/alloy-worktrees/wt3-runtime-v1-settlement` (slot 3, port 3013)
-**Tree:** clean · **Not pushed** · `vac run typecheck` **rc=0** · **51 tests / 7 files green**
+**Tree:** clean · **Not pushed** · `vac run typecheck` **rc=0**
+
+## 0. Session of 2026-07-30 (second): steps 1, 3A, 3B are DONE
+
+| Commit | Step | What landed |
+|---|---|---|
+| `0fd5fb217` | **1** | Declarable lens grain + child participation membership |
+| `d5dfdf834` | **3A** | Canonical child participation identity |
+| `a9ef80898` | **3B** | Stage grain × plan journey segment reconciliation |
+
+**Next: 3C** (grain-aware scope resolution) — §4 item 4, unchanged. Then Phase 4.
+
+Three things a future session should not re-derive:
+
+1. **`journey_segment ?? "family"` was NOT a live hazard** — the field is required on
+   `StageOperatingPlanV1` and enforced by its parser, so a plan omitting it never parses. The real
+   defect was that the plan's segment and the STAGE's grain were never reconciled: a stage edited to
+   `grain: "child"` whose plan still said `family` ran as a family and never reached the child guard.
+   Now refused. §4 item 3 is closed with that correction recorded.
+2. **Pre-existing reds, baselined at `25870bf89` and unchanged by this work** — do not attribute them
+   to the convergence branch: `tests/lifecycle` **91 failed / 1128 passed** (mostly source-scanning UI
+   assertions); `tests/queues` **5 failed**; `tests/runtime` + `tests/queues` + `tests/adminV2/stageWork`
+   together **9 failed / 410 passed**. The owed full-suite name diff against `origin/staging` is still
+   owed — these numbers are the local half of it.
+3. **`d1ProvisioningAnswer.test.ts` used to lie.** Its config-read cache is process-wide, so four
+   proofs passed or failed on residue from earlier tests in the file. Cleared per test (`beforeEach`).
+   That exposed a real fact worth keeping: the FAMILY page enriches from `operational_tasks` and
+   `opportunity_customer_members` — so the family path has its own answer to "what children exist"
+   (OCM) while the child grain reads `process_instances`. Added to the Phase 6 duplicate list below.
 
 ---
 
@@ -64,14 +92,22 @@ stage still applies for DISPLAY, not membership.
 
 ## 4. NEXT, in dependency order
 
-1. **Declarable lens grain** + **participation-membership mode** (§3) — gates everything below.
-2. **3A canonical participation identity.** Replace Cursor's `resolveChildIdentityForProjection` (first-wins
-   across three unrelated ids) and the `opportunityStageWorkResource` cache key that collapses all three into
-   one opaque component. Drop task-metadata identity scraping from the authoritative path. Add boundary
-   contract tests.
-3. **3B canonical grain translation.** Centralize `StageGrain` (`family|child|person|account|work_item`) ×
-   `journey_segment` (`family|child`) × `OperationalGrain` (`case|child|candidate`). Remove
-   `journey_segment ?? "family"` and `subjectGrain ?? "case"` once authority exists.
+1. ~~**Declarable lens grain** + **participation-membership mode**~~ — **DONE** `0fd5fb217`.
+   Grain is declarable via `row_grain_v1` on the Work View; derivation still owns stage-scoped lenses;
+   a declaration contradicting the lens's stages is refused. Child membership follows the lens's shape
+   (`stages` vs `participation`), and participation membership consumes the Enrollment Definition's
+   `isLiveEnrollmentParticipant` — its first consumer — rather than enumerating stages.
+   **Still to do:** author the "All Children in Enrollment" Work View in Firefly tenant config
+   (`row_grain_v1: "child"`, no stage predicate). Doing it earlier would have produced a dead
+   destination; now it produces `subject_surface_unavailable` until Phase 4, which is the honest state.
+   No Work View BUILDER UI exists for `row_grain_v1` yet — config-only.
+2. ~~**3A canonical participation identity**~~ — **DONE** `d5dfdf834`.
+   `lib/lifecycle/childParticipationIdentity.ts` is the one definition; the cache key is injective;
+   the projection names a child explicitly or not at all and reports
+   `subject_unresolved: "child_identity_required"`. `ChildRowIdentity` is now that type (Phase 6
+   duplicate #1 closed). Note `resolveStageWorkOutcomeContext` reading `task.metadata` was KEPT — it
+   reads the acted-on task's OWN identity, which is not the scrape.
+3. ~~**3B canonical grain translation**~~ — **DONE** `a9ef80898`. See §0 note 1 for the correction.
 4. **3C grain-aware scope resolution** — **the post-merge semantic collision.** Cursor's new scope code calls
    `resolveFocusPanelScope({ record: subjectRow })` / `firstMatchingVisibleWorkView` on the subject row; a
    CHILD row would be evaluated by an opportunity-shaped predicate. Unreachable today only because
@@ -87,10 +123,14 @@ stage still applies for DISPLAY, not membership.
 
 ## 5. Known duplicates still present (Phase 6)
 
-- **Child identity normalization ×2** — mine (`childGrainProvisioningRows.ts`) vs Cursor's
-  (`projectStageWorkRuntime.ts` + cache key). Incompatible precedence.
-- **Grain guard ×2** in three vocabularies — `resolveSubjectGrain` vs the `journey_segment` check in
-  `completeStageWorkWithOutcome.ts`.
+- ~~**Child identity normalization ×2**~~ — CLOSED by 3A (`d5dfdf834`); one canonical type.
+- ~~**Grain guard ×2**~~ — CLOSED by 3B (`a9ef80898`); one canonical translation.
+- **"What children exist" ×2** — the FAMILY page enriches child chips from `opportunity_customer_members`
+  (`enrichOpportunityRowsWithChildrenForCompactQueue`) while the child grain reads `process_instances`.
+  Two sources, one question. Found via the `d1ProvisioningAnswer` touched-table proof (§0 note 3).
+- **`subjectGrain?.grain ?? "case"`** in `focusPanelWorkModeModelFromProvisioningAnswer.ts` — documented
+  as a compatibility default for non-answer producers, not a grain fallback. Nothing ENFORCES that a
+  child answer always supplies the field; a boundary test asserting it would close this properly.
 - **Degrade-vs-refuse ×2** — Runtime forbids degrading a failed child *read*; BP keeps a degrade path on the
   *write* side. Possibly justified by different stakes; neither cites the other.
 
@@ -130,5 +170,8 @@ stage still applies for DISPLAY, not membership.
 | Error surface | `web/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot.ts` |
 | BP child Waitlist | `web/lib/lifecycle/applyChildWaitlistViaOutcomeRuntime.ts` |
 | BP readiness preflight | `web/lib/lifecycle/preflightStageChangingOutcomeReadiness.ts` |
+| Canonical child identity (3A) | `web/lib/lifecycle/childParticipationIdentity.ts` |
+| Canonical grain translation (3B) | `web/lib/lifecycle/grainVocabulary.ts` |
+| Participation membership provider | `web/lib/queues/childGrainProcessInstanceQueue.ts` |
 | Live proof harness | `web/scripts/tmp-proveChildProvider.ts` |
 | Docs | `docs/runtime/{GRAIN-AUTHORITY-MAP,SECOND-SURFACE-INVENTORY,REFUSAL-HONEST-NOT-FATAL,OPEN-DECISION-*}.md` |
