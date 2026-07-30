@@ -563,6 +563,9 @@ export function InlineOpportunityFocusPanel() {
                                               : null,
                                           primaryAction: operational.action,
                                           subjectIdentityTruth: operational.subjectIdentityTruth,
+                                          // R2 — the answer's resolved grain, carried by the single
+                                          // subject owner. The panel forwards it; it never decides it.
+                                          subjectGrain: operational.subjectGrain,
                                       }
                                     : null
                             }

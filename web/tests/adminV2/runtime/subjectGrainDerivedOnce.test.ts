@@ -91,3 +91,33 @@ describe("derived once, consumed — not re-derived downstream", () => {
         expect(src).not.toContain("resolveLensRowGrain");
     });
 });
+
+/**
+ * The value has to actually ARRIVE. A contract the client never forwards is a contract in name only — the
+ * builder would take its family compatibility default forever and nothing would fail.
+ */
+describe("the grain is threaded end to end, answer → panel", () => {
+    const HOPS: ReadonlyArray<[string, string]> = [
+        ["components/presentation/workUnit/ProvisionedWorkUnitSurface.tsx", "subjectGrain={op ? op.subjectGrain ?? null : null}"],
+        ["components/presentation/workUnit/OperationalSubjectContext.tsx", "subjectGrain: subjectGrain ?? null"],
+        ["components/presentation/workUnit/InlineOpportunityFocusPanel.tsx", "subjectGrain: operational.subjectGrain"],
+        ["components/admin/focusPanel/OpportunityFocusPanelBody.tsx", "subjectGrain: commitCritical.subjectGrain"],
+    ];
+
+    it.each(HOPS)("%s forwards it", (file, needle) => {
+        expect(read(file)).toContain(needle);
+    });
+
+    it("the subject owner no longer asserts that a committed subject is an opportunity", () => {
+        const src = read("components/presentation/workUnit/OperationalSubjectContext.tsx");
+        // The exact hardcode this replaced: `entityType: subjectId ? "opportunity" : null`.
+        expect(src).not.toMatch(/entityType:\s*subjectId\s*\?\s*"opportunity"\s*:\s*null/);
+        expect(src).toContain('subjectGrain?.subjectType ?? "opportunity"');
+    });
+
+    it("the context re-memoizes when the grain changes — a stale grain is a wrong subject", () => {
+        const src = read("components/presentation/workUnit/OperationalSubjectContext.tsx");
+        const deps = src.slice(src.indexOf("[subjectId,"), src.indexOf("],\n    );"));
+        expect(deps).toContain("subjectGrain");
+    });
+});

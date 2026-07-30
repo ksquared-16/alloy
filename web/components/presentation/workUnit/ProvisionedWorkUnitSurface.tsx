@@ -246,6 +246,10 @@ export function ProvisionedWorkUnitSurface() {
                     workIntentRuntime={op ? op.focusPanelStageWork?.work_intent_runtime ?? null : null}
                     // A — commit-critical subject identity truth (domain-declared bindings; renders identity cards meaningful at commit).
                     subjectIdentityTruth={op ? op.subjectIdentityTruth ?? null : null}
+                    // R2 — the subject grain the ANSWER resolved. Threaded from the committed snapshot so
+                    // the panel never infers what the subject is. Taken from `op` only: a non-operational
+                    // terminal has no committed subject to describe.
+                    subjectGrain={op ? op.subjectGrain ?? null : null}
                     // A — the published Summary composition for the committed scope: the panel presents
                     // the PUBLISHED composition at commit, not the code default standing in for a fetch.
                     summaryDocSeed={op ? op.focusPanelSummaryDoc ?? null : null}

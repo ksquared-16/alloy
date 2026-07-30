@@ -14,6 +14,8 @@ import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
 import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
+import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/types";
 
 /** Enriched (settled drawer VM) input — present once Settlement has resolved the record VM. */
 export type FocusPanelEnrichedInput = {
@@ -30,6 +32,8 @@ export type FocusPanelCommitCriticalInput = {
     situation: { stageKey: string; stageLabel: string; purpose: string | null } | null;
     primaryAction: { actionRef: string; label: string } | null;
     subjectIdentityTruth: SubjectIdentityTruth | null;
+    /** R2 — the subject grain resolved by the answer. Forwarded to the builder; never derived here. */
+    subjectGrain: { grain: OperationalGrain; subjectType: OperationalSubjectType } | null;
 };
 
 type Props = {
@@ -91,6 +95,9 @@ export default function OpportunityFocusPanelBody({
                 situation: commitCritical.situation,
                 primaryAction: commitCritical.primaryAction,
                 subjectIdentityTruth: commitCritical.subjectIdentityTruth,
+                // R2 — forwarded, not decided. The builder reads this instead of hardcoding
+                // `grain: "case"` / `subject.type: "opportunity"`.
+                subjectGrain: commitCritical.subjectGrain,
             });
         }
         return null;

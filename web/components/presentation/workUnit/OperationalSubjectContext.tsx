@@ -25,12 +25,25 @@ import type {
     SubjectIdentityTruth,
     FocusPanelSummaryDocProjection,
 } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
+import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/types";
 
 export type OperationalSubject = {
     /** Record of Attention — the committed subject, from the frozen snapshot. Null = none committed. */
     subjectId: string | null;
-    /** Record of Truth entity type for the committed subject. */
-    entityType: "opportunity" | null;
+    /**
+     * Record of Truth entity type for the committed subject.
+     *
+     * R2: read from the answer's resolved `subjectGrain`, never inferred. This was
+     * `subjectId ? "opportunity" : null` — a hardcode asserting "a committed subject is an opportunity",
+     * which is false for any lens whose stages declare `child`.
+     */
+    entityType: OperationalSubjectType | null;
+    /**
+     * The SUBJECT GRAIN the answer resolved, threaded and never re-derived. This context is the single
+     * subject owner, so it is also the single place the grain reaches the panel.
+     */
+    subjectGrain: { grain: OperationalGrain; subjectType: OperationalSubjectType } | null;
     /**
      * INSTANT-IDENTITY SEED — the committed subject's family name + status, from the SAME committed
      * queue row it was selected from (never the drawer store). Lets the Focus Panel pending header
@@ -100,7 +113,8 @@ export type OperationalSubject = {
 };
 
 const EMPTY: OperationalSubject = {
-    subjectId: null, entityType: null, identitySeed: null, situation: null, decision: null, action: null,
+    subjectId: null, entityType: null, subjectGrain: null, identitySeed: null, situation: null,
+    decision: null, action: null,
     stageWorkRuntime: null, publishedStageInputs: null, workIntentRuntime: null, subjectIdentityTruth: null,
     summaryDocSeed: null,
 };
@@ -118,9 +132,11 @@ export function OperationalSubjectProvider({
     workIntentRuntime,
     subjectIdentityTruth,
     summaryDocSeed,
+    subjectGrain,
     children,
 }: {
     subjectId: string | null;
+    subjectGrain?: { grain: OperationalGrain; subjectType: OperationalSubjectType } | null;
     identitySeed?: OpportunityDrawerQueuePreviewSeed | null;
     situation?: OperationalSubject["situation"];
     decision?: OperationalSubject["decision"];
@@ -135,7 +151,12 @@ export function OperationalSubjectProvider({
     const value = useMemo<OperationalSubject>(
         () => ({
             subjectId,
-            entityType: subjectId ? "opportunity" : null,
+            // R2: the answer decides what the subject IS. `subjectGrain` is absent only on paths that
+            // predate the answer carrying it (enriched/drawer-VM producer, fixtures), where the historical
+            // family shape is the compatible reading — never a grain guess for a child answer, which
+            // always supplies it.
+            entityType: subjectId ? subjectGrain?.subjectType ?? "opportunity" : null,
+            subjectGrain: subjectGrain ?? null,
             identitySeed: identitySeed ?? null,
             situation: situation ?? null,
             decision: decision ?? null,
@@ -146,7 +167,7 @@ export function OperationalSubjectProvider({
             subjectIdentityTruth: subjectIdentityTruth ?? null,
             summaryDocSeed: summaryDocSeed ?? null,
         }),
-        [subjectId, identitySeed, situation, decision, action, stageWorkRuntime, publishedStageInputs, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
+        [subjectId, subjectGrain, identitySeed, situation, decision, action, stageWorkRuntime, publishedStageInputs, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
