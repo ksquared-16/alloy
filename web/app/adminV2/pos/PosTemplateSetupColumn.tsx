@@ -24,6 +24,7 @@ import type { PosCaseState } from "./usePosCase";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 import { computePageMaps, pdfBboxToSvgRect, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
 import PosPdfFieldMap from "./PosPdfFieldMap";
+import ProcessingPdfCanvas, { type PdfHighlightRegion } from "./ProcessingPdfCanvas";
 import PendingManualFieldEditor from "./PendingManualFieldEditor";
 import {
     applyEscapeToCanvas,
@@ -381,6 +382,27 @@ export default function PosTemplateSetupColumn({
         }));
         return computePageMaps(fields, draft?.pdf_pages);
     }, [reviewQuestions, draft?.pdf_pages]);
+
+    // Detected regions drawn over the real document. Only questions that carry the geometry the
+    // detector actually read are shown — a highlight can never point somewhere Alloy did not look.
+    const documentRegions = useMemo<PdfHighlightRegion[]>(
+        () =>
+            reviewQuestions
+                .filter((q) => typeof q.page === "number" && Array.isArray(q.bbox) && !q.ignored)
+                .map((q) => ({
+                    id: q.id,
+                    page: q.page as number,
+                    bbox: q.bbox as [number, number, number, number],
+                    tone: q.mappingOrigin === "operator_created" ? ("operator" as const) : ("auto" as const),
+                })),
+        [reviewQuestions]
+    );
+
+    // Show the source document itself whenever we have one. The SVG schematic remains the fallback
+    // for text/OCR-derived drafts with no PDF, and for the draw-a-region mapping interaction, which
+    // is built against that canvas.
+    const showDocumentCanvas =
+        leftView === "highlights" && !!pdfUrl && canvasState.mode !== "draw_region" && !pendingManualRegion;
 
     const regionMeta = useMemo(
         () =>
@@ -1116,6 +1138,20 @@ export default function PosTemplateSetupColumn({
                         </div>
                     }
                 >
+                    {showDocumentCanvas ? (
+                        // THE SOURCE DOCUMENT ITSELF, with the detected regions drawn over it.
+                        // Deliberately NOT nested in ProcessingSourceDocumentViewport: that wrapper
+                        // owns its own scroll container and applies a CSS `zoom`, which would both
+                        // double-scroll and rescale an already-rasterized bitmap (blurry). The canvas
+                        // rasterizes at the requested scale itself, so it stays crisp.
+                        <ProcessingPdfCanvas
+                            url={pdfUrl!}
+                            regions={documentRegions}
+                            selectedId={selectedQuestionId}
+                            onSelectRegion={(id) => (id ? setSelectedQuestionId(id) : clearSelection())}
+                            onError={(message) => setPdfErr(message)}
+                        />
+                    ) : null}
                     <ProcessingSourceDocumentViewport
                         key={`${detail.id}-${leftView}`}
                         pdfMode={leftView === "pdf" && !!pdfUrl}
@@ -1143,7 +1179,7 @@ export default function PosTemplateSetupColumn({
                             ) : null
                         }
                     >
-                        {leftView === "highlights" ? (
+                        {leftView === "highlights" && !showDocumentCanvas ? (
                             hasRegions ? (
                                 <>
                                     <PosPdfFieldMap
