@@ -92,7 +92,9 @@ describe("the child path reuses the production provider and cannot degrade to fa
             src.indexOf("} else {"),
         );
         expect(childBranch).not.toContain("computeOperationalProjection");
-        expect(childBranch).toContain("loadChildGrainProvisioningRows");
+        // The branch reaches the provider through the SHARED membership rule — the same one the count
+        // path obeys — rather than deriving the rule inline where only it could see it.
+        expect(childBranch).toContain("loadChildGrainMembersForLens");
     });
 
     it("child rows are never presented through the opportunity-shaped downstream", () => {
@@ -132,9 +134,35 @@ describe("the child path reuses the production provider and cannot degrade to fa
     });
 
     it("both grains read the lens the SAME way — one definition of what it selects", () => {
+        // `lensStageKeys` moved to its own module so the COUNT path could import it without a cycle.
+        // The invariant is unchanged and is what matters: exactly ONE definition exists.
+        const shared = read("lib/lifecycle/lensStageKeys.ts");
+        expect(shared).toContain("export function lensStageKeys");
+
         const src = read(ANSWER);
-        expect(src).toContain("export function lensStageKeys");
-        // The grain resolver and the child row source both go through it.
-        expect(src.split("lensStageKeys(").length - 1).toBeGreaterThanOrEqual(2);
+        expect(src).toContain('from "@/lib/lifecycle/lensStageKeys"');
+        // The answer re-exports it, so existing importers are unaffected.
+        expect(src).toContain("export { lensStageKeys }");
+        // …and does not carry a second copy.
+        expect(src).not.toContain("export function lensStageKeys");
+    });
+
+    it("ROWS AND COUNTS SHARE ONE MEMBERSHIP RULE — the 13-rows-under-a-pill-of-8 defect", () => {
+        // The rule was inline in the answer, so the totals route could not ask what a child lens
+        // selects and counted the opportunity lane instead. One module now answers for both.
+        const membership = read("lib/runtime/provisioning/childGrainMembership.ts");
+        expect(membership).toContain("export function childRowMembershipForLens");
+        expect(membership).toContain("export async function loadChildGrainMembersForLens");
+        expect(membership).toContain("export async function countChildGrainMembersForLens");
+        // Counting is defined AS the projected members — not a second query that could disagree.
+        expect(membership).toContain("await loadChildGrainMembersForLens(params)");
+
+        // The answer takes its rows from it…
+        expect(read(ANSWER)).toContain("loadChildGrainMembersForLens");
+        // …and the totals route takes its count from it, never from the opportunity lane.
+        const totals = read("app/api/admin/queue-view-totals/route.ts");
+        expect(totals).toContain("countChildGrainMembersForLens");
+        expect(totals).toContain("workViews: laneViews");
+        expect(totals).not.toContain("workViews: requestedViews");
     });
 });

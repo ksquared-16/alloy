@@ -45,6 +45,7 @@ import {
     firstVisibleWorkView,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
+import { lensStageKeys } from "@/lib/lifecycle/lensStageKeys";
 import {
     loadSettlementLocators,
     SETTLEMENT_LOCATORS_UNAVAILABLE,
@@ -95,10 +96,8 @@ import {
     type OperationalSubjectType,
 } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/types";
-import {
-    loadChildGrainProvisioningRows,
-    type ChildProvisioningRow,
-} from "@/lib/runtime/provisioning/childGrainProvisioningRows";
+import type { ChildProvisioningRow } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
+import { loadChildGrainMembersForLens } from "@/lib/runtime/provisioning/childGrainMembership";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import {
     resolveOpportunityStageWorkSlice,
@@ -476,26 +475,13 @@ function resolveSubjectStrategy(view: WorkViewConfigV1Stored): {
  * participate in this comparison.
  */
 /**
- * The stage keys a lens filters on. Extracted so the grain resolver and the child row source read the lens
- * the SAME way — two copies of this predicate would be two definitions of what the lens selects.
+ * The stage keys a lens filters on — now owned by `@/lib/lifecycle/lensStageKeys` and re-exported here.
  *
- * Empty means the lens is STAGE-INDEPENDENT. It does not mean "every active stage": that reading is what
- * made a deliberately stage-independent lens resolve every stage's grain at once and refuse itself. What a
- * stage-independent lens selects is decided by its grain's own membership rule (for `child`, participation
- * membership), not by enumerating stages.
+ * It moved because the COUNT path needs the identical reading, and a counting module cannot import this
+ * answer without a cycle. Re-deriving it there would have been a second definition of what a lens
+ * selects — the precise shape of the 13-rows-under-a-pill-of-8 defect.
  */
-export function lensStageKeys(view: WorkViewConfigV1Stored): string[] {
-    return (view.filters_v1 ?? [])
-        .filter((f) => f.field_key === "opportunity_stage")
-        .flatMap((f) => (Array.isArray(f.value) ? f.value : [f.value]))
-        // Trim and drop empties, exactly as `stageKeysReferencedByWorkView` already does. The two are
-        // the runtime's and the builder's readers of the same predicate, and "is this lens stage-scoped"
-        // must not be answered differently by them: a filter carrying an empty stage value made the
-        // builder offer a Row Type declaration (nothing to inherit) while the runtime believed the lens
-        // was scoped to a stage key of "".
-        .map((v) => (typeof v === "string" ? v.trim() : String(v ?? "").trim()))
-        .filter((v) => v !== "");
-}
+export { lensStageKeys };
 
 /**
  * Row Grain: DECLARED if the lens declares one, otherwise DERIVED from the stages it filters on.
@@ -841,15 +827,16 @@ export async function composeWorkUnitProvisioningAnswer(
         // participation is live" — a different question, answered by the Enrollment Definition's own
         // liveness gate rather than by enumerating stages. Reading an absent stage predicate as "every
         // stage" is what made such a lens resolve every grain at once and refuse itself.
-        const childStageKeys = lensStageKeys(activeView);
+        //
+        // The rule now lives in `childGrainMembership` rather than inline here, so the COUNT path can
+        // obey the SAME one. While it was inline, the totals route had no way to ask what this lens
+        // selects and counted the opportunity lane instead — thirteen child rows under a pill of eight.
         try {
-            childRows = await loadChildGrainProvisioningRows({
+            childRows = await loadChildGrainMembersForLens({
                 supabase: req.supabase,
                 orgId: req.orgId,
                 workUnitId: workUnit.id,
-                membership: childStageKeys.length
-                    ? { mode: "stages", stageKeys: childStageKeys }
-                    : { mode: "participation" },
+                view: activeView,
             });
         } catch (e) {
             // NEVER the family path. `QueueService` degrades a failed child read to case-grain rows, which

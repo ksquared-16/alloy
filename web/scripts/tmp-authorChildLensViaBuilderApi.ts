@@ -72,7 +72,14 @@ async function main() {
     console.log(`\ncurrent lens set (${saved.length}):`);
     for (const v of saved) console.log(`  ${String(v.id).padEnd(28)} grain=${v.row_grain_v1 ?? "-"}  "${v.label}"`);
 
-    const next = [...saved];
+    // RESTORE the Row Type declarations too. They were authored in a prior session and have since been
+    // wiped — every `row_grain_v1` on this department is null again, which returns Active Pipeline and
+    // All Leads to `grain_ambiguous` dead destinations. The whole list is replaced on every save, so a
+    // builder save elsewhere that predates the Row Type control silently drops them.
+    const FAMILY_DECLARED = new Set(["new_leads", "new_work_view_6", "new_work_view_2"]);
+    const next = saved.map((v) =>
+        FAMILY_DECLARED.has(String(v.id)) && !v.row_grain_v1 ? { ...v, row_grain_v1: "family" } : v,
+    );
     const at = next.findIndex((v) => v.id === VIEW_ID);
     if (at >= 0) next[at] = NEW_VIEW;
     else next.push(NEW_VIEW);

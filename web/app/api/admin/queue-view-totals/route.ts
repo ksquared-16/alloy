@@ -15,6 +15,14 @@ import {
     savedWorkViewsFromDepartmentMetadata,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import { aggregateWorkViewTotals } from "@/lib/queues/aggregateWorkViewTotals";
+import {
+    activeLifecycleProcess,
+    activeStagesForProcess,
+    lifecycleBuilderFromDepartmentMetadata,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
+import { resolveLensRowGrain } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { countChildGrainMembersForLens } from "@/lib/runtime/provisioning/childGrainMembership";
 import { mapWithConcurrencyLimit } from "@/lib/workspace/mapWithConcurrencyLimit";
 import { buildQueueRowsServerTimingHeader } from "@/lib/perf/queueRowsServerTiming";
 
@@ -127,8 +135,63 @@ export async function POST(request: NextRequest) {
             }));
         try {
             if (!(await workUnitAccessible(group.workUnitId))) return unknownAll();
-            const savedViews = savedWorkViewsFromDepartmentMetadata(await deptMetadata(group.workUnitId));
+            const metadata = await deptMetadata(group.workUnitId);
+            const savedViews = savedWorkViewsFromDepartmentMetadata(metadata);
             const requestedViews = savedViews.filter((v) => group.viewIds.has(v.id));
+
+            // ── A CHILD LENS IS COUNTED BY ITS OWN MEMBERSHIP, NOT BY THE OPPORTUNITY LANE. ──
+            //
+            // Everything below counts the base lane — `opportunities` — and for a stage-INDEPENDENT
+            // lens `isWorkViewCatchAll` then returns the lane's exact all-records total. On "All
+            // Children in Enrollment" that produced EIGHT (the family cases in scope) beneath THIRTEEN
+            // child rows: two honest answers to two different questions, one printed under the other.
+            //
+            // A child lens is counted by the SAME projection that produced its rows
+            // (`countChildGrainMembersForLens` → the provider → the Enrollment Definition's liveness
+            // gate), so rows and count cannot drift — there is nothing to drift between.
+            const bpProcess = activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(metadata));
+            const stages = bpProcess ? activeStagesForProcess(bpProcess) : [];
+            const childViews: WorkViewConfigV1Stored[] = [];
+            const laneViews: WorkViewConfigV1Stored[] = [];
+            for (const v of requestedViews) {
+                const grain = resolveLensRowGrain(v, stages);
+                // Resolved, never guessed: a lens whose grain will not resolve keeps the existing lane
+                // behaviour rather than being assumed into either path.
+                (grain.ok && grain.grain === "child" ? childViews : laneViews).push(v);
+            }
+
+            const childTotals = new Map<string, TotalOut>();
+            for (const view of childViews) {
+                const base = { workUnitId: group.workUnitId, queueKey: group.queueKey, workViewId: view.id };
+                try {
+                    const count = await countChildGrainMembersForLens({
+                        supabase,
+                        orgId: gate.orgId,
+                        workUnitId: group.workUnitId,
+                        view,
+                    });
+                    childTotals.set(view.id, { ...base, count, known: true });
+                } catch {
+                    // UNKNOWN, never a family number. A wrong count is worse than an absent one — the
+                    // client keeps its prior value and shows none, rather than captioning child rows
+                    // with a count of something else.
+                    childTotals.set(view.id, { ...base, count: null, known: false });
+                }
+            }
+
+            // Every requested view is a child lens → the opportunity lane is never read.
+            if (laneViews.length === 0) {
+                return [...group.viewIds].map(
+                    (workViewId) =>
+                        childTotals.get(workViewId) ?? {
+                            workUnitId: group.workUnitId,
+                            queueKey: group.queueKey,
+                            workViewId,
+                            count: null,
+                            known: false,
+                        },
+                );
+            }
             // ONE base-lane fetch (exact all-records count + up to the cap of rows) for the whole
             // group. COUNT-ONLY: the base-query operational fields carry the Work-View predicates —
             // a total must never materialize presentation rows (persons/customers/household/
@@ -150,11 +213,16 @@ export async function POST(request: NextRequest) {
             const items = Array.isArray(result.items) ? result.items : [];
             const totals = aggregateWorkViewTotals({
                 baseRows: items as Record<string, unknown>[],
-                workViews: requestedViews,
+                // LANE views only. Passing a child lens here is what produced the wrong number: it has
+                // no predicates, so the lane aggregator read it as include-all and returned the
+                // opportunity total.
+                workViews: laneViews,
                 exactLaneTotal: typeof result.total === "number" ? result.total : null,
                 baseTruncated: items.length >= WORK_VIEW_QUEUE_FILTER_FETCH_CAP,
             });
             return [...group.viewIds].map((workViewId) => {
+                const child = childTotals.get(workViewId);
+                if (child) return child;
                 const t = totals[workViewId];
                 return {
                     workUnitId: group.workUnitId,

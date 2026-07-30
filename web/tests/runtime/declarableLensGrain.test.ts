@@ -152,9 +152,20 @@ describe("membership follows the lens's shape, not a stage enumeration", () => {
     );
 
     it("a stage-independent child lens asks for PARTICIPATION membership", () => {
+        // The rule moved OUT of the answer so the COUNT path could obey the same one — while it was
+        // inline, the totals route counted the opportunity lane instead (13 rows under a pill of 8).
+        // Same invariant, one home.
+        const membership = readFileSync(
+            join(process.cwd(), "lib/runtime/provisioning/childGrainMembership.ts"),
+            "utf8",
+        );
+        expect(membership).toContain('mode: "participation"');
+        expect(membership).toContain('mode: "stages"');
+
+        // …and the answer reaches it rather than keeping a second copy.
         const branch = ANSWER.slice(ANSWER.indexOf('if (subjectGrain.grain === "child")'));
-        expect(branch).toContain('mode: "participation"');
-        expect(branch).toContain('mode: "stages"');
+        expect(branch).toContain("loadChildGrainMembersForLens");
+        expect(branch).not.toContain('mode: "participation"');
     });
 
     it("the child row source never re-derives membership from the opportunity lens", () => {
