@@ -174,3 +174,24 @@ export function filterRoomsForPurposeBehavior<T extends { roomId: string; progra
     }
     return scoped;
 }
+
+/**
+ * Scope rooms for the Assignment picker when operators may override ineligible rooms.
+ *
+ * Hard-removes only `not_used` Categories and explicit `selected` allow-lists.
+ * Does **not** drop `program_match` misses — age/program fit is owned by
+ * `placement.room_fit` classification so ineligible rooms stay visible for override.
+ */
+export function scopeRoomsForAssignmentPicker<T extends { roomId: string; programCategoryId?: string | null }>(
+    rooms: T[],
+    behavior: AssignmentTypeBehavior,
+): T[] {
+    const roomReq = behavior.roomRequirement ?? (behavior.requiresRoom ? "required" : "optional");
+    if (roomReq === "not_used") return [];
+    const mode = behavior.eligibleSpaceMode ?? "any";
+    if (mode === "selected") {
+        const allow = new Set(behavior.eligibleRoomIds ?? []);
+        if (allow.size > 0) return rooms.filter((r) => allow.has(r.roomId));
+    }
+    return rooms;
+}
