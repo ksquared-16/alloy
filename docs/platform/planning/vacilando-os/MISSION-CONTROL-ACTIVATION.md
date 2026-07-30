@@ -21,3 +21,11 @@ whenever loading HTML lacked `.mc-wrap`, producing an infinite main-thread
 
 Legacy Command Center / Director remain under demoted nav links; use `?legacy=1`
 for a hard refresh that preserves the legacy board.
+
+## Client freeze fix checklist
+
+- No MutationObserver on #view
+- MC paint independent of board snap
+- SSE updates chrome only on MC routes
+- Stuck .ov overlays cleared on MC navigation
+- schedulePaint coalesced via rAF
