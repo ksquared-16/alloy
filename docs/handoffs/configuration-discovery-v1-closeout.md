@@ -37,10 +37,19 @@ live security matrix that also proves no refused request wrote anything.
 | Production typecheck | broker `rc=0` |
 | Pushed | **no** |
 
-**Known pre-existing, not mine:** `vac run typecheck:tests` fails with 6 errors in
-`web/tests/presentation/runtime/queueRowVariantResolve.test.ts` (Queue Row Builder V2 fixtures drifted
-from `QueueRecordFieldConfig`). Present on staging; untouched by this branch. Production typecheck is
-clean. A separate task was spun off for it.
+**Known pre-existing, not mine — verified by running the same tests at `origin/staging`:**
+
+- `vac run typecheck:tests` fails with 6 errors in
+  `web/tests/presentation/runtime/queueRowVariantResolve.test.ts` (Queue Row Builder V2 fixtures
+  drifted from `QueueRecordFieldConfig`). Production typecheck is clean.
+- A wider `tests/pos tests/fields` sweep shows 10 failures across 8 files
+  (`canonicalDataProviderRegistry`, `childcareFieldCatalogDoctrine`, `dataModelConfigurationDoctrine`,
+  `dataModelFieldConceptClarification`, `dataModelFinishPass`,
+  `surfaceOperationalFieldConsumerConvergence`, `formDraft`, `questionResolutionModel`).
+
+Both were reproduced at `origin/staging` with **identical** counts — 8 files, 10 failures — so this
+branch introduces zero unit regressions. Neither was fixed here: both are outside the frozen scope and
+outside this sprint's subsystem. Tasks were spun off.
 
 ## The lesson worth carrying forward
 
