@@ -137,16 +137,33 @@ destination rather than as a configuration problem.
 The provisioning answer reads exactly four tables, and its **only record source is `opportunities`**:
 
 ```
-workUnitProvisioningAnswer.ts:411  .from("work_units")
-workUnitProvisioningAnswer.ts:442  .from("opportunities")   ← the ONLY row source
-workUnitProvisioningAnswer.ts:459  .from("departments")
-workUnitProvisioningAnswer.ts:461  .from("work_units")
+workUnitProvisioningAnswer.ts  .from("work_units")
+workUnitProvisioningAnswer.ts  .from("opportunities")   ← the ONLY row source
+workUnitProvisioningAnswer.ts  .from("departments")
+workUnitProvisioningAnswer.ts  .from("work_units")
 ```
+
+> **Line numbers removed (2026-07-30).** These originally read `:411 / :442 / :459 / :461`, correct at the
+> commit this was written against. The Active Pipeline repair added ~65 lines to the same file and shifted
+> them (`.from("opportunities")` is now `:508`). Cite the symbol, not the line.
 
 So Row Grain is **declared, validated, and refused-if-ambiguous — but never honoured at the data source.** A
 `child`-grain lens can only ever be empty. The repo says so itself:
 `buildPartialQueueRowContext.ts:468` `const subjectType: LifecycleSubjectType = "case";` with
 `:579` "declared lane grain — row_subject may still be case until phase 6".
+
+> **CORRECTION — this section's candidate list was wrong, and the omission was total.**
+> `SECOND-SURFACE-INVENTORY.md` reasoned toward `customer_members` as the likely child row source. The
+> canonical source is **`process_instances`** (`process_key='enrollment'`, `subject_type='child'`), whose own
+> migration comment says it "replaces opportunity_customer_members" — and a production read path for it
+> **already exists** (`QueueService` → `ocmEnrollmentTrackQueueBuilder` →
+> `queryEnrollmentProcessInstanceTrackRows`, with the OCM fallback flag defaulting off).
+>
+> The trap worth naming: "18 `customer_members` rows exist, 0 `opportunity_customer_members` rows exist" is a
+> fact about row counts that says nothing about which table is authoritative. **The zero was a deleted
+> writer, not absent children.** Firefly in fact holds **11 child process instances**.
+>
+> Full map, with the risks it carries into implementation: **`GRAIN-AUTHORITY-MAP.md`**.
 
 ## 4. Classification of every repeated requirement
 
