@@ -3338,9 +3338,9 @@ html[data-alloy-os-runtime-split="true"]
   width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
   display: flex;
   flex-direction: column;
-  /* Content-sized between a readable floor and a viewport ceiling — never forced 70vh. */
+  /* Content-sized; leave bottom inset so the rounded card sits fully on the surface. */
   min-height: 0;
-  max-height: min(75vh, calc(100dvh - 48px));
+  max-height: min(75vh, calc(100% - 44px), calc(100dvh - 64px));
   height: max-content;
   overflow: hidden;
   z-index: 60;
@@ -3359,15 +3359,12 @@ html[data-alloy-os-runtime-split="true"]
   animation: alloy-os-fp-card-zoom var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
 }
 
-/* Scheduling work surface — tall composition in the elevated focus panel.
+/* Scheduling elevated card — SAME elevation contract as Household/Children:
+ * content-sized height (never force a viewport height), rounded bottom fully
+ * visible on the surface, body scrolls when the form is taller than the body cap.
  *
- * Failure mode we keep hitting: elevated `.alloy-os-ucard` uses
- * `height: max-content` + `overflow: hidden`. Content taller than the cap is
- * clipped and nothing scrolls, because intermediate wrappers don't shrink.
- *
- * Fix: when the schedule editor/detail is open, give the elevated card a hard
- * viewport budget, make `.alloy-os-ucard__body` the scroller, keep Create
- * Assignment sticky. Roster-only Assignments elevation stays content-sized. */
+ * Do NOT set `height: 90vh` here — that stretched empty white space under the
+ * form and clipped the card bottom against the focus-panel edge. */
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-schedule-editor="true"])
   .alloy-os-ucard,
@@ -3380,28 +3377,11 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-ucard--expanded:has([data-schedule-editor="true"]),
 .alloy-os-ucard--expanded:has([data-schedule-detail="true"]),
 .alloy-os-ucard--expanded:has([data-room-picker="true"]) {
-  /* Beat generic elevated `height: max-content` — definite budget enables scroll. */
-  height: min(90vh, calc(100dvh - 28px)) !important;
-  max-height: min(90vh, calc(100dvh - 28px)) !important;
-  width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 24px));
-  overflow: hidden !important;
-  display: flex !important;
-  flex-direction: column !important;
-  box-sizing: border-box;
-}
-.alloy-os-focus-panel-grid[data-fp-depth="active"]
-  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-schedule-editor="true"])
-  .alloy-os-ucard__header,
-.alloy-os-focus-panel-grid[data-fp-depth="active"]
-  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-schedule-detail="true"])
-  .alloy-os-ucard__header,
-.alloy-os-focus-panel-grid[data-fp-depth="active"]
-  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-room-picker="true"])
-  .alloy-os-ucard__header,
-.alloy-os-ucard--expanded:has([data-schedule-editor="true"]) .alloy-os-ucard__header,
-.alloy-os-ucard--expanded:has([data-schedule-detail="true"]) .alloy-os-ucard__header,
-.alloy-os-ucard--expanded:has([data-room-picker="true"]) .alloy-os-ucard__header {
-  flex: 0 0 auto;
+  height: max-content;
+  /* Leave bottom inset so the rounded card sits on the surface (like Household). */
+  max-height: min(75vh, calc(100% - 44px), calc(100dvh - 64px));
+  overflow: hidden;
+  background: var(--alloy-os-surface, #fff);
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-schedule-editor="true"])
@@ -3415,60 +3395,15 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-ucard--expanded:has([data-schedule-editor="true"]) .alloy-os-ucard__body,
 .alloy-os-ucard--expanded:has([data-schedule-detail="true"]) .alloy-os-ucard__body,
 .alloy-os-ucard--expanded:has([data-room-picker="true"]) .alloy-os-ucard__body {
-  /* Beat `.alloy-os-ucard--expanded .alloy-os-ucard__body { max-height: 360px }`. */
-  max-height: none !important;
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  min-width: 0;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  display: flex !important;
-  flex-direction: column !important;
+  /* Taller than the default 360px expanded body so the schedule form fits more
+   * often without a forced full-viewport card; still scrolls when needed. */
+  max-height: min(560px, 58vh) !important;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-inline: 16px;
-  padding-bottom: 12px;
+  padding-bottom: 10px;
   box-sizing: border-box;
   -webkit-overflow-scrolling: touch;
-}
-.alloy-os-focus-panel-grid[data-fp-depth="active"]
-  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
-  [data-scheduling-card="true"],
-.alloy-os-ucard--expanded [data-scheduling-card="true"] {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) [data-schedule-editor="true"],
-.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) [data-schedule-detail="true"],
-.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) [data-room-picker="true"],
-.alloy-os-focus-panel-grid[data-fp-depth="active"]
-  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
-  [data-schedule-editor="true"],
-.alloy-os-focus-panel-grid[data-fp-depth="active"]
-  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
-  [data-schedule-detail="true"],
-.alloy-os-focus-panel-grid[data-fp-depth="active"]
-  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
-  [data-room-picker="true"] {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-.alloy-os-focus-panel-grid[data-fp-depth="active"]
-  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
-  [data-schedule-scroll="true"],
-.alloy-os-ucard--expanded [data-schedule-scroll="true"] {
-  /* Body is the scroller; inner region grows naturally so sticky footer works. */
-  overflow: visible !important;
-  flex: 0 0 auto;
-  min-height: 0;
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
@@ -3476,13 +3411,11 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-ucard--expanded [data-schedule-footer="true"] {
   position: sticky;
   bottom: 0;
-  z-index: 5;
-  flex: 0 0 auto;
-  margin-top: 4px;
-  padding-top: 12px;
-  padding-bottom: 8px;
-  background: #fff;
-  box-shadow: 0 -10px 18px -14px rgba(15, 23, 42, 0.28);
+  z-index: 2;
+  background: var(--alloy-os-surface, #fff);
+  padding-top: 10px;
+  padding-bottom: 4px;
+  box-shadow: 0 -8px 14px -12px rgba(15, 23, 42, 0.22);
 }
 
 /* Days above Daily hours — two columns only when the elevated card is wide enough
