@@ -358,6 +358,34 @@ export async function handleV2Post(path, body) {
     const id = v.mission_id || v.missionId;
     return { status: 200, body: purgeMissionRuntime(id) };
   }
+  if (path === "/api/v2/missions/archive") {
+    try {
+      const { archiveMission, archiveValidationMissionsForCloseout } = await import("./mission-archive.mjs");
+      if (v.all_validation || v.closeout) {
+        return { status: 200, body: archiveValidationMissionsForCloseout({ actor: v.actor || "operator" }) };
+      }
+      const id = v.mission_id || v.missionId;
+      if (!id) return { status: 400, body: { ok: false, error: "missing_id" } };
+      const entry = archiveMission(id, {
+        reason: v.reason,
+        archiveClass: v.archive_class || v.archiveClass,
+        classification: v.classification,
+        actor: v.actor || "operator",
+      });
+      return { status: 200, body: { ok: true, entry } };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
+  }
+  if (path === "/api/v2/missions/restore") {
+    try {
+      const { restoreMission } = await import("./mission-archive.mjs");
+      const out = restoreMission(v.mission_id || v.missionId, { actor: v.actor || "operator" });
+      return { status: 200, body: out };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
+  }
 
   return null; // not a V2 route
 }
@@ -370,11 +398,9 @@ export async function handleV2Get(path, url) {
     return { status: 200, body: await buildRuntimeDiagnostics() };
   }
 
-  if (path === "/api/v2/missions") {
-    return { status: 200, body: { ok: true, missions: listMissionsV2(), home: missionsHomeVm() } };
-  }
-  if (path === "/api/v2/views/missions") {
-    return { status: 200, body: { ok: true, ...missionsHomeVm() } };
+  if (path === "/api/v2/missions" || path === "/api/v2/views/missions") {
+    const filter = q("filter") || "active";
+    return { status: 200, body: { ok: true, ...missionsHomeVm({ filter }) } };
   }
   if (path === "/api/v2/views/needs-you") {
     return { status: 200, body: { ok: true, items: listNeedsYou() } };
@@ -431,13 +457,17 @@ export async function handleV2Get(path, url) {
     return { status: 200, body: { ok: true, messages: listDirectorMessages(mid) } };
   }
   if (path === "/api/v2/improvements" || path === "/api/v2/views/improvements") {
+    const status = q("status") || "All";
+    const missionScope = q("mission_scope") || q("scope") || "active";
     return {
       status: 200,
       body: {
         ok: true,
-        ...improvementsHomeVm(),
+        ...improvementsHomeVm({ status, missionScope }),
         categories: IMPROVEMENT_CATEGORIES,
         severities: IMPROVEMENT_SEVERITIES,
+        statuses: ["All", "New", "Planned", "Implemented", "Reviewed", "Accepted"],
+        missionScopes: ["active", "archived", "all"],
         raw: q("raw") === "1" ? listImprovements({ missionId: q("mission_id") }) : undefined,
       },
     };

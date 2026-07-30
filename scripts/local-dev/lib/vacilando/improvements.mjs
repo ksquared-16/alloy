@@ -366,7 +366,13 @@ export function getImprovement(id) {
   }
 }
 
-export function listImprovements({ status = null, missionId = null, limit = 200 } = {}) {
+export function listImprovements({
+  status = null,
+  missionId = null,
+  missionScope = "all", // active | archived | all
+  limit = 200,
+  archivedMissionIds = null,
+} = {}) {
   ensureDir();
   let items = [];
   try {
@@ -380,6 +386,12 @@ export function listImprovements({ status = null, missionId = null, limit = 200 
   }
   if (status) items = items.filter((i) => i.status === status);
   if (missionId) items = items.filter((i) => i.missionId === missionId);
+  if ((missionScope === "active" || missionScope === "archived") && archivedMissionIds instanceof Set) {
+    items = items.filter((i) => {
+      const arch = i.missionId ? archivedMissionIds.has(i.missionId) : false;
+      return missionScope === "archived" ? arch : !arch;
+    });
+  }
   return items
     .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))
     .slice(0, limit);
@@ -437,10 +449,33 @@ export function improvementDetailVm(id) {
   };
 }
 
-export function improvementsHomeVm() {
+export function improvementsHomeVm({
+  status = null,
+  missionScope = "active",
+} = {}) {
+  const archivedIds = new Set();
+  for (const imp of listImprovements({ limit: 500 })) {
+    if (imp.missionId && getMission(imp.missionId)?.archived === true) {
+      archivedIds.add(imp.missionId);
+    }
+  }
+  const scopeRaw = String(missionScope || "active");
+  const scope = scopeRaw === "All" || scopeRaw === "all" ? "all" : scopeRaw.toLowerCase();
+  const statusFilter = status && status !== "All" && status !== "all" ? status : null;
+  const items = listImprovements({
+    status: statusFilter,
+    missionScope: scope,
+    archivedMissionIds: archivedIds,
+  });
   return {
     kind: "improvements_home",
-    improvements: listImprovements().map(improvementListVm),
+    filter: { status: status || "All", missionScope: scopeRaw || "active" },
+    counts: {
+      total: listImprovements({ limit: 500 }).length,
+      activeMissions: listImprovements({ missionScope: "active", archivedMissionIds: archivedIds, limit: 500 }).length,
+      archivedMissions: listImprovements({ missionScope: "archived", archivedMissionIds: archivedIds, limit: 500 }).length,
+    },
+    improvements: items.map(improvementListVm),
   };
 }
 

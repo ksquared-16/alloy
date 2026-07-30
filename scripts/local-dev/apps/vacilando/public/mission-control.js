@@ -213,16 +213,6 @@ We'll capture the context automatically.</p>
   }
 
   // ---- fetches (view models) ----
-  V2.fetchMissions = async () => {
-    try {
-      V2.state.missionsHome = await get("/api/v2/views/missions");
-      V2.state.missionsError = null;
-      bump(); schedulePaint();
-    } catch (e) {
-      V2.state.missionsError = String(e.message || e);
-      bump(); schedulePaint();
-    }
-  };
   V2.fetchOverview = async (id) => {
     try {
       V2.state.overview = await get("/api/v2/views/mission/dashboard?id=" + encodeURIComponent(id));
@@ -305,34 +295,64 @@ We'll capture the context automatically.</p>
   };
 
   // ---- views ----
+  V2.fetchMissions = async function (filter) {
+    const f = filter || V2.state.missionsFilter || "active";
+    V2.state.missionsFilter = f;
+    try {
+      V2.state.missionsHome = await get("/api/v2/views/missions?filter=" + encodeURIComponent(f));
+      V2.state.missionsError = null;
+    } catch (e) {
+      V2.state.missionsError = String(e.message || e);
+    }
+    bump(); schedulePaint();
+  };
+
   V2.viewMissions = function () {
     if (!V2.state.missionsHome && !V2.state.missionsError) {
-      V2.fetchMissions();
+      V2.fetchMissions(V2.state.missionsFilter || "active");
       return shell("Missions", {
-        actions: `<button class="btn" data-nav="kickoff">New mission</button>`,
+        actions: `<button class="btn" data-nav="kickoff">Create Mission</button>`,
       }) + `<div class="empty"><div class="big"><span class="spin"></span> Loading missions…</div></div></div>`;
     }
     if (V2.state.missionsError && !V2.state.missionsHome) {
       return shell("Missions") + errPanel("Could not load missions", { message: V2.state.missionsError }, { retry: "missions" }) + `</div>`;
     }
-    const rows = V2.state.missionsHome.missions || [];
+    const home = V2.state.missionsHome || {};
+    const filter = home.filter || V2.state.missionsFilter || "active";
+    const rows = home.missions || [];
+    const empty = home.emptyState;
     const cards = rows.map((m) => `<article class="mc-card mc-mission-card" data-nav="missions/${esc(m.missionId)}">
       <div class="mc-card-h">
         <b>${esc(m.title)}</b>
-        <span class="mc-pill ${esc(m.status)}">${esc(m.statusLabel)}</span>
+        <span class="mc-pill ${esc(m.status)}">${esc(m.archived ? "Archived" : m.statusLabel)}</span>
       </div>
       <div class="mc-card-p">${esc(m.phaseLabel)}</div>
       <div class="mc-card-m">${esc(m.deliverablesLabel)}</div>
-      <div class="mc-card-d">${esc(m.directorState)}</div>
+      <div class="mc-card-d">${esc(m.archived ? (m.archiveReason || "Archived certification history") : m.directorState)}</div>
       <div class="mc-card-f">${esc(m.workersLine)}${m.openDecisionCount ? ` · ${m.openDecisionCount} open decision${m.openDecisionCount === 1 ? "" : "s"}` : ""}</div>
       <div class="mc-card-meta muted">${esc(m.latestUpdate)} · ${esc(m.updatedLabel || "")}</div>
-      <div class="mc-card-cta">${actionBtn(m.primaryAction)}</div>
-    </article>`).join("") || `<div class="rempty">No missions yet. Start from a Mission Brief.</div>`;
+      <div class="mc-card-cta">${m.archived ? `<span class="muted">Read-only history</span>` : actionBtn(m.primaryAction)}</div>
+    </article>`).join("")
+      || (empty
+        ? `<div class="rempty">
+            <h3>${esc(empty.title)}</h3>
+            <p>${esc(empty.body)}</p>
+            <button class="btn" data-nav="kickoff">Create Mission</button>
+          </div>`
+        : `<div class="rempty">No missions in this view.</div>`);
+
+    const filterBar = `<div class="mc-filter-bar row gap" style="margin-bottom:12px">
+      <button class="btn ghost ${filter === "active" ? "active" : ""}" type="button" data-missions-filter="active">Active (${home.activeCount ?? rows.length})</button>
+      <button class="btn ghost ${filter === "archived" || filter === "history" ? "active" : ""}" type="button" data-missions-filter="archived">Mission History (${home.archivedCount ?? 0})</button>
+      <button class="btn" data-nav="kickoff">Create Mission</button>
+    </div>`;
 
     return shell("Missions", {
-      lead: "Director-managed work across your org.",
-      actions: `<button class="btn" data-nav="kickoff">New mission</button>`,
-    }) + `<div class="mc-list">${cards}</div></div>`;
+      lead: filter === "archived" || filter === "history"
+        ? "Archived certification and validation history — read-only."
+        : "Active Director-managed product work.",
+      actions: `<button class="btn" data-nav="kickoff">Create Mission</button>`,
+    }) + filterBar + `<div class="mc-list">${cards}</div></div>`;
   };
 
   V2.viewMissionDetail = function (id) {
@@ -877,9 +897,17 @@ We'll capture the context automatically.</p>
     </div>`;
   };
 
-  V2.fetchImprovements = async () => {
+  V2.fetchImprovements = async function (opts) {
+    const status = (opts && opts.status) || V2.state.improvementsStatus || "All";
+    const missionScope = (opts && opts.missionScope) || V2.state.improvementsMissionScope || "active";
+    V2.state.improvementsStatus = status;
+    V2.state.improvementsMissionScope = missionScope;
     try {
-      V2.state.improvementsHome = await get("/api/v2/views/improvements");
+      const q = new URLSearchParams({
+        status,
+        mission_scope: missionScope,
+      });
+      V2.state.improvementsHome = await get("/api/v2/views/improvements?" + q.toString());
       V2.state.improvementsError = null;
       bump(); schedulePaint();
     } catch (e) {
@@ -908,16 +936,34 @@ We'll capture the context automatically.</p>
     if (V2.state.improvementsError && !V2.state.improvementsHome) {
       return shell("Improvements") + errPanel("Could not load improvements", { message: V2.state.improvementsError }) + `</div>`;
     }
-    const rows = V2.state.improvementsHome.improvements || [];
+    const home = V2.state.improvementsHome || {};
+    const rows = home.improvements || [];
+    const status = home.filter?.status || V2.state.improvementsStatus || "All";
+    const scope = home.filter?.missionScope || V2.state.improvementsMissionScope || "active";
+    const counts = home.counts || {};
+    const statusBtns = ["All", "New", "Planned", "Implemented"].map((s) =>
+      `<button class="btn ghost ${status === s ? "active" : ""}" type="button" data-imp-status="${s}">${s}</button>`
+    ).join("");
+    const scopeBtns = [
+      ["active", `Active missions (${counts.activeMissions ?? "—"})`],
+      ["archived", `Archived missions (${counts.archivedMissions ?? "—"})`],
+      ["all", `All (${counts.total ?? "—"})`],
+    ].map(([k, label]) =>
+      `<button class="btn ghost ${scope === k ? "active" : ""}" type="button" data-imp-scope="${k}">${label}</button>`
+    ).join("");
     const cards = rows.map((m) => `<article class="mc-card" data-nav="improvements/${esc(m.id)}">
       <div class="mc-card-h"><b>${esc(m.title)}</b><span class="mc-pill">${esc(m.status)}</span></div>
       <div class="mc-card-p">${esc(m.missionTitle)} · ${esc(m.category)} · ${esc(m.severity)}</div>
       <div class="mc-card-meta muted">${esc(m.created)}</div>
-    </article>`).join("") || `<div class="rempty">No observations yet. Use Improve Vacilando while operating a mission.</div>`;
+    </article>`).join("") || `<div class="rempty">${scope === "active"
+      ? "No observations on active missions. Validation feedback is under Archived missions."
+      : "No observations in this filter."}</div>`;
     return shell("Improvements", {
-      lead: "Title · Mission · Category · Severity · Status · Created",
+      lead: "Product feedback from real mission use. Validation history stays linked to archived missions.",
       actions: `<button class="btn" type="button" data-ci-open>Improve Vacilando</button>`,
-    }) + `<div class="mc-list">${cards}</div></div>`;
+    }) + `<div class="mc-filter-bar row gap" style="margin-bottom:8px;flex-wrap:wrap">${scopeBtns}</div>
+    <div class="mc-filter-bar row gap" style="margin-bottom:12px;flex-wrap:wrap">${statusBtns}</div>
+    <div class="mc-list">${cards}</div></div>`;
   };
 
   V2.viewImprovementDetail = function (id) {
@@ -1026,6 +1072,23 @@ We'll capture the context automatically.</p>
       openImproveDialog();
       return;
     }
+    const filterBtn = ev.target.closest("[data-missions-filter],[data-imp-status],[data-imp-scope]");
+    if (filterBtn) {
+      if (filterBtn.dataset.missionsFilter) {
+        V2.state.missionsHome = null;
+        V2.fetchMissions(filterBtn.dataset.missionsFilter);
+        return;
+      }
+      if (filterBtn.dataset.impStatus || filterBtn.dataset.impScope) {
+        V2.state.improvementsHome = null;
+        V2.fetchImprovements({
+          status: filterBtn.dataset.impStatus || V2.state.improvementsStatus || "All",
+          missionScope: filterBtn.dataset.impScope || V2.state.improvementsMissionScope || "active",
+        });
+        return;
+      }
+    }
+
     const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry]");
     if (!t) return;
 

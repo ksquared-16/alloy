@@ -636,8 +636,11 @@ export function recoveryNeedsOperator(tel) {
 
 export function listNeedsYou() {
   const items = [];
+  const isArchivedMission = (missionId) =>
+    Boolean(missionId && getMission(missionId)?.archived === true);
   // 1) Open product / architecture decisions
   for (const d of listDecisions(null, { status: "open" })) {
+    if (isArchivedMission(d.missionId)) continue;
     const vm = decisionCardVm(d);
     items.push(needsYouItemVm({
       type: "decision",
@@ -652,6 +655,7 @@ export function listNeedsYou() {
   // 2) Failed recovery requiring operator action only
   for (const w of listWorkerTelemetry()) {
     if (!recoveryNeedsOperator(w)) continue;
+    if (isArchivedMission(w.missionId)) continue;
     const card = workerCardVm(w);
     items.push(needsYouItemVm({
       type: "recovery_approval",
@@ -664,7 +668,7 @@ export function listNeedsYou() {
     }));
   }
   // 3) Kickoff / completion / merge / deployment approvals
-  for (const row of listMissionsV2()) {
+  for (const row of listMissionsV2({ includeArchived: false })) {
     if (row.status === "awaiting_completion_approval") {
       items.push(needsYouItemVm({
         type: "completion",
@@ -1078,15 +1082,51 @@ export function missionOverviewVm(missionId) {
   return { ...dash, kind: "mission_overview" };
 }
 
-export function missionsHomeVm() {
+export function missionsHomeVm({ filter = "active" } = {}) {
+  const includeArchived = filter === "archived" || filter === "history" || filter === "all";
+  let rows = listMissionsV2({ includeArchived: true });
+  if (filter === "active" || !filter) {
+    rows = rows.filter((r) => getMission(r.mission_id)?.archived !== true);
+  } else if (filter === "archived" || filter === "history") {
+    rows = rows.filter((r) => getMission(r.mission_id)?.archived === true);
+  }
+  const activeCount = listMissionsV2({ includeArchived: false }).length;
+  const archivedCount = listMissionsV2({ includeArchived: true })
+    .filter((r) => getMission(r.mission_id || r.missionId)?.archived === true).length;
   return {
     kind: "missions_home",
-    missions: listMissionsV2().map(missionListCardVm),
+    filter: filter || "active",
+    activeCount,
+    archivedCount,
+    emptyState: activeCount === 0 && (filter === "active" || !filter)
+      ? {
+          title: "No active missions",
+          body: "Create a Mission Brief to start real Alloy product work. Runtime validation history lives under Mission History.",
+          primaryAction: { kind: "nav", label: "Create Mission", href: "kickoff" },
+        }
+      : null,
+    missions: rows.map((r) => {
+      const card = missionListCardVm(r);
+      const m = getMission(r.mission_id);
+      return {
+        ...card,
+        archived: m?.archived === true,
+        archiveClass: m?.archive_class || null,
+        archiveReason: m?.archive_reason || null,
+        readOnly: m?.archive_read_only === true,
+      };
+    }),
   };
 }
 
 export function workersHomeVm() {
-  const workers = listWorkerTelemetry().map(workerCardVm);
+  const workers = listWorkerTelemetry()
+    .filter((w) => {
+      if (!w.missionId) return true;
+      const m = getMission(w.missionId);
+      return m?.archived !== true;
+    })
+    .map(workerCardVm);
   const byMission = new Map();
   for (const w of workers) {
     const key = w.missionId || "_unassigned";

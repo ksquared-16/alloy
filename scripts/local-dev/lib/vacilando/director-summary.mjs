@@ -185,12 +185,14 @@ export function projectMissionRow(missionId, mission = null) {
   };
 }
 
-export function listMissionsV2() {
+export function listMissionsV2({ includeArchived = false } = {}) {
   const missions = readMissions(null, 300);
   const byId = new Map();
   for (const m of missions) {
-    // Live Mission Control list requires a durable brief on disk — purged demos stay out.
-    if (getBrief(m.mission_id) || (m.mission_brief_id && getBrief(m.mission_brief_id))) {
+    // Active Mission Control list requires a durable brief — except archived history,
+    // which must remain inspectable even when the brief was never retained.
+    const hasBrief = Boolean(getBrief(m.mission_id) || (m.mission_brief_id && getBrief(m.mission_brief_id)));
+    if (hasBrief || (includeArchived && m.archived === true)) {
       byId.set(m.mission_id, projectMissionRow(m.mission_id, m));
     }
   }
@@ -204,7 +206,16 @@ export function listMissionsV2() {
     }
   }
   return [...byId.values()]
-    .filter((row) => row && getBrief(row.mission_id || row.missionId))
+    .filter((row) => {
+      const id = row.mission_id || row.missionId;
+      const m = getMission(id);
+      const hasBrief = Boolean(getBrief(id));
+      if (includeArchived) {
+        // History: brief-backed rows plus any archived mission (brief optional).
+        return hasBrief || m?.archived === true;
+      }
+      return hasBrief && m?.archived !== true;
+    })
     .sort((a, b) =>
       String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
 }

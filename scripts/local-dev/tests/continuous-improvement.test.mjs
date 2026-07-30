@@ -93,7 +93,7 @@ const apiPost = await handleV2Post("/api/v2/improvements", {
 });
 assert(apiPost.status === 201 && apiPost.body.ok, "POST improvements");
 
-const apiGet = handleV2Get("/api/v2/views/improvements", new URL("http://x/api/v2/views/improvements"));
+const apiGet = await handleV2Get("/api/v2/views/improvements", new URL("http://x/api/v2/views/improvements"));
 assert(apiGet.status === 200 && apiGet.body.improvements.length >= 2, "GET improvements");
 
 const purged = purgeMissionRuntime(missionId);
