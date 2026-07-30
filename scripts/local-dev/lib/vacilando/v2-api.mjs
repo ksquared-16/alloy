@@ -63,7 +63,7 @@ import {
 import { buildMissionContextPackage } from "./mission-context.mjs";
 import {
   missionsHomeVm,
-  missionOverviewVm,
+  missionDashboardVm,
   directorSummaryVm,
   timelinePageVm,
   evidenceGalleryVm,
@@ -74,6 +74,18 @@ import {
   listNeedsYou,
   kickoffVm,
 } from "./presentation/operator-views.mjs";
+import { getMissionConfidence, recordMissionConfidence } from "./mission-confidence.mjs";
+import {
+  getPlatformResources,
+  recordPlatformResourcesSnapshot,
+  listPlatformResourceHistory,
+} from "./platform-resources.mjs";
+import {
+  recordUsageEvent,
+  listUsageEvents,
+  summarizeUsage,
+  recordUsageFromTelemetry,
+} from "./usage-ledger.mjs";
 
 export async function handleV2Post(path, body) {
   const v = body || {};
@@ -201,8 +213,7 @@ export async function handleV2Post(path, body) {
   }
 
   if (path === "/api/v2/workers/heartbeat") {
-    return { status: 200, body: { ok: true, telemetry: recordHeartbeat({
-      ...v,
+    const telemetry = recordHeartbeat({
       workerId: v.worker_id || v.workerId,
       assignmentId: v.assignment_id || v.assignmentId,
       missionId: v.mission_id || v.missionId,
@@ -210,7 +221,13 @@ export async function handleV2Post(path, body) {
       cpuPercent: v.cpu_percent ?? v.cpuPercent,
       memoryMb: v.memory_mb ?? v.memoryMb,
       activeCommand: v.active_command || v.activeCommand,
-    }) } };
+    });
+    try {
+      recordUsageFromTelemetry(telemetry, {
+        runtimeMs: v.runtime_ms ?? v.runtimeMs ?? null,
+      });
+    } catch { /* usage ledger must not break heartbeats */ }
+    return { status: 200, body: { ok: true, telemetry } };
   }
   if (path === "/api/v2/workers/recover") {
     return { status: 200, body: recoverWorker({
@@ -219,6 +236,26 @@ export async function handleV2Post(path, body) {
       missionId: v.mission_id || v.missionId,
       assignmentId: v.assignment_id || v.assignmentId,
     }) };
+  }
+  if (path === "/api/v2/platform/usage") {
+    try {
+      const event = recordUsageEvent({
+        ...v,
+        workerId: v.worker_id || v.workerId,
+        missionId: v.mission_id || v.missionId,
+        assignmentId: v.assignment_id || v.assignmentId,
+        runtimeMs: v.runtime_ms ?? v.runtimeMs,
+        estimatedCostUsd: v.estimated_cost_usd ?? v.estimatedCostUsd,
+        inputTokens: v.input_tokens ?? v.inputTokens,
+        outputTokens: v.output_tokens ?? v.outputTokens,
+        totalTokens: v.total_tokens ?? v.totalTokens,
+        cpuPercent: v.cpu_percent ?? v.cpuPercent,
+        memoryMb: v.memory_mb ?? v.memoryMb,
+      });
+      return { status: 201, body: { ok: true, event } };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
   }
 
   return null; // not a V2 route
@@ -244,12 +281,43 @@ export function handleV2Get(path, url) {
     if (!vm) return { status: 404, body: { ok: false, error: "worker_not_found" } };
     return { status: 200, body: { ok: true, worker: vm } };
   }
-  if (path === "/api/v2/views/mission/overview") {
+  if (path === "/api/v2/views/mission/overview" || path === "/api/v2/views/mission/dashboard") {
     const id = q("id") || q("mission_id");
     if (!id) return { status: 400, body: { ok: false, error: "missing_id" } };
-    const overview = missionOverviewVm(id);
-    if (!overview) return { status: 404, body: { ok: false, error: "mission_not_found" } };
-    return { status: 200, body: { ok: true, overview } };
+    const dashboard = missionDashboardVm(id);
+    if (!dashboard) return { status: 404, body: { ok: false, error: "mission_not_found" } };
+    return { status: 200, body: { ok: true, dashboard, overview: dashboard } };
+  }
+  if (path === "/api/v2/views/mission/confidence") {
+    const id = q("id") || q("mission_id");
+    if (!id) return { status: 400, body: { ok: false, error: "missing_id" } };
+    const refresh = q("refresh") === "1";
+    return {
+      status: 200,
+      body: { ok: true, confidence: refresh ? recordMissionConfidence(id) : getMissionConfidence(id) },
+    };
+  }
+  if (path === "/api/v2/platform/resources") {
+    const refresh = q("refresh") === "1";
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        resources: refresh ? recordPlatformResourcesSnapshot() : getPlatformResources(),
+        history: listPlatformResourceHistory({ limit: 20 }),
+      },
+    };
+  }
+  if (path === "/api/v2/platform/usage") {
+    const mid = q("mission_id");
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        summary: summarizeUsage({ missionId: mid || null }),
+        events: listUsageEvents({ missionId: mid || null, limit: Number(q("limit") || 100) }),
+      },
+    };
   }
   if (path === "/api/v2/views/mission/timeline") {
     const id = q("id") || q("mission_id");
@@ -282,13 +350,14 @@ export function handleV2Get(path, url) {
   if (path === "/api/v2/mission") {
     const id = q("id") || q("mission_id");
     if (!id) return { status: 400, body: { ok: false, error: "missing_id" } };
-    const overview = missionOverviewVm(id);
+    const dashboard = missionDashboardVm(id);
     return {
       status: 200,
       body: {
         ok: true,
         ...getMissionDetailProjection(id),
-        overview,
+        dashboard,
+        overview: dashboard,
         director_summary_vm: directorSummaryVm(id),
       },
     };

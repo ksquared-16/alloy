@@ -78,7 +78,7 @@ const workers = await (await fetch(`${BASE}/api/v2/views/workers`)).json();
 const worker = (workers.workers || []).find((w) => w.missionId === mid) || (workers.workers || [])[0];
 
 await shot("01-missions-home", "missions", { missionId: mid, note: "Missions home with operator cards" });
-await shot("02-mission-overview", `missions/${mid}`, { missionId: mid, note: "Mission Overview — Director five questions, no raw JSON" });
+await shot("02-mission-dashboard", `missions/${mid}`, { missionId: mid, note: "Mission Dashboard — Director, Needs Me, confidence, work-first" });
 await shot("03-decision-desktop", open ? `decisions/${open.decisionId}` : "needs-you", {
   missionId: mid,
   note: "Decision Detail desktop",
@@ -97,18 +97,19 @@ if (worker) {
   await shot("07-worker-detail", `workers/${worker.workerId}`, { missionId: mid, note: "Worker Detail with technical details collapsed" });
 }
 await shot("08-evidence", `evidence/${mid}`, { missionId: mid, note: "Evidence gallery — proves/AC, not paths first" });
-await shot("09-kickoff-intake", "kickoff", { note: "Mission Brief empty intake" });
+await shot("09-kickoff-intake", "kickoff", { note: "Mission Brief — Paste Sprint / Import Markdown" });
 await shot("10-kickoff-readiness", `kickoff/${mid}`, { missionId: mid, note: "Kickoff readiness/approval" });
 await shot("11-needs-you", "needs-you", { missionId: mid, note: "Needs You global rollup" });
 
+const dash = await (await fetch(`${BASE}/api/v2/views/mission/dashboard?id=${encodeURIComponent(mid)}`)).json();
+const d = dash.dashboard || {};
 const qaAnswers = {
-  what_is_mission_doing: mission.directorState,
-  where_is_it: mission.phaseLabel,
-  what_needs_user: open?.title || needs.items?.[0]?.title,
-  director_recommending: open?.recommendation,
-  after_decision: open?.afterAnswer,
-  unhealthy_worker: worker ? `${worker.deliverable} — ${worker.healthLabel}; ${worker.directorAction}` : null,
-  evidence_exists: true,
+  what_is_happening: d.director?.assessment,
+  director_in_control: (d.director?.recoveries || []).join("; "),
+  do_i_need_to_do_anything: (d.needsMe || []).map((n) => n.title).join(" · ") || "Nothing needs you",
+  what_work_is_active: (d.currentWork || []).map((w) => `${w.title} (${w.statusLabel})`).join("; "),
+  how_confident: `${d.summary?.confidencePercent}% — ${d.summary?.confidenceBand}`,
+  what_happens_next: d.director?.next,
 };
 
 writeFileSync(join(OUT, "PRODUCTIZATION-MANIFEST.json"), JSON.stringify({
@@ -119,25 +120,25 @@ writeFileSync(join(OUT, "PRODUCTIZATION-MANIFEST.json"), JSON.stringify({
   workerId: worker?.workerId || null,
   needsYouCount: (needs.items || []).length,
   screenshots: manifest,
-  two_minute_qa: qaAnswers,
+  thirty_second_qa: qaAnswers,
 }, null, 2));
 
-writeFileSync(join(OUT, "PRODUCTIZATION-MANIFEST.md"), `# Mission Control productization — screenshot manifest
+writeFileSync(join(OUT, "PRODUCTIZATION-MANIFEST.md"), `# Mission Dashboard V1 — screenshot manifest
 
 Mission: **${mission.title}** (\`${mid}\`)
 Decision: \`${open?.decisionId || "(none)"}\`
 Generated: ${new Date().toISOString()}
 
-## Two-minute QA answers
+## 30-second QA answers (dashboard only)
 
-| Question | Answer from live view models |
-|----------|------------------------------|
-| What is the mission doing? | ${qaAnswers.what_is_mission_doing} |
-| Where is it? | ${qaAnswers.where_is_it} |
-| What needs the user? | ${qaAnswers.what_needs_user} |
-| What is Director recommending? | ${qaAnswers.director_recommending} |
-| What happens after the decision? | ${qaAnswers.after_decision} |
-| Which worker is unhealthy / Director action? | ${qaAnswers.unhealthy_worker} |
+| Question | Answer |
+|----------|--------|
+| What is happening? | ${qaAnswers.what_is_happening} |
+| Is Director in control? | ${qaAnswers.director_in_control} |
+| Do I need to do anything? | ${qaAnswers.do_i_need_to_do_anything} |
+| What work is active? | ${qaAnswers.what_work_is_active} |
+| How confident is Director? | ${qaAnswers.how_confident} |
+| What happens next? | ${qaAnswers.what_happens_next} |
 
 ## Screenshots
 

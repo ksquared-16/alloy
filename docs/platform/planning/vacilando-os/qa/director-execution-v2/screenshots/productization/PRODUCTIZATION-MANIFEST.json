@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-07-30T17:02:39.463Z",
+  "generated_at": "2026-07-30T17:28:09.600Z",
   "base": "http://127.0.0.1:3021",
   "missionId": "msn_b1c2aa7b4e0cc69da4",
-  "decisionId": "dec_1d8042cdbe05bc",
+  "decisionId": "dec_1765fe82cbaa56",
   "workerId": "claude-6b",
-  "needsYouCount": 6,
+  "needsYouCount": 5,
   "screenshots": [
     {
       "filename": "01-missions-home.png",
@@ -15,13 +15,13 @@
         "width": 1280,
         "height": 900
       },
-      "load_ms": 1883,
+      "load_ms": 1778,
       "demonstrates": "Missions home with operator cards",
       "probe": {
         "hash": "#/missions",
         "mc": true,
         "hasJsonBlob": false,
-        "textSample": "Missions\n\nDirector-managed work across your org.\n\nNew mission\nAccess & Identity V2\nDecision required\nPhase 2 of 3 · Canonical Authority Model\n1 of 3 deliverables accepted\nAnswer decision: How should invitation expiry work?\n1 worker need attention · 2 paused · 1 open decision\nDelivery Sequence waiting on Canonical Authority Model · 1h ago\nOpen decision\nAccess & Identity V2 — Director certification ",
+        "textSample": "Missions\n\nDirector-managed work across your org.\n\nNew mission\nAccess & Identity V2\nDecision required\nPhase 2 of 3 · Canonical Authority Model\n1 of 3 deliverables accepted\nAnswer decision: How should invitation expiry work?\n1 worker need attention · 1 paused · 1 open decision\nDecision required — How should invitation expiry work? · 2h ago\nOpen decision\nAccess & Identity V2 — Director certification ",
         "nav": [
           "Missions",
           "Needs You1",
@@ -31,7 +31,7 @@
       }
     },
     {
-      "filename": "02-mission-overview.png",
+      "filename": "02-mission-dashboard.png",
       "route": "/#/missions/msn_b1c2aa7b4e0cc69da4",
       "url": "http://127.0.0.1:3021/#/missions/msn_b1c2aa7b4e0cc69da4",
       "missionId": "msn_b1c2aa7b4e0cc69da4",
@@ -39,13 +39,13 @@
         "width": 1280,
         "height": 900
       },
-      "load_ms": 1706,
-      "demonstrates": "Mission Overview — Director five questions, no raw JSON",
+      "load_ms": 1637,
+      "demonstrates": "Mission Dashboard — Director, Needs Me, confidence, work-first",
       "probe": {
         "hash": "#/missions/msn_b1c2aa7b4e0cc69da4",
         "mc": true,
         "hasJsonBlob": false,
-        "textSample": "Access & Identity V2\n\nDecision required · Phase 2 of 3 · Canonical Authority Model · 1 of 3 deliverables accepted\n\nOpen decision\nOverview\nTimeline\nWorkers\nDecisions\nEvidence\nDirector summary\n\nAnswer decision: How should invitation expiry work?\n\nWhere are we?\nDecision Required · Canonical Authority Model (1/3 deliverables)\nWhat changed?\nDelivery Sequence waiting on Canonical Authority Model\nAre we ",
+        "textSample": "Access & Identity V2\n\nDecision required · Confidence 54% · Next: Waiting on your decision\n\nOpen decision\nDashboard\nTimeline\nWorkers\nDecisions\nEvidence\nAccess & Identity V2\nDecision required\nOpen decision\nPHASE\nCanonical Authority Model\nDELIVERABLES\n1 / 3 accepted\nWORKERS\n1 active\nCONFIDENCE\n54%\nNEXT CHECKPOINT\nWaiting on your decision\nDirector\n\nI need a product call from you before this work can c",
         "nav": [
           "Missions",
           "Needs You1",
@@ -56,20 +56,20 @@
     },
     {
       "filename": "03-decision-desktop.png",
-      "route": "/#/decisions/dec_1d8042cdbe05bc",
-      "url": "http://127.0.0.1:3021/#/decisions/dec_1d8042cdbe05bc",
+      "route": "/#/decisions/dec_1765fe82cbaa56",
+      "url": "http://127.0.0.1:3021/#/decisions/dec_1765fe82cbaa56",
       "missionId": "msn_b1c2aa7b4e0cc69da4",
       "viewport": {
         "width": 1280,
         "height": 900
       },
-      "load_ms": 1785,
+      "load_ms": 1653,
       "demonstrates": "Decision Detail desktop",
       "probe": {
-        "hash": "#/decisions/dec_1d8042cdbe05bc",
+        "hash": "#/decisions/dec_1765fe82cbaa56",
         "mc": true,
         "hasJsonBlob": false,
-        "textSample": "How should invitation expiry work?\n\nAccess & Identity V2 · High impact · 1h ago\n\nOverview\nTimeline\nWorkers\nDecisions\nEvidence\n1. What happened?\n\nOps requested a 30-day window during certification pressure testing. No product decision is recorded yet.\n\n2. Why does it matter?\n\nThis changes who can still activate access after an invite is sent. It affects security exposure and the day-to-day experien",
+        "textSample": "How should invitation expiry work?\n\nAccess & Identity V2 · High impact · just now\n\nDashboard\nTimeline\nWorkers\nDecisions\nEvidence\n1. What happened?\n\nOps preference during certification\n\n2. Why does it matter?\n\nAffects security exposure and new-operator onboarding.\n\n3. What does Director recommend?\n\nKeep 7-day expiry — Security default until product owner accepts the longer window\n\n4. What is the im",
         "nav": [
           "Missions",
           "Needs You1",
@@ -80,20 +80,20 @@
     },
     {
       "filename": "04-decision-mobile.png",
-      "route": "/#/decisions/dec_1d8042cdbe05bc",
-      "url": "http://127.0.0.1:3021/#/decisions/dec_1d8042cdbe05bc",
+      "route": "/#/decisions/dec_1765fe82cbaa56",
+      "url": "http://127.0.0.1:3021/#/decisions/dec_1765fe82cbaa56",
       "missionId": "msn_b1c2aa7b4e0cc69da4",
       "viewport": {
         "width": 390,
         "height": 844
       },
-      "load_ms": 1670,
+      "load_ms": 1851,
       "demonstrates": "Decision Detail mobile",
       "probe": {
-        "hash": "#/decisions/dec_1d8042cdbe05bc",
+        "hash": "#/decisions/dec_1765fe82cbaa56",
         "mc": true,
         "hasJsonBlob": false,
-        "textSample": "How should invitation expiry work?\n\nAccess & Identity V2 · High impact · 1h ago\n\nOverview\nTimeline\nWorkers\nDecisions\nEvidence\n1. What happened?\n\nOps requested a 30-day window during certification pressure testing. No product decision is recorded yet.\n\n2. Why does it matter?\n\nThis changes who can still activate access after an invite is sent. It affects security exposure and the day-to-day experien",
+        "textSample": "How should invitation expiry work?\n\nAccess & Identity V2 · High impact · just now\n\nDashboard\nTimeline\nWorkers\nDecisions\nEvidence\n1. What happened?\n\nOps preference during certification\n\n2. Why does it matter?\n\nAffects security exposure and new-operator onboarding.\n\n3. What does Director recommend?\n\nKeep 7-day expiry — Security default until product owner accepts the longer window\n\n4. What is the im",
         "nav": [
           "Missions",
           "Needs You1",
@@ -111,13 +111,13 @@
         "width": 1280,
         "height": 900
       },
-      "load_ms": 1631,
+      "load_ms": 1698,
       "demonstrates": "Operator-language timeline",
       "probe": {
         "hash": "#/timeline/msn_b1c2aa7b4e0cc69da4",
         "mc": true,
         "hasJsonBlob": false,
-        "textSample": "Access & Identity V2\n\nThe story of this mission in plain language.\n\nOverview\nTimeline\nWorkers\nDecisions\nEvidence\n1h ago · Director\nProgress update\n\nDelivery Sequence waiting on Canonical Authority Model\n\n1h ago · Director\nEvidence added\n\nEvidence added — Kickoff timeline\n\nDetails\n1h ago · Vacilando\nEvidence added\n\nEvidence added — Control-plane health probe\n\nDetails\n1h ago · Director\nEvidence adde",
+        "textSample": "Access & Identity V2\n\nThe story of this mission in plain language.\n\nDashboard\nTimeline\nWorkers\nDecisions\nEvidence\njust now · Director\nDecision requested\n\nDecision required — How should invitation expiry work?\n\nDetails\n24m ago · You\nDecision answered\n\nDecision answered — How should invitation expiry work?\n\nDetails\n2h ago · Director\nProgress update\n\nDelivery Sequence waiting on Canonical Authority M",
         "nav": [
           "Missions",
           "Needs You1",
@@ -135,13 +135,13 @@
         "width": 1280,
         "height": 900
       },
-      "load_ms": 1611,
+      "load_ms": 1714,
       "demonstrates": "Workers grouped by mission",
       "probe": {
         "hash": "#/workers",
         "mc": true,
         "hasJsonBlob": false,
-        "textSample": "Workers\n\nGrouped by mission. Health and deliverable first.\n\nAccess & Identity V2 Demo\nCatalog integrity\nUnresponsive — Director is intervening\nClaude · Slot 6\nLast progress: implementing (5h ago)\nDirector is preparing a safe recovery\nPaused for a decision\nView details\nAccess & Identity V2\nCanonical Authority Model\nUnresponsive — Director is intervening\nClaude · Slot 6\nLast progress: Drafted model ",
+        "textSample": "Workers\n\nWork first. Model and slot are secondary.\n\nAccess & Identity V2 Demo\nCatalog integrity\nUnresponsive — Director is intervening\nimplementing\nDirector: Director is preparing a safe recovery\nPaused for a decision\nClaude · Slot 6\nView details\nAccess & Identity V2\nCanonical Authority Model\nUnresponsive — Director is intervening\nDrafted model outline; blocked on invite-expiry product call\nDirect",
         "nav": [
           "Missions",
           "Needs You1",
@@ -159,13 +159,13 @@
         "width": 1280,
         "height": 900
       },
-      "load_ms": 1634,
+      "load_ms": 1658,
       "demonstrates": "Worker Detail with technical details collapsed",
       "probe": {
         "hash": "#/workers/claude-6b",
         "mc": true,
         "hasJsonBlob": false,
-        "textSample": "Canonical Authority Model\n\nAccess & Identity V2 · Unresponsive — Director is intervening\n\n← Workers\nAssignment\n\nDocument the canonical authority model from inventory\n\nCurrent activity: drafting cert-model.md\n\nNext step: Resume after the decision is answered\n\nDirector: Director recovery: checkpoint and pause\n\nNo heartbeat for 6121s\n\nRequired outputs\ndocs/platform/planning/vacilando-os/qa/director-e",
+        "textSample": "Canonical Authority Model\n\nAccess & Identity V2 · Unresponsive — Director is intervening\n\n← Workers\nAssignment\n\nDocument the canonical authority model from inventory\n\nCurrent activity: drafting cert-model.md\n\nNext step: Waiting for a worker to start\n\nDirector: Director recovery: checkpoint and pause\n\nNo heartbeat for 7649s\n\nRequired outputs\ndocs/platform/planning/vacilando-os/qa/director-execution",
         "nav": [
           "Missions",
           "Needs You1",
@@ -183,13 +183,13 @@
         "width": 1280,
         "height": 900
       },
-      "load_ms": 1641,
+      "load_ms": 2202,
       "demonstrates": "Evidence gallery — proves/AC, not paths first",
       "probe": {
         "hash": "#/evidence/msn_b1c2aa7b4e0cc69da4",
         "mc": true,
         "hasJsonBlob": false,
-        "textSample": "Access & Identity V2\n\nWhat the work proves — not filesystem paths.\n\nOverview\nTimeline\nWorkers\nDecisions\nEvidence\nAcceptance coverage\nCovered — Inventory is file/line grounded against the live codebase\nCovered — Contradictions and gaps are enumerated\nOutstanding — Canonical authority model is documented\nOutstanding — Sequenced delivery plan is present\nCovered — Browser QA screenshots attached for M",
+        "textSample": "Access & Identity V2\n\nWhat the work proves — not filesystem paths.\n\nDashboard\nTimeline\nWorkers\nDecisions\nEvidence\nAcceptance coverage\nCovered — Inventory is file/line grounded against the live codebase\nCovered — Contradictions and gaps are enumerated\nOutstanding — Canonical authority model is documented\nOutstanding — Sequenced delivery plan is present\nCovered — Browser QA screenshots attached for ",
         "nav": [
           "Missions",
           "Needs You1",
@@ -207,13 +207,13 @@
         "width": 1280,
         "height": 900
       },
-      "load_ms": 1635,
-      "demonstrates": "Mission Brief empty intake",
+      "load_ms": 1885,
+      "demonstrates": "Mission Brief — Paste Sprint / Import Markdown",
       "probe": {
         "hash": "#/kickoff",
         "mc": true,
         "hasJsonBlob": false,
-        "textSample": "Mission Brief\n\nPaste or import a brief to start.\n\nStart a mission\n\nPaste a Mission Brief (JSON) or import Markdown with a title and objective.\n\nPaste Mission Brief (JSON)  Review pasted brief\nImport Markdown  Review Markdown",
+        "textSample": "Mission Brief\n\nPaste or import a brief to start.\n\nStart a mission\n\nPaste a sprint brief or import Markdown. Director will parse the structure for your review.\n\nPaste Sprint  Review with Director\nImport Markdown\n\nSame as paste — drop the full brief text, including objectives and phases.\n\nJSON Mission Briefs remain supported for automation. Operators should not need them.\n\nAdvanced: paste JSON Missi",
         "nav": [
           "Missions",
           "Needs You1",
@@ -231,7 +231,7 @@
         "width": 1280,
         "height": 900
       },
-      "load_ms": 1605,
+      "load_ms": 1674,
       "demonstrates": "Kickoff readiness/approval",
       "probe": {
         "hash": "#/kickoff/msn_b1c2aa7b4e0cc69da4",
@@ -255,29 +255,28 @@
         "width": 1280,
         "height": 900
       },
-      "load_ms": 1617,
+      "load_ms": 1640,
       "demonstrates": "Needs You global rollup",
       "probe": {
         "hash": "#/needs-you",
         "mc": true,
         "hasJsonBlob": false,
-        "textSample": "Needs You\n\nDecisions, recoveries, and approvals waiting on you.\n\nHow should invitation expiry work?\nHigh impact\nAccess & Identity V2\n\nWhile drafting the canonical authority model, Director found that invite links currently expire in 7 days, but operations asked for 30 days so site managers can finish onboarding without re-issuing invites.\n\nDirector: Keep 7-day expiry\n\nReview and decide\nOpen cert d",
+        "textSample": "Needs You\n\nDecisions, recoveries, and approvals waiting on you.\n\nHow should invitation expiry work?\nHigh impact\nAccess & Identity V2\n\nOps asked for 30-day invite expiry while the approved plan keeps 7 days.\n\nDirector: Keep 7-day expiry\n\nReview and decide\nAuth model for suspended users\nNeeds your call\nAccess & Identity V2 Demo\n\nSuspended users can still hit a legacy login path\n\nDirector: Block API ",
         "nav": [
           "Missions",
-          "Needs You6",
+          "Needs You1",
           "Workers",
           "Settings"
         ]
       }
     }
   ],
-  "two_minute_qa": {
-    "what_is_mission_doing": "Answer decision: How should invitation expiry work?",
-    "where_is_it": "Phase 2 of 3 · Canonical Authority Model",
-    "what_needs_user": "How should invitation expiry work?",
-    "director_recommending": "Keep 7-day expiry",
-    "after_decision": "Director will record your choice, refresh affected worker context if needed, and resume paused work.",
-    "unhealthy_worker": "Canonical Authority Model — Unresponsive — Director is intervening; Director recovery: checkpoint and pause",
-    "evidence_exists": true
+  "thirty_second_qa": {
+    "what_is_happening": "I need a product call from you before this work can continue.",
+    "director_in_control": "Canonical Authority Model: Director checkpoint and pause",
+    "do_i_need_to_do_anything": "How should invitation expiry work? · Canonical Authority Model — worker needs attention",
+    "what_work_is_active": "Authority Path Inventory (Accepted); Canonical Authority Model (Ready); Delivery Sequence (Waiting)",
+    "how_confident": "54% — Developing",
+    "what_happens_next": "Answer decision: How should invitation expiry work?"
   }
 }

@@ -63,7 +63,7 @@
   function missionSubnav(missionId, active) {
     if (!missionId) return "";
     const tabs = [
-      ["overview", `missions/${missionId}`, "Overview"],
+      ["dashboard", `missions/${missionId}`, "Dashboard"],
       ["timeline", `timeline/${missionId}`, "Timeline"],
       ["workers", `workers?mission=${encodeURIComponent(missionId)}`, "Workers"],
       ["decisions", `decisions?mission=${encodeURIComponent(missionId)}`, "Decisions"],
@@ -116,7 +116,7 @@
   };
   V2.fetchOverview = async (id) => {
     try {
-      V2.state.overview = await get("/api/v2/views/mission/overview?id=" + encodeURIComponent(id));
+      V2.state.overview = await get("/api/v2/views/mission/dashboard?id=" + encodeURIComponent(id));
       V2.state.selectedMissionId = id;
       V2.state.overviewError = null;
       bump(); schedulePaint();
@@ -125,6 +125,7 @@
       bump(); schedulePaint();
     }
   };
+  V2.fetchDashboard = V2.fetchOverview;
   V2.fetchNeedsYou = async () => {
     try { V2.state.needsYou = await get("/api/v2/views/needs-you"); bump(); schedulePaint(); } catch { /* keep */ }
   };
@@ -222,77 +223,126 @@
 
   V2.viewMissionDetail = function (id) {
     V2.state.selectedMissionId = id;
-    if (!V2.state.overview || V2.state.overview.overview?.header?.missionId !== id) {
-      V2.fetchOverview(id);
-      return shell("Mission", { missionId: id, active: "overview" })
-        + `<div class="empty"><div class="big"><span class="spin"></span> Opening mission…</div></div></div>`;
+    const dashPayload = V2.state.overview;
+    const dash = dashPayload?.dashboard || dashPayload?.overview;
+    if (!dash || (dash.missionId || dash.header?.missionId) !== id) {
+      V2.fetchDashboard(id);
+      return shell("Mission Dashboard", { missionId: id, active: "dashboard" })
+        + `<div class="empty"><div class="big"><span class="spin"></span> Opening dashboard…</div></div></div>`;
     }
     if (V2.state.overviewError) {
-      return shell("Mission", { missionId: id, active: "overview" })
+      return shell("Mission Dashboard", { missionId: id, active: "dashboard" })
         + errPanel("Could not open mission", { message: V2.state.overviewError }, { retry: "overview:" + id }) + `</div>`;
     }
-    const o = V2.state.overview.overview;
-    const h = o.header;
-    const qs = (o.directorSummary?.questions || []).map((q) =>
-      `<div class="mc-q-row"><div class="mc-q-label">${esc(q.label)}</div><div class="mc-q-ans">${esc(q.answer)}</div></div>`).join("");
 
-    const top = o.topDecision;
-    const decisionBlock = top ? `<section class="mc-decision">
-      <div class="mc-decision-h"><b>Decision required</b><span class="mc-pill decision_required">${esc(top.urgency)}</span></div>
-      <h3>${esc(top.title)}</h3>
-      <p>${esc(top.situation)}</p>
-      <p><b>Why it matters:</b> ${esc(top.whyItMatters)}</p>
-      <p><b>Director recommends:</b> ${esc(top.recommendation)}</p>
-      ${top.pausedWork?.length ? `<p><b>Paused work:</b> ${esc(top.pausedWork.map((w) => w.title).join(", "))}</p>` : ""}
-      ${actionBtn(top.primaryAction)}
-    </section>` : "";
+    const s = dash.summary || {};
+    const dir = dash.director || {};
+    const conf = dash.confidence || {};
+    const needs = dash.needsMe || [];
+    const work = dash.currentWork || [];
+    const progress = dash.recentProgress || [];
+    const timeline = dash.timeline || [];
 
-    const work = (o.workInProgress || []).map((w) => `<div class="mc-work">
-      <div class="mc-card-h"><b>${esc(w.title)}</b><span class="mc-pill">${esc(w.statusLabel)}</span></div>
-      <div class="muted">Owner: ${esc(w.owner)}</div>
-      <div>${esc(w.progressSummary)}</div>
-      ${w.blocker ? `<div class="warn">${esc(w.blocker)}</div>` : ""}
-      <div class="muted">Next: ${esc(w.nextStep)}</div>
-    </div>`).join("") || `<div class="rempty">No active work items</div>`;
-
-    const tl = (o.recentTimeline || []).map((e) => `<div class="mc-tl-row">
-      <div class="mc-tl-time">${esc(e.timeLabel || e.time)}</div>
-      <div><b>${esc(e.headline)}</b><div class="muted">${esc(e.explanation || e.actor)}</div></div>
-    </div>`).join("") || `<div class="rempty">No timeline events yet</div>`;
-
-    const cov = (o.evidence?.coverage || []).map((c) =>
-      `<div class="mc-ac ${esc(c.status)}">${esc(c.statusLabel)} — ${esc(c.statement)}</div>`).join("");
-    const arts = (o.evidence?.artifacts || []).map((a) =>
-      `<div class="mc-ev"><b>${esc(a.title)}</b> · ${esc(a.typeLabel)}<div class="muted">${esc(a.proves)}</div></div>`).join("");
-
-    return shell(h.title, {
-      missionId: id,
-      active: "overview",
-      lead: `${esc(h.statusLabel)} · ${esc(h.phaseLabel)} · ${esc(h.deliverablesLabel)}`,
-      actions: actionBtn(h.primaryAction),
-    }) + `
-      <section class="mc-summary">
-        <h3>Director summary</h3>
-        <p class="muted">${esc(h.directorState)}</p>
-        <div class="mc-q-grid">${qs}</div>
-      </section>
-      ${decisionBlock}
-      <div class="mc-grid">
-        <section class="mc-sec"><h3>Work in progress</h3>${work}</section>
-        <section class="mc-sec"><h3>Recent timeline</h3>${tl}
-          <button class="btn sm" data-nav="timeline/${esc(id)}">Full timeline</button>
-        </section>
+    const summaryStrip = `<section class="mc-dash-summary">
+      <div class="mc-dash-title-row">
+        <div>
+          <h2>${esc(s.title)}</h2>
+          <div class="mc-pill ${esc(s.status || "")}">${esc(s.statusLabel)}</div>
+        </div>
+        <div class="mc-hero-actions">${actionBtn(s.primaryAction)}</div>
       </div>
-      <section class="mc-sec">
-        <h3>QA / evidence</h3>
-        <p>${esc(o.evidence?.certificationNote || "")}</p>
-        ${cov}${arts}
-        <button class="btn sm" data-nav="evidence/${esc(id)}">Evidence gallery</button>
-      </section>
-      <details class="mc-diag"><summary>Diagnostics (raw runtime)</summary>
-        <pre class="mono">${esc(JSON.stringify({ missionId: id, status: h.statusLabel }, null, 2))}</pre>
-      </details>
-    </div>`;
+      <div class="mc-stat-grid">
+        <div class="mc-stat"><div class="mc-stat-k">Phase</div><div class="mc-stat-v">${esc(s.phase)}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Deliverables</div><div class="mc-stat-v">${esc(s.deliverablesLabel)}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Workers</div><div class="mc-stat-v">${esc(s.activeWorkers)} active</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Confidence</div><div class="mc-stat-v">${esc(s.confidencePercent)}%</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Next checkpoint</div><div class="mc-stat-v">${esc(s.nextCheckpoint)}</div></div>
+      </div>
+    </section>`;
+
+    const directorSec = `<section class="mc-sec mc-director">
+      <h3>Director</h3>
+      <p class="mc-director-assess">${esc(dir.assessment)}</p>
+      <div class="mc-grid">
+        <div>
+          <div class="mc-stat-k">Current focus</div>
+          <ul>${(dir.focus || []).map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+        </div>
+        <div>
+          <div class="mc-stat-k">Current risk</div>
+          <ul>${(dir.risks || []).map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+        </div>
+        <div>
+          <div class="mc-stat-k">Current recovery</div>
+          <ul>${(dir.recoveries || []).map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+        </div>
+        <div>
+          <div class="mc-stat-k">Next</div>
+          <p>${esc(dir.next)}</p>
+          <p><b>Recommendation:</b> ${esc(dir.recommendation)}</p>
+        </div>
+      </div>
+    </section>`;
+
+    const needsSec = `<section class="mc-sec mc-needs-me">
+      <h3>Needs Me</h3>
+      ${needs.length
+        ? needs.map((it) => `<article class="mc-card mc-needs-card">
+            <div class="mc-card-h"><b>${esc(it.title)}</b><span class="mc-pill">${esc(it.urgency)}</span></div>
+            <p>${esc(it.body)}</p>
+            ${it.recommendation ? `<p><b>Recommendation:</b> ${esc(it.recommendation)}</p>` : ""}
+            ${actionBtn(it.primaryAction)}
+          </article>`).join("")
+        : `<div class="rempty">Nothing needs you right now.</div>`}
+    </section>`;
+
+    const workSec = `<section class="mc-sec">
+      <h3>Current Work</h3>
+      ${work.length
+        ? work.map((w) => `<div class="mc-work-row">
+            <div class="mc-card-h"><b>${esc(w.title)}</b><span class="mc-pill">${esc(w.statusLabel)}</span></div>
+            ${w.handledBy ? `<div class="muted">Handled by ${esc(w.handledBy)}</div>` : `<div class="muted">Unassigned</div>`}
+            ${w.progressSummary ? `<div>${esc(w.progressSummary)}</div>` : ""}
+            ${w.healthLabel ? `<div class="muted">${esc(w.healthLabel)}</div>` : ""}
+          </div>`).join("")
+        : `<div class="rempty">No work items yet</div>`}
+    </section>`;
+
+    const recentSec = `<section class="mc-sec">
+      <h3>Recent Progress</h3>
+      ${progress.length
+        ? progress.map((p) => `<div class="mc-tl-row">
+            <div class="mc-tl-time">${esc(p.timeLabel)}</div>
+            <div><b>${esc(p.headline)}</b>${p.explanation ? `<div class="muted">${esc(p.explanation)}</div>` : ""}</div>
+          </div>`).join("")
+        : `<div class="rempty">No milestones yet</div>`}
+    </section>`;
+
+    const tlSec = `<section class="mc-sec">
+      <h3>Timeline</h3>
+      ${timeline.length
+        ? timeline.map((e) => `<div class="mc-tl-row">
+            <div class="mc-tl-time">${esc(e.timeLabel)} · ${esc(e.actor)}</div>
+            <div><b>${esc(e.headline)}</b>${e.explanation ? `<div class="muted">${esc(e.explanation)}</div>` : ""}</div>
+          </div>`).join("")
+        : `<div class="rempty">No timeline events</div>`}
+      <button class="btn sm" data-nav="timeline/${esc(id)}">Full timeline</button>
+    </section>`;
+
+    const confSec = `<section class="mc-sec mc-confidence">
+      <h3>Mission Confidence · ${esc(conf.percent)}%</h3>
+      <p class="muted">${esc(conf.bandLabel || "")}${conf.change ? ` · ${esc(conf.change.summary)}` : ""}</p>
+      <div class="mc-conf-bar"><div class="mc-conf-fill" style="width:${Number(conf.percent) || 0}%"></div></div>
+      <div class="mc-conf-factors">${(conf.factors || []).map((f) =>
+        `<div class="mc-conf-f"><b>${esc(f.label)}</b> ${esc(f.score)} <span class="muted">(${esc(f.weight)}%) — ${esc(f.note)}</span></div>`).join("")}</div>
+    </section>`;
+
+    return shell(s.title || "Mission Dashboard", {
+      missionId: id,
+      active: "dashboard",
+      lead: `${esc(s.statusLabel)} · Confidence ${esc(s.confidencePercent)}% · Next: ${esc(s.nextCheckpoint)}`,
+      actions: actionBtn(s.primaryAction),
+    }) + summaryStrip + directorSec + needsSec + `<div class="mc-grid">${workSec}${recentSec}</div>` + confSec + tlSec + `</div>`;
   };
 
   V2.viewNeedsYou = function () {
@@ -349,15 +399,15 @@
       <h3>${esc(g.missionTitle || "Unassigned")}</h3>
       ${(g.workers || []).map((w) => `<article class="mc-card" data-nav="workers/${esc(w.workerId)}">
         <div class="mc-card-h"><b>${esc(w.deliverable)}</b><span class="mc-pill">${esc(w.healthLabel)}</span></div>
-        <div class="muted">${[w.modelLabel, w.slotLabel].filter(Boolean).map(esc).join(" · ")}</div>
-        <div>Last progress: ${esc(w.lastProgressSummary)} (${esc(w.lastProgress)})</div>
-        <div>${esc(w.directorAction)}</div>
+        <div>${esc(w.lastProgressSummary)}</div>
+        <div class="muted">Director: ${esc(w.directorAction)}</div>
         ${w.decisionState ? `<div class="warn">${esc(w.decisionState)}</div>` : ""}
+        <div class="muted">${[w.modelLabel, w.slotLabel].filter(Boolean).map(esc).join(" · ")}</div>
         ${actionBtn(w.primaryAction)}
       </article>`).join("") || `<div class="rempty">No workers on this mission</div>`}
     </section>`).join("") || `<div class="rempty">No workers yet</div>`;
 
-    return shell("Workers", { lead: "Grouped by mission. Health and deliverable first." }) + html + `</div>`;
+    return shell("Workers", { lead: "Work first. Model and slot are secondary." }) + html + `</div>`;
   };
 
   V2.viewWorkerDetail = function (workerId) {
@@ -538,17 +588,21 @@
   function kickoffEmptyHtml() {
     return `<section class="mc-sec mc-kickoff-empty">
       <h3>Start a mission</h3>
-      <p>Paste a Mission Brief (JSON) or import Markdown with a title and objective.</p>
+      <p>Paste a sprint brief or import Markdown. Director will parse the structure for your review.</p>
       <div class="mc-grid">
         <div>
-          <label class="muted">Paste Mission Brief (JSON)</label>
-          <textarea id="mc-brief-json" class="mc-textarea" rows="12" placeholder='{ "title": "...", "objective": "...", "plan": [] }'></textarea>
-          <button class="btn" data-mc-kickoff-paste="1">Review pasted brief</button>
+          <label class="muted">Paste Sprint</label>
+          <textarea id="mc-brief-md" class="mc-textarea" rows="14" placeholder="# Access & Identity V2&#10;&#10;Objective: …&#10;&#10;## Phases&#10;- Authority inventory&#10;- Canonical model"></textarea>
+          <button class="btn" data-mc-kickoff-md="1">Review with Director</button>
         </div>
         <div>
           <label class="muted">Import Markdown</label>
-          <textarea id="mc-brief-md" class="mc-textarea" rows="12" placeholder="# Title&#10;&#10;Objective paragraph…"></textarea>
-          <button class="btn ghost" data-mc-kickoff-md="1">Review Markdown</button>
+          <p class="muted">Same as paste — drop the full brief text, including objectives and phases.</p>
+          <p class="muted">JSON Mission Briefs remain supported for automation. Operators should not need them.</p>
+          <details class="mc-diag"><summary>Advanced: paste JSON Mission Brief</summary>
+            <textarea id="mc-brief-json" class="mc-textarea" rows="8" placeholder='{ "title": "…", "objective": "…" }'></textarea>
+            <button class="btn ghost" data-mc-kickoff-paste="1">Review JSON</button>
+          </details>
         </div>
       </div>
     </section>`;
@@ -704,29 +758,47 @@
 
     if (t.dataset.mcKickoffMd) {
       const md = document.getElementById("mc-brief-md")?.value?.trim() || "";
+      if (!md) { alert("Paste a sprint brief first"); return; }
       const lines = md.split("\n");
       const title = (lines.find((l) => l.startsWith("# ")) || "# Untitled mission").replace(/^#\s+/, "");
-      const objective = lines.filter((l) => l && !l.startsWith("#")).join(" ").trim() || title;
+      const bodyLines = lines.filter((l) => l && !l.startsWith("#"));
+      const objective = bodyLines.join(" ").trim() || title;
+      const phaseLines = [];
+      let inPhases = false;
+      for (const line of lines) {
+        if (/^##\s+phases?/i.test(line)) { inPhases = true; continue; }
+        if (inPhases && /^##\s+/.test(line)) break;
+        if (inPhases && /^\s*[-*]\s+/.test(line)) phaseLines.push(line.replace(/^\s*[-*]\s+/, "").trim());
+      }
+      const plan = (phaseLines.length ? phaseLines : ["Initial delivery"]).map((t, i) => ({
+        phaseId: `p${i + 1}`,
+        order: i + 1,
+        title: t,
+        objective: t,
+        requiredOutputs: [],
+        acceptanceCriteriaIds: [`AC${i + 1}`],
+        dependencies: i ? [`p${i}`] : [],
+      }));
       const j = {
         title,
         objective,
-        plan: [{ phaseId: "p1", order: 1, title: "Initial delivery", objective, requiredOutputs: [], acceptanceCriteriaIds: ["AC1"] }],
-        acceptanceCriteria: [{ id: "AC1", statement: "Mission objective is satisfied with evidence" }],
-        constraints: [],
+        plan,
+        acceptanceCriteria: plan.map((p, i) => ({ id: `AC${i + 1}`, statement: `${p.title} is complete with evidence` })),
+        constraints: [{ id: "C1", text: "Do not push, merge, or promote without approval" }],
         sourceMaterials: [],
       };
       V2.state.kickoffDraft = {
         mode: "review",
         title,
         objective,
-        phases: j.plan.map((p) => ({ id: p.phaseId, title: p.title, objective: p.objective, outputs: [] })),
+        phases: plan.map((p) => ({ id: p.phaseId, title: p.title, objective: p.objective, outputs: [] })),
         acceptanceCriteria: j.acceptanceCriteria,
-        constraints: [],
+        constraints: j.constraints.map((c) => c.text),
         sources: [],
         raw: j,
         canStart: true,
         findings: [],
-        assignmentCount: 1,
+        assignmentCount: plan.length,
         primaryAction: { label: "Start mission" },
       };
       V2.state.kickoffStep = "review";

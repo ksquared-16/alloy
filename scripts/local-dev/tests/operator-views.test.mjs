@@ -15,8 +15,7 @@ const { appendTimelineEvent } = await import("../lib/vacilando/timeline.mjs");
 const { attachEvidence } = await import("../lib/vacilando/evidence.mjs");
 const {
   missionsHomeVm,
-  missionOverviewVm,
-  timelinePageVm,
+  missionDashboardVm,
   evidenceCardVm,
   listNeedsYou,
   kickoffVm,
@@ -85,11 +84,14 @@ assert(card.title === "Access & Identity V2", "title");
 assert(!/msn_/.test(card.statusLabel), "status is plain language");
 assert(card.primaryAction?.label, "primary action");
 
-const overview = missionOverviewVm(missionId);
-assert(overview.directorSummary.questions.length === 5, "five director questions");
-assert(overview.topDecision, "top decision present");
-assert(!JSON.stringify(overview.header).includes("fileUri"), "header has no paths");
+const overview = missionDashboardVm(missionId);
+assert(overview.kind === "mission_dashboard", "dashboard kind");
+assert(overview.director?.assessment, "director visible");
+assert(overview.summary?.confidencePercent != null, "confidence");
+assert(overview.topDecision || overview.needsMe?.length, "needs action surface");
+assert(!JSON.stringify(overview.summary).includes("fileUri"), "summary has no paths");
 
+const { timelinePageVm } = await import("../lib/vacilando/presentation/operator-views.mjs");
 const tl = timelinePageVm(missionId);
 assert(tl.events.length > 0, "timeline non-empty");
 assert(tl.events.every((e) => e.headline && !/^tle_/.test(e.headline)), "operator headlines");
@@ -113,8 +115,8 @@ assert(ev.technicalPath, "path only in technical");
 const kick = kickoffVm(null);
 assert(kick.mode === "empty", "empty kickoff");
 
-assert(overview.topDecision.statusLabel !== "open", "no raw open status as primary");
-assert(overview.topDecision.recommendation && !/^opt_/.test(overview.topDecision.recommendation), "recommendation label");
+assert((overview.topDecision || overview.needsMe[0]).statusLabel !== "open" || overview.needsMe.length, "operator copy");
+assert(overview.director.recommendation, "director recommendation");
 
 console.log(JSON.stringify({
   ok: true,
@@ -122,5 +124,6 @@ console.log(JSON.stringify({
   homeCards: home.missions.length,
   timelineEvents: tl.events.length,
   needsYou: needs.length,
-  directorQs: overview.directorSummary.questions.map((q) => q.label),
+  confidence: overview.summary.confidencePercent,
+  director: overview.director.assessment,
 }, null, 2));

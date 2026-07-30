@@ -28,6 +28,11 @@ import {
   projectMissionRow,
 } from "../director-summary.mjs";
 import { getKickoffState, reviewMissionReadiness } from "../mission-kickoff.mjs";
+import {
+  getMissionConfidence,
+  estimateNextCheckpoint,
+} from "../mission-confidence.mjs";
+
 
 const STATUS_COPY = {
   decision_required: "Decision required",
@@ -581,29 +586,160 @@ export function kickoffVm(missionId) {
   };
 }
 
-/** Full Mission Overview composition */
-export function missionOverviewVm(missionId) {
+/** Full Mission Dashboard composition (replaces Mission Overview). */
+export function missionDashboardVm(missionId) {
   const brief = getBrief(missionId);
   const mission = getMission(missionId);
   if (!brief && !mission) return null;
 
   const row = projectMissionRow(missionId, mission);
   const card = missionListCardVm(row);
+  const confidence = getMissionConfidence(missionId);
+  const checkpoint = estimateNextCheckpoint(missionId);
   const summary = directorSummaryVm(missionId);
   const openDecisions = listDecisions(missionId, { status: "open" }).map((d) => decisionCardVm(d, { missionTitle: card.title }));
-  const assignments = listAssignments(missionId).map(workItemVm);
-  const timeline = readTimelineSummary(missionId, { limit: 12 }).map(timelineEventVm);
-  const artifacts = listEvidence(missionId).map((a) => evidenceCardVm(a));
-  const coverage = acceptanceEvidenceCoverage(missionId).map((c) => ({
-    id: c.id,
-    statement: c.statement,
-    status: c.status,
-    statusLabel: c.status === "passed" ? "Covered" : c.status === "partial" ? "Partial" : "Missing evidence",
-  }));
-  const cert = canCertifyMission(missionId);
+  const assignments = listAssignments(missionId);
+  const workers = listWorkerTelemetry().filter((w) => w.missionId === missionId);
+  const activeWorkers = workers.filter((w) => !["stopped", "complete", "failed"].includes(w.status));
+
+  const needsMe = listNeedsYou().filter((n) => n.missionId === missionId);
+
+  const currentWork = assignments.map((a) => {
+    const tel = workers.find((w) => w.assignmentId === a.assignmentId);
+    const model = tel?.workerId?.startsWith("claude") ? "Claude"
+      : tel?.workerId?.startsWith("cursor") ? "Cursor"
+        : a.provider === "claude" ? "Claude"
+          : a.provider === "cursor" ? "Cursor"
+            : a.workerId ? "Worker" : null;
+    return {
+      kind: "current_work",
+      title: a.title,
+      objective: a.objective,
+      status: a.status,
+      statusLabel: ({
+        ready: "Ready",
+        running: "Implementing",
+        waiting: "Waiting",
+        verification: "Validating",
+        complete: "Accepted",
+        blocked: "Blocked",
+        paused: "Paused",
+        failed: "Failed",
+      })[a.status] || a.status,
+      handledBy: model,
+      progressSummary: (a.progress || []).slice(-1)[0]?.summary || null,
+      healthLabel: tel ? (WORKER_HEALTH_COPY[tel.status] || tel.status) : null,
+    };
+  });
+
+  const recovering = workers.filter((w) => ["unresponsive", "stalled", "recovering", "failed"].includes(w.status));
+  const runningAsg = assignments.filter((a) => a.status === "running");
+  const directorFocus = runningAsg.map((a) => {
+    const tel = workers.find((w) => w.assignmentId === a.assignmentId);
+    const who = tel?.workerId?.startsWith("claude") ? "Claude"
+      : tel?.workerId?.startsWith("cursor") ? "Cursor"
+        : "Worker";
+    return `${who} on ${a.title}`;
+  });
+  if (!directorFocus.length) {
+    const ready = assignments.find((a) => a.status === "ready");
+    if (ready) directorFocus.push(`Next up: ${ready.title}`);
+  }
+
+  const risks = [];
+  if (openDecisions.length) risks.push(`Decision required: ${openDecisions[0].title}`);
+  for (const a of assignments.filter((x) => x.status === "blocked")) {
+    risks.push(`Blocked: ${a.title}`);
+  }
+  for (const w of recovering) {
+    risks.push(`${w.workerId?.startsWith("claude") ? "Claude" : w.workerId?.startsWith("cursor") ? "Cursor" : "Worker"} unhealthy on ${(getAssignment(missionId, w.assignmentId)?.title) || "assignment"}`);
+  }
+
+  const recoveries = recovering.map((w) => {
+    const action = w.last_recovery?.action
+      ? String(w.last_recovery.action).replace(/_/g, " ")
+      : "preparing safe recovery";
+    const title = getAssignment(missionId, w.assignmentId)?.title || "Worker";
+    return `${title}: Director ${action}`;
+  });
+
+  const assessment = (() => {
+    if (openDecisions.length) return "I need a product call from you before this work can continue.";
+    if (recovering.length) return "I am intervening on an unhealthy worker and preserving uncommitted work.";
+    if (runningAsg.length) return "Everything is progressing normally.";
+    if (assignments.some((a) => a.status === "verification")) return "I am validating completed work.";
+    if (card.status === "awaiting_kickoff_approval") return "Waiting for you to approve kickoff.";
+    if (assignments.every((a) => a.status === "complete") && assignments.length) {
+      return "Deliverables are complete — ready for your review.";
+    }
+    return summary.questions?.find((q) => q.id === "where")?.answer || card.directorState;
+  })();
+
+  const MILESTONE_TYPES = new Set([
+    "mission_started", "phase_started", "phase_completed", "assignment_started",
+    "assignment_completed", "decision_requested", "decision_answered",
+    "evidence_added", "validation", "recovery", "progress",
+  ]);
+  const timelineAll = readTimelineSummary(missionId, { limit: 40 }).map(timelineEventVm);
+  const recentProgress = [...timelineAll].reverse()
+    .filter((e) => MILESTONE_TYPES.has(e.type))
+    .slice(0, 8)
+    .map((e) => ({
+      headline: e.headline,
+      explanation: e.explanation,
+      timeLabel: e.timeLabel,
+      actor: e.actor,
+    }));
+
+  const progress = row.progress || {};
+  const phaseTitle = row.current_phase?.title || "No active phase yet";
 
   return {
-    kind: "mission_overview",
+    kind: "mission_dashboard",
+    missionId,
+    summary: {
+      title: card.title,
+      statusLabel: card.statusLabel,
+      status: card.status,
+      phase: phaseTitle,
+      phaseLabel: card.phaseLabel,
+      deliverablesAccepted: progress.accepted_deliverables ?? 0,
+      deliverablesTotal: progress.total_deliverables ?? 0,
+      deliverablesLabel: `${progress.accepted_deliverables ?? 0} / ${progress.total_deliverables ?? 0} accepted`,
+      activeWorkers: activeWorkers.length,
+      confidencePercent: confidence.percent,
+      confidenceBand: confidence.bandLabel,
+      nextCheckpoint: checkpoint.label,
+      primaryAction: card.primaryAction,
+    },
+    director: {
+      assessment,
+      focus: directorFocus.length ? directorFocus : ["Monitoring mission state"],
+      risks: risks.length ? risks : ["None"],
+      recoveries: recoveries.length ? recoveries : ["None"],
+      next: summary.questions?.find((q) => q.id === "next")?.answer || checkpoint.label,
+      recommendation: openDecisions[0]
+        ? `Recommend: ${openDecisions[0].recommendation}`
+        : (summary.questions?.find((q) => q.id === "next")?.answer || "Continue as planned"),
+    },
+    needsMe,
+    currentWork,
+    recentProgress,
+    timeline: timelineAll.slice(-12).reverse(),
+    confidence: {
+      percent: confidence.percent,
+      bandLabel: confidence.bandLabel,
+      change: confidence.change,
+      changes: confidence.changes || [],
+      factors: Object.entries(confidence.factors || {}).map(([id, f]) => ({
+        id,
+        label: id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        score: f.score,
+        note: f.note,
+        weight: Math.round((confidence.weights?.[id] || 0) * 100),
+      })),
+    },
+    // Compatibility for older clients still reading overview shape
     header: {
       missionId,
       title: card.title,
@@ -611,23 +747,21 @@ export function missionOverviewVm(missionId) {
       phaseLabel: card.phaseLabel,
       deliverablesLabel: card.deliverablesLabel,
       directorState: card.directorState,
-      openDecisionCount: card.openDecisionCount,
+      openDecisionCount: openDecisions.length,
       primaryAction: card.primaryAction,
     },
     directorSummary: summary,
     topDecision: openDecisions[0] || null,
-    workInProgress: assignments,
-    recentTimeline: timeline.slice(-8).reverse(),
-    evidence: {
-      artifacts: artifacts.slice(0, 8),
-      coverage,
-      certificationReady: Boolean(cert.ready),
-      certificationNote: cert.ready
-        ? "Evidence covers acceptance criteria — product certification still requires your review"
-        : "Certification remains incomplete until criteria and evidence are satisfied",
-    },
+    workInProgress: assignments.map(workItemVm),
     productComplete: false,
   };
+}
+
+/** @deprecated Use missionDashboardVm — kept as alias during cutover. */
+export function missionOverviewVm(missionId) {
+  const dash = missionDashboardVm(missionId);
+  if (!dash) return null;
+  return { ...dash, kind: "mission_overview" };
 }
 
 export function missionsHomeVm() {
