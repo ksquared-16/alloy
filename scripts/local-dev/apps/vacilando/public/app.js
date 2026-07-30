@@ -153,11 +153,21 @@ setInterval(() => {
 
 // Poll the open Director conversation while its work is actively executing, so the
 // operator sees engineering progress live without touching the provider window.
+// Also follow an autonomous objective onto its LIVE phase mission when the open
+// conversation is a finished prior phase (the stale "Reviewing" trap).
 setInterval(() => {
   const r = parseRoute();
   if (r.name !== "director" || r.sub !== "mission" || !r.param) return;
+  const obj = state._objective?.[r.param];
+  const liveId = obj?.live?.mission_id;
+  if (liveId && liveId !== r.param && ["conducting", "launching", "reviewing", "needs_you", "queuing", "waiting_auth"].includes(obj.live.status)) {
+    location.hash = "#/director/mission/" + liveId;
+    fetchConversation(liveId);
+    return;
+  }
   const st = state._convo?.[r.param]?.mission?.status;
   if (["starting", "running", "stopping", "waiting_for_acceptance"].includes(st)) fetchConversation(r.param);
+  else if (obj?.mode === "autonomous" && obj?.live && !obj.live.complete) fetchConversation(r.param);
 }, 3000);
 
 // -------- Director draft state (per worker slot) --------
@@ -210,14 +220,23 @@ document.addEventListener("input", (e) => {
   if (t && t.id === "cv-reply") state._cvReply = t.value;
 });
 
-// -------- routing (Command Center / Work History / Settings) --------
-function parseRoute() { const p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean); return { name: p[0] || "command", sub: p[1], param: p[2] }; }
+// -------- routing (Mission Control primary; legacy Command Center demoted) --------
+function parseRoute() {
+  const raw = location.hash.replace(/^#\/?/, "");
+  const [pathPart] = raw.split("?");
+  const p = pathPart.split("/").filter(Boolean);
+  return { name: p[0] || "missions", sub: p[1], param: p[2] };
+}
 function route() { return parseRoute().name; }
 function go(r) { location.hash = "#/" + r; }
-const CRUMBS = { director: "Director", command: "Command Center", history: "Work History", policies: "Policies", settings: "Settings", trust: "Runtime Trust" };
+const CRUMBS = {
+  missions: "Missions", timeline: "Timeline", workers: "Workers", decisions: "Decisions",
+  evidence: "Evidence", director: "Legacy Director", command: "Command Center",
+  history: "Work History", policies: "Policies", settings: "Settings", trust: "Runtime Trust",
+};
 function setActiveNav(name) {
   document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === name));
-  $("#crumb").textContent = CRUMBS[name] || "Command Center";
+  $("#crumb").textContent = CRUMBS[name] || "Missions";
 }
 
 let lastKey = null;
@@ -236,27 +255,38 @@ function render(force) {
   if (!force && key === lastKey) return;
   setActiveNav(r.name);
   const V = $("#view");
-  // Only a genuinely empty runtime blanks the app. A pending/degraded projection
-  // still has a registry-backed board, and must render it rather than hiding
-  // every worker behind "Connecting…".
-  if (!state.snap || (!state.snap.headline && !(state.snap.sprints || []).length)) {
-    // NOTE: lastKey is deliberately NOT set here. Marking this key as rendered
-    // would make the next identical key short-circuit, leaving the operator
-    // looking at a stale view — the "first click does nothing" defect.
+  const V2 = window.VacilandoV2;
+  const isV2 = V2 && ["missions", "timeline", "workers", "decisions", "evidence"].includes(r.name);
+  // Mission Control can render from V2 APIs without waiting on the legacy board snapshot.
+  if (!isV2 && (!state.snap || (!state.snap.headline && !(state.snap.sprints || []).length))) {
     V.innerHTML = `<div class="empty"><div class="big"><span class="spin"></span> ${esc(state.snap?.pending_note || "Connecting to the runtime…")}</div></div>`; return;
   }
-  lastKey = key; // only a completed render counts as rendered
-  // Preserve caret/scroll of a focused text field across the innerHTML rebuild
-  // so a background refresh can never disturb an in-progress draft.
+  lastKey = key;
   const ae = document.activeElement;
   const savedFocus = ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT") && ae.id
     ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd, top: ae.scrollTop } : null;
-  V.innerHTML = ({ director: viewDirector, command: viewCommand, history: viewHistory, policies: viewPolicies, settings: viewSettings, trust: viewTrust }[r.name] || viewCommand)();
+  let html = null;
+  if (isV2) {
+    if (r.name === "missions" && r.sub) html = V2.viewMissionDetail(r.sub);
+    else if (r.name === "missions") html = V2.viewMissions();
+    else if (r.name === "timeline") html = V2.viewTimeline();
+    else if (r.name === "workers" && r.sub) html = V2.viewWorkers(r.sub);
+    else if (r.name === "workers") html = V2.viewWorkers();
+    else if (r.name === "decisions" && r.sub) html = V2.viewDecisions(r.sub);
+    else if (r.name === "decisions") html = V2.viewDecisions();
+    else if (r.name === "evidence") html = V2.viewEvidence();
+  }
+  if (html != null) {
+    V.innerHTML = html;
+  } else {
+    const legacy = { director: viewDirector, command: viewCommand, history: viewHistory, policies: viewPolicies, settings: viewSettings, trust: viewTrust }[r.name] || viewCommand;
+    V.innerHTML = legacy();
+  }
   if (savedFocus) {
     const n = document.getElementById(savedFocus.id);
     if (n) { try { n.focus({ preventScroll: true }); if (savedFocus.s != null) n.setSelectionRange(savedFocus.s, savedFocus.e); n.scrollTop = savedFocus.top; } catch { /* field gone */ } }
   }
-  $("#nb-needs").textContent = state.snap ? needsYou().length : 0;
+  const nb = $("#nb-needs"); if (nb) nb.textContent = state.snap ? needsYou().length : 0;
 }
 
 // -------- Runtime Trust: every trust property, measurable --------
@@ -1074,6 +1104,23 @@ async function objPrepareNext(cap) {
     else toast("err", "Couldn't prepare next", (data && data.error) || "");
   } catch { toast("err", "Couldn't prepare next", ""); }
 }
+async function approveKickoff(missionId, briefId, version) {
+  toast("idle", "Approving kickoff…", "");
+  try {
+    const { data } = await api("/api/missions/brief/approve", {
+      brief_id: briefId || missionId,
+      mission_id: missionId,
+      version: version != null && version !== "" ? Number(version) : undefined,
+    });
+    if (data && data.ok) {
+      toast("ok", "Ready to begin", `Executing Brief v${(data.brief && data.brief.version) || version}`);
+      await fetchConversation(missionId);
+    } else {
+      toast("err", "Kickoff blocked", (data && (data.detail || data.error)) || "not ready");
+      await fetchConversation(missionId);
+    }
+  } catch { toast("err", "Kickoff failed", ""); }
+}
 async function fetchProviders() { try { const r = await fetch("/api/providers"); state._providers = await r.json(); render(true); } catch {} }
 // A worker's provider status is READ from the Provider Runtime (shared), never owned by the worker.
 function providerRt(id) { return (state._providers?.providers || state._dash?.provider_runtime?.providers || []).find((p) => p.id === id) || null; }
@@ -1347,21 +1394,119 @@ const DIR_MARK = { done: "✓", current: "•", review: "!", blocked: "⛔", pen
 
 async function fetchConversations() { try { const r = await fetch("/api/director/conversations"); state._convos = (await r.json()).conversations || []; render(true); } catch { /* keep last */ } }
 async function fetchCapabilities() { try { const r = await fetch("/api/capabilities"); state._caps = (await r.json()).capabilities || []; render(true); } catch { /* keep last */ } }
-async function fetchConversation(id) { try { const r = await fetch("/api/director/conversation?id=" + encodeURIComponent(id)); const j = await r.json(); (state._convo = state._convo || {})[id] = j.conversation; (state._objective = state._objective || {})[id] = j.objective || null; render(true); } catch { /* keep last */ } }
+async function fetchConversation(id) {
+  try {
+    const r = await fetch("/api/director/conversation?id=" + encodeURIComponent(id));
+    const j = await r.json();
+    (state._convo = state._convo || {})[id] = j.conversation;
+    (state._objective = state._objective || {})[id] = j.objective || null;
+    (state._kickoff = state._kickoff || {})[id] = j.kickoff || null;
+    (state._timeline = state._timeline || {})[id] = j.timeline || [];
+    (state._timelineSummary = state._timelineSummary || {})[id] = j.timeline_summary || null;
+    render(true);
+  } catch { /* keep last */ }
+}
+
+/** §4.4 Kickoff confirmation — user approves execution of THEIR plan. */
+function kickoffCard(id) {
+  const k = (state._kickoff || {})[id];
+  if (!k?.ok || !k.kickoff_card) return "";
+  if (k.kickoff_status === "executing") return "";
+  const card = k.kickoff_card;
+  const plan = card.director_execution_plan || {};
+  const changes = card.plan_changes_by_director;
+  const changeLine = changes === "None" || !changes || (Array.isArray(changes) && !changes.length)
+    ? "None"
+    : (Array.isArray(changes) ? changes.map((c) => esc(String(c))).join("; ") : esc(String(changes)));
+  const ops = (k.readiness?.operational_gaps || []).map((g) =>
+    `<li class="muted">${esc(g.message || g.code)}${g.resolvable ? " <em>(Director can resolve)</em>" : ""}</li>`).join("");
+  const amb = (k.readiness?.mission_ambiguities || []).map((g) =>
+    `<li>${esc(g.message || g.code)}</li>`).join("");
+  const ready = card.ready_to_begin;
+  return `<div class="kickoff-card">
+    <div class="kickoff-h"><b>${esc(card.title)}</b>
+      <span class="muted">Brief v${esc(String(card.mission_brief_version))} · ${esc(String(card.mission_content_hash || "").slice(0, 12))}…</span></div>
+    <div class="kickoff-recv">Plan received · ${card.phase_count} phases · ${card.acceptance_criteria_count} acceptance criteria · ${card.source_document_count} source documents · ${card.constraint_count} constraints</div>
+    <div class="kickoff-plan"><div class="dlabel">Director execution plan</div>
+      <ul>
+        <li>Maximum ${esc(String(plan.max_concurrent_workers ?? 1))} concurrent implementation workers</li>
+        <li>Merge requires user approval: ${plan.merge_requires_user_approval ? "yes" : "no"}</li>
+        <li>Migration requires user approval: ${plan.migration_requires_user_approval ? "yes" : "no"}</li>
+        <li>Estimated risk: ${esc(plan.estimated_risk || "—")}</li>
+      </ul>
+    </div>
+    <div class="kickoff-changes"><div class="dlabel">Plan changes made by Director</div><div>${changeLine}</div></div>
+    ${amb ? `<div class="kickoff-amb"><div class="dlabel">Needs your decision before kickoff</div><ul>${amb}</ul></div>` : ""}
+    ${ops ? `<div class="kickoff-ops"><div class="dlabel">Operational gaps</div><ul>${ops}</ul></div>` : ""}
+    <div class="kickoff-act">
+      ${ready
+        ? `<button class="btn go" data-kickoff-approve="${esc(id)}" data-brief="${esc(k.brief?.missionId || id)}" data-ver="${esc(String(k.brief?.version ?? card.mission_brief_version))}">Ready to begin</button>`
+        : `<span class="warnink">Resolve mission ambiguities before approving execution</span>`}
+    </div>
+  </div>`;
+}
+
+/** Timeline seed in Mission Detail — structured SoR, not worker chat. */
+function missionTimelineSeed(id) {
+  const events = (state._timeline || {})[id] || [];
+  if (!events.length) return "";
+  const rows = events.slice(-12).map((e) =>
+    `<div class="tle"><span class="tle-t">${esc(e.type)}</span><span class="tle-s">${esc(e.summary)}</span><span class="tle-a muted">${esc((e.at || "").replace("T", " ").slice(0, 16))}</span></div>`
+  ).join("");
+  return `<div class="timeline-seed"><div class="dlabel">Mission timeline</div>${rows}</div>`;
+}
+
 // The conductor strip: shows Director conducting the objective as a phase spine,
 // a hand-off toggle (gated ⇄ autonomous), and — after an Accept — a one-click
 // "Prepare next phase" so the operator never returns to a blank box.
+// `live` (from the API) is the authoritative NOW-state even when this conversation
+// is a finished prior phase — that was the stale "Reviewing" confusion.
 function objectiveStrip(id) {
   const o = (state._objective || {})[id];
   if (!o || !(o.phases || []).length) return "";
   const done = o.phases.filter((p) => p.status === "done").length;
   const auto = o.mode === "autonomous";
-  const spine = o.phases.map((p) => `<span class="ophase ${p.status}" title="${esc(p.title)}">${p.status === "done" ? "✓" : "○"} ${esc(p.title)}</span>`).join('<span class="oarrow">→</span>');
+  const live = o.live || null;
+  const wait = live?.waiting_on || o.waiting_on;
+  const spine = o.phases.map((p) => {
+    const isCurrent = live?.phase?.id === p.id;
+    return `<span class="ophase ${p.status}${isCurrent ? " current" : ""}" title="${esc(p.title)}">${p.status === "done" ? "✓" : isCurrent ? "●" : "○"} ${esc(p.title)}</span>`;
+  }).join('<span class="oarrow">→</span>');
   const pn = o.proposed_next;
-  return `<div class="objstrip">
-    <div class="objhead"><b>${esc(o.title)}</b> · ${done}/${o.phases.length} phases · <span class="${auto ? "clean" : "muted"}">${auto ? "Director is conducting (autonomous)" : "operator-gated"}</span>
+  const agoLive = live?.last_activity_at ? (() => {
+    const s = Math.max(0, (Date.now() - new Date(live.last_activity_at).getTime()) / 1000);
+    if (s < 60) return `${s | 0}s ago`;
+    if (s < 3600) return `${(s / 60) | 0}m ago`;
+    return `${(s / 3600) | 0}h ago`;
+  })() : null;
+
+  let statusBlock = "";
+  if (wait?.kind === "provider_auth") {
+    statusBlock = `<div class="objwait">Waiting — reconnect <b>${esc(wait.provider || "provider")}</b> to continue${wait.detail ? ` <span class="muted">· ${esc(String(wait.detail).slice(0, 120))}</span>` : ""}
+        ${wait.provider ? `<button class="btn sm warn" data-prov-reconnect="${esc(wait.provider)}">Reconnect</button>` : ""}</div>`;
+  } else if (live && !live.complete) {
+    const pulse = ["conducting", "launching", "queuing"].includes(live.status) ? " live" : "";
+    const you = live.operator_needed
+      ? `<span class="objneed">Needs you</span>`
+      : `<span class="objidle">Nothing needed from you — Director is conducting</span>`;
+    statusBlock = `<div class="objlive${pulse}"><span class="objlive-dot"></span><b>${esc(live.label)}</b>
+      ${live.current_phase ? `<span class="muted">· ${esc(live.current_phase)}</span>` : ""}
+      ${agoLive ? `<span class="muted">· activity ${esc(agoLive)}</span>` : ""}
+      ${you}
+      ${live.mission_id && live.mission_id !== id ? `<button class="btn sm go" data-dmission="${esc(live.mission_id)}">Open live phase</button>` : ""}
+    </div>`;
+  } else if (live?.complete) {
+    statusBlock = `<div class="objlive done"><b>Objective complete</b> · ${done}/${o.phases.length} phases</div>`;
+  }
+
+  const modeLabel = wait?.kind === "provider_auth"
+    ? `waiting on ${wait.provider || "provider"} auth`
+    : (auto ? "Director is conducting (autonomous)" : "operator-gated");
+  return `<div class="objstrip${wait || (live && !live.operator_needed && !live.complete) ? " waiting" : ""}${live && ["conducting", "launching"].includes(live.status) ? " conducting" : ""}">
+    <div class="objhead"><b>${esc(o.title)}</b> · ${done}/${o.phases.length} phases · <span class="${wait ? "warnink" : auto ? "clean" : "muted"}">${esc(modeLabel)}</span>
       <button class="btn sm ${auto ? "warn" : ""}" data-obj-mode="${auto ? "gated" : "autonomous"}" data-cap="${esc(o.capability_id)}">${auto ? "Take back" : "Hand off to Director"}</button></div>
     <div class="ospine">${spine}</div>
+    ${statusBlock}
     ${pn && !auto ? `<div class="objnext">Next: <b>${esc(pn.phase.title)}</b> <button class="btn sm go" data-obj-prepare="${esc(o.capability_id)}">Prepare it</button></div>` : ""}
   </div>`;
 }
@@ -1416,44 +1561,37 @@ function conversationInbox() {
 // question never disappears behind a green verdict. Curated and load-bearing:
 // superseded claims live under "Set aside", never in the active surface.
 const CARRY_LABEL = { tradeoff: "Accepted tradeoff", accepted_imperfection: "Accepted gap", risk: "Risk" };
-function sharedUnderstanding(c, stage) {
+function sharedUnderstandingBody(c, stage) {
+  // Body-only form used by the collapsible drawer; sharedUnderstanding wraps it.
   const u = c.understanding;
-  if (!u) return `<div class="cvcol cvinsights"><div class="cvcol-h">Shared understanding</div><span class="muted">—</span></div>`;
-  // While Director is still Understanding, the surface must not look fully formed:
-  // show what is settled and what is open, but not carried/advised/set-aside yet.
+  if (!u) return `<span class="muted">—</span>`;
   const understanding = stage === "understanding";
   const tag = (t, cls) => `<span class="su-tag ${cls || ""}">${esc(t)}</span>`;
   const why = (w) => (w ? `<div class="su-why">${esc(w)}</div>` : "");
   const claim = (voiceTag, text, whyText) => `<div class="su-item"><div class="su-line">${voiceTag}<span>${esc(text)}</span></div>${why(whyText)}</div>`;
-
   const reliedCls = (r) => r.kind === "decision" ? (r.settled_from_prior ? "settled" : "decided") : r.kind === "constraint" ? "must" : "approach";
   const relied = u.relied_upon.length
     ? u.relied_upon.map((r) => claim(tag(r.voice, reliedCls(r)), r.text, r.why)).join("")
     : (u.nothing_settled ? `<span class="muted">Nothing is settled yet — this is still being shaped.</span>` : `<span class="muted">—</span>`);
   const thin = u.is_thin ? `<div class="su-thin">Resting on limited evidence so far.</div>` : "";
-
   const frontier = u.frontier.length
     ? u.frontier.map((f) => claim(tag(f.blocks_execution ? "Needs a decision" : "Open", f.blocks_execution ? "blocks" : "open"), f.question, f.why)).join("")
     : (understanding ? `<span class="muted">Director is still working out what's open.</span>` : `<span class="muted">Nothing load-bearing is unresolved.</span>`);
-
-  // These sections are premature while still understanding — hidden until preparing.
   const carrying = (!understanding && u.carrying.length)
     ? `<div class="cvins"><div class="dlabel">Knowingly carrying</div>${u.carrying.map((k) => claim(tag(CARRY_LABEL[k.kind] || "Carrying", "carry"), k.text, k.why)).join("")}</div>` : "";
-  // Only at the pre-start gate, and clearly OPTIONAL — an informed tradeoff the
-  // operator accepts by starting, not a pending decision that blocks the gate.
   const advises = (stage === "preparing" && u.advises)
     ? `<div class="cvins"><div class="dlabel">Director also suggests</div>${claim(tag("Optional", "advise"), u.advises.headline, "Not required to start — you're ready without these. Starting proceeds without them; broaden the objective and prepare again to include them.")}</div>` : "";
   const basis = (!understanding && u.basis)
     ? `<div class="cvins"><div class="dlabel">Continuing from</div><p class="su-basis">${esc(u.basis.continuation)}</p></div>` : "";
   const aside = (!understanding && u.set_aside.length)
     ? `<div class="cvins"><div class="dlabel">Set aside</div>${u.set_aside.map((s) => `<div class="su-aside"><span>${esc(s.text)}</span>${s.revisit_if ? `<div class="su-why">Revisit if ${esc(s.revisit_if)}</div>` : ""}</div>`).join("")}</div>` : "";
-
-  return `<div class="cvcol cvinsights"><div class="cvcol-h">Shared understanding</div>
-    <div class="cvins"><div class="dlabel">What we're doing</div><p class="cvgoal">${esc(u.intent || "—")}</p></div>
+  return `<div class="cvins"><div class="dlabel">What we're doing</div><p class="cvgoal">${esc(u.intent || "—")}</p></div>
     <div class="cvins"><div class="dlabel">What we're relying on</div>${relied}${thin}</div>
     <div class="cvins"><div class="dlabel">What's still open</div>${frontier}</div>
-    ${carrying}${advises}${basis}${aside}
-  </div>`;
+    ${carrying}${advises}${basis}${aside}`;
+}
+function sharedUnderstanding(c, stage) {
+  return `<div class="cvcol cvinsights"><div class="cvcol-h">Shared understanding</div>${sharedUnderstandingBody(c, stage)}</div>`;
 }
 
 // Selecting a conversation opens the workspace: left history, center preparation,
@@ -1560,7 +1698,14 @@ function opFooter(c, id) {
   if (acts.includes("close")) btns.push(`<button class="btn" data-dclose="${id}">Close</button>`);
   if (acts.includes("restart")) btns.push(`<button class="btn" data-dstart="${id}">Try again</button>`);
   if (acts.includes("stop")) btns.push(`<button class="btn warn" data-dstop="${id}">Stop</button>`);
-  return btns.length ? `<div class="cvcompose ready">${btns.join("")}</div>` : "";
+  if (btns.length) return `<div class="cvcompose ready">${btns.join("")}</div>`;
+  // Autonomous conducting with nothing for the operator — say so explicitly so an
+  // empty footer never reads as "stuck".
+  const live = (state._objective || {})[id]?.live;
+  if (live && !live.operator_needed && !live.complete) {
+    return `<div class="cvcompose idle"><span class="objidle">Nothing for you right now — Director is conducting <b>${esc(live.phase?.title || "the next phase")}</b>.</span></div>`;
+  }
+  return "";
 }
 
 // Conversation STAGES — the operator sees only the stage they are in.
@@ -1578,57 +1723,87 @@ function understandingPanel(c) {
     <p class="opsum">${n ? `Director has ${n} ${n === 1 ? "question" : "questions"} in the conversation — answer ${n === 1 ? "it" : "them"} and it will prepare the work.` : "Director is still understanding this work."}</p></div>`;
 }
 
+/** Light formatting for Director prompts in-thread (bold + line breaks). */
+function formatDirectorPrompt(s) {
+  return esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
+}
+
+function workPanelBody(c, stage) {
+  const m = c.mission, pkg = c.package, o = c.operations;
+  const list = (arr, f) => (arr && arr.length ? `<ul class="dul">${arr.slice(0, 6).map((x) => `<li>${esc(f(x))}</li>`).join("")}</ul>` : `<span class="muted">—</span>`);
+  if (stage === "understanding") {
+    return `${understandingPanel(c)}
+      <div class="opnote">Preparation — the objective, deliverables, and acceptance — appears once Director's questions are answered.</div>`;
+  }
+  // Needs-you content lives in the conversation thread; the work panel keeps the
+  // structural band (progress / package) without duplicating the ask.
+  const band = (o?.state?.key === "needs_operator")
+    ? `<div class="opband attn"><span class="opstate attn">Needs you</span><p class="opsum muted">Director's ask is in the conversation — answer there.</p></div>`
+    : opBand(c);
+  const timeline = `<div class="dtl vert">${DIR_STAGES.map((s) => {
+    const st = dirStageState(s.key, m, pkg);
+    return `<div class="dtl-step ${st}"><span class="dtl-dot">${DIR_MARK[st]}</span><span class="dtl-lbl">${s.label}</span></div>`;
+  }).join('<span class="dtl-line"></span>')}</div>`;
+  return `${band}${timeline}
+    ${pkg ? `<div class="cvpkg"><div class="cvpkg-h"><b>What Director prepared</b> <span class="muted">v${pkg.version}${pkg.diff_from_previous?.verdict_change ? ` · ${esc(pkg.diff_from_previous.verdict_change)}` : ""}</span></div>
+      <div class="dcols">
+        <div><div class="dlabel">Deliverables</div>${list(pkg.expected_deliverables, (x) => x.description)}</div>
+        <div><div class="dlabel">How we'll know it's done</div>${list(pkg.acceptance_criteria, (x) => x.statement)}</div>
+      </div></div>` : `<div class="muted">Director is still pulling this together.</div>`}`;
+}
+
 function conversationWorkspace(id) {
   const c = state._convo?.[id];
   if (!c) { fetchConversation(id); return `<div class="dwrap"><button class="btn sm" data-dback>← Conversations</button><div class="m-loading"><span class="spin"></span> Opening the conversation…</div></div>`; }
-  const m = c.mission, pkg = c.package, o = c.operations;
+  const o = c.operations;
   const stage = o?.stage || "preparing";
-  const list = (arr, f) => (arr && arr.length ? `<ul class="dul">${arr.slice(0, 6).map((x) => `<li>${esc(f(x))}</li>`).join("")}</ul>` : `<span class="muted">—</span>`);
 
-  // LEFT — the conversation, as a dialogue, with the stage-aware next-action footer.
+  // PRIMARY — conversation is the workspace. Questions, review, and Needs-you
+  // all land IN the thread so the operator never hunts a side panel.
   const bubbles = c.messages.map((msg) => `<div class="cvmsg ${msg.from}"><div class="cvbub sel">${esc(msg.text)}<button class="cvcopy" data-copy title="Copy">Copy</button></div></div>`).join("");
   const qbubbles = (stage === "understanding" ? (o?.questions || []) : []).map((q) => `<div class="cvmsg director q${q.blocks ? " blocks" : ""}"><div class="cvbub"><span class="qbadge">${q.blocks ? "needs an answer" : "worth confirming"}</span>${esc(q.question)}${q.why ? `<div class="qwhy">${esc(q.why)}</div>` : ""}</div></div>`).join("");
-  // When work is ready for review, Director's summary + read belong IN the thread as
-  // plain, selectable/copy-pasteable text — not boxed in "the work".
   const rev = (stage === "reviewing" ? o?.review : null);
   const reviewBubble = rev && rev.summary ? `<div class="cvmsg director review"><div class="cvbub sel">${esc(rev.summary)}${rev.recommendation ? `<div class="qwhy" style="margin-top:8px"><b>Director's read:</b> ${esc(rev.recommendation)}</div>` : ""}<button class="cvcopy" data-copy title="Copy">Copy</button></div></div>` : "";
-  const left = `<div class="cvcol cvhistory"><div class="cvcol-h">Conversation</div><div class="cvthread">${bubbles}${qbubbles}${reviewBubble}</div>${opFooter(c, id)}</div>`;
+  const need = o?.needs_operator;
+  const needBubble = need ? `<div class="cvmsg director need"><div class="cvbub sel"><span class="qbadge blocks">needs you</span><div class="need-body">${formatDirectorPrompt(need.prompt || "")}</div><button class="cvcopy" data-copy title="Copy">Copy</button></div></div>` : "";
+  const thread = `<div class="cvcol cvhistory primary"><div class="cvcol-h">Conversation</div><div class="cvthread">${bubbles}${qbubbles}${reviewBubble}${needBubble}</div>${opFooter(c, id)}</div>`;
 
-  // CENTER — gated by stage: while Director is still Understanding, it shows the
-  // OPEN QUESTIONS and nothing else; preparation artifacts appear only afterward.
-  let center;
-  if (stage === "understanding") {
-    center = `<div class="cvcol cvprep"><div class="cvcol-h">The work</div>${understandingPanel(c)}
-      <div class="opnote">Preparation — the objective, deliverables, and acceptance — appears once Director's questions are answered.</div></div>`;
-  } else {
-    const timeline = `<div class="dtl vert">${DIR_STAGES.map((s) => {
-      const st = dirStageState(s.key, m, pkg);
-      return `<div class="dtl-step ${st}"><span class="dtl-dot">${DIR_MARK[st]}</span><span class="dtl-lbl">${s.label}</span></div>`;
-    }).join('<span class="dtl-line"></span>')}</div>`;
-    center = `<div class="cvcol cvprep"><div class="cvcol-h">The work</div>
-      ${opBand(c)}
-      ${timeline}
-      ${pkg ? `<div class="cvpkg"><div class="cvpkg-h"><b>What Director prepared</b> <span class="muted">v${pkg.version}${pkg.diff_from_previous?.verdict_change ? ` · ${esc(pkg.diff_from_previous.verdict_change)}` : ""}</span></div>
-        <div class="dcols">
-          <div><div class="dlabel">Deliverables</div>${list(pkg.expected_deliverables, (x) => x.description)}</div>
-          <div><div class="dlabel">How we'll know it's done</div>${list(pkg.acceptance_criteria, (x) => x.statement)}</div>
-        </div></div>` : `<div class="muted">Director is still pulling this together.</div>`}
-    </div>`;
+  // Drawers — Work + Shared Understanding collapse so conversation stays primary.
+  const workDefaultOpen = stage === "preparing" || stage === "understanding" || o?.state?.key === "ready";
+  const suDefaultOpen = stage === "understanding";
+  const workOpen = state._drawerWork != null ? state._drawerWork : workDefaultOpen;
+  const suOpen = state._drawerSu != null ? state._drawerSu : suDefaultOpen;
+  const drawers = `<div class="cvdrawers">
+    <details class="cvdrawer" data-drawer="work"${workOpen ? " open" : ""}>
+      <summary>The work${o?.state?.key === "needs_operator" ? ` <span class="cvdrawer-pill attn">Needs you</span>` : (o?.state?.label ? ` <span class="cvdrawer-pill">${esc(o.state.label)}</span>` : "")}</summary>
+      <div class="cvdrawer-body">${workPanelBody(c, stage)}</div>
+    </details>
+    <details class="cvdrawer" data-drawer="su"${suOpen ? " open" : ""}>
+      <summary>Shared understanding</summary>
+      <div class="cvdrawer-body">${sharedUnderstandingBody(c, stage)}</div>
+    </details>
+  </div>`;
+
+  const live = (state._objective || {})[id]?.live;
+  let headStage = c.presence?.phase === "launching" ? "launching" : stage;
+  let stageLabel = STAGE_LABEL[headStage] || o?.state?.label || "";
+  if (live && !live.complete) {
+    if (live.status === "waiting_auth") { headStage = "reviewing"; stageLabel = "Waiting on auth"; }
+    else if (live.status === "conducting" || live.status === "launching" || live.status === "queuing") { headStage = "executing"; stageLabel = live.status === "launching" ? "Launching" : "Conducting"; }
+    else if (live.status === "needs_you") { headStage = "executing"; stageLabel = "Needs you"; }
+    else if (live.status === "reviewing") { headStage = "reviewing"; stageLabel = live.operator_needed ? "Reviewing" : "Checking evidence"; }
   }
-
-  // RIGHT — Shared Understanding, gated so it doesn't look fully-formed mid-understanding.
-  const right = sharedUnderstanding(c, stage);
-
-  // The header follows presence: while the worker is coming online the whole view
-  // reads "Launching", not "Executing" — one coherent signal, no split-brain.
-  const headStage = c.presence?.phase === "launching" ? "launching" : stage;
-  const stageLabel = STAGE_LABEL[headStage] || o?.state?.label || "";
+  if (live?.mission_id && live.mission_id !== id && ["conducting", "launching", "reviewing", "needs_you"].includes(live.status)) {
+    setTimeout(() => { location.hash = "#/director/mission/" + live.mission_id; }, 0);
+  }
   return `<div class="dwrap wide">
     <div class="dmhead"><button class="btn sm" data-dback>← Conversations</button>
       <div class="dmtitle"><h2>${esc(c.title)}</h2><span class="dmintent">${esc(stageLabel)}</span></div>
       ${o ? `<span class="mbadge ${STAGE_TONE[headStage] || o.state.tone} big">${esc(stageLabel)}</span>` : ""}</div>
+    ${kickoffCard(id)}
     ${objectiveStrip(id)}
-    <div class="cvgrid">${left}${center}${right}</div>
+    ${missionTimelineSeed(id)}
+    <div class="cvlayout">${thread}${drawers}</div>
   </div>`;
 }
 
@@ -1746,6 +1921,13 @@ function directorSendBack(id, verdict, cid) {
   return recompileDirector(id);
 }
 
+document.addEventListener("toggle", (e) => {
+  const d = e.target;
+  if (!(d instanceof HTMLDetailsElement)) return;
+  if (d.dataset.drawer === "work") state._drawerWork = d.open;
+  if (d.dataset.drawer === "su") state._drawerSu = d.open;
+}, true);
+
 document.addEventListener("click", (e) => {
   const t = (a) => e.target.closest(a);
   let n;
@@ -1786,6 +1968,11 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-copy]"))) { e.stopPropagation(); copyBubble(n); return; }
   if ((n = t("[data-obj-mode]"))) { e.stopPropagation(); objSetMode(n.dataset.cap, n.dataset.objMode); return; }
   if ((n = t("[data-obj-prepare]"))) { e.stopPropagation(); objPrepareNext(n.dataset.objPrepare); return; }
+  if ((n = t("[data-kickoff-approve]"))) {
+    e.stopPropagation();
+    approveKickoff(n.dataset.kickoffApprove, n.dataset.brief, n.dataset.ver);
+    return;
+  }
   if ((n = t("[data-end]"))) { e.stopPropagation(); showEndWork(Number(n.dataset.end)); return; }
   if (t("[data-start]")) { showStartWork(); return; }
   if ((n = t("[data-startserver]"))) { e.stopPropagation(); showStartServer(Number(n.dataset.startserver)); return; }
@@ -1869,6 +2056,8 @@ function showDelete(slot) {
 }
 $("#refresh-btn").addEventListener("click", async (ev) => { ev.target.disabled = true; const x = ev.target.textContent; ev.target.textContent = "↻ …"; await execute("runtime.refresh", {}, false); fetchResources(); ev.target.disabled = false; ev.target.textContent = x; });
 window.addEventListener("hashchange", () => render(true));
+window.render = render; // Mission Control (mission-control.js) refreshes after V2 fetches
+window.go = go;
 
 // -------- data loop --------
 function chrome() { $("#gen").textContent = state.snap?.generated_at ? new Date(state.snap.generated_at).toLocaleTimeString() : ""; }
@@ -1896,21 +2085,36 @@ setInterval(poll, 4000);
 setInterval(fetchResources, 9000);
 
 // ---- Operator notifications: pulled in when Director needs you, not by checking.
-// Fires a native (Electron) desktop notification the moment a conversation newly
-// enters a state that needs the operator — a question to answer, a package to
-// review, or work ready for acceptance — and stays quiet otherwise. Same signal a
-// future Mac-mini + mobile push would ride; only the transport differs.
+// Fires a native desktop notification the moment a conversation newly needs the
+// operator — a question, package review, or acceptance — and stays quiet otherwise.
+// Transient engine failures (provider 529 → at_risk) do NOT notify: the inbox may
+// already show a newer live run for the same capability, so "needs you" would be a lie.
 const NOTIFY_ACTIONS = { Answer: "has a question for you", Review: "prepared work to review", Accept: "finished work — ready for your acceptance", Continue: "is blocked and needs you" };
-const _notifySeen = new Map(); // conversation_id -> last action (only notify on transitions, never on first load)
+const _notifySeen = new Map(); // conversation_id -> last attention key (only notify on transitions, never on first load)
+
+function attentionKey(c) {
+  if (!c?.needs_attention) return "";
+  return `${(c.state && c.state.action) || ""}:${(c.state && c.state.key) || ""}`;
+}
+
+function setDockBadge(count) {
+  try { window.vacilandoNative?.setDockBadge?.(count); } catch { /* browser / no shell */ }
+}
+
 function notifyOperator(convos) {
+  const list = convos || [];
+  const needing = list.filter((c) => c.needs_attention);
+  setDockBadge(needing.length);
+
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-  for (const c of (convos || [])) {
-    const action = (c.state && c.state.action) || "";
+  for (const c of list) {
     const id = c.conversation_id;
+    const next = attentionKey(c);
     const prev = _notifySeen.has(id) ? _notifySeen.get(id) : null;
-    _notifySeen.set(id, action);
-    if (prev === null || prev === action) continue;         // first sight or unchanged → no notification
-    if (!NOTIFY_ACTIONS[action]) continue;                   // only the states that need a human
+    _notifySeen.set(id, next);
+    if (prev === null || prev === next || !next) continue; // first sight, unchanged, or cleared
+    const action = (c.state && c.state.action) || "";
+    if (!NOTIFY_ACTIONS[action]) continue;
     try {
       const n = new Notification(`Vacilando · ${c.title || "Director"}`, { body: `Director ${NOTIFY_ACTIONS[action]}.`, tag: id, requireInteraction: action === "Accept" || action === "Continue" });
       n.onclick = () => { try { window.focus(); location.hash = "#/director"; state._openConvo = id; render(true); } catch {} };
