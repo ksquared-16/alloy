@@ -18,6 +18,24 @@
 The one prerequisite left outside code: author the "All Children in Enrollment" Work View in Firefly
 tenant config (`row_grain_v1: "child"`, no stage predicate).
 
+### Later that day — builder, work views, reconciliation
+
+| Commit | What |
+|---|---|
+| `de31aec39` | Row Type declaration in the Work View builder (the Phase 4 prerequisite is now authorable) |
+| `ba9ac24d9` | Dynamic date conditions made readable; lens order made authoritative |
+| `450efb858` | Declared Work View order is the default workspace tile sort |
+
+- **Firefly config is DONE:** Active Pipeline and All Leads now declare `row_grain_v1: "family"`.
+  Both were previously dead destinations refused as `grain_ambiguous`. Confirmed in the browser.
+- **Reconciled with `origin/staging`** (7 incoming commits, Cursor scheduling UX, 6 files, no
+  overlap). Clean merge. Post-merge `vac run typecheck` **rc=0**.
+- **Slot 3 browser auth re-captured** (`alloy-agent-login 3`) — Phase 4 certification is unblocked.
+- **`last_activity_at` is DEFERRED by decision** — see `docs/runtime/DEFERRED-last-activity-operand.md`.
+  It is a real requirement, but it collides with the ratified enrichment-independent count invariant,
+  and **that invariant is not to be revised during this convergence**. `updated_at` stays the operand
+  for Active Pipeline and must not be relabelled as last activity.
+
 Three things a future session should not re-derive:
 
 1. **`journey_segment ?? "family"` was NOT a live hazard** — the field is required on
