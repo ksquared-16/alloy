@@ -96,6 +96,12 @@ alloy_build_test_command() {
 alloy_classify_exec_failure() {
     local log="$1" rc="$2"
     [[ "$rc" -ne 0 ]] || { printf 'ok'; return 0; }
+    # Infrastructure cancellation: signal-shaped exits (128+N) mean the host or an operator stopped
+    # the job. It answers nothing about the code and must never be recorded as a result.
+    if [[ "$rc" -eq 130 || "$rc" -eq 143 || "$rc" -eq 137 || "$rc" -eq 129 ]]; then
+        printf 'cancelled'
+        return 0
+    fi
     [[ -f "$log" ]] || { printf 'test'; return 0; }
     if grep -qE "CACError|Unknown option|unknown option|command not found|Cannot find module|ERR_MODULE_NOT_FOUND|error TS6[0-9]{3}|Invalid option" "$log"; then
         printf 'config'
