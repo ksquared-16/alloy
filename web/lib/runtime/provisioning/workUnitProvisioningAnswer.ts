@@ -95,6 +95,10 @@ import {
     type OperationalSubjectType,
 } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/types";
+import {
+    loadChildGrainProvisioningRows,
+    type ChildProvisioningRow,
+} from "@/lib/runtime/provisioning/childGrainProvisioningRows";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import {
     resolveOpportunityStageWorkSlice,
@@ -342,6 +346,8 @@ export type ProvisioningErrorCode =
     | "grain_ambiguous"
     /** The lens resolved ONE grain, but it has no Focus Panel subject (`person`/`account`/`work_item`). */
     | "grain_unsupported"
+    /** Rows resolved for a grain whose subject surface is not built yet — never presented as family. */
+    | "subject_surface_unavailable"
     | "subject_unavailable"
     | "no_truthful_primary_action"
     | "records_unavailable";
@@ -368,6 +374,7 @@ export function provisioningErrorKind(code: ProvisioningErrorCode): Provisioning
         case "no_active_view":
         case "grain_ambiguous":
         case "grain_unsupported":
+        case "subject_surface_unavailable":
         case "no_truthful_primary_action":
             return "configuration";
         // Configuration is sound; the requested subject is not present.
@@ -434,14 +441,23 @@ function resolveSubjectStrategy(view: WorkViewConfigV1Stored): {
  * equality with Record of Attention: `case`/`candidate` are attention/compat identifiers and never
  * participate in this comparison.
  */
+/**
+ * The stage keys a lens filters on. Extracted so the grain resolver and the child row source read the lens
+ * the SAME way — two copies of this predicate would be two definitions of what the lens selects.
+ * Empty = the lens spans every active stage.
+ */
+export function lensStageKeys(view: WorkViewConfigV1Stored): string[] {
+    return (view.filters_v1 ?? [])
+        .filter((f) => f.field_key === "opportunity_stage")
+        .flatMap((f) => (Array.isArray(f.value) ? f.value : [f.value]))
+        .map((v) => String(v));
+}
+
 export function resolveLensRowGrain(
     view: WorkViewConfigV1Stored,
     stages: readonly LifecycleBuilderStageRecord[],
 ): { ok: true; grain: RowGrain } | { ok: false; reason: string } {
-    const stageKeys = (view.filters_v1 ?? [])
-        .filter((f) => f.field_key === "opportunity_stage")
-        .flatMap((f) => (Array.isArray(f.value) ? f.value : [f.value]))
-        .map((v) => String(v));
+    const stageKeys = lensStageKeys(view);
 
     const scoped = stageKeys.length
         ? stages.filter((s) => stageKeys.includes(s.key))
@@ -734,16 +750,77 @@ export async function composeWorkUnitProvisioningAnswer(
     timings.records_ms = now() - tRec;
     if (rowErr) return fail("records_unavailable", `records unavailable: ${rowErr.message}`, workUnit, navFrame);
 
-    // ── ONE Operational Projection. The lens is evaluated exactly once. ──
+    // ── R1: THE ROW SOURCE IS THE RESOLVED GRAIN'S, NOT ALWAYS `opportunities`. ──
+    //
+    // The `opportunities` read above stays valid for BOTH grains, but means different things:
+    //   family → those rows ARE the rows;
+    //   child  → they are the org + work-unit SCOPE. `process_instances` carries no `work_unit_id` and no
+    //            FK to `opportunities`, so the in-scope opportunity set is a required INPUT to the child
+    //            read, not wasted work. (This is why the early fetch's "records depend only on work_unit.id,
+    //            not on configuration" comment still holds: the read did not move, only its use.)
+    //
+    // Provable invariant, stated as OUTPUT rather than as which tables are touched — the data model leaves
+    // no child path that never reads `opportunities`: ON A CHILD ANSWER, NO ROW'S IDENTITY OR SUBJECT IS AN
+    // OPPORTUNITY ID.
     const tProj = now();
-    const projection = computeOperationalProjection({
-        baseRows: (baseRows ?? []) as OperationalProjectionRow[],
-        workViews: [activeView], // only the active lens — no count fan-out, no second evaluation
-    });
-    const admitted = projection.byViewId[activeView.id]?.rows ?? [];
-    const ordered = applyCanonicalWorkViewSort(admitted, activeView);
-    const page = ordered.slice(0, PROVISIONING_ROW_PAGE_CAP);
+    let page: OperationalProjectionRow[];
+    let childRows: ChildProvisioningRow[] | null = null;
+
+    if (subjectGrain.grain === "child") {
+        try {
+            childRows = await loadChildGrainProvisioningRows({
+                supabase: req.supabase,
+                orgId: req.orgId,
+                workUnitId: workUnit.id,
+                stageKeys: lensStageKeys(activeView),
+            });
+        } catch (e) {
+            // NEVER the family path. `QueueService` degrades a failed child read to case-grain rows, which
+            // on a child surface is a wrong-subject substitution dressed as success. Here it is an honest
+            // terminal — and `records_unavailable` is the one error kind a retry can plausibly fix.
+            return fail(
+                "records_unavailable",
+                `child records unavailable: ${e instanceof Error ? e.message : String(e)}`,
+                workUnit,
+                navFrame,
+            );
+        }
+        // Membership was decided BY THE PROVIDER, using the effective-stage rule
+        // (`process_instances.stage_key ?? opportunities.stage_key`). Re-running the opportunity lens over
+        // child rows would evaluate the wrong predicate against the wrong subject.
+        page = childRows.slice(0, PROVISIONING_ROW_PAGE_CAP) as unknown as OperationalProjectionRow[];
+    } else {
+        // ── ONE Operational Projection. The lens is evaluated exactly once. ──
+        const projection = computeOperationalProjection({
+            baseRows: (baseRows ?? []) as OperationalProjectionRow[],
+            workViews: [activeView], // only the active lens — no count fan-out, no second evaluation
+        });
+        const admitted = projection.byViewId[activeView.id]?.rows ?? [];
+        const ordered = applyCanonicalWorkViewSort(admitted, activeView);
+        page = ordered.slice(0, PROVISIONING_ROW_PAGE_CAP);
+    }
     timings.projection_ms = now() - tProj;
+
+    // ── THE HONEST EDGE OF THIS SLICE. ──
+    // Child rows now resolve from the right source. Everything BELOW this line is still
+    // opportunity-shaped — the row enrichment, the subject snapshot's truth keys, the stage-work slice
+    // (`OpportunityStageWorkSlice`) and the actions projection (`entityType: "opportunity"`). Running child
+    // rows through it would produce a family-shaped answer about children: the precise substitution this
+    // sprint exists to remove, and it would LOOK like success.
+    //
+    // So a child lens that actually HAS rows refuses, explicitly and escapably, until the child subject
+    // path is built. On the certified tenant this does not fire — its child lenses are authoritatively
+    // empty (11 child participations all ride `lead`, and Registration/Waitlist select
+    // enrolling/enrolled/waitlist), so the empty terminal below is reached with the child provider having
+    // genuinely run. That is the difference between "empty" and "unsupported", and both are now sayable.
+    if (subjectGrain.grain === "child" && page.length > 0) {
+        return fail(
+            "subject_surface_unavailable",
+            `Work View "${activeView.label}" resolved ${page.length} child ${page.length === 1 ? "row" : "rows"}, but this surface cannot yet present a child subject — refusing rather than presenting them as a family`,
+            workUnit,
+            navFrame,
+        );
+    }
 
     const tComp = now();
     // U-O2 enrichment over the BOUNDED PAGE only — cost scales with what the operator can see.
