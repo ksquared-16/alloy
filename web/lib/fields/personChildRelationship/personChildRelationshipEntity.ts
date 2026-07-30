@@ -109,7 +109,11 @@ export type PersonChildRelationshipContext = {
 
 export type PersonChildRelationshipResolveStatus =
     | "resolved"
+    /** Valid items were returned, but one or more rows were skipped — see `warnings`. */
+    | "resolved_with_warnings"
     | "empty"
+    /** A systemic failure (query/schema), NOT a single bad row. */
+    | "failed"
     | "inactive"
     | "missing_person"
     | "invalid_context"
@@ -117,8 +121,20 @@ export type PersonChildRelationshipResolveStatus =
     | "legacy_only"
     | "unsupported";
 
+/** Why one relationship row could not be normalized. Never silently swallowed. */
+export type PersonChildRelationshipWarning = {
+    relationship_id: string;
+    person_id: string | null;
+    reason: string;
+    /** Whether re-running could succeed once the underlying data is fixed. */
+    recoverable: boolean;
+    source: "person_child_relationships" | "customer_member_contacts";
+};
+
 export type PersonChildRelationshipCollectionResult = {
     status: PersonChildRelationshipResolveStatus;
     items: readonly PersonChildRelationshipInstance[];
     reason?: string;
+    /** Present when individual rows were skipped; callers can distinguish partial from empty. */
+    warnings?: readonly PersonChildRelationshipWarning[];
 };

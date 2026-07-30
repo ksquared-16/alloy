@@ -56,6 +56,7 @@ const FX = {
 };
 const ON_CERT_STACK = (process.env.PLAYWRIGHT_BASE_URL ?? "").includes("3018");
 /** The local certification tenant's single vertical (Childcare). */
+const EMERGENCY_REF = "person.contact_role.emergency_contacts";
 const CERT_VERTICAL_ID = "d7a48ba5-2602-4dcd-8e5f-598f32436350";
 
 
@@ -937,7 +938,136 @@ test.describe("Configuration Discovery — proving journey", () => {
         expect(sibOutcome, "a different child must be a distinct commit, not a replayed retry").toBe("applied");
         expect(sibBody.data?.affected_member_ids).toEqual([FX.siblingB]);
     });
+
+    test("15. OMISSION is non-destructive — a later response that drops a member deletes nothing", async () => {
+        test.skip(!ON_CERT_STACK, "Runs only against the local certification stack");
+        const req = page.request;
+        const A = resolvedChild ?? FX.childA;
+
+        const before = await relationshipSnapshot(req, A);
+        console.log(`JOURNEY OMISSION before=${JSON.stringify(before)}`);
+
+        // Resolve the published schema again and submit a SECOND response that omits the guardians
+        // and the pickup entirely — only the emergency contact is supplied.
+        const resolved = await okJson(await req.get(`/api/public/forms/${publicToken}/resolve`), "resolve (omission)");
+        const schema = resolved.schema_json ?? resolved.data?.schema_json;
+        const groups = collectGroups(schema.fields ?? []).filter((g) => g.collection_binding?.collection_provider_ref);
+        const emergency = groups.find((g) => g.collection_binding.collection_provider_ref === EMERGENCY_REF)!;
+        const nested = (g: Json, key: string) =>
+            (g.fields ?? []).find((f: Json) => f.field_source?.field_key === key)?.id;
+
+        const signatures: Record<string, Json> = {};
+        for (const f of walkFields(schema.fields ?? []).filter((f) => f.type === "signature")) {
+            signatures[f.id] = { kind: "typed", typed_full_name: "Dana CDV1Guardian", acknowledged_at: new Date().toISOString() };
+        }
+
+        const payload = {
+            values: {},
+            signatures,
+            groups: {
+                [emergency.id]: [
+                    {
+                        instance_key: "cdv1-emergency-omission",
+                        values: {
+                            [nested(emergency, "full_name")!]: "Rosa CDV1Emergency",
+                            [nested(emergency, "phone")!]: "5550102",
+                        },
+                        collection: {
+                            provider_ref: EMERGENCY_REF,
+                            origin: "respondent_added",
+                            iteration_entity_type: "person",
+                        },
+                    },
+                ],
+            },
+        };
+
+        const draft = await okJson(
+            await req.post(`/api/public/forms/${publicToken}/submissions`, { data: { payload } }),
+            "create omission submission",
+        );
+        const omissionId = draft.id ?? draft.data?.id;
+        await okJson(
+            await req.post(`/api/public/forms/${publicToken}/submissions/${omissionId}/submit`, { data: { payload } }),
+            "submit omission",
+        );
+
+        const after = await relationshipSnapshot(req, A);
+        console.log(`JOURNEY OMISSION after=${JSON.stringify(after)}`);
+
+        // Omission is a NO-OP in V1: nothing is removed. No deletion workflow exists, and none is
+        // being introduced — a respondent leaving someone out of a later form must never revoke an
+        // existing guardian or pickup.
+        expect(after.pcrRoles.sort(), "an omitted relationship edge was removed").toEqual(before.pcrRoles.sort());
+        expect(after.cmcRoles.sort(), "an omitted guardian link was removed").toEqual(before.cmcRoles.sort());
+        expect(after.personIds.sort(), "an omitted Person was deleted").toEqual(before.personIds.sort());
+    });
+
+    test("16. operational read projection shows every role, without exposing storage", async () => {
+        test.skip(!ON_CERT_STACK, "Runs only against the local certification stack");
+        const req = page.request;
+        const A = resolvedChild ?? FX.childA;
+
+        const res = await okJson(
+            await req.get(`/api/admin/person-child-relationships?customer_member_id=${A}`),
+            "GET normalized relationships",
+        );
+        const items: Json[] = res.data?.items ?? res.items ?? res.data ?? [];
+        const rows = items.map((i) => ({
+            person_id: i.person_id ?? i.person?.id ?? null,
+            roles: (i.operational_roles ?? []).filter(Boolean),
+        }));
+        console.log(`JOURNEY DISPLAY rows=${JSON.stringify(rows)}`);
+
+        const rolesFor = (personId: string) =>
+            rows.filter((r) => r.person_id === personId).flatMap((r) => r.roles);
+
+        // Dana as guardian, Sam as BOTH guardian and authorized pickup, plus the respondent-added
+        // emergency contact — all through ONE normalized projection.
+        expect(rolesFor(FX.guardianPerson), "Dana is not shown as guardian").toContain("guardian");
+        const sam = rolesFor(FX.multiRolePerson);
+        expect(sam, "Sam is not shown as guardian").toContain("guardian");
+        expect(sam, "Sam is not shown as authorized pickup").toContain("authorized_pickup");
+
+        const emergencyRows = rows.filter((r) => r.roles.includes("emergency_contact"));
+        expect(emergencyRows.length, "the respondent-added emergency contact is not shown").toBeGreaterThan(0);
+
+        // ONE presentation row per canonical Person — the split must not surface as two people.
+        const samRows = rows.filter((r) => r.person_id === FX.multiRolePerson);
+        expect(
+            samRows.length,
+            "the multi-role Person is presented more than once — persistence is leaking into presentation",
+        ).toBe(1);
+
+        // And the payload must not name a physical table anywhere.
+        const raw = JSON.stringify(res);
+        for (const table of ["customer_member_contacts", "person_child_relationship_roles"]) {
+            expect(raw, `read payload leaks the physical table ${table}`).not.toContain(table);
+        }
+    });
 });
+
+/** Canonical relationship state for a child, read through supported admin APIs. */
+async function relationshipSnapshot(request: APIRequestContext, customerMemberId: string) {
+    const res = await request.get(`/api/admin/person-child-relationships?customer_member_id=${customerMemberId}`);
+    const body = await res.json();
+    const items: Json[] = body.data?.items ?? body.items ?? body.data ?? [];
+    const pcrRoles: string[] = [];
+    const cmcRoles: string[] = [];
+    const personIds: string[] = [];
+    for (const i of items) {
+        const pid = i.person_id ?? i.person?.id ?? null;
+        if (pid) personIds.push(pid);
+        // Canonical read-model field is `operational_roles`. Provenance is metadata-only, so the
+        // snapshot records every role against the person — consumers never see the destination.
+        const legacySourced = String((i.metadata ?? {}).legacy_source ?? "") === "customer_member_contacts";
+        for (const key of i.operational_roles ?? []) {
+            if (!key) continue;
+            (legacySourced ? cmcRoles : pcrRoles).push(`${pid}:${key}`);
+        }
+    }
+    return { pcrRoles, cmcRoles, personIds: [...new Set(personIds)] };
+}
 
 /** Collect group-type fields (one level of nesting is all Forms allows). */
 function collectGroups(fields: Json[]): Json[] {

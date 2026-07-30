@@ -4,6 +4,7 @@
  */
 
 import type {
+    PersonChildRelationshipWarning,
     PersonChildRelationshipCollectionResult,
     PersonChildRelationshipInstance,
     PersonChildRelationshipRecord,
@@ -73,16 +74,24 @@ export function resolvePersonChildRelationshipsForCustomerMember(
     }
 
     const items: PersonChildRelationshipInstance[] = [];
+    const warnings: PersonChildRelationshipWarning[] = [];
     for (const rec of scoped) {
         if (!includeInactive && rec.status === "inactive") continue;
         const roles = rolesForRelationship(rec.id, input.roleAssignments);
         if (requiredRole && !roles.map((r) => r.toLowerCase()).includes(requiredRole)) continue;
         if (!input.personsById.has(rec.person_id)) {
-            return {
-                status: "missing_person",
-                items: [],
-                reason: `Missing person ${rec.person_id} for relationship ${rec.id}.`,
-            };
+            // ONE unresolvable row must not erase a child's whole relationship set. Skip just this
+            // row and report it. A Person invisible here is either orphaned or outside the caller's
+            // organization/visibility — either way it is never partially returned, which is what
+            // keeps tenant isolation intact while the rest of the family still renders.
+            warnings.push({
+                relationship_id: rec.id,
+                person_id: rec.person_id,
+                reason: `Person ${rec.person_id} is not visible for relationship ${rec.id}.`,
+                recoverable: true,
+                source: "person_child_relationships",
+            });
+            continue;
         }
         items.push(
             buildInstance(
@@ -95,6 +104,11 @@ export function resolvePersonChildRelationshipsForCustomerMember(
     }
 
     if (items.length === 0) {
+        // Every row skipped is NOT the same as no rows: callers must be able to tell a genuinely
+        // empty child from one whose relationships could not be resolved.
+        if (warnings.length > 0) {
+            return { status: "missing_person", items: [], warnings, reason: warnings[0]!.reason };
+        }
         return { status: requiredRole ? "empty" : "inactive", items: [] };
     }
 
@@ -102,12 +116,15 @@ export function resolvePersonChildRelationshipsForCustomerMember(
         const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
         const pb = b.priority ?? Number.MAX_SAFE_INTEGER;
         if (pa !== pb) return pa - pb;
-        const an = String(a.person?.display_name ?? a.person?.full_name ?? "");
-        const bn = String(b.person?.display_name ?? b.person?.full_name ?? "");
+        // persons has no display_name column; full_name is the canonical display source.
+        const an = String(a.person?.full_name ?? "");
+        const bn = String(b.person?.full_name ?? "");
         return an.localeCompare(bn, undefined, { sensitivity: "base" });
     });
 
-    return { status: "resolved", items };
+    return warnings.length > 0
+        ? { status: "resolved_with_warnings", items, warnings }
+        : { status: "resolved", items };
 }
 
 export function relationshipInstancesGroupedByPerson(
