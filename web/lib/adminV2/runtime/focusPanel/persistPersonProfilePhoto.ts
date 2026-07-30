@@ -65,6 +65,8 @@ export async function resolvePersonIdForProfilePhoto(args: {
     return { ok: true, personId: ensured };
 }
 
+const PROFILE_PHOTO_UPLOAD_TIMEOUT_MS = 45_000;
+
 /** Upload image bytes into documents storage for a person. Does not bind canonical metadata. */
 export async function uploadPersonProfilePhotoDocument(args: {
     personId: string;
@@ -78,16 +80,37 @@ export async function uploadPersonProfilePhotoDocument(args: {
     body.append("doc_type", "profile_photo");
     body.append("title", args.title);
 
-    const uploadRes = await fetch("/api/admin/documents/upload", {
-        method: "POST",
-        credentials: "include",
-        body,
-    });
-    if (!uploadRes.ok) return { ok: false, error: "Upload failed" };
-    const payload = (await uploadRes.json()) as { document?: { id?: string } };
-    const documentId = payload.document?.id?.trim();
-    if (!documentId) return { ok: false, error: "Upload response missing document id" };
-    return { ok: true, documentId };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PROFILE_PHOTO_UPLOAD_TIMEOUT_MS);
+    try {
+        const uploadRes = await fetch("/api/admin/documents/upload", {
+            method: "POST",
+            credentials: "include",
+            body,
+            signal: controller.signal,
+        });
+        const payload = (await uploadRes.json().catch(() => ({}))) as {
+            document?: { id?: string };
+            error?: string;
+            code?: string;
+        };
+        if (!uploadRes.ok) {
+            return {
+                ok: false,
+                error: payload.error?.trim() || `Upload failed (${uploadRes.status})`,
+            };
+        }
+        const documentId = payload.document?.id?.trim();
+        if (!documentId) return { ok: false, error: "Upload response missing document id" };
+        return { ok: true, documentId };
+    } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+            return { ok: false, error: "Upload timed out. Try a smaller photo." };
+        }
+        return { ok: false, error: e instanceof Error ? e.message : "Upload failed" };
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 /** Bind an uploaded document as the person's canonical profile photo. */
