@@ -58,8 +58,11 @@ const LEGACY_CONTACT_TO_CANONICAL_FIELD: Record<string, string> = {
 
 const HOUSEHOLD_SECTION_SOURCES: Record<string, IdentitySectionConfig["source"]> = {
     primary_contact: { type: "relationship_role", roleKeys: ["primary_contact", "primary"] },
-    other_parent_guardian: { type: "relationship_role", roleKeys: ["parent", "guardian"] },
-    household_members: { type: "relationship_role", roleKeys: ["additional", "contact"] },
+    other_parent_guardian: {
+        type: "relationship_role",
+        roleKeys: ["parent", "guardian", "family_member", "primary_contact", "secondary"],
+    },
+    household_members: { type: "relationship_role", roleKeys: ["additional", "relative", "grandparent"] },
     children: { type: "related_entity", entityType: "child" },
     emergency_contacts: { type: "relationship_role", roleKeys: ["emergency_contact"] },
     authorized_pickups: { type: "relationship_role", roleKeys: ["authorized_pickup"] },

@@ -10,6 +10,8 @@ export const PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES = new Set([
     "coparent",
     "spouse",
     "partner",
+    // Create Lead / Processing often links secondary adults as opportunity family_member.
+    "family_member",
 ]);
 export const PERSON_DRAWER_HOUSEHOLD_EMERGENCY_ROLES = new Set(["emergency_contact", "emergency"]);
 export const PERSON_DRAWER_HOUSEHOLD_PICKUP_ROLES = new Set(["authorized_pickup", "pickup"]);
