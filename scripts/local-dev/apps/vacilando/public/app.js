@@ -224,6 +224,26 @@ let lastKey = null;
 function render(force) {
   if (document.querySelector(".ov")) return;
   const r = parseRoute();
+  const V2 = window.VacilandoV2;
+  // Mission Control (opt-in): render without waiting for full board composition.
+  if (V2?.enabled) {
+    const v2Names = new Set(["missions", "timeline", "workers", "decisions", "evidence", "kickoff"]);
+    if (v2Names.has(r.name) || (r.name === "missions" && r.sub)) {
+      setActiveNav(r.name === "missions" || r.name === "kickoff" ? "missions" : r.name);
+      const V = $("#view");
+      let html = "";
+      if (r.name === "missions" && r.sub) html = V2.viewMissionDetail(r.sub);
+      else if (r.name === "missions") html = V2.viewMissions();
+      else if (r.name === "timeline") html = V2.viewTimeline(r.sub);
+      else if (r.name === "workers") html = r.sub ? V2.viewWorkerDetail(r.sub) : V2.viewWorkers();
+      else if (r.name === "decisions") html = r.sub ? V2.viewDecisionDetail(r.sub) : V2.viewDecisions();
+      else if (r.name === "evidence") html = V2.viewEvidence(r.sub);
+      else if (r.name === "kickoff") html = V2.viewKickoff(r.sub);
+      V.innerHTML = html || `<div class="mc-wrap empty">Unknown Mission Control route</div>`;
+      $("#nb-needs").textContent = state.snap ? needsYou().length : 0;
+      return;
+    }
+  }
   // URL drives the center: #/command → Team Dashboard; #/command/worker/N → that worker.
   if (r.name === "command" && r.sub === "worker" && r.param) {
     const n = Number(r.param);
@@ -258,6 +278,7 @@ function render(force) {
   }
   $("#nb-needs").textContent = state.snap ? needsYou().length : 0;
 }
+window.render = render;
 
 // -------- Runtime Trust: every trust property, measurable --------
 async function fetchTrust() { try { const r = await fetch("/api/trust"); state._trust = await r.json(); render(true); } catch { /* keep last */ } }

@@ -1,0 +1,653 @@
+{
+  "schema_version": "vacilando.access_identity_v2_cert.v1",
+  "missionId": "msn_d34d658b3d39c91781",
+  "version": 1,
+  "contentHash": "a3b5b94621ef95e7434643dcdd58fc61",
+  "certification_of": "director_execution_system_v2",
+  "product_complete": false,
+  "steps": [
+    {
+      "name": "1 ingest readiness preview",
+      "ok": true,
+      "ready": true
+    },
+    {
+      "name": "1b ingest Mission Brief",
+      "ok": true,
+      "missionId": "msn_d34d658b3d39c91781",
+      "version": 1,
+      "contentHash": "a3b5b94621ef95e7434643dcdd58fc61"
+    },
+    {
+      "name": "2 show readiness / kickoff card",
+      "ok": true,
+      "kickoff_status": "awaiting_kickoff_approval"
+    },
+    {
+      "name": "3 approve kickoff",
+      "ok": true,
+      "status": "executing"
+    },
+    {
+      "name": "4 create assignments from phases",
+      "ok": true,
+      "count": 3,
+      "ids": [
+        "asg_440c3a4ce3fdbb",
+        "asg_b2e6f26d5bbc9e",
+        "asg_4afcdc9230dc6e"
+      ]
+    },
+    {
+      "name": "5 dependency graph",
+      "ok": true,
+      "edges": [
+        {
+          "id": "asg_440c3a4ce3fdbb",
+          "deps": []
+        },
+        {
+          "id": "asg_b2e6f26d5bbc9e",
+          "deps": [
+            "asg_440c3a4ce3fdbb"
+          ]
+        },
+        {
+          "id": "asg_4afcdc9230dc6e",
+          "deps": [
+            "asg_b2e6f26d5bbc9e"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6 live worker execution package",
+      "ok": true,
+      "hasEnvelope": true,
+      "hashInEnvelope": true
+    },
+    {
+      "name": "7 acknowledge worker contract",
+      "ok": true,
+      "workerId": "claude-6"
+    },
+    {
+      "name": "8 start report → running",
+      "ok": true,
+      "status": "running"
+    },
+    {
+      "name": "8b executor seam uses assignment package",
+      "ok": true,
+      "mode": "brief_assignment"
+    },
+    {
+      "name": "8c progress reported",
+      "ok": true
+    },
+    {
+      "name": "9 attach evidence",
+      "ok": true
+    },
+    {
+      "name": "10 material decision created; affected work paused",
+      "ok": true,
+      "decisionId": "dec_86e740aab2f058",
+      "escalate": true
+    },
+    {
+      "name": "11 only affected work pauses",
+      "ok": true,
+      "paused": [
+        "asg_440c3a4ce3fdbb"
+      ]
+    },
+    {
+      "name": "12–14 answer decision + resume",
+      "ok": true
+    },
+    {
+      "name": "open decision retained for visual QA",
+      "ok": true,
+      "decisionId": "dec_c31ddbee5dc819"
+    },
+    {
+      "name": "health/recovery timeline events recorded",
+      "ok": true,
+      "control_plane": "recovered"
+    },
+    {
+      "name": "15 Director five-question summary",
+      "ok": true,
+      "answers": [
+        "where_are_we",
+        "what_changed",
+        "are_we_blocked",
+        "blocked_detail",
+        "is_user_input_required",
+        "what_happens_next"
+      ]
+    },
+    {
+      "name": "16 certification correctly incomplete",
+      "ok": true,
+      "ready": false,
+      "missing": [
+        "test",
+        "typecheck",
+        "build",
+        "commit"
+      ],
+      "note": "Access & Identity product mission must remain incomplete"
+    }
+  ],
+  "timeline_tail": [
+    {
+      "schema_version": "vacilando.timeline_event.v1",
+      "event_id": "tle_bce14d5fefb46e74",
+      "mission_id": "msn_d34d658b3d39c91781",
+      "type": "mission_created",
+      "headline": "Mission Brief v1 ingested — awaiting kickoff approval",
+      "summary": "Mission Brief v1 ingested — awaiting kickoff approval",
+      "visibility": "summary",
+      "phase_id": null,
+      "assignment_id": null,
+      "decision_id": null,
+      "evidence_ids": null,
+      "actor": "operator",
+      "detail": {
+        "mission_brief_version": 1,
+        "mission_content_hash": "a3b5b94621ef95e7434643dcdd58fc61",
+        "phase_count": 3
+      },
+      "at": "2026-07-30T14:32:33.820Z",
+      "occurred_at": "2026-07-30T14:32:33.820Z"
+    },
+    {
+      "schema_version": "vacilando.timeline_event.v1",
+      "event_id": "tle_8d900c89fd5d2438",
+      "mission_id": "msn_d34d658b3d39c91781",
+      "type": "mission_started",
+      "headline": "Kickoff approved — executing Mission Brief v1",
+      "summary": "Kickoff approved — executing Mission Brief v1",
+      "visibility": "summary",
+      "phase_id": null,
+      "assignment_id": null,
+      "decision_id": null,
+      "evidence_ids": null,
+      "actor": "operator",
+      "detail": {
+        "mission_brief_version": 1,
+        "mission_content_hash": "a3b5b94621ef95e7434643dcdd58fc61",
+        "phase_ids": [
+          "p0_inventory",
+          "p1_model",
+          "p2_sequence"
+        ]
+      },
+      "at": "2026-07-30T14:32:33.852Z",
+      "occurred_at": "2026-07-30T14:32:33.852Z"
+    },
+    {
+      "schema_version": "vacilando.timeline_event.v1",
+      "event_id": "tle_5f9d582782285f11",
+      "mission_id": "msn_d34d658b3d39c91781",
+      "type": "phase_started",
+      "headline": "Phase started — Authority path inventory",
+      "summary": "Phase started — Authority path inventory",
+      "visibility": "summary",
+      "phase_id": "p0_inventory",
+      "assignment_id": null,
+      "decision_id": null,
+      "evidence_ids": null,
+      "actor": "director",
+      "detail": {
+        "order": 1
+      },
+      "at": "2026-07-30T14:32:33.852Z",
+      "occurred_at": "2026-07-30T14:32:33.852Z"
+    },
+    {
+      "schema_version": "vacilando.timeline_event.v1",
+      "event_id": "tle_1e94fd1e270cf87b",
+      "mission_id": "msn_d34d658b3d39c91781",
+      "type": "assignment_started",
+      "headline": "Assignment started — Authority path inventory",
+      "summary": "Assignment started — Authority path inventory",
+      "visibility": "summary",
+      "phase_id": "p0_inventory",
+      "assignment_id": "asg_440c3a4ce3fdbb",
+      "decision_id": null,
+      "evidence_ids": null,
+      "actor": "claude-6",
+      "detail": {
+        "understoodObjective": "Inventory person → user → role → scope authority paths and contradictions"
+      },
+      "at": "2026-07-30T14:32:33.865Z",
+      "occurred_at": "2026-07-30T14:32:33.865Z"
+    },
+    {
+      "schema_version": "vacilando.timeline_event.v1",
+      "event_id": "tle_2955179f306669ce",
+      "mission_id": "msn_d34d658b3d39c91781",
+      "type": "progress",
+      "headline": "Inventory 40% — mapped UsersRolesSettingsClient authority paths",
+      "summary": "Inventory 40% — mapped UsersRolesSettingsClient authority paths",
+      "visibility": "detail",
+      "phase_id": null,
+      "assignment_id": "asg_440c3a4ce3fdbb",
+      "decision_id": null,
+      "evidence_ids": null,
+      "actor": "claude-6",
+      "detail": null,
+      "at": "2026-07-30T14:32:33.871Z",
+      "occurred_at": "2026-07-30T14:32:33.871Z"
+    },
+    {
+      "schema_version": "vacilando.timeline_event.v1",
+      "event_id": "tle_9ada99bd50e51050",
+      "mission_id": "msn_d34d658b3d39c91781",
+      "type": "evidence_added",
+      "headline": "Evidence added — Authority inventory (cert)",
+      "summary": "Evidence added — Authority inventory (cert)",
+      "visibility": "detail",
+      "phase_id": null,
+      "assignment_id": "asg_440c3a4ce3fdbb",
+      "decision_id": null,
+      "evidence_ids": [
+        "ev_ff4fb659cc01c0c8"
+      ],
+      "actor": "claude-6",
+      "detail": {
+        "type": "diff",
+        "acceptanceCriteriaIds": [
+          "AC1"
+        ]
+      },
+      "at": "2026-07-30T14:32:33.872Z",
+      "occurred_at": "2026-07-30T14:32:33.872Z"
+    },
+    {
+      "schema_version": "vacilando.timeline_event.v1",
+      "event_id": "tle_8d2f50cdda0e2e11",
+      "mission_id": "msn_d34d658b3d39c91781",
+      "type": "decision_requested",
+      "headline": "Migration conflict during Access & Identity cert",
+      "summary": "Decision required — Migration conflict during Access & Identity cert",
+      "visibility": "summary",
+      "phase_id": null,
+      "assignment_id": null,
+      "decision_id": "dec_86e740aab2f058",
+      "evidence_ids": null,
+      "actor": "director",
+      "detail": {
+        "affectedAssignments": [
+          "asg_440c3a4ce3fdbb"
+        ],
+        "recommendation": "defer"
+      },
+      "at": "2026-07-30T14:32:33.873Z",
+      "occurred_at": "2026-07-30T14:32:33.873Z"
+    },
+    {
+      "schema_version": "vacilando.timeline_event.v1",
+      "event_id": "tle_f70b76643ce86535",
+      "mission_id": "msn_d34d658b3d39c91781",
+      "type": "decision_answered",
+      "headline": "Migration conflict during Access & Identity cert",
+      "summary": "Decision answered — Migration conflict during Access & Identity cert",
+      "visibility": "summary",
+      "phase_id": null,
+      "assignment_id": null,
+      "decision_id": "dec_86e740aab2f058",
+      "evidence_ids": null,
+      "actor": "operator",
+      "detail": {
+        "chosenOptionId": "defer",
+        "brief_version": null,
+        "changesApprovedIntent": false
+      },
+      "at": "2026-07-30T14:32:33.874Z",
+      "occurred_at": "2026-07-30T14:32:33.874Z"
+    },
+    {
+      "schema_version": "vacilando.timeline_event.v1",
+      "event_id": "tle_19c7466c7ce25465",
+      "mission_id": "msn_d34d658b3d39c91781",
+      "type": "decision_requested",
+      "headline": "Open cert decision — mobile QA",
+      "summary": "Decision required — Open cert decision — mobile QA",
+      "visibility": "summary",
+      "phase_id": null,
+      "assignment_id": null,
+      "decision_id": "dec_c31ddbee5dc819",
+      "evidence_ids": null,
+      "actor": "director",
+      "detail": {
+        "affectedAssignments": [],
+        "recommendation": "keep_7"
+      },
+      "at": "2026-07-30T14:32:33.874Z",
+      "occurred_at": "2026-07-30T14:32:33.874Z"
+    }
+  ],
+  "director_summary": {
+    "schema_version": "vacilando.director_summary.v1",
+    "missionId": "msn_d34d658b3d39c91781",
+    "title": "Access & Identity V2 — Director certification mission",
+    "brief_version": 1,
+    "content_hash": "a3b5b94621ef95e7434643dcdd58fc61",
+    "status": {
+      "status": "decision_required",
+      "label": "Decision Required"
+    },
+    "progress": {
+      "accepted_deliverables": 0,
+      "total_deliverables": 3,
+      "percent": 0,
+      "basis": "assignments"
+    },
+    "current_phase": {
+      "phaseId": "p0_inventory",
+      "title": "Authority path inventory",
+      "order": 1,
+      "assignments": [
+        {
+          "schema_version": "vacilando.worker_assignment.v1",
+          "assignmentId": "asg_440c3a4ce3fdbb",
+          "missionId": "msn_d34d658b3d39c91781",
+          "missionVersion": 1,
+          "missionContentHash": "a3b5b94621ef95e7434643dcdd58fc61",
+          "phaseId": "p0_inventory",
+          "title": "Authority path inventory",
+          "objective": "Inventory person → user → role → scope authority paths and contradictions",
+          "scope": [
+            "docs/platform/planning/vacilando-os/qa/director-execution-v2/cert-inventory.md"
+          ],
+          "prohibitedChanges": [
+            "Do not push, merge, or promote without explicit operator approval",
+            "Do not push, merge, or promote",
+            "Do not mark Access & Identity product implementation complete",
+            "Do not apply shared migrations without operator authorization",
+            "Out of scope: Shipping Access & Identity V2 UI",
+            "Out of scope: Rebuilding Users/Roles settings",
+            "Out of scope: Falsely completing product certification"
+          ],
+          "expectedDeliverables": [
+            "docs/platform/planning/vacilando-os/qa/director-execution-v2/cert-inventory.md"
+          ],
+          "acceptanceCriteriaIds": [
+            "AC1",
+            "AC2"
+          ],
+          "dependencies": [],
+          "repository": {
+            "mergeTarget": "staging"
+          },
+          "branch": null,
+          "slot": "6",
+          "port": null,
+          "requiredValidation": [],
+          "requiredEvidence": [],
+          "evidenceProfile": "code_only",
+          "escalationRules": [
+            {
+              "kind": "product_behavior",
+              "escalate": true
+            }
+          ],
+          "completionContract": {
+            "requireEvidence": true,
+            "evidenceProfile": "code_only",
+            "requireContextAck": true
+          },
+          "status": "ready",
+          "workerId": "claude-6",
+          "provider": "claude",
+          "contextAcknowledgement": {
+            "workerId": "claude-6",
+            "missionId": "msn_d34d658b3d39c91781",
+            "missionVersion": 1,
+            "missionContentHash": "a3b5b94621ef95e7434643dcdd58fc61",
+            "protocolVersion": "vacilando.worker.protocol.v1",
+            "acknowledgedAt": "2026-07-30T14:32:33.863Z"
+          },
+          "startReport": {
+            "assignmentId": "asg_440c3a4ce3fdbb",
+            "understoodObjective": "Inventory person → user → role → scope authority paths and contradictions",
+            "intendedApproach": [
+              "Inventory authority paths from codebase"
+            ],
+            "filesOrSystemsExpectedToChange": [
+              "docs/platform/planning/vacilando-os/qa/director-execution-v2/cert-inventory.md"
+            ],
+            "detectedRisks": [
+              "Must not ship product changes"
+            ],
+            "contextAcknowledgement": {
+              "workerId": "claude-6",
+              "missionId": "msn_d34d658b3d39c91781",
+              "missionVersion": 1,
+              "missionContentHash": "a3b5b94621ef95e7434643dcdd58fc61",
+              "protocolVersion": "vacilando.worker.protocol.v1",
+              "acknowledgedAt": "2026-07-30T14:32:33.863Z"
+            },
+            "at": "2026-07-30T14:32:33.864Z"
+          },
+          "progress": [
+            {
+              "summary": "Inventory 40% — mapped UsersRolesSettingsClient authority paths",
+              "percent": 40,
+              "at": "2026-07-30T14:32:33.871Z"
+            }
+          ],
+          "blockers": [],
+          "completionReport": null,
+          "validation": null,
+          "paused_reason": null,
+          "created_at": "2026-07-30T14:32:33.856Z",
+          "updated_at": "2026-07-30T14:32:33.874Z",
+          "created_by": "operator",
+          "last_progress_at": "2026-07-30T14:32:33.871Z",
+          "paused_decision_id": "dec_86e740aab2f058",
+          "resume_reason": "decision_answered"
+        }
+      ],
+      "progress": 0,
+      "status": "ready"
+    },
+    "open_decisions": [
+      {
+        "schema_version": "vacilando.decision.v1",
+        "decisionId": "dec_c31ddbee5dc819",
+        "missionId": "msn_d34d658b3d39c91781",
+        "title": "Open cert decision — mobile QA",
+        "situation": "Director needs a product call on invitation expiry for Access & Identity",
+        "whyThisMatters": "Affects operator invite UX; not a routine infra issue",
+        "currentPlan": "7-day invite expiry",
+        "discovery": "Ops requested 30-day expiry during cert pressure test",
+        "options": [
+          {
+            "optionId": "keep_7",
+            "label": "Keep 7-day expiry",
+            "description": "Safer default",
+            "consequences": null
+          },
+          {
+            "optionId": "extend_30",
+            "label": "Extend to 30 days",
+            "description": "Ops preference",
+            "consequences": null
+          }
+        ],
+        "recommendation": "keep_7",
+        "recommendationReason": "Security default until product owner decides",
+        "impact": {},
+        "evidence": [],
+        "affectedAssignments": [],
+        "defaultAction": null,
+        "responseDeadline": null,
+        "status": "open",
+        "created_at": "2026-07-30T14:32:33.874Z",
+        "created_by": "director",
+        "answered_at": null,
+        "chosen_option_id": null,
+        "response": null,
+        "brief_revision": null
+      }
+    ],
+    "workers": [],
+    "evidence_coverage": {
+      "passed": 1,
+      "total": 5
+    },
+    "answers": {
+      "where_are_we": "Decision Required · Authority path inventory (0/3 deliverables)",
+      "what_changed": "Decision required — Open cert decision — mobile QA",
+      "are_we_blocked": true,
+      "blocked_detail": "Decision required: Open cert decision — mobile QA",
+      "is_user_input_required": true,
+      "what_happens_next": "Answer decision: Open cert decision — mobile QA"
+    },
+    "where_are_we": "Decision Required · Authority path inventory (0/3 deliverables)",
+    "what_changed": "Decision required — Open cert decision — mobile QA",
+    "are_we_blocked": true,
+    "blocked_detail": "Decision required: Open cert decision — mobile QA",
+    "is_user_input_required": true,
+    "what_happens_next": "Answer decision: Open cert decision — mobile QA",
+    "timeline_tail": [
+      {
+        "schema_version": "vacilando.timeline_event.v1",
+        "event_id": "tle_5f9d582782285f11",
+        "mission_id": "msn_d34d658b3d39c91781",
+        "type": "phase_started",
+        "headline": "Phase started — Authority path inventory",
+        "summary": "Phase started — Authority path inventory",
+        "visibility": "summary",
+        "phase_id": "p0_inventory",
+        "assignment_id": null,
+        "decision_id": null,
+        "evidence_ids": null,
+        "actor": "director",
+        "detail": {
+          "order": 1
+        },
+        "at": "2026-07-30T14:32:33.852Z",
+        "occurred_at": "2026-07-30T14:32:33.852Z"
+      },
+      {
+        "schema_version": "vacilando.timeline_event.v1",
+        "event_id": "tle_1e94fd1e270cf87b",
+        "mission_id": "msn_d34d658b3d39c91781",
+        "type": "assignment_started",
+        "headline": "Assignment started — Authority path inventory",
+        "summary": "Assignment started — Authority path inventory",
+        "visibility": "summary",
+        "phase_id": "p0_inventory",
+        "assignment_id": "asg_440c3a4ce3fdbb",
+        "decision_id": null,
+        "evidence_ids": null,
+        "actor": "claude-6",
+        "detail": {
+          "understoodObjective": "Inventory person → user → role → scope authority paths and contradictions"
+        },
+        "at": "2026-07-30T14:32:33.865Z",
+        "occurred_at": "2026-07-30T14:32:33.865Z"
+      },
+      {
+        "schema_version": "vacilando.timeline_event.v1",
+        "event_id": "tle_8d2f50cdda0e2e11",
+        "mission_id": "msn_d34d658b3d39c91781",
+        "type": "decision_requested",
+        "headline": "Migration conflict during Access & Identity cert",
+        "summary": "Decision required — Migration conflict during Access & Identity cert",
+        "visibility": "summary",
+        "phase_id": null,
+        "assignment_id": null,
+        "decision_id": "dec_86e740aab2f058",
+        "evidence_ids": null,
+        "actor": "director",
+        "detail": {
+          "affectedAssignments": [
+            "asg_440c3a4ce3fdbb"
+          ],
+          "recommendation": "defer"
+        },
+        "at": "2026-07-30T14:32:33.873Z",
+        "occurred_at": "2026-07-30T14:32:33.873Z"
+      },
+      {
+        "schema_version": "vacilando.timeline_event.v1",
+        "event_id": "tle_f70b76643ce86535",
+        "mission_id": "msn_d34d658b3d39c91781",
+        "type": "decision_answered",
+        "headline": "Migration conflict during Access & Identity cert",
+        "summary": "Decision answered — Migration conflict during Access & Identity cert",
+        "visibility": "summary",
+        "phase_id": null,
+        "assignment_id": null,
+        "decision_id": "dec_86e740aab2f058",
+        "evidence_ids": null,
+        "actor": "operator",
+        "detail": {
+          "chosenOptionId": "defer",
+          "brief_version": null,
+          "changesApprovedIntent": false
+        },
+        "at": "2026-07-30T14:32:33.874Z",
+        "occurred_at": "2026-07-30T14:32:33.874Z"
+      },
+      {
+        "schema_version": "vacilando.timeline_event.v1",
+        "event_id": "tle_19c7466c7ce25465",
+        "mission_id": "msn_d34d658b3d39c91781",
+        "type": "decision_requested",
+        "headline": "Open cert decision — mobile QA",
+        "summary": "Decision required — Open cert decision — mobile QA",
+        "visibility": "summary",
+        "phase_id": null,
+        "assignment_id": null,
+        "decision_id": "dec_c31ddbee5dc819",
+        "evidence_ids": null,
+        "actor": "director",
+        "detail": {
+          "affectedAssignments": [],
+          "recommendation": "keep_7"
+        },
+        "at": "2026-07-30T14:32:33.874Z",
+        "occurred_at": "2026-07-30T14:32:33.874Z"
+      }
+    ],
+    "generated_at": "2026-07-30T14:32:33.885Z"
+  },
+  "control_plane": {
+    "schema_version": "vacilando.control_plane_health.v1",
+    "status": "recovered",
+    "accepting": true,
+    "hydrated": false,
+    "timings": {
+      "historical_bind_ms": 30031
+    },
+    "last_detail": "Startup fix: async diskSignal + post-listen warm",
+    "events": [
+      {
+        "status": "slow_to_bind",
+        "detail": "Representing historical :3021 bind starvation (diskSignal sync GC)",
+        "at": "2026-07-30T14:32:33.874Z"
+      },
+      {
+        "status": "screenshot_stalled",
+        "detail": "Prior Playwright screenshot timeouts under event-loop starvation",
+        "at": "2026-07-30T14:32:33.875Z"
+      },
+      {
+        "status": "recovered",
+        "detail": "Startup fix: async diskSignal + post-listen warm",
+        "at": "2026-07-30T14:32:33.875Z"
+      }
+    ],
+    "updated_at": "2026-07-30T14:32:33.875Z",
+    "missionId": "msn_d34d658b3d39c91781"
+  },
+  "generated_at": "2026-07-30T14:32:33.886Z"
+}
