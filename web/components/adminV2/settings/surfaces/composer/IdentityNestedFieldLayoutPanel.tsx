@@ -67,9 +67,9 @@ export default function IdentityNestedFieldLayoutPanel({
     const rowChunks = useMemo(
         () =>
             chunkNestedSurfaceFieldsForHalfRowLayout(keys, (fieldKey) =>
-                fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey),
+                fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey, { purpose }),
             ),
-        [keys, config, groupKey],
+        [keys, config, groupKey, purpose],
     );
 
     return (
@@ -109,7 +109,9 @@ export default function IdentityNestedFieldLayoutPanel({
                                     labels.get(fieldKey) ??
                                     fieldKey.replace(/^[a-z_]+\./, "").replace(/_/g, " ");
                                 const label = fieldPresentationLabel(config, groupKey, fieldKey, catalog);
-                                const width = fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey);
+                                const width = fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey, {
+                                    purpose,
+                                });
                                 return (
                                     <div
                                         key={fieldKey}
@@ -156,6 +158,7 @@ export default function IdentityNestedFieldLayoutPanel({
                                                                     groupKey,
                                                                     fieldKey,
                                                                     "full",
+                                                                    { purpose },
                                                                 ),
                                                             );
                                                         }}
@@ -178,6 +181,7 @@ export default function IdentityNestedFieldLayoutPanel({
                                                                     groupKey,
                                                                     fieldKey,
                                                                     "half",
+                                                                    { purpose },
                                                                 ),
                                                             );
                                                         }}

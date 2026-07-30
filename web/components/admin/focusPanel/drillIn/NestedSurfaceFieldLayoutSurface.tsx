@@ -153,12 +153,17 @@ export default function NestedSurfaceFieldLayoutSurface({
         return fields.map((f) => f.fieldKey);
     }, [composing, config, groupKey, fields, fieldMetaByKey, tier]);
 
+    const layoutPurpose = useMemo(
+        () => (tier ? configurationPurposeFromTierArg(tier) : "summary" as const),
+        [tier],
+    );
+
     const rowChunks = useMemo(() => {
         if (!config) return orderedKeys.map((key) => [key]);
         return chunkNestedSurfaceFieldsForHalfRowLayout(orderedKeys, (fieldKey) =>
-            fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey),
+            fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey, { purpose: layoutPurpose }),
         );
-    }, [config, groupKey, orderedKeys]);
+    }, [config, groupKey, orderedKeys, layoutPurpose]);
 
     const mutate = useCallback(
         (next: NestedSurfaceConfig) => composer?.updateConfig(surfaceId, next),

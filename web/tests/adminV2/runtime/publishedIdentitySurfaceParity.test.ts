@@ -13,6 +13,7 @@ import {
     CHILDREN_SURFACE_ID,
     identityConfigurationFieldKeys,
     fieldLayoutWidthForNestedGroup,
+    setFieldLayoutWidthInNestedGroup,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     CHILD_SURFACE_COMPAT_ID,
@@ -129,6 +130,63 @@ describe("published identity surface parity", () => {
         expect(runtimeResolved).toEqual(docResolved);
         expect(fieldLayoutWidthForNestedGroup(runtimeResolved!, "primary_contact", "person.phone")).toBe("half");
         expect(fieldLayoutWidthForNestedGroup(runtimeResolved!, "primary_contact", "person.email")).toBe("half");
+    });
+
+    it("Context Facts phone|email pairing does not rewrite Summary full-width rows after publish", () => {
+        let draft = groupWithSummaryFields(defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID), "contact_edit", []);
+        draft = addFieldToNestedGroup(draft, "contact_edit", "person.phone", { tier: "summary" });
+        draft = addFieldToNestedGroup(draft, "contact_edit", "person.email", { tier: "summary" });
+        draft = setFieldLayoutWidthInNestedGroup(draft, "contact_edit", "person.phone", "full", {
+            purpose: "summary",
+        });
+        draft = setFieldLayoutWidthInNestedGroup(draft, "contact_edit", "person.email", "full", {
+            purpose: "summary",
+        });
+        draft = addFieldToNestedGroup(draft, "contact_edit", "person.phone", { tier: "context_fact" });
+        draft = addFieldToNestedGroup(draft, "contact_edit", "person.email", { tier: "context_fact" });
+        draft = applyNestedSurfaceFieldDrop(
+            draft,
+            "contact_edit",
+            "person.email",
+            "person.phone",
+            "beside",
+            { tier: "context_fact" },
+        );
+
+        const { runtimeResolved } = publishRoundTrip(HOUSEHOLD_SURFACE_ID, draft);
+        expect(fieldLayoutWidthForNestedGroup(runtimeResolved!, "contact_edit", "person.phone", { purpose: "summary" })).toBe(
+            "full",
+        );
+        expect(fieldLayoutWidthForNestedGroup(runtimeResolved!, "contact_edit", "person.email", { purpose: "summary" })).toBe(
+            "full",
+        );
+        expect(
+            fieldLayoutWidthForNestedGroup(runtimeResolved!, "contact_edit", "person.phone", { purpose: "context_facts" }),
+        ).toBe("half");
+        expect(
+            fieldLayoutWidthForNestedGroup(runtimeResolved!, "contact_edit", "person.email", { purpose: "context_facts" }),
+        ).toBe("half");
+
+        const evidence = buildHouseholdCardEvidence(householdCtx(), { nestedConfig: runtimeResolved });
+        const card = buildHouseholdIdentityCardVM({
+            config: runtimeResolved!,
+            groups: evidence.groups,
+            canMutate: false,
+        });
+        const primary = card.sections.find((section) => section.key === "primary_contact")?.items[0]!;
+        expect(primary).toBeTruthy();
+
+        const summaryPhoneEmail = primary.summaryRows.filter((row) =>
+            row.cells.some((cell) => cell.fieldRef === "person.phone" || cell.fieldRef === "person.email"),
+        );
+        expect(summaryPhoneEmail).toHaveLength(2);
+        expect(summaryPhoneEmail.every((row) => row.cells.length === 1)).toBe(true);
+
+        const contextPhoneEmail = primary.contextFactRows.filter((row) =>
+            row.cells.some((cell) => cell.fieldRef === "person.phone" || cell.fieldRef === "person.email"),
+        );
+        expect(contextPhoneEmail).toHaveLength(1);
+        expect(contextPhoneEmail[0]?.cells.map((cell) => cell.fieldRef)).toEqual(["person.phone", "person.email"]);
     });
 
     it("publish omits legacy surface keys and canonical config wins over legacy child_surface", () => {
