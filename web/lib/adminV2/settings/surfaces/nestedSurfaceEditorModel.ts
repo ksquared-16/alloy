@@ -52,6 +52,7 @@ import {
     resolveIdentityFieldLinkContract,
     type IdentityFieldLinkTarget,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
+import { isCompactIconValueIdentityField } from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
 import type { NestedSurfaceFieldLayoutWidth, NestedSurfaceFieldDropZone } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import {
     chunkNestedSurfaceFieldsForHalfRowLayout,
@@ -830,6 +831,9 @@ export function setFieldLayoutWidthInNestedGroup(
     options?: { purpose?: IdentityFieldLayoutPurpose },
 ): NestedSurfaceConfig {
     const purpose = options?.purpose ?? "summary";
+    // Summary reachability lines cannot be paired — "Place beside" must not stick.
+    const resolvedWidth =
+        purpose === "summary" && isCompactIconValueIdentityField(fieldKey) ? "full" : layoutWidth;
     const next = {
         ...config,
         groups: config.groups.map((g) => {
@@ -838,13 +842,13 @@ export function setFieldLayoutWidthInNestedGroup(
                 ...g,
                 fieldLayoutWidths:
                     purpose === "summary"
-                        ? { ...(g.fieldLayoutWidths ?? {}), [fieldKey]: layoutWidth }
+                        ? { ...(g.fieldLayoutWidths ?? {}), [fieldKey]: resolvedWidth }
                         : g.fieldLayoutWidths,
                 fieldLayoutWidthsByPurpose: {
                     ...(g.fieldLayoutWidthsByPurpose ?? {}),
                     [purpose]: {
                         ...(g.fieldLayoutWidthsByPurpose?.[purpose] ?? {}),
-                        [fieldKey]: layoutWidth,
+                        [fieldKey]: resolvedWidth,
                     },
                 },
             };

@@ -214,6 +214,13 @@ function IdentityInlineEditInput({
                 }}
                 options={resolvedSelectOptions}
                 disabled={selectDisabled}
+                valueLabelHint={
+                    // Edit draft is often the program_category UUID; keep showing the
+                    // authored label (Infant) until options resolve.
+                    cell.value && cell.value.trim() !== selectValue.trim()
+                        ? cell.value
+                        : null
+                }
                 aria-label={cell.label}
                 testId="identity-field-select"
             />
@@ -386,10 +393,34 @@ export default function IdentityFieldValue({
     const canLegacyEdit = Boolean(cell.editable && onEdit && !inlineEdit);
     const canLink = Boolean(cell.linked && onLink && !canInlineEdit);
     const valueText = cell.value?.trim() ?? "";
-    const displayValueText =
-        editControl.kind === "date" && valueText
-            ? (formatFocusPanelDate(valueText) ?? valueText)
-            : valueText;
+    const displayValueText = (() => {
+        if (editControl.kind === "date" && valueText) {
+            return formatFocusPanelDate(valueText) ?? valueText;
+        }
+        // Program/site selects may briefly hold a raw FK — prefer the option label.
+        if (
+            (editControl.kind === "placement_select" || editControl.kind === "select")
+            && valueText
+            && placementSelectOptions.length > 0
+        ) {
+            const byValue = placementSelectOptions.find((o) => o.value === valueText);
+            if (byValue?.label) return byValue.label;
+            const byLabel = placementSelectOptions.find((o) => o.label === valueText);
+            if (byLabel?.label) return byLabel.label;
+        }
+        if (
+            editControl.kind === "placement_select"
+            && editControl.placement === "program"
+            && valueText
+            && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+                valueText,
+            )
+        ) {
+            // Options not loaded yet — don't show the UUID in read mode.
+            return "—";
+        }
+        return valueText;
+    })();
     // Empty/hidden fields are removed in `resolveIdentityFieldRows` before packing.
     // Never return null here — late nulls leave pair/triple grid holes (field collision).
 

@@ -11,12 +11,20 @@ export type AlloySelectOption = { value: string; label: string };
  * Uses a custom listbox (not native `<select>`) so the open menu stays white + midnight —
  * native option popups ignore CSS on macOS and show the OS gray menu.
  */
+function looksLikeUuid(raw: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        raw.trim(),
+    );
+}
+
 export function AlloySelect({
     value,
     onChange,
     options,
     disabled,
     placeholder = "Select…",
+    /** Human label when `value` is a raw id and options have not resolved yet. */
+    valueLabelHint,
     testId,
     id,
     "aria-label": ariaLabel,
@@ -27,6 +35,7 @@ export function AlloySelect({
     options: readonly AlloySelectOption[];
     disabled?: boolean;
     placeholder?: string;
+    valueLabelHint?: string | null;
     testId?: string;
     id?: string;
     "aria-label"?: string;
@@ -55,7 +64,14 @@ export function AlloySelect({
     }, [open]);
 
     const selected = options.find((o) => o.value === value);
-    const display = selected?.label ?? (value ? value : placeholder);
+    const hint = (valueLabelHint ?? "").trim();
+    // Never flash a raw UUID in the trigger while options resolve — use the
+    // known label hint (e.g. "Infant") or the placeholder instead.
+    const displayText =
+        selected?.label
+        ?? (hint && !looksLikeUuid(hint) ? hint : null)
+        ?? (value && !looksLikeUuid(value) ? value : null)
+        ?? placeholder;
 
     const pick = (next: string) => {
         onChange(next);
@@ -81,8 +97,13 @@ export function AlloySelect({
                     if (!disabled) setOpen((prev) => !prev);
                 }}
             >
-                <span className={clsx("alloy-select__value", !selected && "alloy-select__value--placeholder")}>
-                    {display}
+                <span
+                    className={clsx(
+                        "alloy-select__value",
+                        !selected && !hint && "alloy-select__value--placeholder",
+                    )}
+                >
+                    {displayText}
                 </span>
                 <span className="alloy-select__chevron" aria-hidden>
                     ▾

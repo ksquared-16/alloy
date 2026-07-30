@@ -19,6 +19,7 @@ import {
 import { chunkNestedSurfaceFieldsForHalfRowLayout } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import { migrateIdentityDisclosureGroup } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 import { normalizeIdentityStorageTier } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import { isCompactIconValueIdentityField } from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
 
 /** Canonical Parent / Guardian template group (not a runtime section). */
 export const HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP = "contact_edit" as const;
@@ -123,6 +124,18 @@ function remapHouseholdFieldMap<T>(map: Record<string, T> | undefined): Record<s
     return out;
 }
 
+/** Summary phone/email always stack — coerce leftover half pairings out of the map. */
+function normalizeSummaryReachabilityWidths(
+    map: Record<string, "full" | "half" | "third"> | undefined,
+): Record<string, "full" | "half" | "third"> | undefined {
+    if (!map) return undefined;
+    const out: Record<string, "full" | "half" | "third"> = { ...map };
+    for (const key of Object.keys(out)) {
+        if (isCompactIconValueIdentityField(key)) out[key] = "full";
+    }
+    return out;
+}
+
 function mergeHouseholdFieldMaps<T>(
     template: Record<string, T> | undefined,
     runtime: Record<string, T> | undefined,
@@ -191,6 +204,10 @@ function buildAuthoritativePlacements(
             fieldIcons: mergeHouseholdFieldMaps(template.fieldIcons, runtime.fieldIcons),
         };
         const widthFor = (fieldRef: string) => {
+            // Summary phone/email always stack (see identityFieldLayoutWidthForPurpose).
+            if (purpose === "summary" && isCompactIconValueIdentityField(fieldRef)) {
+                return "full" as const;
+            }
             const purposeMap = layoutGroup.fieldLayoutWidthsByPurpose?.[purpose];
             const explicit =
                 purposeMap?.[fieldRef]
@@ -305,7 +322,11 @@ export function resolveHouseholdRoleMergedGroup(
         fieldIcons: mergeHouseholdFieldMaps(template.fieldIcons, runtime.fieldIcons),
         fieldLayoutWidths: remapHouseholdFieldMap(template.fieldLayoutWidths),
         fieldLayoutWidthsByPurpose: {
-            summary: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.summary),
+            // Normalize Summary phone/email to full so stored maps match stacking
+            // (Builder "separate rows" must not leave half in the published template).
+            summary: normalizeSummaryReachabilityWidths(
+                remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.summary),
+            ),
             context_facts: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.context_facts),
             details: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.details),
         },

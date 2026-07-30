@@ -9,6 +9,8 @@ import {
     isNestedSurfaceFieldThirdWidth,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import type { IdentityFieldCellVM, IdentityFieldRowVM, IdentityFieldPlacement } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import { isCompactIconValueIdentityField } from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
+import { normalizeIdentityStorageTier } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 
 export type IdentityFieldRowInput = {
     placement: IdentityFieldPlacement;
@@ -45,7 +47,13 @@ export function resolveIdentityFieldRows(
     });
 
     const keys = ordered.map((input) => input.placement.fieldRef);
+    // Summary reachability lines must stack even when a stale placement still says half
+    // (Builder can look "full row" after force-full width reads while VM placements lag).
+    const packingSummaryTier = ordered.every(
+        (input) => normalizeIdentityStorageTier(input.placement.tier) === "summary",
+    );
     const layoutFor = (fieldRef: string): NestedSurfaceFieldLayoutWidth => {
+        if (packingSummaryTier && isCompactIconValueIdentityField(fieldRef)) return "full";
         const input = ordered.find((row) => row.placement.fieldRef === fieldRef);
         return input?.placement.width ?? "full";
     };
