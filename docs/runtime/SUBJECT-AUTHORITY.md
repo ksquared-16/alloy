@@ -161,3 +161,42 @@ prewarm would be miscounted as an initial duplicate and the matrix would read as
 requested subject; layout renders children and composes nothing; bare route keeps its default; a named
 subject fails honestly before any fallback; lens+subject stay in the key; the reveal gate still defers
 the speculative sweep while never deferring hover intent.
+
+### 6a. A→B→A: five registrations, and why that is correct
+
+The A→B→A case read as 5 seed registrations and 4 "initial" provisioning fetches, which looked like
+duplicated transition work. Traced by producer, deterministic 3/3:
+
+```
+1 × page(subject=A)   the initial-navigation seed
+4 × prefetch          row warms across two transitions (A→B, B→A)
+consumeHits = 2       exactly one consumption per transition
+visible = A           correct end state; distinctSubjects = 2; mixedFrames = 0
+```
+
+Two warms per transition is `prefetchRecord` → `prewarmSubjectDestination` (ADJACENT SUBJECT
+PREPARATION): entering a row warms its complete commit-critical answer so the click resolves from cache
+instead of a cold fetch. A synthetic click fires both the intent warm and the commit, so two per
+transition, four for A→B→A. Legitimate lifecycle work, not duplication.
+
+**The defect was in the certification harness, not the runtime.** Its classifier had two buckets —
+"carries `work_view_id`" (sibling lens warm) versus "everything else" (initial provisioning) — so
+adjacent-subject warms were absorbed into initial provisioning and inflated the count 1 → 4. This is the
+second time that conflation produced a false alarm; the first was sibling lens warms. There are now
+three buckets:
+
+| bucket | identified by |
+|---|---|
+| `initial` | provisioning for the subject actually displayed |
+| `siblingLensPrewarms` | carries `work_view_id` |
+| `adjacentSubjectWarms` | carries a `subject_id` that is not the displayed subject |
+
+After the fix: ABA reports `initialFetch=1, adjWarm=3`; back/forward `initialFetch=0, lensWarm=8,
+adjWarm=2`; every stationary case `initialFetch=0`.
+
+**Residual imprecision, stated rather than hidden:** in A→B→A the *return* transition warms subject A,
+which is also the displayed subject at the end, so URL alone cannot separate it from initial
+provisioning — hence ABA's `initialFetch=1`. The stationary cases (valid deep link, refresh,
+published-doc) each report `initialFetch=0`, which is what actually establishes that initial navigation
+performs no client provisioning fetch. Distinguishing a return-transition warm from initial provisioning
+would need a per-request lifecycle tag, which is not worth adding for a certification harness.

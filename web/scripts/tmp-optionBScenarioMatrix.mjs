@@ -26,12 +26,26 @@ const wuUrl = (q = "") => `${BASE}/workspace/work-unit/${SLUG}${q}`;
 const only = process.argv[2] ?? null;
 fs.mkdirSync("/tmp/optionb", { recursive: true });
 
-function classify(reqs) {
-  // initial = the provisioning fetch for the displayed subject; prewarm = sibling work-view warms
+// THREE buckets, not two. A two-way split (lens-warm vs everything-else) silently absorbed
+// ADJACENT-SUBJECT warms into "initial provisioning", which made the A→B→A case read as 4 initial
+// composes when it performs one initial navigation and warms the rows it moves through.
+//
+//   initial          — provisioning for the subject actually displayed (0 when the page seed is used)
+//   siblingLens      — sibling work-view preparation: carries `work_view_id`
+//   adjacentSubject  — row intent/commit warms for OTHER subjects: carries a `subject_id` that is not
+//                      the displayed one (`prefetchRecord` → `prewarmSubjectDestination`)
+//
+// Conflating any of these makes correct behaviour look like duplicated work — the same mistake, twice.
+function classify(reqs, displayedSubject) {
   const prov = reqs.filter((r) => r.includes("/provisioning-answer"));
-  const initial = prov.filter((u) => !new URL(u).searchParams.get("work_view_id"));
-  const prewarm = prov.filter((u) => new URL(u).searchParams.get("work_view_id"));
-  return { initial, prewarm };
+  const siblingLens = prov.filter((u) => new URL(u).searchParams.get("work_view_id"));
+  const noLens = prov.filter((u) => !new URL(u).searchParams.get("work_view_id"));
+  const adjacentSubject = noLens.filter((u) => {
+    const s = new URL(u).searchParams.get("subject_id");
+    return s != null && displayedSubject != null && s !== displayedSubject;
+  });
+  const initial = noLens.filter((u) => !adjacentSubject.includes(u));
+  return { initial, siblingLens, adjacentSubject };
 }
 
 async function openCtx(browser, viewport) {
@@ -54,8 +68,7 @@ const readState = (page) => page.evaluate(() => {
   return {
     trace: (window.__alloySeedTrace ?? []).map((e) => ({
       kind: e.kind, producer: e.producer, t: e.t, subjectInKey: e.subjectInKey, lensInKey: e.lensInKey,
-      composedSubject: e.composedSubject, terminal: e.terminal, visibleAtEvent: e.visibleAtEvent,
-      overwrites: e.overwrites, url: e.url, stack: e.stack,
+      composedSubject: e.composedSubject, terminal: e.terminal,
     })),
     visibleSubject: panel?.getAttribute("data-inline-focus-panel-subject") ?? null,
     operational: panel?.getAttribute("data-focus-panel-operational") ?? null,
@@ -69,7 +82,7 @@ const readState = (page) => page.evaluate(() => {
 });
 
 function report(name, st, rec, extra = {}) {
-  const { initial, prewarm } = classify(rec.reqs);
+  const { initial, siblingLens, adjacentSubject } = classify(rec.reqs, st.visibleSubject);
   const seeds = st.trace.filter((e) => e.kind === "register");
   const hits = st.trace.filter((e) => e.kind === "consume-hit");
   const composed = [...new Set(seeds.map((s) => s.composedSubject).filter(Boolean))];
@@ -83,7 +96,8 @@ function report(name, st, rec, extra = {}) {
     operational: st.operational,
     settlement: st.settlement,
     initialProvisioningFetches: initial.length,
-    siblingPrewarms: prewarm.length,
+    siblingLensPrewarms: siblingLens.length,
+    adjacentSubjectWarms: adjacentSubject.length,
     cardCount: st.cardCount,
     strategy: st.strategy,
     publishedCards: st.publishedCards,
@@ -248,6 +262,36 @@ await run("08-back-forward", async (name) => {
   });
 });
 
+// 9 — PUBLISHED-DOC TENANT, asserted explicitly rather than incidentally
+await run("09-published-doc-tenant", async (name) => {
+  const ctx = await openCtx(browser, { width: 1440, height: 960 });
+  const page = await ctx.newPage(); const rec = attachRecorders(page);
+  await page.goto(wuUrl(`?subject_id=${A}`), { waitUntil: "domcontentloaded", timeout: 180000 });
+  await page.waitForTimeout(28000);
+  const st = await readState(page);
+  const tenant = await page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll("[data-card-role]")).map((c) => (c.textContent || "").trim());
+    const body = (document.body.innerText || "");
+    return {
+      order: cards.map((t) => t.slice(0, 18)),
+      milestonesPresent: /Milestone/i.test(cards.join(" ")),
+      // Billing must be present but must NOT assert a configured/blocked verdict it cannot know.
+      billingPresent: /Billing Preview/i.test(cards.join(" ")),
+      billingClaimsVerdict: /(items? missing|not configured|\d+ items)/i.test(body),
+    };
+  });
+  await ctx.close();
+  return report(name, st, rec, {
+    documentSource: st.strategy,                    // published-lanes / published-rows => tenant doc
+    tenantPublishedSource: String(st.strategy || "").startsWith("published"),
+    seedSubjectEqualsVisible: st.visibleSubject === A,
+    tenantOrder: tenant.order,
+    milestonesExcluded: tenant.milestonesPresent === false,
+    billingPresent: tenant.billingPresent,
+    billingTruthful: tenant.billingClaimsVerdict === false,
+  });
+});
+
 // 12 — narrow viewport
 await run("12-narrow", async (name) => {
   const ctx = await openCtx(browser, { width: 480, height: 900 });
@@ -285,7 +329,7 @@ console.log("\n================ SUMMARY ================");
 for (const r of rows) {
   if (r.error) { console.log(`${r.name.padEnd(28)} ERROR ${r.error.slice(0, 60)}`); continue; }
   console.log(
-    `${r.name.padEnd(28)} seeds=${r.seedRegistrations} initialFetch=${r.initialProvisioningFetches} prewarm=${r.siblingPrewarms} ` +
+    `${r.name.padEnd(28)} seeds=${r.seedRegistrations} initialFetch=${r.initialProvisioningFetches} lensWarm=${r.siblingLensPrewarms} adjWarm=${r.adjacentSubjectWarms} ` +
     `composed=${(r.composedSubjects || []).map((s) => (s || "").slice(0, 8)).join(",") || "-"} visible=${(r.visibleSubject || "-").slice(0, 8)} ` +
     `cards=${r.cardCount} errs=${r.pageErrors}/${r.consoleErrors}`,
   );

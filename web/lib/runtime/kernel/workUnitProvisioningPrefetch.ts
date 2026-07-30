@@ -113,19 +113,22 @@ function seedProvisioning(
 }
 
 /**
- * TEMPORARY — Option B ordering experiment (DEEPLINK-COMPOSE-OWNERSHIP.md §2a).
+ * SEED/CONSUME TRACE — default-off diagnostic for seed-authority regressions.
  *
- * Whether a page-owned seed is REGISTERED BEFORE the Host CONSUMES it is the whole question, and it is
- * not safely answerable from timings: the failure mode is silent (a wasted compose, not a broken page).
- * This records the seed/consume sequence and the subject each event carried, so the ordering can be
- * READ rather than inferred.
+ * Retained (not experiment scaffolding) because the contract it observes is one the runtime can break
+ * silently: a seed registered under the wrong key, or consumed twice, or never consumed, produces a
+ * wasted compose rather than a visible fault. The durable source guards in
+ * `seedAuthorityLifecycle.test.ts` pin the ownership; this shows the live sequence when something still
+ * looks wrong.
  *
- * Gated on `localStorage.ALLOY_SEED_TRACE === "1"`, default off — deliberately NOT on a bare
- * `process.env` flag. This function runs in the BROWSER, and Next only exposes `NEXT_PUBLIC_*` to the
- * client bundle, so a `process.env.ALLOY_ROUTE_TIMING` check here would compile to `undefined` and the
- * trace would silently never fire — producing an empty result that reads exactly like "the seed was
- * never registered". localStorage is the same prod-capable pattern `platformSurfacePerfEnabled` uses.
- * To be removed once durable guards land.
+ * The experiment-only parts are gone: caller stacks, visible-subject-at-event, and the overwrite probe
+ * were there to CLASSIFY the queue-row registrations, which is now settled and documented
+ * (SUBJECT-AUTHORITY.md §6).
+ *
+ * Gated on `localStorage.ALLOY_SEED_TRACE === "1"`, default off, and it writes only to a window array —
+ * never the console, never a server log — so no subject identifier reaches ordinary output. Deliberately
+ * NOT a bare `process.env` check: this runs in the BROWSER, where Next only exposes `NEXT_PUBLIC_*`, so
+ * an env flag would compile to `undefined` and the trace would silently never fire.
  */
 function traceSeedEvent(
     kind: "register" | "consume-hit" | "consume-miss",
@@ -139,38 +142,10 @@ function traceSeedEvent(
     } catch {
         return;
     }
-    // The caller's own stack, so a registration's identity is READ rather than inferred from timing or
-    // from which label happened to be threaded through. This is what distinguishes "the same producer
-    // registered twice" from "two producers share a key".
-    let stack: string | null = null;
-    try {
-        stack = (new Error().stack ?? "")
-            .split("\n")
-            .slice(2, 7)
-            .map((l) => l.trim().replace(/^at\s+/, "").replace(/\s*\(.*$/, ""))
-            .filter(Boolean)
-            .join(" < ");
-    } catch {
-        stack = null;
-    }
-    // Committed/visible subject AT THE MOMENT of the event. Without this, a registration whose subject
-    // differs from the initial one cannot be attributed to a lifecycle transition rather than a stale
-    // or default compose — the whole question for the queue-row click case.
-    let visibleAtEvent: string | null = null;
-    let overwrites = false;
-    try {
-        visibleAtEvent =
-            document.querySelector("[data-inline-focus-panel]")?.getAttribute("data-inline-focus-panel-subject") ?? null;
-        overwrites = kind === "register" && cache.has(url);
-    } catch {
-        /* diagnostic only */
-    }
     const w = window as unknown as { __alloySeedTrace?: unknown[] };
     (w.__alloySeedTrace ??= []).push({
         kind,
         producer,
-        visibleAtEvent,
-        overwrites,
         t: Math.round(typeof performance !== "undefined" ? performance.now() : 0),
         url,
         subjectInKey: new URL(url, "http://x").searchParams.get("subject_id"),
@@ -178,7 +153,6 @@ function traceSeedEvent(
         composedSubject:
             answer != null && answer.terminal === "operational" ? answer.recordOfAttention?.id ?? null : null,
         terminal: answer?.terminal ?? null,
-        stack,
     });
 }
 
