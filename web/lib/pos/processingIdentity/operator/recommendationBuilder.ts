@@ -221,9 +221,49 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
                 break;
             case "child":
                 if (sub.decision === "create") {
-                    operations.push({ ...common, opKind: "create", commandKey: IDENTITY_COMMAND_KEYS.createChild, payload: { household_id: `@${sub.householdRef}`, display_name: String(sub.values?.display_name ?? "Child"), dob: sub.values?.dob ?? null }, after: { display_name: sub.values?.display_name, dob: sub.values?.dob }, dependsOnRefs: sub.householdRef ? [sub.householdRef] : [], reason: "new child" });
+                    // Persist split names — display_name alone leaves child:first_name / child:last_name
+                    // readiness gaps even when the Children card shows the composed name.
+                    operations.push({
+                        ...common,
+                        opKind: "create",
+                        commandKey: IDENTITY_COMMAND_KEYS.createChild,
+                        payload: {
+                            household_id: `@${sub.householdRef}`,
+                            display_name: String(sub.values?.display_name ?? "Child"),
+                            first_name: sub.values?.first_name ?? null,
+                            last_name: sub.values?.last_name ?? null,
+                            dob: sub.values?.dob ?? null,
+                        },
+                        after: {
+                            display_name: sub.values?.display_name,
+                            first_name: sub.values?.first_name,
+                            last_name: sub.values?.last_name,
+                            dob: sub.values?.dob,
+                        },
+                        dependsOnRefs: sub.householdRef ? [sub.householdRef] : [],
+                        reason: "new child",
+                    });
                 } else if (sub.decision === "update") {
-                    operations.push({ ...common, opKind: "update", commandKey: IDENTITY_COMMAND_KEYS.updateChild, targetId: sub.selectedRecordId ?? null, payload: { child_id: sub.selectedRecordId, display_name: sub.values?.display_name, dob: sub.values?.dob }, after: { display_name: sub.values?.display_name }, preconditionRecordVersion: sub.preconditionRecordVersion ?? null, reason: "update matched child" });
+                    operations.push({
+                        ...common,
+                        opKind: "update",
+                        commandKey: IDENTITY_COMMAND_KEYS.updateChild,
+                        targetId: sub.selectedRecordId ?? null,
+                        payload: {
+                            child_id: sub.selectedRecordId,
+                            display_name: sub.values?.display_name,
+                            first_name: sub.values?.first_name,
+                            last_name: sub.values?.last_name,
+                            dob: sub.values?.dob,
+                        },
+                        after: {
+                            display_name: sub.values?.display_name,
+                            first_name: sub.values?.first_name,
+                            last_name: sub.values?.last_name,
+                        },
+                        preconditionRecordVersion: sub.preconditionRecordVersion ?? null,
+                        reason: "update matched child",
+                    });
                 } else if (sub.decision === "link" && sub.selectedRecordId) {
                     operations.push({
                         ...common,

@@ -242,7 +242,9 @@ export function buildCreateLeadCommitSelection(
         children,
         household_contacts: contacts,
         household_address: householdAddress,
-        address_review_only: Boolean(householdAddress?.lines?.length),
+        // Persist parsed address when present — Create Lead already has household/person
+        // address writers. Review-only used to drop mailing address silently after confirm.
+        address_review_only: false,
     };
 }
 

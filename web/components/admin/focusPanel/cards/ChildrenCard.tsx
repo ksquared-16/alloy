@@ -246,6 +246,14 @@ export default function ChildrenCard({
                           identityBaseline: seed.identityBaseline,
                       });
                       if (!patch) return { ok: false as const };
+                      // Keep summary display in sync when Gender is saved as an option key.
+                      const genderLabel = args.displayLabel?.trim() || null;
+                      if (patch.profilePatch && "gender" in patch.profilePatch && genderLabel) {
+                          patch.profilePatch = {
+                              ...patch.profilePatch,
+                              gender_label: genderLabel,
+                          };
+                      }
                       const hasChanges =
                           Object.keys(patch.identityPatch).length > 0
                           || Object.keys(patch.ocmPatch).length > 0
@@ -272,8 +280,39 @@ export default function ChildrenCard({
                       editableKeys,
                       opportunityStartDate,
                   });
+                  const label = args.displayLabel?.trim() || null;
+                  if (valueKey === "program_category_id" && patch.ocmPatch.program_category_id !== undefined) {
+                      // Only write a display label when we resolved one — never wipe a prior
+                      // label because placement options had not loaded yet at Save time.
+                      if (!patch.ocmPatch.program_category_id) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              desired_program_label: null,
+                          };
+                      } else if (label) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              desired_program_label: label,
+                          };
+                      }
+                  }
+                  if (valueKey === "location_id" && patch.ocmPatch.location_id !== undefined) {
+                      if (!patch.ocmPatch.location_id) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              location_label: null,
+                          };
+                      } else if (label) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              location_label: label,
+                          };
+                      }
+                  }
                   const hasChanges =
-                      Object.keys(patch.identityPatch).length > 0 || Object.keys(patch.ocmPatch).length > 0;
+                      Object.keys(patch.identityPatch).length > 0
+                      || Object.keys(patch.ocmPatch).length > 0
+                      || Boolean(patch.displayPatch && Object.keys(patch.displayPatch).length > 0);
                   if (!hasChanges) return { ok: true as const };
                   return mutation.saveInquiryChild({
                       childId: seed.childId,
@@ -758,6 +797,7 @@ export default function ChildrenCard({
                     onEditField={canEditChild ? () => setEditing(true) : undefined}
                     personId={focused.personId ?? null}
                     customerMemberId={focused.customerMemberId ?? null}
+                    photoUrl={focused.imageUrl ?? null}
                     onSavePhoto={mutation?.savePersonChildPhoto}
                     onClearPhoto={mutation?.clearPersonChildPhoto}
                 />
@@ -789,23 +829,35 @@ export default function ChildrenCard({
                         onSelectIdentity={selectChildIdentity}
                         onSaveField={saveChildIdentityField}
                         onLinkField={linkChildIdentityField}
-                        renderRecordAvatar={
-                            composingChildrenSurface
-                                ? (record) => {
-                                      const child = evidence.children.find((c) => c.id === record.id);
-                                      if (!child) return null;
-                                      return childRosterAvatarComposer({
-                                          child,
-                                          previewImageUrl:
-                                              composer?.childAvatarPreviewUrl(child.id)
-                                              ?? child.imageUrl
-                                              ?? null,
-                                          onSavePhoto: mutation?.savePersonChildPhoto,
-                                          onClearPhoto: mutation?.clearPersonChildPhoto,
-                                      });
-                                  }
-                                : undefined
-                        }
+                        renderRecordAvatar={(record) => {
+                            const child = evidence.children.find((c) => c.id === record.id);
+                            if (!child) return null;
+                            if (composingChildrenSurface) {
+                                return childRosterAvatarComposer({
+                                    child,
+                                    previewImageUrl:
+                                        composer?.childAvatarPreviewUrl(child.id)
+                                        ?? child.imageUrl
+                                        ?? null,
+                                    onSavePhoto: mutation?.savePersonChildPhoto,
+                                    onClearPhoto: mutation?.clearPersonChildPhoto,
+                                });
+                            }
+                            if (!canMutateIdentity || !mutation?.savePersonChildPhoto) return null;
+                            return (
+                                <IdentityAvatarEditable
+                                    name={child.name}
+                                    imageUrl={child.imageUrl ?? null}
+                                    recordId={child.id}
+                                    personId={child.personId ?? null}
+                                    customerMemberId={child.customerMemberId ?? null}
+                                    onSavePhoto={mutation.savePersonChildPhoto}
+                                    onClearPhoto={mutation.clearPersonChildPhoto}
+                                    size={40}
+                                    role="child"
+                                />
+                            );
+                        }}
                     />
             </ComposableRegionShell>
         );
@@ -841,6 +893,8 @@ export default function ChildrenCard({
                                           })
                                         : undefined
                                 }
+                                onSavePhoto={mutation?.savePersonChildPhoto}
+                                onClearPhoto={mutation?.clearPersonChildPhoto}
                                 onSaveField={saveChildIdentityField}
                                 onLinkField={linkChildIdentityField}
                                 onActivate={
@@ -938,6 +992,8 @@ function ChildSummaryRow({
     canMutate = false,
     composingChildrenSurface = false,
     rosterAvatarComposer,
+    onSavePhoto,
+    onClearPhoto,
 }: {
     child: ChildrenEvidenceChild;
     childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
@@ -948,6 +1004,8 @@ function ChildSummaryRow({
     canMutate?: boolean;
     composingChildrenSurface?: boolean;
     rosterAvatarComposer?: ReactNode;
+    onSavePhoto?: FocusPanelMutation["savePersonChildPhoto"];
+    onClearPhoto?: FocusPanelMutation["clearPersonChildPhoto"];
 }) {
     const record = buildChildIdentityRecordVM({
         config: childrenSurfaceConfig,
@@ -957,9 +1015,25 @@ function ChildSummaryRow({
         isFieldSaveSupported: (fieldRef) =>
             isChildIdentityFieldInlineSaveSupported(fieldRef) || isIdentityFieldSaveSupported(fieldRef),
     });
-    // Work Unit summary: display-only avatar (default IdentityAvatar).
-    // Surfaces → context facts composer owns upload/remove via rosterAvatarComposer.
-    const liveAvatarSlot = composingChildrenSurface ? rosterAvatarComposer : undefined;
+    // Composer uses ChildProfileAvatarComposer; live Work Unit uses IdentityAvatarEditable
+    // so uploads stick across summary ↔ details ↔ context without a full refresh.
+    const liveAvatarSlot = composingChildrenSurface
+        ? rosterAvatarComposer
+        : canMutate && onSavePhoto
+          ? (
+                <IdentityAvatarEditable
+                    name={child.name}
+                    imageUrl={child.imageUrl ?? null}
+                    recordId={child.id}
+                    personId={child.personId ?? null}
+                    customerMemberId={child.customerMemberId ?? null}
+                    onSavePhoto={onSavePhoto}
+                    onClearPhoto={onClearPhoto}
+                    size={30}
+                    role="child"
+                />
+            )
+          : undefined;
     return (
         <div className="alloy-os-children__summary-row" data-children-child={child.id}>
             <IdentityRecordSummary
@@ -1401,6 +1475,7 @@ function FocusedChild({
                                       identityRecord.avatar.visible === false
                                           ? null
                                           : (composer?.childAvatarPreviewUrl(child.id)
+                                              ?? child.imageUrl
                                               ?? identityRecord.avatar.imageUrl),
                               }
                             : identityRecord.avatar,

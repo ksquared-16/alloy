@@ -244,6 +244,20 @@ export function resolveHouseholdRoleMergedGroup(
         fieldPolicies: mergeFieldMaps(template.fieldPolicies, runtime.fieldPolicies),
         fieldLabels: mergeFieldMaps(template.fieldLabels, runtime.fieldLabels),
         fieldLayoutWidths: mergeFieldMaps(template.fieldLayoutWidths, runtime.fieldLayoutWidths),
+        fieldLayoutWidthsByPurpose: {
+            summary: mergeFieldMaps(
+                template.fieldLayoutWidthsByPurpose?.summary,
+                runtime.fieldLayoutWidthsByPurpose?.summary,
+            ),
+            context_facts: mergeFieldMaps(
+                template.fieldLayoutWidthsByPurpose?.context_facts,
+                runtime.fieldLayoutWidthsByPurpose?.context_facts,
+            ),
+            details: mergeFieldMaps(
+                template.fieldLayoutWidthsByPurpose?.details,
+                runtime.fieldLayoutWidthsByPurpose?.details,
+            ),
+        },
         fieldModes: mergeFieldMaps(template.fieldModes, runtime.fieldModes),
         evidenceCollections:
             template.evidenceCollections !== undefined

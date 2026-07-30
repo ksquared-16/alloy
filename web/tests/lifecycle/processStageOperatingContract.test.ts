@@ -368,7 +368,7 @@ describe("Process Stage operating contract — statuses (16–21)", () => {
         expect(result.available).toBe(true);
     });
 
-    it("19–20. Unknown / legacy raw text cannot validate as selected", () => {
+    it("19–20. Unknown / legacy raw text cannot validate as selected; non-closed keys are not close_record", () => {
         const result = resolveOutcomeStatusOptions({
             configuredStatuses: [...FAMILY_CLOSED_STATUSES],
             purpose: "close_record",
@@ -379,7 +379,8 @@ describe("Process Stage operating contract — statuses (16–21)", () => {
         expect(result.invalidSelectedStatusKey).toBe("totally_made_up");
 
         const plan = leadContactFamilyProofPlan();
-        const bad = {
+        // Non-closed free text is no longer classified as close_record.
+        const nonClose = {
             ...plan,
             outcome_rules: upsertOutcomeAutomationRule(plan.outcome_rules, "not_interested", {
                 kind: "close_record",
@@ -387,9 +388,41 @@ describe("Process Stage operating contract — statuses (16–21)", () => {
                 completes_work: true,
             }),
         };
-        const badIssues = validateStageOperatingPlanOperatingContract({
-            plan: bad,
+        const nonCloseIssues = validateStageOperatingPlanOperatingContract({
+            plan: nonClose,
             configuredStatuses: [...FAMILY_CLOSED_STATUSES],
+            entityType: "opportunities",
+        });
+        expect(nonCloseIssues.some((i) => i.code === "outcome_close_status_invalid")).toBe(false);
+
+        // True close with a closed-semantic key that is not in the closed option set → invalid.
+        const catalogOnlyLost = [
+            {
+                status_key: "lost",
+                status_label: "Lost",
+                entity_type: "opportunities",
+                is_closed: true,
+                is_active: true,
+            },
+            {
+                status_key: "open",
+                status_label: "Open",
+                entity_type: "opportunities",
+                is_closed: false,
+                is_active: true,
+            },
+        ];
+        const badClose = {
+            ...plan,
+            outcome_rules: upsertOutcomeAutomationRule(plan.outcome_rules, "not_interested", {
+                kind: "close_record",
+                status_key: "closed",
+                completes_work: true,
+            }),
+        };
+        const badIssues = validateStageOperatingPlanOperatingContract({
+            plan: badClose,
+            configuredStatuses: catalogOnlyLost,
             entityType: "opportunities",
         });
         expect(badIssues.some((i) => i.code === "outcome_close_status_invalid")).toBe(true);

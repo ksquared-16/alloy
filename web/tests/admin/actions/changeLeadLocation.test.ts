@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
     CHANGE_LEAD_LOCATION_ACTION_KEY,
     listInheritingInquiryChildren,
+    resolveInquiryChildOcmId,
 } from "@/lib/admin/actions/changeLeadLocationContract";
 import { resolveChangeLeadLocationActionFromResolvedAction } from "@/lib/admin/actions/changeLeadLocationActionClient";
 import { buildOpportunityDrawerHeaderMenuActions } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions";
@@ -11,7 +12,6 @@ import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegi
 import type { ApplyRegistryResolvedActionHost } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 
 vi.mock("@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit", () => ({
-    patchOpportunityNativeFromLayoutDrawer: vi.fn().mockResolvedValue({ ok: true }),
     syncOpportunityLocationDisplayLabel: vi.fn((record, locationId, locationLabel) => ({
         ...record,
         location_id: locationId,
@@ -21,11 +21,14 @@ vi.mock("@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit", () => ({
 
 vi.mock("@/lib/admin/drawer/inquiryChildFieldEdit", () => ({
     patchOpportunityCustomerMemberFromInquiryChild: vi.fn().mockResolvedValue(undefined),
+    patchChildParticipation: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { submitChangeLeadLocation } from "@/lib/admin/actions/submitChangeLeadLocation";
-import { patchOpportunityNativeFromLayoutDrawer } from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
-import { patchOpportunityCustomerMemberFromInquiryChild } from "@/lib/admin/drawer/inquiryChildFieldEdit";
+import {
+    patchChildParticipation,
+    patchOpportunityCustomerMemberFromInquiryChild,
+} from "@/lib/admin/drawer/inquiryChildFieldEdit";
 
 describe("change_lead_location", () => {
     beforeEach(() => {
@@ -104,27 +107,109 @@ describe("change_lead_location", () => {
         })).toBe(true);
     });
 
-    it("patches lead location and optional inheriting children", async () => {
+    it("patches lead location via dedicated route and optional inheriting children", async () => {
+        const fetchFn = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ ok: true, location_id: "site-north" }),
+        });
         const result = await submitChangeLeadLocation({
             opportunityId: "opp-1",
             locationId: "site-north",
             locationLabel: "North",
             applyToInheritingChildren: true,
             inquiryChildren: [
-                { id: "ocm-south", location_id: "site-south" },
-                { id: "ocm-inherit", location_id: null },
+                { id: "ocm-south", customer_member_id: "cm-south", location_id: "site-south" },
+                { id: "ocm-inherit", customer_member_id: "cm-inherit", location_id: null },
             ],
             record: { id: "opp-1", location_id: "site-old" },
+            fetchFn,
         });
         expect(result.ok).toBe(true);
         expect(result.updatedChildCount).toBe(1);
-        expect(patchOpportunityNativeFromLayoutDrawer).toHaveBeenCalledWith({
+        expect(fetchFn).toHaveBeenCalledWith(
+            "/api/admin/opportunities/opp-1/lead-location",
+            expect.objectContaining({
+                method: "PATCH",
+                body: JSON.stringify({ location_id: "site-north" }),
+            }),
+        );
+        expect(patchChildParticipation).toHaveBeenCalledWith({
+            customerMemberId: "cm-inherit",
             opportunityId: "opp-1",
-            body: { location_id: "site-north" },
+            patch: { location_id: "site-north" },
+            fetchFn,
         });
+        expect(patchOpportunityCustomerMemberFromInquiryChild).not.toHaveBeenCalled();
+    });
+
+    it("does not PATCH unlinked synthetic child ids as opportunity_customer_members", async () => {
+        const fetchFn = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ ok: true, location_id: "site-north" }),
+        });
+        expect(resolveInquiryChildOcmId({ id: "unlinked:cm-1", ocm_id: null })).toBeNull();
+
+        const result = await submitChangeLeadLocation({
+            opportunityId: "opp-1",
+            locationId: "site-north",
+            locationLabel: "North",
+            applyToInheritingChildren: true,
+            inquiryChildren: [
+                {
+                    id: "unlinked:cm-ember",
+                    customer_member_id: "cm-ember",
+                    ocm_id: null,
+                    location_id: null,
+                },
+            ],
+            fetchFn,
+        });
+        expect(result.ok).toBe(true);
+        expect(result.updatedChildCount).toBe(1);
+        expect(patchChildParticipation).toHaveBeenCalledWith({
+            customerMemberId: "cm-ember",
+            opportunityId: "opp-1",
+            patch: { location_id: "site-north" },
+            fetchFn,
+        });
+        expect(patchOpportunityCustomerMemberFromInquiryChild).not.toHaveBeenCalled();
+    });
+
+    it("falls back to OCM PATCH when customer_member_id is absent", async () => {
+        const fetchFn = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ ok: true, location_id: "site-north" }),
+        });
+        const result = await submitChangeLeadLocation({
+            opportunityId: "opp-1",
+            locationId: "site-north",
+            locationLabel: "North",
+            applyToInheritingChildren: true,
+            inquiryChildren: [{ id: "ocm-inherit", location_id: null }],
+            fetchFn,
+        });
+        expect(result.ok).toBe(true);
+        expect(result.updatedChildCount).toBe(1);
         expect(patchOpportunityCustomerMemberFromInquiryChild).toHaveBeenCalledWith("ocm-inherit", {
             location_id: "site-north",
         });
-        expect(patchOpportunityCustomerMemberFromInquiryChild).toHaveBeenCalledTimes(1);
+        expect(patchChildParticipation).not.toHaveBeenCalled();
+    });
+
+    it("surfaces lead-location API errors without drawer field-policy wording", async () => {
+        const fetchFn = vi.fn().mockResolvedValue({
+            ok: false,
+            json: async () => ({ error: "Location not found" }),
+        });
+        await expect(
+            submitChangeLeadLocation({
+                opportunityId: "opp-1",
+                locationId: "missing-site",
+                locationLabel: "Missing",
+                applyToInheritingChildren: false,
+                inquiryChildren: [],
+                fetchFn,
+            }),
+        ).rejects.toThrow("Location not found");
     });
 });

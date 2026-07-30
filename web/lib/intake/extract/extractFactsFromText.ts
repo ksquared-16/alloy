@@ -39,6 +39,9 @@ const START_DATE_LABEL_RE =
     /^(?:desired\s+start(?:\s+date)?|start\s+date|enrollment\s+date)\s*[:\-]\s*(.+)$/i;
 const DOB_LABEL_RE = /^(?:dob|date\s+of\s+birth|birth\s*date)\s*[:\-]\s*(.+)$/i;
 const LOOKING_FOR_RE = /^(?:looking\s+for|interested\s+in)\s+(.+)$/i;
+// Bare program phrases without a label prefix, e.g. "toddler program", "infant room", "pre-k class".
+const PROGRAM_PHRASE_RE =
+    /\b(infants?|toddlers?|twos?|threes?|fours?|pre-?k|pre-?kindergarten|kindergarten|preschool|school-?age|after-?school)\s+(?:program|class|classroom|room|group|cohort)\b/i;
 const EMAIL_LABEL_RE = /^e(?:\-?mail)?\s*[:\-]\s*(.+)$/i;
 const PHONE_LABEL_RE = /^phone\s*[:\-]\s*(.+)$/i;
 
@@ -548,6 +551,20 @@ export function extractFactsFromText(input: {
             continue;
         }
 
+        const programPhrase = line.match(PROGRAM_PHRASE_RE);
+        if (programPhrase?.[1]) {
+            pushFact(facts, seen, {
+                fact_type: "program_interest",
+                raw_value: programPhrase[0],
+                normalized_value: programPhrase[1].trim(),
+                confidence: "medium",
+                validation_state: "unknown",
+                source_line: lineNum,
+                evidence: "Program phrase (e.g. 'toddler program')",
+            });
+            continue;
+        }
+
         const childName = extractChildNameFromLine(line);
         if (childName) {
             pushPersonNameFact(facts, seen, {
@@ -759,6 +776,9 @@ export function extractFactsFromText(input: {
             if (CHILD_NAME_AGE_COMMA_RE.test(line)) continue;
             if (PARENT_LABEL_RE.test(line) || DOB_LABEL_RE.test(line) || EMAIL_LABEL_RE.test(line)) continue;
             if (line.includes(":")) continue;
+            // A location phrase ("North campus") is not a fallback adult name — it is captured as a
+            // location_label below. Without this, "North campus" was mis-added as an Additional person.
+            if (looksLikeLocationLine(line)) continue;
             if (!looksLikeNameLine(line)) continue;
             const split = splitPersonName(line);
             if (!split) continue;

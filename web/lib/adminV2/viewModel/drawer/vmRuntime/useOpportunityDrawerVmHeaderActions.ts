@@ -128,7 +128,9 @@ export function useOpportunityDrawerVmHeaderActions(params: {
                         resolvedIntent === "create_task" ||
                         resolvedIntent === "quick_message" ||
                         actionKey === "quick_message" ||
-                        actionKey === "review_enrollment_packet"
+                        actionKey === "review_enrollment_packet" ||
+                        // Opens ChangeLeadLocationModal — success belongs to the modal save path.
+                        actionKey === "change_lead_location"
                     ) {
                         return;
                     }

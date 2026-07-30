@@ -85,22 +85,32 @@ ALLOY_WEB_DIR="web"
 ALLOY_DEV_COMMAND="npm run dev"
 
 # Heavy validation runs from ALLOY_WEB_DIR inside the worktree.
-# Typecheck uses an explicit 4096 MB heap (repo npm script defaults to 8192).
-ALLOY_TYPECHECK_COMMAND='node --max-old-space-size=4096 node_modules/typescript/bin/tsc -p tsconfig.build.json --noEmit'
-ALLOY_TEST_COMMAND='npx vitest run --maxWorkers=2 --minWorkers=1'
-ALLOY_BUILD_COMMAND='npm run build'
+# These commands are invoked BY the broker — never `npm run typecheck|build|test`
+# (those package scripts route INTO the broker; using them here would recurse).
+ALLOY_TYPECHECK_COMMAND='node --max-old-space-size=8192 node_modules/typescript/bin/tsc -p tsconfig.build.json --noEmit'
+ALLOY_TYPECHECK_TESTS_COMMAND='node --max-old-space-size=8192 node_modules/typescript/bin/tsc -p tsconfig.json --noEmit'
+# Leave EMPTY. The broker builds the vitest command from what the installed CLI actually accepts
+# (lib/validate-caps.sh probes `vitest run --help`). Hardcoding worker flags here is what broke
+# `vac run test`: vitest 4.x rejects --minWorkers, so every brokered test run died with
+# `CACError: Unknown option --minWorkers` before running a test. Set this only to override the
+# whole command, and do not put worker flags in it.
+ALLOY_TEST_COMMAND=''
+# Worker cap the broker applies when the installed vitest supports it.
+ALLOY_TEST_MAX_WORKERS='2'
+ALLOY_BUILD_COMMAND='npx next build'
 ALLOY_PLAYWRIGHT_COMMAND='npx playwright test --workers=1'
 # Canonical import verification for the web package:
 ALLOY_IMPORTS_COMMAND='npm run verify:module-imports'
 
 # Default Node heap for alloy-dev-start and alloy-validate wrappers.
-NODE_OPTIONS_DEFAULT="--max-old-space-size=4096"
+NODE_OPTIONS_DEFAULT="--max-old-space-size=8192"
 
 # Cleanup age thresholds (hours) for generated artifacts only.
 ALLOY_CLEAN_ARTIFACT_AGE_HOURS="24"
 
-# Validation lock polling (seconds).
+# Validation lease polling (seconds) and heartbeat stale threshold.
 ALLOY_VALIDATE_POLL_SECONDS="5"
+ALLOY_VALIDATE_HEARTBEAT_STALE_SECONDS="90"
 
 # Managed Sprint Operations V1 — resource guardrails.
 # Six assigned worktrees must not automatically mean six servers or six heavy jobs.

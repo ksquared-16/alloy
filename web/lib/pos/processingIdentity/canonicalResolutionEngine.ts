@@ -22,6 +22,7 @@ import {
     type ProcessingResolutionRow,
 } from "./processingResolutionsDb";
 import type { IntakeFact } from "@/lib/intake/types";
+import { buildHouseholdLeadDisplayName } from "@/lib/admin/opportunity/buildHouseholdLeadDisplayName";
 
 function bandToLegacyConfidence(band: string): IntakeRecordMatchConfidence {
     switch (band) {
@@ -99,19 +100,26 @@ function provisionalForSubject(
     }
     if (role === "household") {
         const primary = guardians[0];
-        const householdName =
-            primary ?
-                `${primary.last_name ?? "Household"}`.trim() || "Household"
-            :   "Household";
-        return { household_name: householdName };
+        return {
+            household_name: buildHouseholdLeadDisplayName({
+                firstName: primary?.first_name,
+                lastName: primary?.last_name,
+                fallback: "Household",
+            }),
+        };
     }
     if (role === "lead") {
         const primary = guardians[0];
-        const name =
-            primary ?
-                `${primary.first_name ?? ""} ${primary.last_name ?? ""}`.trim() || "Lead"
-            :   "Lead";
-        return { name };
+        // Lead / opportunity name is household-oriented (`Lyons Family`), matching Focus Panel titles.
+        // Using the primary contact's full name made queue subject slots show "Alex Lyons" when
+        // Surfaces are configured for household name.
+        return {
+            name: buildHouseholdLeadDisplayName({
+                firstName: primary?.first_name,
+                lastName: primary?.last_name,
+                fallback: "Lead",
+            }),
+        };
     }
     return {};
 }

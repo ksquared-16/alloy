@@ -48,7 +48,7 @@ export const WS_PANEL_SURFACE_FLAT =
 export const WS_FIELD_SEARCH_CHROME =
     "rounded-md border border-alloy-stone/55 bg-white px-3 py-1.5 text-[12px] text-alloy-midnight shadow-[0_1px_3px_rgba(24,39,58,0.06)] placeholder:text-alloy-midnight/40 focus-visible:border-alloy-bend-pine/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-alloy-bend-pine/35";
 
-/** Compact select matching WS_FIELD_SEARCH_CHROME. */
+/** Compact select matching WS_FIELD_SEARCH_CHROME — white field, midnight value text (same as inputs). */
 export const WS_FIELD_SELECT_CHROME =
     "rounded-md border border-alloy-stone/55 bg-white px-2.5 py-1.5 text-[12px] text-alloy-midnight shadow-[0_1px_3px_rgba(24,39,58,0.06)] focus-visible:border-alloy-bend-pine/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-alloy-bend-pine/35";
 

@@ -386,6 +386,7 @@ export async function executeCommandInvocation(
             capability,
             invocation,
             executionSubject: { entityType, entityId },
+            departmentId: request.departmentId ?? null,
             mode: request.mode,
             supabase: server.supabase,
             runtimeContext,

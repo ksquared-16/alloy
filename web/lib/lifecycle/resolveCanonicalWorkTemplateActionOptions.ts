@@ -305,11 +305,31 @@ function mergeByIntent(
     return [...byIntent.values()].filter((row) => row.supported);
 }
 
+/** Best-effort narrowing of the opaque action registry to configured-action rows. */
+function asConfiguredActionRows(registry: unknown): LifecycleConfiguredActionRow[] | null {
+    if (!Array.isArray(registry)) return null;
+    const rows = registry.filter(
+        (row): row is LifecycleConfiguredActionRow =>
+            row != null
+            && typeof row === "object"
+            && typeof (row as { key?: unknown }).key === "string"
+            && Array.isArray((row as { placements?: unknown }).placements)
+    );
+    return rows.length ? rows : null;
+}
+
 function processSelectionKeySet(
-    process: LifecycleBuilderProcessRecord | null | undefined
+    process: LifecycleBuilderProcessRecord | null | undefined,
+    actionRegistry: unknown
 ): Set<string> | null {
     if (!process) return null;
-    const selection = resolveBusinessProcessCommandSelection({ process });
+    // The configured registry must be on BOTH sides of its own gate. Omitting it here meant the
+    // legacy migration derived its selection from stage catalogs alone, so configured actions were
+    // collected as candidates and then filtered out by a set that could never contain them.
+    const selection = resolveBusinessProcessCommandSelection({
+        process,
+        lifecycleConfiguredActions: asConfiguredActionRows(actionRegistry),
+    });
     const keys = listEnabledCommandKeys(selection.commands, (key) => {
         const resolved = tryResolvePlatformCapability(key);
         return resolved.status === "known" ? resolved.capability.canonicalCommandKey : key.trim();
@@ -319,6 +339,10 @@ function processSelectionKeySet(
         out.add(key);
         out.add(normalizeActionRefToIntentKey(key));
     }
+    // A DERIVED-empty legacy migration is not an operator saying "no Commands" — treating it as one
+    // emptied the picker and left the work item unconfigurable. Only an explicit `command_set_v1`
+    // selection may gate to nothing.
+    if (out.size === 0 && selection.authority !== "command_set_v1") return null;
     return out;
 }
 
@@ -360,7 +384,7 @@ export function resolveCanonicalWorkTemplateActionOptions(input: {
         stageKey: input.stageKey,
     });
 
-    const selection = processSelectionKeySet(input.process ?? null);
+    const selection = processSelectionKeySet(input.process ?? null, input.actionRegistry);
     if (selection) {
         candidateKeys = candidateKeys.filter((key) => keyInSelection(selection, key));
     }

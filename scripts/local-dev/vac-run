@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# vac-run — auto-detect worktree from cwd and invoke the validation broker.
+# Used by web/package.json heavy scripts and `vac run <kind>`.
+# Fails closed if the broker cannot be resolved (no silent raw tsc fallback).
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: vac-run <kind> [--force]
+Kinds: typecheck | typecheck:tests | test | build | playwright | imports | command -- …
+EOF
+}
+
+[[ $# -ge 1 ]] || { usage >&2; exit 2; }
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+alloy_load_config
+alloy_ensure_runtime_dirs
+
+# Non-kind commands
+case "${1:-}" in
+  status) exec "$SCRIPT_DIR/alloy-validate" status ;;
+  cancel) shift; exec "$SCRIPT_DIR/alloy-validate" cancel "$@" ;;
+esac
+
+kind="$1"
+shift
+
+# Already inside a broker execution (should not happen with direct underlying cmds).
+if [[ "${ALLOY_VALIDATE_EXECUTING:-0}" == "1" ]]; then
+  echo "error: vac-run invoked while ALLOY_VALIDATE_EXECUTING=1 (possible package-script recursion)" >&2
+  exit 2
+fi
+
+# Resolve git toplevel from cwd (works when npm runs from web/).
+git_root=""
+git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "$git_root" ]] || {
+  echo "error: not inside a git worktree; cannot admit validation through the broker." >&2
+  echo "hint: run from a managed Alloy worktree, or: npm run local-dev:install" >&2
+  exit 2
+}
+
+# Prefer explicit env.
+name="${ALLOY_WORKTREE_NAME:-}"
+unmanaged=0
+
+if [[ -z "$name" ]]; then
+  # Match managed metadata by absolute path.
+  local_match=""
+  if [[ -d "${ALLOY_METADATA_DIR:-}" ]]; then
+    for f in "${ALLOY_METADATA_DIR}"/*.env; do
+      [[ -f "$f" ]] || continue
+      # shellcheck disable=SC1090
+      unset ALLOY_WORKTREE_PATH ALLOY_WORKTREE_NAME
+      # shellcheck disable=SC1090
+      source "$f"
+      if [[ "${ALLOY_WORKTREE_PATH:-}" == "$git_root" ]]; then
+        local_match="${ALLOY_WORKTREE_NAME:-}"
+        break
+      fi
+    done
+  fi
+  if [[ -n "$local_match" ]]; then
+    name="$local_match"
+  else
+    # Unmanaged / canonical checkout: still take the host lease under a synthetic name.
+    name="unmanaged-$(basename "$git_root")"
+    unmanaged=1
+  fi
+fi
+
+export ALLOY_VALIDATE_RESOLVED_NAME="$name"
+if [[ "$unmanaged" -eq 1 ]]; then
+  export ALLOY_VALIDATE_UNMANAGED=1
+  export ALLOY_VALIDATE_PATH_OVERRIDE="$git_root"
+  export ALLOY_VALIDATE_SLOT_OVERRIDE=0
+fi
+
+exec "$SCRIPT_DIR/alloy-validate" --cwd "$kind" "$@"

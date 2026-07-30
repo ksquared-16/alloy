@@ -125,10 +125,17 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
         }
     }, [ensureCommandWorkspace, reviewPhase, session.mode, session.phase]);
 
+    // End the command but stay in BOS — the operator is still working here and usually has a next
+    // instruction. Distinct from returning to the workspace, which puts BOS away.
     const discardWithRestore = useCallback(() => {
         restoreWorkspaceWidth();
         ctx?.discardSession();
     }, [ctx, restoreWorkspaceWidth]);
+
+    const returnToWorkspace = useCallback(() => {
+        discardWithRestore();
+        bosPresentation?.closeToLauncher();
+    }, [bosPresentation, discardWithRestore]);
 
     const optionLabels = useMemo(() => {
         const map = new Map<string, string>();
@@ -266,7 +273,8 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                             restoreWorkspaceWidth();
                             ctx?.startSession(session.invocation);
                         }}
-                        onReturn={discardWithRestore}
+                        onReturnToBos={discardWithRestore}
+                        onReturn={returnToWorkspace}
                     />
                 ) : reviewPhase ? (
                     <ReviewBody groups={reviewGroups} preview={session.preview} compact={compact} />
@@ -511,6 +519,7 @@ function SuccessBody(props: {
     session: BosCommandSession;
     compact: boolean;
     onCreateAnother: () => void;
+    onReturnToBos: () => void;
     onReturn: () => void;
 }) {
     const success =
@@ -572,6 +581,14 @@ function SuccessBody(props: {
                 <button
                     type="button"
                     className={`${WS_ACTION_SECONDARY} ${props.compact ? "min-h-[40px]" : ""}`}
+                    data-bos-command-session-return-bos
+                    onClick={props.onReturnToBos}
+                >
+                    Return to BOS
+                </button>
+                <button
+                    type="button"
+                    className={`${WS_ACTION_SECONDARY} ${props.compact ? "min-h-[40px]" : ""}`}
                     data-bos-command-session-return-workspace
                     onClick={props.onReturn}
                 >
@@ -596,8 +613,7 @@ function ProcessingReviewBody(props: {
             <div>
                 <p className={WS_EYEBROW}>Processing</p>
                 <p className="mt-1 text-[13px] text-alloy-midnight/70">
-                    Review identity matches, approve the commit plan, then explicitly commit to create
-                    records.
+                    Review the household, then confirm once to create the lead and related records.
                 </p>
             </div>
             <IdentityReviewPanel
