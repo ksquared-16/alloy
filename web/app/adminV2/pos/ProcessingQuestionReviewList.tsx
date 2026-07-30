@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import React, { useEffect, useRef } from "react";
 import { Check, EyeOff, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import {
     NAME_REPRESENTATION_OPTIONS,
@@ -156,8 +157,56 @@ export function ProcessingQuestionReviewList({
         return acc;
     }, []);
 
+    // Reading order across sections — the order the operator sees, so Up/Down match the eye.
+    const orderedIds = sections.flatMap((s) => s.questions.map((q) => q.id));
+    const listRef = useRef<HTMLDivElement | null>(null);
+
+    // Keep the selection visible. Selection changes from EITHER side (this list, or clicking a
+    // region in the document), so this is what makes highlight -> question sync legible.
+    useEffect(() => {
+        if (!selectedId || !listRef.current) return;
+        const node = listRef.current.querySelector(`[data-testid="review-question-${CSS.escape(selectedId)}"]`);
+        node?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, [selectedId]);
+
+    // Arrow keys walk the list; Home/End jump to the ends. Buttons already handle Enter/Space, so
+    // this only adds the traversal that was missing.
+    const onListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (!orderedIds.length) return;
+        const key = e.key;
+        if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "Home" && key !== "End") return;
+        // Never hijack arrows while the operator is typing in an inline editor.
+        const target = e.target as HTMLElement | null;
+        if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+
+        e.preventDefault();
+        const current = selectedId ? orderedIds.indexOf(selectedId) : -1;
+        let next: number;
+        if (key === "Home") next = 0;
+        else if (key === "End") next = orderedIds.length - 1;
+        else if (key === "ArrowDown") next = current < 0 ? 0 : Math.min(current + 1, orderedIds.length - 1);
+        else next = current < 0 ? orderedIds.length - 1 : Math.max(current - 1, 0);
+
+        const id = orderedIds[next];
+        if (id) {
+            onSelect(id);
+            // Move focus with the selection so continued arrowing stays on the list.
+            const el = listRef.current?.querySelector<HTMLElement>(
+                `[data-testid="review-question-${CSS.escape(id)}"] button`
+            );
+            el?.focus({ preventScroll: true });
+        }
+    };
+
     return (
-        <>
+        <div
+            ref={listRef}
+            role="listbox"
+            aria-label="Review questions"
+            tabIndex={-1}
+            onKeyDown={onListKeyDown}
+            data-testid="review-questions-list"
+        >
             <p className="mb-1.5 text-[9px] font-medium text-alloy-midnight/40">
                 {activeCount} active question{activeCount === 1 ? "" : "s"}
                 {questions.length > activeCount ? ` · ${questions.length - activeCount} ignored` : ""}
@@ -332,7 +381,7 @@ export function ProcessingQuestionReviewList({
                     </section>
                 ))}
             </div>
-        </>
+        </div>
     );
 }
 
