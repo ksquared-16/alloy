@@ -68,13 +68,13 @@ that happen to have the same members are coupled by assignability, and nothing n
 Widen a union → run the typecheck. Inspection cannot substitute for it, and this handoff previously
 claimed it could.
 
-**STILL TO CONFIRM:** the rerun AFTER that fix has not produced a verdict — the host went to load ~269
-and the running `tsc` accumulated 6 minutes of CPU across ~35 minutes of wall clock. A `vac run
-typecheck` was left QUEUED on the lease; when it lands it caches by commit, so check
-`~/.local/state/alloy-dev/validate-results/*__typecheck__*` for a `9022822…` entry with `exit_code: 0`
-before promoting, or just run it again on a quiet host. The fix itself is an eight-line type guard
-narrowing to the exact union the call site expects, and that one error was the ONLY error the
-completed run reported.
+**CONFIRMED GREEN.** The rerun after that fix landed: `FINISH worktree=wt3-runtime-v1-settlement
+kind=typecheck rc=0 class=ok` (2026-07-30 22:52Z), corroborated by the lease result cache —
+`~/.local/state/alloy-dev/validate-results/eb14b28b1…__typecheck__…json` → `exit_code: 0, outcome: ok`.
+
+It ran against the working tree with the auto-open guard already applied (the run was launched between
+the edit and its commit), which is byte-identical to what `902282248` committed. So **`vac run
+typecheck` is rc=0 for this branch's Phase 4 work** — nothing about the typecheck is owed any more.
 
 Verified by inspection AND now by the compiler:
 
