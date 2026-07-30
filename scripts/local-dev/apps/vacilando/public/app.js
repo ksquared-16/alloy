@@ -210,40 +210,98 @@ document.addEventListener("input", (e) => {
   if (t && t.id === "cv-reply") state._cvReply = t.value;
 });
 
-// -------- routing (Command Center / Work History / Settings) --------
-function parseRoute() { const p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean); return { name: p[0] || "command", sub: p[1], param: p[2] }; }
-function route() { return parseRoute().name; }
-function go(r) { location.hash = "#/" + r; }
-const CRUMBS = { director: "Director", command: "Command Center", history: "Work History", policies: "Policies", settings: "Settings", trust: "Runtime Trust" };
-function setActiveNav(name) {
-  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === name));
-  $("#crumb").textContent = CRUMBS[name] || "Command Center";
+// -------- routing (Mission Control primary; legacy board is compatibility-only) --------
+const MC_ROUTES = new Set(["missions", "timeline", "workers", "decisions", "evidence", "kickoff", "settings"]);
+const LEGACY_ROUTES = new Set(["command", "director", "history", "policies", "trust"]);
+
+function legacyMode() {
+  return new URLSearchParams(location.search).get("legacy") === "1";
 }
 
-let lastKey = null;
-function render(force) {
-  if (document.querySelector(".ov")) return;
+function parseRoute() {
+  const p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
+  return { name: p[0] || "missions", sub: p[1], param: p[2] };
+}
+function route() { return parseRoute().name; }
+function go(r) { location.hash = "#/" + r; }
+const CRUMBS = {
+  missions: "Missions", timeline: "Timeline", workers: "Workers", decisions: "Decisions",
+  evidence: "Evidence", kickoff: "Kickoff", settings: "Settings",
+  director: "Legacy Director", command: "Legacy Board", history: "Work History",
+  policies: "Policies", trust: "Runtime Trust",
+};
+function setActiveNav(name) {
+  const active = name === "kickoff" ? "missions" : name;
+  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === active));
+  $("#crumb").textContent = CRUMBS[name] || "Missions";
+}
+
+/**
+ * Cutover: empty hash and ambiguous legacy-home land in Mission Control unless
+ * the operator explicitly requested ?legacy=1.
+ */
+function enforceMissionControlHome() {
+  const hash = location.hash || "";
+  const empty = !hash || hash === "#" || hash === "#/";
+  if (empty) {
+    location.hash = "#/missions";
+    return;
+  }
+  if (legacyMode()) return;
   const r = parseRoute();
-  const V2 = window.VacilandoV2;
-  // Mission Control (opt-in): render without waiting for full board composition.
-  if (V2?.enabled) {
-    const v2Names = new Set(["missions", "timeline", "workers", "decisions", "evidence", "kickoff"]);
-    if (v2Names.has(r.name) || (r.name === "missions" && r.sub)) {
-      setActiveNav(r.name === "missions" || r.name === "kickoff" ? "missions" : r.name);
-      const V = $("#view");
-      let html = "";
-      if (r.name === "missions" && r.sub) html = V2.viewMissionDetail(r.sub);
-      else if (r.name === "missions") html = V2.viewMissions();
-      else if (r.name === "timeline") html = V2.viewTimeline(r.sub);
-      else if (r.name === "workers") html = r.sub ? V2.viewWorkerDetail(r.sub) : V2.viewWorkers();
-      else if (r.name === "decisions") html = r.sub ? V2.viewDecisionDetail(r.sub) : V2.viewDecisions();
-      else if (r.name === "evidence") html = V2.viewEvidence(r.sub);
-      else if (r.name === "kickoff") html = V2.viewKickoff(r.sub);
-      V.innerHTML = html || `<div class="mc-wrap empty">Unknown Mission Control route</div>`;
-      $("#nb-needs").textContent = state.snap ? needsYou().length : 0;
+  // Stale bookmarks / in-app hashes to Command Center must not become a dual home.
+  if (r.name === "command" && !r.sub) {
+    location.hash = "#/missions";
+  }
+}
+window.addEventListener("hashchange", () => {
+  if (legacyMode()) return;
+  const r = parseRoute();
+  if (r.name === "command" && !r.sub) location.hash = "#/missions";
+});
+
+let lastKey = null;
+function renderMcView(r, V2) {
+  setActiveNav(r.name === "kickoff" ? "missions" : r.name);
+  const V = $("#view");
+  let html = "";
+  if (r.name === "settings") {
+    html = `<div class="mc-wrap" data-mc-shell="1">${typeof viewSettings === "function" ? viewSettings() : "<h2>Settings</h2>"}</div>`;
+  } else if (r.name === "missions" && r.sub) html = V2.viewMissionDetail(r.sub);
+  else if (r.name === "missions") html = V2.viewMissions();
+  else if (r.name === "timeline") html = V2.viewTimeline(r.sub);
+  else if (r.name === "workers") html = r.sub ? V2.viewWorkerDetail(r.sub) : V2.viewWorkers();
+  else if (r.name === "decisions") html = r.sub ? V2.viewDecisionDetail(r.sub) : V2.viewDecisions();
+  else if (r.name === "evidence") html = V2.viewEvidence(r.sub);
+  else if (r.name === "kickoff") html = V2.viewKickoff(r.sub);
+  V.innerHTML = html || `<div class="mc-wrap empty">Unknown Mission Control route</div>`;
+  try { $("#nb-needs").textContent = state.snap ? needsYou().length : 0; } catch { /* */ }
+}
+
+function render(force) {
+  // A leftover modal must not permanently lock Mission Control navigation.
+  const ov = document.querySelector(".ov");
+  if (ov && !force) {
+    // Still allow hash-driven MC navigation to dismiss a stuck overlay.
+    const r0 = parseRoute();
+    if (MC_ROUTES.has(r0.name) && window.VacilandoV2?.enabled) {
+      try { ov.remove(); } catch { /* */ }
+    } else {
       return;
     }
   }
+  const r = parseRoute();
+  const V2 = window.VacilandoV2;
+
+  // Mission Control is the authoritative shell — never wait on board compose.
+  if (V2?.enabled && MC_ROUTES.has(r.name)) {
+    const mcKey = location.hash + "|mc|" + (V2.state?._rev || 0);
+    if (!force && mcKey === lastKey) return;
+    lastKey = mcKey;
+    renderMcView(r, V2);
+    return;
+  }
+
   // URL drives the center: #/command → Team Dashboard; #/command/worker/N → that worker.
   if (r.name === "command" && r.sub === "worker" && r.param) {
     const n = Number(r.param);
@@ -256,9 +314,7 @@ function render(force) {
   if (!force && key === lastKey) return;
   setActiveNav(r.name);
   const V = $("#view");
-  // Only a genuinely empty runtime blanks the app. A pending/degraded projection
-  // still has a registry-backed board, and must render it rather than hiding
-  // every worker behind "Connecting…".
+  // Only a genuinely empty runtime blanks the LEGACY board. Mission Control never hits this path.
   if (!state.snap || (!state.snap.headline && !(state.snap.sprints || []).length)) {
     // NOTE: lastKey is deliberately NOT set here. Marking this key as rendered
     // would make the next identical key short-circuit, leaving the operator
@@ -1835,7 +1891,26 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-prov-disconnect]"))) { e.stopPropagation(); showProviderAction(n.dataset.provDisconnect, "disconnect"); return; }
   if ((n = t("[data-prov-diag]"))) { e.stopPropagation(); showProviderDiagnostics(n.dataset.provDiag); return; }
   if ((n = t("[data-nav]"))) { go(n.dataset.nav); return; }
-  if ((n = t("[data-route]"))) { e.preventDefault(); go(n.dataset.route); return; }
+  if ((n = t("[data-route]"))) {
+    e.preventDefault();
+    if (n.dataset.legacy === "1") {
+      const u = new URL(location.href);
+      u.searchParams.set("legacy", "1");
+      u.hash = "#/" + n.dataset.route;
+      location.href = u.pathname + u.search + u.hash;
+      return;
+    }
+    // Leaving legacy mode when returning to Mission Control primary routes
+    if (MC_ROUTES.has(n.dataset.route) && legacyMode()) {
+      const u = new URL(location.href);
+      u.searchParams.delete("legacy");
+      u.hash = "#/" + n.dataset.route;
+      location.href = u.pathname + u.search + u.hash;
+      return;
+    }
+    go(n.dataset.route);
+    return;
+  }
   if ((n = t("[data-sel]"))) { select(Number(n.dataset.sel)); return; }
 });
 function showReview(initiative_key) {
@@ -1908,13 +1983,28 @@ function adoptSnapshot(s) {
   if (!s.headline && incoming === 0) return false; // nothing useful to show
   state.snap = s; return true;
 }
-function onSnap(s) { if (adoptSnapshot(s)) { chrome(); render(); } }
+function onSnap(s) {
+  if (!adoptSnapshot(s)) return;
+  chrome();
+  // On Mission Control routes, board SSE must not thrash #view — only refresh chrome/badges.
+  const r = parseRoute();
+  if (window.VacilandoV2?.enabled && MC_ROUTES.has(r.name)) {
+    try { $("#nb-needs").textContent = needsYou().length; } catch { /* */ }
+    return;
+  }
+  render();
+}
 async function poll() { try { const r = await fetch("/api/state", { cache: "no-store" }); onSnap(await r.json()); setLive(sseOk ? "live" : "polling"); } catch { setLive("offline"); } }
 function connect() { try { const es = new EventSource("/api/events"); es.addEventListener("snapshot", (ev) => { try { onSnap(JSON.parse(ev.data)); } catch {} sseOk = true; setLive("live"); }); es.addEventListener("hello", () => { sseOk = true; setLive("live"); }); es.onerror = () => { sseOk = false; }; } catch { sseOk = false; } }
-if (!location.hash) location.hash = "#/command";
-connect(); poll(); fetchResources();
+enforceMissionControlHome();
+if (!location.hash || location.hash === "#" || location.hash === "#/") location.hash = "#/missions";
+connect();
+// Board poll is background telemetry — Mission Control does not wait on it.
+poll(); fetchResources();
 setInterval(poll, 4000);
 setInterval(fetchResources, 9000);
+// First Mission Control paint immediately (shell interactive before board hydrate).
+render(true);
 
 // ---- Operator notifications: pulled in when Director needs you, not by checking.
 // Fires a native (Electron) desktop notification the moment a conversation newly

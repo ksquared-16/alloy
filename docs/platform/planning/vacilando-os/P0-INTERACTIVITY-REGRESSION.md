@@ -44,14 +44,6 @@ location.href = "/#/command";
 
 ## Status
 
-V2 **runtime** remains enabled. V2 **Mission Control UI** is gated off by default until a follow-up lands a loop-free primary shell.
+**Superseded 2026-07-30:** Mission Control is again the **default primary shell** after the MutationObserver freeze was removed and ownership cutover completed. See `MISSION-CONTROL-ACTIVATION.md`.
 
-## Validation (2026-07-30)
-
-Script: `scripts/local-dev/tests/vacilando-interactivity.mjs`
-
-- `time_to_dom` ≈ 93ms; `time_to_click_refresh` ≈ 509ms
-- Nav clicks: director, command, history, policies, trust, settings — all OK
-- Default hash `#/command` (Mission Control not forced)
-- Screenshot after proven interactivity: `qa/director-execution-v2/p0-interactive-command-center.png`
-- API after fix: `/api/health` ~2ms, `/api/v2/missions` ~79ms, `/api/state` ~4ms
+V2 **runtime** remains enabled. Legacy Command Center is demoted to `?legacy=1` compatibility routes.
