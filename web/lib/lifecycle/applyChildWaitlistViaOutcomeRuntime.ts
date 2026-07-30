@@ -11,6 +11,8 @@ import {
     type StageOutcomeExecutionSubject,
 } from "@/lib/lifecycle/stageOutcomeRuleTargetExecutor";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { evaluateTransitionRequirementPreflight } from "@/lib/lifecycle/evaluateTransitionRequirementPreflight";
+import { formatTransitionReadinessBlockMessage } from "@/lib/lifecycle/preflightStageChangingOutcomeReadiness";
 
 export const CHILD_WAITLIST_DISPOSITION_KEY = "waitlisted" as const;
 export const CHILD_WAITLIST_STAGE_KEY = "waitlist" as const;
@@ -84,6 +86,8 @@ export async function applyChildWaitlistViaOutcomeRuntime(params: {
     /** Optional plan stub — executor only reads stage_key for some paths; move uses inventory. */
     plan?: StageOperatingPlanV1 | null;
     sourceStageKey?: string | null;
+    /** Required for transition readiness preflight (Program etc.). */
+    departmentMetadata?: Record<string, unknown> | null;
 }): Promise<ApplyChildWaitlistViaOutcomeRuntimeResult> {
     const customerMemberId = params.customerMemberId.trim();
     const opportunityId = params.opportunityId.trim();
@@ -109,6 +113,44 @@ export async function applyChildWaitlistViaOutcomeRuntime(params: {
         outcomes: [],
         outcome_rules: [],
     }) as StageOperatingPlanV1;
+
+    // Transition-specific readiness — block before any status/stage/work mutation.
+    let departmentMetadata = params.departmentMetadata ?? null;
+    if (!departmentMetadata && params.departmentId) {
+        const { data: deptRow } = await params.supabase
+            .from("departments")
+            .select("metadata")
+            .eq("id", params.departmentId)
+            .eq("org_id", params.orgId)
+            .maybeSingle();
+        departmentMetadata =
+            deptRow?.metadata != null
+            && typeof deptRow.metadata === "object"
+            && !Array.isArray(deptRow.metadata)
+                ? (deptRow.metadata as Record<string, unknown>)
+                : {};
+    }
+    if (departmentMetadata) {
+        const readiness = await evaluateTransitionRequirementPreflight({
+            supabase: params.supabase,
+            orgId: params.orgId,
+            opportunityId,
+            departmentMetadata,
+            fromBuilderStageKey: plan.stage_key,
+            toBuilderStageKey: CHILD_WAITLIST_STAGE_KEY,
+            previousStatusKey: plan.stage_key,
+            nextStatusKey: CHILD_WAITLIST_STAGE_KEY,
+            nextStageLabel: "Waitlist",
+            customerMemberId,
+            opportunityCustomerMemberId: trimOrNull(params.opportunityCustomerMemberId),
+        });
+        if (readiness.blockingRequirements.length) {
+            return {
+                ok: false,
+                error: formatTransitionReadinessBlockMessage(readiness.blockingRequirements),
+            };
+        }
+    }
 
     const statusResult = await applyStageOutcomeRuleTarget(params.supabase, {
         orgId: params.orgId,

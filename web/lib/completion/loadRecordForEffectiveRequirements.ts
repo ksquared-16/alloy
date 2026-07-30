@@ -59,6 +59,7 @@ async function loadInquiryChildrenForOpportunity(
         const member = ocm.customer_member_id ? membersById.get(ocm.customer_member_id) : undefined;
         return {
             id: ocm.id,
+            customer_member_id: ocm.customer_member_id ?? null,
             person_id: member?.person_id ?? null,
             first_name: member?.first_name ?? null,
             last_name: member?.last_name ?? null,

@@ -37,6 +37,7 @@ import { shouldCloseWorkAfterStageOutcome } from "@/lib/lifecycle/shouldCloseWor
 import { shouldRepeatWorkAfterRetryOutcome } from "@/lib/lifecycle/stageWorkCompletionPolicy";
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
 import { recordStageWorkContactOutcomeTrace } from "@/lib/lifecycle/recordStageWorkContactOutcomeTrace";
+import { preflightStageChangingOutcomeReadiness } from "@/lib/lifecycle/preflightStageChangingOutcomeReadiness";
 
 /**
  * Execution provenance for a discharged Current Work requirement. Distinguishes an
@@ -121,7 +122,24 @@ export async function completeStageWorkWithOutcome(
         },
         idempotencyKey: input.idempotencyKey ?? null,
         onTrace: input.onTrace,
-        validate: () => (resolved.ok ? { ok: true } : { ok: false, message: resolved.message }),
+        validate: async () => {
+            if (!resolved.ok) return { ok: false, message: resolved.message };
+            const readiness = await preflightStageChangingOutcomeReadiness({
+                supabase: input.supabase,
+                orgId: input.orgId,
+                plan: resolved.plan,
+                outcomeKey,
+                subject: input.subject,
+                departmentMetadata: resolved.departmentMetadata,
+            });
+            if (readiness.blocked) {
+                return {
+                    ok: false,
+                    message: readiness.message ?? "Cannot move stage — requirements are incomplete.",
+                };
+            }
+            return { ok: true };
+        },
         steps: () => {
             if (!resolved.ok) return [];
             const { plan, outcome, closeDecision, departmentMetadata } = resolved;

@@ -31,6 +31,7 @@ describe("applyChildWaitlistViaOutcomeRuntime", () => {
             opportunityId: "opp-1",
             customerMemberId: "child-A",
             opportunityCustomerMemberId: "ocm-A",
+            departmentMetadata: {},
         });
         expect(result.ok).toBe(true);
         const calls = (globalThis as { __waitlistCalls?: Array<{ child: string; kind: string; disposition?: string; stage?: string }> }).__waitlistCalls ?? [];
