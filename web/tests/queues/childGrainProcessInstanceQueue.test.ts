@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
     mapProcessInstanceToTrackRow,
+    queryEnrollmentProcessInstanceParticipationRows,
     queryEnrollmentProcessInstanceTrackRows,
 } from "@/lib/queues/childGrainProcessInstanceQueue";
 
@@ -155,5 +156,127 @@ describe("child-grain read cutover — process_instances", () => {
         });
         const rows = await queryEnrollmentProcessInstanceTrackRows({ supabase, orgId: ORG, workUnitId: WU, stageKey: "waitlist" });
         expect(rows).toEqual([]);
+    });
+
+    it("carries the child's EFFECTIVE stage, not the family's, once the child has branched", () => {
+        const branched = mapProcessInstanceToTrackRow(
+            pi("pi-1", "child-A", "waitlist", "waitlisted") as never,
+            opp(LEAD) as never, // family case is still at `lead`
+            cm("child-A", "Mia Rivera") as never,
+            null,
+        );
+        expect((branched as { _effective_stage_key?: string | null })._effective_stage_key).toBe("waitlist");
+
+        const riding = mapProcessInstanceToTrackRow(
+            { ...pi("pi-2", "child-B", "waitlist", null), stage_key: null } as never,
+            opp(LEAD) as never,
+            cm("child-B", "Leo Rivera") as never,
+            null,
+        );
+        expect((riding as { _effective_stage_key?: string | null })._effective_stage_key).toBe("lead");
+    });
+});
+
+// ── PARTICIPATION MEMBERSHIP ────────────────────────────────────────────────────────────────────
+// "Whose enrollment journey is still running", which is NOT "the stage rule run over every stage".
+
+const piLive = (
+    id: string,
+    subjectId: string,
+    stageKey: string | null,
+    state: string | null,
+    closeReasonKey: string | null = null,
+    contextId: string = LEAD,
+) => ({
+    id,
+    org_id: ORG,
+    process_key: "enrollment",
+    subject_type: "child",
+    subject_id: subjectId,
+    context_id: contextId,
+    stage_key: stageKey,
+    state,
+    close_reason_key: closeReasonKey,
+    metadata: {},
+    updated_at: "2026-07-02",
+    created_at: "2026-07-02",
+});
+
+describe("participation membership — stage-independent child rows", () => {
+    it("admits every live child in the work unit, at whatever stage", async () => {
+        const supabase = mockSupabase({
+            process_instances: [
+                piLive("pi-1", "child-A", null, null), // riding the family track (`lead`)
+                piLive("pi-2", "child-B", "waitlist", "waitlisted"), // branched
+                piLive("pi-3", "child-C", "enrolled", "enrolled"), // still a live participation
+            ],
+            opportunities: [opp(LEAD)],
+            customer_members: [cm("child-A", "Mia Rivera"), cm("child-B", "Leo Rivera"), cm("child-C", "Ana Rivera")],
+        });
+        const rows = await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId: ORG, workUnitId: WU });
+        expect(rows.map((r) => r.customer_member_id).sort()).toEqual(["child-A", "child-B", "child-C"]);
+        // Effective stage travels with the row, for display — membership did not come from it.
+        const byChild = new Map(
+            rows.map((r) => [r.customer_member_id, (r as { _effective_stage_key?: string | null })._effective_stage_key]),
+        );
+        expect(byChild.get("child-A")).toBe("lead"); // inherited from the family case
+        expect(byChild.get("child-B")).toBe("waitlist");
+    });
+
+    it("excludes a CLOSED participation even though its family case sits in an active stage", async () => {
+        // This is the case a stage enumeration gets wrong: the child is done, the family is not.
+        const supabase = mockSupabase({
+            process_instances: [
+                piLive("pi-1", "child-A", null, null),
+                piLive("pi-2", "child-B", null, "withdrawn", "family_withdrew"),
+            ],
+            opportunities: [opp(LEAD)], // still `lead`, still open
+            customer_members: [cm("child-A", "Mia Rivera"), cm("child-B", "Leo Rivera")],
+        });
+        const rows = await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId: ORG, workUnitId: WU });
+        expect(rows.map((r) => r.customer_member_id)).toEqual(["child-A"]);
+    });
+
+    it("excludes a child whose subject record is inactive", async () => {
+        const supabase = mockSupabase({
+            process_instances: [piLive("pi-1", "child-A", null, null), piLive("pi-2", "child-B", null, null)],
+            opportunities: [opp(LEAD)],
+            customer_members: [cm("child-A", "Mia Rivera"), { ...cm("child-B", "Leo Rivera"), is_active: false }],
+        });
+        const rows = await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId: ORG, workUnitId: WU });
+        expect(rows.map((r) => r.customer_member_id)).toEqual(["child-A"]);
+    });
+
+    it("excludes children whose family case is closed", async () => {
+        const supabase = mockSupabase({
+            process_instances: [piLive("pi-1", "child-A", null, null)],
+            opportunities: [{ ...opp(LEAD), status_key: "closed" }],
+            customer_members: [cm("child-A", "Mia Rivera")],
+        });
+        const rows = await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId: ORG, workUnitId: WU });
+        expect(rows).toEqual([]);
+    });
+
+    it("excludes instances whose context opportunity is not in the work unit", async () => {
+        const supabase = mockSupabase({
+            process_instances: [piLive("pi-1", "child-A", null, null)],
+            opportunities: [], // scoped read returns nothing for this work unit
+            customer_members: [cm("child-A", "Mia Rivera")],
+        });
+        const rows = await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId: ORG, workUnitId: WU });
+        expect(rows).toEqual([]);
+    });
+
+    it("does not admit a non-enrollment subject type through the enrollment lens", async () => {
+        const supabase = mockSupabase({
+            process_instances: [
+                piLive("pi-1", "child-A", null, null),
+                { ...piLive("pi-2", "staff-1", null, null), subject_type: "staff" },
+            ],
+            opportunities: [opp(LEAD)],
+            customer_members: [cm("child-A", "Mia Rivera"), cm("staff-1", "Not A Child")],
+        });
+        const rows = await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId: ORG, workUnitId: WU });
+        expect(rows.map((r) => r.customer_member_id)).toEqual(["child-A"]);
     });
 });

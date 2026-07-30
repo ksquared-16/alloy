@@ -444,7 +444,11 @@ function resolveSubjectStrategy(view: WorkViewConfigV1Stored): {
 /**
  * The stage keys a lens filters on. Extracted so the grain resolver and the child row source read the lens
  * the SAME way — two copies of this predicate would be two definitions of what the lens selects.
- * Empty = the lens spans every active stage.
+ *
+ * Empty means the lens is STAGE-INDEPENDENT. It does not mean "every active stage": that reading is what
+ * made a deliberately stage-independent lens resolve every stage's grain at once and refuse itself. What a
+ * stage-independent lens selects is decided by its grain's own membership rule (for `child`, participation
+ * membership), not by enumerating stages.
  */
 export function lensStageKeys(view: WorkViewConfigV1Stored): string[] {
     return (view.filters_v1 ?? [])
@@ -453,6 +457,19 @@ export function lensStageKeys(view: WorkViewConfigV1Stored): string[] {
         .map((v) => String(v));
 }
 
+/**
+ * Row Grain: DECLARED if the lens declares one, otherwise DERIVED from the stages it filters on.
+ *
+ * Derivation is authoritative for a stage-scoped lens and stays exactly as it was. What it cannot do is
+ * serve a lens that has no stage predicate on purpose — there the derivation has nothing to read, treats
+ * "no predicate" as "all stages", and in a process with both family and child stages refuses a perfectly
+ * coherent lens as grain-ambiguous.
+ *
+ * G-1 is intact. A declared lens is unambiguous BY DECLARATION; nothing about multi-grain lenses is
+ * relaxed, and an undeclared ambiguous lens still refuses. A declaration that contradicts the lens's own
+ * stage predicate is refused too — that is a configuration lie, and honouring it would reintroduce the
+ * wrong-subject substitution from the other direction.
+ */
 export function resolveLensRowGrain(
     view: WorkViewConfigV1Stored,
     stages: readonly LifecycleBuilderStageRecord[],
@@ -461,9 +478,21 @@ export function resolveLensRowGrain(
 
     const scoped = stageKeys.length
         ? stages.filter((s) => stageKeys.includes(s.key))
-        : stages; // no stage predicate → the lens spans every active stage
+        : stages; // stage-independent: read every stage's grain only to CHECK a declaration against it
 
     const grains = [...new Set(scoped.map((s) => s.grain).filter((g): g is StageGrain => !!g))];
+
+    const declared = view.row_grain_v1;
+    if (declared) {
+        if (stageKeys.length && grains.length && !grains.includes(declared)) {
+            return {
+                ok: false,
+                reason: `lens declares Row Grain "${declared}" but the stages it filters on are ${grains.join(", ")} — the declaration contradicts the lens`,
+            };
+        }
+        return { ok: true, grain: declared };
+    }
+
     if (grains.length === 1) return { ok: true, grain: grains[0] };
     if (grains.length === 0) return { ok: false, reason: "no stage in this lens declares a Row Grain" };
     return {
@@ -767,12 +796,20 @@ export async function composeWorkUnitProvisioningAnswer(
     let childRows: ChildProvisioningRow[] | null = null;
 
     if (subjectGrain.grain === "child") {
+        // MEMBERSHIP FOLLOWS THE LENS'S OWN SHAPE. A stage-scoped child lens (Registration, Waitlist)
+        // means "children at these stages". A stage-independent one means "children whose enrollment
+        // participation is live" — a different question, answered by the Enrollment Definition's own
+        // liveness gate rather than by enumerating stages. Reading an absent stage predicate as "every
+        // stage" is what made such a lens resolve every grain at once and refuse itself.
+        const childStageKeys = lensStageKeys(activeView);
         try {
             childRows = await loadChildGrainProvisioningRows({
                 supabase: req.supabase,
                 orgId: req.orgId,
                 workUnitId: workUnit.id,
-                stageKeys: lensStageKeys(activeView),
+                membership: childStageKeys.length
+                    ? { mode: "stages", stageKeys: childStageKeys }
+                    : { mode: "participation" },
             });
         } catch (e) {
             // NEVER the family path. `QueueService` degrades a failed child read to case-grain rows, which

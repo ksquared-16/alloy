@@ -28,7 +28,10 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { queryEnrollmentProcessInstanceTrackRows } from "@/lib/queues/childGrainProcessInstanceQueue";
+import {
+    queryEnrollmentProcessInstanceParticipationRows,
+    queryEnrollmentProcessInstanceTrackRows,
+} from "@/lib/queues/childGrainProcessInstanceQueue";
 
 /**
  * The four identities a child row genuinely has. Keeping them apart is the point: they are different
@@ -62,9 +65,27 @@ type RawChildRow = {
     outcome_status_key?: unknown;
     updated_at?: unknown;
     _process_instance_id?: unknown;
+    _effective_stage_key?: unknown;
     customer_members?: unknown;
     opportunities?: unknown;
 };
+
+/**
+ * HOW A LENS DECIDES WHICH CHILDREN IT CONTAINS.
+ *
+ * Two rules, and they answer different questions:
+ *
+ *   `stages`        — "who is at these stages" (a stage-scoped lens: Registration, Waitlist).
+ *   `participation` — "whose enrollment journey is still running" (a stage-INDEPENDENT lens).
+ *
+ * The second is not the first run over every stage. Enumerating stages would admit a child whose own
+ * participation is closed while the family case still sits in an active stage — the wrong subject,
+ * arrived at by asking the wrong question. Effective stage still describes each row; it just stops
+ * being what decides membership.
+ */
+export type ChildRowMembership =
+    | { mode: "stages"; stageKeys: readonly string[] }
+    | { mode: "participation" };
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 
@@ -83,8 +104,12 @@ function childName(row: RawChildRow): string | null {
 }
 
 function effectiveStage(row: RawChildRow): string | null {
-    // The provider already filtered by effective stage; this reports which stage the row actually holds,
-    // preferring the family's when the child rides it (its own stage is null).
+    // The provider resolves the effective stage (`process_instances.stage_key ?? opportunities.stage_key`)
+    // and carries it explicitly. Reading the OPPORTUNITY's stage is right only while the child rides the
+    // family track: a branched child would be reported at its family's stage. That was invisible while
+    // every consumer filtered to one lane at a time, and stops being invisible on a stage-independent lens.
+    const carried = str(row._effective_stage_key);
+    if (carried) return carried;
     const opp = one(row.opportunities as Record<string, unknown> | Record<string, unknown>[] | null);
     return str(opp?.stage_key) ?? null;
 }
@@ -115,10 +140,11 @@ export function normalizeChildRow(raw: RawChildRow): ChildProvisioningRow | null
 }
 
 /**
- * Load the child-grain rows for a lens.
+ * Load the child-grain rows for a lens, under the lens's OWN membership rule.
  *
- * `stageKeys` is the lens's configured stage set — one provider call per stage, unioned by participation so
- * a child cannot appear twice when a lens spans several stages of its own grain.
+ * `stages` mode issues one provider call per stage, unioned by participation so a child cannot appear twice
+ * when a lens spans several stages of its own grain. `participation` mode is a single call — a live
+ * participation is one thing, not a union over lanes.
  *
  * THROWS on read failure. The caller turns that into an honest terminal; it must never become family rows.
  */
@@ -126,24 +152,27 @@ export async function loadChildGrainProvisioningRows(params: {
     supabase: SupabaseClient;
     orgId: string;
     workUnitId: string;
-    stageKeys: readonly string[];
+    membership: ChildRowMembership;
 }): Promise<ChildProvisioningRow[]> {
-    const stages = [...new Set(params.stageKeys.map((s) => s.trim()).filter(Boolean))];
-    if (!stages.length) return [];
+    const { supabase, orgId, workUnitId } = params;
 
-    const perStage = await Promise.all(
-        stages.map((stageKey) =>
-            queryEnrollmentProcessInstanceTrackRows({
-                supabase: params.supabase,
-                orgId: params.orgId,
-                workUnitId: params.workUnitId,
-                stageKey,
-            }),
-        ),
-    );
+    let batches: (readonly unknown[])[];
+    if (params.membership.mode === "participation") {
+        batches = [await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId, workUnitId })];
+    } else {
+        const stages = [...new Set(params.membership.stageKeys.map((s) => s.trim()).filter(Boolean))];
+        // A `stages` lens with no stage is not "everything" — it selects nothing, and saying so is the
+        // honest answer. A lens that MEANS everything declares participation membership instead.
+        if (!stages.length) return [];
+        batches = await Promise.all(
+            stages.map((stageKey) =>
+                queryEnrollmentProcessInstanceTrackRows({ supabase, orgId, workUnitId, stageKey }),
+            ),
+        );
+    }
 
     const byParticipation = new Map<string, ChildProvisioningRow>();
-    for (const rows of perStage) {
+    for (const rows of batches) {
         for (const raw of rows as unknown as RawChildRow[]) {
             const row = normalizeChildRow(raw);
             if (!row) continue;
