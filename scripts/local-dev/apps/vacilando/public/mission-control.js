@@ -1,15 +1,9 @@
 /**
- * Vacilando Mission Control — primary shell (always on).
+ * Vacilando Mission Control — operator product shell.
  *
- * Freeze root cause (fixed): commit 5fa156fd2 used a MutationObserver on #view that
- * re-entered paint whenever loading HTML lacked `.mc-wrap`, creating an infinite
- * main-thread DOM rewrite loop. This module never installs a MutationObserver.
- *
- * Ownership: app.js `render()` is the sole #view writer. This module owns V2 section
- * data + view functions. Board/SSE polling must not block MC first paint.
- *
- * Compatibility: legacy Command Center only via ?legacy=1#/command (or Settings link).
- * Stale localStorage.vacilando_mission_control is cleared so it cannot demote MC.
+ * Freeze root cause (fixed): never install a MutationObserver on #view.
+ * Ownership: app.js render() is the sole #view writer. This module owns V2 views.
+ * Pages bind to /api/v2/views/* operator view models — not raw persistence.
  */
 (function () {
   try {
@@ -25,7 +19,7 @@
     gated: false,
     primary: !legacyForced,
     freeze_fix: "no_mutation_observer",
-    state: { _rev: 0, selectedMissionId: null },
+    state: { _rev: 0, selectedMissionId: null, kickoffDraft: null, kickoffStep: "empty", kickoffError: null },
   };
 
   const V2 = window.VacilandoV2;
@@ -34,6 +28,21 @@
     const r = await fetch(p, { cache: "no-store" });
     if (!r.ok) throw new Error(`http_${r.status}`);
     return r.json();
+  };
+  const post = async (p, body) => {
+    const r = await fetch(p, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const err = new Error(j.error || j.detail || `http_${r.status}`);
+      err.body = j;
+      err.saved = Boolean(j.brief || j.mission || j.ok);
+      throw err;
+    }
+    return j;
   };
 
   let paintScheduled = false;
@@ -48,185 +57,748 @@
   }
 
   V2.isPrimaryRoute = function (name) {
-    return ["missions", "timeline", "workers", "decisions", "evidence", "kickoff", "settings"].includes(name);
+    return ["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "settings"].includes(name);
   };
 
+  function missionSubnav(missionId, active) {
+    if (!missionId) return "";
+    const tabs = [
+      ["overview", `missions/${missionId}`, "Overview"],
+      ["timeline", `timeline/${missionId}`, "Timeline"],
+      ["workers", `workers?mission=${encodeURIComponent(missionId)}`, "Workers"],
+      ["decisions", `decisions?mission=${encodeURIComponent(missionId)}`, "Decisions"],
+      ["evidence", `evidence/${missionId}`, "Evidence"],
+    ];
+    return `<nav class="mc-subnav" aria-label="Mission">${tabs.map(([k, href, label]) =>
+      `<a class="${active === k ? "on" : ""}" data-nav="${esc(href)}">${esc(label)}</a>`).join("")}</nav>`;
+  }
+
+  function shell(title, { missionId = null, active = null, lead = "", actions = "" } = {}) {
+    return `<div class="mc-wrap wide" data-mc-shell="1">
+      <div class="mc-hero">
+        <div class="mc-hero-row">
+          <div>
+            <h2>${esc(title)}</h2>
+            ${lead ? `<p class="mc-lead">${lead}</p>` : ""}
+          </div>
+          <div class="mc-hero-actions">${actions}</div>
+        </div>
+        ${missionSubnav(missionId, active)}
+      </div>`;
+  }
+
+  function actionBtn(action) {
+    if (!action) return "";
+    return `<button class="btn" data-nav="${esc(action.href)}">${esc(action.label)}</button>`;
+  }
+
+  function errPanel(title, err, { saved = false, retry = null } = {}) {
+    const tech = err?.body ? JSON.stringify(err.body, null, 2) : String(err?.message || err || "Unknown error");
+    return `<div class="mc-error">
+      <h3>${esc(title)}</h3>
+      <p>${esc(err?.message || err)}</p>
+      <p class="muted">${saved ? "Mission data was saved." : "Mission data may not have been saved."}</p>
+      ${retry ? `<button class="btn" data-mc-retry="${esc(retry)}">Retry</button>` : ""}
+      <details class="mc-diag"><summary>Technical details</summary><pre class="mono">${esc(tech)}</pre></details>
+    </div>`;
+  }
+
+  // ---- fetches (view models) ----
   V2.fetchMissions = async () => {
-    try { V2.state.missions = await get("/api/v2/missions"); bump(); schedulePaint(); } catch (e) { V2.state.missionsError = String(e.message || e); bump(); schedulePaint(); }
-  };
-  V2.fetchMission = async (id) => {
     try {
-      V2.state.detail = await get("/api/v2/mission?id=" + encodeURIComponent(id));
-      V2.state.selectedMissionId = id;
+      V2.state.missionsHome = await get("/api/v2/views/missions");
+      V2.state.missionsError = null;
       bump(); schedulePaint();
-    } catch (e) { V2.state.detailError = String(e.message || e); bump(); schedulePaint(); }
+    } catch (e) {
+      V2.state.missionsError = String(e.message || e);
+      bump(); schedulePaint();
+    }
+  };
+  V2.fetchOverview = async (id) => {
+    try {
+      V2.state.overview = await get("/api/v2/views/mission/overview?id=" + encodeURIComponent(id));
+      V2.state.selectedMissionId = id;
+      V2.state.overviewError = null;
+      bump(); schedulePaint();
+    } catch (e) {
+      V2.state.overviewError = String(e.message || e);
+      bump(); schedulePaint();
+    }
+  };
+  V2.fetchNeedsYou = async () => {
+    try { V2.state.needsYou = await get("/api/v2/views/needs-you"); bump(); schedulePaint(); } catch { /* keep */ }
   };
   V2.fetchWorkers = async () => {
-    try { V2.state.workers = await get("/api/v2/workers"); bump(); schedulePaint(); } catch { /* keep */ }
+    try { V2.state.workersHome = await get("/api/v2/views/workers"); bump(); schedulePaint(); } catch { /* keep */ }
   };
-  V2.fetchDecisions = async () => {
-    try { V2.state.decisions = await get("/api/v2/decisions?status=open"); bump(); schedulePaint(); } catch { /* keep */ }
-  };
-  V2.fetchAllDecisions = async () => {
-    try { V2.state.allDecisions = await get("/api/v2/decisions"); bump(); schedulePaint(); } catch { /* keep */ }
-  };
-  V2.fetchEvidence = async (missionId) => {
+  V2.fetchWorker = async (id) => {
     try {
-      const q = missionId ? "?mission_id=" + encodeURIComponent(missionId) : "";
-      V2.state.evidence = await get("/api/v2/evidence" + q);
+      V2.state.workerDetail = await get("/api/v2/views/worker?id=" + encodeURIComponent(id));
+      bump(); schedulePaint();
+    } catch (e) {
+      V2.state.workerDetailError = String(e.message || e);
+      bump(); schedulePaint();
+    }
+  };
+  V2.fetchDecisions = async (missionId) => {
+    try {
+      const q = missionId ? "?mission_id=" + encodeURIComponent(missionId) + "&status=all" : "?status=open";
+      V2.state.decisionsVm = await get("/api/v2/views/decisions" + q);
+      V2.state.decisionsMissionId = missionId || null;
       bump(); schedulePaint();
     } catch { /* keep */ }
   };
-  V2.fetchKickoff = async (id) => {
-    try { V2.state.kickoff = await get("/api/v2/mission/kickoff?id=" + encodeURIComponent(id)); bump(); schedulePaint(); } catch { /* keep */ }
+  V2.fetchDecision = async (decisionId, missionId) => {
+    try {
+      let url = "/api/v2/views/decision?id=" + encodeURIComponent(decisionId);
+      if (missionId) url += "&mission_id=" + encodeURIComponent(missionId);
+      V2.state.decisionDetail = await get(url);
+      bump(); schedulePaint();
+    } catch (e) {
+      V2.state.decisionDetailError = String(e.message || e);
+      bump(); schedulePaint();
+    }
   };
   V2.fetchTimeline = async (id) => {
     try {
-      V2.state.timeline = await get("/api/v2/mission/timeline?id=" + encodeURIComponent(id));
+      V2.state.timelineVm = await get("/api/v2/views/mission/timeline?id=" + encodeURIComponent(id));
       V2.state.timelineMissionId = id;
       bump(); schedulePaint();
     } catch { /* keep */ }
   };
+  V2.fetchEvidence = async (id) => {
+    try {
+      V2.state.evidenceVm = await get("/api/v2/views/mission/evidence?id=" + encodeURIComponent(id));
+      V2.state.evidenceMissionId = id;
+      bump(); schedulePaint();
+    } catch { /* keep */ }
+  };
+  V2.fetchKickoff = async (id) => {
+    try {
+      if (!id) {
+        V2.state.kickoffVm = { ok: true, mode: "empty", title: "Start a mission" };
+      } else {
+        V2.state.kickoffVm = await get("/api/v2/views/mission/kickoff?id=" + encodeURIComponent(id));
+      }
+      V2.state.kickoffMissionId = id || null;
+      V2.state.kickoffError = null;
+      bump(); schedulePaint();
+    } catch (e) {
+      V2.state.kickoffError = e;
+      bump(); schedulePaint();
+    }
+  };
 
-  function shellChrome(title, extra = "") {
-    return `<div class="mc-wrap" data-mc-shell="1"><div class="mc-hero"><h2>${esc(title)}</h2>${extra}</div>`;
-  }
-
+  // ---- views ----
   V2.viewMissions = function () {
-    if (!V2.state.missions && !V2.state.missionsError) {
+    if (!V2.state.missionsHome && !V2.state.missionsError) {
       V2.fetchMissions();
-      return shellChrome("Missions") + `<div class="empty"><div class="big"><span class="spin"></span> Loading missions…</div></div></div>`;
+      return shell("Missions", {
+        actions: `<button class="btn" data-nav="kickoff">New mission</button>`,
+      }) + `<div class="empty"><div class="big"><span class="spin"></span> Loading missions…</div></div></div>`;
     }
-    if (V2.state.missionsError && !V2.state.missions) {
-      return shellChrome("Missions") + `<div class="rempty">Could not load missions: ${esc(V2.state.missionsError)}</div></div>`;
+    if (V2.state.missionsError && !V2.state.missionsHome) {
+      return shell("Missions") + errPanel("Could not load missions", { message: V2.state.missionsError }, { retry: "missions" }) + `</div>`;
     }
-    const rows = V2.state.missions.missions || V2.state.missions.items || [];
-    const cards = rows.map((m) => {
-      const id = m.mission_id || m.missionId;
-      return `<div class="mc-card" data-nav="missions/${esc(id)}"><b>${esc(m.title)}</b> · ${esc(m.status_label || m.status || m.kickoff_status || "")}</div>`;
-    }).join("") || `<div class="rempty">No missions yet</div>`;
-    return shellChrome("Missions") + `<div class="mc-list">${cards}</div></div>`;
+    const rows = V2.state.missionsHome.missions || [];
+    const cards = rows.map((m) => `<article class="mc-card mc-mission-card" data-nav="missions/${esc(m.missionId)}">
+      <div class="mc-card-h">
+        <b>${esc(m.title)}</b>
+        <span class="mc-pill ${esc(m.status)}">${esc(m.statusLabel)}</span>
+      </div>
+      <div class="mc-card-p">${esc(m.phaseLabel)}</div>
+      <div class="mc-card-m">${esc(m.deliverablesLabel)}</div>
+      <div class="mc-card-d">${esc(m.directorState)}</div>
+      <div class="mc-card-f">${esc(m.workersLine)}${m.openDecisionCount ? ` · ${m.openDecisionCount} open decision${m.openDecisionCount === 1 ? "" : "s"}` : ""}</div>
+      <div class="mc-card-meta muted">${esc(m.latestUpdate)} · ${esc(m.updatedLabel || "")}</div>
+      <div class="mc-card-cta">${actionBtn(m.primaryAction)}</div>
+    </article>`).join("") || `<div class="rempty">No missions yet. Start from a Mission Brief.</div>`;
+
+    return shell("Missions", {
+      lead: "Director-managed work across your org.",
+      actions: `<button class="btn" data-nav="kickoff">New mission</button>`,
+    }) + `<div class="mc-list">${cards}</div></div>`;
   };
 
   V2.viewMissionDetail = function (id) {
     V2.state.selectedMissionId = id;
-    if (!V2.state.detail || (V2.state.detail.mission_id !== id && V2.state.detail.missionId !== id)) {
-      V2.fetchMission(id);
-      return shellChrome("Mission") + `<div class="empty"><div class="big"><span class="spin"></span> Opening…</div></div></div>`;
+    if (!V2.state.overview || V2.state.overview.overview?.header?.missionId !== id) {
+      V2.fetchOverview(id);
+      return shell("Mission", { missionId: id, active: "overview" })
+        + `<div class="empty"><div class="big"><span class="spin"></span> Opening mission…</div></div></div>`;
     }
-    const d = V2.state.detail;
-    const title = d.brief?.title || d.title || id;
-    return `<div class="mc-wrap" data-mc-shell="1"><button class="btn sm" data-nav="missions">← Missions</button>
-      <h2>${esc(title)}</h2>
-      <p class="muted">Mission detail · ${esc(id)}</p>
-      <div class="row gap">
-        <button class="btn sm" data-nav="kickoff/${esc(id)}">Kickoff / readiness</button>
-        <button class="btn sm" data-nav="timeline/${esc(id)}">Timeline</button>
-        <button class="btn sm" data-nav="evidence/${esc(id)}">Evidence</button>
-        <button class="btn sm" data-nav="workers">Workers</button>
-        <button class="btn sm" data-nav="decisions">Decisions</button>
+    if (V2.state.overviewError) {
+      return shell("Mission", { missionId: id, active: "overview" })
+        + errPanel("Could not open mission", { message: V2.state.overviewError }, { retry: "overview:" + id }) + `</div>`;
+    }
+    const o = V2.state.overview.overview;
+    const h = o.header;
+    const qs = (o.directorSummary?.questions || []).map((q) =>
+      `<div class="mc-q-row"><div class="mc-q-label">${esc(q.label)}</div><div class="mc-q-ans">${esc(q.answer)}</div></div>`).join("");
+
+    const top = o.topDecision;
+    const decisionBlock = top ? `<section class="mc-decision">
+      <div class="mc-decision-h"><b>Decision required</b><span class="mc-pill decision_required">${esc(top.urgency)}</span></div>
+      <h3>${esc(top.title)}</h3>
+      <p>${esc(top.situation)}</p>
+      <p><b>Why it matters:</b> ${esc(top.whyItMatters)}</p>
+      <p><b>Director recommends:</b> ${esc(top.recommendation)}</p>
+      ${top.pausedWork?.length ? `<p><b>Paused work:</b> ${esc(top.pausedWork.map((w) => w.title).join(", "))}</p>` : ""}
+      ${actionBtn(top.primaryAction)}
+    </section>` : "";
+
+    const work = (o.workInProgress || []).map((w) => `<div class="mc-work">
+      <div class="mc-card-h"><b>${esc(w.title)}</b><span class="mc-pill">${esc(w.statusLabel)}</span></div>
+      <div class="muted">Owner: ${esc(w.owner)}</div>
+      <div>${esc(w.progressSummary)}</div>
+      ${w.blocker ? `<div class="warn">${esc(w.blocker)}</div>` : ""}
+      <div class="muted">Next: ${esc(w.nextStep)}</div>
+    </div>`).join("") || `<div class="rempty">No active work items</div>`;
+
+    const tl = (o.recentTimeline || []).map((e) => `<div class="mc-tl-row">
+      <div class="mc-tl-time">${esc(e.timeLabel || e.time)}</div>
+      <div><b>${esc(e.headline)}</b><div class="muted">${esc(e.explanation || e.actor)}</div></div>
+    </div>`).join("") || `<div class="rempty">No timeline events yet</div>`;
+
+    const cov = (o.evidence?.coverage || []).map((c) =>
+      `<div class="mc-ac ${esc(c.status)}">${esc(c.statusLabel)} — ${esc(c.statement)}</div>`).join("");
+    const arts = (o.evidence?.artifacts || []).map((a) =>
+      `<div class="mc-ev"><b>${esc(a.title)}</b> · ${esc(a.typeLabel)}<div class="muted">${esc(a.proves)}</div></div>`).join("");
+
+    return shell(h.title, {
+      missionId: id,
+      active: "overview",
+      lead: `${esc(h.statusLabel)} · ${esc(h.phaseLabel)} · ${esc(h.deliverablesLabel)}`,
+      actions: actionBtn(h.primaryAction),
+    }) + `
+      <section class="mc-summary">
+        <h3>Director summary</h3>
+        <p class="muted">${esc(h.directorState)}</p>
+        <div class="mc-q-grid">${qs}</div>
+      </section>
+      ${decisionBlock}
+      <div class="mc-grid">
+        <section class="mc-sec"><h3>Work in progress</h3>${work}</section>
+        <section class="mc-sec"><h3>Recent timeline</h3>${tl}
+          <button class="btn sm" data-nav="timeline/${esc(id)}">Full timeline</button>
+        </section>
       </div>
-      <pre class="mono" style="white-space:pre-wrap;font-size:12px">${esc(JSON.stringify(d.summary || d.brief || d, null, 2).slice(0, 6000))}</pre></div>`;
+      <section class="mc-sec">
+        <h3>QA / evidence</h3>
+        <p>${esc(o.evidence?.certificationNote || "")}</p>
+        ${cov}${arts}
+        <button class="btn sm" data-nav="evidence/${esc(id)}">Evidence gallery</button>
+      </section>
+      <details class="mc-diag"><summary>Diagnostics (raw runtime)</summary>
+        <pre class="mono">${esc(JSON.stringify({ missionId: id, status: h.statusLabel }, null, 2))}</pre>
+      </details>
+    </div>`;
+  };
+
+  V2.viewNeedsYou = function () {
+    if (!V2.state.needsYou) {
+      V2.fetchNeedsYou();
+      return shell("Needs You") + `<div class="empty"><span class="spin"></span> Loading…</div></div>`;
+    }
+    const items = V2.state.needsYou.items || [];
+    const cards = items.map((it) => `<article class="mc-card">
+      <div class="mc-card-h"><b>${esc(it.title)}</b><span class="mc-pill">${esc(it.urgency)}</span></div>
+      <div class="muted">${esc(it.missionTitle)}</div>
+      <p>${esc(it.body)}</p>
+      ${it.recommendation ? `<p><b>Director:</b> ${esc(it.recommendation)}</p>` : ""}
+      ${actionBtn(it.primaryAction)}
+    </article>`).join("") || `<div class="rempty">Nothing needs you right now.</div>`;
+    return shell("Needs You", { lead: "Decisions, recoveries, and approvals waiting on you." })
+      + `<div class="mc-list">${cards}</div></div>`;
   };
 
   V2.viewTimeline = function (missionId) {
     const mid = missionId || V2.state.selectedMissionId;
     if (!mid) {
-      return shellChrome("Timeline") + `<div class="rempty">Open a mission first to view its timeline.</div>
-        <button class="btn sm" data-nav="missions">Missions</button></div>`;
+      return shell("Timeline") + `<div class="rempty">Open a mission to see its story.</div>
+        <button class="btn" data-nav="missions">Missions</button></div>`;
     }
-    if (!V2.state.timeline || V2.state.timelineMissionId !== mid) {
+    if (!V2.state.timelineVm || V2.state.timelineMissionId !== mid) {
       V2.fetchTimeline(mid);
-      return shellChrome("Timeline") + `<div class="empty"><span class="spin"></span> Loading timeline…</div></div>`;
+      return shell("Timeline", { missionId: mid, active: "timeline" })
+        + `<div class="empty"><span class="spin"></span> Loading timeline…</div></div>`;
     }
-    const events = V2.state.timeline?.events || V2.state.timeline?.items || [];
-    const rows = events.map((e) => `<div class="mc-card"><b>${esc(e.type || e.kind)}</b> · ${esc(e.summary || "")}<div class="muted">${esc(e.at || e.created_at || "")}</div></div>`).join("")
-      || `<div class="rempty">No timeline events</div>`;
-    return shellChrome("Timeline", `<p class="muted">${esc(mid)}</p>`) + rows + `</div>`;
+    const page = V2.state.timelineVm;
+    const events = page.events || [];
+    const rows = events.map((e) => `<article class="mc-tl-event">
+      <div class="mc-tl-time">${esc(e.timeLabel)} · ${esc(e.actor)}</div>
+      <h4>${esc(e.headline)}</h4>
+      ${e.explanation ? `<p>${esc(e.explanation)}</p>` : ""}
+      ${e.expandable ? `<details><summary>Details</summary><pre class="mono">${esc(JSON.stringify(e.detail, null, 2))}</pre></details>` : ""}
+    </article>`).join("") || `<div class="rempty">No timeline events yet for this mission.</div>`;
+
+    return shell(page.title || "Timeline", {
+      missionId: mid,
+      active: "timeline",
+      lead: "The story of this mission in plain language.",
+    }) + `<div class="mc-tl">${rows}</div></div>`;
   };
 
   V2.viewWorkers = function () {
-    if (!V2.state.workers) { V2.fetchWorkers(); return shellChrome("Workers") + `<div class="empty"><span class="spin"></span> Loading…</div></div>`; }
-    const rows = (V2.state.workers.workers || []).map((w) =>
-      `<div class="mc-card" data-nav="workers/${esc(w.workerId)}"><b>${esc(w.workerId)}</b> · ${esc(w.status)}
-        <div class="muted">slot ${esc(w.slot || "—")} · ${esc(w.assignmentId || "no assignment")}</div></div>`).join("")
-      || `<div class="rempty">No workers</div>`;
-    return shellChrome("Workers") + rows + `</div>`;
+    if (!V2.state.workersHome) {
+      V2.fetchWorkers();
+      return shell("Workers") + `<div class="empty"><span class="spin"></span> Loading workers…</div></div>`;
+    }
+    const groups = V2.state.workersHome.groups || [];
+    const html = groups.map((g) => `<section class="mc-sec">
+      <h3>${esc(g.missionTitle || "Unassigned")}</h3>
+      ${(g.workers || []).map((w) => `<article class="mc-card" data-nav="workers/${esc(w.workerId)}">
+        <div class="mc-card-h"><b>${esc(w.deliverable)}</b><span class="mc-pill">${esc(w.healthLabel)}</span></div>
+        <div class="muted">${[w.modelLabel, w.slotLabel].filter(Boolean).map(esc).join(" · ")}</div>
+        <div>Last progress: ${esc(w.lastProgressSummary)} (${esc(w.lastProgress)})</div>
+        <div>${esc(w.directorAction)}</div>
+        ${w.decisionState ? `<div class="warn">${esc(w.decisionState)}</div>` : ""}
+        ${actionBtn(w.primaryAction)}
+      </article>`).join("") || `<div class="rempty">No workers on this mission</div>`}
+    </section>`).join("") || `<div class="rempty">No workers yet</div>`;
+
+    return shell("Workers", { lead: "Grouped by mission. Health and deliverable first." }) + html + `</div>`;
   };
 
   V2.viewWorkerDetail = function (workerId) {
-    if (!V2.state.workers) { V2.fetchWorkers(); return shellChrome("Worker") + `<div class="empty"><span class="spin"></span> Loading…</div></div>`; }
-    const w = (V2.state.workers.workers || []).find((x) => x.workerId === workerId) || { workerId, status: "unknown" };
-    return `<div class="mc-wrap" data-mc-shell="1"><button class="btn sm" data-nav="workers">← Workers</button>
-      <h2>Worker ${esc(workerId)}</h2>
-      <pre class="mono" style="font-size:12px;white-space:pre-wrap">${esc(JSON.stringify(w, null, 2))}</pre></div>`;
+    if (!V2.state.workerDetail || V2.state.workerDetail.worker?.workerId !== workerId) {
+      V2.fetchWorker(workerId);
+      return shell("Worker") + `<div class="empty"><span class="spin"></span> Loading…</div></div>`;
+    }
+    if (V2.state.workerDetailError) {
+      return shell("Worker") + errPanel("Worker not found", { message: V2.state.workerDetailError }) + `</div>`;
+    }
+    const w = V2.state.workerDetail.worker;
+    return shell(w.deliverable, {
+      lead: `${esc(w.missionTitle)} · ${esc(w.healthLabel)}`,
+      actions: `<button class="btn sm" data-nav="workers">← Workers</button>`,
+    }) + `
+      <section class="mc-sec">
+        <h3>Assignment</h3>
+        <p>${esc(w.objective)}</p>
+        <p><b>Current activity:</b> ${esc(w.currentActivity)}</p>
+        <p><b>Next step:</b> ${esc(w.nextStep)}</p>
+        <p><b>Director:</b> ${esc(w.directorAction)}</p>
+        ${w.issueDetail ? `<p class="warn">${esc(w.issueDetail)}</p>` : ""}
+      </section>
+      <section class="mc-sec">
+        <h3>Required outputs</h3>
+        ${(w.requiredOutputs || []).map((o) => `<div class="mc-asg">${esc(o.label || o)}</div>`).join("") || `<div class="muted">None listed</div>`}
+      </section>
+      <section class="mc-sec">
+        <h3>Evidence</h3>
+        ${(w.evidence || []).map((a) => `<div class="mc-ev"><b>${esc(a.title)}</b> — ${esc(a.proves)}</div>`).join("") || `<div class="muted">None yet</div>`}
+      </section>
+      <details class="mc-diag"><summary>Technical details</summary>
+        <pre class="mono">${esc(JSON.stringify(w.technical || {}, null, 2))}</pre>
+      </details>
+    </div>`;
   };
 
-  V2.viewDecisions = function () {
-    if (!V2.state.decisions) { V2.fetchDecisions(); return shellChrome("Decisions") + `<div class="empty"><span class="spin"></span> Loading…</div></div>`; }
-    const rows = (V2.state.decisions.decisions || []).map((d) =>
-      `<div class="mc-card" data-nav="decisions/${esc(d.decisionId)}"><b>${esc(d.title)}</b>
-        <div class="muted">${esc(d.status)} · ${esc((d.situation || "").slice(0, 120))}</div></div>`).join("")
-      || `<div class="rempty">No open decisions</div>`;
-    return shellChrome("Decisions") + rows + `</div>`;
+  V2.viewDecisions = function (missionId) {
+    const mid = missionId || null;
+    if (!V2.state.decisionsVm || V2.state.decisionsMissionId !== mid) {
+      V2.fetchDecisions(mid);
+      return shell("Decisions", { missionId: mid, active: "decisions" })
+        + `<div class="empty"><span class="spin"></span> Loading decisions…</div></div>`;
+    }
+    const rows = (V2.state.decisionsVm.decisions || []).map((d) => `<article class="mc-card" data-nav="decisions/${esc(d.decisionId)}">
+      <div class="mc-card-h"><b>${esc(d.question || d.title)}</b><span class="mc-pill">${esc(d.urgency)}</span></div>
+      <div class="muted">${esc(d.missionTitle)} · ${esc(d.requestedLabel)} · ${esc(d.statusLabel)}</div>
+      <p>${esc((d.situation || "").slice(0, 220))}${(d.situation || "").length > 220 ? "…" : ""}</p>
+      <p><b>Recommendation:</b> ${esc(d.recommendation)}</p>
+      ${d.pausedWork?.length ? `<p class="warn">Paused: ${esc(d.pausedWork.map((w) => w.title).join(", "))}</p>` : ""}
+      ${actionBtn(d.primaryAction)}
+    </article>`).join("") || `<div class="rempty">No decisions here.</div>`;
+
+    return shell("Decisions", {
+      missionId: mid,
+      active: mid ? "decisions" : null,
+      lead: mid ? "Decisions for this mission." : "Open decisions across missions.",
+    }) + `<div class="mc-list">${rows}</div></div>`;
   };
 
   V2.viewDecisionDetail = function (decisionId) {
-    if (!V2.state.decisions && !V2.state.allDecisions) {
-      V2.fetchDecisions(); V2.fetchAllDecisions();
-      return shellChrome("Decision") + `<div class="empty"><span class="spin"></span> Loading…</div></div>`;
+    if (!V2.state.decisionDetail || V2.state.decisionDetail.decision?.decisionId !== decisionId) {
+      V2.fetchDecision(decisionId, V2.state.selectedMissionId);
+      return shell("Decision") + `<div class="empty"><span class="spin"></span> Loading decision…</div></div>`;
     }
-    const pool = [
-      ...(V2.state.decisions?.decisions || []),
-      ...(V2.state.allDecisions?.decisions || []),
-    ];
-    const d = pool.find((x) => x.decisionId === decisionId);
-    if (!d) {
-      V2.fetchAllDecisions();
-      return shellChrome("Decision") + `<div class="rempty">Not found: ${esc(decisionId)}</div></div>`;
+    if (V2.state.decisionDetailError) {
+      return shell("Decision") + errPanel("Decision not found", { message: V2.state.decisionDetailError }) + `</div>`;
     }
-    const opts = (d.options || []).map((o) =>
-      `<div class="mc-card"><b>${esc(o.label)}</b><div class="muted">${esc(o.description || "")}</div></div>`).join("");
-    return `<div class="mc-wrap decision-card" data-mc-shell="1" data-decision-id="${esc(decisionId)}">
-      <button class="btn sm" data-nav="decisions">← Decisions</button>
-      <h2>${esc(d.title)}</h2>
-      <p>${esc(d.situation)}</p>
-      <p class="muted">${esc(d.whyThisMatters)}</p>
-      <h3>Options</h3>${opts}
-      <p><b>Recommendation:</b> ${esc(d.recommendation)}</p>
-    </div>`;
+    const d = V2.state.decisionDetail.decision;
+    const s = d.sections || {};
+    const open = d.status === "open";
+    const actions = open ? `<div class="mc-actions mobile-decision">
+      ${(d.actions || []).map((a) => {
+        if (a.id === "ask") return `<button class="btn ghost" data-mc-ask="${esc(d.decisionId)}">${esc(a.label)}</button>`;
+        if (a.id === "reject") return `<button class="btn ghost" data-mc-reject="${esc(d.decisionId)}">${esc(a.label)}</button>`;
+        return `<button class="btn ${a.id === "approve" ? "" : "ghost"}" data-mc-answer="${esc(d.decisionId)}" data-option="${esc(a.optionId)}" data-mission="${esc(d.missionId)}">${esc(a.label)}</button>`;
+      }).join("")}
+    </div>` : `<div class="mc-pill">${esc(d.statusLabel)}</div>`;
+
+    return shell(d.title, {
+      missionId: d.missionId,
+      active: "decisions",
+      lead: `${esc(d.missionTitle)} · ${esc(d.urgency)} · ${esc(d.requestedLabel)}`,
+    }) + `<article class="mc-decision mobile-decision">
+      <section><h3>1. What happened?</h3><p>${esc(s.whatHappened || d.situation)}</p></section>
+      <section><h3>2. Why does it matter?</h3><p>${esc(s.whyItMatters || d.whyItMatters)}</p></section>
+      <section><h3>3. What does Director recommend?</h3><p>${esc(s.recommendation || d.recommendation)}</p></section>
+      <section><h3>4. What is the impact?</h3><ul>${(s.impact || d.impactLines || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></section>
+      <section><h3>5. What are the alternatives?</h3><ul>${(s.alternatives || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></section>
+      <section><h3>6. What evidence supports this?</h3><ul>${(Array.isArray(s.evidence) ? s.evidence : []).map((x) => `<li>${esc(typeof x === "string" ? x : x.title || x)}</li>`).join("")}</ul></section>
+      <section><h3>7. What work is paused?</h3>
+        ${(d.pausedWork || []).map((w) => `<div class="mc-work"><b>${esc(w.title)}</b> · ${esc(w.statusLabel)}</div>`).join("") || `<p class="muted">No work paused</p>`}
+      </section>
+      <section><h3>8. What happens after I answer?</h3><p>${esc(s.afterAnswer || d.afterAnswer)}</p></section>
+      ${actions}
+    </article></div>`;
   };
 
   V2.viewEvidence = function (missionId) {
     const mid = missionId || V2.state.selectedMissionId;
-    if (!V2.state.evidence) { V2.fetchEvidence(mid); return shellChrome("Evidence") + `<div class="empty"><span class="spin"></span> Loading…</div></div>`; }
-    const arts = V2.state.evidence.artifacts || V2.state.evidence.evidence || [];
-    const cards = arts.map((a) =>
-      `<div class="mc-card"><b>${esc(a.title || a.type)}</b> · ${esc(a.type)}
-        <div class="muted">${esc(a.fileUri || a.path || "")}</div></div>`).join("")
-      || `<div class="rempty">No evidence artifacts</div>`;
-    return shellChrome("Evidence gallery") + `<div class="mc-list">${cards}</div></div>`;
+    if (!mid) {
+      return shell("Evidence") + `<div class="rempty">Open a mission to review evidence.</div>
+        <button class="btn" data-nav="missions">Missions</button></div>`;
+    }
+    if (!V2.state.evidenceVm || V2.state.evidenceMissionId !== mid) {
+      V2.fetchEvidence(mid);
+      return shell("Evidence", { missionId: mid, active: "evidence" })
+        + `<div class="empty"><span class="spin"></span> Loading evidence…</div></div>`;
+    }
+    const page = V2.state.evidenceVm;
+    const cards = (page.artifacts || []).map((a) => `<article class="mc-card mc-ev-card">
+      <div class="mc-card-h"><b>${esc(a.title)}</b><span class="mc-pill">${esc(a.typeLabel)}</span></div>
+      <p><b>Proves:</b> ${esc(a.proves)}</p>
+      ${a.acceptanceCriteriaIds?.length ? `<p class="muted">Criteria: ${esc(a.acceptanceCriteriaIds.join(", "))}</p>` : ""}
+      <p class="muted">${esc(a.producedBy)} · ${esc(a.whenLabel)}${a.commit ? ` · ${esc(a.commit)}` : ""}</p>
+      ${a.command ? `<p class="mono">${esc(a.command)}${a.exitCode != null ? ` → ${a.exitCode === 0 ? "passed" : "failed"}` : ""}</p>` : ""}
+      ${a.previewLabel ? `<div>${esc(a.previewLabel)}</div>` : ""}
+      ${a.technicalPath ? `<details class="mc-diag"><summary>Technical location</summary><code>${esc(a.technicalPath)}</code></details>` : ""}
+    </article>`).join("") || `<div class="rempty">No evidence collected yet.</div>`;
+
+    const cov = (page.coverage || []).map((c) =>
+      `<div class="mc-ac">${esc(c.statusLabel)} — ${esc(c.statement)}</div>`).join("");
+
+    return shell(page.title || "Evidence", {
+      missionId: mid,
+      active: "evidence",
+      lead: "What the work proves — not filesystem paths.",
+    }) + `<section class="mc-sec"><h3>Acceptance coverage</h3>${cov || `<div class="muted">No criteria mapped</div>`}</section>
+      <div class="mc-list">${cards}</div></div>`;
   };
 
   V2.viewKickoff = function (missionId) {
-    if (!missionId) return shellChrome("Kickoff") + `<div class="rempty">Select a mission</div></div>`;
-    if (!V2.state.kickoff || (V2.state.kickoff.mission_id !== missionId && V2.state.kickoff.missionId !== missionId)) {
-      V2.fetchKickoff(missionId);
-      return shellChrome("Kickoff") + `<div class="empty"><span class="spin"></span> Loading kickoff…</div></div>`;
+    const step = V2.state.kickoffStep || "empty";
+    const draft = V2.state.kickoffDraft;
+    const busy = V2.state.kickoffBusy;
+
+    if (V2.state.kickoffError) {
+      return shell("Mission Brief") + errPanel(
+        "Kickoff request failed",
+        V2.state.kickoffError,
+        { saved: V2.state.kickoffError.saved, retry: "kickoff" },
+      ) + `<button class="btn ghost" data-mc-kickoff-reset="1">Start over</button></div>`;
     }
-    const k = V2.state.kickoff;
-    const findings = (k.readiness?.findings || k.findings || []).map((f) =>
-      `<div class="mc-card">${esc(f.message || f.code || JSON.stringify(f))}</div>`).join("") || `<div class="rempty">No findings</div>`;
-    return `<div class="mc-wrap kickoff-card" data-mc-shell="1"><h2>Mission Brief kickoff / readiness</h2>
-      <p class="muted">${esc(missionId)} · ${esc(k.kickoff_status || k.status || "")}</p>
-      <h3>Readiness findings</h3>${findings}
-      <pre class="mono" style="font-size:11px;white-space:pre-wrap">${esc(JSON.stringify(k.kickoff_card || k, null, 2).slice(0, 5000))}</pre></div>`;
+
+    if (busy) {
+      return shell("Mission Brief") + `<div class="empty"><div class="big"><span class="spin"></span> ${esc(busy)}…</div>
+        <p class="muted">This should only take a moment.</p></div></div>`;
+    }
+
+    // Existing mission readiness / approval
+    if (missionId && !draft) {
+      if (!V2.state.kickoffVm || V2.state.kickoffMissionId !== missionId) {
+        V2.fetchKickoff(missionId);
+        return shell("Mission Brief") + `<div class="empty"><span class="spin"></span> Loading readiness…</div></div>`;
+      }
+      const k = V2.state.kickoffVm;
+      if (k.mode === "empty" || !k.title) {
+        return shell("Mission Brief") + kickoffEmptyHtml() + `</div>`;
+      }
+      return shell(k.title, { lead: "Readiness and approval" }) + kickoffReadinessHtml(k) + `</div>`;
+    }
+
+    if (step === "empty" || (!draft && !missionId)) {
+      return shell("Mission Brief", { lead: "Paste or import a brief to start." }) + kickoffEmptyHtml() + `</div>`;
+    }
+
+    if (step === "review" && draft) {
+      return shell(draft.title || "Review Mission Brief") + kickoffReviewHtml(draft) + `</div>`;
+    }
+
+    if ((step === "readiness" || step === "approval") && draft) {
+      return shell(draft.title || "Readiness") + kickoffReadinessHtml(draft) + `</div>`;
+    }
+
+    return shell("Mission Brief") + kickoffEmptyHtml() + `</div>`;
   };
 
-  // Prefetch missions list lightly after idle — does not block first paint.
+  function kickoffEmptyHtml() {
+    return `<section class="mc-sec mc-kickoff-empty">
+      <h3>Start a mission</h3>
+      <p>Paste a Mission Brief (JSON) or import Markdown with a title and objective.</p>
+      <div class="mc-grid">
+        <div>
+          <label class="muted">Paste Mission Brief (JSON)</label>
+          <textarea id="mc-brief-json" class="mc-textarea" rows="12" placeholder='{ "title": "...", "objective": "...", "plan": [] }'></textarea>
+          <button class="btn" data-mc-kickoff-paste="1">Review pasted brief</button>
+        </div>
+        <div>
+          <label class="muted">Import Markdown</label>
+          <textarea id="mc-brief-md" class="mc-textarea" rows="12" placeholder="# Title&#10;&#10;Objective paragraph…"></textarea>
+          <button class="btn ghost" data-mc-kickoff-md="1">Review Markdown</button>
+        </div>
+      </div>
+    </section>`;
+  }
+
+  function kickoffReviewHtml(k) {
+    return `<section class="mc-sec">
+      <h3>Review</h3>
+      <p><b>Objective</b></p><p>${esc(k.objective)}</p>
+      <p><b>Phases</b></p>
+      <ol>${(k.phases || []).map((p) => `<li><b>${esc(p.title)}</b> — ${esc(p.objective || "")}</li>`).join("")}</ol>
+      <p><b>Acceptance criteria</b></p>
+      <ul>${(k.acceptanceCriteria || []).map((c) => `<li>${esc(c.statement || c)}</li>`).join("")}</ul>
+      <p><b>Constraints</b></p>
+      <ul>${(k.constraints || []).map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
+      <p><b>Sources</b></p>
+      <ul>${(k.sources || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+      <div class="mc-actions">
+        <button class="btn ghost" data-mc-kickoff-reset="1">Back</button>
+        <button class="btn" data-mc-kickoff-ingest="1">Continue to readiness</button>
+      </div>
+    </section>`;
+  }
+
+  function kickoffReadinessHtml(k) {
+    const findings = (k.findings || []).map((f) =>
+      `<div class="mc-card ${f.severity === "blocking" ? "warn" : ""}">${esc(f.message)}</div>`).join("")
+      || `<div class="rempty">No operational gaps — ready to start.</div>`;
+    return `<section class="mc-sec">
+      <h3>Readiness</h3>
+      <p>Director-resolved operational gaps and mission ambiguities:</p>
+      ${findings}
+      <p><b>Initial assignment plan:</b> ${esc(k.assignmentCount ?? "—")} deliverable assignment(s)</p>
+      <p class="muted">Execution follows the Mission Brief phases. Director will not invent a new plan.</p>
+      <div class="mc-actions">
+        <button class="btn" data-mc-kickoff-start="${esc(k.missionId || "")}" ${k.canStart === false ? "disabled" : ""}>${esc(k.primaryAction?.label || "Start mission")}</button>
+      </div>
+    </section>`;
+  }
+
+  V2.viewSettings = function () {
+    return shell("Settings", { lead: "Diagnostics and legacy tools." }) + `
+      <section class="mc-sec">
+        <h3>Diagnostics</h3>
+        <p class="muted">Compatibility surfaces for the previous Command Center.</p>
+        <h4>Legacy tools</h4>
+        <div class="row gap">
+          <button class="btn ghost" data-legacy-nav="command">Open Legacy Board</button>
+          <button class="btn ghost" data-legacy-nav="director">Open Legacy Director</button>
+        </div>
+      </section>
+    </div>`;
+  };
+
+  // Answer decision
+  async function answerDecision(missionId, decisionId, optionId, response) {
+    V2.state.kickoffBusy = "Recording your decision";
+    bump(); schedulePaint();
+    try {
+      await post("/api/v2/decisions/answer", {
+        mission_id: missionId,
+        decision_id: decisionId,
+        chosen_option_id: optionId,
+        response: response || "Operator answered from Mission Control",
+      });
+      V2.state.decisionDetail = null;
+      V2.state.overview = null;
+      V2.state.decisionsVm = null;
+      V2.state.needsYou = null;
+      V2.state.kickoffBusy = null;
+      bump(); schedulePaint();
+      location.hash = "#/missions/" + encodeURIComponent(missionId);
+    } catch (e) {
+      V2.state.kickoffBusy = null;
+      V2.state.kickoffError = e;
+      bump(); schedulePaint();
+    }
+  }
+
+  document.addEventListener("click", (ev) => {
+    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry]");
+    if (!t) return;
+
+    if (t.dataset.legacyNav) {
+      const u = new URL(location.href);
+      u.searchParams.set("legacy", "1");
+      u.hash = "#/" + t.dataset.legacyNav;
+      location.href = u.pathname + u.search + u.hash;
+      return;
+    }
+    if (t.dataset.mcRetry === "missions") { V2.state.missionsHome = null; V2.fetchMissions(); return; }
+    if (t.dataset.mcRetry?.startsWith("overview:")) {
+      const id = t.dataset.mcRetry.slice(9);
+      V2.state.overview = null;
+      V2.fetchOverview(id);
+      return;
+    }
+    if (t.dataset.mcRetry === "kickoff") { V2.state.kickoffError = null; bump(); schedulePaint(); return; }
+
+    if (t.dataset.mcAnswer) {
+      answerDecision(t.dataset.mission, t.dataset.mcAnswer, t.dataset.option);
+      return;
+    }
+    if (t.dataset.mcAsk) {
+      const msg = prompt("What should Director clarify?");
+      if (msg) alert("Director note recorded locally: " + msg + "\n(Ask-Director channel will deliver in a later tranche.)");
+      return;
+    }
+    if (t.dataset.mcReject) {
+      const msg = prompt("Provide direction for Director:");
+      if (!msg) return;
+      const d = V2.state.decisionDetail?.decision;
+      if (d) answerDecision(d.missionId, d.decisionId, d.options?.[d.options.length - 1]?.id || d.recommendationId, "Reject: " + msg);
+      return;
+    }
+
+    if (t.dataset.mcKickoffReset) {
+      V2.state.kickoffDraft = null;
+      V2.state.kickoffStep = "empty";
+      V2.state.kickoffError = null;
+      V2.state.kickoffVm = null;
+      bump(); schedulePaint();
+      return;
+    }
+
+    if (t.dataset.mcKickoffPaste) {
+      const raw = document.getElementById("mc-brief-json")?.value?.trim();
+      if (!raw) { alert("Paste a Mission Brief JSON first"); return; }
+      try {
+        const j = JSON.parse(raw);
+        V2.state.kickoffDraft = {
+          mode: "review",
+          title: j.title,
+          objective: j.objective,
+          phases: (j.plan || []).map((p) => ({ id: p.phaseId, title: p.title, objective: p.objective, outputs: p.requiredOutputs || [] })),
+          acceptanceCriteria: j.acceptanceCriteria || [],
+          constraints: (j.constraints || []).map((c) => (typeof c === "string" ? c : c.text)),
+          sources: (j.sourceMaterials || []).map((s) => s.ref || s.title || s.id),
+          raw: j,
+          canStart: true,
+          findings: [],
+          assignmentCount: (j.plan || []).length,
+          primaryAction: { label: "Start mission" },
+        };
+        V2.state.kickoffStep = "review";
+        bump(); schedulePaint();
+      } catch (e) {
+        V2.state.kickoffError = e;
+        bump(); schedulePaint();
+      }
+      return;
+    }
+
+    if (t.dataset.mcKickoffMd) {
+      const md = document.getElementById("mc-brief-md")?.value?.trim() || "";
+      const lines = md.split("\n");
+      const title = (lines.find((l) => l.startsWith("# ")) || "# Untitled mission").replace(/^#\s+/, "");
+      const objective = lines.filter((l) => l && !l.startsWith("#")).join(" ").trim() || title;
+      const j = {
+        title,
+        objective,
+        plan: [{ phaseId: "p1", order: 1, title: "Initial delivery", objective, requiredOutputs: [], acceptanceCriteriaIds: ["AC1"] }],
+        acceptanceCriteria: [{ id: "AC1", statement: "Mission objective is satisfied with evidence" }],
+        constraints: [],
+        sourceMaterials: [],
+      };
+      V2.state.kickoffDraft = {
+        mode: "review",
+        title,
+        objective,
+        phases: j.plan.map((p) => ({ id: p.phaseId, title: p.title, objective: p.objective, outputs: [] })),
+        acceptanceCriteria: j.acceptanceCriteria,
+        constraints: [],
+        sources: [],
+        raw: j,
+        canStart: true,
+        findings: [],
+        assignmentCount: 1,
+        primaryAction: { label: "Start mission" },
+      };
+      V2.state.kickoffStep = "review";
+      bump(); schedulePaint();
+      return;
+    }
+
+    if (t.dataset.mcKickoffIngest) {
+      const draft = V2.state.kickoffDraft;
+      if (!draft?.raw) return;
+      V2.state.kickoffBusy = "Saving Mission Brief";
+      bump(); schedulePaint();
+      post("/api/v2/missions/brief/ingest", draft.raw)
+        .then((res) => {
+          const mid = res.brief?.missionId || res.mission?.mission_id;
+          V2.state.kickoffBusy = null;
+          V2.state.kickoffDraft = {
+            ...draft,
+            missionId: mid,
+            mode: "approval",
+            findings: (res.readiness?.findings || []).map((f) => ({
+              severity: f.blocking ? "blocking" : "info",
+              message: f.message || f.code || "Finding",
+            })),
+            canStart: res.readiness?.ready !== false,
+            assignmentCount: (draft.phases || []).length,
+            primaryAction: { label: "Start mission" },
+            version: res.brief?.version,
+          };
+          V2.state.kickoffStep = "readiness";
+          bump(); schedulePaint();
+        })
+        .catch((e) => {
+          V2.state.kickoffBusy = null;
+          V2.state.kickoffError = e;
+          bump(); schedulePaint();
+        });
+      return;
+    }
+
+    if (t.dataset.mcKickoffStart != null) {
+      const draft = V2.state.kickoffDraft;
+      const mid = t.dataset.mcKickoffStart || draft?.missionId;
+      if (!mid) return;
+      V2.state.kickoffBusy = "Starting mission";
+      bump(); schedulePaint();
+      post("/api/v2/missions/brief/approve", {
+        mission_id: mid,
+        brief_id: mid,
+        version: draft?.version,
+      })
+        .then((res) => {
+          V2.state.kickoffBusy = null;
+          V2.state.kickoffDraft = null;
+          V2.state.kickoffStep = "empty";
+          V2.state.missionsHome = null;
+          V2.state.overview = null;
+          bump(); schedulePaint();
+          const id = res.mission?.mission_id || mid;
+          location.hash = "#/missions/" + encodeURIComponent(id);
+        })
+        .catch((e) => {
+          V2.state.kickoffBusy = null;
+          V2.state.kickoffError = e;
+          bump(); schedulePaint();
+        });
+    }
+  });
+
   if (typeof requestIdleCallback === "function") {
-    requestIdleCallback(() => { if (!V2.state.missions) V2.fetchMissions(); }, { timeout: 2000 });
+    requestIdleCallback(() => { if (!V2.state.missionsHome) V2.fetchMissions(); }, { timeout: 2000 });
   } else {
-    setTimeout(() => { if (!V2.state.missions) V2.fetchMissions(); }, 50);
+    setTimeout(() => { if (!V2.state.missionsHome) V2.fetchMissions(); }, 50);
   }
 })();

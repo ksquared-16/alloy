@@ -1,0 +1,283 @@
+{
+  "generated_at": "2026-07-30T17:02:39.463Z",
+  "base": "http://127.0.0.1:3021",
+  "missionId": "msn_b1c2aa7b4e0cc69da4",
+  "decisionId": "dec_1d8042cdbe05bc",
+  "workerId": "claude-6b",
+  "needsYouCount": 6,
+  "screenshots": [
+    {
+      "filename": "01-missions-home.png",
+      "route": "/#/missions",
+      "url": "http://127.0.0.1:3021/#/missions",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1883,
+      "demonstrates": "Missions home with operator cards",
+      "probe": {
+        "hash": "#/missions",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Missions\n\nDirector-managed work across your org.\n\nNew mission\nAccess & Identity V2\nDecision required\nPhase 2 of 3 · Canonical Authority Model\n1 of 3 deliverables accepted\nAnswer decision: How should invitation expiry work?\n1 worker need attention · 2 paused · 1 open decision\nDelivery Sequence waiting on Canonical Authority Model · 1h ago\nOpen decision\nAccess & Identity V2 — Director certification ",
+        "nav": [
+          "Missions",
+          "Needs You1",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "02-mission-overview.png",
+      "route": "/#/missions/msn_b1c2aa7b4e0cc69da4",
+      "url": "http://127.0.0.1:3021/#/missions/msn_b1c2aa7b4e0cc69da4",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1706,
+      "demonstrates": "Mission Overview — Director five questions, no raw JSON",
+      "probe": {
+        "hash": "#/missions/msn_b1c2aa7b4e0cc69da4",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Access & Identity V2\n\nDecision required · Phase 2 of 3 · Canonical Authority Model · 1 of 3 deliverables accepted\n\nOpen decision\nOverview\nTimeline\nWorkers\nDecisions\nEvidence\nDirector summary\n\nAnswer decision: How should invitation expiry work?\n\nWhere are we?\nDecision Required · Canonical Authority Model (1/3 deliverables)\nWhat changed?\nDelivery Sequence waiting on Canonical Authority Model\nAre we ",
+        "nav": [
+          "Missions",
+          "Needs You1",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "03-decision-desktop.png",
+      "route": "/#/decisions/dec_1d8042cdbe05bc",
+      "url": "http://127.0.0.1:3021/#/decisions/dec_1d8042cdbe05bc",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1785,
+      "demonstrates": "Decision Detail desktop",
+      "probe": {
+        "hash": "#/decisions/dec_1d8042cdbe05bc",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "How should invitation expiry work?\n\nAccess & Identity V2 · High impact · 1h ago\n\nOverview\nTimeline\nWorkers\nDecisions\nEvidence\n1. What happened?\n\nOps requested a 30-day window during certification pressure testing. No product decision is recorded yet.\n\n2. Why does it matter?\n\nThis changes who can still activate access after an invite is sent. It affects security exposure and the day-to-day experien",
+        "nav": [
+          "Missions",
+          "Needs You1",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "04-decision-mobile.png",
+      "route": "/#/decisions/dec_1d8042cdbe05bc",
+      "url": "http://127.0.0.1:3021/#/decisions/dec_1d8042cdbe05bc",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "load_ms": 1670,
+      "demonstrates": "Decision Detail mobile",
+      "probe": {
+        "hash": "#/decisions/dec_1d8042cdbe05bc",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "How should invitation expiry work?\n\nAccess & Identity V2 · High impact · 1h ago\n\nOverview\nTimeline\nWorkers\nDecisions\nEvidence\n1. What happened?\n\nOps requested a 30-day window during certification pressure testing. No product decision is recorded yet.\n\n2. Why does it matter?\n\nThis changes who can still activate access after an invite is sent. It affects security exposure and the day-to-day experien",
+        "nav": [
+          "Missions",
+          "Needs You1",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "05-timeline.png",
+      "route": "/#/timeline/msn_b1c2aa7b4e0cc69da4",
+      "url": "http://127.0.0.1:3021/#/timeline/msn_b1c2aa7b4e0cc69da4",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1631,
+      "demonstrates": "Operator-language timeline",
+      "probe": {
+        "hash": "#/timeline/msn_b1c2aa7b4e0cc69da4",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Access & Identity V2\n\nThe story of this mission in plain language.\n\nOverview\nTimeline\nWorkers\nDecisions\nEvidence\n1h ago · Director\nProgress update\n\nDelivery Sequence waiting on Canonical Authority Model\n\n1h ago · Director\nEvidence added\n\nEvidence added — Kickoff timeline\n\nDetails\n1h ago · Vacilando\nEvidence added\n\nEvidence added — Control-plane health probe\n\nDetails\n1h ago · Director\nEvidence adde",
+        "nav": [
+          "Missions",
+          "Needs You1",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "06-workers.png",
+      "route": "/#/workers",
+      "url": "http://127.0.0.1:3021/#/workers",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1611,
+      "demonstrates": "Workers grouped by mission",
+      "probe": {
+        "hash": "#/workers",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Workers\n\nGrouped by mission. Health and deliverable first.\n\nAccess & Identity V2 Demo\nCatalog integrity\nUnresponsive — Director is intervening\nClaude · Slot 6\nLast progress: implementing (5h ago)\nDirector is preparing a safe recovery\nPaused for a decision\nView details\nAccess & Identity V2\nCanonical Authority Model\nUnresponsive — Director is intervening\nClaude · Slot 6\nLast progress: Drafted model ",
+        "nav": [
+          "Missions",
+          "Needs You1",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "07-worker-detail.png",
+      "route": "/#/workers/claude-6b",
+      "url": "http://127.0.0.1:3021/#/workers/claude-6b",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1634,
+      "demonstrates": "Worker Detail with technical details collapsed",
+      "probe": {
+        "hash": "#/workers/claude-6b",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Canonical Authority Model\n\nAccess & Identity V2 · Unresponsive — Director is intervening\n\n← Workers\nAssignment\n\nDocument the canonical authority model from inventory\n\nCurrent activity: drafting cert-model.md\n\nNext step: Resume after the decision is answered\n\nDirector: Director recovery: checkpoint and pause\n\nNo heartbeat for 6121s\n\nRequired outputs\ndocs/platform/planning/vacilando-os/qa/director-e",
+        "nav": [
+          "Missions",
+          "Needs You1",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "08-evidence.png",
+      "route": "/#/evidence/msn_b1c2aa7b4e0cc69da4",
+      "url": "http://127.0.0.1:3021/#/evidence/msn_b1c2aa7b4e0cc69da4",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1641,
+      "demonstrates": "Evidence gallery — proves/AC, not paths first",
+      "probe": {
+        "hash": "#/evidence/msn_b1c2aa7b4e0cc69da4",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Access & Identity V2\n\nWhat the work proves — not filesystem paths.\n\nOverview\nTimeline\nWorkers\nDecisions\nEvidence\nAcceptance coverage\nCovered — Inventory is file/line grounded against the live codebase\nCovered — Contradictions and gaps are enumerated\nOutstanding — Canonical authority model is documented\nOutstanding — Sequenced delivery plan is present\nCovered — Browser QA screenshots attached for M",
+        "nav": [
+          "Missions",
+          "Needs You1",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "09-kickoff-intake.png",
+      "route": "/#/kickoff",
+      "url": "http://127.0.0.1:3021/#/kickoff",
+      "missionId": null,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1635,
+      "demonstrates": "Mission Brief empty intake",
+      "probe": {
+        "hash": "#/kickoff",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Mission Brief\n\nPaste or import a brief to start.\n\nStart a mission\n\nPaste a Mission Brief (JSON) or import Markdown with a title and objective.\n\nPaste Mission Brief (JSON)  Review pasted brief\nImport Markdown  Review Markdown",
+        "nav": [
+          "Missions",
+          "Needs You1",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "10-kickoff-readiness.png",
+      "route": "/#/kickoff/msn_b1c2aa7b4e0cc69da4",
+      "url": "http://127.0.0.1:3021/#/kickoff/msn_b1c2aa7b4e0cc69da4",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1605,
+      "demonstrates": "Kickoff readiness/approval",
+      "probe": {
+        "hash": "#/kickoff/msn_b1c2aa7b4e0cc69da4",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Access & Identity V2\n\nReadiness and approval\n\nReadiness\n\nDirector-resolved operational gaps and mission ambiguities:\n\nNo operational gaps — ready to start.\n\nInitial assignment plan: 3 deliverable assignment(s)\n\nExecution follows the Mission Brief phases. Director will not invent a new plan.\n\nStart mission",
+        "nav": [
+          "Missions",
+          "Needs You1",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "11-needs-you.png",
+      "route": "/#/needs-you",
+      "url": "http://127.0.0.1:3021/#/needs-you",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1617,
+      "demonstrates": "Needs You global rollup",
+      "probe": {
+        "hash": "#/needs-you",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Needs You\n\nDecisions, recoveries, and approvals waiting on you.\n\nHow should invitation expiry work?\nHigh impact\nAccess & Identity V2\n\nWhile drafting the canonical authority model, Director found that invite links currently expire in 7 days, but operations asked for 30 days so site managers can finish onboarding without re-issuing invites.\n\nDirector: Keep 7-day expiry\n\nReview and decide\nOpen cert d",
+        "nav": [
+          "Missions",
+          "Needs You6",
+          "Workers",
+          "Settings"
+        ]
+      }
+    }
+  ],
+  "two_minute_qa": {
+    "what_is_mission_doing": "Answer decision: How should invitation expiry work?",
+    "where_is_it": "Phase 2 of 3 · Canonical Authority Model",
+    "what_needs_user": "How should invitation expiry work?",
+    "director_recommending": "Keep 7-day expiry",
+    "after_decision": "Director will record your choice, refresh affected worker context if needed, and resume paused work.",
+    "unhealthy_worker": "Canonical Authority Model — Unresponsive — Director is intervening; Director recovery: checkpoint and pause",
+    "evidence_exists": true
+  }
+}

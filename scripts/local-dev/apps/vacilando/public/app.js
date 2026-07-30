@@ -211,7 +211,7 @@ document.addEventListener("input", (e) => {
 });
 
 // -------- routing (Mission Control primary; legacy board is compatibility-only) --------
-const MC_ROUTES = new Set(["missions", "timeline", "workers", "decisions", "evidence", "kickoff", "settings"]);
+const MC_ROUTES = new Set(["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "settings"]);
 const LEGACY_ROUTES = new Set(["command", "director", "history", "policies", "trust"]);
 
 function legacyMode() {
@@ -219,20 +219,28 @@ function legacyMode() {
 }
 
 function parseRoute() {
-  const p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
-  return { name: p[0] || "missions", sub: p[1], param: p[2] };
+  const raw = location.hash.replace(/^#\/?/, "");
+  const [pathPart, queryPart] = raw.split("?");
+  const p = (pathPart || "").split("/").filter(Boolean);
+  const qs = new URLSearchParams(queryPart || "");
+  return { name: p[0] || "missions", sub: p[1], param: p[2], query: qs };
 }
 function route() { return parseRoute().name; }
 function go(r) { location.hash = "#/" + r; }
 const CRUMBS = {
-  missions: "Missions", timeline: "Timeline", workers: "Workers", decisions: "Decisions",
-  evidence: "Evidence", kickoff: "Kickoff", settings: "Settings",
+  missions: "Missions", "needs-you": "Needs You", timeline: "Timeline", workers: "Workers",
+  decisions: "Decisions", evidence: "Evidence", kickoff: "Mission Brief", settings: "Settings",
   director: "Legacy Director", command: "Legacy Board", history: "Work History",
   policies: "Policies", trust: "Runtime Trust",
 };
 function setActiveNav(name) {
-  const active = name === "kickoff" ? "missions" : name;
-  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === active));
+  const active = (name === "kickoff" || name === "timeline" || name === "decisions" || name === "evidence")
+    ? (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name)
+    : name;
+  const navActive = ["missions", "needs-you", "workers", "settings"].includes(name)
+    ? name
+    : (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name === "timeline" || name === "evidence" ? "missions" : name);
+  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === navActive));
   $("#crumb").textContent = CRUMBS[name] || "Missions";
 }
 
@@ -262,20 +270,25 @@ window.addEventListener("hashchange", () => {
 
 let lastKey = null;
 function renderMcView(r, V2) {
-  setActiveNav(r.name === "kickoff" ? "missions" : r.name);
+  setActiveNav(r.name);
   const V = $("#view");
   let html = "";
-  if (r.name === "settings") {
-    html = `<div class="mc-wrap" data-mc-shell="1">${typeof viewSettings === "function" ? viewSettings() : "<h2>Settings</h2>"}</div>`;
-  } else if (r.name === "missions" && r.sub) html = V2.viewMissionDetail(r.sub);
+  const missionQ = r.query?.get("mission") || null;
+  if (r.name === "settings") html = V2.viewSettings ? V2.viewSettings() : `<div class="mc-wrap"><h2>Settings</h2></div>`;
+  else if (r.name === "needs-you") html = V2.viewNeedsYou();
+  else if (r.name === "missions" && r.sub) html = V2.viewMissionDetail(r.sub);
   else if (r.name === "missions") html = V2.viewMissions();
-  else if (r.name === "timeline") html = V2.viewTimeline(r.sub);
+  else if (r.name === "timeline") html = V2.viewTimeline(r.sub || missionQ);
   else if (r.name === "workers") html = r.sub ? V2.viewWorkerDetail(r.sub) : V2.viewWorkers();
-  else if (r.name === "decisions") html = r.sub ? V2.viewDecisionDetail(r.sub) : V2.viewDecisions();
-  else if (r.name === "evidence") html = V2.viewEvidence(r.sub);
+  else if (r.name === "decisions") html = r.sub ? V2.viewDecisionDetail(r.sub) : V2.viewDecisions(missionQ);
+  else if (r.name === "evidence") html = V2.viewEvidence(r.sub || missionQ);
   else if (r.name === "kickoff") html = V2.viewKickoff(r.sub);
   V.innerHTML = html || `<div class="mc-wrap empty">Unknown Mission Control route</div>`;
-  try { $("#nb-needs").textContent = state.snap ? needsYou().length : 0; } catch { /* */ }
+  try {
+    const n = window.VacilandoV2?.state?.needsYou?.items?.length;
+    if (n != null) $("#nb-needs").textContent = n;
+    else if (state.snap) $("#nb-needs").textContent = needsYou().length;
+  } catch { /* */ }
 }
 
 function render(force) {

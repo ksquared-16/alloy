@@ -61,6 +61,19 @@ import {
   getMissionDetailProjection,
 } from "./director-summary.mjs";
 import { buildMissionContextPackage } from "./mission-context.mjs";
+import {
+  missionsHomeVm,
+  missionOverviewVm,
+  directorSummaryVm,
+  timelinePageVm,
+  evidenceGalleryVm,
+  workersHomeVm,
+  workerDetailVm,
+  decisionCardVm,
+  decisionDetailVm,
+  listNeedsYou,
+  kickoffVm,
+} from "./presentation/operator-views.mjs";
 
 export async function handleV2Post(path, body) {
   const v = body || {};
@@ -215,12 +228,70 @@ export function handleV2Get(path, url) {
   const q = (k) => url.searchParams.get(k);
 
   if (path === "/api/v2/missions") {
-    return { status: 200, body: { ok: true, missions: listMissionsV2() } };
+    return { status: 200, body: { ok: true, missions: listMissionsV2(), home: missionsHomeVm() } };
+  }
+  if (path === "/api/v2/views/missions") {
+    return { status: 200, body: { ok: true, ...missionsHomeVm() } };
+  }
+  if (path === "/api/v2/views/needs-you") {
+    return { status: 200, body: { ok: true, items: listNeedsYou() } };
+  }
+  if (path === "/api/v2/views/workers") {
+    return { status: 200, body: { ok: true, ...workersHomeVm() } };
+  }
+  if (path === "/api/v2/views/worker") {
+    const vm = workerDetailVm(q("id") || q("worker_id"));
+    if (!vm) return { status: 404, body: { ok: false, error: "worker_not_found" } };
+    return { status: 200, body: { ok: true, worker: vm } };
+  }
+  if (path === "/api/v2/views/mission/overview") {
+    const id = q("id") || q("mission_id");
+    if (!id) return { status: 400, body: { ok: false, error: "missing_id" } };
+    const overview = missionOverviewVm(id);
+    if (!overview) return { status: 404, body: { ok: false, error: "mission_not_found" } };
+    return { status: 200, body: { ok: true, overview } };
+  }
+  if (path === "/api/v2/views/mission/timeline") {
+    const id = q("id") || q("mission_id");
+    if (!id) return { status: 400, body: { ok: false, error: "missing_id" } };
+    return { status: 200, body: { ok: true, ...timelinePageVm(id) } };
+  }
+  if (path === "/api/v2/views/mission/evidence") {
+    const id = q("id") || q("mission_id");
+    if (!id) return { status: 400, body: { ok: false, error: "missing_id" } };
+    return { status: 200, body: { ok: true, ...evidenceGalleryVm(id) } };
+  }
+  if (path === "/api/v2/views/mission/kickoff") {
+    const id = q("id") || q("mission_id");
+    return { status: 200, body: { ok: true, ...kickoffVm(id) } };
+  }
+  if (path === "/api/v2/views/decision") {
+    const mid = q("mission_id");
+    const did = q("id") || q("decision_id");
+    const vm = decisionDetailVm(mid, did);
+    if (!vm) return { status: 404, body: { ok: false, error: "decision_not_found" } };
+    return { status: 200, body: { ok: true, decision: vm } };
+  }
+  if (path === "/api/v2/views/decisions") {
+    const mid = q("mission_id");
+    const status = q("status") || "open";
+    const decisions = listDecisions(mid || null, { status: status === "all" ? null : status })
+      .map((d) => decisionCardVm(d));
+    return { status: 200, body: { ok: true, decisions } };
   }
   if (path === "/api/v2/mission") {
     const id = q("id") || q("mission_id");
     if (!id) return { status: 400, body: { ok: false, error: "missing_id" } };
-    return { status: 200, body: { ok: true, ...getMissionDetailProjection(id) } };
+    const overview = missionOverviewVm(id);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        ...getMissionDetailProjection(id),
+        overview,
+        director_summary_vm: directorSummaryVm(id),
+      },
+    };
   }
   if (path === "/api/v2/mission/summary") {
     const id = q("id") || q("mission_id");
