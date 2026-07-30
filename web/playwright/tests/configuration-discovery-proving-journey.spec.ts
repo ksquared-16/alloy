@@ -123,6 +123,7 @@ test.describe("Configuration Discovery — proving journey", () => {
     const commitResults: Record<string, { status: number; body: Json }> = {};
     let resolvedHousehold: string | null = null;
     let resolvedChild: string | null = null;
+    let reviewedRevision: string | null = null;
 
     test("1. import a NEW case and detect (native layout → discovery)", async () => {
         const req = page.request;
@@ -783,6 +784,11 @@ test.describe("Configuration Discovery — proving journey", () => {
                                 instance_decision: "approve",
                                 field_decisions: [],
                             },
+                            // Preview must be given the SAME anchor the commit will use, or it is not
+                            // a preview of what will happen. The gate refuses a child-scoped
+                            // relationship without one — "a household is not a child".
+                            anchor_customer_member_id: resolvedChild ?? FX.childA,
+                            scope: "this_child",
                         },
                         timeout: 120_000,
                     },
@@ -793,6 +799,15 @@ test.describe("Configuration Discovery — proving journey", () => {
                 `JOURNEY APPROVE ${p.collection_provider_ref} idempotencyKey=${String(preview.data?.idempotency_key).slice(0, 28)} decisionVersion=${preview.data?.decision_version}`,
             );
             expect(preview.data?.idempotency_key, "preview produced no idempotency key").toBeTruthy();
+            expect(preview.data?.resolved_customer_id, "preview did not report the resolved household").toBeTruthy();
+            expect(preview.data?.affected_member_ids, "preview resolved the wrong anchor").toEqual([
+                resolvedChild ?? FX.childA,
+            ]);
+            reviewedRevision = preview.data?.resolution_revision ?? reviewedRevision;
+            console.log(
+                `JOURNEY APPROVE   -> household=${preview.data?.resolved_customer_id} anchor=${JSON.stringify(preview.data?.affected_member_ids)} ` +
+                    `role=${preview.data?.role_key} cmd=${preview.data?.command_key} dest=${preview.data?.persistence_destination}`,
+            );
             expect(preview.data?.decision_version, "preview produced no decision version").toBeTruthy();
         }
     });
@@ -815,6 +830,8 @@ test.describe("Configuration Discovery — proving journey", () => {
                         // resolution actually produced, never a guess.
                         anchor_customer_member_id: resolvedChild ?? FX.childA,
                         scope: "this_child",
+                        // The commit must be against the SAME resolution the operator reviewed.
+                        expected_resolution_revision: reviewedRevision,
                     },
                     timeout: 180_000,
                 },
