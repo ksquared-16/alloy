@@ -1273,19 +1273,21 @@ function ScheduleRegions({
 }) {
     return (
         <div
+            className="alloy-os-sched-surface"
             style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%", gap: 0, paddingTop: 2 }}
             {...(surface === "detail" ? { "data-schedule-detail": "true" } : { "data-schedule-editor": "true" })}
         >
-            <div data-schedule-scroll="true" style={{ display: "grid", gap: 13, flex: "1 1 auto", minHeight: 0, overflowY: "auto", paddingBottom: 4 }}>
+            <div
+                data-schedule-scroll="true"
+                className="alloy-os-sched-scroll"
+                style={{ display: "grid", gap: 13, flex: "1 1 auto", minHeight: 0, overflowX: "hidden", overflowY: "auto", paddingBottom: 8 }}
+            >
                 <IdentityHeader child={child} state={state} />
                 {state.sub ? <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div> : null}
+                {/* Stack Days above Hours in the elevated focus panel — side-by-side
+                    clips AlloyTimeInput + Create Assignment against overflow:hidden. */}
                 <div
                     data-schedule-days-hours-band="true"
-                    style={{
-                        display: "grid",
-                        gap: 12,
-                        gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 1fr)",
-                    }}
                     className="alloy-os-sched-days-hours-band"
                 >
                     <Region icon={CalendarDays} label="Days">{days}</Region>
@@ -1297,11 +1299,12 @@ function ScheduleRegions({
             </div>
             <div
                 data-schedule-footer="true"
+                className="alloy-os-sched-footer"
                 style={{
                     flex: "0 0 auto",
                     borderTop: `1px solid ${T.border}`,
                     paddingTop: 12,
-                    paddingBottom: 2,
+                    paddingBottom: 4,
                     background: "#fff",
                 }}
             >
@@ -1632,9 +1635,12 @@ function ScheduleEditor({
                     </div>
                 }
                 hours={
-                    <div style={{ display: "grid", gap: 6 }}>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                            <div data-arrive="true">
+                    <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                        <div
+                            className="alloy-os-sched-hours-row"
+                            style={{ display: "flex", flexWrap: "wrap", gap: "8px 10px", alignItems: "center", minWidth: 0 }}
+                        >
+                            <div data-arrive="true" style={{ minWidth: 0, flex: "0 1 auto" }}>
                                 <AlloyTimeInput
                                     value={arrive}
                                     onChange={setArrive}
@@ -1643,8 +1649,8 @@ function ScheduleEditor({
                                     className="alloy-time-input--sched"
                                 />
                             </div>
-                            <span style={{ color: T.mid40 }}>–</span>
-                            <div data-depart="true">
+                            <span style={{ color: T.mid40, flex: "0 0 auto" }}>–</span>
+                            <div data-depart="true" style={{ minWidth: 0, flex: "0 1 auto" }}>
                                 <AlloyTimeInput
                                     value={depart}
                                     onChange={setDepart}
@@ -1752,11 +1758,11 @@ function ScheduleEditor({
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                             <label style={{ display: "grid", gap: 3 }}>
                                 <span style={{ fontSize: 10, color: T.mid40 }}>Start</span>
-                                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="alloy-os-sched-input" style={{ width: 156 }} />
+                                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
                             </label>
                             <label style={{ display: "grid", gap: 3 }}>
                                 <span style={{ fontSize: 10, color: T.mid40 }}>End</span>
-                                <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} className="alloy-os-sched-input" style={{ width: 156 }} />
+                                <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
                             </label>
                             <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: T.slate, cursor: "pointer", paddingBottom: 7 }}>
                                 <AlloyCheck checked={openEnded} onChange={setOpenEnded} data-open-ended={openEnded ? "true" : "false"} />
@@ -1767,8 +1773,11 @@ function ScheduleEditor({
                     </div>
                 }
                 footer={
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 10.5, color: T.muted }}>
+                    <div
+                        className="alloy-os-sched-footer-row"
+                        style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px 12px", minWidth: 0 }}
+                    >
+                        <span style={{ fontSize: 10.5, color: T.muted, flex: "1 1 140px", minWidth: 0 }}>
                             {createAsSecondary
                                 ? assignmentTypeLabel
                                     ? `${assignmentTypeLabel} — independent of the primary.`
@@ -1777,7 +1786,7 @@ function ScheduleEditor({
                                   ? "Create Assignment — configure the minimum."
                                   : "Editing this Assignment."}
                         </span>
-                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, flex: "0 0 auto" }}>
                             <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
                                 Cancel
                             </button>

@@ -3359,32 +3359,92 @@ html[data-alloy-os-runtime-split="true"]
   animation: alloy-os-fp-card-zoom var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
 }
 
-/* Scheduling work surface — the schedule editor/detail is a tall composition; give the
- * elevated card (and its scrollable body) enough height that the FULL card fits on a
- * normal viewport without an inner scrollbar. Scoped to the scheduling card only so
- * other expanded cards keep the compact 360px body cap. */
+/* Scheduling work surface — tall composition in the elevated focus panel.
+ * Specificity must beat the generic elevated `.alloy-os-ucard` 75vh cap so the
+ * editor can use the viewport and scroll its body instead of clipping tuition/CTA. */
 .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-scheduling-card="true"]) {
   max-height: min(92vh, calc(100dvh - 24px));
 }
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-scheduling-card="true"])
+  .alloy-os-ucard,
 .alloy-os-ucard--expanded:has([data-scheduling-card="true"]) {
   max-height: min(92vh, calc(100dvh - 24px));
+  width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 24px));
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-scheduling-card="true"])
+  .alloy-os-ucard__body,
 .alloy-os-ucard--expanded:has([data-scheduling-card="true"]) .alloy-os-ucard__body {
   max-height: none;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding-inline: 16px;
+  padding-bottom: 12px;
+  box-sizing: border-box;
 }
 .alloy-os-ucard--expanded:has([data-scheduling-card="true"]) [data-schedule-editor="true"],
 .alloy-os-ucard--expanded:has([data-scheduling-card="true"]) [data-schedule-detail="true"],
-.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) [data-room-picker="true"] {
+.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) [data-room-picker="true"],
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-schedule-editor="true"],
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-schedule-detail="true"],
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-room-picker="true"] {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Days above Daily hours — two columns only when the elevated card is wide enough
+ * for day pills + two AlloyTimeInputs without horizontal clip. */
+.alloy-os-sched-days-hours-band {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.alloy-os-sched-days-hours-band > * {
+  min-width: 0;
+}
+@container (min-width: 560px) {
+  .alloy-os-sched-days-hours-band {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  }
+}
+.alloy-os-sched-surface,
+.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) .alloy-os-ucard__body,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-scheduling-card="true"])
+  .alloy-os-ucard__body {
+  container-type: inline-size;
+  container-name: alloy-sched;
+}
+.alloy-os-sched-scroll {
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+.alloy-os-sched-footer {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Scheduling editor inputs (date + time) — a calm, consistent field with a Pine focus
@@ -3399,13 +3459,6 @@ html[data-alloy-os-runtime-split="true"]
   color: #273f52;
   box-sizing: border-box;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
-}
-
-/* Days + Daily hours share one band on comfortable widths; stack on narrow panels. */
-@media (max-width: 420px) {
-  .alloy-os-sched-days-hours-band {
-    grid-template-columns: 1fr !important;
-  }
 }
 .alloy-os-sched-input:hover:not(:disabled) {
   border-color: #cfd6e0;
@@ -3433,19 +3486,24 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-time-input {
   position: relative;
   display: inline-block;
-  width: 132px;
+  width: min(128px, 100%);
+  max-width: 100%;
   vertical-align: top;
+  box-sizing: border-box;
 }
 .alloy-time-input--sched {
-  width: 132px;
+  width: min(128px, 100%);
 }
 .alloy-time-input__field {
   position: relative;
   display: flex;
   align-items: stretch;
+  min-width: 0;
+  width: 100%;
 }
 .alloy-time-input__control {
   width: 100%;
+  min-width: 0;
   padding-right: 34px !important;
 }
 .alloy-time-input__field--invalid .alloy-time-input__control {
