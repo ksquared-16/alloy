@@ -1799,9 +1799,11 @@ html[data-alloy-os-runtime="on"]
 
 
 .alloy-os-focus-panel-grid--work {
-  /* Match the Activity cockpit rhythm exactly (10px gap + 10px padding) so both modes feel identical. */
+  /* Match the Activity cockpit rhythm exactly (10px gap + 10px padding) so both modes feel identical.
+   * Work canvas stays white-on-white (same as Summary/composed) — never the page mint or a grey slab. */
   gap: 10px;
   padding: 10px;
+  background: var(--alloy-os-surface, #fff);
 }
 
 .alloy-os-focus-panel-grid--work .alloy-os-ucard[data-universal-card-key="work_launcher"] {
@@ -3278,9 +3280,9 @@ html[data-alloy-os-runtime-split="true"]
 }
 
 /* Backdrop scrim — covers the whole canvas; click returns to base Work surface.
- * Soft-GLASS treatment: a light frosted veil (not a heavy gray modal). The canvas
- * stays understandable behind a gentle white blur + slight desaturation, so the
- * focused card reads as "zoomed in front of", not "a modal opened over". */
+ * Soft WHITE frost (not slate/grey). A cooler `rgba(248,250,252,…)` veil read as a
+ * grey slab behind smaller elevated cards (Assignments). Pure white + light blur
+ * keeps Household / What's Next / Assignments on the same calm surface. */
 .alloy-os-fp-depth-scrim {
   position: absolute;
   inset: 0;
@@ -3290,9 +3292,9 @@ html[data-alloy-os-runtime-split="true"]
   padding: 0;
   margin: 0;
   cursor: pointer;
-  background: rgba(248, 250, 252, 0.5);
-  backdrop-filter: blur(8px) saturate(0.85) brightness(1.02);
-  -webkit-backdrop-filter: blur(8px) saturate(0.85) brightness(1.02);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(6px) saturate(0.92) brightness(1.03);
+  -webkit-backdrop-filter: blur(6px) saturate(0.92) brightness(1.03);
   animation: alloy-os-fp-scrim-in var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
 }
 @keyframes alloy-os-fp-scrim-in {
@@ -3301,11 +3303,13 @@ html[data-alloy-os-runtime-split="true"]
 }
 
 /* Receded base cards: pull back in depth — dim + desaturate ONLY. They must NOT
- * move (no transform), so the canvas stays exactly where the operator left it. */
+ * move (no transform), so the canvas stays exactly where the operator left it.
+ * Keep opacity high enough that the white canvas does not read as a grey slab
+ * through the frost (Assignments is smaller, so more underlay stays visible). */
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"]) {
-  opacity: 0.5;
-  filter: saturate(0.72) brightness(0.99);
+  opacity: 0.64;
+  filter: saturate(0.78) brightness(1.01);
   transition:
     opacity var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease),
     filter var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease);
@@ -3662,9 +3666,9 @@ html[data-alloy-os-runtime-split="true"]
 [data-fp-composer-edit-mode="true"]
   .alloy-os-fp-composer__body
   .alloy-os-fp-depth-scrim {
-  background: rgba(248, 250, 252, 0.82);
-  backdrop-filter: blur(10px) saturate(0.8);
-  -webkit-backdrop-filter: blur(10px) saturate(0.8);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(8px) saturate(0.9);
+  -webkit-backdrop-filter: blur(8px) saturate(0.9);
 }
 
 /* One elevated fill for every Focus Panel card (What's Next, Household, Children,
@@ -3708,6 +3712,12 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   [data-schedule-surface="true"],
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-sched-surface,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-schedule-scroll="true"],
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   [data-schedule-editor="true"],
