@@ -240,10 +240,12 @@ describe("Focus Panel membership against the active Work View", () => {
     it("resolveFocusPanelScope classifies in/out of the active view", () => {
         const newLead = { id: "x", status_key: "new_inquiry" };
         expect(resolveFocusPanelScope({ record: newLead, activeView: VIEWS[1] })).toEqual({ kind: "in_scope" });
-        expect(resolveFocusPanelScope({ record: newLead, activeView: VIEWS[3] })).toEqual({
+        expect(resolveFocusPanelScope({ record: newLead, activeView: VIEWS[3], workViews: VIEWS })).toEqual({
             kind: "out_of_scope",
             activeViewId: "waitlist",
             activeViewLabel: "Waitlist",
+            destinationViewId: "new_leads",
+            destinationViewLabel: "New Leads",
         });
         expect(resolveFocusPanelScope({ record: newLead, activeView: null })).toEqual({ kind: "no_active_view" });
         // Record not yet loaded → don't assert out-of-scope.

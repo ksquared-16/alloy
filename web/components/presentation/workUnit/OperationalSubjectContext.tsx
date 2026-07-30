@@ -61,6 +61,9 @@ export type OperationalSubject = {
         workViewId: string;
         workViewLabel: string;
         scopeState: "in_scope" | "no_active_view" | "out_of_scope";
+        /** When out_of_scope — destination Work View label for the Open-in affordance. */
+        destinationViewId?: string | null;
+        destinationViewLabel?: string | null;
     } | null;
     /** U-O5 — capability, not decoration. */
     action: { actionRef: string; label: string } | null;

@@ -235,6 +235,8 @@ export function ProvisionedWorkUnitSurface() {
                                   workViewId: op.contextFrame.workViewId,
                                   workViewLabel: op.contextFrame.workViewLabel,
                                   scopeState: op.focusPanelScopeState,
+                                  destinationViewId: op.focusPanelOutOfView?.destinationViewId ?? null,
+                                  destinationViewLabel: op.focusPanelOutOfView?.destinationViewLabel ?? null,
                               }
                             : null
                     }

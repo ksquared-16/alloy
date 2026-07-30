@@ -327,22 +327,59 @@ export function firstMatchingVisibleWorkView(
 export type FocusPanelScopeState =
     | { kind: "in_scope" }
     | { kind: "no_active_view" }
-    | { kind: "out_of_scope"; activeViewId: string; activeViewLabel: string };
+    | {
+          kind: "out_of_scope";
+          activeViewId: string;
+          activeViewLabel: string;
+          /** Destination Work View the record now matches (for Open-in affordance). */
+          destinationViewId?: string | null;
+          destinationViewLabel?: string | null;
+      };
 
 /**
  * Classify a deep-linked record against the active Work View so the UI can show an explicit
- * "record is outside this view" state (with an "open in All Leads" action) instead of silently
+ * "record has moved" state (with an Open-in destination action) instead of silently
  * showing a record the active queue counts as 0.
  */
 export function resolveFocusPanelScope(params: {
     record: OperationalProjectionRow | null | undefined;
     activeView: WorkViewConfigV1Stored | null | undefined;
+    /** All configured Work Views — used to name the destination when out of the active view. */
+    workViews?: readonly WorkViewConfigV1Stored[] | null;
 }): FocusPanelScopeState {
     const { record, activeView } = params;
     if (!activeView) return { kind: "no_active_view" };
     if (!record) return { kind: "in_scope" }; // record not yet loaded — don't assert out-of-scope
     if (recordMatchesWorkView(record, activeView)) return { kind: "in_scope" };
-    return { kind: "out_of_scope", activeViewId: activeView.id, activeViewLabel: activeView.label };
+
+    const others = (params.workViews ?? []).filter(
+        (view) => view.id !== activeView.id && view.visible_in_runtime !== false,
+    );
+    const destination = firstMatchingVisibleWorkView(record, others);
+    return {
+        kind: "out_of_scope",
+        activeViewId: activeView.id,
+        activeViewLabel: activeView.label,
+        destinationViewId: destination?.id ?? null,
+        destinationViewLabel: destination?.label ?? null,
+    };
+}
+
+/** Operator copy for a record that left the active Work View after stage movement. */
+export function formatRecordMovedOutOfViewMessage(params: {
+    destinationViewLabel?: string | null;
+}): { body: string; cta: string | null } {
+    const dest = params.destinationViewLabel?.trim() || null;
+    if (dest) {
+        return {
+            body: `This record has moved to ${dest}.`,
+            cta: `Open in ${dest}`,
+        };
+    }
+    return {
+        body: "This record is no longer in the current Work View.",
+        cta: null,
+    };
 }
 
 export type WorkViewPlacementResult = {

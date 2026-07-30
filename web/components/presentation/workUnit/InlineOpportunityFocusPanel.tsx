@@ -58,6 +58,7 @@ import VmDrawerActionModalsPortal from "@/components/admin/vmDrawer/VmDrawerActi
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useRecordWorkRuntime } from "@/lib/presentation/runtime/useRecordWorkRuntime";
 import { useOperationalSubject, isOperationallyResolved } from "./OperationalSubjectContext";
+import { FocusPanelOutOfViewAffordance } from "./FocusPanelOutOfViewAffordance";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
 import { focusPanelScrollScope } from "@/lib/presentation/runtime/workUnitOperatorContext";
@@ -431,6 +432,30 @@ export function InlineOpportunityFocusPanel() {
                 // as the empty state; the body scrolls internally. Height comes from the parent row.
                 className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white"
             >
+                {operational.decision?.scopeState === "out_of_scope" ? (
+                    <FocusPanelOutOfViewAffordance
+                        destinationViewLabel={
+                            operational.decision.destinationViewLabel
+                            ?? operational.situation?.stageLabel
+                            ?? null
+                        }
+                        onOpenDestination={
+                            operational.decision.destinationViewId
+                                ? () => {
+                                      // Soft navigate via custom event — Work Unit surface owns pill switch.
+                                      if (typeof window === "undefined") return;
+                                      window.dispatchEvent(
+                                          new CustomEvent("adminv2:open-work-view", {
+                                              detail: {
+                                                  workViewId: operational.decision?.destinationViewId,
+                                              },
+                                          }),
+                                      );
+                                  }
+                                : null
+                        }
+                    />
+                ) : null}
                 <div
                     className="sticky top-0 z-10 shrink-0 border-b border-alloy-stone/12 bg-white"
                     data-inline-focus-panel-header="true"

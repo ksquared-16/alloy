@@ -230,6 +230,11 @@ export type ProvisioningAnswer =
           /** Context Frame — the Work View the operator entered from. Never mutated by Runtime. */
           contextFrame: { workViewId: string; workViewLabel: string };
           focusPanelScopeState: FocusPanelScopeStateKind;
+          /** When scope is out_of_scope — destination Work View for the Open-in affordance. */
+          focusPanelOutOfView?: {
+              destinationViewId: string | null;
+              destinationViewLabel: string | null;
+          } | null;
           currentBusinessState: CurrentBusinessState;
           primaryAction: TruthfulPrimaryAction;
           /**
@@ -275,6 +280,7 @@ export type ProvisioningAnswer =
           recordOfAttention: null;
           contextFrame: { workViewId: string; workViewLabel: string };
           focusPanelScopeState: FocusPanelScopeStateKind;
+          focusPanelOutOfView?: null;
           presentation: OperationalPresentation;
           /** D5 — Settlement-only locators (see the operational variant). */
           settlement: SettlementLocators;
@@ -683,6 +689,7 @@ export async function composeWorkUnitProvisioningAnswer(
             recordOfAttention: null,
             contextFrame,
             focusPanelScopeState: resolveFocusPanelScope({ record: null, activeView }).kind,
+            focusPanelOutOfView: null,
             presentation,
             settlement,
             actionsProjection,
@@ -856,7 +863,23 @@ export async function composeWorkUnitProvisioningAnswer(
         // §0.5.2: the Record of Truth may be broader than the row; the attention scope is preserved.
         recordOfTruth: { entityType: "opportunity", id: chosen.entityId },
         contextFrame,
-        focusPanelScopeState: resolveFocusPanelScope({ record: subjectRow, activeView }).kind,
+        ...(() => {
+            const scope = resolveFocusPanelScope({
+                record: subjectRow,
+                activeView,
+                workViews,
+            });
+            return {
+                focusPanelScopeState: scope.kind,
+                focusPanelOutOfView:
+                    scope.kind === "out_of_scope"
+                        ? {
+                              destinationViewId: scope.destinationViewId ?? null,
+                              destinationViewLabel: scope.destinationViewLabel ?? null,
+                          }
+                        : null,
+            };
+        })(),
         currentBusinessState: {
             stageKey: stage.key,
             stageLabel: stage.label,
