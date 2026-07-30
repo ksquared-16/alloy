@@ -134,12 +134,13 @@ export async function preflightStageChangingOutcomeReadiness(params: {
         };
     }
 
-    // Dedupe by ruleId
-    const byRule = new Map<string, EffectiveRequirementMissing>();
+    // Dedupe by requirement key (+ scope) — EffectiveRequirementMissing has no ruleId.
+    const byKey = new Map<string, EffectiveRequirementMissing>();
     for (const row of allBlocking) {
-        if (!byRule.has(row.ruleId)) byRule.set(row.ruleId, row);
+        const dedupeKey = `${row.scope}::${row.key}`;
+        if (!byKey.has(dedupeKey)) byKey.set(dedupeKey, row);
     }
-    const blocking = [...byRule.values()];
+    const blocking = [...byKey.values()];
 
     return {
         blocked: true,
