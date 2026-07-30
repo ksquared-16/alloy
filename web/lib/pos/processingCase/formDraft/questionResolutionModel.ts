@@ -285,16 +285,35 @@ const PROCESSING_FIELD_LABEL_BY_KEY = new Map<string, string>(
     ] as const
 );
 
-/** Human label for where data is stored — shows canonical field when known. */
+/**
+ * Human label for where data is stored — shows canonical field when known.
+ *
+ * IMPORTANT: a question has NO `field_source` until the concept review is applied. Detection alone
+ * never binds storage. Labelling that state "Form field only — not synced to records" read as a
+ * decision Alloy had made, when it is really "not decided yet" — which is why a guardian's Name
+ * appeared to be heading nowhere. `context` lets the caller say which it actually is.
+ */
 export function storageSummaryLabel(
     fieldSource?: FormFieldSource | null,
-    destinationFieldId?: string | null
+    destinationFieldId?: string | null,
+    context?: {
+        /** Label of the relationship collection this question's section belongs to, when bound. */
+        relationshipLabel?: string | null;
+        /** True when a concept proposal covering this question is still awaiting a decision. */
+        awaitingConceptDecision?: boolean;
+    }
 ): string {
     if (destinationFieldId) {
         const option = reviewFieldOptionById(destinationFieldId);
         if (option) return option.label;
     }
-    if (!fieldSource) return "Form field only — not synced to records";
+    if (!fieldSource) {
+        // Ordered most-specific first: a bound relationship is a real answer, a pending concept is
+        // an honest "not yet", and only the remainder is genuinely form-only.
+        if (context?.relationshipLabel) return `Collected as ${context.relationshipLabel}`;
+        if (context?.awaitingConceptDecision) return "Not decided yet — set this in concept review";
+        return "Form field only — not stored on a record";
+    }
     const selected = PROCESSING_FIELD_LABEL_BY_KEY.get(`${fieldSource.entity_type}:${fieldSource.field_key}`);
     if (selected) return selected;
     const subject =

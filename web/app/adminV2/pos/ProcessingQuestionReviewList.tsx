@@ -130,6 +130,15 @@ type Props = {
     sectionInfo?: Record<string, SectionInfo>;
     /** Operator changed a section's disposition. Disabled once the form is created. */
     onSectionDisposition?: (title: string, disposition: SectionDisposition) => void;
+    /**
+     * Why a question currently has no record binding. Detection never binds storage — only applying
+     * the concept review does — so without this the list reports "form field only" for questions
+     * whose destination simply has not been decided yet.
+     */
+    storageContext?: (question: ReviewQuestionInput) => {
+        relationshipLabel?: string | null;
+        awaitingConceptDecision?: boolean;
+    };
 };
 
 export function ProcessingQuestionReviewList({
@@ -147,6 +156,7 @@ export function ProcessingQuestionReviewList({
     onStartMapping,
     sectionInfo,
     onSectionDisposition,
+    storageContext,
 }: Props) {
     const activeCount = questions.filter((q) => !q.ignored).length;
     const sections = questions.reduce<Array<{ title: string; questions: ReviewQuestionInput[] }>>((acc, q) => {
@@ -357,7 +367,7 @@ export function ProcessingQuestionReviewList({
                                         </div>
 
                                         {!q.ignored && sel ? (
-                                            <ReviewQuestionInspector question={q} showNameRep={showNameRep} onUpdate={onUpdate} />
+                                            <ReviewQuestionInspector question={q} showNameRep={showNameRep} onUpdate={onUpdate} storageCtx={storageContext?.(q)} />
                                         ) : null}
 
                                         {isEditing && !q.ignored ? (
@@ -389,7 +399,9 @@ function ReviewQuestionInspector({
     question,
     showNameRep,
     onUpdate,
+    storageCtx,
 }: {
+    storageCtx?: { relationshipLabel?: string | null; awaitingConceptDecision?: boolean };
     question: ReviewQuestionInput;
     showNameRep: boolean;
     onUpdate: (id: string, patch: Partial<ReviewQuestionInput>) => void;
@@ -524,7 +536,7 @@ function ReviewQuestionInspector({
 
             <div className="flex items-center gap-1 text-[9px] font-medium text-alloy-bend-pine">
                 <Check className="h-3 w-3 shrink-0" strokeWidth={3} aria-hidden />
-                <span>{storageSummaryLabel(fieldSource, selectedFieldId || null)}</span>
+                <span>{storageSummaryLabel(fieldSource, selectedFieldId || null, storageCtx)}</span>
             </div>
         </div>
     );

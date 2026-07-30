@@ -164,8 +164,17 @@ export async function buildFormDraftForCaseSafe(
     args: { orgId: string; caseId: string },
     deps: FormDraftCaseDeps = {}
 ): Promise<StoredFormDraftPreview | null> {
+    // Every failure path below reports WHY through `onStage`. Returning a bare null made three very
+    // different failures — bad input, a genuinely missing source, and any thrown error — all surface
+    // to the operator as "this case has no document source", which sent QA looking in the wrong place
+    // for a document that was attached perfectly well.
+    const fail = (stage: string, detail: string): null => {
+        deps.onStage?.({ stage, ms: 0, ok: false, detail });
+        return null;
+    };
+
     try {
-        if (!args.orgId || !args.caseId) return null;
+        if (!args.orgId || !args.caseId) return fail("input", "missing org or case id");
 
         // Primary document source for the case.
         const { data: src } = await supabase
@@ -176,7 +185,9 @@ export async function buildFormDraftForCaseSafe(
             .eq("role", "primary")
             .maybeSingle();
         const source = src as { source_kind?: string; source_id?: string } | null;
-        if (!source || source.source_kind !== "document" || !source.source_id) return null;
+        if (!source) return fail("source_lookup", "no primary source row for this case");
+        if (source.source_kind !== "document") return fail("source_lookup", `primary source is "${source.source_kind}", not a document`);
+        if (!source.source_id) return fail("source_lookup", "primary document source has no id");
 
         const { data: docRow } = await supabase
             .from("documents")
@@ -229,7 +240,9 @@ export async function buildFormDraftForCaseSafe(
 
         return await dbStoreFormDraftPreview(supabase, { orgId: args.orgId, caseId: args.caseId, draft });
     } catch (e) {
-        console.warn("[buildFormDraftForCaseSafe]", e instanceof Error ? e.message : e);
-        return null;
+        // A crash while reading the document is NOT "no document source". Report it as what it is.
+        const message = e instanceof Error ? e.message : String(e);
+        console.warn("[buildFormDraftForCaseSafe]", message);
+        return fail("build", message);
     }
 }

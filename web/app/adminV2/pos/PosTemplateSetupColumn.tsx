@@ -404,6 +404,28 @@ export default function PosTemplateSetupColumn({
     const showDocumentCanvas =
         leftView === "highlights" && !!pdfUrl && canvasState.mode !== "draw_region" && !pendingManualRegion;
 
+    // Sections that Configuration Discovery resolved to a RELATIONSHIP. Questions inside them are
+    // collected through that relationship (the Person is created/linked at submission), so they are
+    // not "form field only" even though they carry no per-question field_source.
+    const relationshipLabelBySection = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const p of discovery?.proposals ?? []) {
+            if (p.disposition !== "relationship_binding") continue;
+            const title = (p.source.section_title ?? "").trim().toLowerCase();
+            const role = (p.target_relationship_role ?? "").replace(/_/g, " ").trim();
+            if (title && role) map.set(title, role);
+        }
+        return map;
+    }, [discovery]);
+
+    const conceptsAwaitingDecision = useMemo(
+        () =>
+            (discovery?.proposals ?? []).some(
+                (p) => (conceptDecisions[p.id] ?? p.decision_state) === "proposed"
+            ),
+        [discovery, conceptDecisions]
+    );
+
     const regionMeta = useMemo(
         () =>
             reviewQuestions
@@ -1077,6 +1099,24 @@ export default function PosTemplateSetupColumn({
                     onDecision={setConceptDecision}
                     onBulkAcceptHighConfidence={bulkAcceptHighConfidence}
                     onOpenDetailed={() => setReviewMode("detailed")}
+                    onReviewProposal={(proposal) => {
+                        // "Review recommended" must lead somewhere the operator can actually CHANGE
+                        // something. Open the detailed review and select the question this proposal
+                        // was read from, matched on the source labels the proposal carries.
+                        setReviewMode("detailed");
+                        const labels = new Set(
+                            (proposal.source.labels ?? []).map((l) => l.trim().toLowerCase()).filter(Boolean)
+                        );
+                        const match = reviewQuestionsRef.current.find((q) => {
+                            const evidence = (q.evidenceLabel || "").trim().toLowerCase();
+                            const display = (q.displayLabel || "").trim().toLowerCase();
+                            return (evidence && labels.has(evidence)) || (display && labels.has(display));
+                        });
+                        if (match) {
+                            setSelectedQuestionId(match.id);
+                            setEditingQuestionId(match.id);
+                        }
+                    }}
                     onApply={applyConfiguration}
                     applying={applying}
                     applicationCounts={applicationCounts}
@@ -1259,6 +1299,17 @@ export default function PosTemplateSetupColumn({
                                     />
                                 ) : null}
                                 <ProcessingQuestionReviewList
+                                    storageContext={(q) => {
+                                        // A question is only "form field only" once the concept review
+                                        // has actually decided so. Before that it is undecided, and a
+                                        // guardian/emergency section is collected through its
+                                        // relationship rather than as a loose field.
+                                        const rel = relationshipLabelBySection.get((q.section ?? "").trim().toLowerCase());
+                                        return {
+                                            relationshipLabel: rel ?? null,
+                                            awaitingConceptDecision: !rel && conceptsAwaitingDecision,
+                                        };
+                                    }}
                                     questions={reviewQuestions}
                                     selectedId={selectedQuestionId}
                                     editingId={editingQuestionId}
