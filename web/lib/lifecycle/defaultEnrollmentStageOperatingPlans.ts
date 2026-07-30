@@ -66,6 +66,13 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                             result: "sent",
                             satisfies_outcome_key: "left_message",
                         },
+                        {
+                            // Confirmed tour booking is objective success for schedule_tour.
+                            // Maps to Tour Scheduled → outcome rules own stage movement.
+                            capability: "schedule_tour",
+                            result: "confirmed",
+                            satisfies_outcome_key: "tour_scheduled",
+                        },
                     ],
                 },
                 primary_action: { action_ref: "quick_message", override_label: "Contact Family" },
@@ -78,6 +85,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                     { outcome_ref: "left_message" },
                     { outcome_ref: "needs_follow_up" },
                     { outcome_ref: "interested" },
+                    { outcome_ref: "tour_scheduled" },
                     { outcome_ref: "not_interested" },
                 ],
             },
@@ -87,6 +95,12 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
             { outcome_key: "left_message", label: "Left Message" },
             { outcome_key: "needs_follow_up", label: "Needs Follow-up" },
             { outcome_key: "interested", label: "Interested", successful: true },
+            {
+                outcome_key: "tour_scheduled",
+                label: "Tour Scheduled",
+                successful: true,
+                completes_work: true,
+            },
             { outcome_key: "not_interested", label: "Not Interested", completes_work: true },
         ],
         outcome_rules: [
@@ -98,6 +112,18 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
             {
                 rule_key: "interested_to_tour",
                 when_outcome_key: "interested",
+                targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
+            },
+            {
+                rule_key: "tour_scheduled_to_tour",
+                when_outcome_key: "tour_scheduled",
+                targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
+            },
+            {
+                // Domain signal from confirmed booking — same progression as Tour Scheduled outcome.
+                // Actions never hardcode stage moves; configuration owns meaning.
+                rule_key: "domain_tour_booking_scheduled_to_tour",
+                when_domain_signal: { domain: "tour_booking", signal: "scheduled" },
                 targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
             },
             {

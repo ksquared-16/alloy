@@ -10,6 +10,7 @@ import type {
 import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS, type TourLifecycleEventType } from "@/lib/tours/constants";
 import { emitTourBookingLifecycleEvent } from "@/lib/tours/events/tourLifecycleEvents";
 import { applyTourBookingOpportunityIntegration } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
+import { associateTourBookingToStageWork } from "@/lib/lifecycle/associateTourBookingToStageWork";
 import {
     orchestrateTourBookingCanceled,
     orchestrateTourBookingCompleted,
@@ -285,6 +286,25 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
                 },
                 compensate: async () => {
                     await mirrorUndo?.();
+                },
+            },
+            {
+                // Soft: booking + stage signal already committed. Map schedule_tour → outcome when configured.
+                name: "stage_work_sufficiency",
+                stage: "business_process",
+                boundary: "outside",
+                run: async () => {
+                    if (!row || row.status_key !== "confirmed") return null;
+                    const actor = (input.requestedByUserId ?? "").trim();
+                    if (!actor) return null;
+                    return associateTourBookingToStageWork({
+                        supabase,
+                        orgId,
+                        userId: actor,
+                        opportunityId: row.opportunity_id,
+                        result: "confirmed",
+                        bookingId: row.id,
+                    });
                 },
             },
             {
