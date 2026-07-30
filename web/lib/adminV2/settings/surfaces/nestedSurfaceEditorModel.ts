@@ -1011,7 +1011,63 @@ export function fieldShowIconForNestedGroup(
     groupKey: string,
     fieldKey: string,
 ): boolean {
-    return config.groups.find((g) => g.key === groupKey)?.fieldModes?.[fieldKey]?.showIcon !== false;
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (!group) return false;
+    if (group.fieldModes?.[fieldKey]?.showIcon === true) return true;
+    if (group.fieldModes?.[fieldKey]?.showIcon === false) return false;
+    // Legacy publishes: an explicit fieldIcons entry means the icon is on.
+    return Boolean(group.fieldIcons?.[fieldKey]?.trim());
+}
+
+export function fieldIconForNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+): string | null {
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (!group) return null;
+    const explicit = group.fieldIcons?.[fieldKey]?.trim();
+    if (explicit) return explicit;
+    const placementIcon = group.fieldPlacements?.find((row) => row.fieldRef === fieldKey)?.icon?.trim();
+    return placementIcon || null;
+}
+
+export function setFieldIconInNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    iconKey: string | null,
+): NestedSurfaceConfig {
+    const nextIcon = iconKey?.trim() || null;
+    return {
+        ...config,
+        groups: config.groups.map((g) => {
+            if (g.key !== groupKey) return g;
+            const nextFieldIcons = { ...(g.fieldIcons ?? {}) };
+            if (nextIcon) nextFieldIcons[fieldKey] = nextIcon;
+            else delete nextFieldIcons[fieldKey];
+            const placements =
+                (g.fieldPlacements?.length ?? 0) > 0
+                    ? g.fieldPlacements!.map((placement) =>
+                          placement.fieldRef === fieldKey
+                              ? { ...placement, icon: nextIcon ?? undefined }
+                              : placement,
+                      )
+                    : g.fieldPlacements;
+            return {
+                ...g,
+                fieldIcons: Object.keys(nextFieldIcons).length > 0 ? nextFieldIcons : undefined,
+                fieldModes: {
+                    ...(g.fieldModes ?? {}),
+                    [fieldKey]: {
+                        ...(g.fieldModes?.[fieldKey] ?? {}),
+                        showIcon: Boolean(nextIcon),
+                    },
+                },
+                ...(placements !== undefined ? { fieldPlacements: placements } : {}),
+            };
+        }),
+    };
 }
 
 export function setFieldPresentationModeInNestedGroup(

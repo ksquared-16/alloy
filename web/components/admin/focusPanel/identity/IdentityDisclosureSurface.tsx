@@ -71,6 +71,7 @@ export default function IdentityDisclosureSurface({
                         customerMemberId={customerMemberId}
                         onSavePhoto={onSavePhoto}
                         onClearPhoto={onClearPhoto}
+                        allowUpload={Boolean(onSavePhoto)}
                         size={40}
                     />
                 )

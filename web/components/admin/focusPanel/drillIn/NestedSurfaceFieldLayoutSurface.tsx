@@ -8,6 +8,7 @@ import { namespacesForNestedGroupPicker,
     applyNestedSurfaceFieldDrop,
     fieldLayoutWidthForNestedGroup,
     fieldPresentationLabel,
+    fieldIconForNestedGroup,
     fieldShowIconForNestedGroup,
     fieldShowLabelForNestedGroup,
     fieldVisibilityForNestedGroup,
@@ -15,6 +16,7 @@ import { namespacesForNestedGroupPicker,
     identityConfigurationFieldKeys,
     removeFieldFromNestedGroup,
     selectedFieldKeys,
+    setFieldIconInNestedGroup,
     setFieldPresentationLabel,
     setFieldPresentationModeInNestedGroup,
     setFieldVisibilityInNestedGroup,
@@ -22,6 +24,22 @@ import { namespacesForNestedGroupPicker,
     fieldLinkTargetForNestedGroup,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+
+/** Icons available for identity field authoring — keys match IdentityFieldValue runtime map. */
+const IDENTITY_FIELD_ICON_OPTIONS = [
+    { key: "phone", label: "Phone" },
+    { key: "mail", label: "Email" },
+    { key: "cake", label: "Birthday" },
+    { key: "graduation-cap", label: "Program" },
+    { key: "door-open", label: "Room" },
+    { key: "calendar-clock", label: "Schedule" },
+    { key: "calendar-days", label: "Date" },
+    { key: "badge-check", label: "Badge" },
+    { key: "building", label: "Building" },
+    { key: "user", label: "Person" },
+    { key: "users", label: "People" },
+    { key: "home", label: "Home" },
+] as const;
 import type { IdentityFieldTier } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
 import { configurationPurposeFromTierArg } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import type { NestedSurfaceFieldDropZone } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
@@ -671,16 +689,53 @@ function FieldInstance({
                                 type="button"
                                 className={clsx("fp-layout-field__toggle", showIcon && "is-on")}
                                 aria-pressed={showIcon}
-                                onClick={() =>
-                                    onMutate(
-                                        setFieldPresentationModeInNestedGroup(config, groupKey, fieldKey, {
-                                            showIcon: !showIcon,
-                                        }),
-                                    )
-                                }
+                                onClick={() => {
+                                    if (showIcon) {
+                                        onMutate(setFieldIconInNestedGroup(config, groupKey, fieldKey, null));
+                                        return;
+                                    }
+                                    // Turning Icon on: enable + seed a sensible default glyph.
+                                    const seeded =
+                                        fieldIconForNestedGroup(config, groupKey, fieldKey)
+                                        ?? (fieldKey.includes("phone")
+                                            ? "phone"
+                                            : fieldKey.includes("email") || fieldKey.includes("mail")
+                                              ? "mail"
+                                              : fieldKey.includes("program")
+                                                ? "graduation-cap"
+                                                : fieldKey.includes("dob") || fieldKey.includes("birth")
+                                                  ? "cake"
+                                                  : "badge-check");
+                                    onMutate(setFieldIconInNestedGroup(config, groupKey, fieldKey, seeded));
+                                }}
                             >
                                 Icon
                             </button>
+                            {showIcon ? (
+                                <select
+                                    className="fp-inline-field-row__behavior"
+                                    value={fieldIconForNestedGroup(config, groupKey, fieldKey) ?? ""}
+                                    aria-label={`Icon for ${catalogLabel}`}
+                                    data-identity-field-icon-picker={fieldKey}
+                                    onChange={(e) =>
+                                        onMutate(
+                                            setFieldIconInNestedGroup(
+                                                config,
+                                                groupKey,
+                                                fieldKey,
+                                                e.target.value || null,
+                                            ),
+                                        )
+                                    }
+                                >
+                                    <option value="">Select icon…</option>
+                                    {IDENTITY_FIELD_ICON_OPTIONS.map((opt) => (
+                                        <option key={opt.key} value={opt.key}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : null}
                         </div>
                         <button
                             type="button"

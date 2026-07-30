@@ -133,8 +133,10 @@ export function useInquiryChildPlacementCascade(params: {
         programOptions,
         programCategoryIdOptions,
         roomOptions,
-        programDisabled: !siteId,
-        roomDisabled: !siteId,
+        // Keep the control interactive while options resolve (site may come from
+        // workspace default after hierarchy load). Disable only once we know there is no site.
+        programDisabled: !loading && !siteId,
+        roomDisabled: !loading && !siteId,
         loading,
         defaultSiteId,
         siteSelectionReady: siteFilter?.siteSelectionReady ?? true,
