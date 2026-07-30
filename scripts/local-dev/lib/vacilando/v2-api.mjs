@@ -188,9 +188,10 @@ export async function handleV2Post(path, body) {
     return { status: 201, body: { ok: true, ...out } };
   }
   if (path === "/api/v2/decisions/answer") {
+    const mid = v.mission_id || v.missionId;
     const out = answerDecision({
       ...v,
-      missionId: v.mission_id || v.missionId,
+      missionId: mid,
       decisionId: v.decision_id || v.decisionId,
       chosenOptionId: v.chosen_option_id || v.chosenOptionId,
       changesApprovedIntent: Boolean(v.changes_approved_intent || v.changesApprovedIntent),
@@ -199,6 +200,10 @@ export async function handleV2Post(path, body) {
       resumeAssignments,
       invalidateWorkerContexts,
     });
+    if (out.ok && mid) {
+      const { scheduleDispatchAfterKickoff } = await import("./assignment-dispatch.mjs");
+      scheduleDispatchAfterKickoff(mid, { actor: "director" });
+    }
     return { status: out.ok ? 200 : 409, body: out };
   }
   if (path === "/api/v2/issues/classify") {

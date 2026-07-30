@@ -17,11 +17,13 @@ const DIR = join(RUNTIME_ROOT, "vacilando", "evidence");
 export const EVIDENCE_TYPES = new Set([
   "screenshot", "video", "test", "build", "typecheck", "browser",
   "database", "migration", "diff", "log", "performance", "security", "commit",
+  "notes", "document",
 ]);
 
 export const EVIDENCE_PROFILES = {
   code_only: ["diff", "test", "typecheck", "build", "commit"],
   execution_v1: ["log"],
+  execution_session_v1: ["log", "notes", "document"],
   ui: ["diff", "test", "typecheck", "build", "commit", "screenshot", "browser"],
   migration: ["migration", "database", "test", "diff", "commit", "log"],
   security: ["security", "test", "browser", "log", "diff", "commit"],

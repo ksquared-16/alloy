@@ -419,12 +419,26 @@ We'll capture the context automatically.</p>
     const workSec = `<section class="mc-sec">
       <h3>Current Work</h3>
       ${work.length
-        ? work.map((w) => `<div class="mc-work-row">
+        ? work.map((w) => {
+            const live = w.liveActivity;
+            const liveBlock = live && ["active", "starting", "waiting_ack", "blocked"].includes(w.lifecycleState)
+              ? `<div class="mc-live-activity">
+                  <div><b>${esc(live.workerLabel || "Worker")}</b> · ${esc(live.activity || "—")}</div>
+                  ${live.detail ? `<div class="muted">${esc(live.detail)}</div>` : ""}
+                  <div class="muted">${esc([
+                    live.filesInspected != null ? `${live.filesInspected} files inspected` : null,
+                    live.percent != null ? `${live.percent}% complete` : null,
+                    live.heartbeatLabel ? `Heartbeat: ${live.heartbeatLabel}` : null,
+                    live.estimatedCheckpoint ? `Estimated checkpoint: ${live.estimatedCheckpoint}` : null,
+                  ].filter(Boolean).join(" · "))}</div>
+                </div>`
+              : "";
+            return `<div class="mc-work-row">
             <div class="mc-card-h"><b>${esc(w.title)}</b><span class="mc-pill">${esc(w.lifecycleLabel || w.statusLabel)}</span></div>
             <div class="muted">${esc(w.handledByLabel || w.lifecycleExplanation || "Director is preparing execution")}</div>
-            ${w.lifecycleExplanation && w.lifecycleExplanation !== w.handledByLabel ? `<div class="muted">${esc(w.lifecycleExplanation)}</div>` : ""}
-            ${w.progressSummary && w.progressSummary !== w.lifecycleExplanation ? `<div>${esc(w.progressSummary)}</div>` : ""}
-          </div>`).join("")
+            ${liveBlock || (w.progressSummary && w.progressSummary !== w.lifecycleExplanation ? `<div>${esc(w.progressSummary)}</div>` : "")}
+          </div>`;
+          }).join("")
         : `<div class="rempty">No work items yet</div>`}
     </section>`;
 

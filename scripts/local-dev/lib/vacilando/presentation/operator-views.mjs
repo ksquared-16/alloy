@@ -36,6 +36,11 @@ import {
   estimateNextCheckpoint,
 } from "../mission-confidence.mjs";
 import { summarizeUsage, listUsageEvents } from "../usage-ledger.mjs";
+import {
+  getActiveSessionForAssignment,
+  getExecutionSession,
+  sessionLiveVm,
+} from "../execution-session.mjs";
 
 
 const STATUS_COPY = {
@@ -118,6 +123,13 @@ export function deriveWorkerLifecycle(assignment, telemetry = null) {
   }
   if (pl === "running") {
     return { state: "active", label: "Executing", explanation: `${providerLabel} is executing this deliverable.` };
+  }
+  if (pl === "awaiting_decision") {
+    return {
+      state: "blocked",
+      label: "Waiting for approval",
+      explanation: `${providerLabel} paused — a product decision is required.`,
+    };
   }
   if (pl === "producing_evidence") {
     return { state: "active", label: "Producing evidence", explanation: "Director is collecting evidence from the worker." };
@@ -795,6 +807,10 @@ export function missionDashboardVm(missionId) {
     const handledBy = providerLabel(tel?.workerId || a.workerId, a.provider || tel?.provider);
     const lifecycle = deriveWorkerLifecycle(a, tel);
     const statusLabel = lifecycle.label;
+    const sessionId = a.dispatch?.sessionId || null;
+    const session = (sessionId && getExecutionSession(sessionId))
+      || getActiveSessionForAssignment(missionId, a.assignmentId);
+    const live = sessionLiveVm(session);
     let handledByLabel;
     if (handledBy && ["active", "starting", "waiting_ack", "retrying"].includes(lifecycle.state)) {
       handledByLabel = `Handled by ${handledBy}`;
@@ -807,6 +823,13 @@ export function missionDashboardVm(missionId) {
     } else {
       handledByLabel = lifecycle.explanation;
     }
+    const progressSummary = live?.activity
+      ? [
+          live.activity,
+          live.filesInspected ? `${live.filesInspected} files inspected` : null,
+          live.percent ? `${live.percent}% complete` : null,
+        ].filter(Boolean).join(" · ")
+      : ((a.progress || []).slice(-1)[0]?.summary || lifecycle.explanation);
     return {
       kind: "current_work",
       title: a.title,
@@ -818,8 +841,9 @@ export function missionDashboardVm(missionId) {
       lifecycleExplanation: lifecycle.explanation,
       handledBy,
       handledByLabel,
-      progressSummary: (a.progress || []).slice(-1)[0]?.summary || lifecycle.explanation,
+      progressSummary,
       healthLabel: tel ? (WORKER_HEALTH_COPY[tel.status] || tel.status) : lifecycle.label,
+      liveActivity: live,
     };
   });
 

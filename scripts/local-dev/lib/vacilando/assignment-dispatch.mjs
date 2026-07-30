@@ -18,6 +18,7 @@ import {
   validateAssignmentCompletion,
   serializeAssignmentPrompt,
   buildAssignmentPackage,
+  pauseAssignments,
 } from "./worker-assignment.mjs";
 import { buildMissionContextPackage } from "./mission-context.mjs";
 import { appendTimelineEvent } from "./timeline.mjs";
@@ -30,6 +31,9 @@ import {
   getProvider,
   PROVIDER_LIFECYCLE_LABELS,
 } from "./execution-provider.mjs";
+import { createExecutionSession } from "./execution-session.mjs";
+import { runClaudeExecutionSession } from "./connectors/claude-connector.mjs";
+import { createDecision } from "./decisions.mjs";
 
 import {
   existsSync,
@@ -148,6 +152,282 @@ export async function dispatchAssignment(missionId, assignmentId, {
   }
 }
 
+/**
+ * Claude path: Director → Execution Session → Claude connector.
+ */
+async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, nowMs } = {}) {
+  const assignment = getAssignment(missionId, assignmentId);
+  if (!assignment) return { ok: false, error: "assignment_not_found" };
+  const context = buildMissionContextPackage(missionId, { phaseId: assignment.phaseId });
+  if (!context) return { ok: false, error: "context_unavailable" };
+
+  const wid = workerIdFor("claude", slot ?? assignment.slot ?? 6);
+  const session = createExecutionSession({
+    missionId,
+    assignmentId,
+    connector: "claude",
+    workerId: wid,
+    slot: slot ?? assignment.slot ?? 6,
+    cwd: executionCwd(missionId),
+    nowMs,
+  });
+
+  setDispatchState(missionId, assignmentId, {
+    providerLifecycle: "launching",
+    currentProvider: "claude",
+    workerId: wid,
+    provider: "claude",
+    sessionId: session.sessionId,
+    attempt: 1,
+  }, { nowMs });
+
+  story(missionId, {
+    type: "assignment_started",
+    headline: `Director assigned ${assignment.title}`,
+    summary: `Director assigned ${assignment.title} to a Claude execution session`,
+    assignmentId,
+    phaseId: assignment.phaseId,
+    actor,
+    detail: { sessionId: session.sessionId },
+    nowMs,
+  });
+
+  // Acknowledge when session starts (connector accepted the session).
+  const ack = acknowledgeWorkerContext({
+    missionId,
+    assignmentId,
+    workerId: wid,
+    missionVersion: context.missionVersion,
+    missionContentHash: context.missionContentHash,
+    provider: "claude",
+    nowMs,
+  });
+  if (!ack.ok) return { ok: false, error: ack.error || ack.code || "ack_failed", sessionId: session.sessionId };
+
+  submitWorkerStartReport({
+    missionId,
+    assignmentId,
+    understoodObjective: assignment.objective,
+    intendedApproach: ["Director execution session via Claude connector"],
+    filesOrSystemsExpectedToChange: assignment.expectedDeliverables || [],
+    detectedRisks: [],
+    nowMs,
+  });
+
+  setDispatchState(missionId, assignmentId, {
+    providerLifecycle: "acknowledged",
+    sessionId: session.sessionId,
+  }, { nowMs });
+
+  story(missionId, {
+    type: "assignment_started",
+    headline: "Claude acknowledged assignment",
+    summary: `Claude execution session accepted ${assignment.title}`,
+    assignmentId,
+    phaseId: assignment.phaseId,
+    actor: wid,
+    nowMs,
+  });
+
+  updateMission(missionId, {
+    status: "running",
+    provider: "claude",
+    assignment_id: assignmentId,
+    execution_session_id: session.sessionId,
+    worker_slot: slot ?? assignment.slot ?? null,
+  }, { nowMs });
+
+  const finished = await runClaudeExecutionSession(session, {
+    cwd: executionCwd(missionId),
+    nowMs,
+    onProgress: () => {
+      setDispatchState(missionId, assignmentId, { providerLifecycle: "running" }, { nowMs });
+      recordHeartbeat({
+        workerId: wid,
+        missionId,
+        assignmentId,
+        slot: Number(slot ?? assignment.slot ?? 6) || 6,
+        progress: true,
+        provider: "claude",
+      });
+    },
+  });
+
+  if (finished?.status === "awaiting_decision") {
+    const dreq = finished.decisionRequest || {};
+    createDecision({
+      missionId,
+      title: dreq.title || "Product decision required",
+      situation: dreq.situation || "Claude paused for a product decision",
+      whyThisMatters: dreq.whyThisMatters || "Execution cannot continue safely without your call",
+      currentPlan: dreq.currentPlan || assignment.objective,
+      discovery: dreq.discovery || "Raised by Claude during execution session",
+      options: dreq.options || [
+        { optionId: "proceed", label: "Proceed as recommended", description: "Continue" },
+        { optionId: "revise", label: "Revise approach", description: "Provide new direction" },
+      ],
+      recommendation: dreq.recommendation || "proceed",
+      recommendationReason: dreq.recommendationReason || "Claude recommendation",
+      affectedAssignments: [assignmentId],
+      actor: "director",
+      pauseAssignments,
+      nowMs,
+    });
+    setDispatchState(missionId, assignmentId, {
+      providerLifecycle: "awaiting_decision",
+      lastError: null,
+      sessionId: finished.sessionId,
+    }, { nowMs });
+    story(missionId, {
+      type: "decision_requested",
+      headline: "Decision required",
+      summary: dreq.situation || "Claude paused for a product decision",
+      assignmentId,
+      phaseId: assignment.phaseId,
+      actor: "director",
+      nowMs,
+    });
+    return {
+      ok: false,
+      error: "awaiting_decision",
+      sessionId: finished.sessionId,
+      decision: finished.decisionRequest,
+    };
+  }
+
+  if (finished?.status !== "completed") {
+    setDispatchState(missionId, assignmentId, {
+      providerLifecycle: "failed",
+      lastError: finished?.recovery?.lastError || "session_failed",
+      sessionId: finished?.sessionId || session.sessionId,
+    }, { nowMs });
+    return { ok: false, error: "session_failed", sessionId: finished?.sessionId || session.sessionId };
+  }
+
+  setDispatchState(missionId, assignmentId, {
+    providerLifecycle: "producing_evidence",
+    sessionId: finished.sessionId,
+  }, { nowMs });
+
+  const pkg = finished.completionPackage || {};
+  for (const ev of finished.evidence || []) {
+    attachEvidence({
+      missionId,
+      assignmentId,
+      type: ev.type || "log",
+      title: ev.title || "Session evidence",
+      description: ev.description || "",
+      fileUri: ev.fileUri || null,
+      acceptanceCriteriaIds: assignment.acceptanceCriteriaIds || [],
+      createdBy: wid,
+      nowMs,
+    });
+  }
+
+  // Guarantee core evidence types for validation
+  for (const type of ["log", "notes", "document"]) {
+    const has = (finished.evidence || []).some((e) => e.type === type);
+    if (!has) {
+      attachEvidence({
+        missionId,
+        assignmentId,
+        type,
+        title: `${type} — ${assignment.title}`,
+        description: pkg.summary || "Produced by Claude execution session",
+        fileUri: (assignment.expectedDeliverables || [])[0] || null,
+        acceptanceCriteriaIds: assignment.acceptanceCriteriaIds || [],
+        createdBy: wid,
+        nowMs,
+      });
+    }
+  }
+
+  const completion = submitWorkerCompletion({
+    missionId,
+    assignmentId,
+    status: "complete",
+    summary: pkg.summary || `Claude completed ${assignment.title}`,
+    changesMade: pkg.filesModified || assignment.expectedDeliverables || [],
+    acceptanceCriteriaResults: (assignment.acceptanceCriteriaIds || []).map((id) => ({
+      id,
+      status: "met",
+    })),
+    tests: pkg.tests?.ran ? [pkg.tests] : [],
+    residualRisks: pkg.risks || [],
+    followUpItems: pkg.followUp || [],
+    confidence: "medium",
+    recommendation: pkg.recommendation || "Accept deliverable",
+    nowMs,
+  });
+
+  if (!completion.ok && completion.error === "missing_evidence") {
+    for (const missing of completion.missing || []) {
+      attachEvidence({
+        missionId,
+        assignmentId,
+        type: missing,
+        title: `${missing} — ${assignment.title}`,
+        description: pkg.summary || "Director recorded from Claude session",
+        createdBy: actor,
+        nowMs,
+      });
+    }
+    submitWorkerCompletion({
+      missionId,
+      assignmentId,
+      status: "complete",
+      summary: pkg.summary || `Claude completed ${assignment.title}`,
+      changesMade: pkg.filesModified || assignment.expectedDeliverables || [],
+      acceptanceCriteriaResults: (assignment.acceptanceCriteriaIds || []).map((id) => ({ id, status: "met" })),
+      confidence: "medium",
+      recommendation: "Accept deliverable",
+      nowMs,
+    });
+  }
+
+  const validated = validateAssignmentCompletion(missionId, assignmentId, { actor, nowMs });
+  setDispatchState(missionId, assignmentId, {
+    providerLifecycle: validated.validation?.passed ? "completed" : "failed",
+    sessionId: finished.sessionId,
+    completedAt: new Date(nowMs ?? Date.now()).toISOString(),
+  }, { nowMs });
+
+  if (validated.validation?.passed) {
+    story(missionId, {
+      type: "assignment_completed",
+      headline: "Deliverable accepted",
+      summary: `Director accepted ${assignment.title}`,
+      assignmentId,
+      phaseId: assignment.phaseId,
+      actor,
+      nowMs,
+    });
+    const next = listAssignments(missionId).find((a) => a.status === "ready");
+    if (next) {
+      story(missionId, {
+        type: "phase_started",
+        headline: `Director dispatched ${next.title}`,
+        summary: `Director dispatching next workstream: ${next.title}`,
+        assignmentId: next.assignmentId,
+        phaseId: next.phaseId,
+        actor,
+        nowMs,
+      });
+      await dispatchAssignment(missionId, next.assignmentId, { slot, actor, nowMs });
+    }
+    return {
+      ok: true,
+      assignmentId,
+      provider: "claude",
+      workerId: wid,
+      sessionId: finished.sessionId,
+      lifecycle: "completed",
+    };
+  }
+
+  return { ok: false, error: "validation_failed", sessionId: finished.sessionId };
+}
+
 async function dispatchAssignmentInner(missionId, assignmentId, { slot, actor, nowMs }) {
   let assignment = getAssignment(missionId, assignmentId);
   if (!assignment) return { ok: false, error: "assignment_not_found" };
@@ -173,6 +453,14 @@ async function dispatchAssignmentInner(missionId, assignmentId, { slot, actor, n
   });
 
   const preferred = preferredProvider(missionId);
+  // Real Claude path uses Execution Sessions (unless forced to mock).
+  if (preferred === "claude" || (!process.env.VACILANDO_EXECUTION_PROVIDER && preferred !== "mock")) {
+    const forced = process.env.VACILANDO_EXECUTION_PROVIDER?.trim();
+    if (forced !== "mock" && forced !== "cursor") {
+      return dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, nowMs });
+    }
+  }
+
   const exclude = [];
   let lastError = null;
 
@@ -180,6 +468,9 @@ async function dispatchAssignmentInner(missionId, assignmentId, { slot, actor, n
     const order = resolveProviderOrder({ preferred, exclude });
     const providerId = order[0];
     if (!providerId) break;
+    if (providerId === "claude" && process.env.VACILANDO_EXECUTION_PROVIDER !== "mock") {
+      return dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, nowMs });
+    }
     const provider = getProvider(providerId);
     if (!provider) {
       exclude.push(providerId);
