@@ -568,6 +568,25 @@ test.describe("Configuration Discovery — proving journey", () => {
                             iteration_entity_type: "person",
                         },
                     },
+                    // SECOND guardian — deliberately the SAME canonical Person who is also the
+                    // authorized pickup below. This is the multi-role proof: one identity holding
+                    // two operational roles that persist to two DIFFERENT destinations
+                    // (guardian -> customer_member_contacts, pickup -> person_child_relationships).
+                    // It also exercises "multiple guardians are retained".
+                    {
+                        instance_key: "cdv1-guardian-2",
+                        values: {
+                            [nestedId(parents, "full_name")!]: "Sam CDV1MultiRole",
+                            [nestedId(parents, "email")!]: "sam.multirole@cdv1.invalid",
+                            [nestedId(parents, "phone")!]: "5550103",
+                        },
+                        collection: {
+                            provider_ref: "person.contact_role.parents",
+                            origin: "existing",
+                            item_id: FX.multiRolePerson,
+                            iteration_entity_type: "person",
+                        },
+                    },
                 ],
                 // EMERGENCY CONTACT — respondent-added, so Processing must CREATE the Person.
                 [emergency.id]: [
@@ -619,14 +638,23 @@ test.describe("Configuration Discovery — proving journey", () => {
         // The submission must PRESERVE collection metadata rather than flattening to field pairs.
         const savedGroups = row.payload?.groups ?? {};
         const allRows: Json[] = Object.values(savedGroups).flat() as Json[];
-        expect(allRows.length, "submission lost its collection rows").toBe(3);
+        expect(allRows.length, "submission lost its collection rows").toBe(4);
         for (const r of allRows) {
             expect(r.collection?.provider_ref, "row lost provider_ref").toBeTruthy();
             expect(r.instance_key, "row lost instance identity").toBeTruthy();
             expect(r.collection?.origin, "row lost origin").toBeTruthy();
             expect(r.collection?.iteration_entity_type).toBe("person");
         }
-        const byRef = Object.fromEntries(allRows.map((r) => [r.collection.provider_ref, r]));
+        // Two guardian rows share a provider_ref, so keep the FIRST (the primary guardian) rather
+        // than letting the last one win.
+        const byRef: Record<string, Json> = {};
+        for (const r of allRows) if (!byRef[r.collection.provider_ref]) byRef[r.collection.provider_ref] = r;
+        const guardianRows = allRows.filter((r) => r.collection.provider_ref === "person.contact_role.parents");
+        expect(guardianRows.length, "both guardian instances must be preserved").toBe(2);
+        expect(
+            guardianRows.map((r) => r.collection.item_id).sort(),
+            "the multi-role person must appear as a guardian alongside the primary",
+        ).toEqual([FX.guardianPerson, FX.multiRolePerson].sort());
         expect(byRef["person.contact_role.parents"].collection.origin).toBe("existing");
         expect(byRef["person.contact_role.parents"].collection.item_id).toBe(FX.guardianPerson);
         expect(byRef["person.contact_role.emergency_contacts"].collection.origin).toBe("respondent_added");
@@ -638,7 +666,7 @@ test.describe("Configuration Discovery — proving journey", () => {
         // ordinary question/value pairs.
         const envelope = row.payload?.meta?.collection_submission_envelope ?? {};
         const envelopeRows: Json[] = Object.values(envelope).flat() as Json[];
-        expect(envelopeRows.length, "no collection envelope stamped on the submission").toBe(3);
+        expect(envelopeRows.length, "no collection envelope stamped on the submission").toBe(4);
         for (const r of envelopeRows) {
             expect(r.provider_ref).toBeTruthy();
             expect(r.instance_key).toBeTruthy();
@@ -682,10 +710,12 @@ test.describe("Configuration Discovery — proving journey", () => {
         );
 
         expect(groups.length, "Processing received no collection evidence").toBe(3);
-        expect(instances.length, "Processing received no collection instances").toBe(3);
+        expect(instances.length, "Processing received no collection instances").toBe(4);
 
         // ALL THREE collections must survive — a guardian-only case would lose the others.
-        const byRef = Object.fromEntries(instances.map((i) => [i.collection_provider_ref, i]));
+        // Two guardian instances now share a provider_ref; keep the first for per-ref assertions.
+        const byRef: Record<string, Json> = {};
+        for (const i of instances) if (!byRef[i.collection_provider_ref]) byRef[i.collection_provider_ref] = i;
         for (const ref of [
             "person.contact_role.parents",
             "person.contact_role.emergency_contacts",
@@ -771,7 +801,7 @@ test.describe("Configuration Discovery — proving journey", () => {
         proposals = ((caseRead.data?.evidence ?? []) as Json[])
             .flatMap((e: Json) => e?.collectionEvidence?.groups ?? [])
             .flatMap((g: Json) => g?.instances ?? []);
-        expect(proposals.length).toBe(3);
+        expect(proposals.length).toBe(4);
 
         for (const p of proposals) {
             const preview = await okJson(
@@ -855,6 +885,57 @@ test.describe("Configuration Discovery — proving journey", () => {
             // The anchor must be exactly the child we named — never expanded to the sibling.
             expect(r.body.affected_member_ids, `${ref} wrote to the wrong members`).toEqual([resolvedChild ?? FX.childA]);
         }
+    });
+
+    test("12+13+14. retry is idempotent, no duplicates, sibling untouched", async () => {
+        test.skip(!ON_CERT_STACK, "Runs only against the local certification stack");
+        const req = page.request;
+
+        // RETRY every commit with identical inputs. Same proposal + command + role + scope + anchor +
+        // resolution revision => same idempotency key => already_applied, never a second write.
+        for (const p of proposals) {
+            const res = await req.post(
+                `/api/admin/processing/cases/${submissionCaseId}/related-record-proposals/${p.proposal_id}/commit`,
+                {
+                    data: {
+                        decision: { proposal_id: p.proposal_id, instance_decision: "approve", field_decisions: [] },
+                        anchor_customer_member_id: resolvedChild ?? FX.childA,
+                        scope: "this_child",
+                        expected_resolution_revision: reviewedRevision,
+                    },
+                    timeout: 180_000,
+                },
+            );
+            const body = await res.json();
+            const outcome = body.data?.outcome ?? body.outcome;
+            console.log(`JOURNEY RETRY ${p.collection_provider_ref} http=${res.status()} outcome=${outcome}`);
+            expect(res.status()).toBe(200);
+            expect(outcome, `${p.collection_provider_ref} retry re-executed instead of no-op`).toBe("already_applied");
+        }
+
+        // COMMITTING THE SAME ROLE FOR THE SIBLING is a DISTINCT scoped assignment, not a retry —
+        // the anchor is part of the commit identity. Guardian is used because its own definition
+        // declares this_child scope.
+        const pickup = proposals.find((p) => p.collection_provider_ref === "person.contact_role.authorized_pickups")!;
+        const sibRes = await req.post(
+            `/api/admin/processing/cases/${submissionCaseId}/related-record-proposals/${pickup.proposal_id}/commit`,
+            {
+                data: {
+                    decision: { proposal_id: pickup.proposal_id, instance_decision: "approve", field_decisions: [] },
+                    anchor_customer_member_id: FX.siblingB,
+                    scope: "this_child",
+                    expected_resolution_revision: reviewedRevision,
+                },
+                timeout: 180_000,
+            },
+        );
+        const sibBody = await sibRes.json();
+        const sibOutcome = sibBody.data?.outcome ?? sibBody.outcome;
+        console.log(
+            `JOURNEY SIBLING explicit-commit http=${sibRes.status()} outcome=${sibOutcome} members=${JSON.stringify(sibBody.data?.affected_member_ids)}`,
+        );
+        expect(sibOutcome, "a different child must be a distinct commit, not a replayed retry").toBe("applied");
+        expect(sibBody.data?.affected_member_ids).toEqual([FX.siblingB]);
     });
 });
 
