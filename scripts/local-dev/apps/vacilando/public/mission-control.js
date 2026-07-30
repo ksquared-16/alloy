@@ -631,19 +631,22 @@ We'll capture the context automatically.</p>
       return shell("Decisions", { missionId: mid, active: "decisions" })
         + `<div class="empty"><span class="spin"></span> Loading decisions…</div></div>`;
     }
-    const rows = (V2.state.decisionsVm.decisions || []).map((d) => `<article class="mc-card" data-nav="decisions/${esc(d.decisionId)}">
-      <div class="mc-card-h"><b>${esc(d.question || d.title)}</b><span class="mc-pill">${esc(d.urgency)}</span></div>
-      <div class="muted">${esc(d.missionTitle)} · ${esc(d.requestedLabel)} · ${esc(d.statusLabel)}</div>
-      <p>${esc((d.situation || "").slice(0, 220))}${(d.situation || "").length > 220 ? "…" : ""}</p>
-      <p><b>Recommendation:</b> ${esc(d.recommendation)}</p>
-      ${d.pausedWork?.length ? `<p class="warn">Paused: ${esc(d.pausedWork.map((w) => w.title).join(", "))}</p>` : ""}
+    const rows = (V2.state.decisionsVm.decisions || []).map((d) => {
+      const stop = d.briefing?.stop_reason || d.question || d.title;
+      const rec = d.briefing?.recommendation_summary || d.recommendation;
+      return `<article class="mc-card" data-nav="decisions/${esc(d.decisionId)}">
+      <div class="mc-card-h"><b>${esc(stop)}</b><span class="mc-pill">${esc(d.statusLabel)}</span></div>
+      <div class="muted">${esc(d.missionTitle)} · ${esc(d.requestedLabel)}</div>
+      <p>${esc((d.situation || "").slice(0, 200))}${(d.situation || "").length > 200 ? "…" : ""}</p>
+      <p><b>Director recommends:</b> ${esc(rec)}</p>
       ${actionBtn(d.primaryAction)}
-    </article>`).join("") || `<div class="rempty">No decisions here.</div>`;
+    </article>`;
+    }).join("") || `<div class="rempty">No decisions here.</div>`;
 
     return shell("Decisions", {
       missionId: mid,
       active: mid ? "decisions" : null,
-      lead: mid ? "Decisions for this mission." : "Open decisions across missions.",
+      lead: mid ? "Director briefings that need your call." : "Open decisions across missions.",
     }) + `<div class="mc-list">${rows}</div></div>`;
   };
 
@@ -657,31 +660,108 @@ We'll capture the context automatically.</p>
     }
     const d = V2.state.decisionDetail.decision;
     const s = d.sections || {};
+    const b = d.briefing || {};
     const open = d.status === "open";
-    const actions = open ? `<div class="mc-actions mobile-decision">
-      ${(d.actions || []).map((a) => {
-        if (a.id === "ask") return `<button class="btn ghost" data-mc-ask="${esc(d.decisionId)}">${esc(a.label)}</button>`;
-        if (a.id === "reject") return `<button class="btn ghost" data-mc-reject="${esc(d.decisionId)}">${esc(a.label)}</button>`;
-        return `<button class="btn ${a.id === "approve" ? "" : "ghost"}" data-mc-answer="${esc(d.decisionId)}" data-option="${esc(a.optionId)}" data-mission="${esc(d.missionId)}">${esc(a.label)}</button>`;
-      }).join("")}
+    const why = s.whyStopped || b.why_stopped || {};
+    const whyBullets = (why.bullets || []).map((x) => `<li>${esc(x)}</li>`).join("");
+    const whyBlock = `<p>${esc(why.lead || s.whyItMatters || "")}</p>
+      ${whyBullets ? `<ul>${whyBullets}</ul>` : ""}
+      ${why.close ? `<p>${esc(why.close)}</p>` : ""}`;
+
+    const recCard = s.recommendedCard || b.recommended_card || {};
+    const recWhy = (s.recommendationWhy || b.recommendation_why || []).map((x) => `<li>${esc(x)}</li>`).join("");
+    const impact = (s.impact || recCard.impact || d.impactLines || []).map((x) => `<li>${esc(x)}</li>`).join("");
+
+    const altCards = (s.alternatives || b.alternative_cards || []).map((o) => {
+      const id = o.id || o.optionId;
+      const title = o.title || o.label;
+      return `<article class="mc-opt-card">
+        <div class="mc-opt-card-h"><b>${esc(title)}</b></div>
+        <p>${esc(o.description || "")}</p>
+        <p class="muted"><b>When to choose:</b> ${esc(o.whenToChoose || "")}</p>
+        ${open && id ? `<button class="btn ghost" data-mc-answer="${esc(d.decisionId)}" data-option="${esc(id)}" data-mission="${esc(d.missionId)}">Choose this</button>` : ""}
+      </article>`;
+    }).join("");
+
+    const approveSteps = (s.afterApprove || b.approval_steps || []).map((x) => `<li>${esc(x)}</li>`).join("");
+    const rejectSteps = (s.afterReject || b.rejection_steps || []).map((x) => `<li>${esc(x)}</li>`).join("");
+
+    const tech = d.technicalDetails || b.technical || {};
+    const techJson = esc(JSON.stringify(tech, null, 2));
+
+    const primaryActions = open ? `<div class="mc-actions mc-decision-actions mobile-decision">
+      <button class="btn" data-mc-answer="${esc(d.decisionId)}" data-option="${esc(s.recommendedCard?.id || b.recommendation_id || d.recommendationId)}" data-mission="${esc(d.missionId)}">Approve recommendation</button>
+      <button class="btn ghost" data-mc-ask="${esc(d.decisionId)}">Ask Director</button>
+      <button class="btn ghost" data-mc-reject="${esc(d.decisionId)}">Reject and provide direction</button>
     </div>` : `<div class="mc-pill">${esc(d.statusLabel)}</div>`;
 
-    return shell(d.title, {
+    return shell("Director needs your decision", {
       missionId: d.missionId,
       active: "decisions",
-      lead: `${esc(d.missionTitle)} · ${esc(d.urgency)} · ${esc(d.requestedLabel)}`,
-    }) + `<article class="mc-decision mobile-decision">
-      <section><h3>1. What happened?</h3><p>${esc(s.whatHappened || d.situation)}</p></section>
-      <section><h3>2. Why does it matter?</h3><p>${esc(s.whyItMatters || d.whyItMatters)}</p></section>
-      <section><h3>3. What does Director recommend?</h3><p>${esc(s.recommendation || d.recommendation)}</p></section>
-      <section><h3>4. What is the impact?</h3><ul>${(s.impact || d.impactLines || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></section>
-      <section><h3>5. What are the alternatives?</h3><ul>${(s.alternatives || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></section>
-      <section><h3>6. What evidence supports this?</h3><ul>${(Array.isArray(s.evidence) ? s.evidence : []).map((x) => `<li>${esc(typeof x === "string" ? x : x.title || x)}</li>`).join("")}</ul></section>
-      <section><h3>7. What work is paused?</h3>
-        ${(d.pausedWork || []).map((w) => `<div class="mc-work"><b>${esc(w.title)}</b> · ${esc(w.statusLabel)}</div>`).join("") || `<p class="muted">No work paused</p>`}
+      lead: `${esc(d.missionTitle)} · ${esc(d.requestedLabel)}`,
+    }) + `<article class="mc-decision mc-briefing mobile-decision">
+      <header class="mc-briefing-hero">
+        <p class="mc-briefing-kicker">Director needs your decision</p>
+        <h2 class="mc-briefing-stop">${esc(s.stopReason || b.stop_reason || d.title)}</h2>
+      </header>
+
+      <section class="mc-briefing-sec">
+        <h3>What happened?</h3>
+        <p>${esc(s.whatHappened || d.situation)}</p>
       </section>
-      <section><h3>8. What happens after I answer?</h3><p>${esc(s.afterAnswer || d.afterAnswer)}</p></section>
-      ${actions}
+
+      <section class="mc-briefing-sec">
+        <h3>Why did I stop?</h3>
+        ${whyBlock}
+      </section>
+
+      <section class="mc-briefing-sec mc-briefing-rec">
+        <h3>Director’s recommendation</h3>
+        <div class="mc-rec-card">
+          <div class="mc-rec-badge">Recommended</div>
+          <p class="mc-rec-summary">${esc(s.recommendation || b.recommendation_summary || d.recommendation)}</p>
+          <p class="mc-rec-path muted">${esc(recCard.title || b.recommendation_label || "")}</p>
+          <h4>Why?</h4>
+          <ul>${recWhy || `<li>${esc(d.recommendationReason || "Best path given the Mission Brief and accepted work.")}</li>`}</ul>
+          <h4>Estimated impact</h4>
+          <ul>${impact || "<li>Review carefully before continuing</li>"}</ul>
+          ${open ? `<button class="btn" data-mc-answer="${esc(d.decisionId)}" data-option="${esc(recCard.id || b.recommendation_id || d.recommendationId)}" data-mission="${esc(d.missionId)}">Continue with recommendation</button>` : ""}
+        </div>
+      </section>
+
+      <section class="mc-briefing-sec">
+        <h3>Other options</h3>
+        <div class="mc-opt-grid">${altCards || `<p class="muted">No alternatives were offered.</p>`}</div>
+      </section>
+
+      <section class="mc-briefing-sec">
+        <h3>What happens after I answer?</h3>
+        <div class="mc-after-grid">
+          <div class="mc-after-card">
+            <h4>If you approve</h4>
+            <p>${esc(s.approvalResult || b.approval_result || d.afterAnswer || "")}</p>
+            ${approveSteps ? `<p class="muted">Director will:</p><ul>${approveSteps}</ul>` : ""}
+          </div>
+          <div class="mc-after-card">
+            <h4>If you reject</h4>
+            <p>${esc(s.rejectionResult || b.rejection_result || "Director keeps work paused and waits for new direction.")}</p>
+            ${rejectSteps ? `<ul>${rejectSteps}</ul>` : ""}
+          </div>
+        </div>
+      </section>
+
+      ${d.pausedWork?.length ? `<section class="mc-briefing-sec">
+        <h3>Work waiting on this</h3>
+        ${(d.pausedWork || []).map((w) => `<div class="mc-work"><b>${esc(w.title)}</b> · ${esc(w.statusLabel)}</div>`).join("")}
+      </section>` : ""}
+
+      ${primaryActions}
+
+      <details class="mc-diag mc-tech-details">
+        <summary>Technical details</summary>
+        <p class="muted">Worker reasoning, session metadata, and raw decision fields — not required to decide.</p>
+        <pre class="mono">${techJson}</pre>
+      </details>
     </article></div>`;
   };
 

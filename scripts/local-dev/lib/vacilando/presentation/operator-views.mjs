@@ -41,6 +41,11 @@ import {
   getExecutionSession,
   sessionLiveVm,
 } from "../execution-session.mjs";
+import {
+  buildDirectorDecisionSummary,
+  decisionTimelineCopy,
+  resolveRecommendedOption,
+} from "./decision-summary.mjs";
 
 
 const STATUS_COPY = {
@@ -337,27 +342,46 @@ export function timelineEventVm(ev) {
   const type = ev.type || "event";
   let headline = ev.headline || TIMELINE_HEADLINES[type] || null;
   const summary = ev.summary || "";
-  // Rewrite legacy technical summaries into operator language.
-  if (!ev.headline) {
+  let explanation = (summary && summary !== headline)
+    ? summary
+    : (ev.detail?.message || ev.detail?.question || "");
+
+  // Decision events → executive briefing language (never "Decision created/resolved").
+  if (type === "decision_requested" || type === "decision_answered") {
+    const decisionId = ev.decision_id || ev.decisionId || ev.detail?.decisionId || null;
+    const missionId = ev.mission_id || ev.missionId || null;
+    const decision = decisionId
+      ? (getDecision(missionId, decisionId) || listDecisions(null).find((d) => d.decisionId === decisionId))
+      : null;
+    const copy = decisionTimelineCopy(decision, {
+      answered: type === "decision_answered",
+      chosenOptionId: ev.detail?.chosenOptionId || decision?.chosen_option_id || null,
+    });
+    headline = copy.headline;
+    explanation = copy.explanation;
+  } else if (!ev.headline) {
+    // Rewrite legacy technical summaries into operator language.
     if (type === "mission_created" || /Mission Brief v\d+ ingested/i.test(summary)) {
       headline = "Director reviewed your Mission Brief";
     } else if (type === "mission_started" || /Kickoff approved/i.test(summary)) {
       headline = "You approved execution";
     } else if (type === "phase_started" || /^Phase started/i.test(summary)) {
-      const m = summary.match(/Phase started — (.+)/i);
-      headline = m ? `Director assigned the first workstream` : TIMELINE_HEADLINES.phase_started;
+      headline = TIMELINE_HEADLINES.phase_started;
     } else if (!headline) {
       headline = TIMELINE_HEADLINES[type] || summary || type.replace(/_/g, " ");
     }
   }
+
+  // Strip worker-escalation noise from decision-adjacent headlines.
+  if (/^Claude requires|^Raised by|^Execution session|^Worker\b/i.test(headline || "")) {
+    headline = TIMELINE_HEADLINES[type] || "Director needs a decision from you";
+  }
+
   const actorMap = { operator: "You", director: "Director", system: "Vacilando" };
   const actor = actorMap[ev.actor] || (ev.actor?.startsWith("claude") || ev.actor?.startsWith("cursor")
     ? `Worker (${ev.actor})`
     : ev.actor || "System");
   const technical = ev.detail?.technical || null;
-  const explanation = (summary && summary !== headline)
-    ? summary
-    : (ev.detail?.message || ev.detail?.question || "");
   return {
     kind: "timeline_event",
     eventId: ev.event_id || ev.eventId,
@@ -376,37 +400,33 @@ export function timelineEventVm(ev) {
   };
 }
 
-/** Decision card / detail */
+/** Decision card / detail — executive briefing over worker reasoning. */
 export function decisionCardVm(decision, { missionTitle = null } = {}) {
   const brief = getBrief(decision.missionId);
   const affected = (decision.affectedAssignments || [])
     .map((id) => getAssignment(decision.missionId, id))
     .filter(Boolean);
-  const recId = decision.recommendation;
-  const recLabel = optionLabel(decision, recId);
-  const impact = decision.impact || {};
-  const impactBits = [];
-  if (impact.data) impactBits.push(`Data: ${impact.data}`);
-  if (impact.schedule) impactBits.push(`Schedule: ${impact.schedule}`);
-  if (impact.security) impactBits.push(`Security: ${impact.security}`);
-  if (impact.product) impactBits.push(`Product: ${impact.product}`);
+  const briefing = buildDirectorDecisionSummary(decision);
+  const recommended = resolveRecommendedOption(decision);
+  const recId = briefing.recommendation_id || recommended?.optionId || decision.recommendation;
+  const recLabel = briefing.recommendation_label || optionLabel(decision, recId);
 
   return {
     kind: "decision_card",
     decisionId: decision.decisionId,
     missionId: decision.missionId,
     missionTitle: missionTitle || brief?.title || decision.missionId,
-    urgency: impact.security || impact.data === "possible" || impact.data === "high" ? "High impact" : "Needs your call",
-    title: decision.title,
-    question: decision.title,
-    situation: decision.situation,
-    whyItMatters: decision.whyThisMatters,
+    urgency: "Needs your decision",
+    title: briefing.stop_reason,
+    question: briefing.stop_reason,
+    situation: briefing.situation_summary,
+    whyItMatters: briefing.why_stopped?.lead || decision.whyThisMatters,
     currentPlan: decision.currentPlan,
     discovery: decision.discovery,
-    recommendation: recLabel,
+    recommendation: briefing.recommendation_summary,
     recommendationId: recId,
-    recommendationReason: decision.recommendationReason,
-    impactLines: impactBits.length ? impactBits : ["Impact details were not provided — review carefully"],
+    recommendationReason: (briefing.recommendation_why || []).join("; "),
+    impactLines: briefing.impact_summary,
     options: (decision.options || []).map((o) => ({
       id: o.optionId || o.id,
       label: o.label,
@@ -426,32 +446,47 @@ export function decisionCardVm(decision, { missionTitle = null } = {}) {
     primaryAction: decision.status === "open"
       ? { label: "Review and decide", href: `decisions/${decision.decisionId}` }
       : null,
-    afterAnswer: "Director will record your choice, refresh affected worker context if needed, and resume paused work.",
+    afterAnswer: briefing.approval_result,
+    briefing,
   };
 }
 
 export function decisionDetailVm(missionId, decisionId) {
   const d = getDecision(missionId, decisionId) || listDecisions(null, { status: null }).find((x) => x.decisionId === decisionId);
   if (!d) return null;
+  const card = decisionCardVm(d);
+  const b = card.briefing;
   return {
+    ...card,
     kind: "decision_detail",
-    ...decisionCardVm(d),
     sections: {
-      whatHappened: d.discovery || d.situation,
-      whyItMatters: d.whyThisMatters,
-      recommendation: `${optionLabel(d, d.recommendation)}${d.recommendationReason ? ` — ${d.recommendationReason}` : ""}`,
-      impact: decisionCardVm(d).impactLines,
-      alternatives: (d.options || []).map((o) => `${o.label}: ${o.description || ""}`.trim()),
-      evidence: d.evidence?.length ? d.evidence : ["No attached evidence previews yet"],
-      pausedWork: decisionCardVm(d).pausedWork,
-      afterAnswer: decisionCardVm(d).afterAnswer,
+      stopReason: b.stop_reason,
+      whatHappened: b.situation_summary,
+      whyStopped: b.why_stopped,
+      recommendation: b.recommendation_summary,
+      recommendationWhy: b.recommendation_why,
+      recommendedCard: b.recommended_card,
+      alternatives: b.alternative_cards,
+      impact: b.impact_summary,
+      afterApprove: b.approval_steps,
+      afterReject: b.rejection_steps,
+      approvalResult: b.approval_result,
+      rejectionResult: b.rejection_result,
+      pausedWork: card.pausedWork,
     },
+    technicalDetails: b.technical,
     actions: [
-      { id: "approve", label: "Approve recommendation", optionId: d.recommendation },
-      ...((d.options || []).filter((o) => (o.optionId || o.id) !== d.recommendation).map((o) => ({
+      {
+        id: "approve",
+        label: "Recommended — continue",
+        optionId: b.recommendation_id,
+        primary: true,
+      },
+      ...((b.alternative_cards || []).map((o) => ({
         id: "alternative",
-        label: `Choose: ${o.label}`,
-        optionId: o.optionId || o.id,
+        label: o.title,
+        optionId: o.id,
+        primary: false,
       }))),
       { id: "ask", label: "Ask Director", optionId: null },
       { id: "reject", label: "Reject and provide direction", optionId: null },
