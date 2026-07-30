@@ -11,6 +11,10 @@
  */
 
 import type { OpportunityStageWorkSlice } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice";
+import {
+    childParticipationIdentityFromWire,
+    childParticipationIdentityKey,
+} from "@/lib/lifecycle/childParticipationIdentity";
 
 const CACHE_TTL_MS = 90_000;
 
@@ -38,18 +42,36 @@ function notify(): void {
     listeners.forEach((l) => l());
 }
 
-/** Stable per-record key: org + opportunity + department + stage (+ child subject when present). */
+/**
+ * Stable per-record key: org + opportunity + department + stage + the child participation identity.
+ *
+ * The child component is the CANONICAL identity key — positional, one slot per id. It used to be
+ * `customerMemberId || ocmId || processInstanceId`, which collapsed three different claims into one
+ * opaque string and broke the cache's only real promise. Two ways:
+ *
+ *  - `{customerMemberId: "cm-1"}` and `{customerMemberId: "cm-1", processInstanceId: "pi-9"}` produced
+ *    the SAME key while sending DIFFERENT query strings, so one request's slice was served to the
+ *    other — a stage-work answer about a participation the caller never asked about.
+ *  - `{ocmId: "x"}` and `{processInstanceId: "x"}` also produced the same key, and that is reachable
+ *    in real data: a `process_instances.id` was carried under the OCM name through the migration
+ *    (`docs/runtime/GRAIN-AUTHORITY-MAP.md` §4).
+ *
+ * The key must be injective on exactly what the fetch varies by, or it is not a cache — it is a
+ * substitution.
+ */
 export function opportunityStageWorkCacheKey(params: OpportunityStageWorkParams): string | null {
     const opp = params.opportunityId?.trim();
     const stage = params.stageKey?.trim();
     if (!opp || !stage) return null;
     const org = params.orgScope?.trim() || "_";
     const dept = params.departmentId?.trim() || "_";
-    const child =
-        params.customerMemberId?.trim()
-        || params.opportunityCustomerMemberId?.trim()
-        || params.processInstanceId?.trim()
-        || "_";
+    const child = childParticipationIdentityKey(
+        childParticipationIdentityFromWire({
+            customer_member_id: params.customerMemberId,
+            opportunity_customer_member_id: params.opportunityCustomerMemberId,
+            process_instance_id: params.processInstanceId,
+        }),
+    );
     return `${org}:opp:${opp}:dept:${dept}:stage:${stage}:child:${child}`;
 }
 

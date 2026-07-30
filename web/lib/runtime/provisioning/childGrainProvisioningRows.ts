@@ -28,25 +28,20 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ChildParticipationIdentity } from "@/lib/lifecycle/childParticipationIdentity";
 import {
     queryEnrollmentProcessInstanceParticipationRows,
     queryEnrollmentProcessInstanceTrackRows,
 } from "@/lib/queues/childGrainProcessInstanceQueue";
 
 /**
- * The four identities a child row genuinely has. Keeping them apart is the point: they are different
- * things that were being carried in one ambiguous field.
+ * The four identities a child row genuinely has — the CANONICAL tuple, not a second copy of it.
+ * `ChildParticipationIdentity` is the one definition (`lib/lifecycle/childParticipationIdentity.ts`);
+ * a row narrows it only by guaranteeing the subject, since a row with no child is dropped rather than
+ * carried. Keeping the four apart is the point: they are different things that were being carried in
+ * one ambiguous field.
  */
-export type ChildRowIdentity = {
-    /** The durable CHILD — `customer_members.id`. Stable across leads, across OCM→PI, across materialization. */
-    subjectId: string;
-    /** This child's journey through THIS lead — `process_instances.id`. */
-    participationId: string | null;
-    /** The family case the journey hangs off — `opportunities.id`. */
-    contextId: string | null;
-    /** Only when a genuine legacy OCM row is behind this — never a process-instance id wearing its name. */
-    legacyOcmId: string | null;
-};
+export type ChildRowIdentity = ChildParticipationIdentity & { subjectId: string };
 
 export type ChildProvisioningRow = ChildRowIdentity & {
     /** Effective stage: the child's own stage, else the family's (resolved upstream by the provider). */

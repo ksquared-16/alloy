@@ -12,6 +12,11 @@ import {
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
+import {
+    childParticipationIdentityFromWire,
+    namesAChild,
+    type ChildParticipationIdentity,
+} from "@/lib/lifecycle/childParticipationIdentity";
 import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import { resolvePrimaryWorkIntentForStage } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
@@ -156,64 +161,43 @@ export function taskMatchesStageWorkTemplate(
 function buildExecutionSubject(
     opportunityId: string,
     journeySegment: "family" | "child",
-    childIdentity?: {
-        customer_member_id?: string | null;
-        opportunity_customer_member_id?: string | null;
-        process_instance_id?: string | null;
-    } | null,
+    childIdentity: ChildParticipationIdentity | null,
 ): StageOutcomeExecutionSubject {
     const subject: StageOutcomeExecutionSubject = {
         journey_segment: journeySegment,
         opportunity_id: opportunityId,
     };
-    if (journeySegment !== "child") return subject;
+    if (journeySegment !== "child" || !childIdentity) return subject;
 
-    const customerMemberId = trimOrNull(childIdentity?.customer_member_id);
-    const ocmId = trimOrNull(childIdentity?.opportunity_customer_member_id);
-    const processInstanceId = trimOrNull(childIdentity?.process_instance_id);
-    if (customerMemberId) subject.customer_member_id = customerMemberId;
-    if (ocmId) subject.opportunity_customer_member_id = ocmId;
-    if (processInstanceId) subject.process_instance_id = processInstanceId;
+    if (childIdentity.subjectId) subject.customer_member_id = childIdentity.subjectId;
+    if (childIdentity.legacyOcmId) subject.opportunity_customer_member_id = childIdentity.legacyOcmId;
+    if (childIdentity.participationId) subject.process_instance_id = childIdentity.participationId;
     return subject;
 }
 
-/** Prefer explicit child identity; else stamp from open BP task metadata (never invent family grain). */
-function resolveChildIdentityForProjection(params: {
-    explicit?: {
-        customer_member_id?: string | null;
-        opportunity_customer_member_id?: string | null;
-        process_instance_id?: string | null;
-    } | null;
-    openRows: TaskDbRow[];
-}): {
+/**
+ * The child this projection is about — EXPLICIT OR ABSENT.
+ *
+ * This used to fall back to scraping: if the caller named no child, it walked the family's open tasks
+ * and took the first one carrying any child id. That is wrong in the ordinary case, not the exotic
+ * one. `attachStageWorkRuntimeToQueueRows` groups tasks BY OPPORTUNITY and passes no explicit
+ * identity, so on a family with siblings the scrape picked an arbitrary child and stamped it as the
+ * execution subject for every work item in the projection — including items matched to a task
+ * belonging to a DIFFERENT sibling. The operator then recorded an outcome against a child they never
+ * chose, and every downstream guard passed, because the guards ask "is a child named?" and one was.
+ *
+ * Which sibling a family-grain surface means is a question that surface cannot answer. The configured
+ * mechanism for answering it is the stage's `subject_resolution_strategy` (single_anchor /
+ * ask_operator / …), which the scrape bypassed entirely. So the honest projection carries no child,
+ * says so via `subject_unresolved`, and the outcome path refuses — which it already does.
+ */
+function explicitChildIdentityForProjection(explicit: {
     customer_member_id?: string | null;
     opportunity_customer_member_id?: string | null;
     process_instance_id?: string | null;
-} | null {
-    const explicitMember = trimOrNull(params.explicit?.customer_member_id);
-    const explicitOcm = trimOrNull(params.explicit?.opportunity_customer_member_id);
-    const explicitPi = trimOrNull(params.explicit?.process_instance_id);
-    if (explicitMember || explicitOcm || explicitPi) {
-        return {
-            customer_member_id: explicitMember,
-            opportunity_customer_member_id: explicitOcm,
-            process_instance_id: explicitPi,
-        };
-    }
-    for (const row of params.openRows) {
-        const md = row.metadata ?? {};
-        const customerMemberId = trimOrNull(md.customer_member_id);
-        const ocmId = trimOrNull(md.opportunity_customer_member_id);
-        const processInstanceId = trimOrNull(md.process_instance_id);
-        if (customerMemberId || ocmId || processInstanceId) {
-            return {
-                customer_member_id: customerMemberId,
-                opportunity_customer_member_id: ocmId,
-                process_instance_id: processInstanceId,
-            };
-        }
-    }
-    return null;
+}): ChildParticipationIdentity | null {
+    const identity = childParticipationIdentityFromWire(explicit);
+    return namesAChild(identity) ? identity : null;
 }
 
 function outcomesForTemplate(
@@ -415,13 +399,10 @@ export function projectStageWorkRuntimeSync(
     const completedList = params.completedRows ?? [];
     const childIdentity =
         journeySegment === "child"
-            ? resolveChildIdentityForProjection({
-                  explicit: {
-                      customer_member_id: params.customerMemberId,
-                      opportunity_customer_member_id: params.opportunityCustomerMemberId,
-                      process_instance_id: params.processInstanceId,
-                  },
-                  openRows: openList,
+            ? explicitChildIdentityForProjection({
+                  customer_member_id: params.customerMemberId,
+                  opportunity_customer_member_id: params.opportunityCustomerMemberId,
+                  process_instance_id: params.processInstanceId,
               })
             : null;
 
@@ -460,6 +441,12 @@ export function projectStageWorkRuntimeSync(
             department_id: departmentId,
             requires_outcome_picker: requiresOutcomePicker,
             subject: buildExecutionSubject(params.opportunityId, journeySegment, childIdentity),
+            // A child-grain plan whose caller named no child. The subject is truthful — a family case
+            // and a grain — but it is not executable, and saying so beats letting a surface offer an
+            // action that can only fail at the guard.
+            ...(journeySegment === "child" && !childIdentity
+                ? { subject_unresolved: "child_identity_required" as const }
+                : {}),
         },
     };
 }
