@@ -66,8 +66,14 @@ export type OperationalSubject = {
         stageLabel: string;
         /** Why this stage exists — the Situation half of Situation → Decision → Action. */
         purpose: string | null;
-        workTemplateLabel: string;
-        required: boolean;
+        /**
+         * The subject's OWN required work at this stage. NULL when the stage configures none for this
+         * subject — a child whose effective stage is a family-segment stage has no work of its own
+         * there, and showing the family's template under the child's name would be the substitution
+         * the child grain exists to prevent.
+         */
+        workTemplateLabel: string | null;
+        required: boolean | null;
     } | null;
     /** Decision context — the lens the operator entered from, and their scope within it. */
     decision: {
@@ -80,6 +86,19 @@ export type OperationalSubject = {
     } | null;
     /** U-O5 — capability, not decoration. */
     action: { actionRef: string; label: string } | null;
+    /**
+     * WHY there is no action, when there is none — and therefore that the question was ANSWERED.
+     *
+     * A null `action` used to mean only one thing (the answer had not resolved yet), because the
+     * family path refuses rather than committing without one. A child surface can be fully
+     * operational with no action at all: Firefly configures none for its child-grain stages, and a
+     * child riding a family-segment stage has none of its own. Without this field that legitimate
+     * state is indistinguishable from "still loading", and the panel spins forever on a subject that
+     * is completely resolved.
+     *
+     * Null when an action IS present, or when the answer genuinely has not resolved.
+     */
+    actionAbsence: { code: string; message: string } | null;
     /**
      * COMMIT-CRITICAL CURRENT WORK — the stage-work runtime projection (progress, requirements,
      * blocked/status, work items) carried by the D1 answer (`focusPanelStageWork.stage_work_runtime`).
@@ -114,7 +133,7 @@ export type OperationalSubject = {
 
 const EMPTY: OperationalSubject = {
     subjectId: null, entityType: null, subjectGrain: null, identitySeed: null, situation: null,
-    decision: null, action: null,
+    decision: null, action: null, actionAbsence: null,
     stageWorkRuntime: null, publishedStageInputs: null, workIntentRuntime: null, subjectIdentityTruth: null,
     summaryDocSeed: null,
 };
@@ -127,6 +146,7 @@ export function OperationalSubjectProvider({
     situation,
     decision,
     action,
+    actionAbsence,
     stageWorkRuntime,
     publishedStageInputs,
     workIntentRuntime,
@@ -141,6 +161,7 @@ export function OperationalSubjectProvider({
     situation?: OperationalSubject["situation"];
     decision?: OperationalSubject["decision"];
     action?: OperationalSubject["action"];
+    actionAbsence?: OperationalSubject["actionAbsence"];
     stageWorkRuntime?: StageWorkRuntimeProjection | null;
     publishedStageInputs?: PublishedStageInputsForCurrentWork | null;
     workIntentRuntime?: WorkIntentRuntimeProjection | null;
@@ -161,13 +182,14 @@ export function OperationalSubjectProvider({
             situation: situation ?? null,
             decision: decision ?? null,
             action: action ?? null,
+            actionAbsence: actionAbsence ?? null,
             stageWorkRuntime: stageWorkRuntime ?? null,
             publishedStageInputs: publishedStageInputs ?? null,
             workIntentRuntime: workIntentRuntime ?? null,
             subjectIdentityTruth: subjectIdentityTruth ?? null,
             summaryDocSeed: summaryDocSeed ?? null,
         }),
-        [subjectId, subjectGrain, identitySeed, situation, decision, action, stageWorkRuntime, publishedStageInputs, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
+        [subjectId, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, publishedStageInputs, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -178,7 +200,11 @@ export function OperationalSubjectProvider({
  * Settlement fetch: Detail/History arriving later must never make the operator's panel "unresolved".
  */
 export function isOperationallyResolved(s: OperationalSubject): boolean {
-    return s.subjectId != null && s.situation != null && s.action != null;
+    // Resolution is that the ACTION QUESTION HAS BEEN ANSWERED — not that the answer was "yes".
+    // Requiring `action != null` outright made "this stage configures no action for a child", a fully
+    // resolved and perfectly ordinary state, render as a permanent loading spinner. The family path is
+    // unchanged by this: it always carries an action, and never an absence.
+    return s.subjectId != null && s.situation != null && (s.action != null || s.actionAbsence != null);
 }
 
 /** The one read for "who is the operator working on". */

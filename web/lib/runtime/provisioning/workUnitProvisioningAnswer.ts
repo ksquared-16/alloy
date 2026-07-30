@@ -104,6 +104,15 @@ import {
     resolveOpportunityStageWorkSlice,
     type OpportunityStageWorkSlice,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice";
+import {
+    childQueueRowContext,
+    childSubjectIdentityTruthBindings,
+    composeChildGrainSurface,
+    type ChildPrimaryActionAbsence,
+    type ChildSurfaceComposition,
+} from "@/lib/runtime/provisioning/childGrainSurfaceComposition";
+import { resolveChildGrainFocusPanelScope } from "@/lib/runtime/provisioning/childGrainScope";
+import type { ChildParticipationIdentity } from "@/lib/lifecycle/childParticipationIdentity";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
 export const PROVISIONING_ROW_PAGE_CAP = 100;
@@ -143,10 +152,17 @@ export type CurrentBusinessState = {
     stageLabel: string;
     /** Why this stage exists — the Situation half of Situation → Decision → Action. */
     purpose: string | null;
-    /** The required primary work at this stage. */
-    workTemplateKey: string;
-    workTemplateLabel: string;
-    required: boolean;
+    /**
+     * The required primary work at this stage — for THIS subject.
+     *
+     * Always present on a family answer: the family path refuses a stage with no reachable work. NULL
+     * on a child answer whose effective stage is a FAMILY-segment stage, because the work configured
+     * there belongs to the family, and naming it here would attribute the family's work to the child.
+     * Null is the truthful value, not a missing one.
+     */
+    workTemplateKey: string | null;
+    workTemplateLabel: string | null;
+    required: boolean | null;
 };
 
 /** U-O5: capability, not decoration. */
@@ -253,7 +269,28 @@ export type ProvisioningAnswer =
               destinationViewLabel: string | null;
           } | null;
           currentBusinessState: CurrentBusinessState;
-          primaryAction: TruthfulPrimaryAction;
+          /**
+           * U-O5 — capability, not decoration.
+           *
+           * NEVER null on a family answer: identity alone is not operational, so the family path
+           * refuses (`no_truthful_primary_action`) rather than claiming `operational` without one.
+           *
+           * MAY be null on a CHILD answer, and that is a rendered state rather than a degraded one.
+           * Firefly's child-grain stages configure no primary action at all, and a child riding a
+           * family-segment stage has none of its own either; refusing there would make a coherent
+           * configuration unreachable. `primaryActionAbsence` says which of those is the case, so
+           * "nothing is configured" never renders the same as "something failed".
+           */
+          primaryAction: TruthfulPrimaryAction | null;
+          /** Why {@link primaryAction} is null. Null when an action IS present. Child answers only. */
+          primaryActionAbsence?: ChildPrimaryActionAbsence | null;
+          /**
+           * The canonical four-part child identity, carried WHOLE (`docs/runtime/GRAIN-AUTHORITY-MAP.md`).
+           * Present only on a child answer. Never collapsed into `recordOfAttention.id`: that field
+           * carries the participation id because that is what the row IS, while the durable child,
+           * the family context and any genuine legacy row remain separately nameable here.
+           */
+          childIdentity?: ChildParticipationIdentity | null;
           /**
            * COMMIT-CRITICAL FOCUS PANEL — the default subject's stage-work slice (Current Work
            * runtime: progress, requirements completion, blocked/status, published stage inputs, work
@@ -346,8 +383,6 @@ export type ProvisioningErrorCode =
     | "grain_ambiguous"
     /** The lens resolved ONE grain, but it has no Focus Panel subject (`person`/`account`/`work_item`). */
     | "grain_unsupported"
-    /** Rows resolved for a grain whose subject surface is not built yet — never presented as family. */
-    | "subject_surface_unavailable"
     | "subject_unavailable"
     | "no_truthful_primary_action"
     | "records_unavailable";
@@ -374,7 +409,6 @@ export function provisioningErrorKind(code: ProvisioningErrorCode): Provisioning
         case "no_active_view":
         case "grain_ambiguous":
         case "grain_unsupported":
-        case "subject_surface_unavailable":
         case "no_truthful_primary_action":
             return "configuration";
         // Configuration is sound; the requested subject is not present.
@@ -844,26 +878,13 @@ export async function composeWorkUnitProvisioningAnswer(
     }
     timings.projection_ms = now() - tProj;
 
-    // ── THE HONEST EDGE OF THIS SLICE. ──
-    // Child rows now resolve from the right source. Everything BELOW this line is still
-    // opportunity-shaped — the row enrichment, the subject snapshot's truth keys, the stage-work slice
-    // (`OpportunityStageWorkSlice`) and the actions projection (`entityType: "opportunity"`). Running child
-    // rows through it would produce a family-shaped answer about children: the precise substitution this
-    // sprint exists to remove, and it would LOOK like success.
-    //
-    // So a child lens that actually HAS rows refuses, explicitly and escapably, until the child subject
-    // path is built. On the certified tenant this does not fire — its child lenses are authoritatively
-    // empty (11 child participations all ride `lead`, and Registration/Waitlist select
-    // enrolling/enrolled/waitlist), so the empty terminal below is reached with the child provider having
-    // genuinely run. That is the difference between "empty" and "unsupported", and both are now sayable.
-    if (subjectGrain.grain === "child" && page.length > 0) {
-        return fail(
-            "subject_surface_unavailable",
-            `Work View "${activeView.label}" resolved ${page.length} child ${page.length === 1 ? "row" : "rows"}, but this surface cannot yet present a child subject — refusing rather than presenting them as a family`,
-            workUnit,
-            navFrame,
-        );
-    }
+    // ── PHASE 4: THE CHILD-SURFACE REFUSAL THAT STOOD HERE IS GONE. ──
+    // It stood here because everything below was opportunity-shaped, so a child row reaching it would
+    // have produced a family-shaped answer ABOUT a child — the wrong-subject substitution this sprint
+    // exists to remove, wearing the costume of success. It came out only once the child path below
+    // existed, and in the SAME change that wires `resolveChildGrainFocusPanelScope`, because a child
+    // row reaching opportunity-shaped scope resolution is that same defect arriving by another route.
+    // Its error code is retired from the vocabulary too, so it cannot return from somewhere new.
 
     const tComp = now();
     // U-O2 enrichment over the BOUNDED PAGE only — cost scales with what the operator can see.
@@ -876,24 +897,32 @@ export async function composeWorkUnitProvisioningAnswer(
     // and stage-work needs only subject + stage + config, so it never reads the enriched rows. They
     // were serial (~680 ms + ~690 ms measured); kick BOTH off here and join below so composition is
     // the max, not the sum. The subject-snapshot's enriched `primary_contact` is built AFTER the join.
-    const enrichedPromise = enrichOperationalProjectionRows({
-        supabase: req.supabase,
-        orgId: req.orgId,
-        rows: page as unknown as EnrichableProjectionRow[],
-        queue: {
-            key: activeView.id,
-            label: activeView.label,
-            lifecycle_key: process.key,
-            subject_grain: "case",
-            // Configured stages are the only runtime stage vocabulary, so the row pill can name the
-            // stage a record actually holds in the operator's own words.
-            stage_labels_by_key: Object.fromEntries(
-                stages
-                    .filter((s) => s.key.trim() && s.label.trim())
-                    .map((s) => [s.key.trim(), s.label.trim()])
-            ),
-        },
-    });
+    //
+    // CHILD ROWS ARE NOT ENRICHED. `enrichOperationalProjectionRows` resolves CRM labels by
+    // OPPORTUNITY id — a child row's `id` is not one, so running it here would either return nothing
+    // or, worse, attach the family's contact to the child and call it the child's. The child page is
+    // already complete for what it claims: identity, effective stage, and the family it hangs off.
+    const enrichedPromise: Promise<readonly Record<string, unknown>[]> =
+        childRows
+            ? Promise.resolve([])
+            : (enrichOperationalProjectionRows({
+                  supabase: req.supabase,
+                  orgId: req.orgId,
+                  rows: page as unknown as EnrichableProjectionRow[],
+                  queue: {
+                      key: activeView.id,
+                      label: activeView.label,
+                      lifecycle_key: process.key,
+                      subject_grain: "case",
+                      // Configured stages are the only runtime stage vocabulary, so the row pill can
+                      // name the stage a record actually holds in the operator's own words.
+                      stage_labels_by_key: Object.fromEntries(
+                          stages
+                              .filter((s) => s.key.trim() && s.label.trim())
+                              .map((s) => [s.key.trim(), s.label.trim()])
+                      ),
+                  },
+              }) as unknown as Promise<readonly Record<string, unknown>[]>);
     void enrichedPromise.catch(() => {});
 
     // ── U-O6 AUTHORITATIVE EMPTY — a workable place, never confused with error. Gated on the PAGE
@@ -929,12 +958,30 @@ export async function composeWorkUnitProvisioningAnswer(
     //    from the PAGE (pre-enrichment) so the commit-critical stage-work read can start CONCURRENTLY
     //    with enrichment above. ──
     const { strategy, source } = resolveSubjectStrategy(activeView);
-    const subjectRows: OperationalSubjectQueueRow[] = page.map((r, i) => ({
-        id: String((r as Record<string, unknown>).id),
-        entityId: String((r as Record<string, unknown>).id),
-        entityType: "opportunity",
-        sortIndex: i,
-    }));
+    // THE ROW'S IDENTITY IS ITS GRAIN'S, NOT ALWAYS AN OPPORTUNITY ID.
+    //
+    // A child row has no `id` field at all — it has the canonical four-part identity, and the part that
+    // names THIS row is `participationId` (`process_instances.id`): one row per participation is
+    // exactly what the provider deduped to. Reading `.id` off a child row here yielded the string
+    // "undefined" for every row — every subject id identical, so selection, deep links and
+    // next/previous would all have addressed the same phantom subject. Unreachable until now only
+    // because the refusal above returned first.
+    //
+    // `subjectId` (the durable child) is deliberately NOT the row id: the same child can hold two
+    // participations across two leads, and those are two different rows.
+    const subjectRows: OperationalSubjectQueueRow[] = childRows
+        ? childRows.slice(0, PROVISIONING_ROW_PAGE_CAP).map((r, i) => ({
+              id: String(r.participationId ?? ""),
+              entityId: String(r.participationId ?? ""),
+              entityType: "child",
+              sortIndex: i,
+          }))
+        : page.map((r, i) => ({
+              id: String((r as Record<string, unknown>).id),
+              entityId: String((r as Record<string, unknown>).id),
+              entityType: "opportunity",
+              sortIndex: i,
+          }));
     const requested = req.requestedSubjectId
         ? subjectRows.find((s) => s.entityId === req.requestedSubjectId) ?? null
         : null;
@@ -969,29 +1016,84 @@ export async function composeWorkUnitProvisioningAnswer(
             navFrame,
         );
     }
-    const subjectRow = page.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId)!;
-    const subjectStageKey = strOrNull((subjectRow as Record<string, unknown>).stage_key);
+    // ── U-P5/U-O4 current business state + U-O5 truthful primary action. ──
+    const childSubjectRow = childRows?.find((r) => String(r.participationId ?? "") === chosen.entityId) ?? null;
+    const subjectRow = childSubjectRow ?? page.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId)!;
 
-    // ── U-P5/U-O4 current business state + U-O5 truthful primary action. Identity alone is NOT operational. ──
-    const stage = stages.find((s) => s.key === subjectStageKey) ?? null;
-    if (!stage) {
-        return fail(
-            "no_truthful_primary_action",
-            `subject holds stage "${subjectStageKey}" which is not an active configured stage`,
-            workUnit,
-            navFrame,
-        );
-    }
-    const plan = stage.stage_operating_plan_v1 ?? null;
-    const template = plan?.work_templates?.find((t) => t.primary) ?? plan?.work_templates?.[0] ?? null;
-    const actionRef = template?.primary_action?.action_ref ?? null;
-    if (!plan || !template || !actionRef) {
-        return fail(
-            "no_truthful_primary_action",
-            `stage "${stage.key}" offers no reachable primary action — the answer will not claim operational on identity alone`,
-            workUnit,
-            navFrame,
-        );
+    // The FAMILY NAMES the child page can honestly cite. `baseRows` are the in-scope opportunities the
+    // answer already fetched (for the child grain they ARE the scope), so this is a pure lookup — no
+    // extra read, and no invented name when the row carries none.
+    const familyNamesByOpportunityId = new Map<string, string | null>(
+        childRows
+            ? ((baseRows ?? []) as Array<Record<string, unknown>>).map((o) => [
+                  String(o.id),
+                  strOrNull(o.name) ?? strOrNull(o.title),
+              ])
+            : [],
+    );
+
+    let stage: LifecycleBuilderStageRecord;
+    let currentBusinessState: CurrentBusinessState;
+    let primaryAction: TruthfulPrimaryAction | null;
+    let childComposition: ChildSurfaceComposition | null = null;
+
+    if (childSubjectRow) {
+        // ── THE CHILD RUNTIME VIEWMODEL — composition only. Every field below is READ from Business
+        //    Process outputs (effective stage from the provider, journey segment from the canonical
+        //    translation, work + action from the stage's operating plan). Nothing here computes
+        //    readiness, membership, stage or eligibility.
+        const composed = composeChildGrainSurface({
+            row: childSubjectRow,
+            stages,
+            familyNamesByOpportunityId,
+        });
+        if (!composed.ok) {
+            // Same refusal the family path makes, for the same reason: a surface cannot describe a
+            // position the Business Process does not define.
+            return fail("no_truthful_primary_action", composed.reason, workUnit, navFrame);
+        }
+        childComposition = composed.composition;
+        stage = childComposition.stage;
+        currentBusinessState = childComposition.currentBusinessState;
+        primaryAction = childComposition.primaryAction;
+    } else {
+        // ── FAMILY PATH — UNCHANGED. Identity alone is NOT operational here: a family surface with no
+        //    reachable primary action still refuses, exactly as it did before Phase 4.
+        const subjectStageKey = strOrNull((subjectRow as Record<string, unknown>).stage_key);
+        const found = stages.find((s) => s.key === subjectStageKey) ?? null;
+        if (!found) {
+            return fail(
+                "no_truthful_primary_action",
+                `subject holds stage "${subjectStageKey}" which is not an active configured stage`,
+                workUnit,
+                navFrame,
+            );
+        }
+        const foundPlan = found.stage_operating_plan_v1 ?? null;
+        const template = foundPlan?.work_templates?.find((t) => t.primary) ?? foundPlan?.work_templates?.[0] ?? null;
+        const actionRef = template?.primary_action?.action_ref ?? null;
+        if (!foundPlan || !template || !actionRef) {
+            return fail(
+                "no_truthful_primary_action",
+                `stage "${found.key}" offers no reachable primary action — the answer will not claim operational on identity alone`,
+                workUnit,
+                navFrame,
+            );
+        }
+        stage = found;
+        currentBusinessState = {
+            stageKey: found.key,
+            stageLabel: found.label,
+            purpose: foundPlan.purpose ?? null,
+            workTemplateKey: template.template_key,
+            workTemplateLabel: template.label,
+            required: template.required,
+        };
+        primaryAction = {
+            actionRef,
+            label: template.primary_action?.override_label ?? template.label,
+            workTemplateKey: template.template_key,
+        };
     }
 
     // ── COMMIT-CRITICAL FOCUS PANEL — the answer OWNS the operational Current Work projection. ──
@@ -1000,26 +1102,74 @@ export async function composeWorkUnitProvisioningAnswer(
     // surrounding Settlement cards afterward. Additive and non-fatal: any failure degrades to the
     // client drawer-VM load, never an operational error. `departmentMetadata` is already in hand.
     // Kicked off CONCURRENTLY with enrichment (both need only data resolved above); joined below.
-    const focusPanelStageWorkPromise = resolveOpportunityStageWorkSlice({
-        supabase: req.supabase,
-        orgId: req.orgId,
-        opportunityId: chosen.entityId,
-        departmentId: wuRow.department_id ? String(wuRow.department_id) : null,
-        stageKey: stage.key,
-        stageLabel: stage.label,
-        departmentMetadata: deptRow?.metadata,
-    }).catch(() => null /* stage-work is additive to the commit — never fail the operational answer on it */);
+    //
+    // FOR A CHILD, THE READ IS THE CHILD'S OR IT DOES NOT HAPPEN. The slice is already
+    // child-parameterized (`customerMemberId` / `processInstanceId` / `opportunityCustomerMemberId`),
+    // so the child path threads the canonical identity through it rather than adding a second reader —
+    // and it is anchored on the family case (`contextId`), which is where the tasks actually hang.
+    //
+    // When the child's effective stage is a FAMILY-segment stage, no read is issued at all. The work
+    // configured there is the family's; fetching it and publishing it as `focusPanelStageWork` would
+    // put the family's Current Work on a child's surface, which is precisely the substitution the
+    // removed refusal was standing in for.
+    const focusPanelStageWorkPromise: Promise<OpportunityStageWorkSlice | null> = childSubjectRow
+        ? childComposition?.childOwnsStageWork && childSubjectRow.contextId
+            ? resolveOpportunityStageWorkSlice({
+                  supabase: req.supabase,
+                  orgId: req.orgId,
+                  opportunityId: childSubjectRow.contextId,
+                  departmentId: wuRow.department_id ? String(wuRow.department_id) : null,
+                  stageKey: stage.key,
+                  stageLabel: stage.label,
+                  departmentMetadata: deptRow?.metadata,
+                  customerMemberId: childSubjectRow.subjectId,
+                  processInstanceId: childSubjectRow.participationId,
+                  opportunityCustomerMemberId: childSubjectRow.legacyOcmId,
+              }).catch(() => null)
+            : Promise.resolve(null)
+        : resolveOpportunityStageWorkSlice({
+              supabase: req.supabase,
+              orgId: req.orgId,
+              opportunityId: chosen.entityId,
+              departmentId: wuRow.department_id ? String(wuRow.department_id) : null,
+              stageKey: stage.key,
+              stageLabel: stage.label,
+              departmentMetadata: deptRow?.metadata,
+          }).catch(() => null /* stage-work is additive to the commit — never fail the operational answer on it */);
 
     // ── JOIN: enrichment (queue rows) + presentation + actions + stage-work, all kicked off above. ──
     const enriched = await enrichedPromise;
-    const rows: ProvisioningRow[] = enriched.map((r) => ({
-        id: String((r as Record<string, unknown>).id),
-        stageKey: strOrNull((r as Record<string, unknown>).stage_key),
-        statusKey: strOrNull((r as Record<string, unknown>).status_key),
-        updatedAt: strOrNull((r as Record<string, unknown>).updated_at),
-        title: strOrNull((r as Record<string, unknown>).name),
-        context: queueRowContextOf(r as Record<string, unknown>),
-    }));
+    // Child rows are published from the PROVIDER's own normalization — the same rows membership was
+    // decided over — with a PI-NATIVE presentation context. Leaving `context` null was not the neutral
+    // choice it looked like: a queue row renders entirely from its context, so thirteen children
+    // rendered as thirteen raw participation UUIDs. The context carries only what a child row knows,
+    // and leaves every Settlement-owned signal null rather than borrowing the family's.
+    const stageLabelsByKey = Object.fromEntries(
+        stages.filter((s) => s.key.trim() && s.label.trim()).map((s) => [s.key.trim(), s.label.trim()]),
+    );
+    const rows: ProvisioningRow[] = childRows
+        ? childRows.slice(0, PROVISIONING_ROW_PAGE_CAP).map((r) => ({
+              id: String(r.participationId ?? ""),
+              stageKey: r.stageKey,
+              statusKey: r.statusKey,
+              updatedAt: r.updatedAt,
+              title: r.title,
+              context: childQueueRowContext({
+                  row: r,
+                  stageLabel: (r.stageKey ? stageLabelsByKey[r.stageKey] : null) ?? r.stageKey ?? "",
+                  stageLabelsByKey,
+                  lifecycleKey: process.key,
+                  familyName: r.contextId ? familyNamesByOpportunityId.get(r.contextId) ?? null : null,
+              }),
+          }))
+        : enriched.map((r) => ({
+              id: String((r as Record<string, unknown>).id),
+              stageKey: strOrNull((r as Record<string, unknown>).stage_key),
+              statusKey: strOrNull((r as Record<string, unknown>).status_key),
+              updatedAt: strOrNull((r as Record<string, unknown>).updated_at),
+              title: strOrNull((r as Record<string, unknown>).name),
+              context: queueRowContextOf(r as Record<string, unknown>),
+          }));
     // Join: await the presentation branch that ran CONCURRENTLY with projection + enrichment above.
     // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
     const presentation = await presentationPromise;
@@ -1073,8 +1223,16 @@ export async function composeWorkUnitProvisioningAnswer(
         ...(primaryContactEmail ? { "person.primary_email": primaryContactEmail } : {}),
         ...(inquiryChildren != null ? { _inquiry_children: inquiryChildren } : {}),
     };
-    const subjectIdentityTruth: SubjectIdentityTruth | null =
-        Object.keys(subjectIdentityTruthBindings).length ? subjectIdentityTruthBindings : null;
+    // A SECOND SURFACE DECLARES ITS OWN KEYS — the seam working as designed. The child domain names
+    // `child.*` bindings; the platform contract and the work-mode builder forward them opaquely,
+    // knowing none of them. The family bindings above are NOT reused: they describe the household's
+    // primary contact, and a child surface presenting them as the child's identity would be the
+    // family-shaped answer wearing a child's name.
+    const subjectIdentityTruth: SubjectIdentityTruth | null = childComposition
+        ? childSubjectIdentityTruthBindings(childComposition, childSubjectRow?.title ?? null)
+        : Object.keys(subjectIdentityTruthBindings).length
+          ? subjectIdentityTruthBindings
+          : null;
 
     // A — the published Summary composition for the committed scope. Selected with the SAME axes the
     // client doc provider sends (`workViewId` + committed stage; Business Process / status stay
@@ -1102,14 +1260,39 @@ export async function composeWorkUnitProvisioningAnswer(
         rows,
         recordOfAttention: { id: chosen.entityId, strategy, strategySource: source },
         // §0.5.2: the Record of Truth may be broader than the row; the attention scope is preserved.
-        recordOfTruth: { entityType: "opportunity", id: chosen.entityId },
+        // For a child the Record of Truth is the PARTICIPATION — `process_instances` is the canonical
+        // child row (`docs/runtime/GRAIN-AUTHORITY-MAP.md`), and naming the opportunity here would say
+        // the truth about a child lives on its family's record.
+        recordOfTruth: childComposition
+            ? { entityType: "process_instance", id: chosen.entityId }
+            : { entityType: "opportunity", id: chosen.entityId },
         contextFrame,
         ...(() => {
-            const scope = resolveFocusPanelScope({
-                record: subjectRow,
-                activeView,
-                workViews,
-            });
+            // ── 3C WIRED HERE, in the same change that removed the refusal. ──
+            // `resolveFocusPanelScope` runs the lens's OPPORTUNITY-shaped predicates over the record. A
+            // child row has none of those fields, so it would match nothing, and the answer would tell
+            // the operator their record had moved OUT of the lens they are looking at — then offer a
+            // destination chosen by the same broken comparison. Confident, navigable, fabricated.
+            const scope = childComposition
+                ? resolveChildGrainFocusPanelScope({
+                      subject: { stageKey: childComposition.stage.key },
+                      activeView,
+                      workViews,
+                      reader: {
+                          stageKeysForView: lensStageKeys,
+                          // Resolved, never guessed: a lens whose grain cannot be resolved is not a
+                          // place a child can be sent, so it is not offered as a destination.
+                          isChildLens: (v) => {
+                              const g = resolveLensRowGrain(v, stages);
+                              return g.ok && g.grain === "child";
+                          },
+                      },
+                  })
+                : resolveFocusPanelScope({
+                      record: subjectRow,
+                      activeView,
+                      workViews,
+                  });
             return {
                 focusPanelScopeState: scope.kind,
                 focusPanelOutOfView:
@@ -1121,19 +1304,10 @@ export async function composeWorkUnitProvisioningAnswer(
                         : null,
             };
         })(),
-        currentBusinessState: {
-            stageKey: stage.key,
-            stageLabel: stage.label,
-            purpose: plan.purpose ?? null,
-            workTemplateKey: template.template_key,
-            workTemplateLabel: template.label,
-            required: template.required,
-        },
-        primaryAction: {
-            actionRef,
-            label: template.primary_action?.override_label ?? template.label,
-            workTemplateKey: template.template_key,
-        },
+        currentBusinessState,
+        primaryAction,
+        primaryActionAbsence: childComposition?.primaryActionAbsence ?? null,
+        childIdentity: childComposition?.identity ?? null,
         focusPanelStageWork,
         subjectIdentityTruth,
         focusPanelSummaryDoc,

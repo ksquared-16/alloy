@@ -29,7 +29,10 @@ function sliceBetween(from: string, to: string): string {
 }
 
 describe("a requested subject is never silently substituted", () => {
-    const selection = sliceBetween("const requested = req.requestedSubjectId", "const subjectRow = page.find");
+    // The end anchor moved with Phase 4: the subject row is now resolved per GRAIN
+    // (`childSubjectRow ?? page.find(...)`). The invariant under test is unchanged — a
+    // requested-but-absent subject must still refuse BEFORE the default-subject fallback runs.
+    const selection = sliceBetween("const requested = req.requestedSubjectId", "const childSubjectRow =");
 
     it("refuses when a subject was requested but is not on the evaluated page", () => {
         expect(selection).toMatch(/if\s*\(\s*req\.requestedSubjectId\s*&&\s*!requested\s*\)/);

@@ -48,7 +48,14 @@ describe("D4 — Settlement reserves geometry, never constructs", () => {
     it("6. operational resolution asks nothing of the record VM", () => {
         const ctx = code(read("components/presentation/workUnit/OperationalSubjectContext.tsx"));
         // The predicate reads only committed-snapshot fields.
-        expect(ctx).toMatch(/subjectId != null && s\.situation != null && s\.action != null/);
+        //
+        // Phase 4 widened WHICH committed fields count, not where they come from: resolution now means
+        // the action QUESTION was answered — `action` present, or `actionAbsence` saying why not —
+        // because a child at a stage that configures no action is fully resolved and was rendering as
+        // a permanent spinner. Still zero Settlement input, which is the invariant on the next line.
+        expect(ctx).toMatch(
+            /subjectId != null && s\.situation != null && \(s\.action != null \|\| s\.actionAbsence != null\)/,
+        );
         expect(ctx).not.toMatch(/fetch|useOpportunityDrawerVmPayload|displayVm|record/);
     });
 

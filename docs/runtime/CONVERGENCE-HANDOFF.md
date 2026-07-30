@@ -5,6 +5,53 @@
 **Worktree:** `/Users/Kelly/Code/alloy-worktrees/wt3-runtime-v1-settlement` (slot 3, port 3013)
 **Tree:** clean · **Not pushed** · `vac run typecheck` **rc=0**
 
+## 0.0 PHASE 4 IS DONE — the first production child Runtime surface (2026-07-30, third session)
+
+`subject_surface_unavailable` is **gone**, retired from the error vocabulary, and replaced by a real
+child surface. `resolveChildGrainFocusPanelScope` was wired in the SAME change. Certified in the
+browser against live Firefly: **10/10**.
+
+**What an operator now sees** on *All Children in Enrollment*: thirteen children by name, each with
+its family and effective stage ("Wenc Family · Lead · Jarek Wenc"), and a Focus Panel titled
+**Jarek Wenc** — not "Wenc Family" — that says, where the action would be:
+
+> This child is at a stage whose work belongs to the family, so there is no child action here.
+
+**The judgement that makes this honest.** Every Firefly child participation carries `stage_key = NULL`,
+so its effective stage is the family's `lead` — a stage whose grain is `family` and whose plan declares
+`journey_segment: "family"`. That stage DOES configure work, with a real `action_ref`. None of it is
+the child's. So the child path reads the segment (canonical 3B `resolveJourneySegment`) and, when it is
+`family`, publishes `primaryAction: null`, `workTemplateKey: null`, `focusPanelStageWork: null`, plus a
+`primaryActionAbsence` code saying which absence it is. It never asks for the family's stage work.
+
+**Four defects found and fixed only because the surface was actually rendered:**
+
+1. **Child rows had no `.id`.** `ChildProvisioningRow` has no such field; reading it produced the string
+   `"undefined"` for every row, so selection, deep links and next/previous all addressed one phantom
+   subject. The row id is now `participationId`. Unreachable before only because the refusal returned first.
+2. **Thirteen raw UUIDs.** A queue row renders ENTIRELY from its `QueueRowContext`; `context: null` was
+   not the neutral choice it looked like. Added a PI-native `childQueueRowContext` — deliberately NOT
+   `buildChildGrainQueueRowContext`, which is OCM-keyed and would reintroduce the identity ambiguity 3A
+   removed. Settlement-owned signals stay null rather than borrowing the family's.
+3. **A permanent spinner.** `isOperationallyResolved` required `action != null`, so a child with no
+   configured action — fully resolved — rendered as "Thinking…" forever. Resolution now means the action
+   QUESTION was answered (`action` OR `actionAbsence`). The family path is unaffected: it always has one.
+4. **"Could not load the opportunity drawer View Model."** `useRecordWorkRuntime` loads the OPPORTUNITY
+   record VM keyed on the committed subject id; a child's is a `process_instances.id`. The fetch is now
+   suppressed for a child subject — **only the fetch**: nulling `drawer.type` as well returned the whole
+   panel as `null` for every child, which is a worse lie than the failed fetch.
+
+**Live provider proof** (`scripts/tmp-proveParticipationMembership.ts`): the provider's output equals the
+Enrollment Definition's own liveness verdict over the real population, 13/13. One claim is **NOT proven
+here and the script says so out loud**: Firefly holds zero non-live participations, so "closed
+participation never appears" is vacuously true against this data — unit-proven only.
+
+**Known, NOT fixed (next slice):** the *All Children in Enrollment* pill counts **8**, not 13 — the D5
+Settlement count locator is family-shaped. Counts are Settlement-only and governed by the
+enrichment-independent count doctrine, which is off-limits here. Also unchanged by choice:
+`actionsProjection` still resolves work-unit-scoped `entityType: "opportunity"` rail actions (they are
+work-unit actions, not claims about the child).
+
 ## 0. Session of 2026-07-30 (second): steps 1, 3A, 3B are DONE
 
 | Commit | Step | What landed |

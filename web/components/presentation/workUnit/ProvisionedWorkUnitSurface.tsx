@@ -23,6 +23,7 @@ import { runtimeLabelProps, PRESENTATION_RUNTIME_LABELS } from "@/components/pre
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import { useCommittedFocus } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { OperationalSubjectProvider } from "@/components/presentation/workUnit/OperationalSubjectContext";
+import { CHILD_PRIMARY_ACTION_ABSENCE_COPY } from "@/lib/runtime/provisioning/childGrainSurfaceComposition";
 import { focusPanelSeedForSubject } from "@/lib/presentation/runtime/focusPanelSeedFromQueueRow";
 
 declare global {
@@ -240,7 +241,22 @@ export function ProvisionedWorkUnitSurface() {
                               }
                             : null
                     }
-                    action={op ? { actionRef: op.primaryAction.actionRef, label: op.primaryAction.label } : null}
+                    // Null when the committed subject genuinely has no configured action — a child at a
+                    // stage that configures none. The panel renders that absence; it does not stand in
+                    // for it, and `actionAbsence` is what keeps it from reading as "still loading".
+                    action={
+                        op?.primaryAction
+                            ? { actionRef: op.primaryAction.actionRef, label: op.primaryAction.label }
+                            : null
+                    }
+                    actionAbsence={
+                        op && !op.primaryAction && op.primaryActionAbsence
+                            ? {
+                                  code: op.primaryActionAbsence,
+                                  message: CHILD_PRIMARY_ACTION_ABSENCE_COPY[op.primaryActionAbsence],
+                              }
+                            : null
+                    }
                     stageWorkRuntime={op ? op.focusPanelStageWork?.stage_work_runtime ?? null : null}
                     publishedStageInputs={op ? op.focusPanelStageWork?.published_stage_inputs ?? null : null}
                     workIntentRuntime={op ? op.focusPanelStageWork?.work_intent_runtime ?? null : null}

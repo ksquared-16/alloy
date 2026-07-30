@@ -31,6 +31,11 @@ export type FocusPanelCommitCriticalInput = {
     publishedStageInputs: PublishedStageInputsForCurrentWork | null;
     situation: { stageKey: string; stageLabel: string; purpose: string | null } | null;
     primaryAction: { actionRef: string; label: string } | null;
+    /**
+     * Set when the answer resolved that this subject has NO configured action. Distinct from
+     * `primaryAction: null` alone, which cannot tell "nothing is configured" from "not resolved yet".
+     */
+    actionAbsence: { code: string; message: string } | null;
     subjectIdentityTruth: SubjectIdentityTruth | null;
     /** R2 — the subject grain resolved by the answer. Forwarded to the builder; never derived here. */
     subjectGrain: { grain: OperationalGrain; subjectType: OperationalSubjectType } | null;
@@ -111,12 +116,31 @@ export default function OpportunityFocusPanelBody({
 
     if (!model) return null;
 
+    // "NO CONFIGURED ACTION" IS RENDERED, NOT OMITTED.
+    //
+    // Firefly's child-grain stages configure no primary action, and a child riding a family-segment
+    // stage has none of its own. Showing nothing there leaves an operator unable to tell an
+    // intentionally empty surface from a broken one — so the surface says which it is, in the
+    // operator's terms, exactly where the action would otherwise be.
+    const absence = !enriched ? commitCritical?.actionAbsence ?? null : null;
+
     return (
+        <>
+        {absence ?
+            <p
+                className="mb-3 rounded-md border border-dashed border-[var(--alloy-border-subtle,#d4d4d8)] px-3 py-2 text-sm text-[var(--alloy-text-secondary,#52525b)]"
+                data-focus-panel-no-action={absence.code}
+                role="note"
+            >
+                {absence.message}
+            </p>
+        : null}
         <OpportunityFocusPanelModeGrid
             model={model}
             onSelectTab={onSelectTab}
             onHeaderAction={onHeaderAction}
             onModeChange={onModeChange}
         />
+        </>
     );
 }

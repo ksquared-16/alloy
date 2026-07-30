@@ -96,11 +96,39 @@ describe("the child path reuses the production provider and cannot degrade to fa
     });
 
     it("child rows are never presented through the opportunity-shaped downstream", () => {
-        // The honest edge of this slice: rows resolve, but the subject path below is still
-        // opportunity-shaped, so a child lens WITH rows refuses instead of looking like success.
+        // PHASE 4 replaced the refusal with the real child path. The INVARIANT the refusal protected is
+        // unchanged, and it is what this asserts: nothing opportunity-shaped may be applied to a child.
         const src = read(ANSWER);
-        expect(src).toContain("subject_surface_unavailable");
-        expect(provisioningErrorKind("subject_surface_unavailable")).toBe("configuration");
+
+        // The scaffolding is gone — including from the error vocabulary, so it cannot return by being
+        // thrown from somewhere new.
+        expect(src).not.toContain("subject_surface_unavailable");
+
+        // Scope resolution: a child goes through the child-grain resolver. Running the lens's
+        // opportunity-shaped predicates over a child row matches nothing, which renders as "this record
+        // moved out of your lens" plus a destination chosen by the same broken comparison.
+        expect(src).toContain("resolveChildGrainFocusPanelScope");
+
+        // Enrichment resolves CRM labels by OPPORTUNITY id. A child row's id is not one, so the child
+        // branch must not enter it — otherwise the family's contact is attached to the child.
+        expect(src).toContain("childRows\n            ? Promise.resolve([])");
+
+        // The child's business state comes from the child composer, never from the family block.
+        expect(src).toContain("composeChildGrainSurface");
+    });
+
+    it("a child subject is addressed by its PARTICIPATION, never by a row `.id` it does not have", () => {
+        // `ChildProvisioningRow` has no `id` field at all. Reading one yielded the string "undefined"
+        // for every row, so selection, deep links and next/previous all addressed one phantom subject.
+        const src = read(ANSWER);
+        expect(src).toContain('id: String(r.participationId ?? "")');
+    });
+
+    it("the error vocabulary still classifies the refusals that remain", () => {
+        expect(provisioningErrorKind("grain_ambiguous")).toBe("configuration");
+        expect(provisioningErrorKind("no_truthful_primary_action")).toBe("configuration");
+        expect(provisioningErrorKind("subject_unavailable")).toBe("subject");
+        expect(provisioningErrorKind("records_unavailable")).toBe("records");
     });
 
     it("both grains read the lens the SAME way — one definition of what it selects", () => {

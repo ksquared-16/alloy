@@ -110,6 +110,19 @@ export function InlineOpportunityFocusPanel() {
     // seed carried on the committed Operational Subject (derived from the same committed queue row the
     // subject was selected from — never the drawer store). It gives the pending header the family name +
     // status on cold open; the resolved header replaces it once the VM lands.
+    // ── SETTLEMENT IS OPPORTUNITY-SHAPED, SO A CHILD SUBJECT DOES NOT ENTER IT. ──
+    // `useRecordWorkRuntime` loads the OPPORTUNITY record VM keyed on the committed subject id. A
+    // child's subject id is a `process_instances.id`, so that fetch cannot succeed — measured, it
+    // returned "Could not load the opportunity drawer View Model" over a child whose operational
+    // answer was completely healthy. The two wrong ways out are both substitutions: loading the
+    // FAMILY's VM instead (the wrong subject), or reporting the child as unresolved (a lie about a
+    // resolved answer). So a child panel renders from the commit-critical answer alone, and the
+    // Settlement cards stay honestly reserved until a child Settlement exists.
+    const isChildSubject = operational.entityType === "child";
+    // Only the FETCH is suppressed. `drawer` still describes the committed subject, because the panel
+    // host, its chrome and its mode all key off it — nulling it here returned the whole panel as
+    // `null` for every child, which is a worse lie than the failed fetch it was meant to prevent.
+    const settlementSubjectId = isChildSubject ? null : operationalSubjectId;
     const drawer = {
         id: operationalSubjectId,
         type: operationalSubjectId ? ("opportunities" as const) : null,
@@ -121,7 +134,7 @@ export function InlineOpportunityFocusPanel() {
         holdPriorPayload,
         patchDisplayRecord,
         reloadDisplayVm,
-    } = useRecordWorkRuntime(operationalSubjectId);
+    } = useRecordWorkRuntime(settlementSubjectId);
 
     const bodyScrollRef = useRef<HTMLDivElement | null>(null);
     const { mode: focusPanelMode, setMode: setFocusPanelModeState, selectFromDrawerTab } =
@@ -345,7 +358,17 @@ export function InlineOpportunityFocusPanel() {
     // seed header appears only on true cold entry (no prior VM to hold).
     const visible = resolved ?? heldPrior;
 
-    const seedTitle = drawer.opportunityQueuePreviewSeed?.title?.trim() || opportunitySingular;
+    // A CHILD PANEL IS TITLED WITH THE CHILD. The queue-preview seed carries the FAMILY's name (it is
+    // derived from the case), so on a child subject it titled the panel "Wenc Family" while the
+    // committed subject was Jarek Wenc — a family-shaped identity on a child surface. The child's own
+    // name comes from the answer's domain-declared identity truth, which is where a child's identity
+    // lives; the seed remains the fallback when the answer carried no name.
+    const childDisplayName =
+        isChildSubject && typeof operational.subjectIdentityTruth?.["child.display_name"] === "string"
+            ? (operational.subjectIdentityTruth["child.display_name"] as string).trim() || null
+            : null;
+    const seedTitle =
+        childDisplayName || drawer.opportunityQueuePreviewSeed?.title?.trim() || opportunitySingular;
     const seedContextChips = useMemo(
         () => buildFocusPanelContextChipsFromQueuePreviewSeed(drawer.opportunityQueuePreviewSeed),
         [drawer.opportunityQueuePreviewSeed],
@@ -562,6 +585,10 @@ export function InlineOpportunityFocusPanel() {
                                                 }
                                               : null,
                                           primaryAction: operational.action,
+                                          // Carried so the panel can SAY there is no configured action,
+                                          // instead of leaving the operator to guess whether the surface
+                                          // is deliberately empty or still settling.
+                                          actionAbsence: operational.actionAbsence,
                                           subjectIdentityTruth: operational.subjectIdentityTruth,
                                           // R2 — the answer's resolved grain, carried by the single
                                           // subject owner. The panel forwards it; it never decides it.
