@@ -16,6 +16,11 @@ Relationships are **edges** between canonical entities — not duplicate copies 
 
 ## Ownership and projection (canonical architecture)
 
+> **Configuration Discovery V1 is CERTIFIED (2026-07-30).** The chain below is proven end to end on a
+> live stack; see
+> [`configuration-discovery-v1-certification.md`](./configuration-discovery-v1-certification.md) for the
+> record, the security matrix, and the defects certification found.
+
 The Relationship Model is the canonical truth for configured relationships. Everything downstream is a
 **projection** of it.
 
@@ -161,77 +166,81 @@ dual-read/backfill strategy, compatibility testing and product approval. It is d
 scope for Configuration Discovery V1, and `persists_to` is the seam that makes that later migration a
 configuration change plus a backfill rather than a rewrite.
 
-### Open gap — Discovery's relationship bindings never reach the form
+### Implemented — Discovery's relationship bindings reach the form
 
-Configuration Discovery resolves each relationship group to its canonical provider and write command
-(`apply-discovery` returns `provider_ref` + `relationship_apply.command_key` for guardian, emergency
-contact and authorized pickup). **Nothing then translates that into a collection-bound form group.**
+Configuration Discovery resolves each relationship group to its canonical provider and write command,
+and `projectRelationshipCollections.ts` now translates an ACCEPTED `relationship_binding` into a
+collection-bound form group. Everything it needs is already on the definition row — `provider_ref`,
+`item_entity_type`, `iteration_alias`, `nested_field_keys` — so it branches on no role.
 
-- `applyDiscovery`'s `relationship_binding` branch only *records* the resolution; it does not mutate
-  the draft.
-- `createFormFromCaseDraft` has no `collection_binding` handling at all.
-- The only writers of `collection_binding` are the manual Forms authoring surfaces
-  (`useFormSchemaFieldAuthoring`, `DocumentCompositionEditor`, `FormGroupAuthoringCard`).
+Two exclusions are deliberate, because the first draft of this projection would have destroyed data:
 
-Live result on a freshly imported enrollment record: 3 relationship proposals → a published form with
-**112 flat fields and 0 collection groups**. A respondent cannot supply emergency contacts as a
-collection, so no collection metadata reaches Processing and the canonical relationship executor is
-never invoked from a form.
+- **Output-copy sections are never converted.** A section whose disposition is `static_reference`, or
+  whose title reads as a copy, is left alone. Converting "(Classroom Copy)" would have stripped it.
+- **Signature sections are not relationship groups.** "Parent/Guardian Signatures" names guardians but
+  collects signatures; projecting it would have removed the signature fields from the form.
 
-Everything needed to close it is already on the definition row — `provider_ref`,
-`item_entity_type`, `iteration_alias`, `nested_field_keys`. This is the last unbuilt link in the
-chain, and it is what blocks proving-journey steps 6-10.
+Certified live end to end: a freshly imported enrollment record produces a published form carrying
+three relationship collections whose bindings and lineage survive publish and reopen.
 
-Pinned by `web/playwright/tests/configuration-discovery-proving-journey.spec.ts` test 6, which
-asserts the gap so that closing it fails the test and forces the journey to be extended.
+### Implemented — public lead-capture intake reads the collection envelope
 
-### Open defect — collection projection can break public lead-capture intake
+Projecting guardians into a collection SUPPRESSES the flat guardian contact questions. The public
+form's CRM-intake path used to read only those flat fields, so a lead-capture submission recorded
+`intake_resolution_path = "skipped_missing_config"` and **no Processing case was opened** — a form
+could be published that silently could not capture a lead. Found by live certification, not by
+inspection.
 
-Found by live certification on the local stack, not by inspection.
+`resolveGuardianFromCollectionEnvelope.ts` closes it by making intake a CONSUMER of the same
+collection model Forms, Discovery and Processing already use. Recognition is by IDENTITY, never by
+label: a collection qualifies because its `provider_ref` resolves to a Relationship Definition whose
+operational role is guardian or parent. Renaming a document section, or a tenant writing "Caregiver"
+instead of "Parent", changes nothing. Field meaning comes from the schema's own `field_source`
+bindings, so no id or label is ever parsed.
 
-Projecting guardians into a collection SUPPRESSES the flat guardian contact questions — verified on
-the enrollment fixture, where `Email`, `Home Phone`, `Cell Phone` and `Work Phone` inside the
-"Parent or Guardian #1/#2" sections are all marked `suppressed_by_collection=col_parents_guardians`.
+It selects a primary contact deterministically (an existing canonical guardian with usable contact,
+then the first usable guardian in stable collection order) and never discards the other guardians. It
+performs no canonical Person write — Processing identity resolution owns create-vs-link.
 
-The public form's CRM-intake path reads FLAT guardian fields. With them suppressed, a lead-capture
-submission records:
+### Implemented — configured relationship commits are guarded
 
-```
-intake_resolution_path = "skipped_missing_config"
-intake_skip_reason     = "Guardian email or phone is required for intake — map fields via link
-                          intake_field_paths or use default guardian_* field ids."
-```
+Configured relationship-collection commits converge on the canonical adapter through
+`verifyRelationshipCommitAuthorization.ts`. The authority rule: a caller may identify WHICH proposal
+to commit, plus an anchor and a scope. It may never assert the role, the command, the entities or the
+write destination — all are re-derived server-side from the proposal's `collection_provider_ref`, and
+anything the caller does assert is compared and rejected on conflict, so a spoof surfaces as an error
+rather than succeeding under different semantics.
 
-so **no Processing case is opened**, and the journey cannot reach Processing proposals, approval or
-guarded commit through the public path.
+Supporting rules, each of which exists because its absence was a real defect:
 
-Two mechanisms are running in parallel and only one understands collections:
+- **The relationship anchor is explicit.** A child is never inferred from a household and a missing
+  anchor is never silently expanded to every child. Preview and commit resolve the anchor through the
+  same helper, so a preview always describes what the commit will do.
+- **The resolved Processing Case is the household authority.** A public submission is truthful when
+  created (`customer_id` null) and stays immutable source evidence; it is never back-filled to look as
+  though the household was known at intake time. Disagreement between submission and resolved case is
+  a 409 conflict, never a silent choice.
+- **The resolution revision is part of the commit identity.** A retry replays; a case re-resolved to a
+  different family is a distinct commit, never a replay against the previous household.
+- **Omission is a no-op.** A later response that drops a member deletes nothing. No deletion workflow
+  exists in V1 and none was introduced.
 
-- `collection_submission_envelope` IS stamped correctly on the submission (proven live: 3 groups,
-  3 rows, origins `existing/existing/respondent_added`, carrying provider_ref, instance_key and the
-  canonical person ids). The Part 2 contract works.
-- CRM intake, which is what actually OPENS the Processing case for a public link, does not read that
-  envelope — it looks for flat `guardian_*` values or an explicit `intake_field_paths` mapping.
+Nine spoof attempts are refused by the live route with specific codes, and the certification asserts
+that none of them wrote anything — see
+[`configuration-discovery-v1-certification.md`](./configuration-discovery-v1-certification.md).
 
-Options, in preference order:
+### Remaining follow-up — the direct relationship-action route
 
-1. Teach intake to resolve guardian contact from the collection envelope when the form projects
-   guardians into a collection. This keeps the projection lossless and needs no per-form config.
-2. Have the projection emit `intake_field_paths` on the published form/link pointing at the nested
-   guardian email/phone, so existing intake keeps working unchanged.
-3. Leave guardian contact questions unsuppressed when a form is lead-capture — the weakest option;
-   it reintroduces the duplicate flat questions the projection exists to remove.
+`POST /api/admin/relationship-actions/execute` calls `executeRelationshipAction` **directly** rather
+than through the command adapter. The spoofing half of this concern is now closed: the route resolves
+the definition from the action key, rejects a client-supplied `role_key` that disagrees with it
+(`client_role_not_authoritative`), derives the role from the definition, and validates scope against
+the definition's supported scopes.
 
-Until one lands, a collection-projected form is not safe to publish as a public lead-capture link.
-
-### Open follow-up — an unguarded write path
-
-`POST /api/admin/relationship-actions/execute` calls `executeRelationshipAction` **directly**,
-bypassing the command adapter. The adapter deliberately ignores a client-supplied `role_key` for
-fixed-role commands (anti-spoof); this route honours it, validating only against the org's active
-role keys. It is the live UI path for the relationship modals. Not changed here — it is a
-pre-existing authorization concern, not a consequence of this refactor — but it should be brought
-behind the same rule.
+What remains is structural, not an authorization hole: this route still reaches the executor without
+passing through the command adapter, so adapter-level concerns (ledger, delegation, invocation
+identity) do not apply to it. It is the live UI path for the relationship modals. Deferred to a future
+iteration — it is a pre-existing architectural seam, not a consequence of this work.
 
 ---
 
