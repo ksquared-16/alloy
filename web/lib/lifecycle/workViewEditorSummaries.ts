@@ -4,6 +4,7 @@ import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import type { WorkViewConfigV1Stored, WorkViewFilterV1 } from "@/lib/lifecycle/workViewsConfigV1";
 import { WORK_VIEW_CATCH_ALL_SUMMARY, WORK_VIEW_FILTER_OPERATOR_OPTIONS } from "@/lib/lifecycle/workViewsConfigV1";
 import { getWorkViewConditionField } from "@/lib/lifecycle/workViewConditionFieldRegistry";
+import { formatRelativeDateTokenLabel } from "@/lib/lifecycle/workViewFilterValueControls";
 
 function fieldLabel(fieldKey: string): string {
     return getWorkViewConditionField(fieldKey)?.label ?? fieldKey;
@@ -22,13 +23,12 @@ function formatFilterValue(value: unknown): string {
     if (raw === "tomorrow") return "Tomorrow";
     if (raw === "this_week") return "This week";
     if (raw === "next_week") return "Next week";
-    if (raw.startsWith("relative:")) {
-        const parts = raw.split(":");
-        if (parts.length >= 4) {
-            const direction = parts[1] === "previous" ? "Previous" : "Next";
-            return `${direction} ${parts[2]} ${parts[3]}`;
-        }
-    }
+    // Relative date tokens are `prev:14:days` / `next:1:months` — the format the value control writes
+    // and the evaluator reads. This used to look for a `relative:` prefix that NOTHING in the codebase
+    // has ever written, so a perfectly good dynamic condition summarised as "Prev:14:days" and read as
+    // broken configuration. `formatRelativeDateTokenLabel` is the one formatter for these.
+    const relative = formatRelativeDateTokenLabel(raw);
+    if (relative) return relative;
     return raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 

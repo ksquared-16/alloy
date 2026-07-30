@@ -12,6 +12,7 @@ import {
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import { isCanonicalWorkViewConditionFieldKey } from "@/lib/lifecycle/workViewCanonicalOperands";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
+import { parseRelativeDateToken } from "@/lib/lifecycle/workViewFilterValueControls";
 
 export type WorkViewFilterEvaluationNote = {
     field_key: string;
@@ -248,14 +249,23 @@ function addUtcMonths(d: Date, months: number): Date {
     return next;
 }
 
+/**
+ * A relative date token (`prev:14:days`, `next:1:months`) as a span test.
+ *
+ * The token GRAMMAR is not restated here. It used to be: an independently written copy of the same
+ * regex lived in this file while the builder's copy lived in `workViewFilterValueControls`, with
+ * nothing tying them together. Two hand-written parsers for one saved format is a drift waiting to
+ * happen — widen one and conditions authored in the builder quietly stop matching, or match something
+ * else. The builder owns what a token IS; this owns what it MEANS against a date.
+ */
 function parseRelativeDateTokenForEvaluation(
     raw: string,
 ): ((actualDate: Date, now: Date) => boolean) | null {
-    const match = raw.trim().match(/^(next|prev):(\d+):(days|weeks|months)$/);
-    if (!match) return null;
-    const direction = match[1];
-    const amount = Math.max(1, Number(match[2]));
-    const unit = match[3];
+    const parsed = parseRelativeDateToken(raw);
+    if (!parsed) return null;
+    const direction = parsed.direction;
+    const amount = Math.max(1, parsed.amount);
+    const unit = parsed.unit;
     return (actualDate, now) => {
         const todayStart = startOfUtcDay(now);
         const todayEnd = endOfUtcDay(now);

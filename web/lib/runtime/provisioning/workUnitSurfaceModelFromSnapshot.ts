@@ -40,7 +40,7 @@ import type { QueueRowVariant, QueueRecordFixedControls } from "@/lib/layout/que
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { WorkspaceHeaderKpiVm, WorkspaceHeaderPresentationModel } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import type { ProcessCardIcon, ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
-import { provisioningErrorKind, type ProvisioningAnswer } from "./workUnitProvisioningAnswer";
+import { provisioningErrorKind, type LensSetEntry, type ProvisioningAnswer } from "./workUnitProvisioningAnswer";
 import type { OperationalPresentation } from "./operationalPresentation";
 
 /**
@@ -112,6 +112,24 @@ function headerFromPresentation(p: OperationalPresentation): WorkspaceHeaderPres
 }
 
 /**
+ * THE PILL ORDER IS THE OPERATOR'S DECLARED ORDER.
+ *
+ * `LensSetEntry.displayOrder` carries what the builder's Work View ordering means, and until now every
+ * consumer mapped straight over it and dropped it — the strip was in the right order only because
+ * `savedWorkViewsFromDepartmentMetadata` happens to hand the array over pre-sorted. That made a
+ * published, contractual field inert, and left the operator's intent riding on an upstream array
+ * position that nothing promises to preserve. Any consumer that filtered, merged, or re-derived the
+ * lens set would have lost the ordering silently, and the field that looks authoritative would not
+ * have caught it.
+ *
+ * Sorted here, so the declared order is what decides. Ties break on label, matching
+ * `normalizeWorkViewsDisplayOrder` — one rule for lens order, not two.
+ */
+function lensSetInDeclaredOrder(lensSet: readonly LensSetEntry[]): LensSetEntry[] {
+    return [...lensSet].sort((a, b) => a.displayOrder - b.displayOrder || a.label.localeCompare(b.label));
+}
+
+/**
  * The committed world → the canonical Work Unit model.
  * Total function: every terminal (`operational` | `empty` | `error`) yields ONE coherent surface.
  */
@@ -138,7 +156,7 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
             // EVERY count stays null: counts are SETTLEMENT (U-S6) and this answer never reached it. A
             // pill with no badge is honest; a zero would be a claim this answer cannot make — the same
             // rule the operational path below already follows for `count`.
-            workViews: (frame?.lensSet ?? []).map((l): WorkViewLinkModel => ({
+            workViews: lensSetInDeclaredOrder(frame?.lensSet ?? []).map((l): WorkViewLinkModel => ({
                 id: l.id,
                 label: l.label,
                 isActive: l.id === frame?.activeWorkView.id,
@@ -170,7 +188,7 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
     }
 
     const p = snapshot.presentation;
-    const workViews: WorkViewLinkModel[] = snapshot.lensSet.map((l) => ({
+    const workViews: WorkViewLinkModel[] = lensSetInDeclaredOrder(snapshot.lensSet).map((l) => ({
         id: l.id,
         label: l.label,
         isActive: l.id === snapshot.activeWorkView.id,

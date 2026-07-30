@@ -178,3 +178,31 @@ describe("the family path is unchanged", () => {
         expect(s.destinationViewId).toBe("new_leads");
     });
 });
+
+// ── Lens pill order is the operator's declared order ─────────────────────────────────────────────
+
+import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
+
+const lens = (id: string, label: string, displayOrder: number) => ({ id, label, displayOrder });
+
+describe("the lens strip honours display_order, not array position", () => {
+    it("an operational answer sorts its pills by declared order", () => {
+        const model = workUnitSurfaceModelFromSnapshot({
+            terminal: "error",
+            code: "grain_ambiguous",
+            message: "refused",
+            orgId: "org-1",
+            workUnit: { id: "wu-1", key: "new_leads", name: "New Leads" },
+            navigationFrame: {
+                // Deliberately shuffled: this is what a consumer that filtered or merged would hand over.
+                lensSet: [lens("all_leads", "All Leads", 6), lens("leads", "Leads", 1), lens("tours", "Tours", 5)],
+                activeWorkView: { id: "leads", label: "Leads" },
+            },
+            timings: {
+                authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0, presentation_ms: 0,
+                records_ms: 0, projection_ms: 0, composition_ms: 0, total_ms: 0,
+            },
+        } as never);
+        expect(model.workViews.map((v) => v.id)).toEqual(["leads", "tours", "all_leads"]);
+    });
+});
