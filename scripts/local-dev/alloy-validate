@@ -139,14 +139,14 @@ run_validate() {
     cmd="$(resolve_kind_command "$kind" "$web_dir")"
   fi
 
-  # Result reuse (skip lease when we can honestly reuse).
-  #
-  # Reuse is keyed on (commit, kind) only, so it must NOT apply when the caller passed test paths or
-  # filters: a cached full-suite result does not answer "does this one file pass", and a cached focused
-  # result certainly does not answer the full suite. Different question, no reuse.
-  if [[ "$use_argv" -eq 0 && "$kind" != "command" && ${#extra[@]} -eq 0 ]]; then
+  # Result identity includes SCOPE, so a focused run is now safely cacheable under its own key and
+  # structurally cannot satisfy the full suite (see lib/validate-reuse.sh).
+  local scope_id
+  scope_id="$(alloy_validate_scope_id ${extra[@]+"${extra[@]}"})"
+
+  if [[ "$use_argv" -eq 0 && "$kind" != "command" ]]; then
     local reuse
-    reuse="$(alloy_validate_reuse_lookup "$commit" "$kind" "$web_dir" "$force" || true)"
+    reuse="$(alloy_validate_reuse_lookup "$commit" "$kind" "$web_dir" "$force" "$scope_id" "$cmd" || true)"
     if [[ "$reuse" == HIT\|* ]]; then
       local rpath rcode rsrc
       IFS='|' read -r _ rpath rcode rsrc <<<"$reuse"
@@ -235,8 +235,10 @@ run_validate() {
       "$(alloy_iso_now)" "$name" "$kind" "$rc" "$failure_class"
   } | tee -a "$vlog"
 
-  if [[ "$use_argv" -eq 0 && "$kind" != "command" && "$failure_class" != "config" ]]; then
-    alloy_validate_reuse_store "$commit" "$kind" "$web_dir" "$rc" "$name" "$slot"
+  # Scope is part of the key now, so a focused result records under its own identity rather than being
+  # suppressed. The outcome gate (inside the store) refuses anything that was not a real execution.
+  if [[ "$use_argv" -eq 0 && "$kind" != "command" ]]; then
+    alloy_validate_reuse_store "$commit" "$kind" "$web_dir" "$rc" "$name" "$slot" "$scope_id" "$cmd" "$failure_class"
   fi
   if [[ "$failure_class" == "config" ]]; then
     alloy_warn "${kind} FAILED TO START (CLI/config error, not a test failure) — result not cached."
