@@ -36,6 +36,7 @@ describe("opportunity drawer action UX hardening", () => {
         const hook = read("lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions.ts");
         expect(hook).toContain("action_preflight");
         expect(hook).toContain('action.action_type === "open_form"');
+        expect(hook).toContain('actionKey === "change_lead_location"');
         expect(hook).toContain("dispatchOpportunityDrawerScopedUpdate");
     });
 

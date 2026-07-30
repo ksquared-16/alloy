@@ -6,6 +6,7 @@
  */
 
 import type { InquirySummaryTaskPreviewRow } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
+import { formatActivitySignalSummary } from "@/lib/admin/activitySignals";
 import { formatActivityTimestamp } from "@/lib/presentation/presentationDateFormat";
 import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
@@ -152,11 +153,12 @@ export function resolveLeadActivityPreview(
         record._activity_signal && typeof record._activity_signal === "object"
             ? (record._activity_signal as Record<string, unknown>)
             : null;
-    const activitySummary = pickLine(
+    const activitySummaryRaw = pickLine(
         record.last_activity_summary,
         overview.last_activity_summary,
         activitySignal?.last_activity_summary,
     );
+    const activitySummary = formatActivitySignalSummary(activitySummaryRaw);
     const activityAt = pickLine(
         record.last_activity_at,
         overview.last_activity_at,

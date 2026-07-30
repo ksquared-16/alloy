@@ -138,22 +138,30 @@ export function summarizeWorkflowEventForSignal(
         const k = p.action_key != null ? String(p.action_key).trim() : "";
         return k ? humanizeSnakeCaseToken(k) : "Action taken";
     }
+    if (t === "stage_work_outcome_recorded") {
+        const outcomeLabel =
+            (p.outcome_label != null && String(p.outcome_label).trim())
+            || (p.outcome_key != null ? humanizeSnakeCaseToken(String(p.outcome_key).trim()) : "");
+        return outcomeLabel ? `Outcome recorded: ${outcomeLabel}` : "Work outcome recorded";
+    }
     if (
-        t === "opportunity_enrollment_packet_created" ||
-        t === "opportunity_enrollment_packet_opened" ||
-        t === "opportunity_enrollment_packet_step_completed" ||
-        t === "opportunity_enrollment_packet_completed" ||
-        t === "opportunity_enrollment_packet_sent" ||
-        t === "opportunity_enrollment_packet_submitted_for_review" ||
-        t === "opportunity_enrollment_packet_review_decision" ||
-        t === "opportunity_waitlist_manual_adjustment_created" ||
-        t === "opportunity_waitlist_manual_adjustment_updated" ||
-        t === "opportunity_waitlist_manual_adjustment_released"
+        t === "opportunity_enrollment_packet_created"
+        || t === "opportunity_enrollment_packet_opened"
+        || t === "opportunity_enrollment_packet_step_completed"
+        || t === "opportunity_enrollment_packet_completed"
+        || t === "opportunity_enrollment_packet_sent"
+        || t === "opportunity_enrollment_packet_submitted_for_review"
+        || t === "opportunity_enrollment_packet_review_decision"
+        || t === "opportunity_waitlist_manual_adjustment_created"
+        || t === "opportunity_waitlist_manual_adjustment_updated"
+        || t === "opportunity_waitlist_manual_adjustment_released"
     ) {
         const s = p.summary != null && String(p.summary).trim() ? String(p.summary).trim() : "";
         if (s) return s;
     }
-    return t || "Activity";
+    // Never surface raw event_type keys to operators.
+    if (t) return humanizeSnakeCaseToken(t);
+    return "Activity";
 }
 
 export function formatActivityRelativeShort(iso: string | null, nowMs: number): string | null {
@@ -193,6 +201,10 @@ export function formatActivitySignalSummary(
         const o = humanizeSnakeCaseToken(childLine[1]!.trim(), statusKeyLabels);
         const n = humanizeSnakeCaseToken(childLine[2]!.trim(), statusKeyLabels);
         return `Child lifecycle: ${o} → ${n}`;
+    }
+    // Stored summaries sometimes keep the raw event_type — humanize bare snake_case tokens.
+    if (/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(s)) {
+        return humanizeSnakeCaseToken(s, statusKeyLabels);
     }
     return s;
 }

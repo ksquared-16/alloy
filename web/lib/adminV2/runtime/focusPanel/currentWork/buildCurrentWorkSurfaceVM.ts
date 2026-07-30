@@ -412,6 +412,25 @@ function mergeActionVms(
     return merged;
 }
 
+/**
+ * When a tour booking already exists, What's Next must not keep advertising "Schedule tour".
+ * Rewrite schedule_tour → reschedule_tour so the CTA matches Tour card / helpful-action truth.
+ */
+export function alignTourScheduleActionForBookingState(
+    action: CurrentWorkActionVM,
+    tourScheduled: boolean,
+): CurrentWorkActionVM {
+    if (!tourScheduled) return action;
+    const key = (action.handlerKey || action.key || "").trim();
+    if (key !== "schedule_tour") return action;
+    return {
+        ...action,
+        key: "reschedule_tour",
+        handlerKey: "reschedule_tour",
+        label: "Reschedule tour",
+    };
+}
+
 /** Config-owned helpful actions: explicit template config first; legacy catalog/header fallback only when undefined. */
 function resolveHelpfulActions(args: {
     explicitRefs: CurrentWorkTemplateConfigOverlay["helpful_actions"] | undefined;
@@ -721,8 +740,12 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
 
     // Command integrity (Slice F): thread each action's resolved execution state onto the VM so
     // the card renders enabled only what is provably executable, and config errors stay observable.
-    const withActionExecution = <T extends CurrentWorkActionVM | null | undefined>(action: T): T =>
-        action ? ({ ...action, execution: resolveCurrentWorkActionExecution(action) } as T) : action;
+    const tourScheduled = context.signals.tour.scheduled === true;
+    const withActionExecution = <T extends CurrentWorkActionVM | null | undefined>(action: T): T => {
+        if (!action) return action;
+        const aligned = alignTourScheduleActionForBookingState(action, tourScheduled);
+        return { ...aligned, execution: resolveCurrentWorkActionExecution(aligned) } as T;
+    };
     const withActionExecutionAll = (actions: CurrentWorkActionVM[]): CurrentWorkActionVM[] =>
         actions.map((action) => withActionExecution(action)!);
 

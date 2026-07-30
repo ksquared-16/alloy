@@ -7,7 +7,10 @@ import {
     resolveInquiryChildOcmId,
     type InquiryChildLocationRow,
 } from "@/lib/admin/actions/changeLeadLocationContract";
-import { patchOpportunityCustomerMemberFromInquiryChild } from "@/lib/admin/drawer/inquiryChildFieldEdit";
+import {
+    patchChildParticipation,
+    patchOpportunityCustomerMemberFromInquiryChild,
+} from "@/lib/admin/drawer/inquiryChildFieldEdit";
 import { syncOpportunityLocationDisplayLabel } from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
@@ -27,6 +30,12 @@ export type ChangeLeadLocationSubmitResult = {
     updatedChildCount: number;
     nextRecord: ProofRuntimeRecord | null;
 };
+
+function trimId(value: unknown): string | null {
+    if (value == null) return null;
+    const text = String(value).trim();
+    return text.length > 0 ? text : null;
+}
 
 export async function patchOpportunityLeadLocation(params: {
     opportunityId: string;
@@ -49,6 +58,35 @@ export async function patchOpportunityLeadLocation(params: {
     return { ok: true };
 }
 
+/**
+ * Write an owned site onto a child that currently inherits the lead default.
+ * Prefer customer_member participation (handles unlinked / pre-OCM children);
+ * fall back to direct OCM PATCH only when we have a real opportunity_customer_members id.
+ */
+async function patchInheritingChildLocation(args: {
+    opportunityId: string;
+    locationId: string;
+    row: InquiryChildLocationRow;
+    fetchFn?: typeof fetch;
+}): Promise<boolean> {
+    const customerMemberId = trimId(args.row.customer_member_id);
+    if (customerMemberId) {
+        await patchChildParticipation({
+            customerMemberId,
+            opportunityId: args.opportunityId,
+            patch: { location_id: args.locationId },
+            fetchFn: args.fetchFn,
+        });
+        return true;
+    }
+    const ocmId = resolveInquiryChildOcmId(args.row);
+    if (!ocmId) return false;
+    await patchOpportunityCustomerMemberFromInquiryChild(ocmId, {
+        location_id: args.locationId,
+    });
+    return true;
+}
+
 export async function submitChangeLeadLocation(
     input: ChangeLeadLocationSubmitInput,
 ): Promise<ChangeLeadLocationSubmitResult> {
@@ -68,12 +106,13 @@ export async function submitChangeLeadLocation(
     if (input.applyToInheritingChildren) {
         const inheriting = listInheritingInquiryChildren(input.inquiryChildren);
         for (const row of inheriting) {
-            const ocmId = resolveInquiryChildOcmId(row);
-            if (!ocmId) continue;
-            await patchOpportunityCustomerMemberFromInquiryChild(ocmId, {
-                location_id: locationId,
+            const wrote = await patchInheritingChildLocation({
+                opportunityId,
+                locationId,
+                row,
+                fetchFn: input.fetchFn,
             });
-            updatedChildCount += 1;
+            if (wrote) updatedChildCount += 1;
         }
     }
 

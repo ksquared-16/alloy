@@ -33,6 +33,10 @@ type Props = {
 
 const SAVED_FLASH_MS = 1800;
 
+/**
+ * Predictive (optimistic) save: accept the edit in the UI immediately, then reconcile.
+ * Failures reopen edit and clear the optimistic value.
+ */
 export default function IdentityFieldGrid({
     rows,
     className,
@@ -45,7 +49,9 @@ export default function IdentityFieldGrid({
     const [editingFieldRef, setEditingFieldRef] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [justSavedFieldRef, setJustSavedFieldRef] = useState<string | null>(null);
+    const [optimisticValues, setOptimisticValues] = useState<Record<string, string>>({});
     const savedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const saveGen = useRef(0);
 
     useEffect(
         () => () => {
@@ -53,6 +59,24 @@ export default function IdentityFieldGrid({
         },
         [],
     );
+
+    // Drop optimistic overrides once parent truth catches up.
+    useEffect(() => {
+        setOptimisticValues((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            for (const row of rows) {
+                for (const cell of row.cells) {
+                    if (!(cell.fieldRef in next)) continue;
+                    if ((cell.value ?? "") === next[cell.fieldRef]) {
+                        delete next[cell.fieldRef];
+                        changed = true;
+                    }
+                }
+            }
+            return changed ? next : prev;
+        });
+    }, [rows]);
 
     const flashSaved = (fieldRef: string) => {
         if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
@@ -80,10 +104,14 @@ export default function IdentityFieldGrid({
                         const canInline =
                             Boolean(cell.editable && personId && (onSaveField || batchEdit));
                         const inBatch = Boolean(batchEdit && cell.editable && personId);
+                        const displayCell =
+                            cell.fieldRef in optimisticValues
+                                ? { ...cell, value: optimisticValues[cell.fieldRef] ?? "" }
+                                : cell;
                         return (
                             <IdentityFieldValue
                                 key={cell.fieldRef}
-                                cell={cell}
+                                cell={displayCell}
                                 className={clsx(
                                     "identity-field-grid__cell",
                                     cell.width === "half" && "identity-field-grid__cell--half",
@@ -116,11 +144,24 @@ export default function IdentityFieldGrid({
                                         : canInline
                                           ? {
                                                 isEditing: editingFieldRef === cell.fieldRef,
-                                                busy: saving,
-                                                onStartEdit: () => setEditingFieldRef(cell.fieldRef),
+                                                busy: saving && editingFieldRef === cell.fieldRef,
+                                                onStartEdit: () => {
+                                                    if (saving) return;
+                                                    setEditingFieldRef(cell.fieldRef);
+                                                },
                                                 onCancel: () => setEditingFieldRef(null),
                                                 onCommit: async (value, meta) => {
-                                                    if (!personId || !onSaveField) return;
+                                                    if (!personId || !onSaveField || saving) return;
+                                                    const displayValue =
+                                                        meta?.displayLabel?.trim() || value;
+                                                    const gen = ++saveGen.current;
+                                                    // Accept immediately — predictive save.
+                                                    setOptimisticValues((prev) => ({
+                                                        ...prev,
+                                                        [cell.fieldRef]: displayValue,
+                                                    }));
+                                                    setEditingFieldRef(null);
+                                                    flashSaved(cell.fieldRef);
                                                     setSaving(true);
                                                     try {
                                                         const result = await onSaveField({
@@ -129,12 +170,27 @@ export default function IdentityFieldGrid({
                                                             value,
                                                             displayLabel: meta?.displayLabel,
                                                         });
-                                                        if (!result || result.ok !== false) {
-                                                            setEditingFieldRef(null);
-                                                            flashSaved(cell.fieldRef);
+                                                        if (gen !== saveGen.current) return;
+                                                        if (result && result.ok === false) {
+                                                            setOptimisticValues((prev) => {
+                                                                const next = { ...prev };
+                                                                delete next[cell.fieldRef];
+                                                                return next;
+                                                            });
+                                                            setJustSavedFieldRef(null);
+                                                            setEditingFieldRef(cell.fieldRef);
                                                         }
+                                                    } catch {
+                                                        if (gen !== saveGen.current) return;
+                                                        setOptimisticValues((prev) => {
+                                                            const next = { ...prev };
+                                                            delete next[cell.fieldRef];
+                                                            return next;
+                                                        });
+                                                        setJustSavedFieldRef(null);
+                                                        setEditingFieldRef(cell.fieldRef);
                                                     } finally {
-                                                        setSaving(false);
+                                                        if (gen === saveGen.current) setSaving(false);
                                                     }
                                                 },
                                             }

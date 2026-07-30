@@ -50,5 +50,10 @@ export function listInheritingInquiryChildren(
 }
 
 export function resolveInquiryChildOcmId(row: InquiryChildLocationRow): string | null {
-    return trimOrNull(row.ocm_id) ?? trimOrNull(row.id);
+    const ocm = trimOrNull(row.ocm_id);
+    if (ocm) return ocm;
+    const id = trimOrNull(row.id);
+    // Household-only children use synthetic `unlinked:{customer_member_id}` ids — not OCM rows.
+    if (!id || id.startsWith("unlinked:")) return null;
+    return id;
 }

@@ -1,10 +1,16 @@
 "use client";
 
 import clsx from "clsx";
+import { useEffect, useId, useRef, useState } from "react";
 import { WS_FIELD_SELECT_CHROME } from "@/components/workspace/workspaceTokens";
 
 export type AlloySelectOption = { value: string; label: string };
 
+/**
+ * Controlled select with Alloy chrome.
+ * Uses a custom listbox (not native `<select>`) so the open menu stays white + midnight —
+ * native option popups ignore CSS on macOS and show the OS gray menu.
+ */
 export function AlloySelect({
     value,
     onChange,
@@ -26,24 +32,94 @@ export function AlloySelect({
     "aria-label"?: string;
     className?: string;
 }) {
-    // Always include an empty option so controlled value="" is valid while options
-    // load or when the field is cleared (matches SelectFieldControl).
+    const [open, setOpen] = useState(false);
+    const rootRef = useRef<HTMLDivElement>(null);
+    const listId = useId();
+
+    useEffect(() => {
+        if (!open) return;
+        const onPointerDown = (event: MouseEvent) => {
+            if (!rootRef.current?.contains(event.target as Node)) {
+                setOpen(false);
+            }
+        };
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setOpen(false);
+        };
+        document.addEventListener("mousedown", onPointerDown);
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+            document.removeEventListener("mousedown", onPointerDown);
+            document.removeEventListener("keydown", onKeyDown);
+        };
+    }, [open]);
+
+    const selected = options.find((o) => o.value === value);
+    const display = selected?.label ?? (value ? value : placeholder);
+
+    const pick = (next: string) => {
+        onChange(next);
+        setOpen(false);
+    };
+
     return (
-        <select
-            id={id}
-            value={value}
-            disabled={disabled}
-            aria-label={ariaLabel}
-            onChange={(e) => onChange(e.target.value)}
-            className={clsx(WS_FIELD_SELECT_CHROME, "w-full disabled:opacity-50", className)}
+        <div
+            ref={rootRef}
+            className={clsx("alloy-select", open && "alloy-select--open", className)}
             data-testid={testId}
         >
-            <option value="">{placeholder}</option>
-            {options.map((o) => (
-                <option key={o.value} value={o.value}>
-                    {o.label}
-                </option>
-            ))}
-        </select>
+            <button
+                type="button"
+                id={id}
+                disabled={disabled}
+                aria-label={ariaLabel}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                aria-controls={listId}
+                className={clsx(WS_FIELD_SELECT_CHROME, "alloy-select__trigger w-full disabled:opacity-50")}
+                onClick={() => {
+                    if (!disabled) setOpen((prev) => !prev);
+                }}
+            >
+                <span className={clsx("alloy-select__value", !selected && "alloy-select__value--placeholder")}>
+                    {display}
+                </span>
+                <span className="alloy-select__chevron" aria-hidden>
+                    ▾
+                </span>
+            </button>
+            {open ? (
+                <ul id={listId} role="listbox" className="alloy-select__list" aria-label={ariaLabel}>
+                    <li
+                        role="option"
+                        aria-selected={value === ""}
+                        className={clsx("alloy-select__option", value === "" && "alloy-select__option--selected")}
+                        onMouseDown={(event) => {
+                            event.preventDefault();
+                            pick("");
+                        }}
+                    >
+                        {placeholder}
+                    </li>
+                    {options.map((o) => (
+                        <li
+                            key={o.value}
+                            role="option"
+                            aria-selected={o.value === value}
+                            className={clsx(
+                                "alloy-select__option",
+                                o.value === value && "alloy-select__option--selected",
+                            )}
+                            onMouseDown={(event) => {
+                                event.preventDefault();
+                                pick(o.value);
+                            }}
+                        >
+                            {o.label}
+                        </li>
+                    ))}
+                </ul>
+            ) : null}
+        </div>
     );
 }
