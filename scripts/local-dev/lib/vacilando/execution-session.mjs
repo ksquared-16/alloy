@@ -18,7 +18,13 @@ export const SESSION_STATUSES = Object.freeze([
   "queued",
   "starting",
   "running",
+  "recovering",
+  "recovered",
+  "interrupted",
+  "lost",
+  "retrying",
   "awaiting_decision",
+  "awaiting_operator",
   "producing_evidence",
   "completed",
   "failed",
@@ -81,6 +87,9 @@ export function createExecutionSession({
     logs: [],
     completionPackage: null,
     decisionRequest: null,
+    /** Durable pause checkpoint for decision resume. */
+    checkpoint: null,
+    decisionAnswers: [],
     recovery: { attempts: 0, lastError: null },
     created_at: iso(nowMs),
     updated_at: iso(nowMs),
@@ -120,8 +129,49 @@ export function listExecutionSessions({ missionId = null, assignmentId = null, s
 
 export function getActiveSessionForAssignment(missionId, assignmentId) {
   return listExecutionSessions({ missionId, assignmentId }).find((s) =>
-    ["queued", "starting", "running", "awaiting_decision", "producing_evidence", "paused"].includes(s.status))
+    ["queued", "starting", "running", "recovering", "recovered", "retrying",
+      "awaiting_decision", "awaiting_operator", "producing_evidence", "paused", "interrupted"].includes(s.status))
     || null;
+}
+
+/** Persist a decision-pause checkpoint (Claude session id + question package). */
+export function persistDecisionCheckpoint(sessionId, {
+  decisionRequest,
+  connectorSessionId = null,
+  progressSnapshot = null,
+  pausedWork = null,
+  nowMs,
+} = {}) {
+  const session = getExecutionSession(sessionId);
+  if (!session) return null;
+  return updateExecutionSession(sessionId, {
+    status: "awaiting_decision",
+    connectorSessionId: connectorSessionId || session.connectorSessionId,
+    decisionRequest: decisionRequest || session.decisionRequest,
+    checkpoint: {
+      at: iso(nowMs),
+      connectorSessionId: connectorSessionId || session.connectorSessionId,
+      decisionRequest: decisionRequest || session.decisionRequest,
+      progress: progressSnapshot || session.progress,
+      pausedWork: pausedWork || session.progress?.activity || null,
+      assignmentId: session.assignmentId,
+      missionId: session.missionId,
+    },
+  }, { nowMs });
+}
+
+/** Append operator decision answer verbatim onto the session. */
+export function appendDecisionAnswer(sessionId, answer, { nowMs } = {}) {
+  const session = getExecutionSession(sessionId);
+  if (!session) return null;
+  const row = {
+    at: iso(nowMs),
+    ...answer,
+  };
+  return updateExecutionSession(sessionId, {
+    decisionAnswers: [...(session.decisionAnswers || []), row],
+    status: "retrying",
+  }, { nowMs });
 }
 
 export function updateExecutionSession(sessionId, patch = {}, { nowMs } = {}) {

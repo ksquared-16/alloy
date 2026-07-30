@@ -731,7 +731,7 @@ export function createVacilandoServer() {
           const out = await handleV2Post(path, body.value);
           if (out) return sendJson(res, out.status, out.body);
         } else if (req.method === "GET") {
-          const out = handleV2Get(path, url);
+          const out = await handleV2Get(path, url);
           if (out) return sendJson(res, out.status, out.body);
         }
         return sendJson(res, 404, { ok: false, error: "unknown_v2_route", path });
@@ -1365,6 +1365,13 @@ export function createVacilandoServer() {
       const rec = recoverMissions({ providerResumable });
       if (rec.length) console.log(`[missions] recovered ${rec.length} interrupted mission(s) (${rec.filter((r) => r.resumable).length} resumable)`);
     } catch { /* best-effort */ }
+    try {
+      import("./vacilando/execution-session-recovery.mjs").then(({ reconcileExecutionSessionsOnBoot }) => {
+        const ex = reconcileExecutionSessionsOnBoot();
+        const n = (ex.recovered?.length || 0) + (ex.lost?.length || 0) + (ex.interrupted?.length || 0);
+        if (n) console.log(`[execution-sessions] reconciled ${n} (recovered=${ex.recovered.length} interrupted=${ex.interrupted.length} lost=${ex.lost.length})`);
+      }).catch(() => {});
+    } catch { /* best-effort */ }
     startupTimings.recover_ms = Date.now() - tWarm;
 
     // Defer expensive compose / provider / GC until after the process is accepting.
@@ -1419,6 +1426,16 @@ export function getStartupTimings() {
 }
 
 export function startVacilandoServer(port = DEFAULT_PORT) {
+  // Desktop / auto defaults: real provider unless tests authorize mock.
+  if (!process.env.VACILANDO_EXECUTION_PROVIDER) {
+    process.env.VACILANDO_EXECUTION_PROVIDER = "auto";
+  }
+  if (process.env.VACILANDO_ALLOW_MOCK_PROVIDER !== "1"
+      && process.env.VACILANDO_EXECUTION_PROVIDER !== "mock") {
+    process.env.VACILANDO_ALLOW_MOCK_PROVIDER = "0";
+  }
+  process.env.VACILANDO_CONTROL_PLANE_PORT = String(port);
+
   recordControlPlaneEvent({ status: "starting", detail: `Binding :${port}`, timings: { process_started_at: startupTimings.process_started_at } });
   const tCreate = Date.now();
   const { server, close, beginBackgroundWarm } = createVacilandoServer();
@@ -1433,7 +1450,13 @@ export function startVacilandoServer(port = DEFAULT_PORT) {
       const bound = server.address()?.port ?? port;
       startupTimings.listen_ms = listenAt - startupTimings.process_started_at;
       noteBindTiming({ startedAtMs: startupTimings.process_started_at, listenAtMs: listenAt });
-      claimControlPlaneOwnership({ pid: process.pid, port: bound, worktree: process.cwd() });
+      claimControlPlaneOwnership({
+        pid: process.pid,
+        port: bound,
+        worktree: process.cwd(),
+        desktopOwned: process.env.VACILANDO_DESKTOP_OWNED === "1" || process.env.VACILANDO_OWNED === "1",
+        executionProvider: process.env.VACILANDO_EXECUTION_PROVIDER || "auto",
+      });
       // Warm only after accepting — health answers immediately.
       setImmediate(() => beginBackgroundWarm({ startedAtMs: startupTimings.process_started_at }));
       res({ server, close, port: bound, startupTimings: getStartupTimings() });

@@ -194,6 +194,7 @@ export async function handleV2Post(path, body) {
       missionId: mid,
       decisionId: v.decision_id || v.decisionId,
       chosenOptionId: v.chosen_option_id || v.chosenOptionId,
+      response: v.response || v.chosen_option_id || v.chosenOptionId,
       changesApprovedIntent: Boolean(v.changes_approved_intent || v.changesApprovedIntent),
       briefPatch: v.brief_patch || v.briefPatch,
       changeSummary: v.change_summary || v.changeSummary,
@@ -201,8 +202,18 @@ export async function handleV2Post(path, body) {
       invalidateWorkerContexts,
     });
     if (out.ok && mid) {
-      const { scheduleDispatchAfterKickoff } = await import("./assignment-dispatch.mjs");
-      scheduleDispatchAfterKickoff(mid, { actor: "director" });
+      const { resumeAfterDecisionAnswer } = await import("./assignment-dispatch.mjs");
+      // Durable resume — prefer prior Claude session; do not blind re-dispatch.
+      setTimeout(() => {
+        resumeAfterDecisionAnswer({
+          missionId: mid,
+          assignmentIds: out.decision?.affectedAssignments || [],
+          decision: out.decision,
+          chosenOptionId: v.chosen_option_id || v.chosenOptionId,
+          response: v.response || v.chosen_option_id || v.chosenOptionId,
+          actor: "director",
+        }).catch(() => {});
+      }, 10);
     }
     return { status: out.ok ? 200 : 409, body: out };
   }
@@ -351,8 +362,13 @@ export async function handleV2Post(path, body) {
   return null; // not a V2 route
 }
 
-export function handleV2Get(path, url) {
+export async function handleV2Get(path, url) {
   const q = (k) => url.searchParams.get(k);
+
+  if (path === "/api/v2/runtime/diagnostics") {
+    const { buildRuntimeDiagnostics } = await import("./runtime-diagnostics.mjs");
+    return { status: 200, body: await buildRuntimeDiagnostics() };
+  }
 
   if (path === "/api/v2/missions") {
     return { status: 200, body: { ok: true, missions: listMissionsV2(), home: missionsHomeVm() } };

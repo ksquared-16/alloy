@@ -819,12 +819,51 @@ We'll capture the context automatically.</p>
     });
   }
 
+  V2.fetchRuntimeDiagnostics = async function () {
+    try {
+      V2.state.runtimeDiagnostics = await get("/api/v2/runtime/diagnostics");
+      V2.state.runtimeDiagnosticsError = null;
+    } catch (e) {
+      V2.state.runtimeDiagnosticsError = String(e.message || e);
+    }
+    bump(); schedulePaint();
+  };
+
   V2.viewSettings = function () {
+    if (!V2.state.runtimeDiagnostics && !V2.state.runtimeDiagnosticsError) {
+      V2.fetchRuntimeDiagnostics();
+    }
+    const diag = V2.state.runtimeDiagnostics;
+    const claude = diag?.claude || {};
+    const ex = diag?.execution || {};
+    const claudePill = claude.state === "available" ? "ok"
+      : claude.state === "auth_missing" ? "warn"
+        : "bad";
     return shell("Settings", { lead: "Diagnostics and legacy tools." }) + `
       <section class="mc-sec">
         <h3>Diagnostics</h3>
-        <p class="muted">Compatibility surfaces for the previous Command Center.</p>
-        <h4>Legacy tools</h4>
+        <p class="muted">Execution runtime configuration and Claude availability.</p>
+        ${V2.state.runtimeDiagnosticsError && !diag
+          ? `<p class="muted">Could not load diagnostics: ${esc(V2.state.runtimeDiagnosticsError)}</p>`
+          : ""}
+        <div class="mc-stat-grid">
+          <div class="mc-stat"><div class="mc-stat-k">Configured provider</div><div class="mc-stat-v">${esc(ex.configuredProvider || "…")}</div></div>
+          <div class="mc-stat"><div class="mc-stat-k">Resolved provider</div><div class="mc-stat-v">${esc(ex.resolvedProvider || "…")}</div></div>
+          <div class="mc-stat"><div class="mc-stat-k">Auto-dispatch</div><div class="mc-stat-v">${diag ? (ex.autoDispatch ? "On" : "Off") : "…"}</div></div>
+          <div class="mc-stat"><div class="mc-stat-k">Mock authorized</div><div class="mc-stat-v">${diag ? (ex.mockAuthorized ? "Yes (test-only)" : "No") : "…"}</div></div>
+          <div class="mc-stat"><div class="mc-stat-k">Desktop-owned</div><div class="mc-stat-v">${diag ? (ex.desktopOwned ? "Yes" : "No") : "…"}</div></div>
+          <div class="mc-stat"><div class="mc-stat-k">Control plane PID</div><div class="mc-stat-v">${esc(String(diag?.pid || "…"))}</div></div>
+        </div>
+        <article class="mc-card" style="margin-top:12px">
+          <div class="mc-card-h"><b>Claude</b><span class="mc-pill ${claudePill}">${esc(claude.label || (diag ? "Unknown" : "Checking…"))}</span></div>
+          <p>${esc(claude.detail || "Loading Claude availability…")}</p>
+          ${claude.bin ? `<p class="muted">CLI: ${esc(claude.bin)}</p>` : ""}
+        </article>
+        ${(diag?.sessions?.recent || []).length ? `<div style="margin-top:12px">
+          <div class="mc-stat-k">Recent execution sessions</div>
+          <ul>${diag.sessions.recent.map((s) => `<li><code>${esc(s.sessionId)}</code> — ${esc(s.status)} — ${esc(s.activity || "")}</li>`).join("")}</ul>
+        </div>` : ""}
+        <h4 style="margin-top:20px">Legacy tools</h4>
         <div class="row gap">
           <button class="btn ghost" data-legacy-nav="command">Open Legacy Board</button>
           <button class="btn ghost" data-legacy-nav="director">Open Legacy Director</button>

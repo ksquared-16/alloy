@@ -55,6 +55,8 @@ export function claimControlPlaneOwnership({
   worktree = process.cwd(),
   argv = process.argv.slice(),
   missionId = null,
+  desktopOwned = process.env.VACILANDO_DESKTOP_OWNED === "1" || process.env.VACILANDO_OWNED === "1",
+  executionProvider = process.env.VACILANDO_EXECUTION_PROVIDER || "auto",
 } = {}) {
   ensureDir();
   const owner = {
@@ -64,6 +66,8 @@ export function claimControlPlaneOwnership({
     worktree,
     argv,
     missionId,
+    desktopOwned: Boolean(desktopOwned),
+    executionProvider: String(executionProvider || "auto"),
     claimed_at: iso(),
     host: os.hostname(),
   };

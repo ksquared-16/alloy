@@ -106,6 +106,8 @@ function childEnv() {
   const extra = [
     path.dirname(resolveNode()),
     `${home}/.nvm/versions/node/v22.21.1/bin`,
+    `${home}/.local/bin`,
+    `${home}/bin`,
     "/opt/homebrew/bin",
     "/usr/local/bin",
     "/usr/bin",
@@ -120,7 +122,75 @@ function childEnv() {
     seen.add(d);
     return true;
   });
-  return { ...process.env, PATH: merged.join(":") };
+  // Authoritative desktop defaults — Finder launches must not inherit a bare
+  // Terminal server lacking execution configuration.
+  const env = { ...process.env, PATH: merged.join(":") };
+  if (!env.VACILANDO_EXECUTION_PROVIDER || env.VACILANDO_EXECUTION_PROVIDER === "") {
+    env.VACILANDO_EXECUTION_PROVIDER = "auto";
+  }
+  // Mock is test-only; desktop never authorizes it unless the operator set it.
+  if (env.VACILANDO_ALLOW_MOCK_PROVIDER !== "1") {
+    env.VACILANDO_ALLOW_MOCK_PROVIDER = "0";
+  }
+  env.VACILANDO_DESKTOP_OWNED = "1";
+  env.VACILANDO_CONTROL_PLANE_PORT = String(PORT);
+  return env;
+}
+
+/** GET JSON from the control plane; null on failure. */
+function fetchJson(pathname) {
+  return new Promise((resolve) => {
+    const req = http.get({ host: HOST, port: PORT, path: pathname, timeout: 2500 }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => { body += c; });
+      res.on("end", () => {
+        try { resolve(JSON.parse(body)); } catch { resolve(null); }
+      });
+    });
+    req.on("error", () => resolve(null));
+    req.on("timeout", () => { req.destroy(); resolve(null); });
+  });
+}
+
+/**
+ * Kill whatever is listening on PORT so Vacilando.app can own it.
+ * Prefer the recorded control-plane owner PID when present.
+ */
+function reclaimPort() {
+  return new Promise((resolve) => {
+    const { execFile } = require("node:child_process");
+    execFile("lsof", ["-nP", `-iTCP:${PORT}`, "-sTCP:LISTEN", "-t"], { timeout: 4000 }, (err, stdout) => {
+      const pids = String(stdout || "")
+        .split(/\s+/)
+        .map((s) => Number(s))
+        .filter((n) => n > 0 && n !== process.pid);
+      if (!pids.length) return resolve({ killed: [] });
+      const killed = [];
+      for (const pid of pids) {
+        try {
+          process.kill(pid, "SIGTERM");
+          killed.push(pid);
+          log(`reclaimed :${PORT} — SIGTERM pid ${pid} (foreign/misconfigured control plane)`);
+        } catch (e) {
+          log(`reclaim pid ${pid} failed: ${e.message}`);
+        }
+      }
+      setTimeout(() => {
+        for (const pid of killed) {
+          try { process.kill(pid, 0); process.kill(pid, "SIGKILL"); } catch { /* gone */ }
+        }
+        resolve({ killed });
+      }, 1500);
+    });
+  });
+}
+
+/** True when the listening server is safe for Vacilando.app to attach to. */
+async function isAttachCompatible() {
+  const diag = await fetchJson("/api/v2/runtime/diagnostics");
+  if (!diag?.ok || !diag.execution) return false;
+  return Boolean(diag.execution.attachCompatible || diag.execution.desktopOwned);
 }
 
 // ---------------------------------------------------------------------------
@@ -208,18 +278,25 @@ async function recover() {
   for (;;) {
     if (shuttingDown) break;
     if (await probe()) {
-      managingServer = false;
-      restartAttempts = 0;
-      log(`attached to server on ${HOST}:${PORT}`);
-      await showApp();
-      break;
+      if (await isAttachCompatible()) {
+        managingServer = false;
+        restartAttempts = 0;
+        log(`attached to desktop-owned server on ${HOST}:${PORT}`);
+        await showApp();
+        break;
+      }
+      // Port occupied by a bare Terminal server (or mock) — reclaim ownership.
+      showStatus("Taking ownership of the control plane…");
+      log(`server on :${PORT} is not desktop-owned / misconfigured — reclaiming`);
+      await reclaimPort();
+      await new Promise((r) => setTimeout(r, 500));
     }
     try {
       if (!fs.existsSync(SERVER_ENTRY)) throw new Error(`server not found at ${SERVER_ENTRY}`);
       spawnServer();
       if (await waitForReady(Date.now() + READY_TIMEOUT_MS)) {
         restartAttempts = 0;
-        log("server ready");
+        log("server ready (desktop-owned, execution provider auto→Claude)");
         await showApp();
         break;
       }
@@ -454,6 +531,13 @@ if (!gotLock) {
     if (!mainWindow) return;
     if (mainWindow.isMaximized()) mainWindow.unmaximize();
     else mainWindow.maximize();
+  });
+
+  // Dock badge: count of conversations that need the operator (from the SPA).
+  ipcMain.on("dock:set-badge", (_e, count) => {
+    if (process.platform !== "darwin" || !app.dock) return;
+    const n = Math.max(0, Number(count) || 0);
+    try { app.dock.setBadge(n > 0 ? String(n) : ""); } catch { /* ignore */ }
   });
 
   app.whenReady().then(() => {

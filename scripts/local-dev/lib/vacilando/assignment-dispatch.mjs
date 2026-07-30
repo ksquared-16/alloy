@@ -31,8 +31,17 @@ import {
   getProvider,
   PROVIDER_LIFECYCLE_LABELS,
 } from "./execution-provider.mjs";
-import { createExecutionSession } from "./execution-session.mjs";
-import { runClaudeExecutionSession } from "./connectors/claude-connector.mjs";
+import {
+  createExecutionSession,
+  getActiveSessionForAssignment,
+  getExecutionSession,
+  appendDecisionAnswer,
+} from "./execution-session.mjs";
+import {
+  runClaudeExecutionSession,
+  resumeClaudeAfterDecision,
+} from "./connectors/claude-connector.mjs";
+import { getResumableSession } from "./execution-session-recovery.mjs";
 import { createDecision } from "./decisions.mjs";
 
 import {
@@ -161,6 +170,21 @@ async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, 
   const context = buildMissionContextPackage(missionId, { phaseId: assignment.phaseId });
   if (!context) return { ok: false, error: "context_unavailable" };
 
+  const existing = getActiveSessionForAssignment(missionId, assignmentId);
+  if (existing && ["running", "starting", "recovering", "recovered", "producing_evidence"].includes(existing.status)) {
+    story(missionId, {
+      type: "worker_health",
+      headline: "Dispatch skipped — session already active",
+      summary: `Director did not duplicate Claude for ${assignment.title}`,
+      assignmentId,
+      phaseId: assignment.phaseId,
+      actor,
+      detail: { sessionId: existing.sessionId, status: existing.status },
+      nowMs,
+    });
+    return { ok: false, error: "session_already_active", sessionId: existing.sessionId };
+  }
+
   const wid = workerIdFor("claude", slot ?? assignment.slot ?? 6);
   const session = createExecutionSession({
     missionId,
@@ -253,8 +277,8 @@ async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, 
     },
   });
 
-  if (finished?.status === "awaiting_decision") {
-    const dreq = finished.decisionRequest || {};
+  if (finished?.status === "awaiting_decision" || finished?.status === "awaiting_operator") {
+    const dreq = finished.decisionRequest || finished.checkpoint?.decisionRequest || {};
     createDecision({
       missionId,
       title: dreq.title || "Product decision required",
@@ -268,6 +292,7 @@ async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, 
       ],
       recommendation: dreq.recommendation || "proceed",
       recommendationReason: dreq.recommendationReason || "Claude recommendation",
+      impact: dreq.impact || {},
       affectedAssignments: [assignmentId],
       actor: "director",
       pauseAssignments,
@@ -277,6 +302,7 @@ async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, 
       providerLifecycle: "awaiting_decision",
       lastError: null,
       sessionId: finished.sessionId,
+      connectorSessionId: finished.checkpoint?.connectorSessionId || finished.connectorSessionId,
     }, { nowMs });
     story(missionId, {
       type: "decision_requested",
@@ -285,8 +311,13 @@ async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, 
       assignmentId,
       phaseId: assignment.phaseId,
       actor: "director",
+      detail: {
+        sessionId: finished.sessionId,
+        connectorSessionId: finished.checkpoint?.connectorSessionId || finished.connectorSessionId,
+      },
       nowMs,
     });
+    // Stop dependent dispatch — only this assignment is paused; dependents stay waiting.
     return {
       ok: false,
       error: "awaiting_decision",
@@ -770,6 +801,128 @@ async function dispatchAssignmentInner(missionId, assignmentId, { slot, actor, n
 }
 
 /** Schedule dispatch without blocking the approve HTTP response. */
+/**
+ * After an operator answers a Decision — resume the paused Claude session.
+ */
+export async function resumeAfterDecisionAnswer({
+  missionId,
+  assignmentIds = [],
+  decision = null,
+  chosenOptionId = null,
+  response = null,
+  slot = null,
+  actor = "director",
+  nowMs,
+} = {}) {
+  const results = [];
+  for (const assignmentId of assignmentIds) {
+    const session = getResumableSession(missionId, assignmentId)
+      || getActiveSessionForAssignment(missionId, assignmentId);
+    if (!session) {
+      // No session to resume — normal dispatch of ready assignment
+      results.push(await dispatchAssignment(missionId, assignmentId, { slot, actor, nowMs }));
+      continue;
+    }
+    appendDecisionAnswer(session.sessionId, {
+      decisionId: decision?.decisionId || null,
+      chosenOptionId,
+      response,
+      title: decision?.title || null,
+    }, { nowMs });
+
+    const key = `${missionId}:${assignmentId}`;
+    if (activeDispatches.has(key)) {
+      results.push({ ok: false, error: "dispatch_in_progress", assignmentId });
+      continue;
+    }
+    activeDispatches.add(key);
+    try {
+      const finished = await resumeClaudeAfterDecision(getExecutionSession(session.sessionId), {
+        decision,
+        chosenOptionId,
+        response,
+        cwd: executionCwd(missionId),
+        nowMs,
+        onProgress: () => {
+          setDispatchState(missionId, assignmentId, { providerLifecycle: "running" }, { nowMs });
+          recordHeartbeat({
+            workerId: session.workerId || workerIdFor("claude", slot ?? 6),
+            missionId,
+            assignmentId,
+            slot: Number(slot ?? 6) || 6,
+            progress: true,
+            provider: "claude",
+          });
+        },
+      });
+
+      if (finished?.status === "awaiting_decision") {
+        results.push({ ok: false, error: "awaiting_decision", sessionId: finished.sessionId });
+        continue;
+      }
+      if (finished?.status !== "completed") {
+        results.push({ ok: false, error: "resume_failed", sessionId: finished?.sessionId });
+        continue;
+      }
+
+      // Reuse completion path via a nested call pattern: attach evidence + validate
+      const assignment = getAssignment(missionId, assignmentId);
+      const wid = session.workerId || workerIdFor("claude", slot ?? 6);
+      const pkg = finished.completionPackage || {};
+      for (const ev of finished.evidence || []) {
+        attachEvidence({
+          missionId,
+          assignmentId,
+          type: ev.type || "log",
+          title: ev.title || "Session evidence",
+          description: ev.description || "",
+          fileUri: ev.fileUri || null,
+          acceptanceCriteriaIds: assignment?.acceptanceCriteriaIds || [],
+          createdBy: wid,
+          nowMs,
+        });
+      }
+      for (const type of ["log", "notes", "document"]) {
+        attachEvidence({
+          missionId,
+          assignmentId,
+          type,
+          title: `${type} — ${assignment?.title || assignmentId}`,
+          description: pkg.summary || "Resumed Claude session",
+          fileUri: (assignment?.expectedDeliverables || [])[0] || null,
+          acceptanceCriteriaIds: assignment?.acceptanceCriteriaIds || [],
+          createdBy: wid,
+          nowMs,
+        });
+      }
+      submitWorkerCompletion({
+        missionId,
+        assignmentId,
+        status: "complete",
+        summary: pkg.summary || "Claude completed after decision resume",
+        changesMade: pkg.filesModified || assignment?.expectedDeliverables || [],
+        acceptanceCriteriaResults: (assignment?.acceptanceCriteriaIds || []).map((id) => ({ id, status: "met" })),
+        confidence: "medium",
+        recommendation: pkg.recommendation || "Accept deliverable",
+        nowMs,
+      });
+      const validated = validateAssignmentCompletion(missionId, assignmentId, { actor, nowMs });
+      setDispatchState(missionId, assignmentId, {
+        providerLifecycle: validated.validation?.passed ? "completed" : "failed",
+        sessionId: finished.sessionId,
+      }, { nowMs });
+      if (validated.validation?.passed) {
+        const next = listAssignments(missionId).find((a) => a.status === "ready");
+        if (next) await dispatchAssignment(missionId, next.assignmentId, { slot, actor, nowMs });
+      }
+      results.push({ ok: Boolean(validated.validation?.passed), sessionId: finished.sessionId, resumed: true });
+    } finally {
+      activeDispatches.delete(key);
+    }
+  }
+  return { ok: true, results };
+}
+
 export function scheduleDispatchAfterKickoff(missionId, opts = {}) {
   if (process.env.VACILANDO_AUTO_DISPATCH === "0") {
     return { ok: true, scheduled: false, skipped: true, missionId };

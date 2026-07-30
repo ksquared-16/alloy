@@ -1,5 +1,9 @@
 # Authority Path Inventory — person → user → role → scope
 
+> **Authoritative accepted artifact** for Access & Identity V2 inventory.
+> An earlier draft at `docs/platform/planning/access-identity-v2/inventory.md` is superseded;
+> preserved for history at `archive/draft-inventory-pre-acceptance.md` (not operational truth).
+
 **Mission** `msn_f904f4970652b86e34` v1 · phase *Authority Path Inventory* · assignment `asg_e22f196db64054`
 **contentHash** `811d73bdb8cf97f0593db86a3f906c01`
 **Worktree** `wt6-vacilando-os-product-def` @ `agent/claude/6-vacilando-os-product-def`
