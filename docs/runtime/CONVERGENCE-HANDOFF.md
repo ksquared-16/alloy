@@ -46,6 +46,26 @@ Enrollment Definition's own liveness verdict over the real population, 13/13. On
 here and the script says so out loud**: Firefly holds zero non-live participations, so "closed
 participation never appears" is vacuously true against this data — unit-proven only.
 
+**OWED: a full-repo `vac run typecheck` never completed on 2026-07-30.** Not a code problem — the host
+was saturated by concurrent agents in `wt4-phase7-slice3-participant-runtime` and
+`wt2-assignment-schedule-ux` (load average ~70), and every attempt died with **exit 144**: leased,
+direct, detached, and scoped-to-changed-files alike. Run it when the host is quiet, before promotion.
+
+An earlier full run DID complete and caught the one real type error in this work (`entityType: "child"`
+missing from `OperationalSubjectEntityType`), which is fixed. The residual risk was then narrowed by
+inspection — **do not redo this**:
+
+| Widening | Verified |
+|---|---|
+| `OperationalSubjectEntityType` + `"child"` | used ONLY inside `resolveDefaultOperationalSubject.ts`; no exhaustive switch anywhere. Other `entityType === "opportunity"` sites belong to unrelated unions (forms, workflow, layout). |
+| `CurrentBusinessState.workTemplateKey/Label/required` → nullable | read only by the answer, `ProvisionedWorkUnitSurface.tsx` (fixed, browser-certified), and tests (passing). |
+| `situation.workTemplateLabel/required` → nullable | **ZERO** production readers — nothing dereferences either field. |
+| `primaryAction` → nullable | one dereference, in `ProvisionedWorkUnitSurface.tsx`; fixed. The panel VM already typed it `| null`. |
+
+No dangling `plan` reference survives the family/child split, and every import in the answer is still
+used. The whole child path was also compiled and executed end-to-end by the dev server during
+certification, so what remains unchecked is type-only, not behavioural.
+
 **Known, NOT fixed (next slice):** the *All Children in Enrollment* pill counts **8**, not 13 — the D5
 Settlement count locator is family-shaped. Counts are Settlement-only and governed by the
 enrichment-independent count doctrine, which is off-limits here. Also unchanged by choice:
