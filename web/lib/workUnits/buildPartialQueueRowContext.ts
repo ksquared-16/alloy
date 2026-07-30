@@ -9,6 +9,7 @@
  */
 
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
+import { formatHouseholdLeadDisplayTitle } from "@/lib/admin/opportunity/buildHouseholdLeadDisplayName";
 import { inquiryChildProfileFieldsFromRaw } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import {
     buildHouseholdChildrenLookup,
@@ -86,14 +87,23 @@ function readInquiryChildrenFromRow(row: Record<string, unknown>): unknown[] {
  * Case / household identity for queue row subject + `customer.display_name`.
  * Prefer `_customer_name` (household) over opportunity `title` — lead titles are
  * often the primary contact name, which must not displace authored household name.
+ * Format to `{Base} Family` so queue subject matches Focus Panel household titles.
  */
 function resolveCaseDisplayName(row: Record<string, unknown>): string {
-    return (
-        trimOrNull(row._customer_name) ??
-        trimOrNull(row.title) ??
-        trimOrNull(row.name) ??
-        "Case"
-    );
+    const householdBase =
+        trimOrNull(row._customer_name)
+        ?? trimOrNull(row["customer.display_name"])
+        ?? trimOrNull(row["customer.name"]);
+    if (householdBase) {
+        return formatHouseholdLeadDisplayTitle(householdBase);
+    }
+    const titleOrName = trimOrNull(row.title) ?? trimOrNull(row.name);
+    if (titleOrName) {
+        // Opportunity name may already be household-formatted (`Lyons Family`) after create;
+        // formatHouseholdLeadDisplayTitle is idempotent for those.
+        return formatHouseholdLeadDisplayTitle(titleOrName);
+    }
+    return "Case";
 }
 
 function resolveStatusKey(row: Record<string, unknown>): string {

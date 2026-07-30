@@ -60,6 +60,7 @@ import {
     readCreateNewOverride,
     type IdentityResolutionEligibility,
 } from "./identityResolutionEligibility";
+import { applyCreateLeadPostCommitPersistence } from "./applyCreateLeadPostCommitPersistence";
 
 export class OperatorServiceError extends Error {
     code: string;
@@ -468,6 +469,14 @@ export async function executeApprovedPlanForCase(
             severity: "warning",
             code: "partial_commit",
             message: attempt.operations.filter((o) => o.status === "failed" || o.status === "async_failed").map((o) => `${o.opId}:${o.error}`).join(","),
+        });
+    }
+
+    if (attempt.outcome === "committed" || attempt.outcome === "partially_committed") {
+        await applyCreateLeadPostCommitPersistence(deps.supabase, {
+            orgId: deps.orgId,
+            caseId: input.caseId,
+            attempt,
         });
     }
 

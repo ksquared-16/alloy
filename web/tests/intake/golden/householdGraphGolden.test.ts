@@ -125,7 +125,9 @@ export const GOLDEN_HOUSEHOLD_FIXTURES: GoldenFixtureExpectation[] = [
         children: 0,
         relationships: 0,
         has_address: true,
-        warning_codes: ["address_no_action_field"],
+        // Address is persisted via household commit / post-commit layout writers —
+        // no longer warned as "no action field".
+        warning_codes: [],
     },
     {
         id: "location-present",

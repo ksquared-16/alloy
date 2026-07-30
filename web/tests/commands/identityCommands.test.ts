@@ -320,10 +320,17 @@ describe("D0 handlers execute real repository behavior", () => {
         expect(store.persons).toHaveLength(1);
     });
 
-    it("validates create_person requires an email or phone signal", async () => {
+    it("validates create_person requires a full name or an email/phone signal", async () => {
         const v = await validateIdentityCommand(IDENTITY_COMMAND_KEYS.createPerson, { first_name: "A" }, ctx(new FakeStore()));
         expect(v.ok).toBe(false);
         expect(v.issues[0].code).toBe("insufficient_identity");
+
+        const nameOnly = await validateIdentityCommand(
+            IDENTITY_COMMAND_KEYS.createPerson,
+            { first_name: "Jason", last_name: "Lyons" },
+            ctx(new FakeStore()),
+        );
+        expect(nameOnly.ok).toBe(true);
     });
 
     it("runs a non-enrollment fixture: person + household + link + document attach", async () => {
