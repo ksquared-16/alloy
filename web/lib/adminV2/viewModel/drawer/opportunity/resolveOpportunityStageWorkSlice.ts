@@ -40,6 +40,10 @@ export type ResolveOpportunityStageWorkSliceParams = {
     stageLabel?: string | null;
     /** Preloaded department metadata (Tier-1 already has it). When omitted it is fetched (cached). */
     departmentMetadata?: unknown;
+    /** Child-grain subject — threaded into Current Work execution; never inferred as family. */
+    customerMemberId?: string | null;
+    opportunityCustomerMemberId?: string | null;
+    processInstanceId?: string | null;
 };
 
 const EMPTY_SLICE: OpportunityStageWorkSlice = {
@@ -67,6 +71,9 @@ export async function resolveOpportunityStageWorkSlice(
         departmentMetadata,
         builderStageKey: stageKey,
         stageLabel: params.stageLabel ?? null,
+        customerMemberId: params.customerMemberId,
+        opportunityCustomerMemberId: params.opportunityCustomerMemberId,
+        processInstanceId: params.processInstanceId,
     });
 
     const published_stage_inputs = resolvePublishedStageInputsForCurrentWork({

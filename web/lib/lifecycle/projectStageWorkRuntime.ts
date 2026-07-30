@@ -156,11 +156,64 @@ export function taskMatchesStageWorkTemplate(
 function buildExecutionSubject(
     opportunityId: string,
     journeySegment: "family" | "child",
+    childIdentity?: {
+        customer_member_id?: string | null;
+        opportunity_customer_member_id?: string | null;
+        process_instance_id?: string | null;
+    } | null,
 ): StageOutcomeExecutionSubject {
-    return {
+    const subject: StageOutcomeExecutionSubject = {
         journey_segment: journeySegment,
         opportunity_id: opportunityId,
     };
+    if (journeySegment !== "child") return subject;
+
+    const customerMemberId = trimOrNull(childIdentity?.customer_member_id);
+    const ocmId = trimOrNull(childIdentity?.opportunity_customer_member_id);
+    const processInstanceId = trimOrNull(childIdentity?.process_instance_id);
+    if (customerMemberId) subject.customer_member_id = customerMemberId;
+    if (ocmId) subject.opportunity_customer_member_id = ocmId;
+    if (processInstanceId) subject.process_instance_id = processInstanceId;
+    return subject;
+}
+
+/** Prefer explicit child identity; else stamp from open BP task metadata (never invent family grain). */
+function resolveChildIdentityForProjection(params: {
+    explicit?: {
+        customer_member_id?: string | null;
+        opportunity_customer_member_id?: string | null;
+        process_instance_id?: string | null;
+    } | null;
+    openRows: TaskDbRow[];
+}): {
+    customer_member_id?: string | null;
+    opportunity_customer_member_id?: string | null;
+    process_instance_id?: string | null;
+} | null {
+    const explicitMember = trimOrNull(params.explicit?.customer_member_id);
+    const explicitOcm = trimOrNull(params.explicit?.opportunity_customer_member_id);
+    const explicitPi = trimOrNull(params.explicit?.process_instance_id);
+    if (explicitMember || explicitOcm || explicitPi) {
+        return {
+            customer_member_id: explicitMember,
+            opportunity_customer_member_id: explicitOcm,
+            process_instance_id: explicitPi,
+        };
+    }
+    for (const row of params.openRows) {
+        const md = row.metadata ?? {};
+        const customerMemberId = trimOrNull(md.customer_member_id);
+        const ocmId = trimOrNull(md.opportunity_customer_member_id);
+        const processInstanceId = trimOrNull(md.process_instance_id);
+        if (customerMemberId || ocmId || processInstanceId) {
+            return {
+                customer_member_id: customerMemberId,
+                opportunity_customer_member_id: ocmId,
+                process_instance_id: processInstanceId,
+            };
+        }
+    }
+    return null;
 }
 
 function outcomesForTemplate(
@@ -318,6 +371,10 @@ export type ProjectStageWorkRuntimeSyncInput = {
     stageLabel?: string | null;
     openRows?: TaskDbRow[];
     completedRows?: TaskDbRow[];
+    /** Child-grain Current Work — required for child journey outcomes; never inferred as family. */
+    customerMemberId?: string | null;
+    opportunityCustomerMemberId?: string | null;
+    processInstanceId?: string | null;
 };
 
 /** Synchronous projection from preloaded tasks — used by drawer and batch queue enrichment. */
@@ -356,6 +413,17 @@ export function projectStageWorkRuntimeSync(
 
     const openList = params.openRows ?? [];
     const completedList = params.completedRows ?? [];
+    const childIdentity =
+        journeySegment === "child"
+            ? resolveChildIdentityForProjection({
+                  explicit: {
+                      customer_member_id: params.customerMemberId,
+                      opportunity_customer_member_id: params.opportunityCustomerMemberId,
+                      process_instance_id: params.processInstanceId,
+                  },
+                  openRows: openList,
+              })
+            : null;
 
     const items: StageWorkItemProjection[] = sortedTemplates.map((template, index) => {
         const openRow =
@@ -391,7 +459,7 @@ export function projectStageWorkRuntimeSync(
         execution: {
             department_id: departmentId,
             requires_outcome_picker: requiresOutcomePicker,
-            subject: buildExecutionSubject(params.opportunityId, journeySegment),
+            subject: buildExecutionSubject(params.opportunityId, journeySegment, childIdentity),
         },
     };
 }
@@ -404,6 +472,9 @@ export async function projectStageWorkRuntime(params: {
     departmentMetadata: unknown;
     builderStageKey: string | null;
     stageLabel?: string | null;
+    customerMemberId?: string | null;
+    opportunityCustomerMemberId?: string | null;
+    processInstanceId?: string | null;
 }): Promise<StageWorkRuntimeProjection | null> {
     const stageKey = trimOrNull(params.builderStageKey);
     if (!stageKey) return null;
@@ -455,6 +526,9 @@ export async function projectStageWorkRuntime(params: {
         stageLabel: params.stageLabel,
         openRows: (openRows ?? []) as TaskDbRow[],
         completedRows: (completedRows ?? []) as TaskDbRow[],
+        customerMemberId: params.customerMemberId,
+        opportunityCustomerMemberId: params.opportunityCustomerMemberId,
+        processInstanceId: params.processInstanceId,
     });
 }
 

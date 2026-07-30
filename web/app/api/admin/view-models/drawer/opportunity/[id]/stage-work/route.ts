@@ -33,6 +33,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const departmentId = (sp.get("department_id") ?? "").trim() || null;
     const stageKey = (sp.get("stage_key") ?? "").trim() || null;
     const stageLabel = (sp.get("stage_label") ?? "").trim() || null;
+    const customerMemberId = (sp.get("customer_member_id") ?? "").trim() || null;
+    const opportunityCustomerMemberId =
+        (sp.get("opportunity_customer_member_id") ?? "").trim() || null;
+    const processInstanceId = (sp.get("process_instance_id") ?? "").trim() || null;
 
     try {
         const slice = await resolveOpportunityStageWorkSlice({
@@ -42,6 +46,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             departmentId,
             stageKey,
             stageLabel,
+            customerMemberId,
+            opportunityCustomerMemberId,
+            processInstanceId,
         });
         return NextResponse.json(slice, {
             headers: {

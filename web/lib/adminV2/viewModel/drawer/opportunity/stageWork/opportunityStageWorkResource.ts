@@ -22,6 +22,10 @@ export type OpportunityStageWorkParams = {
     /** Builder stage_key (= `workspace.lifecycle_rail.current_stage_key`). */
     stageKey: string | null;
     stageLabel?: string | null;
+    /** Child-grain subject — included in cache key so siblings do not share execution subject. */
+    customerMemberId?: string | null;
+    opportunityCustomerMemberId?: string | null;
+    processInstanceId?: string | null;
 };
 
 type CacheEntry = { slice: OpportunityStageWorkSlice; fetchedAt: number };
@@ -34,14 +38,19 @@ function notify(): void {
     listeners.forEach((l) => l());
 }
 
-/** Stable per-record key: org + opportunity + department + stage. Null when no stage to resolve. */
+/** Stable per-record key: org + opportunity + department + stage (+ child subject when present). */
 export function opportunityStageWorkCacheKey(params: OpportunityStageWorkParams): string | null {
     const opp = params.opportunityId?.trim();
     const stage = params.stageKey?.trim();
     if (!opp || !stage) return null;
     const org = params.orgScope?.trim() || "_";
     const dept = params.departmentId?.trim() || "_";
-    return `${org}:opp:${opp}:dept:${dept}:stage:${stage}`;
+    const child =
+        params.customerMemberId?.trim()
+        || params.opportunityCustomerMemberId?.trim()
+        || params.processInstanceId?.trim()
+        || "_";
+    return `${org}:opp:${opp}:dept:${dept}:stage:${stage}:child:${child}`;
 }
 
 function buildFetchQuery(params: OpportunityStageWorkParams): string | null {
@@ -51,6 +60,11 @@ function buildFetchQuery(params: OpportunityStageWorkParams): string | null {
     qs.set("stage_key", stage);
     if (params.departmentId?.trim()) qs.set("department_id", params.departmentId.trim());
     if (params.stageLabel?.trim()) qs.set("stage_label", params.stageLabel.trim());
+    if (params.customerMemberId?.trim()) qs.set("customer_member_id", params.customerMemberId.trim());
+    if (params.opportunityCustomerMemberId?.trim()) {
+        qs.set("opportunity_customer_member_id", params.opportunityCustomerMemberId.trim());
+    }
+    if (params.processInstanceId?.trim()) qs.set("process_instance_id", params.processInstanceId.trim());
     return qs.toString();
 }
 

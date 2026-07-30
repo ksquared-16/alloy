@@ -2,6 +2,23 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/lifecycle/applyChildWaitlistViaOutcomeRuntime", () => ({
+    applyChildWaitlistViaOutcomeRuntime: vi.fn(async () => ({
+        ok: true as const,
+        opportunity_id: "opp-1",
+        customer_member_id: "child-1",
+    })),
+    resolveChildWaitlistSubjectFromOcm: vi.fn(async () => ({
+        opportunity_id: "opp-1",
+        customer_member_id: "child-1",
+        opportunity_customer_member_id: "ocm-1",
+    })),
+}));
+
+vi.mock("@/lib/lifecycle/resolveStageWorkOutcomeContext", () => ({
+    resolveEnrollmentDepartmentForOpportunity: vi.fn(async () => "dept-1"),
+}));
+
 import type { MutationResult } from "@/lib/mutations/types";
 import {
     buildChildEnrollmentDecisionIntent,
@@ -9,6 +26,7 @@ import {
     CHILD_ENROLLMENT_WAITLIST_TARGET_STATE,
     resolveChildEnrollmentTargetState,
 } from "@/lib/platform/commands/runtime/adapters/childEnrollmentMutationExecutionAdapter";
+import { applyChildWaitlistViaOutcomeRuntime } from "@/lib/lifecycle/applyChildWaitlistViaOutcomeRuntime";
 import { executeCommandInvocation } from "@/lib/platform/commands/runtime/executeCommandInvocation";
 import {
     isChildEnrollmentMutationFacadeSupported,
@@ -35,6 +53,7 @@ describe("Child Enrollment Mutation adapter (P2.S2)", () => {
     let mutationSpy: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
+        vi.mocked(applyChildWaitlistViaOutcomeRuntime).mockClear();
         mutationSpy = vi.fn(async (_ctx, intent, opts) => {
             if (opts?.previewOnly) {
                 return {
@@ -112,16 +131,11 @@ describe("Child Enrollment Mutation adapter (P2.S2)", () => {
         expect(update).toEqual({ targetState: "approved", strategy: "supplied" });
     });
 
-    it("executes the three capabilities through Mutation Runtime once", async () => {
-        const cases = [
+    it("routes status keys through Mutation Runtime; waitlist_child through outcome progression", async () => {
+        const mutationCases = [
             {
                 key: "update_child_enrollment_status",
                 payload: { target_state: "waitlisted" },
-                expected: "waitlisted",
-            },
-            {
-                key: "waitlist_child",
-                payload: { target_state: "enrolled" },
                 expected: "waitlisted",
             },
             {
@@ -131,7 +145,7 @@ describe("Child Enrollment Mutation adapter (P2.S2)", () => {
             },
         ] as const;
 
-        for (const c of cases) {
+        for (const c of mutationCases) {
             mutationSpy.mockClear();
             const result = await executeCommandInvocation({
                 request: {
@@ -160,9 +174,6 @@ describe("Child Enrollment Mutation adapter (P2.S2)", () => {
                 expect(result.mutationResult?.status).toBe("committed");
             }
             expect(mutationSpy).toHaveBeenCalledTimes(1);
-            expect(mutationSpy.mock.calls[0][0]).toEqual(
-                expect.objectContaining({ orgId: "org-real" })
-            );
             expect(mutationSpy.mock.calls[0][1]).toEqual(
                 expect.objectContaining({
                     commandKey: c.key,
@@ -170,12 +181,47 @@ describe("Child Enrollment Mutation adapter (P2.S2)", () => {
                     targetState: c.expected,
                     subjectId: "ocm-1",
                     operatorId: "user-real",
-                })
+                }),
             );
         }
+
+        mutationSpy.mockClear();
+        const waitlist = await executeCommandInvocation({
+            request: {
+                invocation: invocation({
+                    commandKey: "waitlist_child",
+                    inputValues: { target_state: "enrolled" },
+                    actor: { orgId: "spoof", userId: "spoof" },
+                }),
+                mode: "execute",
+                executionSubject: {
+                    entityType: "opportunity_customer_member",
+                    entityId: "ocm-1",
+                },
+                invocationId: "inv-waitlist_child",
+            },
+            server: { orgId: "org-real", userId: "user-real", supabase },
+            deps: { executeMutation: mutationSpy as never },
+        });
+        expect(waitlist.ok).toBe(true);
+        if (waitlist.ok) {
+            expect(waitlist.mutationResult?.status).toBe("committed");
+            if (waitlist.mutationResult?.status === "committed") {
+                expect(waitlist.mutationResult.newState).toBe("waitlisted");
+            }
+        }
+        expect(mutationSpy).not.toHaveBeenCalled();
+        expect(applyChildWaitlistViaOutcomeRuntime).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(applyChildWaitlistViaOutcomeRuntime).mock.calls[0]![0]).toEqual(
+            expect.objectContaining({
+                orgId: "org-real",
+                customerMemberId: "child-1",
+                opportunityId: "opp-1",
+            }),
+        );
     });
 
-    it("preview delegates without commit", async () => {
+    it("preview for waitlist_child does not commit mutation or outcome progression", async () => {
         const result = await executeCommandInvocation({
             request: {
                 invocation: invocation({
@@ -193,8 +239,8 @@ describe("Child Enrollment Mutation adapter (P2.S2)", () => {
         });
         expect(result.ok).toBe(true);
         if (result.ok) expect(result.status).toBe("previewed");
-        expect(mutationSpy.mock.calls[0][2]).toEqual({ previewOnly: true });
-        expect(mutationSpy.mock.calls[0][1].targetState).toBe("waitlisted");
+        expect(mutationSpy).not.toHaveBeenCalled();
+        expect(applyChildWaitlistViaOutcomeRuntime).not.toHaveBeenCalled();
     });
 
     it("rejects incompatible subject type before delegation", async () => {

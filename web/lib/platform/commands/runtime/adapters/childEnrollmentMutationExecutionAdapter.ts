@@ -1,12 +1,16 @@
 /**
  * Child Enrollment Mutation Runtime adapter (P2.S2).
  *
- * Delegates exactly once to `executeMutation` — never calls the enrollment domain
- * handler, RPCs, or OCM columns directly. Domain derives from capability/registry truth.
+ * Delegates exactly once to `executeMutation` for status-key commands — never calls the enrollment
+ * domain handler, RPCs, or OCM columns directly from this file. Domain derives from capability/
+ * registry truth.
+ *
+ * `waitlist_child` converges onto the Outcome Runtime path (disposition + stage + work
+ * reconciliation) so it does not double-write status/stage beside outcome rules.
  *
  * Target-state strategies (from domain readiness keys + semantic command meaning):
  * - update_child_enrollment_status → supplied target_state / status_key
- * - waitlist_child → fixed "waitlisted" (client conflict ignored)
+ * - waitlist_child → fixed "waitlisted" via outcome progression (not Mutation Runtime commit)
  * - enroll_child → fixed "enrolled" (client conflict ignored)
  *
  * Subject grain: opportunity_customer_member (OCM id). Not child person id.
@@ -29,6 +33,11 @@ import { isDestructiveOrReplacementCapability } from "@/lib/platform/commands/ru
 import type { CommandInvocationRequest } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 import type { CommandSnapshot } from "@/lib/platform/commands/runtime/commandRuntimeTypes";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+    applyChildWaitlistViaOutcomeRuntime,
+    resolveChildWaitlistSubjectFromOcm,
+} from "@/lib/lifecycle/applyChildWaitlistViaOutcomeRuntime";
+import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
 
 /** Canonical waitlist outcome — matches enrollment readiness rules / status defs. */
 export const CHILD_ENROLLMENT_WAITLIST_TARGET_STATE = "waitlisted" as const;
@@ -230,6 +239,8 @@ export async function executeChildEnrollmentMutationViaAdapter(
         throw new Error("[commandRuntime] Child Enrollment adapter requires subject id");
     }
 
+    input.guard.markDelegated();
+
     const intent = buildChildEnrollmentDecisionIntent({
         commandKey: input.commandKey,
         subjectId,
@@ -241,7 +252,114 @@ export async function executeChildEnrollmentMutationViaAdapter(
         overrideReason: input.overrideReason,
     });
 
-    input.guard.markDelegated();
+    // waitlist_child → Outcome Runtime (disposition + stage + work). Avoids double-writing
+    // OCM status via Mutation Runtime while outcomes also own stage movement.
+    if (canonical === "waitlist_child") {
+        if (input.mode === "preview") {
+            const previewResult: MutationResult = {
+                status: "previewed",
+                preview: {
+                    commandKey: input.commandKey,
+                    domain: "enrollment_status",
+                    subjectId,
+                    subjectType: "opportunity_customer_member",
+                    previousState: "",
+                    targetState: CHILD_ENROLLMENT_WAITLIST_TARGET_STATE,
+                    warnings: [],
+                    readinessGaps: [],
+                    sideEffects: [
+                        {
+                            kind: "automation",
+                            description: "Move child to Waitlist via outcome progression (status + stage)",
+                        },
+                    ],
+                },
+            };
+            return {
+                mutationResult: previewResult,
+                delegated: true,
+                domainKey: "enrollment_status",
+                decisionIntent: intent,
+                targetStateStrategy: targetResolved.strategy,
+            };
+        }
+
+        const resolved = await resolveChildWaitlistSubjectFromOcm({
+            supabase: input.supabase,
+            orgId: input.orgId,
+            opportunityCustomerMemberId: subjectId,
+        });
+        if ("error" in resolved) {
+            throw new Error(`[commandRuntime] ${resolved.error}`);
+        }
+
+        let departmentId = input.departmentId?.trim() || null;
+        if (!departmentId) {
+            departmentId = await resolveEnrollmentDepartmentForOpportunity({
+                supabase: input.supabase,
+                orgId: input.orgId,
+                opportunityId: resolved.opportunity_id,
+            });
+        }
+        if (!departmentId) {
+            throw new Error("[commandRuntime] Waitlist progression requires enrollment department");
+        }
+
+        const progression = await applyChildWaitlistViaOutcomeRuntime({
+            supabase: input.supabase,
+            orgId: input.orgId,
+            userId: input.userId ?? "",
+            departmentId,
+            opportunityId: resolved.opportunity_id,
+            customerMemberId: resolved.customer_member_id,
+            opportunityCustomerMemberId: resolved.opportunity_customer_member_id,
+        });
+        if (!progression.ok) {
+            const blocked: MutationResult = {
+                status: "blocked",
+                commandKey: input.commandKey,
+                domain: "enrollment_status",
+                subjectId,
+                blockedReason: progression.error,
+                blockedCode: "waitlist_outcome_progression_failed",
+            };
+            return {
+                mutationResult: blocked,
+                delegated: true,
+                domainKey: "enrollment_status",
+                decisionIntent: intent,
+                targetStateStrategy: targetResolved.strategy,
+            };
+        }
+
+        const committed: MutationResult = {
+            status: "committed",
+            mutationId: `waitlist-outcome:${resolved.customer_member_id}`,
+            commandKey: input.commandKey,
+            domain: "enrollment_status",
+            subjectId,
+            subjectType: "opportunity_customer_member",
+            previousState: "",
+            newState: CHILD_ENROLLMENT_WAITLIST_TARGET_STATE,
+            warnings: progression.degraded
+                ? [{ code: "degraded_side_effect", message: progression.degraded, severity: "warn" }]
+                : [],
+            sideEffects: [
+                {
+                    kind: "automation",
+                    description: "Child Waitlist outcome progression (disposition + stage)",
+                },
+            ],
+            committedAt: new Date().toISOString(),
+        };
+        return {
+            mutationResult: committed,
+            delegated: true,
+            domainKey: "enrollment_status",
+            decisionIntent: intent,
+            targetStateStrategy: targetResolved.strategy,
+        };
+    }
 
     const run = input.deps?.executeMutation ?? executeMutation;
     const mutationResult = await run(

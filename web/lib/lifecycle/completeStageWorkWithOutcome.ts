@@ -369,6 +369,26 @@ async function resolveOutcomeExecutionPlan(
     const outcome = plan.outcomes.find((o) => o.outcome_key === outcomeKey);
     if (!outcome) return { ok: false, message: "Unknown outcome for stage" };
 
+    // Child-grain plans must carry a child subject — never silently execute as family/case.
+    if ((plan.journey_segment ?? "family") === "child") {
+        const hasChild =
+            Boolean(input.subject.customer_member_id?.trim())
+            || Boolean(input.subject.opportunity_customer_member_id?.trim())
+            || Boolean(input.subject.process_instance_id?.trim());
+        if (!hasChild) {
+            return {
+                ok: false,
+                message: "Child enrollment subject required for this stage outcome",
+            };
+        }
+        if (input.subject.journey_segment !== "child") {
+            return {
+                ok: false,
+                message: "Child-grain outcome cannot run with family/case subject grain",
+            };
+        }
+    }
+
     return {
         ok: true,
         plan,
