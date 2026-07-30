@@ -113,6 +113,9 @@ export function resolveQueueRowFieldValueFromContext(
             return context.waitlist_context?.position_label?.trim() || null;
         case "waitlist.waitSince":
             return context.waitlist_context?.wait_since?.trim() || null;
+        case "opportunity.days_in_stage":
+        case "queue_row.operational_age":
+            return context.operational_state?.age_compact?.trim() || null;
         default:
             return null;
     }

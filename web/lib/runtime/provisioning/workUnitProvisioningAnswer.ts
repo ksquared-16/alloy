@@ -440,7 +440,7 @@ export async function composeWorkUnitProvisioningAnswer(
     const recordsPromise = (async () =>
         req.supabase
             .from("opportunities")
-            .select("id, org_id, work_unit_id, status_key, stage_key, updated_at, name, title, metadata, primary_person_id, location_id, customer_id")
+            .select("id, org_id, work_unit_id, status_key, stage_key, stage_entered_at, created_at, updated_at, name, title, metadata, primary_person_id, location_id, customer_id")
             .eq("org_id", req.orgId)
             .eq("work_unit_id", workUnit.id)
             .limit(500))();

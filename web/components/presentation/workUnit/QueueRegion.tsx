@@ -36,6 +36,12 @@ import { queueRowsForListDuringHold } from "@/lib/presentation/runtime/queueRows
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
 import { queueScrollScope } from "@/lib/presentation/runtime/workUnitOperatorContext";
+import {
+    acknowledgeQueueRowOpened,
+    hydrateOccurrencesSeenLocally,
+    occurrenceKeyFromQueueRowContext,
+    useLocallySeenOccurrenceCount,
+} from "@/lib/queues/queuePersonalSeenSession";
 
 const QUEUE_SKELETON_ROW_COUNT = 3;
 
@@ -130,17 +136,27 @@ export function QueueRegion({
             setOptimisticSelectedId(null);
         }
     }, [selectedRecordId, optimisticSelectedId]);
+    const { orgId, principalUserId } = useWorkspaceOrg();
+    const locallySeenCount = useLocallySeenOccurrenceCount();
+    const queueScrollRef = useRetainedScroll(queueScrollScope(orgId, workUnitId, workViewId));
+
     const openRecordAck = useCallback(
         (row: QueueRowModel) => {
             setOptimisticSelectedId(row.entityId);
+            // Intentional row activation (pointer or keyboard) — mark personal seen.
+            // Prefetch / default auto-open do not call this path.
+            if (orgId && principalUserId && row.context) {
+                void acknowledgeQueueRowOpened({
+                    orgId,
+                    userId: principalUserId,
+                    context: row.context,
+                });
+            }
             openRecord(row);
         },
-        [openRecord],
+        [openRecord, orgId, principalUserId],
     );
     const effectiveSelectedId = optimisticSelectedId ?? selectedRecordId;
-    // Retained queue scroll — per (org, work unit, work view) so Work View A→B→A restores each place.
-    const { orgId } = useWorkspaceOrg();
-    const queueScrollRef = useRetainedScroll(queueScrollScope(orgId, workUnitId, workViewId));
 
     const lastMarkedQueueStateRef = useRef<string | null>(null);
     useEffect(() => {
@@ -187,6 +203,32 @@ export function QueueRegion({
     }, [workViewId]);
     const facets = useMemo(() => deriveQueueRowFilterFacets(queue.rows), [queue.rows]);
     const visibleRows = useMemo(() => applyQueueRowFilters(queue.rows, filters), [queue.rows, filters]);
+    // Hydrate personal seen for visible occurrence keys (stale refresh cannot revive cleared dots).
+    useEffect(() => {
+        if (!orgId || !principalUserId || !queue.rows.length) return;
+        const keys = queue.rows
+            .map((row) => occurrenceKeyFromQueueRowContext(row.context, principalUserId, orgId))
+            .filter((k): k is string => Boolean(k));
+        if (!keys.length) return;
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch(
+                    `/api/admin/queues/stage-membership-ack?keys=${encodeURIComponent(keys.join(","))}`,
+                );
+                if (!res.ok || cancelled) return;
+                const body = (await res.json()) as { occurrence_keys?: string[] };
+                if (!cancelled && Array.isArray(body.occurrence_keys)) {
+                    hydrateOccurrencesSeenLocally(body.occurrence_keys);
+                }
+            } catch {
+                // Ignore hydration failures — local session still protects post-open clears.
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [orgId, principalUserId, queue.rows]);
     const holdActive = queue.loading && queue.rows.length > 0;
     const rowsForList = queueRowsForListDuringHold({
         queueRows: queue.rows,
