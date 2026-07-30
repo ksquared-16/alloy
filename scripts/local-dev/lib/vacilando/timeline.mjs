@@ -27,6 +27,8 @@ export const TIMELINE_EVENT_TYPES = new Set([
   "blocker",
   "decision_requested",
   "decision_answered",
+  "operator_message",
+  "director_response",
   "worker_health",
   "recovery",
   "commit",

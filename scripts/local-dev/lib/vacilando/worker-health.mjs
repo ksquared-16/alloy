@@ -176,7 +176,37 @@ export function recoverWorker({
   ]);
   const UNSAFE = new Set(["destroy_worktree", "hard_reset", "discard_uncommitted"]);
   if (UNSAFE.has(action)) {
-    return { ok: false, error: "unsafe_recovery", message: "Refusing destructive recovery without operator approval" };
+    const tel = getWorkerTelemetry(workerId) || recordHeartbeat({ workerId, missionId, assignmentId, nowMs });
+    tel.status = tel.status === "healthy" ? "failed" : tel.status;
+    tel.operatorActionRequired = true;
+    tel.last_recovery = {
+      action,
+      at: iso(nowMs),
+      actor,
+      requiresOperatorApproval: true,
+      refused: true,
+      reason: "unsafe_recovery",
+    };
+    write(tel);
+    const mid = missionId || tel.missionId;
+    if (mid) {
+      appendTimelineEvent(mid, {
+        type: "recovery",
+        summary: `Recovery requires your approval — refused unsafe action (${action})`,
+        visibility: "summary",
+        assignmentId: assignmentId || tel.assignmentId,
+        actor,
+        detail: { action, workerId, requiresOperatorApproval: true },
+        nowMs,
+      });
+    }
+    return {
+      ok: false,
+      error: "unsafe_recovery",
+      message: "Refusing destructive recovery without operator approval",
+      telemetry: tel,
+      requiresOperatorApproval: true,
+    };
   }
   if (!SAFE.has(action)) {
     return { ok: false, error: "unknown_recovery_action" };

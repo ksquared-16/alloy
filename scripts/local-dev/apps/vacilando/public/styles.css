@@ -773,7 +773,11 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .mc-confidence .mc-conf-bar{height:10px;background:rgba(0,0,0,.06);border-radius:99px;overflow:hidden;margin:10px 0 12px}
 .mc-conf-fill{height:100%;background:#2f6b45;border-radius:99px}
 .mc-conf-f{font-size:13px;padding:4px 0;border-top:1px solid rgba(0,0,0,.04)}
-@media(max-width:900px){.mc-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mc-provider-line{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:13px;color:var(--ink-2)}
+.mc-provider-line span{padding:4px 10px;border-radius:999px;background:rgba(47,107,69,.1);color:#1f4d30}
+.mc-usage-row{display:grid;grid-template-columns:100px repeat(4,minmax(0,1fr));gap:8px;padding:8px 0;border-top:1px solid rgba(0,0,0,.05);font-size:13px}
+.mc-usage summary{cursor:pointer;list-style:none}
+@media(max-width:900px){.mc-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mc-usage-row{grid-template-columns:1fr 1fr}}
 @media(max-width:720px){
   .mc-q-row{grid-template-columns:1fr}
   .mc-actions .btn{width:100%}

@@ -127,7 +127,12 @@
   };
   V2.fetchDashboard = V2.fetchOverview;
   V2.fetchNeedsYou = async () => {
-    try { V2.state.needsYou = await get("/api/v2/views/needs-you"); bump(); schedulePaint(); } catch { /* keep */ }
+    try {
+      V2.state.needsYou = await get("/api/v2/views/needs-you");
+      const el = document.getElementById("nb-needs");
+      if (el) el.textContent = String((V2.state.needsYou.items || []).length);
+      bump(); schedulePaint();
+    } catch { /* keep */ }
   };
   V2.fetchWorkers = async () => {
     try { V2.state.workersHome = await get("/api/v2/views/workers"); bump(); schedulePaint(); } catch { /* keep */ }
@@ -242,6 +247,8 @@
     const work = dash.currentWork || [];
     const progress = dash.recentProgress || [];
     const timeline = dash.timeline || [];
+    const providers = dash.providers || [];
+    const usage = dash.resourcesUsage || {};
 
     const summaryStrip = `<section class="mc-dash-summary">
       <div class="mc-dash-title-row">
@@ -258,6 +265,7 @@
         <div class="mc-stat"><div class="mc-stat-k">Confidence</div><div class="mc-stat-v">${esc(s.confidencePercent)}%</div></div>
         <div class="mc-stat"><div class="mc-stat-k">Next checkpoint</div><div class="mc-stat-v">${esc(s.nextCheckpoint)}</div></div>
       </div>
+      ${providers.length ? `<div class="mc-provider-line">${providers.map((p) => `<span>${esc(p.label)}</span>`).join("")}</div>` : ""}
     </section>`;
 
     const directorSec = `<section class="mc-sec mc-director">
@@ -301,12 +309,24 @@
       ${work.length
         ? work.map((w) => `<div class="mc-work-row">
             <div class="mc-card-h"><b>${esc(w.title)}</b><span class="mc-pill">${esc(w.statusLabel)}</span></div>
-            ${w.handledBy ? `<div class="muted">Handled by ${esc(w.handledBy)}</div>` : `<div class="muted">Unassigned</div>`}
+            <div class="muted">${esc(w.handledByLabel || (w.handledBy ? `Handled by ${w.handledBy}` : "Unassigned"))}</div>
             ${w.progressSummary ? `<div>${esc(w.progressSummary)}</div>` : ""}
             ${w.healthLabel ? `<div class="muted">${esc(w.healthLabel)}</div>` : ""}
           </div>`).join("")
         : `<div class="rempty">No work items yet</div>`}
     </section>`;
+
+    const usageSec = `<details class="mc-sec mc-usage" open>
+      <summary><h3 style="display:inline">Resources &amp; Usage</h3></summary>
+      <p class="muted">${esc(usage.note || "Provider-reported usage only.")}</p>
+      ${(usage.byProvider || []).map((u) => `<div class="mc-usage-row">
+        <b>${esc(u.provider)}</b>
+        <span>${esc(u.activeWorkers)} active</span>
+        <span>Session: ${esc(u.sessionDuration)}</span>
+        <span>Tokens: ${esc(u.tokens)}</span>
+        <span>Est. cost: ${esc(u.estimatedCost)}</span>
+      </div>`).join("") || `<div class="rempty">No usage recorded yet</div>`}
+    </details>`;
 
     const recentSec = `<section class="mc-sec">
       <h3>Recent Progress</h3>
@@ -342,7 +362,7 @@
       active: "dashboard",
       lead: `${esc(s.statusLabel)} · Confidence ${esc(s.confidencePercent)}% · Next: ${esc(s.nextCheckpoint)}`,
       actions: actionBtn(s.primaryAction),
-    }) + summaryStrip + directorSec + needsSec + `<div class="mc-grid">${workSec}${recentSec}</div>` + confSec + tlSec + `</div>`;
+    }) + summaryStrip + directorSec + needsSec + `<div class="mc-grid">${workSec}${recentSec}</div>` + usageSec + confSec + tlSec + `</div>`;
   };
 
   V2.viewNeedsYou = function () {
@@ -419,16 +439,20 @@
       return shell("Worker") + errPanel("Worker not found", { message: V2.state.workerDetailError }) + `</div>`;
     }
     const w = V2.state.workerDetail.worker;
-    return shell(w.deliverable, {
+    return shell(w.deliverable || w.assignmentTitle || "Worker", {
       lead: `${esc(w.missionTitle)} · ${esc(w.healthLabel)}`,
       actions: `<button class="btn sm" data-nav="workers">← Workers</button>`,
     }) + `
       <section class="mc-sec">
         <h3>Assignment</h3>
+        <p><b>${esc(w.assignmentTitle || w.deliverable)}</b></p>
         <p>${esc(w.objective)}</p>
-        <p><b>Current activity:</b> ${esc(w.currentActivity)}</p>
+        <p><b>Provider / model:</b> ${esc(w.provider || w.model || "Unknown")}</p>
+        <p><b>Runtime:</b> ${esc(w.runtimeDuration || "Unavailable")}</p>
+        <p><b>Current session:</b> ${esc(w.currentSession || w.currentActivity)}</p>
         <p><b>Next step:</b> ${esc(w.nextStep)}</p>
         <p><b>Director:</b> ${esc(w.directorAction)}</p>
+        ${w.directorManagedRecovery ? `<p class="muted">Director is handling recovery — no action needed from you.</p>` : ""}
         ${w.issueDetail ? `<p class="warn">${esc(w.issueDetail)}</p>` : ""}
       </section>
       <section class="mc-sec">
@@ -657,6 +681,17 @@
     </div>`;
   };
 
+  async function refreshNeedsBadge() {
+    try {
+      const j = await get("/api/v2/views/needs-you");
+      V2.state.needsYou = j;
+      const n = (j.items || []).length;
+      const el = document.getElementById("nb-needs");
+      if (el) el.textContent = String(n);
+      bump();
+    } catch { /* keep */ }
+  }
+
   // Answer decision
   async function answerDecision(missionId, decisionId, optionId, response) {
     V2.state.kickoffBusy = "Recording your decision";
@@ -673,6 +708,33 @@
       V2.state.decisionsVm = null;
       V2.state.needsYou = null;
       V2.state.kickoffBusy = null;
+      await refreshNeedsBadge();
+      bump(); schedulePaint();
+      location.hash = "#/missions/" + encodeURIComponent(missionId);
+    } catch (e) {
+      V2.state.kickoffBusy = null;
+      V2.state.kickoffError = e;
+      bump(); schedulePaint();
+    }
+  }
+
+  async function sendDirectorMessage(kind, decisionId, missionId, message) {
+    V2.state.kickoffBusy = kind === "ask" ? "Asking Director" : "Sending direction";
+    bump(); schedulePaint();
+    try {
+      const out = await post("/api/v2/director/message", {
+        mission_id: missionId,
+        decision_id: decisionId,
+        kind,
+        message,
+      });
+      V2.state.decisionDetail = null;
+      V2.state.overview = null;
+      V2.state.decisionsVm = null;
+      V2.state.needsYou = null;
+      V2.state.kickoffBusy = null;
+      V2.state.lastDirectorMessage = out;
+      await refreshNeedsBadge();
       bump(); schedulePaint();
       location.hash = "#/missions/" + encodeURIComponent(missionId);
     } catch (e) {
@@ -707,15 +769,17 @@
       return;
     }
     if (t.dataset.mcAsk) {
+      const d = V2.state.decisionDetail?.decision;
       const msg = prompt("What should Director clarify?");
-      if (msg) alert("Director note recorded locally: " + msg + "\n(Ask-Director channel will deliver in a later tranche.)");
+      if (!msg || !d) return;
+      sendDirectorMessage("ask", d.decisionId, d.missionId, msg);
       return;
     }
     if (t.dataset.mcReject) {
-      const msg = prompt("Provide direction for Director:");
-      if (!msg) return;
       const d = V2.state.decisionDetail?.decision;
-      if (d) answerDecision(d.missionId, d.decisionId, d.options?.[d.options.length - 1]?.id || d.recommendationId, "Reject: " + msg);
+      const msg = prompt("Provide direction for Director:");
+      if (!msg || !d) return;
+      sendDirectorMessage("reject_direction", d.decisionId, d.missionId, msg);
       return;
     }
 
@@ -869,8 +933,14 @@
   });
 
   if (typeof requestIdleCallback === "function") {
-    requestIdleCallback(() => { if (!V2.state.missionsHome) V2.fetchMissions(); }, { timeout: 2000 });
+    requestIdleCallback(() => {
+      if (!V2.state.missionsHome) V2.fetchMissions();
+      V2.fetchNeedsYou();
+    }, { timeout: 2000 });
   } else {
-    setTimeout(() => { if (!V2.state.missionsHome) V2.fetchMissions(); }, 50);
+    setTimeout(() => {
+      if (!V2.state.missionsHome) V2.fetchMissions();
+      V2.fetchNeedsYou();
+    }, 50);
   }
 })();

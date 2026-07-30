@@ -198,7 +198,7 @@ export function answerDecision({
   decision.answered_at = iso(nowMs);
   decision.answered_by = actor;
   decision.chosen_option_id = chosenOptionId || null;
-  decision.response = response || chosenOptionId;
+  decision.response = response || chosenOptionId || null;
 
   let brief = null;
   if (changesApprovedIntent) {

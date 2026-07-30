@@ -74,7 +74,9 @@ import {
   listNeedsYou,
   kickoffVm,
 } from "./presentation/operator-views.mjs";
-import { getMissionConfidence, recordMissionConfidence } from "./mission-confidence.mjs";
+import {
+  getMissionConfidence, recordMissionConfidence,
+} from "./mission-confidence.mjs";
 import {
   getPlatformResources,
   recordPlatformResourcesSnapshot,
@@ -86,6 +88,7 @@ import {
   summarizeUsage,
   recordUsageFromTelemetry,
 } from "./usage-ledger.mjs";
+import { submitOperatorDirectorMessage, listDirectorMessages } from "./director-comms.mjs";
 
 export async function handleV2Post(path, body) {
   const v = body || {};
@@ -257,6 +260,20 @@ export async function handleV2Post(path, body) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
     }
   }
+  if (path === "/api/v2/director/message") {
+    try {
+      const out = submitOperatorDirectorMessage({
+        missionId: v.mission_id || v.missionId,
+        decisionId: v.decision_id || v.decisionId || null,
+        kind: v.kind,
+        message: v.message,
+        actor: v.actor || "operator",
+      });
+      return { status: out.ok ? 200 : 400, body: out };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
+  }
 
   return null; // not a V2 route
 }
@@ -318,6 +335,11 @@ export function handleV2Get(path, url) {
         events: listUsageEvents({ missionId: mid || null, limit: Number(q("limit") || 100) }),
       },
     };
+  }
+  if (path === "/api/v2/director/messages") {
+    const mid = q("mission_id") || q("id");
+    if (!mid) return { status: 400, body: { ok: false, error: "missing_mission_id" } };
+    return { status: 200, body: { ok: true, messages: listDirectorMessages(mid) } };
   }
   if (path === "/api/v2/views/mission/timeline") {
     const id = q("id") || q("mission_id");

@@ -20,7 +20,6 @@ import { readTimelineSummary, readTimeline } from "../timeline.mjs";
 import {
   listWorkerTelemetry,
   getWorkerTelemetry,
-  detectStaleWorkers,
 } from "../worker-health.mjs";
 import {
   buildDirectorSummary,
@@ -32,6 +31,7 @@ import {
   getMissionConfidence,
   estimateNextCheckpoint,
 } from "../mission-confidence.mjs";
+import { summarizeUsage, listUsageEvents } from "../usage-ledger.mjs";
 
 
 const STATUS_COPY = {
@@ -73,6 +73,8 @@ const TIMELINE_HEADLINES = {
   blocker: "Work blocked",
   decision_requested: "Decision requested",
   decision_answered: "Decision answered",
+  operator_message: "You messaged Director",
+  director_response: "Director responded",
   worker_health: "Worker health changed",
   recovery: "Director recovery attempted",
   evidence_added: "Evidence added",
@@ -219,7 +221,7 @@ export function workItemVm(assignment) {
 /** Timeline event for operators */
 export function timelineEventVm(ev) {
   const type = ev.type || "event";
-  const headline = TIMELINE_HEADLINES[type] || ev.headline || ev.summary || type.replace(/_/g, " ");
+  const headline = ev.headline || TIMELINE_HEADLINES[type] || ev.summary || type.replace(/_/g, " ");
   const actorMap = { operator: "You", director: "Director", system: "Vacilando" };
   const actor = actorMap[ev.actor] || (ev.actor?.startsWith("claude") || ev.actor?.startsWith("cursor")
     ? `Worker (${ev.actor})`
@@ -231,7 +233,7 @@ export function timelineEventVm(ev) {
     time: ev.at || ev.occurred_at,
     timeLabel: relTime(ev.at || ev.occurred_at),
     headline,
-    explanation: ev.summary && ev.summary !== headline ? ev.summary : (ev.detail?.message || ""),
+    explanation: ev.summary && ev.summary !== headline ? ev.summary : (ev.detail?.message || ev.detail?.question || ""),
     actor,
     evidenceIds: ev.evidence_ids || ev.evidenceIds || [],
     decisionId: ev.decision_id || ev.decisionId || null,
@@ -424,9 +426,21 @@ export function workerDetailVm(workerId) {
   const evidence = tel.missionId
     ? listEvidence(tel.missionId, { assignmentId: tel.assignmentId }).map((a) => evidenceCardVm(a))
     : [];
+  const provider = providerLabel(tel.workerId, tel.provider);
+  const usage = tel.missionId
+    ? summarizeUsage({ missionId: tel.missionId })
+    : null;
+  const workerUsage = usage?.by_worker?.find((b) => b.workerId === workerId) || null;
   return {
     kind: "worker_detail",
     ...card,
+    provider: provider || "Unknown",
+    model: provider || card.modelLabel || "Unknown",
+    runtimeDuration: sessionDurationLabel(tel) || (workerUsage?.runtime_ms
+      ? `${Math.round(workerUsage.runtime_ms / 60000)}m recorded`
+      : "Unavailable"),
+    currentSession: tel.activeCommand || tel.activeTool || "No active command reported",
+    assignmentTitle: asg?.title || "No assignment",
     objective: asg?.objective || "No assignment objective",
     currentActivity: tel.activeCommand || tel.activeTool || card.lastProgressSummary,
     requiredOutputs: (asg?.expectedDeliverables || asg?.scope || []).map((o) => (
@@ -435,6 +449,12 @@ export function workerDetailVm(workerId) {
     evidence,
     nextStep: asg ? workItemVm(asg).nextStep : "Await assignment",
     recovery: tel.last_recovery || null,
+    directorManagedRecovery: ["unresponsive", "stalled", "recovering"].includes(tel.status)
+      && !recoveryNeedsOperator(tel),
+    technical: {
+      ...card.technical,
+      tokens: "See mission usage when reported by provider",
+    },
   };
 }
 
@@ -454,8 +474,36 @@ export function needsYouItemVm({ type, missionId, title, body, urgency, action, 
   };
 }
 
+function providerLabel(workerId, provider = null) {
+  if (provider === "claude" || workerId?.startsWith("claude")) return "Claude";
+  if (provider === "cursor" || workerId?.startsWith("cursor")) return "Cursor";
+  return null;
+}
+
+function sessionDurationLabel(tel) {
+  const start = tel?.sessionStartedAt || tel?.lastProgressAt || tel?.lastHeartbeatAt;
+  if (!start) return null;
+  const ms = Date.now() - Date.parse(start);
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const mins = Math.round(ms / 60000);
+  if (mins < 1) return "just started";
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+/** True only when operator must act on recovery — not when Director is handling it. */
+export function recoveryNeedsOperator(tel) {
+  if (!tel) return false;
+  if (tel.operatorActionRequired || tel.last_recovery?.requiresOperatorApproval) return true;
+  if (tel.status === "failed" && tel.last_recovery?.refused) return true;
+  return false;
+}
+
 export function listNeedsYou() {
   const items = [];
+  // 1) Open product / architecture decisions
   for (const d of listDecisions(null, { status: "open" })) {
     const vm = decisionCardVm(d);
     items.push(needsYouItemVm({
@@ -468,34 +516,21 @@ export function listNeedsYou() {
       action: { label: "Review and decide", href: `decisions/${d.decisionId}` },
     }));
   }
-  const unhealthy = listWorkerTelemetry().filter((w) =>
-    ["unresponsive", "failed", "stalled", "recovering"].includes(w.status));
-  for (const w of unhealthy) {
+  // 2) Failed recovery requiring operator action only
+  for (const w of listWorkerTelemetry()) {
+    if (!recoveryNeedsOperator(w)) continue;
     const card = workerCardVm(w);
     items.push(needsYouItemVm({
-      type: "recovery",
+      type: "recovery_approval",
       missionId: w.missionId,
-      title: `${card.deliverable} — worker needs attention`,
-      body: card.directorAction + (card.issueDetail ? ` (${card.issueDetail})` : ""),
-      urgency: "Worker recovery",
-      recommendation: "Let Director finish recovery, or open Workers for details",
+      title: `${card.deliverable} — recovery needs your approval`,
+      body: "Director refused an unsafe recovery and needs you to authorize next steps.",
+      urgency: "Recovery approval",
+      recommendation: "Review the worker and approve a safe path — or give explicit discard authority.",
       action: { label: "Open worker", href: `workers/${w.workerId}` },
     }));
   }
-  for (const stale of detectStaleWorkers()) {
-    const tel = stale.telemetry;
-    const asg = stale.assignment;
-    if (!asg || unhealthy.some((u) => u.workerId === asg.workerId)) continue;
-    items.push(needsYouItemVm({
-      type: "recovery",
-      missionId: asg.missionId,
-      title: `${asg.title} — no recent worker heartbeat`,
-      body: "Director has not received a recent heartbeat for this assignment.",
-      urgency: "Worker recovery",
-      recommendation: "Open Workers so Director can attempt a safe recovery",
-      action: { label: "Open workers", href: "workers" },
-    }));
-  }
+  // 3) Kickoff / completion / merge / deployment approvals
   for (const row of listMissionsV2()) {
     if (row.status === "awaiting_completion_approval") {
       items.push(needsYouItemVm({
@@ -517,6 +552,29 @@ export function listNeedsYou() {
         urgency: "Kickoff",
         recommendation: "Review readiness and start the mission",
         action: { label: "Review kickoff", href: `kickoff/${row.mission_id}` },
+      }));
+    }
+    // Merge / deployment — reserved when mission flags them (future completion package)
+    if (row.merge_approval_required) {
+      items.push(needsYouItemVm({
+        type: "merge",
+        missionId: row.mission_id,
+        title: "Merge approval needed",
+        body: "Director is ready to merge and needs your authorization.",
+        urgency: "Merge approval",
+        recommendation: "Review the completion package, then approve merge",
+        action: { label: "Open mission", href: `missions/${row.mission_id}` },
+      }));
+    }
+    if (row.deployment_approval_required) {
+      items.push(needsYouItemVm({
+        type: "deployment",
+        missionId: row.mission_id,
+        title: "Deployment approval needed",
+        body: "Director is ready to deploy and needs your authorization.",
+        urgency: "Deployment approval",
+        recommendation: "Review evidence, then approve deployment",
+        action: { label: "Open mission", href: `missions/${row.mission_id}` },
       }));
     }
   }
@@ -605,12 +663,9 @@ export function missionDashboardVm(missionId) {
   const needsMe = listNeedsYou().filter((n) => n.missionId === missionId);
 
   const currentWork = assignments.map((a) => {
-    const tel = workers.find((w) => w.assignmentId === a.assignmentId);
-    const model = tel?.workerId?.startsWith("claude") ? "Claude"
-      : tel?.workerId?.startsWith("cursor") ? "Cursor"
-        : a.provider === "claude" ? "Claude"
-          : a.provider === "cursor" ? "Cursor"
-            : a.workerId ? "Worker" : null;
+    const tel = workers.find((w) => w.assignmentId === a.assignmentId)
+      || workers.find((w) => w.workerId && w.workerId === a.workerId);
+    const handledBy = providerLabel(tel?.workerId || a.workerId, a.provider || tel?.provider);
     return {
       kind: "current_work",
       title: a.title,
@@ -626,24 +681,54 @@ export function missionDashboardVm(missionId) {
         paused: "Paused",
         failed: "Failed",
       })[a.status] || a.status,
-      handledBy: model,
+      handledBy,
+      handledByLabel: handledBy ? `Handled by ${handledBy}` : "Unassigned",
       progressSummary: (a.progress || []).slice(-1)[0]?.summary || null,
       healthLabel: tel ? (WORKER_HEALTH_COPY[tel.status] || tel.status) : null,
     };
   });
 
+  const providerRollup = { Claude: { active: 0, waiting: 0 }, Cursor: { active: 0, waiting: 0 } };
+  for (const w of currentWork) {
+    if (!w.handledBy || !providerRollup[w.handledBy]) continue;
+    if (["running", "verification"].includes(w.status)) providerRollup[w.handledBy].active += 1;
+    else if (["waiting", "ready", "paused"].includes(w.status)) providerRollup[w.handledBy].waiting += 1;
+  }
+  if (!Object.values(providerRollup).some((v) => v.active || v.waiting)) {
+    for (const tel of workers) {
+      const p = providerLabel(tel.workerId);
+      if (!p) continue;
+      if (["healthy", "starting", "recovering", "unresponsive", "stalled"].includes(tel.status)) {
+        providerRollup[p].active += 1;
+      } else if (["waiting", "idle", "blocked"].includes(tel.status)) {
+        providerRollup[p].waiting += 1;
+      }
+    }
+  }
+  const providers = Object.entries(providerRollup)
+    .filter(([, v]) => v.active || v.waiting)
+    .map(([name, v]) => {
+      const bits = [];
+      if (v.active) bits.push(`${v.active} active`);
+      if (v.waiting) bits.push(`${v.waiting} waiting`);
+      return { provider: name, active: v.active, waiting: v.waiting, label: `${name}: ${bits.join(", ")}` };
+    });
+
   const recovering = workers.filter((w) => ["unresponsive", "stalled", "recovering", "failed"].includes(w.status));
+  const directorManagedRecoveries = recovering.filter((w) => !recoveryNeedsOperator(w));
+  const operatorRecoveries = recovering.filter((w) => recoveryNeedsOperator(w));
   const runningAsg = assignments.filter((a) => a.status === "running");
   const directorFocus = runningAsg.map((a) => {
     const tel = workers.find((w) => w.assignmentId === a.assignmentId);
-    const who = tel?.workerId?.startsWith("claude") ? "Claude"
-      : tel?.workerId?.startsWith("cursor") ? "Cursor"
-        : "Worker";
+    const who = providerLabel(tel?.workerId || a.workerId, a.provider) || "Worker";
     return `${who} on ${a.title}`;
   });
   if (!directorFocus.length) {
-    const ready = assignments.find((a) => a.status === "ready");
-    if (ready) directorFocus.push(`Next up: ${ready.title}`);
+    const ready = assignments.find((a) => a.status === "ready" || a.status === "paused");
+    if (ready) {
+      const who = providerLabel(ready.workerId, ready.provider);
+      directorFocus.push(who ? `Next up: ${ready.title} (${who})` : `Next up: ${ready.title}`);
+    }
   }
 
   const risks = [];
@@ -652,20 +737,28 @@ export function missionDashboardVm(missionId) {
     risks.push(`Blocked: ${a.title}`);
   }
   for (const w of recovering) {
-    risks.push(`${w.workerId?.startsWith("claude") ? "Claude" : w.workerId?.startsWith("cursor") ? "Cursor" : "Worker"} unhealthy on ${(getAssignment(missionId, w.assignmentId)?.title) || "assignment"}`);
+    const who = providerLabel(w.workerId) || "Worker";
+    risks.push(`${who} unhealthy on ${(getAssignment(missionId, w.assignmentId)?.title) || "assignment"}`);
   }
 
-  const recoveries = recovering.map((w) => {
-    const action = w.last_recovery?.action
-      ? String(w.last_recovery.action).replace(/_/g, " ")
-      : "preparing safe recovery";
-    const title = getAssignment(missionId, w.assignmentId)?.title || "Worker";
-    return `${title}: Director ${action}`;
-  });
+  const recoveries = [
+    ...directorManagedRecoveries.map((w) => {
+      const action = w.last_recovery?.action
+        ? String(w.last_recovery.action).replace(/_/g, " ")
+        : "preparing safe recovery";
+      const title = getAssignment(missionId, w.assignmentId)?.title || "Worker";
+      return `${title}: Director handling (${action}) — no action needed from you`;
+    }),
+    ...operatorRecoveries.map((w) => {
+      const title = getAssignment(missionId, w.assignmentId)?.title || "Worker";
+      return `${title}: Recovery needs your approval`;
+    }),
+  ];
 
   const assessment = (() => {
     if (openDecisions.length) return "I need a product call from you before this work can continue.";
-    if (recovering.length) return "I am intervening on an unhealthy worker and preserving uncommitted work.";
+    if (operatorRecoveries.length) return "I need your approval before a recovery can proceed.";
+    if (directorManagedRecoveries.length) return "I am intervening on an unhealthy worker and preserving uncommitted work.";
     if (runningAsg.length) return "Everything is progressing normally.";
     if (assignments.some((a) => a.status === "verification")) return "I am validating completed work.";
     if (card.status === "awaiting_kickoff_approval") return "Waiting for you to approve kickoff.";
@@ -674,6 +767,30 @@ export function missionDashboardVm(missionId) {
     }
     return summary.questions?.find((q) => q.id === "where")?.answer || card.directorState;
   })();
+
+  const usageSummary = summarizeUsage({ missionId });
+  const usageEvents = listUsageEvents({ missionId, limit: 50 });
+  const usageByProvider = ["Claude", "Cursor"].map((name) => {
+    const key = name.toLowerCase();
+    const relatedWorkers = workers.filter((w) => providerLabel(w.workerId) === name);
+    const events = usageEvents.filter((e) => providerLabel(e.workerId, e.model) === name || e.model === key);
+    const runtimeMs = events.reduce((a, e) => a + (e.runtime_ms || 0), 0);
+    const tokens = events.reduce((a, e) => a + (e.tokens?.total || 0), 0);
+    const costParts = events.map((e) => e.estimated_cost_usd).filter((c) => c != null);
+    const active = relatedWorkers.filter((w) => !["stopped", "complete", "failed"].includes(w.status)).length;
+    return {
+      provider: name,
+      activeWorkers: active,
+      sessionDuration: runtimeMs
+        ? `${Math.max(1, Math.round(runtimeMs / 60000))}m recorded`
+        : (relatedWorkers[0] ? (sessionDurationLabel(relatedWorkers[0]) || "Unavailable") : "Unavailable"),
+      tokens: tokens > 0 ? tokens : "Unavailable",
+      estimatedCost: costParts.length
+        ? `$${costParts.reduce((a, c) => a + c, 0).toFixed(4)}`
+        : "Unavailable",
+    };
+  }).filter((r) => r.activeWorkers > 0 || r.tokens !== "Unavailable" || r.estimatedCost !== "Unavailable"
+    || usageEvents.some((e) => providerLabel(e.workerId, e.model) === r.provider));
 
   const MILESTONE_TYPES = new Set([
     "mission_started", "phase_started", "phase_completed", "assignment_started",
@@ -723,6 +840,15 @@ export function missionDashboardVm(missionId) {
         : (summary.questions?.find((q) => q.id === "next")?.answer || "Continue as planned"),
     },
     needsMe,
+    providers,
+    resourcesUsage: {
+      byProvider: usageByProvider.length ? usageByProvider : [
+        { provider: "Claude", activeWorkers: 0, sessionDuration: "Unavailable", tokens: "Unavailable", estimatedCost: "Unavailable" },
+        { provider: "Cursor", activeWorkers: 0, sessionDuration: "Unavailable", tokens: "Unavailable", estimatedCost: "Unavailable" },
+      ],
+      note: "Tokens and cost show Unavailable unless the provider reported them — never estimated blindly.",
+      events: usageSummary.events || 0,
+    },
     currentWork,
     recentProgress,
     timeline: timelineAll.slice(-12).reverse(),
