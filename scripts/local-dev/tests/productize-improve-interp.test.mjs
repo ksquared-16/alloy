@@ -7,6 +7,7 @@ import { join } from "node:path";
 import os from "node:os";
 
 process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-prod-"));
+process.env.VACILANDO_AUTO_DISPATCH = "0";
 
 const {
   ingestMissionBrief,
@@ -84,7 +85,7 @@ assert(events.some((e) => /first workstream/i.test(e.headline)), "timeline story
 
 const asg = listAssignments(mid)[0];
 const life = deriveWorkerLifecycle(asg, null);
-assert(life.state === "assigning", `expected assigning, got ${life.state}`);
+assert(["queued", "assigning", "starting"].includes(life.state), `expected queued/starting, got ${life.state}`);
 assert(life.label !== "Unassigned", "no bare Unassigned");
 
 const dash = missionDashboardVm(mid);

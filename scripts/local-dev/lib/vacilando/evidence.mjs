@@ -21,6 +21,7 @@ export const EVIDENCE_TYPES = new Set([
 
 export const EVIDENCE_PROFILES = {
   code_only: ["diff", "test", "typecheck", "build", "commit"],
+  execution_v1: ["log"],
   ui: ["diff", "test", "typecheck", "build", "commit", "screenshot", "browser"],
   migration: ["migration", "database", "test", "diff", "commit", "log"],
   security: ["security", "test", "browser", "log", "diff", "commit"],

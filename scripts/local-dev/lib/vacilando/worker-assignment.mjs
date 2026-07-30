@@ -105,8 +105,9 @@ export function createAssignmentsFromBrief(missionId, brief = null, { slot = nul
       slot: slot != null ? String(slot) : (b.executionPreferences?.preferredSlots?.[0] || null),
       port: null,
       requiredValidation: (b.executionPreferences?.requiredValidationProfiles || []).map((p) => ({ profile: p })),
-      requiredEvidence: [],
-      evidenceProfile: "code_only",
+      // V1 Director dispatch collects an execution log; richer profiles opt in via brief prefs later.
+      requiredEvidence: ["log"],
+      evidenceProfile: "execution_v1",
       escalationRules: [{ kind: "product_behavior", escalate: true }],
       completionContract: {
         requireEvidence: true,

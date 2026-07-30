@@ -7,6 +7,7 @@ import { join } from "node:path";
 import os from "node:os";
 
 process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-ci-"));
+process.env.VACILANDO_AUTO_DISPATCH = "0";
 
 const { ingestMissionBrief, approveMissionExecution } = await import("../lib/vacilando/mission-kickoff.mjs");
 const { readTimeline } = await import("../lib/vacilando/timeline.mjs");

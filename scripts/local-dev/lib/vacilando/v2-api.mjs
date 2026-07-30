@@ -115,8 +115,24 @@ export async function handleV2Post(path, body) {
     const out = approveMissionExecution(v.brief_id || v.mission_brief_id || v.mission_id, v.version, {
       actor: v.actor || "operator",
       slot: v.slot ?? null,
+      awaitDispatch: Boolean(v.await_dispatch || v.awaitDispatch),
     });
     return { status: out.ok ? 200 : 409, body: out };
+  }
+  if (path === "/api/v2/missions/dispatch") {
+    try {
+      if (v.provider) process.env.VACILANDO_EXECUTION_PROVIDER = String(v.provider);
+      if (v.allow_mock || v.allowMock) process.env.VACILANDO_ALLOW_MOCK_PROVIDER = "1";
+      const { dispatchReadyAssignments } = await import("./assignment-dispatch.mjs");
+      const mid = v.mission_id || v.missionId;
+      const out = await dispatchReadyAssignments(mid, {
+        slot: v.slot ?? null,
+        actor: v.actor || "director",
+      });
+      return { status: 200, body: out };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
   }
   if (path === "/api/v2/missions/brief/review") {
     const brief = (v.version != null ? getBriefVersion(v.brief_id || v.mission_id, v.version) : null)

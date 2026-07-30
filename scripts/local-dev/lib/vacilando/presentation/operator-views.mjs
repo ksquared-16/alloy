@@ -100,6 +100,40 @@ export function deriveWorkerLifecycle(assignment, telemetry = null) {
   const hasWorker = Boolean(assignment.workerId || telemetry?.workerId);
   const hasAck = Boolean(assignment.contextAcknowledgement);
   const telStatus = telemetry?.status;
+  const pl = assignment.dispatch?.providerLifecycle;
+  const providerName = assignment.provider || assignment.dispatch?.currentProvider;
+  const providerLabel = providerName
+    ? String(providerName).charAt(0).toUpperCase() + String(providerName).slice(1)
+    : "worker";
+
+  // Director dispatch state is authoritative when present.
+  if (pl === "queued") {
+    return { state: "queued", label: "Queued", explanation: "Director queued this deliverable for launch." };
+  }
+  if (pl === "launching") {
+    return { state: "starting", label: `Launching ${providerLabel}`, explanation: `Director is launching ${providerLabel}.` };
+  }
+  if (pl === "acknowledged") {
+    return { state: "waiting_ack", label: "Waiting for acknowledgement", explanation: `${providerLabel} accepted the assignment.` };
+  }
+  if (pl === "running") {
+    return { state: "active", label: "Executing", explanation: `${providerLabel} is executing this deliverable.` };
+  }
+  if (pl === "producing_evidence") {
+    return { state: "active", label: "Producing evidence", explanation: "Director is collecting evidence from the worker." };
+  }
+  if (pl === "completed" || status === "complete") {
+    return { state: "complete", label: "Completed", explanation: "Deliverable accepted." };
+  }
+  if (pl === "retrying") {
+    return { state: "retrying", label: "Retrying", explanation: `Director is retrying ${providerLabel}.` };
+  }
+  if (pl === "unavailable") {
+    return { state: "waiting_capacity", label: "Unavailable", explanation: `${providerLabel} is unavailable — Director will try another provider.` };
+  }
+  if (pl === "failed" || status === "failed" || telStatus === "failed") {
+    return { state: "launch_failed", label: "Failed", explanation: "Director could not complete this launch." };
+  }
 
   if (status === "blocked") {
     return { state: "blocked", label: "Blocked", explanation: assignment.blocker?.message || "Work cannot continue until a blocker is cleared." };
@@ -110,39 +144,24 @@ export function deriveWorkerLifecycle(assignment, telemetry = null) {
   if (status === "waiting") {
     return { state: "waiting_dependency", label: "Waiting on upstream work", explanation: "This deliverable starts after an earlier workstream finishes." };
   }
-  if (status === "complete") {
-    return { state: "complete", label: "Complete", explanation: "Deliverable accepted." };
-  }
-  if (status === "failed" || telStatus === "failed") {
-    return { state: "launch_failed", label: "Launch failed", explanation: "Director could not keep this worker healthy — recovery may be needed." };
-  }
-  if (telStatus === "recovering") {
-    return { state: "retrying", label: "Retrying launch", explanation: "Director is recovering the worker." };
-  }
-  if (["unresponsive", "stalled"].includes(telStatus)) {
-    return { state: "retrying", label: "Retrying launch", explanation: "Worker stopped responding — Director is intervening." };
-  }
   if (status === "verification") {
-    return { state: "active", label: "Worker active", explanation: "Work is under validation." };
+    return { state: "active", label: "Producing evidence", explanation: "Work is under validation." };
   }
   if (status === "running" || telStatus === "healthy") {
-    return { state: "active", label: "Worker active", explanation: "Worker is executing this deliverable." };
+    return { state: "active", label: "Executing", explanation: "Worker is executing this deliverable." };
   }
   if (status === "ready" && !hasWorker) {
-    return { state: "assigning", label: "Assigning worker", explanation: "Director is choosing a worker for this deliverable." };
+    return { state: "queued", label: "Queued", explanation: "Director will launch a worker for this deliverable." };
   }
   if (status === "ready" && hasWorker && !hasAck) {
     return { state: "waiting_ack", label: "Waiting for acknowledgement", explanation: "Worker is assigned and must acknowledge the package before starting." };
   }
   if ((status === "ready" && hasAck) || telStatus === "starting") {
-    return { state: "starting", label: "Starting worker", explanation: "Worker acknowledged the package and is starting." };
-  }
-  if (!hasWorker && ["ready", "running"].includes(status)) {
-    return { state: "waiting_capacity", label: "Waiting for capacity", explanation: "No worker slot is free yet — Director is waiting for capacity." };
+    return { state: "starting", label: `Launching ${providerLabel}`, explanation: "Worker acknowledged the package and is starting." };
   }
   return {
-    state: "assigning",
-    label: "Assigning worker",
+    state: "queued",
+    label: "Queued",
     explanation: "Director is preparing execution for this deliverable.",
   };
 }

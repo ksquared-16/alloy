@@ -17,6 +17,7 @@ import {
 } from "./objective.mjs";
 import { createMission, getMission, updateMission } from "./commands/missions.mjs";
 import { createAssignmentsFromBrief } from "./worker-assignment.mjs";
+import { scheduleDispatchAfterKickoff } from "./assignment-dispatch.mjs";
 
 /**
  * Distinguish operational gaps (Director can resolve) from mission-level
@@ -278,7 +279,12 @@ export function ingestMissionBrief(input = {}, { slot = null, provider = "claude
  * Approve execution of the user-owned plan. Objective spine from brief phases;
  * Director may not change phase titles without a new brief version.
  */
-export function approveMissionExecution(briefId, version, { actor = "operator", slot = null, nowMs } = {}) {
+export function approveMissionExecution(briefId, version, {
+  actor = "operator",
+  slot = null,
+  nowMs,
+  awaitDispatch = false,
+} = {}) {
   const ver = version != null ? Number(version) : null;
   let brief = ver != null ? getBriefVersion(briefId, ver) : getBrief(briefId);
   if (!brief) brief = getBrief(briefId);
@@ -378,6 +384,14 @@ export function approveMissionExecution(briefId, version, { actor = "operator", 
     };
   }
 
+  // Director owns execution from this point — operator does not launch workers.
+  const dispatch = scheduleDispatchAfterKickoff(missionKey, {
+    slot,
+    actor: "director",
+    nowMs,
+    await: awaitDispatch,
+  });
+
   return {
     ok: true,
     brief,
@@ -387,6 +401,7 @@ export function approveMissionExecution(briefId, version, { actor = "operator", 
     readiness,
     kickoff_card: readiness.kickoff_card,
     timeline: readTimelineSummary(missionKey),
+    dispatch,
   };
 }
 
