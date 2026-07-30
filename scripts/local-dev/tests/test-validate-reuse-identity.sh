@@ -23,6 +23,11 @@ source "$LIB/validate-caps.sh"
 WEB="${WEB:-/Users/Kelly/Code/alloy-worktrees/wt3-runtime-v1-deeplink-compose/web}"
 COMMIT="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
+# Dirty-tree state is an INPUT to identity, so the test controls it instead of inheriting whatever the
+# host worktree happens to be. Default clean; the dirty case is asserted explicitly below.
+ALLOY_TEST_FAKE_DIRTY=0
+alloy_validate_tree_dirty() { [[ "$ALLOY_TEST_FAKE_DIRTY" == "1" ]]; }
+
 echo "== scope identity =="
 full_scope="$(alloy_validate_scope_id)"
 one_scope="$(alloy_validate_scope_id tests/a.test.ts)"
@@ -89,6 +94,23 @@ fp_a="$(alloy_validate_fingerprint "$WEB" test full)"
 case "$fp_a" in
   *_4.*|*_none*) ok "fingerprint carries the tool version ($fp_a)" ;;
   *) bad "fingerprint lacks a tool version ($fp_a)" ;;
+esac
+
+echo "== a dirty worktree neither reuses nor stores =="
+# The commit SHA identifies COMMITTED code. This exact hole returned a stale FAILING build for source
+# that had already been repaired but not committed.
+ALLOY_TEST_FAKE_DIRTY=1
+dirty_lookup="$(alloy_validate_reuse_lookup "$COMMIT" test "$WEB" 0 "$one_scope" "npx vitest run --maxWorkers=2 tests/a.test.ts" || true)"
+case "$dirty_lookup" in
+  MISS*) ok "dirty tree => no reuse" ;;
+  *) bad "dirty tree reused a result ($dirty_lookup)" ;;
+esac
+alloy_validate_reuse_store "$COMMIT" test "$WEB" 0 wt-x 3 "scope-dirty" "cmd-dirty" ok
+ALLOY_TEST_FAKE_DIRTY=0
+after_dirty="$(alloy_validate_reuse_lookup "$COMMIT" test "$WEB" 0 "scope-dirty" "cmd-dirty" || true)"
+case "$after_dirty" in
+  MISS*) ok "a result produced on a dirty tree was not stored" ;;
+  *) bad "dirty-tree result WAS stored ($after_dirty)" ;;
 esac
 
 echo "== classification includes infrastructure cancellation =="
