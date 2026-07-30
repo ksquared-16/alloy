@@ -122,18 +122,28 @@ function childEnv() {
     seen.add(d);
     return true;
   });
-  // Authoritative desktop defaults — Finder launches must not inherit a bare
-  // Terminal server lacking execution configuration.
+  // Authoritative desktop defaults — do not inherit Terminal/agent env that may
+  // force mock from unit tests. Everyday Vacilando.app is always auto→Claude.
   const env = { ...process.env, PATH: merged.join(":") };
-  if (!env.VACILANDO_EXECUTION_PROVIDER || env.VACILANDO_EXECUTION_PROVIDER === "") {
+  const override = process.env.VACILANDO_DESKTOP_PROVIDER?.trim();
+  if (override) {
+    env.VACILANDO_EXECUTION_PROVIDER = override;
+  } else {
     env.VACILANDO_EXECUTION_PROVIDER = "auto";
   }
-  // Mock is test-only; desktop never authorizes it unless the operator set it.
-  if (env.VACILANDO_ALLOW_MOCK_PROVIDER !== "1") {
+  // Mock requires explicit dual authorization (never inherited from a parent shell alone).
+  const mockOk = process.env.VACILANDO_DESKTOP_ALLOW_MOCK === "1"
+    && process.env.VACILANDO_ALLOW_MOCK_PROVIDER === "1";
+  if (!mockOk) {
     env.VACILANDO_ALLOW_MOCK_PROVIDER = "0";
+    if (env.VACILANDO_EXECUTION_PROVIDER === "mock") {
+      env.VACILANDO_EXECUTION_PROVIDER = "auto";
+    }
   }
   env.VACILANDO_DESKTOP_OWNED = "1";
   env.VACILANDO_CONTROL_PLANE_PORT = String(PORT);
+  // Strip agent/test pollution that should never reach the control plane.
+  delete env.VACILANDO_CERT_USE_LIVE_STATE;
   return env;
 }
 

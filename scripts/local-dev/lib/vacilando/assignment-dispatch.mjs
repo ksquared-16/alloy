@@ -912,8 +912,25 @@ export async function resumeAfterDecisionAnswer({
         sessionId: finished.sessionId,
       }, { nowMs });
       if (validated.validation?.passed) {
+        // Chain next assignment through schedule helper so callers outside the
+        // desktop-owned server (e.g. tooling) cannot silently run mock failover.
         const next = listAssignments(missionId).find((a) => a.status === "ready");
-        if (next) await dispatchAssignment(missionId, next.assignmentId, { slot, actor, nowMs });
+        if (next) {
+          if (process.env.VACILANDO_DESKTOP_OWNED === "1"
+              || process.env.VACILANDO_EXECUTION_PROVIDER === "auto"
+              || process.env.VACILANDO_EXECUTION_PROVIDER === "claude") {
+            await dispatchAssignment(missionId, next.assignmentId, { slot, actor, nowMs });
+          } else {
+            story(missionId, {
+              type: "blocker",
+              headline: "Next assignment not auto-chained",
+              summary: `Director completed resume but will not chain ${next.title} from a non-Claude process. Approve dispatch from Vacilando.app.`,
+              assignmentId: next.assignmentId,
+              actor,
+              nowMs,
+            });
+          }
+        }
       }
       results.push({ ok: Boolean(validated.validation?.passed), sessionId: finished.sessionId, resumed: true });
     } finally {

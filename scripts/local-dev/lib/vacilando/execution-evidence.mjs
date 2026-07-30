@@ -64,10 +64,12 @@ export function collectWorkspaceEvidence({
     }
   }
 
+  // Prefer assignment deliverables + Claude-claimed files. Only include other
+  // dirty-tree paths when they intersect those sets (avoids unrelated worktree noise).
+  const focus = new Set([...(claimedFiles || []), ...(deliverablePaths || [])].filter(Boolean));
   const uniquePaths = [...new Set([
-    ...changed,
-    ...(claimedFiles || []),
-    ...(deliverablePaths || []),
+    ...[...focus],
+    ...changed.filter((p) => focus.size === 0 || focus.has(p) || [...focus].some((f) => p.endsWith(f) || f.endsWith(p))),
   ])];
 
   for (const rel of uniquePaths) {

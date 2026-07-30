@@ -1366,10 +1366,33 @@ export function createVacilandoServer() {
       if (rec.length) console.log(`[missions] recovered ${rec.length} interrupted mission(s) (${rec.filter((r) => r.resumable).length} resumable)`);
     } catch { /* best-effort */ }
     try {
-      import("./vacilando/execution-session-recovery.mjs").then(({ reconcileExecutionSessionsOnBoot }) => {
+      import("./vacilando/execution-session-recovery.mjs").then(async ({ reconcileExecutionSessionsOnBoot }) => {
         const ex = reconcileExecutionSessionsOnBoot();
         const n = (ex.recovered?.length || 0) + (ex.lost?.length || 0) + (ex.interrupted?.length || 0);
         if (n) console.log(`[execution-sessions] reconciled ${n} (recovered=${ex.recovered.length} interrupted=${ex.interrupted.length} lost=${ex.lost.length})`);
+        // Resume interrupted Claude sessions that still have a connector session id.
+        if (ex.interrupted?.length) {
+          const { resumeAfterDecisionAnswer } = await import("./vacilando/assignment-dispatch.mjs");
+          for (const s of ex.interrupted) {
+            if (!s.connectorSessionId && !s.checkpoint?.connectorSessionId) continue;
+            try {
+              await resumeAfterDecisionAnswer({
+                missionId: s.missionId,
+                assignmentIds: [s.assignmentId],
+                decision: {
+                  title: "Resume after control-plane restart",
+                  situation: "Vacilando restarted during Claude execution",
+                  recommendation: "continue",
+                },
+                chosenOptionId: "continue",
+                response: "Control plane recovered. Continue the paused deliverable from your prior checkpoint. Do not restart unrelated work.",
+                actor: "director",
+              });
+            } catch (e) {
+              console.log(`[execution-sessions] resume failed ${s.sessionId}: ${e.message || e}`);
+            }
+          }
+        }
       }).catch(() => {});
     } catch { /* best-effort */ }
     startupTimings.recover_ms = Date.now() - tWarm;

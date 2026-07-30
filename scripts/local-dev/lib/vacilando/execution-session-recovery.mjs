@@ -47,29 +47,58 @@ export function reconcileExecutionSessionsOnBoot({ nowMs } = {}) {
     const alive = pidAlive(session.pid);
 
     if (alive) {
-      const next = updateExecutionSession(session.sessionId, {
-        status: "recovered",
+      // Orphaned Claude after control-plane death: the new server does not own the
+      // stream / completion promise. Stop the orphan and resume via connectorSessionId
+      // rather than pretending we reattached (which would hang forever).
+      const orphanPid = Number(session.pid);
+      if (orphanPid === process.pid) {
+        // Never signal ourselves (mis-recorded pid).
+        updateExecutionSession(session.sessionId, {
+          status: "interrupted",
+          pid: null,
+          recovery: {
+            ...(session.recovery || {}),
+            lastError: "pid_was_control_plane",
+            resumable: Boolean(session.connectorSessionId),
+          },
+        }, { nowMs });
+        result.interrupted.push(session);
+        continue;
+      }
+      try { process.kill(orphanPid, "SIGTERM"); } catch { /* */ }
+      setTimeout(() => {
+        try { process.kill(orphanPid, "SIGKILL"); } catch { /* */ }
+      }, 2000).unref?.();
+
+      updateExecutionSession(session.sessionId, {
+        status: "interrupted",
         progress: {
-          activity: session.progress?.activity || "Recovered after restart",
-          detail: "Claude process still running — Director reattached heartbeat tracking",
+          activity: "Interrupted",
+          detail: "Control plane restarted — orphaned Claude stopped; Director will resume the prior session",
         },
         recovery: {
           ...(session.recovery || {}),
-          lastError: null,
-          recoveredAt: new Date(nowMs ?? Date.now()).toISOString(),
-          mode: "process_alive",
+          lastError: "orphaned_after_restart",
+          interruptedAt: new Date(nowMs ?? Date.now()).toISOString(),
+          resumable: Boolean(session.connectorSessionId),
+          priorPid: session.pid,
+          mode: "orphan_stopped_for_resume",
         },
+        pid: null,
       }, { nowMs });
-      // Immediately mark running so dispatch does not re-launch.
-      updateExecutionSession(session.sessionId, { status: "running" }, { nowMs });
-      result.recovered.push(next || session);
+      result.interrupted.push(session);
       story(session.missionId, {
         type: "worker_health",
-        headline: "Execution session recovered",
-        summary: `Director recovered Claude session for ${assignment?.title || session.assignmentId} — process still running`,
+        headline: "Execution session interrupted",
+        summary: `Director stopped an orphaned Claude process after restart for ${assignment?.title || session.assignmentId}. Resuming with prior session context.`,
         assignmentId: session.assignmentId,
         phaseId: assignment?.phaseId,
-        detail: { sessionId: session.sessionId, pid: session.pid, mode: "process_alive" },
+        detail: {
+          sessionId: session.sessionId,
+          connectorSessionId: session.connectorSessionId,
+          priorPid: session.pid,
+          mode: "orphan_stopped_for_resume",
+        },
         nowMs,
       });
       continue;

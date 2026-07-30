@@ -48,6 +48,21 @@ updateExecutionSession(interrupted.sessionId, {
   connectorSessionId: "claude-sess-abc",
 });
 
+// Alive orphan → interrupted for resume (not pretend-reattached).
+// Use a short-lived sleep child — never this test's own PID (reconcile SIGTERMs orphans).
+const { spawn } = await import("node:child_process");
+const sleeper = spawn("sleep", ["30"], { stdio: "ignore" });
+const orphan = createExecutionSession({
+  missionId: "msn_orphan",
+  assignmentId: "asg_orphan",
+  connector: "claude",
+});
+updateExecutionSession(orphan.sessionId, {
+  status: "running",
+  pid: sleeper.pid,
+  connectorSessionId: "claude-orphan-sess",
+});
+
 const rec = reconcileExecutionSessionsOnBoot();
 assert(rec.lost.some((s) => s.sessionId === lost.sessionId) || getExecutionSession(lost.sessionId)?.status === "lost", "lost marked");
 assert(
@@ -55,6 +70,12 @@ assert(
     || getExecutionSession(interrupted.sessionId)?.status === "interrupted",
   "interrupted marked",
 );
+assert(
+  getExecutionSession(orphan.sessionId)?.status === "interrupted"
+    || rec.interrupted.some((s) => s.sessionId === orphan.sessionId),
+  "alive orphan interrupted for resume",
+);
+try { sleeper.kill("SIGKILL"); } catch { /* */ }
 
 const pause = createExecutionSession({
   missionId: "msn_c",

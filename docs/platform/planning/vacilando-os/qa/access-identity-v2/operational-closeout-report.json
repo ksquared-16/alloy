@@ -1,0 +1,151 @@
+{
+  "missionId": "msn_e9133cdade883793d2",
+  "title": "Access & Identity V2 — Operational Closeout",
+  "sessions": [
+    {
+      "sessionId": "exs_26ae795e96267ae2",
+      "status": "completed",
+      "assignmentId": "asg_9c1635a5beb5e0",
+      "summary": "Specified the canonical access & identity model for Alloy as a normative document: one authority chain (principal -> org -> role -> capability -> scope), a five-class principal taxonomy, a hard identi"
+    },
+    {
+      "sessionId": "exs_49ae17dbf6eb5a7d",
+      "status": "completed",
+      "assignmentId": "asg_69cd1fc151087f",
+      "summary": "Refreshed the person→user→role→scope authority inventory against wt6-vacilando-os-product-def. Re-verified all 9 contradictions and 6 gaps of the accepted authority-path-inventory.md — all hold, count"
+    },
+    {
+      "sessionId": "exs_6bc03dfb3e0bd209",
+      "status": "completed",
+      "assignmentId": "asg_c505e1d0d76acd",
+      "summary": "Produced the sequenced delivery and QA plan for Access & Identity V2 (docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md, 799 lines). Grounded in phase 1's inve"
+    }
+  ],
+  "deliverables": [
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/01-existing-state-inventory.md",
+      "exists": true,
+      "bytes": 34402
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/02-canonical-access-identity-model.md",
+      "exists": true,
+      "bytes": 43952
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+      "exists": true,
+      "bytes": 49719
+    }
+  ],
+  "evidenceCount": 85,
+  "evidenceByAssignment": {
+    "asg_69cd1fc151087f": [
+      "diff",
+      "document",
+      "document",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "document",
+      "diff",
+      "document",
+      "document",
+      "document",
+      "document",
+      "diff",
+      "diff",
+      "notes",
+      "log",
+      "notes",
+      "document"
+    ],
+    "asg_9c1635a5beb5e0": [
+      "log",
+      "diff",
+      "document",
+      "document",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "document",
+      "diff",
+      "document",
+      "document",
+      "document",
+      "document",
+      "document",
+      "diff",
+      "diff",
+      "notes"
+    ],
+    "asg_c505e1d0d76acd": [
+      "log",
+      "diff",
+      "document",
+      "document",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "diff",
+      "document",
+      "diff",
+      "document",
+      "document",
+      "document",
+      "document",
+      "document",
+      "document",
+      "diff",
+      "diff",
+      "notes"
+    ]
+  },
+  "restart": {
+    "sessionSurvivedAsOrphan": true,
+    "directorTimeline": "Execution session interrupted / resumed",
+    "resumeSessionId": "exs_49ae17dbf6eb5a7d",
+    "connectorSessionId": "ae745acc-0739-463c-8ae0-5b986d810311",
+    "result": "phase1 completed after resume; phases 2–3 via new Claude sessions on Vacilando.app"
+  },
+  "decisionResume": {
+    "implemented": true,
+    "validatedPath": "resume with --resume connectorSessionId after restart (recovery package path also coded)"
+  },
+  "desktop": {
+    "packagedApp": "scripts/local-dev/apps/vacilando-desktop/dist/Vacilando-darwin-arm64/Vacilando.app",
+    "provider": "auto→claude",
+    "mockAuthorized": false
+  }
+}
