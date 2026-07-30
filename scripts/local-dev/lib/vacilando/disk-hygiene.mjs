@@ -56,17 +56,7 @@ function parseGc(text) {
   };
 }
 
-/**
- * The operator-facing SIGNAL (read-only): current headroom + what a reclaim WOULD
- * free, and what it keeps and why. Runs a gc dry-run (nothing deleted). Bounded.
- */
-export function diskSignal() {
-  let text = "";
-  let available = existsSync(GC);
-  if (available) {
-    try { text = execFileSync(GC, [], { encoding: "utf8", timeout: 30000, maxBuffer: 1 << 22 }); }
-    catch (e) { text = String(e.stdout || "") + String(e.stderr || ""); }
-  }
+function buildDiskSignalFromText(text, available) {
   const p = parseGc(text);
   const free_gb = p.free_gb ?? freeDiskGb();
   const worktrees = (p.reclaimed || 0) + (p.kept || 0) || null;
@@ -80,6 +70,38 @@ export function diskSignal() {
     kept_reasons: p.kept_reasons,
     computed_at: new Date().toISOString(),
   };
+}
+
+/**
+ * Async disk signal — preferred path. Never blocks the event loop on the GC dry-run.
+ * The dry-run can take tens of seconds under load; calling it via execFileSync before
+ * listen starved Vacilando bind (~30s createVacilandoServer).
+ */
+export function diskSignalAsync() {
+  return new Promise((resolve) => {
+    const available = existsSync(GC);
+    if (!available) return resolve(buildDiskSignalFromText("", false));
+    const child = execFile(GC, [], { timeout: 30000, maxBuffer: 1 << 22 }, (err, stdout, stderr) => {
+      const text = String(stdout || "") + String(err ? (stderr || "") : "");
+      resolve(buildDiskSignalFromText(text, true));
+    });
+    // Do not keep the Vacilando process (or tests) alive solely for a GC dry-run.
+    child.unref?.();
+  });
+}
+
+/**
+ * Sync disk signal — ONLY for non-boot call sites that already tolerate blocking.
+ * Prefer diskSignalAsync. Do not call from createVacilandoServer / listen path.
+ */
+export function diskSignal() {
+  let text = "";
+  const available = existsSync(GC);
+  if (available) {
+    try { text = execFileSync(GC, [], { encoding: "utf8", timeout: 30000, maxBuffer: 1 << 22 }); }
+    catch (e) { text = String(e.stdout || "") + String(e.stderr || ""); }
+  }
+  return buildDiskSignalFromText(text, available);
 }
 
 /**

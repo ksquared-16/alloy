@@ -45,7 +45,13 @@ import { collectPolicies } from "./vacilando/policies.mjs";
 import { collectUsage } from "./vacilando/usage.mjs";
 import { getProviderRuntime } from "./vacilando/provider-runtime.mjs";
 import { computeReclaim, memoryPressure, runningDevServers } from "./vacilando/memory-manager.mjs";
-import { diskSignal, freeDiskGb, runGc } from "./vacilando/disk-hygiene.mjs";
+import { diskSignalAsync, freeDiskGb, runGc } from "./vacilando/disk-hygiene.mjs";
+import {
+  claimControlPlaneOwnership,
+  noteBindTiming,
+  recordControlPlaneEvent,
+  getControlPlaneHealth,
+} from "./vacilando/control-plane-health.mjs";
 import { schedule } from "./vacilando/scheduler.mjs";
 import { readReviews } from "./vacilando/commands/review.mjs";
 import { readMissions, getMission, recoverMissions } from "./vacilando/commands/missions.mjs";
@@ -563,15 +569,18 @@ function saveDiskPolicy() {
 loadDiskPolicy();
 
 async function refreshDisk({ act = false } = {}) {
+  // Yield first so callers that fire-and-forget at boot never block listen on the
+  // GC dry-run (was execFileSync ≤30s inside createVacilandoServer).
+  await Promise.resolve();
   let signal = null;
-  try { signal = diskSignal(); } catch { /* keep last */ }
+  try { signal = await diskSignalAsync(); } catch { /* keep last */ }
   if (act && DISK_POLICY.auto_gc && signal && typeof signal.free_gb === "number" && signal.free_gb < DISK_POLICY.low_water_gb
       && Date.now() - diskReclaimCooldown >= DISK_POLICY.cooldown_ms) {
     diskReclaimCooldown = Date.now();
     try {
       const out = await runGc({ minFreeGb: DISK_POLICY.cache_min_free_gb });
       lastDiskGc.auto_actions = [{ ...out, trigger: `free ${signal.free_gb}GB < ${DISK_POLICY.low_water_gb}GB`, at: new Date().toISOString() }, ...(lastDiskGc.auto_actions || [])].slice(0, 10);
-      try { signal = diskSignal(); } catch { /* keep */ }
+      try { signal = await diskSignalAsync(); } catch { /* keep */ }
     } catch (e) { lastDiskGc.auto_actions = [{ ok: false, error: String(e.message || e), at: new Date().toISOString() }, ...(lastDiskGc.auto_actions || [])].slice(0, 10); }
   }
   lastDiskGc = { ...lastDiskGc, signal: signal || lastDiskGc.signal, policy: DISK_POLICY };
@@ -967,7 +976,23 @@ export function createVacilandoServer() {
     if (req.method !== "GET") return sendJson(res, 405, { error: "method_not_allowed" });
 
     if (path === "/api/health") {
-      return sendJson(res, 200, { ok: true, schema: "vacilando.snapshot.v1", server: "vacilando", host: LOOPBACK_HOST });
+      const timings = getStartupTimings();
+      const cp = getControlPlaneHealth();
+      const hydrated = Boolean(timings.cache_hydrated);
+      return sendJson(res, 200, {
+        ok: true,
+        accepting: true,
+        hydrated,
+        schema: "vacilando.snapshot.v1",
+        server: "vacilando",
+        host: LOOPBACK_HOST,
+        pid: process.pid,
+        control_plane: { status: cp.status, accepting: true, hydrated },
+        startup: timings,
+      });
+    }
+    if (path === "/api/control-plane/health") {
+      return sendJson(res, 200, { ok: true, ...getControlPlaneHealth(), startup: getStartupTimings() });
     }
     if (path === "/api/state" || path === "/api/snapshot") {
       return sendJson(res, 200, await boardSnapshot());
@@ -1327,36 +1352,92 @@ export function createVacilandoServer() {
   const condTimer = setInterval(() => { try { conductorTick(); } catch {} }, 15000);
   condTimer.unref?.();
 
-  // Any Director request left non-terminal died with a previous process — mark it
-  // interrupted honestly rather than showing a fake "running".
-  try { const n = recoverInterrupted(); if (n) console.log(`[director] recovered ${n} interrupted request(s)`); } catch { /* best-effort */ }
+  /**
+   * Background warm AFTER listen. Previously recover + diskSignal (sync GC dry-run
+   * ≤30s) + getSnapshot + warmExpensive ran inside createVacilandoServer and
+   * delayed HTTP bind. Recover stays cheap sync but still runs post-listen so a
+   * hung FS never blocks accepting traffic.
+   */
+  function beginBackgroundWarm({ startedAtMs = Date.now() } = {}) {
+    const tWarm = Date.now();
+    try { const n = recoverInterrupted(); if (n) console.log(`[director] recovered ${n} interrupted request(s)`); } catch { /* best-effort */ }
+    try {
+      const rec = recoverMissions({ providerResumable });
+      if (rec.length) console.log(`[missions] recovered ${rec.length} interrupted mission(s) (${rec.filter((r) => r.resumable).length} resumable)`);
+    } catch { /* best-effort */ }
+    startupTimings.recover_ms = Date.now() - tWarm;
 
-  // Any mission left in a LIVE state (starting/running/stopping) lost its owning
-  // child with the previous process — project an honest interrupted/resumable
-  // state. Never show "running" without a live tracked child.
-  try {
-    const rec = recoverMissions({ providerResumable });
-    if (rec.length) console.log(`[missions] recovered ${rec.length} interrupted mission(s) (${rec.filter((r) => r.resumable).length} resumable)`);
-  } catch { /* best-effort */ }
+    // Defer expensive compose / provider / GC until after the process is accepting.
+    setImmediate(() => {
+      getSnapshot().then((s) => {
+        startupTimings.first_compose_ms = Date.now() - startedAtMs;
+        if (s && !s.pending) {
+          recordControlPlaneEvent({
+            status: "hydrated",
+            detail: "Board projection ready",
+            timings: { ...startupTimings },
+          });
+        }
+      }).catch(() => {});
+      // Memory reclaim OFF until hydrated — avoid stopping idle servers while compose runs.
+      refreshMemory({ act: false }).catch(() => {});
+      refreshDisk({ act: false }).catch(() => {});
+      // Stagger provider warm so it does not compete with first compose.
+      setTimeout(() => warmExpensive(), 1500);
+    });
+    const warmTimer = setInterval(warmExpensive, 30000);
+    warmTimer.unref?.();
+    backgroundTimers.push(warmTimer);
+  }
 
-  // Warm the cache immediately so the first request isn't a cold ~8s compute.
-  getSnapshot().catch(() => {});
-  refreshMemory({ act: true }).catch(() => {});
-  refreshDisk({ act: false }).catch(() => {}); // warm the disk signal for the dashboard
-  // Warm the EXPENSIVE keys too (providers ~23s, resources ~6s) so the operator's
-  // first read of those surfaces is served from cache instead of blocking.
-  warmExpensive();
-  const warmTimer = setInterval(warmExpensive, 30000);
-  warmTimer.unref?.();
+  const backgroundTimers = [];
+  return {
+    server,
+    clients,
+    beginBackgroundWarm,
+    close: () => {
+      clearInterval(timer);
+      clearInterval(memTimer);
+      clearInterval(diskTimer);
+      clearInterval(condTimer);
+      for (const t of backgroundTimers) clearInterval(t);
+      server.close();
+    },
+  };
+}
 
-  return { server, clients, close: () => { clearInterval(timer); clearInterval(memTimer); clearInterval(diskTimer); clearInterval(condTimer); server.close(); } };
+const startupTimings = {
+  process_started_at: Date.now(),
+  create_ms: null,
+  listen_ms: null,
+  recover_ms: null,
+  first_compose_ms: null,
+};
+
+export function getStartupTimings() {
+  return { ...startupTimings, cache_hydrated: Boolean(cache.snap && !cache.snap.pending) };
 }
 
 export function startVacilandoServer(port = DEFAULT_PORT) {
-  const { server, close } = createVacilandoServer();
+  recordControlPlaneEvent({ status: "starting", detail: `Binding :${port}`, timings: { process_started_at: startupTimings.process_started_at } });
+  const tCreate = Date.now();
+  const { server, close, beginBackgroundWarm } = createVacilandoServer();
+  startupTimings.create_ms = Date.now() - tCreate;
   return new Promise((res, rej) => {
-    server.once("error", rej);
-    server.listen(port, LOOPBACK_HOST, () => res({ server, close, port }));
+    server.once("error", (e) => {
+      recordControlPlaneEvent({ status: "failed", detail: String(e.message || e) });
+      rej(e);
+    });
+    server.listen(port, LOOPBACK_HOST, () => {
+      const listenAt = Date.now();
+      const bound = server.address()?.port ?? port;
+      startupTimings.listen_ms = listenAt - startupTimings.process_started_at;
+      noteBindTiming({ startedAtMs: startupTimings.process_started_at, listenAtMs: listenAt });
+      claimControlPlaneOwnership({ pid: process.pid, port: bound, worktree: process.cwd() });
+      // Warm only after accepting — health answers immediately.
+      setImmediate(() => beginBackgroundWarm({ startedAtMs: startupTimings.process_started_at }));
+      res({ server, close, port: bound, startupTimings: getStartupTimings() });
+    });
   });
 }
 
