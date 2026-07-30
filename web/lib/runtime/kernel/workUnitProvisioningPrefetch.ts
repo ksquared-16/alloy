@@ -153,10 +153,24 @@ function traceSeedEvent(
     } catch {
         stack = null;
     }
+    // Committed/visible subject AT THE MOMENT of the event. Without this, a registration whose subject
+    // differs from the initial one cannot be attributed to a lifecycle transition rather than a stale
+    // or default compose — the whole question for the queue-row click case.
+    let visibleAtEvent: string | null = null;
+    let overwrites = false;
+    try {
+        visibleAtEvent =
+            document.querySelector("[data-inline-focus-panel]")?.getAttribute("data-inline-focus-panel-subject") ?? null;
+        overwrites = kind === "register" && cache.has(url);
+    } catch {
+        /* diagnostic only */
+    }
     const w = window as unknown as { __alloySeedTrace?: unknown[] };
     (w.__alloySeedTrace ??= []).push({
         kind,
         producer,
+        visibleAtEvent,
+        overwrites,
         t: Math.round(typeof performance !== "undefined" ? performance.now() : 0),
         url,
         subjectInKey: new URL(url, "http://x").searchParams.get("subject_id"),

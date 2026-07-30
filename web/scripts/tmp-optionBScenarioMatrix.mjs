@@ -54,7 +54,8 @@ const readState = (page) => page.evaluate(() => {
   return {
     trace: (window.__alloySeedTrace ?? []).map((e) => ({
       kind: e.kind, producer: e.producer, t: e.t, subjectInKey: e.subjectInKey, lensInKey: e.lensInKey,
-      composedSubject: e.composedSubject, terminal: e.terminal,
+      composedSubject: e.composedSubject, terminal: e.terminal, visibleAtEvent: e.visibleAtEvent,
+      overwrites: e.overwrites, url: e.url, stack: e.stack,
     })),
     visibleSubject: panel?.getAttribute("data-inline-focus-panel-subject") ?? null,
     operational: panel?.getAttribute("data-focus-panel-operational") ?? null,
@@ -176,12 +177,19 @@ await run("06-queue-row-click", async (name) => {
   await page.waitForTimeout(22000);
   const rec = attachRecorders(page);
   const clicked = await page.evaluate(() => {
+    const panel = document.querySelector("[data-inline-focus-panel]");
+    const before = panel?.getAttribute("data-inline-focus-panel-subject") ?? null;
     const rows = Array.from(document.querySelectorAll("[data-runtime-label='WU.QUEUE_ROW'], [data-queue-row-id]"));
     const target = rows[1] ?? rows[0];
-    if (!target) return false;
+    if (!target) return { ok: false };
+    // Identify the row we are about to click, so a differing third subject can be checked against it
+    // rather than merely noted as "different".
+    const rowId = target.getAttribute("data-queue-row-id") || target.getAttribute("data-entity-id") || "";
+    const rowText = (target.textContent || "").trim().slice(0, 40);
+    const idInRow = (rowId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/) || [])[0] || null;
     target.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
     target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    return true;
+    return { ok: true, subjectBeforeClick: before, clickedRowId: rowId, clickedSubjectInRow: idInRow, rowText };
   });
   await page.waitForTimeout(20000);
   const st = await readState(page); await ctx.close();
