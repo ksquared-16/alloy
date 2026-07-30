@@ -150,6 +150,9 @@ export default function PosTemplateSetupColumn({
         reviewQuestionsRef.current = reviewQuestions;
     }, [reviewQuestions]);
     const [busy, setBusy] = useState(false);
+    // Import progress the operator sees. Every value is backed by a real transition — the request
+    // being in flight, or its response having arrived — never by a timer.
+    const [detectStage, setDetectStage] = useState<"idle" | "reading" | "preparing">("idle");
     const [creating, setCreating] = useState(false);
     const [err, setErr] = useState<string | null>(null);
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -259,7 +262,15 @@ export default function PosTemplateSetupColumn({
         return () => window.clearTimeout(t);
     }, [conceptDecisions, caseId, discovery]);
 
+    // Auto-detect bookkeeping lives in refs ON PURPOSE: any of these held as state would land in the
+    // effect's dependency list and tear down the in-flight request that sets it (see the auto-detect
+    // effect below for the deadlock this caused).
     const autoDetectAttemptedRef = useRef<string | null>(null);
+    /** caseId of the request currently in flight, or null. */
+    const detectInFlightRef = useRef<string | null>(null);
+    /** The case this component is currently showing — used to decide whether a response is stale. */
+    const detectCaseRef = useRef<string | null>(caseId);
+    const mountedRef = useRef(true);
 
     const clearSelection = () => {
         setSelectedQuestionId(null);
@@ -394,35 +405,73 @@ export default function PosTemplateSetupColumn({
         [reviewQuestions]
     );
 
+    // AUTO-DETECT after import.
+    //
+    // This effect used to deadlock, and the symptom was "Reading your document" forever while the
+    // server had already answered 200 in seconds:
+    //
+    //   `busy` was BOTH set inside the effect and listed as a dependency. `setBusy(true)` runs
+    //   synchronously (before the first await), so the dependency changed while the request was in
+    //   flight; React tore the effect down, the cleanup set `cancelled = true`, and when the POST
+    //   resolved every line was skipped by `if (cancelled) return` — no draft, no error, and `busy`
+    //   stuck true forever. Nothing could recover, because this surface has no polling: the case is
+    //   fetched once per caseId and never revalidated.
+    //
+    // The fix is to keep in-flight bookkeeping in refs so it can never feed the dependency list, and
+    // to make staleness mean "the case changed or we unmounted" rather than "the effect re-ran".
+    // No timers, no polling: the awaited response is authoritative and is now actually applied.
     useEffect(() => {
-        if (!caseId || draft || busy || creating || !shouldAutoDetect) return;
+        if (!caseId || draft || creating || !shouldAutoDetect) return;
+        if (detectInFlightRef.current) return;
         if (autoDetectAttemptedRef.current === caseId) return;
         autoDetectAttemptedRef.current = caseId;
-        let cancelled = false;
+        detectInFlightRef.current = caseId;
+
+        // Staleness is keyed to the CASE, not to this effect instance.
+        const requestedCaseId = caseId;
+        const isStale = () => mountedRef.current === false || detectCaseRef.current !== requestedCaseId;
+
         (async () => {
             setBusy(true);
             setErr(null);
+            setDetectStage("reading");
             try {
-                const next = await postDetect(caseId);
-                if (cancelled) return;
+                const next = await postDetect(requestedCaseId);
+                if (isStale()) return;
+                setDetectStage("preparing");
                 setDraft(next);
                 const seeded = seedReviewQuestions(next);
                 setReviewQuestions(seeded);
                 reviewQuestionsRef.current = seeded;
                 await reload();
             } catch (e) {
-                if (!cancelled) setErr(e instanceof Error ? e.message : "Couldn't read this document");
+                // Surface the failure. Swallowing it here is what turned a timeout into a hang.
+                if (!isStale()) setErr(e instanceof Error ? e.message : "Couldn't read this document");
             } finally {
-                if (!cancelled) setBusy(false);
+                detectInFlightRef.current = null;
+                // Always clear the spinner for the case we were working on, even if it is no longer
+                // the visible one — a stuck `busy` also permanently wedges the guard above.
+                if (mountedRef.current) {
+                    setBusy(false);
+                    setDetectStage("idle");
+                }
             }
         })();
-        return () => {
-            cancelled = true;
-        };
-    }, [caseId, draft, busy, creating, shouldAutoDetect, reload]);
+    }, [caseId, draft, creating, shouldAutoDetect, reload]);
 
+    // Reset the per-case guard when the case actually changes. This must not run as a separate
+    // mount effect: effects fire in order, so a bare `[caseId]` reset ran immediately AFTER the
+    // auto-detect effect above and erased the guard it had just written.
     useEffect(() => {
-        autoDetectAttemptedRef.current = null;
+        mountedRef.current = true;
+        if (detectCaseRef.current !== caseId) {
+            detectCaseRef.current = caseId;
+            autoDetectAttemptedRef.current = null;
+            detectInFlightRef.current = null;
+        }
+        return () => {
+            mountedRef.current = false;
+        };
     }, [caseId]);
 
     if (!detail) return null;
@@ -787,6 +836,7 @@ export default function PosTemplateSetupColumn({
                 <ProcessingNativeFormCreatingState
                     mode="detecting"
                     error={err}
+                    detectStage={detectStage === "preparing" ? "preparing" : "reading"}
                     onRetry={err ? () => void handleDetect() : undefined}
                 />
             );

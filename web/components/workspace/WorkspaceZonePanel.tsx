@@ -45,7 +45,15 @@ export default function WorkspaceZonePanel({
                 <h2 className={WS_EYEBROW}>{title}</h2>
                 {headerAction}
             </header>
-            <div className="relative min-h-0 flex-1 overflow-hidden">{children}</div>
+            {/*
+              * The body MUST be a flex column. Every consumer writes its body child as
+              * `min-h-0 flex-1 overflow-y-auto` (Review questions, the Processing queue rail, the
+              * work-item detail pane), and `flex-1` is inert unless this parent is a flex container.
+              * Without it the child sized to its full content height inside an `overflow-hidden`
+              * block, so the list was CLIPPED and its own `overflow-y-auto` never activated — the
+              * "Review questions panel cannot be scrolled" defect.
+              */}
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
         </section>
     );
 }

@@ -25,11 +25,17 @@ export default function ProcessingNativeFormCreatingState({
     phaseIndex = 0,
     error = null,
     onRetry,
+    detectStage = "reading",
 }: {
     mode?: "detecting" | "creating";
     phaseIndex?: number;
     error?: string | null;
     onRetry?: () => void;
+    /**
+     * Real detect progress. "preparing" is set only once the server response has actually arrived
+     * and the review list is being seeded — it is a genuine transition, not a timed guess.
+     */
+    detectStage?: "reading" | "preparing";
 }) {
     const detecting = mode === "detecting";
     const safePhase = Math.min(Math.max(phaseIndex, 0), CREATE_PHASES.length - 1);
@@ -44,9 +50,16 @@ export default function ProcessingNativeFormCreatingState({
         return () => window.clearInterval(timer);
     }, [error, mode]);
 
-    const title = detecting ? "Reading your document" : "Creating your native form";
+    const preparing = detecting && detectStage === "preparing";
+    const title = detecting
+        ? preparing
+            ? "Preparing your review"
+            : "Reading your document"
+        : "Creating your native form";
     const subtitle = detecting
-        ? "Detecting questions, fields, and layout — large documents can take a minute or two."
+        ? preparing
+            ? "Alloy finished reading the document and is laying out what it found."
+            : "Detecting questions, fields, and layout — large documents can take a minute or two."
         : "Applying your reviewed questions, mappings, and layout.";
 
     return (
