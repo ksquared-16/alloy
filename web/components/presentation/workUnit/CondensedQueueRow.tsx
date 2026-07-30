@@ -7,7 +7,7 @@
  * anatomy in adminV2 history). Rendered ONLY from the frozen `QueueRowContext` contract
  * (web/lib/workUnits/lifecycleSubjectContracts.ts):
  *
- *   [32px avatar]  line 1 subject identity ··············· [status pill]
+ *   [32px avatar]  line 1 subject identity ··············· [age] [stage pill]
  *                  line 2 primary contact · related subjects (muted)
  *                  line 3 attention dot + reason (ember, when flagged)
  *                  line 4 grouped-count chip ····· current work · due (muted)
@@ -268,8 +268,12 @@ export function CondensedQueueRow({
                                 >
                                     {context.operational_state.age_compact}
                                 </span>
-                            ) : stageLabel ? (
-                                <span className="max-w-[10rem] truncate rounded-full border border-alloy-midnight/15 bg-white px-2 py-0.5 text-[10px] font-semibold leading-[13px] text-alloy-midnight/60">
+                            ) : null}
+                            {stageLabel ? (
+                                <span
+                                    data-queue-row-stage
+                                    className="max-w-[10rem] truncate rounded-full border border-alloy-pine/30 bg-alloy-pine/10 px-2 py-0.5 text-[10px] font-semibold leading-[13px] text-alloy-pine"
+                                >
                                     {stageLabel}
                                 </span>
                             ) : null}

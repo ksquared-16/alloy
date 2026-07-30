@@ -88,7 +88,7 @@ Two separate signals — do not conflate them with status, Needs Attention, sele
 
 ### Time in current operational state
 
-Compact age on the right edge (`12m`, `3h`, `2d`, `4w`, `3mo`) answers: **how long has this subject been in its current authoritative process stage / cohort?**
+Compact age on the right edge (`12m`, `3h`, `2d`, `4w`, `3mo`) answers: **how long has this subject been in its current authoritative process stage / cohort?** It sits beside the stage pill (both show when present) — age never replaces stage.
 
 | Rule | Detail |
 |------|--------|
