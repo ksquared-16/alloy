@@ -176,23 +176,17 @@ function buildAuthoritativePlacements(
             tier === "context_fact" ? ("context_facts" as const) : tier === "details" ? ("details" as const) : ("summary" as const);
         // Pack with purpose-scoped widths (Summary full vs Context Facts half stay independent).
         // Never assign row=index — that forced one field per row and broke half stacking.
+        // Layout widths: Parent / Guardian template is authoritative (like summary keys).
+        // Do not gap-fill from primary_contact — that leaked Context Facts half pairings
+        // into Summary and forced phone|email onto one row after "Full" authoring.
         const layoutGroup: NestedSurfaceGroupConfig = {
             ...template,
             fieldModes: mergedFieldModes,
-            fieldLayoutWidths: mergeHouseholdFieldMaps(template.fieldLayoutWidths, runtime.fieldLayoutWidths),
+            fieldLayoutWidths: remapHouseholdFieldMap(template.fieldLayoutWidths),
             fieldLayoutWidthsByPurpose: {
-                summary: mergeHouseholdFieldMaps(
-                    template.fieldLayoutWidthsByPurpose?.summary,
-                    runtime.fieldLayoutWidthsByPurpose?.summary,
-                ),
-                context_facts: mergeHouseholdFieldMaps(
-                    template.fieldLayoutWidthsByPurpose?.context_facts,
-                    runtime.fieldLayoutWidthsByPurpose?.context_facts,
-                ),
-                details: mergeHouseholdFieldMaps(
-                    template.fieldLayoutWidthsByPurpose?.details,
-                    runtime.fieldLayoutWidthsByPurpose?.details,
-                ),
+                summary: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.summary),
+                context_facts: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.context_facts),
+                details: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.details),
             },
             fieldIcons: mergeHouseholdFieldMaps(template.fieldIcons, runtime.fieldIcons),
         };
@@ -202,11 +196,10 @@ function buildAuthoritativePlacements(
                 purposeMap?.[fieldRef]
                 ?? (purpose === "summary" ? layoutGroup.fieldLayoutWidths?.[fieldRef] : undefined);
             if (explicit) return explicit;
-            // Legacy publishes: width may only exist on the placement row.
+            // Template placement width only — never runtime primary_contact halves.
             const key = `${tier}:${fieldRef}`;
             return (
                 templateByTierField.get(key)?.width
-                ?? runtimeByTierField.get(key)?.width
                 ?? identityFieldLayoutWidthForPurpose(layoutGroup, fieldRef, purpose)
             );
         };
@@ -310,20 +303,11 @@ export function resolveHouseholdRoleMergedGroup(
         fieldPolicies: mergeHouseholdFieldMaps(template.fieldPolicies, runtime.fieldPolicies),
         fieldLabels: mergeHouseholdFieldMaps(template.fieldLabels, runtime.fieldLabels),
         fieldIcons: mergeHouseholdFieldMaps(template.fieldIcons, runtime.fieldIcons),
-        fieldLayoutWidths: mergeHouseholdFieldMaps(template.fieldLayoutWidths, runtime.fieldLayoutWidths),
+        fieldLayoutWidths: remapHouseholdFieldMap(template.fieldLayoutWidths),
         fieldLayoutWidthsByPurpose: {
-            summary: mergeHouseholdFieldMaps(
-                template.fieldLayoutWidthsByPurpose?.summary,
-                runtime.fieldLayoutWidthsByPurpose?.summary,
-            ),
-            context_facts: mergeHouseholdFieldMaps(
-                template.fieldLayoutWidthsByPurpose?.context_facts,
-                runtime.fieldLayoutWidthsByPurpose?.context_facts,
-            ),
-            details: mergeHouseholdFieldMaps(
-                template.fieldLayoutWidthsByPurpose?.details,
-                runtime.fieldLayoutWidthsByPurpose?.details,
-            ),
+            summary: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.summary),
+            context_facts: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.context_facts),
+            details: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.details),
         },
         fieldModes: mergeHouseholdFieldMaps(template.fieldModes, runtime.fieldModes),
         evidenceCollections:
@@ -356,7 +340,7 @@ export function resolveHouseholdRoleMergedGroup(
         expandedFieldKeys: detailKeys,
         fieldModes: mergeHouseholdFieldMaps(template.fieldModes, runtime.fieldModes),
         fieldIcons: mergedBase.fieldIcons,
-        fieldLayoutWidths: mergeHouseholdFieldMaps(template.fieldLayoutWidths, runtime.fieldLayoutWidths),
+        fieldLayoutWidths: mergedBase.fieldLayoutWidths,
         fieldLayoutWidthsByPurpose: mergedBase.fieldLayoutWidthsByPurpose,
         fieldPlacements,
     };

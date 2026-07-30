@@ -121,6 +121,56 @@ describe("buildHouseholdCardEvidence", () => {
         expect(otherParent?.contacts.some((c) => c.name === "Sarah Johnson")).toBe(false);
     });
 
+    it("surfaces create-lead family_member secondary as Other Parent (not Additional)", () => {
+        const record = baseRecord();
+        record._opportunity_persons = [
+            {
+                person_id: "p-sarah",
+                role_type: "primary_contact",
+                name: "Sarah Johnson",
+                phone: "555-123-4567",
+                email: "sarah@example.com",
+            },
+            {
+                person_id: "p-mike",
+                role_type: "family_member",
+                name: "Michael Johnson",
+                phone: "555-111-2222",
+            },
+        ];
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        // Stale Additional criteria that historically claimed family_member via "member".
+        config = {
+            ...config,
+            groups: config.groups.map((group) => {
+                if (group.key === "other_parent_guardian") {
+                    return {
+                        ...group,
+                        relationshipCriteria: {
+                            roleKeys: ["parent", "guardian"],
+                            excludeRoleKeys: ["emergency", "pickup", "billing"],
+                        },
+                    };
+                }
+                if (group.key === "household_members") {
+                    return {
+                        ...group,
+                        enabled: true,
+                        relationshipCriteria: {
+                            roleKeys: ["additional", "contact", "member"],
+                        },
+                    };
+                }
+                return group;
+            }),
+        };
+        const ev = buildHouseholdCardEvidence(ctx(record), { nestedConfig: config });
+        const otherParent = ev.groups.find((g) => g.key === "other_parent_guardian");
+        const additional = ev.groups.find((g) => g.key === "household_members");
+        expect(otherParent?.contacts.map((c) => c.name)).toEqual(["Michael Johnson"]);
+        expect(additional?.contacts.some((c) => c.name === "Michael Johnson") ?? false).toBe(false);
+    });
+
     it("does not duplicate the primary person in Other Parent / Guardian", () => {
         const record = baseRecord();
         record._opportunity_persons = [

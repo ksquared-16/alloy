@@ -67,7 +67,18 @@ const DEFINITIONS: HouseholdRelationshipSectionDefinition[] = [
         allowMultipleInstances: false,
         clickBehavior: "open_identity_details",
         defaultCriteria: {
-            roleKeys: ["parent", "guardian"],
+            // Include create-lead / Processing roles that historically landed as
+            // family_member or primary_contact on the secondary adult.
+            roleKeys: [
+                "parent",
+                "guardian",
+                "family_member",
+                "primary_contact",
+                "secondary",
+                "co_parent",
+                "spouse",
+                "partner",
+            ],
             excludeRoleKeys: ["emergency", "pickup", "billing"],
         },
     },

@@ -121,7 +121,8 @@ async function linkGuardianToHouseholdAndOpportunity(
             org_id: input.orgId,
             opportunity_id: input.opportunityId,
             person_id: input.personId,
-            role_type: "family_member",
+            // Match customer_persons: secondary adults are guardians, not generic family_member.
+            role_type: input.isPrimary ? "primary_contact" : "guardian",
             metadata: {
                 source: "create_lead",
                 role: input.isPrimary ? "primary_guardian" : "secondary_guardian",
