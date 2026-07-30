@@ -14,7 +14,21 @@ import { perfIntent } from "@/lib/perf/perfNamespaceLog";
 
 const AUTO_OPEN_SOURCE = "default_operational_subject";
 
+/**
+ * What this auto-open path can OPEN — the record-drawer vocabulary.
+ *
+ * This was silently identical to `OperationalSubjectEntityType` until the child grain got a subject
+ * type of its own, and the two answer different questions: that union says what a queue row's subject
+ * IS, this one says what this hook knows how to open. A child participation is neither — it is
+ * committed by the provisioning answer, never opened through the opportunity drawer.
+ */
 type EntityType = "opportunity" | "job" | "schedule";
+
+const OPENABLE_ENTITY_TYPES = new Set<string>(["opportunity", "job", "schedule"]);
+
+function isOpenableEntityType(value: string): value is EntityType {
+    return OPENABLE_ENTITY_TYPES.has(value);
+}
 
 type Params = {
     enabled: boolean;
@@ -111,6 +125,11 @@ export function useWorkUnitDefaultOperationalSubjectAutoOpen(params: Params): vo
             currentUserId: params.currentUserId,
         });
         if (!resolved) return;
+        // A subject this hook cannot open is not opened. Before the child grain existed every resolved
+        // subject was openable, so this was unnecessary; now a child participation would be handed to
+        // `openRecord` as though it were an opportunity id — opening a DIFFERENT record under the
+        // child's id, which is the wrong-subject substitution in its most direct form.
+        if (!isOpenableEntityType(resolved.entityType)) return;
 
         autoOpenedLaneRef.current = laneKey;
         perfAlloyOsRuntimeMark("default_subject_resolved", {
