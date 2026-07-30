@@ -219,12 +219,6 @@ export function buildOcmEnrollmentTrackQueueRow(
     const base = enrichedOpp ?? (opportunityPreviewFromOcmRow(row) as Record<string, unknown>);
     const ocmLocationId = row.location_id?.trim() || null;
     const oppLocationId = opp.location_id?.trim() || null;
-    const readIso = (v: unknown): string | null =>
-        typeof v === "string" && v.trim() ? v.trim() : null;
-    const stageEnteredAt =
-        readIso((row as { _stage_entered_at?: unknown })._stage_entered_at)
-        ?? readIso((opp as { stage_entered_at?: unknown }).stage_entered_at)
-        ?? readIso((base as { stage_entered_at?: unknown }).stage_entered_at);
 
     return {
         ...base,
@@ -238,8 +232,6 @@ export function buildOcmEnrollmentTrackQueueRow(
         opportunity_status_key: opp.status_key,
             enrollment_track_stage_key: lane.stageKey,
             enrollment_track_stage_label: lane.stageLabel,
-        // Prefer process-instance stage entry; fall back to opportunity when child rides family stage.
-        stage_entered_at: stageEnteredAt,
         _child_display_name: childDisplayName,
         _crm_compact_children: buildQueueRelevantCrmCompactChildren({
             row: {

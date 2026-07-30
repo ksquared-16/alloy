@@ -28,7 +28,6 @@ import {
     applyRelatedSubjectLocationVisibility,
     relatedSubjectVisibilityForLocation,
 } from "@/lib/queues/queueMembershipLocationScope";
-import { buildOperationalStateQueueContext } from "@/lib/workUnits/buildOperationalStateQueueContext";
 import { buildQueueCurrentWorkSummary } from "@/lib/workUnits/buildQueueCurrentWorkSummary";
 import {
     buildAttentionSummary,
@@ -493,17 +492,6 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
         },
         ...(placement_context ? { placement_context } : {}),
         ...(waitlist_context ? { waitlist_context } : {}),
-        operational_state: buildOperationalStateQueueContext({
-            orgId: trimOrNull(row.org_id) ?? "",
-            grain: subjectType === "candidate" ? "candidate" : "child",
-            subjectType,
-            subjectId: active.subjectId,
-            currentStageKey: stageKey,
-            persistedStageEnteredAt: trimOrNull(row.stage_entered_at),
-            intakeCreatedAt: trimOrNull(row.created_at),
-            // Do not assume PI/OCM created_at equals stage entry for child/candidate historical rows.
-            neverTransitioned: false,
-        }),
     };
 }
 
