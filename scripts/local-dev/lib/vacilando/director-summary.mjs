@@ -189,7 +189,8 @@ export function listMissionsV2() {
   const missions = readMissions(null, 300);
   const byId = new Map();
   for (const m of missions) {
-    if (m.mission_brief_id || getBrief(m.mission_id)) {
+    // Live Mission Control list requires a durable brief on disk — purged demos stay out.
+    if (getBrief(m.mission_id) || (m.mission_brief_id && getBrief(m.mission_brief_id))) {
       byId.set(m.mission_id, projectMissionRow(m.mission_id, m));
     }
   }
@@ -202,8 +203,10 @@ export function listMissionsV2() {
       if (!byId.has(id)) byId.set(id, projectMissionRow(id, getMission(id)));
     }
   }
-  return [...byId.values()].sort((a, b) =>
-    String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+  return [...byId.values()]
+    .filter((row) => row && getBrief(row.mission_id || row.missionId))
+    .sort((a, b) =>
+      String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
 }
 
 export function getMissionDetailProjection(missionId) {

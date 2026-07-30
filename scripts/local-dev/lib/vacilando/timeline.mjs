@@ -29,6 +29,7 @@ export const TIMELINE_EVENT_TYPES = new Set([
   "decision_answered",
   "operator_message",
   "director_response",
+  "improvement_captured",
   "worker_health",
   "recovery",
   "commit",

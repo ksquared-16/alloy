@@ -211,7 +211,7 @@ document.addEventListener("input", (e) => {
 });
 
 // -------- routing (Mission Control primary; legacy board is compatibility-only) --------
-const MC_ROUTES = new Set(["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "settings"]);
+const MC_ROUTES = new Set(["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"]);
 const LEGACY_ROUTES = new Set(["command", "director", "history", "policies", "trust"]);
 
 function legacyMode() {
@@ -229,7 +229,8 @@ function route() { return parseRoute().name; }
 function go(r) { location.hash = "#/" + r; }
 const CRUMBS = {
   missions: "Missions", "needs-you": "Needs You", timeline: "Timeline", workers: "Workers",
-  decisions: "Decisions", evidence: "Evidence", kickoff: "Mission Brief", settings: "Settings",
+  decisions: "Decisions", evidence: "Evidence", kickoff: "Mission Brief", improvements: "Improvements",
+  settings: "Settings",
   director: "Legacy Director", command: "Legacy Board", history: "Work History",
   policies: "Policies", trust: "Runtime Trust",
 };
@@ -237,7 +238,7 @@ function setActiveNav(name) {
   const active = (name === "kickoff" || name === "timeline" || name === "decisions" || name === "evidence")
     ? (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name)
     : name;
-  const navActive = ["missions", "needs-you", "workers", "settings"].includes(name)
+  const navActive = ["missions", "needs-you", "workers", "improvements", "settings"].includes(name)
     ? name
     : (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name === "timeline" || name === "evidence" ? "missions" : name);
   document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === navActive));
@@ -283,6 +284,7 @@ function renderMcView(r, V2) {
   else if (r.name === "decisions") html = r.sub ? V2.viewDecisionDetail(r.sub) : V2.viewDecisions(missionQ);
   else if (r.name === "evidence") html = V2.viewEvidence(r.sub || missionQ);
   else if (r.name === "kickoff") html = V2.viewKickoff(r.sub);
+  else if (r.name === "improvements") html = r.sub ? V2.viewImprovementDetail(r.sub) : V2.viewImprovements();
   V.innerHTML = html || `<div class="mc-wrap empty">Unknown Mission Control route</div>`;
   try {
     const n = window.VacilandoV2?.state?.needsYou?.items?.length;

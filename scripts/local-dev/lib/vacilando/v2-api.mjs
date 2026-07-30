@@ -89,6 +89,17 @@ import {
   recordUsageFromTelemetry,
 } from "./usage-ledger.mjs";
 import { submitOperatorDirectorMessage, listDirectorMessages } from "./director-comms.mjs";
+import {
+  captureImprovement,
+  listImprovements,
+  getImprovement,
+  updateImprovement,
+  improvementsHomeVm,
+  improvementDetailVm,
+  purgeMissionRuntime,
+  IMPROVEMENT_CATEGORIES,
+  IMPROVEMENT_SEVERITIES,
+} from "./improvements.mjs";
 
 export async function handleV2Post(path, body) {
   const v = body || {};
@@ -274,6 +285,38 @@ export async function handleV2Post(path, body) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
     }
   }
+  if (path === "/api/v2/improvements") {
+    try {
+      const rec = captureImprovement({
+        title: v.title,
+        description: v.description,
+        expectedBehavior: v.expected_behavior ?? v.expectedBehavior,
+        severity: v.severity || "Medium",
+        category: v.category || null,
+        missionId: v.mission_id || v.missionId || null,
+        currentScreen: v.current_screen || v.currentScreen || null,
+        currentSection: v.current_section || v.currentSection || null,
+        currentRoute: v.current_route || v.currentRoute || null,
+        workerId: v.worker_id || v.workerId || null,
+        decisionId: v.decision_id || v.decisionId || null,
+        screenshotRef: v.screenshot_ref || v.screenshotRef || null,
+        createdBy: v.actor || v.created_by || "operator",
+      });
+      return { status: 201, body: { ok: true, improvement: rec } };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
+  }
+  if (path === "/api/v2/improvements/update") {
+    const out = updateImprovement(v.id || v.improvement_id, v.patch || v, {
+      actor: v.actor || "operator",
+    });
+    return { status: out.ok ? 200 : 404, body: out };
+  }
+  if (path === "/api/v2/missions/purge") {
+    const id = v.mission_id || v.missionId;
+    return { status: 200, body: purgeMissionRuntime(id) };
+  }
 
   return null; // not a V2 route
 }
@@ -340,6 +383,24 @@ export function handleV2Get(path, url) {
     const mid = q("mission_id") || q("id");
     if (!mid) return { status: 400, body: { ok: false, error: "missing_mission_id" } };
     return { status: 200, body: { ok: true, messages: listDirectorMessages(mid) } };
+  }
+  if (path === "/api/v2/improvements" || path === "/api/v2/views/improvements") {
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        ...improvementsHomeVm(),
+        categories: IMPROVEMENT_CATEGORIES,
+        severities: IMPROVEMENT_SEVERITIES,
+        raw: q("raw") === "1" ? listImprovements({ missionId: q("mission_id") }) : undefined,
+      },
+    };
+  }
+  if (path === "/api/v2/improvement" || path === "/api/v2/views/improvement") {
+    const id = q("id");
+    const vm = improvementDetailVm(id);
+    if (!vm) return { status: 404, body: { ok: false, error: "not_found" } };
+    return { status: 200, body: { ok: true, improvement: vm } };
   }
   if (path === "/api/v2/views/mission/timeline") {
     const id = q("id") || q("mission_id");

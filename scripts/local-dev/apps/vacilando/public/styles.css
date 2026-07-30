@@ -785,8 +785,9 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   .mc-stat-grid{grid-template-columns:1fr 1fr}
 }
 .ov-card.wide{max-width:640px}
-.ov-card textarea,.ov-card input{width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit}
-.ov-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.ov-card select{width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit}
+.ov-card label{display:block;font-size:12px;font-weight:600;margin-top:6px}
+#improve-vacilando-btn{font-size:12px;padding:6px 10px}
 
 /* Chat: Director's questions in-thread + a prominent compose box */
 .cvmsg.director.q .cvbub{border:1.5px solid var(--accent,#c2703f);background:rgba(194,112,63,.06)}

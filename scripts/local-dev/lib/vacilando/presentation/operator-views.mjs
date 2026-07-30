@@ -75,6 +75,7 @@ const TIMELINE_HEADLINES = {
   decision_answered: "Decision answered",
   operator_message: "You messaged Director",
   director_response: "Director responded",
+  improvement_captured: "Improve Vacilando observation",
   worker_health: "Worker health changed",
   recovery: "Director recovery attempted",
   evidence_added: "Evidence added",

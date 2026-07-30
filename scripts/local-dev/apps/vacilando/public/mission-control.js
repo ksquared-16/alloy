@@ -57,8 +57,116 @@
   }
 
   V2.isPrimaryRoute = function (name) {
-    return ["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "settings"].includes(name);
+    return ["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"].includes(name);
   };
+
+  function currentOperatorContext() {
+    const r = (() => {
+      try {
+        const raw = location.hash.replace(/^#\/?/, "");
+        const [pathPart] = raw.split("?");
+        const p = (pathPart || "").split("/").filter(Boolean);
+        return { name: p[0] || "missions", sub: p[1] || null };
+      } catch {
+        return { name: "missions", sub: null };
+      }
+    })();
+    const missionId = V2.state.selectedMissionId
+      || (r.name === "missions" && r.sub ? r.sub : null)
+      || (r.name === "kickoff" && r.sub ? r.sub : null)
+      || (r.name === "timeline" && r.sub ? r.sub : null)
+      || (r.name === "evidence" && r.sub ? r.sub : null)
+      || null;
+    const screenMap = {
+      missions: r.sub ? "Mission Dashboard" : "Missions",
+      "needs-you": "Needs You",
+      workers: "Workers",
+      decisions: "Decisions",
+      evidence: "Evidence",
+      timeline: "Timeline",
+      kickoff: "Mission Brief",
+      improvements: "Improvements",
+      settings: "Settings",
+    };
+    return {
+      missionId,
+      currentScreen: screenMap[r.name] || r.name,
+      currentSection: r.sub || null,
+      currentRoute: location.hash || "#/missions",
+    };
+  }
+
+  function toast(msg, kind = "ok") {
+    document.querySelectorAll(".toast").forEach((el) => el.remove());
+    const el = document.createElement("div");
+    el.className = `toast ${kind}`;
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => { try { el.remove(); } catch { /* */ } }, 2800);
+  }
+
+  function openImproveDialog() {
+    document.querySelectorAll(".ov.ci-improve").forEach((el) => el.remove());
+    const ov = document.createElement("div");
+    ov.className = "ov ci-improve";
+    ov.innerHTML = `<div class="ov-card" role="dialog" aria-label="Improve Vacilando">
+      <h3>Improve Vacilando</h3>
+      <p class="muted">Capture friction. Context is attached automatically.</p>
+      <label>Title<input id="ci-title" type="text" maxlength="160" placeholder="What felt wrong?" autofocus /></label>
+      <label>Severity
+        <select id="ci-severity">
+          <option>Low</option>
+          <option selected>Medium</option>
+          <option>High</option>
+          <option>Blocker</option>
+        </select>
+      </label>
+      <label>Description<textarea id="ci-desc" rows="3" placeholder="What happened?"></textarea></label>
+      <label>Expected behavior<textarea id="ci-expected" rows="2" placeholder="What should have happened?"></textarea></label>
+      <div class="ov-actions">
+        <button type="button" class="btn ghost" data-ci-cancel>Cancel</button>
+        <button type="button" class="btn" data-ci-save>Save</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener("click", (ev) => {
+      if (ev.target === ov || ev.target.closest("[data-ci-cancel]")) ov.remove();
+    });
+    ov.querySelector("[data-ci-save]")?.addEventListener("click", async () => {
+      const title = ov.querySelector("#ci-title")?.value?.trim();
+      const description = ov.querySelector("#ci-desc")?.value?.trim();
+      const expected = ov.querySelector("#ci-expected")?.value?.trim();
+      const severity = ov.querySelector("#ci-severity")?.value || "Medium";
+      if (!title || !description) {
+        toast("Title and description are required.", "err");
+        return;
+      }
+      const ctx = currentOperatorContext();
+      try {
+        await post("/api/v2/improvements", {
+          title,
+          description,
+          expected_behavior: expected || null,
+          severity,
+          mission_id: ctx.missionId,
+          current_screen: ctx.currentScreen,
+          current_section: ctx.currentSection,
+          current_route: ctx.currentRoute,
+        });
+        ov.remove();
+        toast("Observation captured.");
+        V2.state.improvementsHome = null;
+        if (location.hash.startsWith("#/improvements")) {
+          V2.fetchImprovements();
+        }
+      } catch (e) {
+        toast(String(e.message || e), "err");
+      }
+    });
+    setTimeout(() => ov.querySelector("#ci-title")?.focus(), 30);
+  }
+
+  V2.openImproveDialog = openImproveDialog;
 
   function missionSubnav(missionId, active) {
     if (!missionId) return "";
@@ -256,7 +364,10 @@
           <h2>${esc(s.title)}</h2>
           <div class="mc-pill ${esc(s.status || "")}">${esc(s.statusLabel)}</div>
         </div>
-        <div class="mc-hero-actions">${actionBtn(s.primaryAction)}</div>
+        <div class="mc-hero-actions">
+          <button class="btn ghost" type="button" data-ci-open>Improve Vacilando</button>
+          ${actionBtn(s.primaryAction)}
+        </div>
       </div>
       <div class="mc-stat-grid">
         <div class="mc-stat"><div class="mc-stat-k">Phase</div><div class="mc-stat-v">${esc(s.phase)}</div></div>
@@ -678,7 +789,92 @@
           <button class="btn ghost" data-legacy-nav="director">Open Legacy Director</button>
         </div>
       </section>
+      <section class="mc-sec">
+        <h3>Continuous Improvement</h3>
+        <p class="muted">Observations drive future Vacilando work — not speculative redesign.</p>
+        <button class="btn" data-nav="improvements">Open Improvement Center</button>
+      </section>
     </div>`;
+  };
+
+  V2.fetchImprovements = async () => {
+    try {
+      V2.state.improvementsHome = await get("/api/v2/views/improvements");
+      V2.state.improvementsError = null;
+      bump(); schedulePaint();
+    } catch (e) {
+      V2.state.improvementsError = String(e.message || e);
+      bump(); schedulePaint();
+    }
+  };
+
+  V2.fetchImprovement = async (id) => {
+    try {
+      V2.state.improvementDetail = await get("/api/v2/views/improvement?id=" + encodeURIComponent(id));
+      V2.state.improvementError = null;
+      bump(); schedulePaint();
+    } catch (e) {
+      V2.state.improvementError = String(e.message || e);
+      bump(); schedulePaint();
+    }
+  };
+
+  V2.viewImprovements = function () {
+    if (!V2.state.improvementsHome && !V2.state.improvementsError) {
+      V2.fetchImprovements();
+      return shell("Improvements", { lead: "Product feedback from real mission use." })
+        + `<div class="empty"><div class="big"><span class="spin"></span> Loading…</div></div></div>`;
+    }
+    if (V2.state.improvementsError && !V2.state.improvementsHome) {
+      return shell("Improvements") + errPanel("Could not load improvements", { message: V2.state.improvementsError }) + `</div>`;
+    }
+    const rows = V2.state.improvementsHome.improvements || [];
+    const cards = rows.map((m) => `<article class="mc-card" data-nav="improvements/${esc(m.id)}">
+      <div class="mc-card-h"><b>${esc(m.title)}</b><span class="mc-pill">${esc(m.status)}</span></div>
+      <div class="mc-card-p">${esc(m.missionTitle)} · ${esc(m.category)} · ${esc(m.severity)}</div>
+      <div class="mc-card-meta muted">${esc(m.created)}</div>
+    </article>`).join("") || `<div class="rempty">No observations yet. Use Improve Vacilando while operating a mission.</div>`;
+    return shell("Improvements", {
+      lead: "Title · Mission · Category · Severity · Status · Created",
+      actions: `<button class="btn" type="button" data-ci-open>Improve Vacilando</button>`,
+    }) + `<div class="mc-list">${cards}</div></div>`;
+  };
+
+  V2.viewImprovementDetail = function (id) {
+    const payload = V2.state.improvementDetail;
+    const d = payload?.improvement;
+    if (!d || d.id !== id) {
+      V2.fetchImprovement(id);
+      return shell("Observation", { lead: "Loading…" })
+        + `<div class="empty"><div class="big"><span class="spin"></span> Opening…</div></div></div>`;
+    }
+    if (V2.state.improvementError) {
+      return shell("Observation") + errPanel("Could not open observation", { message: V2.state.improvementError }) + `</div>`;
+    }
+    const enrich = d.directorEnrichment || {};
+    return shell(d.title || "Observation", {
+      lead: `${esc(d.missionTitle || "No mission")} · ${esc(d.category)} · ${esc(d.severity)} · ${esc(d.status)}`,
+      actions: `<button class="btn ghost" data-nav="improvements">Back</button>`,
+    }) + `<section class="mc-sec">
+      <h3>Description</h3>
+      <p>${esc(d.description)}</p>
+      ${d.expectedBehavior ? `<h3>Expected behavior</h3><p>${esc(d.expectedBehavior)}</p>` : ""}
+      <h3>Context</h3>
+      <ul>
+        <li>Phase: ${esc(d.currentPhase || "—")}</li>
+        <li>Screen: ${esc(d.currentScreen || "—")}</li>
+        <li>Section: ${esc(d.currentSection || "—")}</li>
+        <li>Route: ${esc(d.currentRoute || "—")}</li>
+        <li>Created: ${esc(d.timestamp)} by ${esc(d.createdBy)}</li>
+      </ul>
+      <h3>Director enrichment</h3>
+      <ul>
+        <li>Status: ${esc(enrich.status || "—")}</li>
+        <li>Director state: ${esc(enrich.directorState || "—")}</li>
+        <li>Open decision: ${esc(enrich.openDecisionTitle || "—")}</li>
+        <li>Active deliverables: ${esc((enrich.activeDeliverables || []).join(", ") || "—")}</li>
+      </ul>
+    </section></div>`;
   };
 
   async function refreshNeedsBadge() {
@@ -745,6 +941,10 @@
   }
 
   document.addEventListener("click", (ev) => {
+    if (ev.target.closest("#improve-vacilando-btn") || ev.target.closest("[data-ci-open]")) {
+      openImproveDialog();
+      return;
+    }
     const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry]");
     if (!t) return;
 
