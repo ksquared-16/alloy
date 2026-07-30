@@ -15,6 +15,7 @@ import {
     uploadPersonProfilePhotoDocument,
 } from "@/lib/adminV2/runtime/focusPanel/persistPersonProfilePhoto";
 import {
+    clearChildAvatarSessionPreviewMatchingUrl,
     getChildAvatarSessionPreview,
     setChildAvatarSessionPreview,
 } from "@/lib/adminV2/runtime/focusPanel/children/childAvatarSessionPreview";
@@ -94,8 +95,12 @@ export default function IdentityAvatarEditable({
 
     const revokeBlob = () => {
         if (blobUrlRef.current) {
-            URL.revokeObjectURL(blobUrlRef.current);
+            const revoked = blobUrlRef.current;
+            URL.revokeObjectURL(revoked);
             blobUrlRef.current = null;
+            // Older builds wrote blob: URLs into session; scrub so remounts don't
+            // show Change/Remove over a dead object URL (initials).
+            clearChildAvatarSessionPreviewMatchingUrl(revoked);
         }
         setLocalBlobUrl(null);
     };
@@ -118,8 +123,12 @@ export default function IdentityAvatarEditable({
     const applyPreview = (url: string | null) => {
         const next = trimUrl(url);
         setResolvedUrl(next);
-        rememberSessionPreview(previewIds, next);
-        if (recordId) composer?.setChildAvatarPreviewUrl(recordId, next);
+        // Session (and composer bridge) only keep durable URLs — blob previews are
+        // local-only so summary↔context remounts don't inherit revoked object URLs.
+        if (next === null || !next.startsWith("blob:")) {
+            rememberSessionPreview(previewIds, next);
+            if (recordId) composer?.setChildAvatarPreviewUrl(recordId, next);
+        }
     };
 
     // Evidence wins when present. Otherwise keep blob/session preview — never wipe a
@@ -154,7 +163,7 @@ export default function IdentityAvatarEditable({
             });
             if (!resolved.ok) throw new Error(resolved.error);
             setResolvedPersonId(resolved.personId);
-            rememberSessionPreview([resolved.personId, customerMemberId, recordId], blobUrl);
+            // Keep blob local-only until the remote URL lands — do not session-store blob:.
 
             const uploaded = await uploadPersonProfilePhotoDocument({
                 personId: resolved.personId,
