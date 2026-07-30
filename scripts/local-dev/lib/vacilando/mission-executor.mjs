@@ -28,6 +28,14 @@ import { precheckProvider, providerResumable, invalidateProviderProbe } from "./
 import { startMissionTurn } from "./providers.mjs";
 import { REPO_ROOT } from "./knowledge.mjs";
 import { WORKER_POLICY } from "./command-budget.mjs";
+import { getBrief } from "./mission-brief.mjs";
+import {
+  getAssignment,
+  listAssignments,
+  buildAssignmentPackage,
+  serializeAssignmentPrompt,
+} from "./worker-assignment.mjs";
+import { EXECUTION_PROTOCOL_VERSION } from "./mission-context.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(os.homedir(), ".local", "state", "alloy-dev");
 const OUT_ROOT = join(RUNTIME_ROOT, "vacilando", "missions", "outputs");
@@ -36,6 +44,12 @@ const OUT_ROOT = join(RUNTIME_ROOT, "vacilando", "missions", "outputs");
 const PER_TURN_MAX_MS = Number(process.env.VACILANDO_TURN_MAX_MS) || 30 * 60 * 1000; // ≥30 min, configurable
 const INACTIVITY_MS = Number(process.env.VACILANDO_TURN_INACTIVITY_MS) || 5 * 60 * 1000;
 const ACTIVITY_WRITE_THROTTLE_MS = 15000; // don't append last_activity_at more than every 15s
+
+/** Implement phases (intent "— implement:" or package.implement_phase) need Bash. */
+export function isImplementMission(mission, pkg) {
+  if (pkg?.implement_phase) return true;
+  return /—\s*implement:/i.test(String(mission?.intent || mission?.title || pkg?.title || ""));
+}
 
 // Live registry: mission_id → { kill, pid, startedAt }. A mission is only truly
 // "running" if it is in this map; recovery relies on that.
@@ -88,6 +102,7 @@ Also, just before the control token, emit a fenced JSON block labelled vacilando
 { "implementation_summary": "...", "changed_files": [], "tests": {"ran": false, "results": null},
   "deliverables": [{"id":"D1","produced":true,"path":"..."}],
   "criterion_evidence": [{"criterion_id":"AC1","status":"met|partial|unmet|not_evidenced","evidence_ref":"..."}],
+  "migrations": [{"path":"supabase/migrations/….sql","status":"applied|awaiting_authorization|not_required","target":"local|shared|none","note":"...","preflight":{"ok":true,"summary":"…","evidence_path":"docs/…/…-preflight.json"}}],
   "deviations_from_package": [], "unresolved_items": [], "provider_completion_claim": true }
 \`\`\`
 `.trim();
@@ -113,6 +128,163 @@ export function serializePackagePrompt(pkg) {
   L.push(`\n## GOVERNANCE\nno_push=${!!g.no_push} no_merge=${!!g.no_merge} no_promote=${!!g.no_promote} no_scope_broadening=${!!g.no_scope_broadening} ask_before_consequential=${!!g.ask_before_consequential} loopback_only=${!!g.loopback_only}`);
   L.push("\n" + TURN_PROTOCOL);
   return L.join("\n");
+}
+
+/**
+ * True when this mission is bound to a V2 Mission Brief (assignment package path).
+ * Brief-backed missions must NEVER silently fall through to serializePackagePrompt.
+ */
+export function isBriefBackedMission(mission) {
+  if (!mission) return false;
+  if (mission.mission_content_hash || mission.mission_brief_version != null) return true;
+  if (mission.assignment_id || mission.kickoff_status) return true;
+  try {
+    return Boolean(getBrief(mission.mission_id));
+  } catch {
+    return false;
+  }
+}
+
+function resolvedDeliverablesFromAssignment(mission) {
+  try {
+    const asg = mission.assignment_id
+      ? getAssignment(mission.mission_id, mission.assignment_id)
+      : listAssignments(mission.mission_id)[0];
+    return (asg?.expectedDeliverables || []).map((d, i) => (
+      typeof d === "string" ? { id: `D${i + 1}`, description: d, path: null } : d
+    ));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Resolve the authoritative stdin prompt for a durable turn.
+ *
+ * Modes:
+ *   - brief_assignment: serializeAssignmentPrompt (+ turn protocol). Requires
+ *     fresh context acknowledgement + start report before Running.
+ *   - legacy_package: serializePackagePrompt (capability-compiler compatibility).
+ *
+ * Fail-closed: brief-backed missions without a valid assignment/ack do not
+ * fall back to the legacy package prompt.
+ *
+ * @param {object} mission
+ * @param {object|null} pkg — legacy Mission Package (optional for brief path)
+ * @param {{ assignmentId?: string }} [opts]
+ * @returns {{ ok: true, mode: string, message: string, meta: object } | { ok: false, error: string, code: string, detail?: object }}
+ */
+export function resolveExecutionPrompt(mission, pkg, { assignmentId = null } = {}) {
+  const briefBacked = isBriefBackedMission(mission);
+  if (!briefBacked) {
+    if (!pkg) return { ok: false, error: "no_package", code: "no_package" };
+    return {
+      ok: true,
+      mode: "legacy_package",
+      message: serializePackagePrompt(pkg),
+      meta: { package_id: pkg.package_id, version: pkg.version },
+    };
+  }
+
+  const mid = mission.mission_id;
+  const brief = getBrief(mid);
+  if (!brief) {
+    return {
+      ok: false,
+      error: "brief_required",
+      code: "brief_missing_for_v2_mission",
+      detail: { message: "Mission is brief-backed but no Mission Brief head exists — refusing legacy prompt fallback" },
+    };
+  }
+
+  const assignments = listAssignments(mid);
+  const asg = assignmentId
+    ? getAssignment(mid, assignmentId)
+    : (mission.assignment_id ? getAssignment(mid, mission.assignment_id) : null)
+      || assignments.find((a) => a.status === "ready" || a.status === "waiting" || a.status === "running")
+      || assignments[0];
+
+  if (!asg) {
+    return {
+      ok: false,
+      error: "assignment_required",
+      code: "no_assignment_for_brief_mission",
+      detail: { message: "V2 Mission Brief path requires a Worker Assignment Package before spawn" },
+    };
+  }
+
+  if (!asg.contextAcknowledgement) {
+    return {
+      ok: false,
+      error: "context_not_acknowledged",
+      code: "ack_required_before_running",
+      detail: { assignmentId: asg.assignmentId, message: "Worker must acknowledge Mission Context before execution becomes Running" },
+    };
+  }
+
+  if (!asg.startReport) {
+    return {
+      ok: false,
+      error: "start_report_required",
+      code: "start_report_required_before_running",
+      detail: { assignmentId: asg.assignmentId, message: "Submit start report after acknowledgement before spawn" },
+    };
+  }
+
+  // Stale acknowledgement / binding
+  if (Number(asg.contextAcknowledgement.missionVersion) !== Number(brief.version)
+    || asg.contextAcknowledgement.missionContentHash !== brief.contentHash) {
+    return {
+      ok: false,
+      error: "stale_mission_hash",
+      code: "stale_acknowledgement",
+      detail: {
+        acknowledged: asg.contextAcknowledgement,
+        current: { version: brief.version, contentHash: brief.contentHash },
+      },
+    };
+  }
+  if (Number(asg.missionVersion) !== Number(brief.version)
+    || asg.missionContentHash !== brief.contentHash) {
+    return {
+      ok: false,
+      error: "stale_assignment_binding",
+      code: "stale_assignment_binding",
+      detail: { assignmentId: asg.assignmentId },
+    };
+  }
+
+  const built = buildAssignmentPackage(mid, asg.assignmentId);
+  if (!built?.workerPromptEnvelope) {
+    return { ok: false, error: "assignment_package_failed", code: "assignment_package_failed" };
+  }
+
+  // Prefer the live serializer so tests can assert exact envelope == serializeAssignmentPrompt
+  const envelope = serializeAssignmentPrompt(asg, built.context);
+  if (envelope !== built.workerPromptEnvelope) {
+    // Should not diverge — use serializeAssignmentPrompt as authority
+  }
+  if (!envelope.includes(brief.contentHash) || !envelope.includes(`v${brief.version}`)) {
+    return {
+      ok: false,
+      error: "envelope_missing_authority",
+      code: "envelope_missing_version_or_hash",
+    };
+  }
+
+  const message = `${envelope}\n\n${TURN_PROTOCOL}`;
+  return {
+    ok: true,
+    mode: "brief_assignment",
+    message,
+    meta: {
+      assignmentId: asg.assignmentId,
+      missionVersion: brief.version,
+      contentHash: brief.contentHash,
+      protocolVersion: EXECUTION_PROTOCOL_VERSION,
+      package_mode: "worker_assignment_v1",
+    },
+  };
 }
 
 /** Parse a finished turn's text → outcome token + question + completion report. */
@@ -200,7 +372,9 @@ export async function runMissionTurn(mission, pkg, { provider, identity, resume 
   // Prepare the environment: ensure declared deliverable directories exist so the
   // worker's write of a bounded doc path never needs an ad-hoc mkdir (which
   // acceptEdits would not auto-approve). Only creates dirs under the worktree.
-  for (const d of pkg.expected_deliverables || []) {
+  const deliverables = pkg?.expected_deliverables
+    || (resolvedDeliverablesFromAssignment(mission));
+  for (const d of deliverables) {
     if (d.path && cwd) {
       const abs = join(cwd, d.path);
       if (abs.startsWith(cwd)) { try { mkdirSync(join(abs, ".."), { recursive: true }); } catch { /* best-effort */ } }
@@ -208,7 +382,19 @@ export async function runMissionTurn(mission, pkg, { provider, identity, resume 
   }
   updateMission(mid, { current_phase: "attaching engine" });
 
-  let base = serializePackagePrompt(pkg);
+  const resolved = resolveExecutionPrompt(mission, pkg, { assignmentId: mission.assignment_id || null });
+  if (!resolved.ok) {
+    updateMission(mid, {
+      status: "blocked",
+      error_code: resolved.code || resolved.error,
+      error_message: resolved.detail?.message || resolved.error || "Execution prompt could not be resolved",
+      current_phase: null,
+      execution_prompt_mode: null,
+    });
+    return { ok: false, ...resolved };
+  }
+
+  let base = resolved.message;
   if (instruction) base = `[OPERATOR STEERING / ANSWER]\n${instruction}\n\n${base}`;
 
   let lastWrite = 0, sessionWritten = false, rollingSummary = null;
@@ -222,11 +408,23 @@ export async function runMissionTurn(mission, pkg, { provider, identity, resume 
     }
   };
 
-  const handle = startMissionTurn({ provider, message: base, cwd, resume, maxTurnMs: PER_TURN_MAX_MS, inactivityMs: INACTIVITY_MS, onActivity });
+  const handle = startMissionTurn({
+    provider, message: base, cwd, resume, maxTurnMs: PER_TURN_MAX_MS, inactivityMs: INACTIVITY_MS, onActivity,
+    // Implement phases must run tests + browser QA headlessly — pre-allow Bash.
+    allowBash: isImplementMission(mission, pkg),
+  });
   live.set(mid, { kill: handle.kill, pid: handle.pid, startedAt: t0 });
   // Dispatched: the engine is running but has not reported activity yet. Presence keeps
   // this as "launching" until the first onActivity flips it to a real execution event.
-  updateMission(mid, { status: "running", current_phase: "dispatching work", turn_count: turn });
+  updateMission(mid, {
+    status: "running",
+    current_phase: "dispatching work",
+    turn_count: turn,
+    execution_prompt_mode: resolved.mode,
+    assignment_id: resolved.meta?.assignmentId || mission.assignment_id || null,
+    mission_brief_version: resolved.meta?.missionVersion ?? mission.mission_brief_version ?? null,
+    mission_content_hash: resolved.meta?.contentHash ?? mission.mission_content_hash ?? null,
+  });
 
   let r;
   try { r = await handle.done; } finally { live.delete(mid); }
