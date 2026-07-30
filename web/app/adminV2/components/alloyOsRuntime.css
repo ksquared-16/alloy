@@ -3360,35 +3360,86 @@ html[data-alloy-os-runtime-split="true"]
 }
 
 /* Scheduling work surface — tall composition in the elevated focus panel.
- * Specificity must beat the generic elevated `.alloy-os-ucard` 75vh cap so the
- * editor can use the viewport and scroll its body instead of clipping tuition/CTA. */
-.alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-scheduling-card="true"]) {
-  max-height: min(92vh, calc(100dvh - 24px));
-}
+ *
+ * Failure mode we keep hitting: elevated `.alloy-os-ucard` uses
+ * `height: max-content` + `overflow: hidden`. Content taller than the cap is
+ * clipped and nothing scrolls, because intermediate wrappers don't shrink.
+ *
+ * Fix: when the schedule editor/detail is open, give the elevated card a hard
+ * viewport budget, make `.alloy-os-ucard__body` the scroller, keep Create
+ * Assignment sticky. Roster-only Assignments elevation stays content-sized. */
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
-  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-scheduling-card="true"])
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-schedule-editor="true"])
   .alloy-os-ucard,
-.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) {
-  max-height: min(92vh, calc(100dvh - 24px));
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-schedule-detail="true"])
+  .alloy-os-ucard,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-room-picker="true"])
+  .alloy-os-ucard,
+.alloy-os-ucard--expanded:has([data-schedule-editor="true"]),
+.alloy-os-ucard--expanded:has([data-schedule-detail="true"]),
+.alloy-os-ucard--expanded:has([data-room-picker="true"]) {
+  /* Beat generic elevated `height: max-content` — definite budget enables scroll. */
+  height: min(90vh, calc(100dvh - 28px)) !important;
+  max-height: min(90vh, calc(100dvh - 28px)) !important;
   width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 24px));
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
   box-sizing: border-box;
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
-  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-scheduling-card="true"])
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-schedule-editor="true"])
+  .alloy-os-ucard__header,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-schedule-detail="true"])
+  .alloy-os-ucard__header,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-room-picker="true"])
+  .alloy-os-ucard__header,
+.alloy-os-ucard--expanded:has([data-schedule-editor="true"]) .alloy-os-ucard__header,
+.alloy-os-ucard--expanded:has([data-schedule-detail="true"]) .alloy-os-ucard__header,
+.alloy-os-ucard--expanded:has([data-room-picker="true"]) .alloy-os-ucard__header {
+  flex: 0 0 auto;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-schedule-editor="true"])
   .alloy-os-ucard__body,
-.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) .alloy-os-ucard__body {
-  max-height: none;
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-schedule-detail="true"])
+  .alloy-os-ucard__body,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-room-picker="true"])
+  .alloy-os-ucard__body,
+.alloy-os-ucard--expanded:has([data-schedule-editor="true"]) .alloy-os-ucard__body,
+.alloy-os-ucard--expanded:has([data-schedule-detail="true"]) .alloy-os-ucard__body,
+.alloy-os-ucard--expanded:has([data-room-picker="true"]) .alloy-os-ucard__body {
+  /* Beat `.alloy-os-ucard--expanded .alloy-os-ucard__body { max-height: 360px }`. */
+  max-height: none !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  min-width: 0;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding-inline: 16px;
+  padding-bottom: 12px;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-scheduling-card="true"],
+.alloy-os-ucard--expanded [data-scheduling-card="true"] {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  padding-inline: 16px;
-  padding-bottom: 12px;
+  width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
 }
 .alloy-os-ucard--expanded:has([data-scheduling-card="true"]) [data-schedule-editor="true"],
@@ -3409,6 +3460,29 @@ html[data-alloy-os-runtime-split="true"]
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-schedule-scroll="true"],
+.alloy-os-ucard--expanded [data-schedule-scroll="true"] {
+  /* Body is the scroller; inner region grows naturally so sticky footer works. */
+  overflow: visible !important;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-schedule-footer="true"],
+.alloy-os-ucard--expanded [data-schedule-footer="true"] {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  flex: 0 0 auto;
+  margin-top: 4px;
+  padding-top: 12px;
+  padding-bottom: 8px;
+  background: #fff;
+  box-shadow: 0 -10px 18px -14px rgba(15, 23, 42, 0.28);
 }
 
 /* Days above Daily hours — two columns only when the elevated card is wide enough
@@ -3439,7 +3513,6 @@ html[data-alloy-os-runtime-split="true"]
 }
 .alloy-os-sched-scroll {
   padding-right: 2px;
-  scrollbar-gutter: stable;
 }
 .alloy-os-sched-footer {
   min-width: 0;

@@ -1274,13 +1274,13 @@ function ScheduleRegions({
     return (
         <div
             className="alloy-os-sched-surface"
-            style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%", gap: 0, paddingTop: 2 }}
+            style={{ display: "flex", flexDirection: "column", minHeight: 0, gap: 0, paddingTop: 2 }}
             {...(surface === "detail" ? { "data-schedule-detail": "true" } : { "data-schedule-editor": "true" })}
         >
             <div
                 data-schedule-scroll="true"
                 className="alloy-os-sched-scroll"
-                style={{ display: "grid", gap: 13, flex: "1 1 auto", minHeight: 0, overflowX: "hidden", overflowY: "auto", paddingBottom: 8 }}
+                style={{ display: "grid", gap: 13, flex: "0 0 auto", minWidth: 0, paddingBottom: 8 }}
             >
                 <IdentityHeader child={child} state={state} />
                 {state.sub ? <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div> : null}
