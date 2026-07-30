@@ -480,8 +480,8 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "offer_to_enrolling",
                 when_outcome_key: "spot_offered",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "waitlisted" },
-                    { kind: "move_to_stage", stage_key: "enrollment" },
+                    { kind: "update_child_enrollment_status", disposition_key: "enrolling" },
+                    { kind: "move_to_stage", stage_key: "enrolling" },
                     { kind: "mark_stage_work_complete" },
                 ],
             },
