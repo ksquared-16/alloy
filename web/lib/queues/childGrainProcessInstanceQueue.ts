@@ -18,6 +18,7 @@ type PiRow = {
     subject_id: string;
     context_id: string | null;
     stage_key: string | null;
+    stage_entered_at: string | null;
     state: string | null;
     metadata: Record<string, unknown> | null;
     updated_at: string | null;
@@ -59,11 +60,12 @@ export function mapProcessInstanceToTrackRow(
         customer_members: cm,
         // process-instance provenance for downstream write-cutover + drawer resolution.
         _process_instance_id: pi.id,
-    } as OcmEnrollmentTrackQueryRow & { _process_instance_id: string };
+        _stage_entered_at: pi.stage_entered_at,
+    } as OcmEnrollmentTrackQueryRow & { _process_instance_id: string; _stage_entered_at: string | null };
 }
 
 const OPP_SELECT =
-    "id, name, title, status_key, stage_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at";
+    "id, name, title, status_key, stage_key, stage_entered_at, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at";
 const CM_SELECT = "id, display_name, first_name, last_name, dob, person_id, relationship, is_active";
 
 /**
@@ -85,7 +87,7 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
     // a freshly-created child (null stage) surfaces in its household's stage lane (e.g. Lead).
     const { data: piData, error: piErr } = await params.supabase
         .from("process_instances")
-        .select("id, org_id, subject_id, context_id, stage_key, state, metadata, updated_at, created_at")
+        .select("id, org_id, subject_id, context_id, stage_key, stage_entered_at, state, metadata, updated_at, created_at")
         .eq("org_id", params.orgId)
         .eq("process_key", ENROLLMENT_PROCESS_KEY)
         .or(`stage_key.eq.${stageKey},stage_key.is.null`);

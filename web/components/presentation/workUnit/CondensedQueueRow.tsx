@@ -46,6 +46,12 @@ import {
     QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
     QUEUE_ROW_CARD_SHELL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
+import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import {
+    occurrenceKeyFromQueueRowContext,
+    resolveRowUnseen,
+    useLocallySeenOccurrenceCount,
+} from "@/lib/queues/queuePersonalSeenSession";
 
 const CARD_BUTTON_CLASS =
     `${QUEUE_ROW_CARD_SHELL_CLASS} focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-bend-pine`;
@@ -104,6 +110,10 @@ export function CondensedQueueRow({
     focus?: FocusedSubjectContext;
 }) {
     const context = row.context;
+    const { orgId, principalUserId } = useWorkspaceOrg();
+    useLocallySeenOccurrenceCount();
+    const occurrenceKey = occurrenceKeyFromQueueRowContext(context, principalUserId, orgId);
+    const showUnseen = resolveRowUnseen({ context, occurrenceKey });
     // One warm handler for pointer-enter, pointer-down (earliest pre-click), and focus.
     // All route to the same existing `onPrefetch` (`intents.prefetchRecord`).
     const warm = onPrefetch
@@ -225,17 +235,45 @@ export function CondensedQueueRow({
                 <AvatarChip name={displayName} />
                 <span className="min-w-0 flex-1">
                     <span className="flex items-start justify-between gap-2">
-                        <span
-                            data-queue-row-subject
-                            className="min-w-0 truncate text-[13px] font-semibold leading-4 text-alloy-midnight"
-                        >
-                            {displayName}
-                        </span>
-                        {stageLabel ? (
-                            <span className="max-w-[10rem] shrink-0 truncate rounded-full border border-alloy-midnight/15 bg-white px-2 py-0.5 text-[10px] font-semibold leading-[13px] text-alloy-midnight/60">
-                                {stageLabel}
+                        <span className="flex min-w-0 items-center gap-1.5">
+                            {showUnseen ? (
+                                <span
+                                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-juniper"
+                                    aria-label="Not yet opened by you"
+                                    title="Not yet opened by you"
+                                />
+                            ) : (
+                                <span className="h-1.5 w-1.5 shrink-0" aria-hidden />
+                            )}
+                            <span
+                                data-queue-row-subject
+                                className="min-w-0 truncate text-[13px] font-semibold leading-4 text-alloy-midnight"
+                            >
+                                {displayName}
                             </span>
-                        ) : null}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                            {context.operational_state?.age_compact ? (
+                                <span
+                                    data-queue-row-operational-age
+                                    className="tabular-nums text-[11px] font-medium leading-4 text-alloy-midnight/55"
+                                    title={
+                                        context.operational_state.age_accessible
+                                        ?? undefined
+                                    }
+                                    aria-label={
+                                        context.operational_state.age_accessible
+                                        ?? undefined
+                                    }
+                                >
+                                    {context.operational_state.age_compact}
+                                </span>
+                            ) : stageLabel ? (
+                                <span className="max-w-[10rem] truncate rounded-full border border-alloy-midnight/15 bg-white px-2 py-0.5 text-[10px] font-semibold leading-[13px] text-alloy-midnight/60">
+                                    {stageLabel}
+                                </span>
+                            ) : null}
+                        </span>
                     </span>
                     {line2 ? (
                         <span

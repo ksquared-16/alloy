@@ -453,22 +453,27 @@ export async function applyStageOutcomeRuleTarget(
             } else {
                 const { data: priorOpp } = await supabase
                     .from("opportunities")
-                    .select("stage_key")
+                    .select("stage_key, stage_entered_at")
                     .eq("id", subject.opportunity_id)
                     .eq("org_id", orgId)
                     .maybeSingle();
                 const { error } = await supabase
                     .from("opportunities")
-                    .update({ stage_key: targetStageKey, updated_at: nowIso })
+                    .update({ stage_key: targetStageKey, stage_entered_at: nowIso, updated_at: nowIso })
                     .eq("id", subject.opportunity_id)
                     .eq("org_id", orgId);
                 if (error) return { error: error.message };
                 if (priorOpp) {
+                    const prior = priorOpp as {
+                        stage_key?: string | null;
+                        stage_entered_at?: string | null;
+                    };
                     undoStageMove = async () => {
                         const { error: undoErr } = await supabase
                             .from("opportunities")
                             .update({
-                                stage_key: (priorOpp as { stage_key?: string | null }).stage_key ?? null,
+                                stage_key: prior.stage_key ?? null,
+                                stage_entered_at: prior.stage_entered_at ?? null,
                                 updated_at: new Date().toISOString(),
                             })
                             .eq("id", subject.opportunity_id)

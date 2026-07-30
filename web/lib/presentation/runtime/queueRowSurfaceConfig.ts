@@ -108,6 +108,8 @@ const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
         "queue_row.stage_label",
         "waitlist.positionLabel",
         "waitlist.waitSince",
+        "queue_row.operational_age",
+        "opportunity.days_in_stage",
     ],
     contact: [...QUEUE_ROW_PERSON_CONTACT_FIELD_KEYS],
     attention: ["opportunity.attention_reason"],
