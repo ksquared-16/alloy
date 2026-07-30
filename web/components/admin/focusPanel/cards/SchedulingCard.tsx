@@ -1229,7 +1229,7 @@ function DayPills({ days, interactive, allowed, onToggle }: { days: number[]; in
 function BillingConsequence({ billing }: { billing: BillingProjection | null }) {
     const family = billing?.totals ? money(billing.totals.familyResponsibility, billing.totals.recurringFrequency) : null;
     return (
-        <div style={{ background: "#f9fafb", border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px", display: "grid", gap: 5 }} data-schedule-billing="true">
+        <div style={{ background: "#fff", border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px", display: "grid", gap: 5 }} data-schedule-billing="true">
             <div style={{ display: "flex", alignItems: "center", gap: 6, color: T.mid40 }}>
                 <Wallet size={12.5} strokeWidth={2} />
                 <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Recurring tuition</span>

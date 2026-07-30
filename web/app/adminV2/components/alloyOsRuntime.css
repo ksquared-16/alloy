@@ -3381,7 +3381,8 @@ html[data-alloy-os-runtime-split="true"]
   /* Leave bottom inset so the rounded card sits on the surface (like Household). */
   max-height: min(75vh, calc(100% - 44px), calc(100dvh - 64px));
   overflow: hidden;
-  background: var(--alloy-os-surface, #fff);
+  background: #ffffff !important;
+  background-color: #ffffff !important;
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-schedule-editor="true"])
@@ -3412,7 +3413,7 @@ html[data-alloy-os-runtime-split="true"]
   position: sticky;
   bottom: 0;
   z-index: 2;
-  background: var(--alloy-os-surface, #fff);
+  background: #ffffff;
   padding-top: 10px;
   padding-bottom: 4px;
   box-shadow: 0 -8px 14px -12px rgba(15, 23, 42, 0.22);
@@ -3647,11 +3648,12 @@ html[data-alloy-os-runtime-split="true"]
   background-color: #ffffff !important;
 }
 
-/* Elevated active surface: solid opaque fill on the stacking context root. */
+/* Elevated active surface: card is opaque white; cell stays transparent so a
+ * second white slab does not sit behind Assignments (Household/Children parity). */
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"] {
   isolation: isolate;
-  background: #ffffff;
+  background: transparent;
   z-index: 56; /* > .alloy-os-fp-depth-scrim z-index: 55 */
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
@@ -3683,8 +3685,8 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard
   .alloy-os-ucard__footer {
-  background: var(--alloy-os-surface, #ffffff);
-  background-color: var(--alloy-os-surface, #ffffff);
+  background: #ffffff !important;
+  background-color: #ffffff !important;
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
@@ -3700,9 +3702,24 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-household__summary,
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
-  .alloy-os-children {
-  background: var(--alloy-os-surface, #ffffff);
-  background-color: var(--alloy-os-surface, #ffffff);
+  .alloy-os-children,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-scheduling-card="true"],
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-schedule-surface="true"],
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-schedule-editor="true"],
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-schedule-detail="true"],
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-room-picker="true"] {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
 }
 
 /* Surface Composer V3 — drill-in edit mode uses most of the viewport as workspace. */
