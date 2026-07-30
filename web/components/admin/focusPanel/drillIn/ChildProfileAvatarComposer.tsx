@@ -88,7 +88,7 @@ export default function ChildProfileAvatarComposer({
     // a published `useProfilePhotos: false` gate (Surfaces can toggle that later).
     const { imageUrl: displayUrl } = resolveSurfaceAvatarRuntime({
         showAvatar,
-        useProfilePhotos: useProfilePhotos || Boolean(localPreviewUrl || composer?.childAvatarPreviewUrl(childId)),
+        useProfilePhotos: useProfilePhotos || Boolean(localPreviewUrl || composer?.childAvatarPreviewUrl(childId) || previewUrl),
         imageUrl: previewUrl,
     });
 
@@ -109,6 +109,8 @@ export default function ChildProfileAvatarComposer({
         if (!file) return;
         setUploading(true);
         setUploadError(null);
+        const blobUrl = URL.createObjectURL(file);
+        setPreview(blobUrl);
         try {
             const resolved = await resolvePersonIdForProfilePhoto({
                 personId,
@@ -141,7 +143,8 @@ export default function ChildProfileAvatarComposer({
                 if (!bound.ok) throw new Error(bound.error);
                 photoUrl = bound.photoUrl;
             }
-            setPreview(photoUrl);
+            setPreview(photoUrl || blobUrl);
+            if (photoUrl) URL.revokeObjectURL(blobUrl);
             if (config && !useProfilePhotos) {
                 mutate(setGroupUseProfilePhotosInNestedGroup(config, groupKey, true));
             }
@@ -149,6 +152,8 @@ export default function ChildProfileAvatarComposer({
                 mutate(setGroupShowAvatarInNestedGroup(config, groupKey, true));
             }
         } catch (e) {
+            URL.revokeObjectURL(blobUrl);
+            setPreview(imageUrl);
             setUploadError(e instanceof Error ? e.message : "Upload failed");
         } finally {
             setUploading(false);

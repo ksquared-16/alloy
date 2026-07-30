@@ -4873,11 +4873,19 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-card-avatar {
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0; border-radius: 999px; overflow: hidden;
+  position: relative;
   background-size: cover; background-position: center; background-repeat: no-repeat;
   font-weight: 700; line-height: 1; letter-spacing: 0.01em;
   color: var(--alloy-os-avatar-fg, #3f3f46);
   background-color: var(--alloy-os-avatar-bg, #e4e4e7);
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+}
+.alloy-os-card-avatar__img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  display: block;
+  border-radius: inherit;
 }
 /* Identity tints — Alloy operational palette (slate / green / amber / blue / teal / stone), no purple or pink. */
 .alloy-os-card-avatar[data-avatar-tone="0"] { --alloy-os-avatar-bg: #e2e8f0; --alloy-os-avatar-fg: #475569; }

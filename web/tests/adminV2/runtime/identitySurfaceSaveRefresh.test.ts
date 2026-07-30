@@ -74,6 +74,8 @@ const CHILD_TRUTH = {
     _inquiry_children: [
         {
             id: "child-1",
+            person_id: "p-emma",
+            customer_member_id: "cm-emma",
             display_name: "Emma Johnson",
             desired_program_label: "Preschool",
             program_room_cohort_label: "North Room",
@@ -357,7 +359,7 @@ describe("expanded field save refresh", () => {
     });
 });
 
-
+describe("drawer record patch photo preservation", () => {
     it("post-save detail cells keep address when merge uses stale truth but patch overlay has values", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
         config = addFieldToNestedGroup(config, "contact_edit", "person.address_line1", { tier: "expanded" });
@@ -405,6 +407,37 @@ describe("expanded field save refresh", () => {
         expect(cells.find((c) => c.fieldRef === "person.address_line1")?.value).toBe("742 Evergreen Terrace");
         expect(cells.find((c) => c.fieldRef === "person.city")?.value).toBe("Portland");
     });
+
+    it("preserves child photo_url when a later inquiry_children patch omits photos", () => {
+        const withPhoto = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
+            childId: "child-1",
+            row: { person_id: "p-emma" },
+            patch: {
+                identityPatch: {},
+                ocmPatch: {},
+                profilePatch: { photo_url: "https://cdn.example/emma.jpg" },
+            },
+            savedPerson: null,
+        });
+        const strippedReload = {
+            ...withPhoto,
+            _inquiry_children: [
+                {
+                    id: "child-1",
+                    person_id: "p-emma",
+                    customer_member_id: "cm-emma",
+                    display_name: "Emma Johnson",
+                },
+            ],
+        };
+        const merged = mergeOpportunityDrawerDisplayRecordPatch(withPhoto, strippedReload);
+        const child = (merged._inquiry_children as Record<string, unknown>[])[0]!;
+        expect(child.photo_url).toBe("https://cdn.example/emma.jpg");
+        expect(buildChildrenCardEvidence(householdCtx(merged)).children[0]!.imageUrl).toBe(
+            "https://cdn.example/emma.jpg",
+        );
+    });
+});
 
 describe("save failure semantics", () => {
     it("failed save does not mutate authoritative truth used for VM recompose", () => {

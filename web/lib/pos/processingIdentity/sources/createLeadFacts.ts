@@ -77,6 +77,18 @@ export function extractFactsFromCreateLeadHousehold(
                 evidence: "create_lead:intake",
             });
         }
+        if (child.last_name) {
+            push({
+                fact_id: `${prefix}:last_name`,
+                fact_type: "person_name",
+                raw_value: child.last_name,
+                normalized_value: child.last_name,
+                confidence: child.confidence,
+                validation_state: child.validation_state,
+                role_hint: "child",
+                evidence: "create_lead:intake",
+            });
+        }
         if (child.dob) {
             push({
                 fact_id: `${prefix}:dob`,

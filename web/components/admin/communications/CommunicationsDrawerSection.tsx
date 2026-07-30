@@ -25,6 +25,7 @@ import {
     markCommunicationsDrawerPrefetchConsumed,
     invalidateCommunicationsDrawerPrefetch,
 } from "@/lib/admin/communications/communicationsDrawerPrefetch";
+import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import type { CommunicationMessage, DeliveryState } from "@/lib/communications/deliveryStateAdapter";
 import { deliveryStatePresentation, mapToDeliveryState } from "@/lib/communications/deliveryStateAdapter";
 import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
@@ -171,6 +172,22 @@ function userFriendlySendNote(processNote: string, channel?: string): string {
     if (queued) return `${noun} queued for delivery.`;
     if (n.includes("dispatched") || n.includes("backend process trigger")) return `${noun} sent.`;
     return `${noun} queued for delivery.`;
+}
+
+/**
+ * Whether the send advanced the open work, in the operator's terms. Sending and having nothing
+ * happen used to be indistinguishable from sending and advancing the step — the API said which,
+ * but nothing read it.
+ */
+function contactAttemptNote(assoc: unknown): string {
+    if (assoc == null || typeof assoc !== "object") return "";
+    const a = assoc as { associated?: boolean; reason?: string };
+    if (a.associated) return " Contact attempt recorded.";
+    if (a.reason === "no_configured_sufficiency") {
+        return " This step isn’t set up to complete on a sent message, so nothing advanced.";
+    }
+    if (a.reason === "no_open_work") return "";
+    return "";
 }
 
 function channelFacetLabel(channel: string | undefined | null): string {
@@ -971,6 +988,7 @@ function CommunicationsDrawerSectionLegacy({
         const subjectTrim = values.subject.trim();
         try {
             let lastNote = "";
+            let lastAssociation: unknown = undefined;
             const optimisticRows: MsgRowWithThread[] = [];
             const nowIso = new Date().toISOString();
             for (const personId of selectedRecipientIds) {
@@ -998,6 +1016,8 @@ function CommunicationsDrawerSectionLegacy({
                     typeof (j as { process_trigger_attempted_note?: string }).process_trigger_attempted_note === "string"
                         ? String((j as { process_trigger_attempted_note: string }).process_trigger_attempted_note)
                         : "";
+                lastAssociation = (j as { contact_attempt_association?: unknown })
+                    .contact_attempt_association;
                 const msgId = String((j as { communication_message_id?: string }).communication_message_id ?? "").trim();
                 const threadId = String((j as { thread_id?: string }).thread_id ?? "").trim();
                 const rec = recipients.find((r) => r.person_id === personId);
@@ -1026,8 +1046,18 @@ function CommunicationsDrawerSectionLegacy({
                     } as MsgRowWithThread);
                 }
             }
-            setSendOkNote(userFriendlySendNote(lastNote, channelSent === "sms" ? "sms" : "email"));
+            setSendOkNote(
+                userFriendlySendNote(lastNote, channelSent === "sms" ? "sms" : "email")
+                    + contactAttemptNote(lastAssociation),
+            );
             invalidateCommunicationsDrawerPrefetch(apiEntityType, entityId);
+            // The comms cache is not the only reader. Activity surfaces (What's Next "Recent
+            // activity", the Activity timeline) compose from the drawer record, which a send never
+            // recomposed — so a message sent today kept showing last week's activity until some
+            // unrelated refresh happened to land.
+            if (apiEntityType === "opportunities") {
+                dispatchOpportunityDrawerScopedUpdate(entityId, "communications_send", ["activity"]);
+            }
             if (optimisticRows.length > 0) {
                 setMsgs((prev) => {
                     const byId = new Set(prev.map((x) => x.id));

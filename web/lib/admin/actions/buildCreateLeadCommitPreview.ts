@@ -212,10 +212,19 @@ function buildSelectionPreview(input: {
         });
     }
 
-    if (selection.address_review_only || household?.address?.lines?.length) {
+    if (selection.address_review_only) {
         not_created.push({
             label: "Address (review only)",
             detail: household?.address?.lines.join(" · "),
+        });
+    } else if (selection.household_address?.lines?.length || selection.household_address?.address_line1) {
+        const detail =
+            selection.household_address.address_line1
+            ?? selection.household_address.lines?.join(" · ")
+            ?? household?.address?.lines.join(" · ");
+        will_create.push({
+            label: "Household address",
+            detail: detail || undefined,
         });
     }
 

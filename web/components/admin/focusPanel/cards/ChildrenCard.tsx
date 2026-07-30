@@ -1475,6 +1475,7 @@ function FocusedChild({
                                       identityRecord.avatar.visible === false
                                           ? null
                                           : (composer?.childAvatarPreviewUrl(child.id)
+                                              ?? child.imageUrl
                                               ?? identityRecord.avatar.imageUrl),
                               }
                             : identityRecord.avatar,

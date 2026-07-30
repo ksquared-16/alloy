@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { createLeadParserSpec } from "@/lib/admin/actions/createLeadPlatformGather";
 import {
@@ -25,8 +25,11 @@ import {
     applyCreateLeadCommitSelectionToDraft,
     resolveCreateLeadCommitSelectionFromDraft,
 } from "@/lib/bos/commandSession/createLeadRepeaterDraft";
+import { resolveCreateLeadDefaultLocation } from "@/lib/admin/actions/resolveCreateLeadDefaultLocation";
+import { upsertBosDraftValue } from "@/lib/bos/commandSession/draftValues";
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { useInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
 import type { IntakeSelectOption } from "@/lib/intake/types";
 import type { BosCommandResolutionState } from "@/lib/bos/commandSession/types";
@@ -62,6 +65,38 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
         locationValue: formLocation,
         programValue: formProgram,
     });
+
+    // Location is implied whenever the operator's own scope determines it — the selected workspace
+    // site, or their single permitted site. Only an "All locations" operator with more than one
+    // permitted site has to supply it. Seeded once so clearing the field is not fought.
+    const siteFilter = useWorkspaceSiteFilter();
+    const impliedLocationSeededRef = useRef(false);
+    const impliedLocationId = resolveCreateLeadDefaultLocation({
+        workspaceSiteId: siteFilter?.selectedSiteId ?? null,
+        permittedSiteIds: (siteFilter?.bootstrap?.sites ?? []).map((s) => s.id),
+    }).location_id;
+
+    useEffect(() => {
+        if (!ctx || impliedLocationSeededRef.current) return;
+        if (!impliedLocationId || formLocation.trim()) return;
+        impliedLocationSeededRef.current = true;
+        ctx.dispatch({
+            type: "SET_DRAFT",
+            draft: upsertBosDraftValue(session.draft, {
+                fieldKey: "location_id",
+                value: impliedLocationId,
+                state: "confirmed",
+                evidence: [
+                    {
+                        kind: "system_default",
+                        note: "From your location",
+                        at: new Date().toISOString(),
+                    },
+                ],
+                optionResolved: true,
+            }),
+        });
+    }, [ctx, formLocation, impliedLocationId, session.draft]);
 
     const fieldOptions = useMemo(() => {
         const options: Partial<Record<string, readonly IntakeSelectOption[]>> = {};
@@ -115,13 +150,15 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
         };
     }, [departmentId, fieldOptions, intakeSpec]);
 
+    // Execute must use the same repaired department the spec was loaded against, or the lead is
+    // validated for one department and committed with none.
     const workspace = useMemo(
         () => ({
-            departmentId: session.invocation.workspace.departmentId,
+            departmentId,
             workUnitId: session.invocation.workspace.workUnitId,
             surface: session.invocation.workspace.surface || "bos_recommendations",
         }),
-        [session.invocation.workspace]
+        [departmentId, session.invocation.workspace]
     );
 
     const resolution = useMemo(() => {

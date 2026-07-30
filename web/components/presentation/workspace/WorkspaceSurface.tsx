@@ -61,7 +61,7 @@ export function WorkspaceSurface() {
                         actionsSlot={
                             <WorkspaceRightRailActions
                                 actions={model.rightRailActions}
-                                defaultDepartmentId={model.defaultDepartmentId}
+                                defaultDepartmentId={model.createLeadDepartmentId}
                             />
                         }
                     />
