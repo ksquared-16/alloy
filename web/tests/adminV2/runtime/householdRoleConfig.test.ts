@@ -116,6 +116,37 @@ describe("household role-based configuration", () => {
         expect(contextPlacements.find((p) => p.fieldRef === "person.phone")?.icon).toBe("phone");
     });
 
+    it("forces Summary phone/email to full rows even when Parent / Guardian still has half", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = {
+            ...config,
+            groups: config.groups.map((group) => {
+                if (group.key !== HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP) return group;
+                return {
+                    ...group,
+                    selectedFieldKeys: ["person.email", "person.phone"],
+                    fieldLayoutWidthsByPurpose: {
+                        ...(group.fieldLayoutWidthsByPurpose ?? {}),
+                        summary: {
+                            "person.email": "half",
+                            "person.phone": "half",
+                        },
+                    },
+                };
+            }),
+        };
+        const primary = resolveHouseholdRoleMergedGroup(config, "primary_contact");
+        const summaryPlacements = (primary?.fieldPlacements ?? []).filter(
+            (placement) => placement.tier === "summary",
+        );
+        expect(summaryPlacements.filter((p) => p.row === 1).map((p) => p.fieldRef)).toEqual([
+            "person.email",
+        ]);
+        expect(summaryPlacements.filter((p) => p.row === 2).map((p) => p.fieldRef)).toEqual([
+            "person.phone",
+        ]);
+    });
+
     it("keeps Summary full widths from Parent / Guardian even when primary_contact has half pairing", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
         config = {

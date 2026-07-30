@@ -10,6 +10,7 @@ import {
     type IdentityStorageTier,
 } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import type { IdentityFieldLinkTarget } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
+import { isCompactIconValueIdentityField } from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
 
 /** @deprecated Prefer storage tier helpers; legacy tier aliases accepted on read. */
 export type IdentityFieldTier = IdentityStorageTier;
@@ -70,6 +71,12 @@ export function identityFieldLayoutWidthForPurpose(
     fieldRef: string,
     purpose: IdentityFieldLayoutPurpose,
 ): NestedSurfaceFieldLayoutWidth {
+    // Card Summary reachability lines (phone/email) always stack — half pairings
+    // from an older beside-drag or polluted primary_contact publish must not win.
+    // Context Facts / Details still honor authored half widths.
+    if (purpose === "summary" && isCompactIconValueIdentityField(fieldRef)) {
+        return "full";
+    }
     return (
         group.fieldLayoutWidthsByPurpose?.[purpose]?.[fieldRef]
         ?? (purpose === "summary" ? group.fieldLayoutWidths?.[fieldRef] : undefined)
