@@ -106,11 +106,23 @@ describe("work-unit route shell", () => {
         expect(operator.shell.breadcrumbs.some((b) => b.label === "Enrollment")).toBe(false);
     });
 
-    it("slug layout mounts the seed-only work-unit host; the legacy record segment is retired", () => {
+    it("slug layout mounts the host and renders children; the page owns the subject seed", () => {
         const layout = read("app/adminV2/workspace/work-unit/[workUnitSlug]/layout.tsx");
         const page = read("app/adminV2/workspace/work-unit/[workUnitSlug]/page.tsx");
         expect(layout).toContain("WorkUnitSlugRouteHost");
-        expect(page).toMatch(/return null/);
+
+        // The page is no longer an inert `return null` anchor. Provisioning composition moved here
+        // because a Next LAYOUT never receives `searchParams`, so the page is the only server boundary
+        // that can know WHICH subject a `?subject_id=` deep link asked for. Measured: its seed is
+        // registered before the Host consumes it, and a deep link now performs exactly one compose of
+        // exactly the requested subject. See docs/runtime/DEEPLINK-COMPOSE-OWNERSHIP.md.
+        expect(page).toContain("searchParams");
+        expect(page).toContain("ProvisioningAnswerSeed");
+        expect(page).toContain("requestedSubjectId");
+
+        // Which means the layout MUST render children — it previously discarded them, and that is the
+        // real reason an earlier page-seed attempt never mounted at all (not a lost hydration race).
+        expect(layout).toMatch(/\{children\}/);
         // RA-2: the `/:recordId` path route is retired — a selected record is the `?subject_id` subject.
         expect(existsSync(join(webRoot, "app/adminV2/workspace/work-unit/[workUnitSlug]/[recordId]"))).toBe(
             false,
