@@ -3366,10 +3366,27 @@ html[data-alloy-os-runtime-split="true"]
  * normal viewport without an inner scrollbar. Scoped to the scheduling card only so
  * other expanded cards keep the compact 360px body cap. */
 .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-scheduling-card="true"]) {
-  max-height: min(88vh, calc(100dvh - 32px));
+  max-height: min(92vh, calc(100dvh - 24px));
+}
+.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) {
+  max-height: min(92vh, calc(100dvh - 24px));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .alloy-os-ucard--expanded:has([data-scheduling-card="true"]) .alloy-os-ucard__body {
-  max-height: calc(88vh - 104px);
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) [data-schedule-editor="true"],
+.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) [data-schedule-detail="true"],
+.alloy-os-ucard--expanded:has([data-scheduling-card="true"]) [data-room-picker="true"] {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Scheduling editor inputs (date + time) — a calm, consistent field with a Pine focus
@@ -3412,6 +3429,78 @@ html[data-alloy-os-runtime-split="true"]
 }
 .alloy-os-sched-input:hover::-webkit-calendar-picker-indicator {
   opacity: 0.9;
+}
+
+/* AlloyTimeInput — compact text + suggestion popover (Assignment / Scheduling). */
+.alloy-time-input {
+  position: relative;
+  display: inline-block;
+  width: 132px;
+  vertical-align: top;
+}
+.alloy-time-input--sched {
+  width: 132px;
+}
+.alloy-time-input__field {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.alloy-time-input__control {
+  width: 100%;
+  padding-right: 34px !important;
+}
+.alloy-time-input__field--invalid .alloy-time-input__control {
+  border-color: #f04438 !important;
+  box-shadow: 0 0 0 3px rgba(240, 68, 56, 0.12);
+}
+.alloy-time-input__clock {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+  font-size: 13px;
+  opacity: 0.55;
+}
+.alloy-time-input__clock:hover:not(:disabled) {
+  opacity: 0.95;
+}
+.alloy-time-input__clock:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.alloy-time-input__list {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5e9ef;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(24, 39, 58, 0.12);
+}
+.alloy-time-input__option {
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #18273a;
+  cursor: pointer;
+}
+.alloy-time-input__option:hover,
+.alloy-time-input__option--selected {
+  background: rgba(0, 162, 131, 0.08);
+  color: #00a283;
 }
 
 /* Shared identity drill-in — fully opaque elevated surface (no canvas bleed-through). */

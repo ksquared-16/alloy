@@ -30,7 +30,7 @@ import {
     type AssignmentListActions,
 } from "@/components/adminV2/scheduling/AssignmentSummaryDetail";
 import {
-    filterRoomsForPurposeBehavior,
+    scopeRoomsForAssignmentPicker,
     type AssignmentTypeBehavior,
 } from "@/lib/operationalAssignments/assignmentTypeBehavior";
 import type { SiteOperationalRoom } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
@@ -38,6 +38,7 @@ import {
     programCategoryIdForRoom,
     resolveProgramOnRoomChange,
 } from "@/lib/operationalAssignments/assignmentProgramRoomResolution";
+import { AlloyTimeInput } from "@/components/workspace/AlloyTimeInput";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -1184,25 +1185,41 @@ function ScheduleRegions({
     surface: "detail" | "editor";
 }) {
     return (
-        <div style={{ display: "grid", gap: 13, paddingTop: 2 }} {...(surface === "detail" ? { "data-schedule-detail": "true" } : { "data-schedule-editor": "true" })}>
-            <IdentityHeader child={child} state={state} />
-            {state.sub ? <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div> : null}
-            <div
-                data-schedule-days-hours-band="true"
-                style={{
-                    display: "grid",
-                    gap: 12,
-                    gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 1fr)",
-                }}
-                className="alloy-os-sched-days-hours-band"
-            >
-                <Region icon={CalendarDays} label="Days">{days}</Region>
-                <Region icon={Clock} label="Daily hours">{hours}</Region>
+        <div
+            style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%", gap: 0, paddingTop: 2 }}
+            {...(surface === "detail" ? { "data-schedule-detail": "true" } : { "data-schedule-editor": "true" })}
+        >
+            <div data-schedule-scroll="true" style={{ display: "grid", gap: 13, flex: "1 1 auto", minHeight: 0, overflowY: "auto", paddingBottom: 4 }}>
+                <IdentityHeader child={child} state={state} />
+                {state.sub ? <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div> : null}
+                <div
+                    data-schedule-days-hours-band="true"
+                    style={{
+                        display: "grid",
+                        gap: 12,
+                        gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 1fr)",
+                    }}
+                    className="alloy-os-sched-days-hours-band"
+                >
+                    <Region icon={CalendarDays} label="Days">{days}</Region>
+                    <Region icon={Clock} label="Daily hours">{hours}</Region>
+                </div>
+                <Region icon={DoorOpen} label="Room">{siteRoom}</Region>
+                <Region icon={CalendarRange} label="Effective">{effective}</Region>
+                <BillingConsequence billing={billing} />
             </div>
-            <Region icon={DoorOpen} label="Room">{siteRoom}</Region>
-            <Region icon={CalendarRange} label="Effective">{effective}</Region>
-            <BillingConsequence billing={billing} />
-            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>{footer}</div>
+            <div
+                data-schedule-footer="true"
+                style={{
+                    flex: "0 0 auto",
+                    borderTop: `1px solid ${T.border}`,
+                    paddingTop: 12,
+                    paddingBottom: 2,
+                    background: "#fff",
+                }}
+            >
+                {footer}
+            </div>
         </div>
     );
 }
@@ -1394,7 +1411,9 @@ function ScheduleEditor({
     const roomReq =
         assignmentTypeBehavior?.roomRequirement ??
         (assignmentTypeBehavior?.requiresRoom ? "required" : "optional");
-    const roomRequired = roomReq === "required";
+    // Schedules that use operational space always require a room. Category
+    // "optional" still presents a required pick here; only `not_used` skips Room.
+    const roomRequired = roomReq !== "not_used";
     const programReq =
         assignmentTypeBehavior?.programRequirement ??
         (assignmentTypeBehavior?.requiresProgram ? "required" : "optional");
@@ -1528,9 +1547,25 @@ function ScheduleEditor({
                 hours={
                     <div style={{ display: "grid", gap: 6 }}>
                         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                            <input type="time" value={arrive} onChange={(e) => setArrive(e.target.value)} data-arrive="true" className="alloy-os-sched-input" style={{ width: 118 }} />
+                            <div data-arrive="true">
+                                <AlloyTimeInput
+                                    value={arrive}
+                                    onChange={setArrive}
+                                    aria-label="Arrive"
+                                    testId="schedule-arrive"
+                                    className="alloy-time-input--sched"
+                                />
+                            </div>
                             <span style={{ color: T.mid40 }}>–</span>
-                            <input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} data-depart="true" className="alloy-os-sched-input" style={{ width: 118 }} />
+                            <div data-depart="true">
+                                <AlloyTimeInput
+                                    value={depart}
+                                    onChange={setDepart}
+                                    aria-label="Depart"
+                                    testId="schedule-depart"
+                                    className="alloy-time-input--sched"
+                                />
+                            </div>
                         </div>
                         {arrive && depart && depart <= arrive && <div style={{ fontSize: 11, color: T.ember }}>Depart must be after arrive.</div>}
                         {days.length > 1 && (
@@ -1547,9 +1582,19 @@ function ScheduleEditor({
                                     return (
                                         <div key={d.i} style={{ display: "flex", gap: 8, alignItems: "center" }} data-perday-row={d.i}>
                                             <span style={{ width: 30, fontSize: 11.5, fontWeight: 600, color: T.slate }}>{WEEKDAY_LABEL[d.i]}</span>
-                                            <input type="time" value={row.arrive} onChange={(e) => setRow({ arrive: e.target.value })} className="alloy-os-sched-input" style={{ width: 118 }} />
+                                            <AlloyTimeInput
+                                                value={row.arrive}
+                                                onChange={(next) => setRow({ arrive: next })}
+                                                aria-label={`${WEEKDAY_LABEL[d.i]} arrive`}
+                                                className="alloy-time-input--sched"
+                                            />
                                             <span style={{ color: T.mid40, fontSize: 11 }}>–</span>
-                                            <input type="time" value={row.depart} onChange={(e) => setRow({ depart: e.target.value })} className="alloy-os-sched-input" style={{ width: 118 }} />
+                                            <AlloyTimeInput
+                                                value={row.depart}
+                                                onChange={(next) => setRow({ depart: next })}
+                                                aria-label={`${WEEKDAY_LABEL[d.i]} depart`}
+                                                className="alloy-time-input--sched"
+                                            />
                                         </div>
                                     );
                                 })}
@@ -1581,7 +1626,7 @@ function ScheduleEditor({
                                     </span>
                                 ) : (
                                     <span data-room-value="pending" style={{ fontSize: 13, fontWeight: 600, color: T.muted }}>
-                                        {roomRequired ? "Select a room" : "Room optional"}
+                                        Select a room
                                     </span>
                                 )}
                                 {roomName && roomFromRec ? <RecTag /> : null}
@@ -1697,22 +1742,19 @@ function RoomPicker({
 }) {
     const seedOptions = useMemo((): PlacementOption[] => {
         const active = seedRooms.filter((r) => r.active !== false);
-        const filtered = filterRoomsForPurposeBehavior(
-            active,
-            purposeBehavior ?? {},
-            programCategoryId
-        );
-        return filtered.map((r) => ({
+        const scoped = scopeRoomsForAssignmentPicker(active, purposeBehavior ?? {});
+        return scoped.map((r) => ({
             roomId: r.roomId,
             roomName: r.roomName,
             classification: "eligible" as const,
             reason: "Operational space",
             programCategoryId: r.programCategoryId,
         }));
-    }, [seedRooms, purposeBehavior, programCategoryId]);
+    }, [seedRooms, purposeBehavior]);
 
     const [scored, setScored] = useState<PlacementOption[] | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [overridePending, setOverridePending] = useState<PlacementOption | null>(null);
 
     useEffect(() => {
         if (!patternId) return;
@@ -1725,15 +1767,15 @@ function RoomPicker({
                 );
                 if (cancelled) return;
                 const raw = (o.options ?? []) as PlacementOption[];
-                const filtered = filterRoomsForPurposeBehavior(
+                // Keep Category allow-list / not_used scoping — do not drop program mismatches.
+                const scoped = scopeRoomsForAssignmentPicker(
                     raw.map((r) => ({
                         ...r,
                         programCategoryId: r.programCategoryId ?? null,
                     })),
                     purposeBehavior ?? {},
-                    programCategoryId
                 );
-                setScored(filtered);
+                setScored(scoped);
                 if (!programCategoryId && typeof o.programCategoryId === "string" && o.programCategoryId) {
                     onProgramResolved?.(o.programCategoryId);
                 }
@@ -1749,40 +1791,72 @@ function RoomPicker({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [siteId, patternId, childId, start, purposeBehavior, programCategoryId]);
 
-    const options = scored ?? seedOptions;
+    const options = useMemo(() => {
+        const list = scored ?? seedOptions;
+        const rank = (c: PlacementOption["classification"]) =>
+            c === "recommended" ? 0 : c === "eligible" ? 1 : 2;
+        return [...list].sort((a, b) => rank(a.classification) - rank(b.classification));
+    }, [scored, seedOptions]);
+
+    function choose(option: PlacementOption) {
+        if (option.classification === "blocked") {
+            setOverridePending(option);
+            return;
+        }
+        setOverridePending(null);
+        onPick(option.roomId, option.roomName, option.classification === "recommended");
+    }
 
     return (
-        <div style={{ display: "grid", gap: 10, paddingTop: 4 }} data-room-picker="true">
+        <div style={{ display: "grid", gap: 10, paddingTop: 4, minHeight: 0 }} data-room-picker="true">
             {label("Choose a room")}
+            <p style={{ margin: 0, fontSize: 11.5, color: T.muted, lineHeight: 1.4 }}>
+                Eligible rooms match this child&rsquo;s age and program as of the start date. Ineligible rooms stay
+                listed — you can override when needed.
+            </p>
             {error && <ErrorNote message={error} />}
             {options.length === 0 ? (
                 <span style={{ fontSize: 12, color: T.muted }}>
-                    No eligible operational spaces for this Category
-                    {programCategoryId ? " and program" : ""}.
+                    No operational spaces configured for this site
+                    {programCategoryId ? " and Category" : ""}.
                 </span>
             ) : (
-                <div style={{ display: "grid", gap: 6 }} data-room-options-ready={scored ? "scored" : "seed"}>
+                <div
+                    style={{ display: "grid", gap: 6, maxHeight: "min(42vh, 320px)", overflowY: "auto" }}
+                    data-room-options-ready={scored ? "scored" : "seed"}
+                >
                     {options.map((o) => {
                         const blocked = o.classification === "blocked";
                         const selected = o.roomId === selectedRoomId;
+                        const pending = overridePending?.roomId === o.roomId;
                         return (
                             <button
                                 key={o.roomId}
                                 type="button"
-                                disabled={blocked}
-                                onClick={() => onPick(o.roomId, o.roomName, o.classification === "recommended")}
+                                onClick={() => choose(o)}
                                 data-room-option={o.roomId}
+                                data-room-classification={o.classification}
+                                data-room-override-pending={pending ? "true" : undefined}
                                 style={{
                                     all: "unset",
-                                    cursor: blocked ? "not-allowed" : "pointer",
+                                    cursor: "pointer",
                                     display: "flex",
                                     justifyContent: "space-between",
                                     alignItems: "center",
-                                    border: selected ? `1px solid ${T.pine}` : `1px solid ${T.border}`,
-                                    background: blocked ? "#f9fafb" : selected ? "rgba(0,162,131,.06)" : "#fff",
+                                    border: pending
+                                        ? `1px solid ${T.ember}`
+                                        : selected
+                                          ? `1px solid ${T.pine}`
+                                          : `1px solid ${T.border}`,
+                                    background: blocked
+                                        ? pending
+                                            ? "rgba(180,83,42,.06)"
+                                            : "#f9fafb"
+                                        : selected
+                                          ? "rgba(0,162,131,.06)"
+                                          : "#fff",
                                     borderRadius: 8,
                                     padding: "8px 12px",
-                                    opacity: blocked ? 0.7 : 1,
                                 }}
                             >
                                 <span style={{ color: blocked ? T.muted : T.forge, minWidth: 0 }}>
@@ -1815,6 +1889,54 @@ function RoomPicker({
                     })}
                 </div>
             )}
+            {overridePending ? (
+                <div
+                    data-room-override-confirm="true"
+                    style={{
+                        display: "grid",
+                        gap: 8,
+                        border: `1px solid ${T.ember}`,
+                        background: "#fffaf7",
+                        borderRadius: 8,
+                        padding: "10px 12px",
+                    }}
+                >
+                    <div style={{ fontSize: 12, color: T.forge, lineHeight: 1.4 }}>
+                        <strong>{overridePending.roomName ?? "This room"}</strong> is ineligible
+                        {overridePending.reason ? ` — ${overridePending.reason}` : ""}. Use it anyway?
+                    </div>
+                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                        <button
+                            type="button"
+                            onClick={() => setOverridePending(null)}
+                            style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}
+                        >
+                            Keep browsing
+                        </button>
+                        <button
+                            type="button"
+                            data-room-override-confirm-use="true"
+                            onClick={() => {
+                                const next = overridePending;
+                                setOverridePending(null);
+                                onPick(next.roomId, next.roomName, false);
+                            }}
+                            style={{
+                                all: "unset",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: "#fff",
+                                background: "var(--alloy-os-bend-pine, #00A283)",
+                                borderRadius: 7,
+                                padding: "7px 12px",
+                            }}
+                        >
+                            Use anyway
+                        </button>
+                    </div>
+                </div>
+            ) : null}
             <div style={{ display: "flex", borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
                 <button type="button" onClick={onCancel} style={{ all: "unset", marginLeft: "auto", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
                     Cancel
@@ -1863,7 +1985,16 @@ function label(s: string) {
     return <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: T.mid40, marginBottom: 7 }}>{s}</div>;
 }
 function primaryBtn(disabled: boolean): CSSProperties {
-    return { fontSize: 12.5, fontWeight: 600, color: "#fff", background: disabled ? "#98a2b3" : T.pine, border: "none", borderRadius: 7, padding: "8px 16px", cursor: disabled ? "default" : "pointer" };
+    return {
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: "#fff",
+        background: disabled ? "#98a2b3" : "var(--alloy-os-bend-pine, #00A283)",
+        border: "none",
+        borderRadius: 7,
+        padding: "8px 16px",
+        cursor: disabled ? "default" : "pointer",
+    };
 }
 
 const rowBtnStyle: CSSProperties = {
