@@ -1274,18 +1274,16 @@ function ScheduleRegions({
     return (
         <div
             className="alloy-os-sched-surface"
-            style={{ display: "flex", flexDirection: "column", minHeight: 0, gap: 0, paddingTop: 2 }}
+            style={{ display: "grid", gap: 0, paddingTop: 2, minWidth: 0 }}
             {...(surface === "detail" ? { "data-schedule-detail": "true" } : { "data-schedule-editor": "true" })}
         >
             <div
                 data-schedule-scroll="true"
                 className="alloy-os-sched-scroll"
-                style={{ display: "grid", gap: 13, flex: "0 0 auto", minWidth: 0, paddingBottom: 8 }}
+                style={{ display: "grid", gap: 13, minWidth: 0, paddingBottom: 8 }}
             >
                 <IdentityHeader child={child} state={state} />
                 {state.sub ? <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div> : null}
-                {/* Stack Days above Hours in the elevated focus panel — side-by-side
-                    clips AlloyTimeInput + Create Assignment against overflow:hidden. */}
                 <div
                     data-schedule-days-hours-band="true"
                     className="alloy-os-sched-days-hours-band"
@@ -1301,11 +1299,10 @@ function ScheduleRegions({
                 data-schedule-footer="true"
                 className="alloy-os-sched-footer"
                 style={{
-                    flex: "0 0 auto",
                     borderTop: `1px solid ${T.border}`,
                     paddingTop: 12,
-                    paddingBottom: 4,
-                    background: "#fff",
+                    paddingBottom: 2,
+                    background: "var(--alloy-os-surface, #fff)",
                 }}
             >
                 {footer}
