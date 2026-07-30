@@ -36,6 +36,19 @@ alloy_validate_tool_version() {
     node -e 'try{process.stdout.write(require(process.argv[1]).version)}catch(e){process.stdout.write("none")}' "$pkg" 2>/dev/null
 }
 
+# Is the worktree dirty? A commit SHA identifies COMMITTED code; if the tree has uncommitted changes,
+# the SHA no longer identifies what was actually validated.
+#
+# This bit us for real: a build failed, its failure was cached against the commit, the source was then
+# fixed WITHOUT committing, and the next two runs returned the stale FAILURE from cache — reporting a
+# broken build for code that was already repaired. The mirror image (a stale PASS masking a real break)
+# is the dangerous direction. So a dirty tree neither reuses nor stores.
+alloy_validate_tree_dirty() {
+    local web_dir="$1" root
+    root="$(cd "$web_dir" && git rev-parse --show-toplevel 2>/dev/null)" || return 1
+    [[ -n "$(cd "$root" && git status --porcelain 2>/dev/null)" ]]
+}
+
 alloy_validate_cmd_id() {
     printf '%s' "${1:-}" | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//' \
         | openssl dgst -sha256 2>/dev/null | awk '{print $NF}' | cut -c1-16
@@ -86,6 +99,8 @@ alloy_validate_reuse_lookup() {
   local force="${4:-0}"
   local scope_id="${5:-full}"
   local cmd="${6:-}"
+  # A dirty tree means the commit no longer identifies the code that would be validated.
+  if alloy_validate_tree_dirty "$web_dir"; then printf 'MISS\n'; return 1; fi
   [[ "$force" == "1" ]] && { printf 'MISS\n'; return 1; }
   [[ -n "$commit" && "$commit" != "unknown" ]] || { printf 'MISS\n'; return 1; }
 
@@ -146,6 +161,8 @@ alloy_validate_reuse_store() {
     ok|test) : ;;
     *) return 0 ;;
   esac
+  # A dirty tree means the commit does not identify what ran; recording it would poison the SHA.
+  if alloy_validate_tree_dirty "$web_dir"; then return 0; fi
 
   mkdir -p "$(alloy_validate_results_dir)"
   local fp path cmd_id tool_v
