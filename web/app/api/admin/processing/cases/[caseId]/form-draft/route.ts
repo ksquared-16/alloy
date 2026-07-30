@@ -76,12 +76,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const draft = await Promise.race([pipeline, timeout, abort]).finally(() => timer && clearTimeout(timer));
 
         if (!draft) {
+            // The builder reports WHY through the stage sink. Reporting every failure as "no document
+            // source" hid real crashes behind a wrong explanation.
+            const failed = stages.filter((s) => s.ok === false).at(-1);
+            const reason = failed ? `${failed.stage}: ${failed.detail ?? "failed"}` : "no_document_source";
             await dbRecordFormDraftDetection(supabase, {
                 orgId: ctx.orgId,
                 caseId,
-                record: { status: "error", stages, total_ms: Date.now() - startedAt, reason: "no_document_source", at: new Date().toISOString() },
+                record: { status: "error", stages, total_ms: Date.now() - startedAt, reason, at: new Date().toISOString() },
             });
-            return jsonError("Could not create a form draft — this case has no document source.", 422);
+            const operatorMessage =
+                failed?.stage === "source_lookup" || !failed
+                    ? "Could not create a form draft — this case has no document source."
+                    : `Could not read this document — ${failed.detail ?? "the document could not be processed"}.`;
+            return jsonError(operatorMessage, 422);
         }
 
         await dbRecordFormDraftDetection(supabase, {
