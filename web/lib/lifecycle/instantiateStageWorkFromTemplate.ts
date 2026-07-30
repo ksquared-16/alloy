@@ -5,7 +5,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { instantiateWorkFromDefinition } from "@/lib/admin/operationalWork/instantiateWorkFromDefinition";
 import { buildBusinessProcessWorkTaskMetadata } from "@/lib/lifecycle/buildBusinessProcessWorkTaskMetadata";
-import { buildBusinessProcessWorkRuntimeFingerprint, findOpenBusinessProcessWorkTask } from "@/lib/lifecycle/buildBusinessProcessWorkRuntimeFingerprint";
+import {
+    buildBusinessProcessWorkRuntimeFingerprint,
+    findOpenBusinessProcessWorkBySemanticIdentity,
+} from "@/lib/lifecycle/buildBusinessProcessWorkRuntimeFingerprint";
 import {
     buildLifecycleIntentIdempotencyKey,
     buildLifecycleIntentSubjectFingerprint,
@@ -76,24 +79,26 @@ export async function instantiateStageWorkFromTemplate(params: {
         };
     }
 
+    const workDefinitionKey = resolvedDefinition.work_definition_key;
     const bpRuntimeFingerprint = buildBusinessProcessWorkRuntimeFingerprint({
         orgId,
         entityType: "opportunities",
         entityId: opportunityId,
-        stageKey,
+        workDefinitionKey,
         templateKey,
     });
 
-    const existingBpTask = await findOpenBusinessProcessWorkTask({
+    const existingBpTask = await findOpenBusinessProcessWorkBySemanticIdentity({
         supabase: params.supabase,
         orgId,
-        fingerprint: bpRuntimeFingerprint,
+        entityType: "opportunities",
+        entityId: opportunityId,
+        workDefinitionKey,
+        templateKey,
     });
     if (existingBpTask?.id) {
         return { status: "deduped", work_id: existingBpTask.id, reason: "bp_runtime_fingerprint" };
     }
-
-    const workDefinitionKey = resolvedDefinition.work_definition_key;
     const now = params.now ?? new Date();
     const idempotencyKey = buildLifecycleIntentIdempotencyKey({
         orgId,
@@ -149,6 +154,7 @@ export async function instantiateStageWorkFromTemplate(params: {
             departmentId: params.departmentId,
             attemptCount: 0,
             bpRuntimeFingerprint,
+            extra: { work_definition_key: workDefinitionKey },
         }),
         resolveParams: {
             departmentMetadata: params.departmentMetadata ?? null,

@@ -272,7 +272,7 @@ describe("tourBpRuntimeIntegration", () => {
             templateKey: "record_tour_outcome_work",
         });
         expect(fingerprint).toBe(
-            `bp:${orgId}:opportunities:${opportunityId}:tour_completed:record_tour_outcome_work`,
+            `bpw:${orgId}:opportunities:${opportunityId}:record_tour_outcome_work`,
         );
 
         mockInstantiate
