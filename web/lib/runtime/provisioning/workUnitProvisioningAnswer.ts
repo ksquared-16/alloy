@@ -90,6 +90,11 @@ import {
     FOCUS_PANEL_SUMMARY_SURFACE,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelLayoutDocModel";
 import { resolvePublishedFocusPanelSummaryRecord } from "@/lib/adminV2/runtime/focusPanel/resolveFocusPanelSummaryVariant";
+import {
+    resolveSubjectGrain,
+    type OperationalSubjectType,
+} from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
+import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import {
     resolveOpportunityStageWorkSlice,
@@ -215,6 +220,14 @@ export type ProvisioningAnswer =
           lensSet: LensSetEntry[];
           /** §0.5.1/§6 — explicit, Stage-owned. */
           rowGrain: RowGrain;
+          /**
+           * THE SUBJECT GRAIN, DERIVED ONCE (R2). `rowGrain` is the lifecycle vocabulary
+           * (`family|child|…`); this is the Focus Panel's (`case|child|candidate`), resolved here by
+           * {@link resolveSubjectGrain} so no downstream layer re-derives or hardcodes it. Before this
+           * existed the panel builder hardcoded `grain:"case"` / `subject.type:"opportunity"` a few
+           * modules away from an answer that already knew better.
+           */
+          subjectGrain: { grain: OperationalGrain; subjectType: OperationalSubjectType };
           /** U-P3 authoritative queue truth, canonical order, ONE bounded page. */
           rows: ProvisioningRow[];
           /** U-P4/U-O3 Record of Attention, from the SAME evaluated page. */
@@ -275,6 +288,12 @@ export type ProvisioningAnswer =
           activeWorkView: { id: string; label: string };
           lensSet: LensSetEntry[];
           rowGrain: RowGrain;
+          /**
+           * Present on the EMPTY terminal too, and that is the point: an authoritatively-empty child lens
+           * must still be able to say it was a CHILD lens that found nobody. Without it, "empty" carries no
+           * evidence of which provider ran, and provider-absence becomes indistinguishable from no-matches.
+           */
+          subjectGrain: { grain: OperationalGrain; subjectType: OperationalSubjectType };
           rows: [];
           /** U-O6: an empty lens has no subject to commit; lens switching stays reachable. */
           recordOfAttention: null;
@@ -321,6 +340,8 @@ export type ProvisioningErrorCode =
     | "no_business_process"
     | "no_active_view"
     | "grain_ambiguous"
+    /** The lens resolved ONE grain, but it has no Focus Panel subject (`person`/`account`/`work_item`). */
+    | "grain_unsupported"
     | "subject_unavailable"
     | "no_truthful_primary_action"
     | "records_unavailable";
@@ -346,6 +367,7 @@ export function provisioningErrorKind(code: ProvisioningErrorCode): Provisioning
         case "no_business_process":
         case "no_active_view":
         case "grain_ambiguous":
+        case "grain_unsupported":
         case "no_truthful_primary_action":
             return "configuration";
         // Configuration is sound; the requested subject is not present.
@@ -689,6 +711,20 @@ export async function composeWorkUnitProvisioningAnswer(
     const grain = resolveLensRowGrain(activeView, stages);
     if (!grain.ok) return fail("grain_ambiguous", `Work View "${activeView.label}": ${grain.reason}`, workUnit, navFrame);
 
+    // ── R2: the lens grain becomes the SUBJECT grain, here, once. ──
+    // Derived at the single point that knows the resolved lens, and published on the answer. Every layer
+    // below reads that field; none re-derives it and none may hardcode one.
+    //
+    // A grain with no Focus Panel subject REFUSES, and does so as a configuration problem the operator can
+    // navigate away from — the same honest-not-fatal shape as `grain_ambiguous`. It must never resolve to
+    // `case`: silently presenting a `person`/`account`/`work_item` lens as a family is precisely the
+    // wrong-subject substitution Subject Authority exists to prevent.
+    const subject = resolveSubjectGrain(grain.grain);
+    if (!subject.ok) {
+        return fail("grain_unsupported", `Work View "${activeView.label}": ${subject.reason}`, workUnit, navFrame);
+    }
+    const subjectGrain = { grain: subject.grain, subjectType: subject.subjectType };
+
     // ── Stage Membership: base rows, Work Unit scoped, bounded. Persisted stage_key IS membership. ──
     // Awaited here at the projection join — the fetch was kicked off at gesture-entry (above) so it ran
     // CONCURRENTLY with configuration + queue-layout + presentation. `records_ms` now measures the residual
@@ -756,6 +792,7 @@ export async function composeWorkUnitProvisioningAnswer(
             activeWorkView: { id: activeView.id, label: activeView.label },
             lensSet,
             rowGrain: grain.grain,
+            subjectGrain,
             rows: [],
             recordOfAttention: null,
             contextFrame,
@@ -941,6 +978,7 @@ export async function composeWorkUnitProvisioningAnswer(
         activeWorkView: { id: activeView.id, label: activeView.label },
         lensSet,
         rowGrain: grain.grain,
+        subjectGrain,
         rows,
         recordOfAttention: { id: chosen.entityId, strategy, strategySource: source },
         // §0.5.2: the Record of Truth may be broader than the row; the attention scope is preserved.
