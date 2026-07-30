@@ -7,6 +7,7 @@ import {
     opportunityStageWorkCacheKey,
     prefetchOpportunityStageWork,
     resetOpportunityStageWorkCacheForTests,
+    seedOpportunityStageWork,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/stageWork/opportunityStageWorkResource";
 
 const SLICE = { stage_work_runtime: { stage_key: "s" }, published_stage_inputs: null, work_intent_runtime: null };
@@ -105,5 +106,28 @@ describe("opportunityStageWorkResource — canonical ownership", () => {
         invalidateOpportunityStageWorkCache({ opportunityId: "opp-A" });
         expect(getOpportunityStageWorkWarm(A)).toBeNull();
         expect(getOpportunityStageWorkWarm(B)).toEqual(SLICE);
+    });
+
+    it("CP-2 seed reuse: provisioning seed satisfies warm resolve without a network fetch", async () => {
+        const { calls } = mockFetch();
+        const seeded = seedOpportunityStageWork(A, SLICE as never);
+        expect(seeded).toBe(true);
+        expect(getOpportunityStageWorkWarm(A)).toEqual(SLICE);
+        const again = await prefetchOpportunityStageWork(A);
+        expect(again).toEqual(SLICE);
+        expect(calls).toHaveLength(0);
+    });
+
+    it("CP-2 seed does not clobber a still-fresh fetched entry", async () => {
+        const { calls } = mockFetch();
+        await prefetchOpportunityStageWork(A);
+        expect(calls).toHaveLength(1);
+        const seeded = seedOpportunityStageWork(A, {
+            stage_work_runtime: { stage_key: "other" },
+            published_stage_inputs: null,
+            work_intent_runtime: null,
+        } as never);
+        expect(seeded).toBe(false);
+        expect(getOpportunityStageWorkWarm(A)).toEqual(SLICE);
     });
 });
