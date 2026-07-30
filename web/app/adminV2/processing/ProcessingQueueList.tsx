@@ -26,7 +26,6 @@ import {
     QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
     QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
     QUEUE_ROW_CARD_SHELL_CLASS,
-    QUEUE_ROW_SELECTED_RAIL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
 import { WS_ICON_ATTENTION, WS_ICON_INTERACTIVE, WS_ICON_STRUCTURAL, WS_TEXT_MUTED, WS_TEXT_PRIMARY, WS_TEXT_SECONDARY } from "@/components/workspace/workspaceTokens";
 
@@ -95,15 +94,15 @@ const LANE_TONE: Record<string, string> = {
     archived: "text-alloy-midnight/35",
 };
 
-// Queue rows use the SAME shell as every other queue surface (work-unit queue, configuration rails
-// — 13 consumers), so a change to the house card treatment reaches Processing too instead of this
-// rail drifting on its own flat divider list.
+// Queue rows use the SAME shell as every other queue surface (work-unit queue, configuration rails),
+// so a change to the house card treatment reaches Processing too instead of this rail drifting on
+// its own flat divider list.
 //
-// `border-alloy-stone/22` is a deliberate belt-and-braces: `.alloy-os-queue-row-card` supplies the
-// real border colour and elevation from CSS variables, but the Tailwind `border` in the shared shell
-// carries no colour of its own, so without this the row would render borderless anywhere that
-// stylesheet is not in the route's chain.
-const QUEUE_ROW_CLASS = `${QUEUE_ROW_CARD_SHELL_CLASS} border-alloy-stone/22 !px-2 !py-1.5 transition-colors ${QUEUE_ROW_CARD_IDLE_BORDER_CLASS}`;
+// No local border colour: the perimeter and elevation belong to `.alloy-os-queue-row-card`, which
+// reuses the Focus Panel card tokens. Overriding it here is precisely how this surface would end up
+// looking "slightly different" from /work-unit again. Only the padding is tightened, because this
+// rail is far narrower than the work-unit queue panel.
+const QUEUE_ROW_CLASS = `${QUEUE_ROW_CARD_SHELL_CLASS} !px-2 !py-1.5 transition-colors ${QUEUE_ROW_CARD_IDLE_BORDER_CLASS}`;
 const QUEUE_ROW_SELECTED_CLASS = QUEUE_ROW_CARD_SELECTED_BORDER_CLASS;
 
 function formatAge(iso: string | null): string {
@@ -300,7 +299,6 @@ export default function ProcessingQueueList({
                     aria-current={selected}
                     className={`${QUEUE_ROW_CLASS} ${selected ? QUEUE_ROW_SELECTED_CLASS : ""}`}
                 >
-                    {selected ? <span aria-hidden className={QUEUE_ROW_SELECTED_RAIL_CLASS} /> : null}
                     <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
                             <span className={`min-w-0 flex-1 truncate ${PROCESSING_QUEUE_ROW_TITLE}`}>{title}</span>
