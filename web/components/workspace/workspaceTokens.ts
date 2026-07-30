@@ -128,8 +128,14 @@ export const WS_SHELL_INSET =
 export const WS_FIELD_CANVAS =
     `flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl ring-1 ring-alloy-stone/25 ${WS_FIELD}`;
 
-/** Module shell nav band padding (header → mode tabs → section tabs). */
-export const WS_SHELL_NAV_CLASS = "bg-white px-4 pb-3 pt-1";
+/**
+ * Module shell nav band padding (header → mode tabs → section tabs).
+ *
+ * The bottom rule runs the FULL width of the shell so the header reads as a distinct band rather
+ * than floating above the body — the section tabs and the metrics strip previously ran straight into
+ * the canvas with nothing separating them.
+ */
+export const WS_SHELL_NAV_CLASS = "border-b border-alloy-stone/22 bg-white px-4 pb-3 pt-1";
 
 /** Queue / list rail — white column with visible vertical stone separator. */
 export const WS_QUEUE_RAIL = "border-r border-alloy-stone/30 bg-white";

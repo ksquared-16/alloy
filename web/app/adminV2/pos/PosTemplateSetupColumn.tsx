@@ -614,7 +614,7 @@ export default function PosTemplateSetupColumn({
                         patch.displayLabel !== undefined ||
                         patch.destinationFieldId !== undefined)
                 ) {
-                    const intent = inferQuestionIntent(merged.evidenceLabel || merged.displayLabel);
+                    const intent = inferQuestionIntent(merged.evidenceLabel || merged.displayLabel, merged.section ?? "");
                     const subject = merged.questionSubject ?? defaultSubjectForIntent(intent);
                     merged.field_source = deriveFieldSources({
                         subject,
@@ -694,7 +694,7 @@ export default function PosTemplateSetupColumn({
         try {
             const id = `manual_${Date.now().toString(36)}`;
             const saved = buildSavedManualQuestion(pendingManualRegion, id);
-            const intent = inferQuestionIntent(saved.evidenceLabel || saved.displayLabel);
+            const intent = inferQuestionIntent(saved.evidenceLabel || saved.displayLabel, saved.section ?? "");
             const subject = saved.questionSubject ?? defaultSubjectForIntent(intent);
             const field_source = deriveFieldSources({
                 subject,
@@ -966,7 +966,7 @@ export default function PosTemplateSetupColumn({
                         <p className="mt-1 text-[12px] text-alloy-midnight/55">Review what Alloy will include before generating.</p>
                     </header>
 
-                    <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-white p-4">
+                    <section className="mb-4 rounded-xl border border-alloy-stone/22 bg-white p-4">
                         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Form setup</h3>
                         <div className="mt-3 space-y-3">
                             <div>
@@ -983,7 +983,7 @@ export default function PosTemplateSetupColumn({
                         </div>
                     </section>
 
-                    <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.03] p-3">
+                    <section className="mb-4 rounded-xl border border-alloy-stone/22 bg-alloy-stone/[0.03] p-3">
                         <div className="flex flex-wrap gap-3">
                             <SummaryRow label="Mapped" value={summaryCounts.mapped} tone="pine" />
                             <SummaryRow label="Form field only" value={summaryCounts.formFieldOnly} tone="midnight" />
@@ -1000,7 +1000,7 @@ export default function PosTemplateSetupColumn({
                         ) : null}
                     </section>
 
-                    <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-white p-4">
+                    <section className="mb-4 rounded-xl border border-alloy-stone/22 bg-white p-4">
                         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Included fields</h3>
                         {includedSections.every((s) => s.fields.length === 0) ? (
                             <p className="mt-2 text-[11px] text-alloy-midnight/40">No active questions to include.</p>
@@ -1029,7 +1029,7 @@ export default function PosTemplateSetupColumn({
                         )}
                     </section>
 
-                    <section className="rounded-lg border border-alloy-stone/10 bg-alloy-stone/[0.02] p-3 text-[11px]">
+                    <section className="rounded-lg border border-alloy-stone/18 bg-alloy-stone/[0.02] p-3 text-[11px]">
                         <h3 className="font-semibold uppercase tracking-wide text-alloy-midnight/35">Source details</h3>
                         <dl className="mt-2 grid gap-1.5 sm:grid-cols-2">
                             <DetailRow label="Source filename" value={sourceFilename} />
@@ -1040,7 +1040,7 @@ export default function PosTemplateSetupColumn({
                         </dl>
                     </section>
                 </div>
-                <div className="shrink-0 border-t border-alloy-stone/12 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
+                <div className="shrink-0 border-t border-alloy-stone/22 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
                     {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
                     <div className="flex items-center justify-end gap-2">
                         <button type="button" onClick={() => setPhase("review")} className={WS_ACTION_SECONDARY}>
@@ -1124,7 +1124,7 @@ export default function PosTemplateSetupColumn({
             ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {discovery && !created ? (
-                <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-1.5">
+                <div className="shrink-0 border-b border-alloy-stone/22 px-3 py-1.5">
                     <button type="button" onClick={() => setReviewMode("concepts")} className="text-[11px] font-semibold text-alloy-bend-pine hover:underline" data-testid="concept-back">
                         ← Back to concept review
                     </button>
@@ -1253,7 +1253,7 @@ export default function PosTemplateSetupColumn({
                             <iframe
                                 src={pdfUrl}
                                 title="Source PDF"
-                                className="w-full rounded border border-alloy-stone/15 bg-white"
+                                className="w-full rounded border border-alloy-stone/22 bg-white"
                                 style={{ height: "72rem" }}
                             />
                         ) : pdfErr ? (
@@ -1352,7 +1352,7 @@ export default function PosTemplateSetupColumn({
                                 {fullText === null ? (
                                     <div className="text-[11px] text-alloy-midnight/40">Loading…</div>
                                 ) : (fullText || draft.diagnostics.extracted_text_preview) ? (
-                                    <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/15 bg-alloy-stone/[0.03] p-2 text-[10px] leading-snug text-alloy-midnight/65">
+                                    <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/22 bg-alloy-stone/[0.03] p-2 text-[10px] leading-snug text-alloy-midnight/65">
                                         {matchedTextLines.lines.join("\n")}
                                     </pre>
                                 ) : (
@@ -1380,7 +1380,7 @@ export default function PosTemplateSetupColumn({
             </div>
 
             {/* Footer — below review workspace; document scroll stays above */}
-            <div className="shrink-0 border-t border-alloy-stone/12 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
+            <div className="shrink-0 border-t border-alloy-stone/22 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
                 {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
                 <div className="flex items-center justify-between gap-3">
                     <p className={`min-w-0 text-[10px] ${created ? "text-alloy-bend-pine" : "text-alloy-midnight/40"}`}>
@@ -1426,7 +1426,7 @@ export default function PosTemplateSetupColumn({
 
 function SummaryPanel({ title, children }: { title: string; children: ReactNode }) {
     return (
-        <section className="rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-alloy-bend-pine bg-white p-3">
+        <section className="rounded-xl border border-alloy-stone/22 border-l-[3px] border-l-alloy-bend-pine bg-white p-3">
             <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">{title}</h3>
             <div className="mt-2">{children}</div>
         </section>
