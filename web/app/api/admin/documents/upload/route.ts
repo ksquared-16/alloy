@@ -183,19 +183,28 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    const { data: existingTitles } = await supabase.from("documents").select("title").eq("org_id", ctx.orgId);
-    const existingDisplayNames = ((existingTitles ?? []) as Array<{ title?: string | null }>)
-        .map((row) => (row.title ?? "").trim())
-        .filter(Boolean);
+    // Profile photos are identity assets — skip org-wide title scan + OCR/POS intake.
+    // Awaiting tesseract on a face photo was hanging Focus Panel "Save photo" indefinitely.
+    const isProfilePhoto = (docType ?? "").trim().toLowerCase() === "profile_photo";
 
-    const proposedTitle =
-        titleRaw ??
-        proposeImportDisplayName({
-            fileName: origName,
-            receivedAt: new Date().toISOString(),
-            existingDisplayNames,
-        });
-    const title = resolveDisplayNameWithCollision(proposedTitle, existingDisplayNames);
+    let title: string;
+    if (isProfilePhoto) {
+        title = (titleRaw ?? origName ?? "Profile photo").trim() || "Profile photo";
+    } else {
+        const { data: existingTitles } = await supabase.from("documents").select("title").eq("org_id", ctx.orgId);
+        const existingDisplayNames = ((existingTitles ?? []) as Array<{ title?: string | null }>)
+            .map((row) => (row.title ?? "").trim())
+            .filter(Boolean);
+
+        const proposedTitle =
+            titleRaw ??
+            proposeImportDisplayName({
+                fileName: origName,
+                receivedAt: new Date().toISOString(),
+                existingDisplayNames,
+            });
+        title = resolveDisplayNameWithCollision(proposedTitle, existingDisplayNames);
+    }
 
     const { data: row, error: insErr } = await supabase
         .from("documents")
@@ -215,6 +224,7 @@ export async function POST(request: NextRequest) {
                 processing_intent: processingIntent,
                 ...processingIntentMetadata(processingIntent),
                 source_format: sourceFormat,
+                ...(isProfilePhoto ? { profile_photo: true } : {}),
             },
         })
         .select("*")
@@ -235,6 +245,34 @@ export async function POST(request: NextRequest) {
 
     const document = normalizeDocumentRow(row as Record<string, unknown>);
     const docId = (row as { id: string }).id;
+
+    if (isProfilePhoto) {
+        try {
+            await emitEvent({
+                org_id: ctx.orgId,
+                event_type: "document_uploaded",
+                entity_type: "documents",
+                entity_id: docId,
+                payload: {
+                    canonical_entity_type: canonicalType,
+                    entity_id: rowEntityId,
+                    doc_type: docType,
+                    storage_path: storagePath,
+                    actor_user_id: ctx.userId,
+                    profile_photo: true,
+                },
+            });
+        } catch (e) {
+            console.warn("[documents/upload] emitEvent profile_photo", e instanceof Error ? e.message : e);
+        }
+        return NextResponse.json({
+            document,
+            raw: row,
+            processing_case_id: null,
+            classification_key: null,
+            extraction_candidate_count: null,
+        });
+    }
 
     // POS-FP11b: best-effort text-only PDF extraction. We already have the bytes in
     // memory. On success the text lands on `documents.extracted_text` so the structure

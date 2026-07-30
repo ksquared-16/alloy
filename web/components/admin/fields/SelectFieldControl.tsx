@@ -8,7 +8,7 @@ const SELECT_CLASS =
 type Props = {
     value: string;
     onChange: (value: string) => void;
-    options: SelectOptionChoice[];
+    options: readonly SelectOptionChoice[];
     disabled?: boolean;
     placeholder?: string;
     className?: string;

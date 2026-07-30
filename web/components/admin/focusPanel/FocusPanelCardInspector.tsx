@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 
+import { UNIVERSAL_CARD_ICON_BY_NAME } from "@/components/admin/focusPanel/UniversalCardIcon";
 import {
     FOCUS_PANEL_COLLECTION_RENDERERS,
     FOCUS_PANEL_COLLECTION_RENDERER_LABELS,
@@ -357,6 +358,23 @@ export default function FocusPanelCardInspector({
                                 placeholder={baseModel.title}
                                 onChange={(e) => patchAppearance({ titleOverride: e.target.value })}
                             />
+                        </Labeled>
+                        <Labeled label="Card icon">
+                            <select
+                                data-testid="inspector-icon"
+                                className={FIELD}
+                                value={appearance.iconName ?? ""}
+                                onChange={(e) =>
+                                    patchAppearance({ iconName: e.target.value.trim() || null })
+                                }
+                            >
+                                <option value="">Default ({baseModel.iconName ?? "LayoutGrid"})</option>
+                                {Object.keys(UNIVERSAL_CARD_ICON_BY_NAME).map((name) => (
+                                    <option key={name} value={name}>
+                                        {name}
+                                    </option>
+                                ))}
+                            </select>
                         </Labeled>
                         <Labeled label="Supporting description">
                             <textarea

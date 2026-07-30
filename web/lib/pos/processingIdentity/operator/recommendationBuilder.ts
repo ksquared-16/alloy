@@ -207,16 +207,50 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
                 }
                 if (sub.householdRef) {
                     const personRef = sub.decision === "link" && sub.selectedRecordId ? sub.selectedRecordId : `@${sub.ref}`;
+                    const parentSubjects = subjects.filter((entry) => entry.role === "parent");
+                    const isPrimaryParent = parentSubjects[0]?.ref === sub.ref;
                     operations.push({
                         ref: `${sub.ref}:link`,
                         opKind: "link",
                         commandKey: IDENTITY_COMMAND_KEYS.linkPersonToHousehold,
-                        payload: { person_id: personRef, household_id: `@${sub.householdRef}` },
+                        payload: {
+                            person_id: personRef,
+                            household_id: `@${sub.householdRef}`,
+                            role_type: isPrimaryParent ? "primary_contact" : "guardian",
+                            primary: isPrimaryParent,
+                        },
                         dependsOnRefs: dedupeRefs([sub.decision === "create" ? sub.ref : undefined, sub.householdRef]),
                         evidenceRefs,
                         resolutionRefs,
-                        reason: "link guardian to household",
+                        reason: isPrimaryParent
+                            ? "link primary guardian to household"
+                            : "link secondary guardian to household",
                     });
+                    const lead = subjects.find((entry) => entry.role === "lead");
+                    if (lead && !isPrimaryParent) {
+                        const leadId =
+                            lead.decision === "link" && lead.selectedRecordId
+                                ? lead.selectedRecordId
+                                : `@${lead.ref}`;
+                        operations.push({
+                            ref: `${sub.ref}:lead-link`,
+                            opKind: "link",
+                            commandKey: IDENTITY_COMMAND_KEYS.linkPersonToLead,
+                            payload: {
+                                person_id: personRef,
+                                lead_id: leadId,
+                                role_type: "guardian",
+                                role: "secondary_guardian",
+                            },
+                            dependsOnRefs: dedupeRefs([
+                                sub.decision === "create" ? sub.ref : undefined,
+                                lead.decision === "create" ? lead.ref : undefined,
+                            ]),
+                            evidenceRefs,
+                            resolutionRefs,
+                            reason: "link secondary guardian to lead",
+                        });
+                    }
                 }
                 break;
             case "child":

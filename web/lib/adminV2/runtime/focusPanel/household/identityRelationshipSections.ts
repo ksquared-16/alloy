@@ -58,11 +58,33 @@ function groupForInstance(config: NestedSurfaceConfig, instanceKey: string): Nes
 }
 
 function criteriaForGroup(group: NestedSurfaceGroupConfig): RelationshipCriteria {
-    if (group.relationshipCriteria) return group.relationshipCriteria;
     const def =
         (group.definitionKey ? householdRelationshipSectionDefinition(group.definitionKey) : undefined)
         ?? householdRelationshipSectionDefinitionForLegacyGroup(group.key);
-    return def?.defaultCriteria ?? {};
+    const defaults = def?.defaultCriteria ?? {};
+    const authored = group.relationshipCriteria;
+    if (!authored) return defaults;
+
+    // Parent / Guardian: always union platform role keys so stale publishes that only
+    // list parent|guardian still classify create-lead `family_member` secondaries here
+    // (instead of trapping them in Additional, which the collapsed card does not show).
+    if (def?.definitionKey === "parent_guardian") {
+        const roleKeys = [...(authored.roleKeys ?? []), ...(defaults.roleKeys ?? [])];
+        const seen = new Set<string>();
+        const deduped = roleKeys.filter((key) => {
+            const k = key.trim().toLowerCase();
+            if (!k || seen.has(k)) return false;
+            seen.add(k);
+            return true;
+        });
+        return {
+            ...authored,
+            roleKeys: deduped,
+            excludeRoleKeys: authored.excludeRoleKeys ?? defaults.excludeRoleKeys,
+        };
+    }
+
+    return authored;
 }
 
 function roleMatchesCriteria(roleType: string | null, criteria: RelationshipCriteria): boolean {

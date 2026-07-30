@@ -1128,7 +1128,7 @@ function AssignmentTypePicker({
                                 padding: "10px 12px",
                                 borderRadius: 10,
                                 border: `1px solid ${T.border}`,
-                                background: "#fff",
+                                background: "var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff))",
                                 cursor: "pointer",
                                 fontSize: 13,
                                 fontWeight: 600,
@@ -1229,7 +1229,17 @@ function DayPills({ days, interactive, allowed, onToggle }: { days: number[]; in
 function BillingConsequence({ billing }: { billing: BillingProjection | null }) {
     const family = billing?.totals ? money(billing.totals.familyResponsibility, billing.totals.recurringFrequency) : null;
     return (
-        <div style={{ background: "#fff", border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px", display: "grid", gap: 5 }} data-schedule-billing="true">
+        <div
+            style={{
+                background: "var(--alloy-os-surface-muted, #f6f8fa)",
+                border: `1px solid ${T.border}`,
+                borderRadius: 10,
+                padding: "9px 12px",
+                display: "grid",
+                gap: 5,
+            }}
+            data-schedule-billing="true"
+        >
             <div style={{ display: "flex", alignItems: "center", gap: 6, color: T.mid40 }}>
                 <Wallet size={12.5} strokeWidth={2} />
                 <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Recurring tuition</span>
@@ -1302,7 +1312,7 @@ function ScheduleRegions({
                     borderTop: `1px solid ${T.border}`,
                     paddingTop: 12,
                     paddingBottom: 2,
-                    background: "var(--alloy-os-surface, #fff)",
+                    background: "var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff))",
                 }}
             >
                 {footer}
@@ -2102,6 +2112,6 @@ const rowBtnStyle: CSSProperties = {
     border: `1px solid ${T.border}`,
     borderRadius: 10,
     padding: "8px 12px",
-    background: "#fff",
+    background: "var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff))",
 };
 const patternChip: CSSProperties = { all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.slate, background: T.stone, border: `1px solid ${T.border}`, borderRadius: 999, padding: "6px 11px" };

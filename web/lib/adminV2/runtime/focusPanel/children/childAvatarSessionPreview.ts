@@ -69,3 +69,23 @@ export function seedChildAvatarSessionPreviewForTests(
 export function clearChildAvatarSessionPreviews(): void {
     previews.clear();
 }
+
+/**
+ * Display URL for a child avatar: evidence first, then session preview under any
+ * known id (inquiry child / person / customer_member). Used so Context↔Summary
+ * remounts keep a just-saved photo before `_inquiry_children` catches up.
+ */
+export function resolveChildDisplayImageUrl(args: {
+    imageUrl?: string | null;
+    childId?: string | null;
+    personId?: string | null;
+    customerMemberId?: string | null;
+}): string | null {
+    const evidence = (args.imageUrl ?? "").trim();
+    if (evidence) return evidence;
+    return (
+        getChildAvatarSessionPreview(args.childId)
+        ?? getChildAvatarSessionPreview(args.personId)
+        ?? getChildAvatarSessionPreview(args.customerMemberId)
+    );
+}
