@@ -111,6 +111,36 @@ lens is unambiguous by declaration; nothing about multi-grain lenses is relaxed)
 mode (all active enrollment participations in scope), distinct from its current per-stage mode. Effective
 stage still applies for DISPLAY, not membership.
 
+## 3B. PHASE 4 — the child surface (START HERE)
+
+Everything Phase 4 depended on is in place. Its goal: **replace `subject_surface_unavailable` with
+the first real child Runtime surface.**
+
+The surface CONSUMES the Business Process projection and renders: child identity · family context ·
+effective child stage · readiness · current work · evaluated actions.
+
+It must **not fabricate**: placement · room · schedule · attendance · enrollment completion.
+
+**Required ordering (Kelly, 2026-07-30):**
+
+1. ~~Author/configure the Firefly child participation Work View.~~ The two family lenses are already
+   declared. The child lens ("All Children in Enrollment", `row_grain_v1: "child"`, no stage
+   predicate) still needs authoring — the Row Type control is in the builder now.
+2. Prove its provider returns ACTIVE `process_instances` only. Unit-proven already (closed instance
+   under an active family case, inactive subject, closed family case, non-enrollment subject type all
+   excluded — `tests/queues/childGrainProcessInstanceQueue.test.ts`). What is NOT proven is the same
+   claim against real Firefly data through the live provider. Re-run the proof harness.
+3. Remove the refusal ONLY after the child surface VM is complete.
+4. Wire `resolveFocusPanelScope` at the same boundary — same commit. `childGrainScope.ts` exists and
+   is proven but deliberately unwired; the refusal is the only thing keeping a child row away from
+   opportunity-shaped scope resolution today.
+5. Browser-certify selection, deep link, next/previous, refresh, and out-of-view behaviour.
+6. Add NO new identity, grain, membership, stage, readiness, or action authority.
+
+**The live case, not a hypothetical:** Firefly's child-grain stages have NO configured primary action.
+The answer requires a truthful primary action to claim `operational`. BP's outcome path supplies
+child-valid actions; Runtime must not invent one. A surface with no action must say so.
+
 ## 4. NEXT, in dependency order
 
 1. ~~**Declarable lens grain** + **participation-membership mode**~~ — **DONE** `0fd5fb217`.
@@ -175,7 +205,20 @@ stage still applies for DISPLAY, not membership.
 - **The broker misclassifies a real tsc `rc=2`** as `class=config` / "the command never ran". Recorded in
   `REFUSAL-HONEST-NOT-FATAL.md` §4; belongs to the Vacilando broker, not Runtime.
 - Dev server: `alloy-dev-start wt3-runtime-v1-settlement` (never bare `next dev`). Auth storage state at
-  `~/.local/state/alloy-dev/auth/slot3/storage-state.json`.
+  `~/.local/state/alloy-dev/auth/slot3/storage-state.json` — **re-captured 2026-07-30**. It expires;
+  refresh with `alloy-agent-login 3`, which opens a browser for a MANUAL sign-in (an agent cannot
+  complete it).
+- **`vac` is not on PATH in every shell** — invoke it as `/Users/Kelly/bin/alloy-dev/vac`. `npx vac`
+  fails with "could not determine executable to run".
+- **Slow tests are usually CONTENTION, not slowness.** Three concurrent vitest/tsc jobs starve each
+  other into multi-minute hangs on suites that finish in seconds alone. Check
+  `ps -eo args | grep [v]itest` before concluding a suite is slow, and never run a second heavy job
+  while one is live.
+- **`origin/staging` is moving fast** (Cursor scheduling/avatar UX, several merges an hour). Reconcile
+  before starting a slice, and expect to reconcile again before landing it. No overlap with
+  convergence files so far — every merge has been clean.
+- **Do NOT revise the enrichment-independent count invariant** (`countOnlyTotalsProjection`). It
+  blocked `last_activity_at` and that is recorded as a deferred slice, not a problem to route around.
 
 ## 7. Owed before any merge
 
