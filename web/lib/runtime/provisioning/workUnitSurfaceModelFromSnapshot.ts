@@ -40,7 +40,7 @@ import type { QueueRowVariant, QueueRecordFixedControls } from "@/lib/layout/que
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { WorkspaceHeaderKpiVm, WorkspaceHeaderPresentationModel } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import type { ProcessCardIcon, ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
-import type { ProvisioningAnswer } from "./workUnitProvisioningAnswer";
+import { provisioningErrorKind, type ProvisioningAnswer } from "./workUnitProvisioningAnswer";
 import type { OperationalPresentation } from "./operationalPresentation";
 
 /**
@@ -117,8 +117,16 @@ function headerFromPresentation(p: OperationalPresentation): WorkspaceHeaderPres
  */
 export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): WorkUnitSurfaceModel {
     // ── HONEST ERROR (U-O7) — one coherent error surface. Never a false-empty, and never partial
-    //    operational content behind it: there are no rows, no subject, no lens set to render.
+    //    operational content behind it: there are no rows and no subject.
+    //
+    //    HONEST, NOT FATAL. This branch used to hard-code `workViews: []`, reasoning that an error has
+    //    "no lens set to render". That was true of the ANSWER, not of the world: by the time a
+    //    grain-ambiguous lens is refused, the lens set is already resolved. Discarding it produced a
+    //    measured defect — Firefly's "Active Pipeline" rendered a raw internal sentence with no pill
+    //    strip and no retry, so an operator (sidebar collapsed by default) had no in-surface way to
+    //    reach a working Work View. A refusal states what is wrong; it must not also remove the exit.
     if (snapshot.terminal === "error") {
+        const frame = snapshot.navigationFrame;
         return {
             header: {
                 title: snapshot.workUnit?.name ?? "Work Unit",
@@ -127,16 +135,30 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
                 identityAccent: null,
                 kpis: [],
             },
-            workViews: [],
+            // EVERY count stays null: counts are SETTLEMENT (U-S6) and this answer never reached it. A
+            // pill with no badge is honest; a zero would be a claim this answer cannot make — the same
+            // rule the operational path below already follows for `count`.
+            workViews: (frame?.lensSet ?? []).map((l): WorkViewLinkModel => ({
+                id: l.id,
+                label: l.label,
+                isActive: l.id === frame?.activeWorkView.id,
+                count: null,
+                href: null,
+                attentionCount: null,
+                overdueCount: null,
+                primaryGrainCount: null,
+                supportingGrainCount: null,
+            })),
             queue: {
                 rows: [],
                 totalCount: null,
                 loading: false,
                 // QueueRegion renders `error` (role="alert") — distinct from `empty` by construction.
                 error: snapshot.message,
+                errorKind: provisioningErrorKind(snapshot.code),
                 rowConfig: EMPTY_ROW_SLOTS,
             },
-            activeWorkViewId: null,
+            activeWorkViewId: frame?.activeWorkView.id ?? null,
             selectedRecordId: null,
             selectedSubject: { selectedRecordId: null, source: "empty" },
             rightRailActions: [],

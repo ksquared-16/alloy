@@ -295,6 +295,23 @@ export type ProvisioningAnswer =
           message: string;
           orgId: string | null;
           workUnit: { id: string; key: string; name: string } | null;
+          /**
+           * HONEST, NOT FATAL. The navigational frame the answer had ALREADY resolved when it refused.
+           *
+           * Measured defect this repairs: Firefly publishes a Work View ("Active Pipeline") whose stages
+           * span two Row Grains, so law G-1 refuses it — correctly. But the error terminal dropped the
+           * lens set, so the surface rendered a raw internal sentence with NO pill strip, no counts and
+           * no retry; with the sidebar collapsed (its default) the operator had no in-surface way to
+           * reach a working Work View. A refusal must not also remove the way out.
+           *
+           * `null` when the failure happened BEFORE lenses were resolved (unauthorized, work unit not
+           * found, no business process, no active view) — there is genuinely no frame to offer, and
+           * inventing one would be a false affordance.
+           */
+          navigationFrame: {
+              lensSet: LensSetEntry[];
+              activeWorkView: { id: string; label: string };
+          } | null;
           timings: ProvisioningTimings;
       };
 
@@ -307,6 +324,38 @@ export type ProvisioningErrorCode =
     | "subject_unavailable"
     | "no_truthful_primary_action"
     | "records_unavailable";
+
+/**
+ * WHAT KIND of problem this is — the distinction the surface needs and the codes already imply.
+ *
+ * Before this existed, no renderer read `code` at all, so a tenant CONFIGURATION problem and a missing
+ * RECORD produced a visually identical dead surface. They call for different operator responses:
+ * configuration is someone's job to fix, a missing subject is not.
+ *
+ * Derived, never stored — one pure total function over the code union, so it cannot drift and adds no
+ * coordinator.
+ */
+export type ProvisioningErrorKind = "authorization" | "configuration" | "subject" | "records";
+
+export function provisioningErrorKind(code: ProvisioningErrorCode): ProvisioningErrorKind {
+    switch (code) {
+        case "unauthorized":
+            return "authorization";
+        // The tenant's configuration is invalid or absent — the surface cannot be composed until it changes.
+        case "work_unit_not_found":
+        case "no_business_process":
+        case "no_active_view":
+        case "grain_ambiguous":
+        case "no_truthful_primary_action":
+            return "configuration";
+        // Configuration is sound; the requested subject is not present.
+        case "subject_unavailable":
+            return "subject";
+        // The read itself failed — transient, and the only kind a retry can plausibly fix.
+        case "records_unavailable":
+            return "records";
+    }
+}
 
 /** Internal dependency timings — D1 must MEASURE the chain, not assume it (Part 8). */
 export type ProvisioningTimings = {
@@ -394,9 +443,26 @@ export async function composeWorkUnitProvisioningAnswer(
         authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0, presentation_ms: 0,
         records_ms: 0, projection_ms: 0, composition_ms: 0, total_ms: 0,
     };
-    const fail = (code: ProvisioningErrorCode, message: string, wu: ProvisioningAnswer extends never ? never : { id: string; key: string; name: string } | null = null): ProvisioningAnswer => {
+    // A refusal carries whatever navigational frame was ALREADY resolved when it happened, so the
+    // operator keeps a way out. `frame` is threaded explicitly rather than captured from an outer
+    // mutable: the lens set does not exist for the early failures, and a closure would silently offer
+    // a stale or empty frame instead of an honest `null`.
+    const fail = (
+        code: ProvisioningErrorCode,
+        message: string,
+        wu: ProvisioningAnswer extends never ? never : { id: string; key: string; name: string } | null = null,
+        frame: { lensSet: LensSetEntry[]; activeWorkView: { id: string; label: string } } | null = null,
+    ): ProvisioningAnswer => {
         timings.total_ms = now() - t0;
-        return { terminal: "error", code, message, orgId: req.orgId ?? null, workUnit: wu, timings };
+        return {
+            terminal: "error",
+            code,
+            message,
+            orgId: req.orgId ?? null,
+            workUnit: wu,
+            navigationFrame: frame,
+            timings,
+        };
     };
 
     // ── U-P1: authorization + scope resolved ONCE, by the caller's gate. Not re-resolved here. ──
@@ -508,6 +574,11 @@ export async function composeWorkUnitProvisioningAnswer(
         displayOrder: v.display_order ?? i,
     }));
     const contextFrame = { workViewId: activeView.id, workViewLabel: activeView.label };
+    /**
+     * From here on, a refusal can still tell the operator where else to go. Every `fail(...)` below
+     * this line passes it; every one above genuinely cannot (no lenses resolved yet).
+     */
+    const navFrame = { lensSet, activeWorkView: { id: activeView.id, label: activeView.label } };
 
     // ── D5 SETTLEMENT LOCATORS — server-resolved, additive, Settlement-only. ──
     // The units are already in hand (parallel fetch above), so this is a PURE resolution: no extra
@@ -616,7 +687,7 @@ export async function composeWorkUnitProvisioningAnswer(
 
     // ── §6: Row Grain explicit, Stage-owned. Grain-ambiguous config is refused honestly. ──
     const grain = resolveLensRowGrain(activeView, stages);
-    if (!grain.ok) return fail("grain_ambiguous", `Work View "${activeView.label}": ${grain.reason}`, workUnit);
+    if (!grain.ok) return fail("grain_ambiguous", `Work View "${activeView.label}": ${grain.reason}`, workUnit, navFrame);
 
     // ── Stage Membership: base rows, Work Unit scoped, bounded. Persisted stage_key IS membership. ──
     // Awaited here at the projection join — the fetch was kicked off at gesture-entry (above) so it ran
@@ -625,7 +696,7 @@ export async function composeWorkUnitProvisioningAnswer(
     const tRec = now();
     const { data: baseRows, error: rowErr } = await recordsPromise;
     timings.records_ms = now() - tRec;
-    if (rowErr) return fail("records_unavailable", `records unavailable: ${rowErr.message}`, workUnit);
+    if (rowErr) return fail("records_unavailable", `records unavailable: ${rowErr.message}`, workUnit, navFrame);
 
     // ── ONE Operational Projection. The lens is evaluated exactly once. ──
     const tProj = now();
@@ -726,6 +797,7 @@ export async function composeWorkUnitProvisioningAnswer(
             "subject_unavailable",
             `the requested subject is not present in this work unit's evaluated page — refusing to substitute a different subject`,
             workUnit,
+            navFrame,
         );
     }
     const chosen =
@@ -733,7 +805,12 @@ export async function composeWorkUnitProvisioningAnswer(
         resolveDefaultOperationalSubject(subjectRows, strategy, { currentUserId: req.currentUserId ?? null });
     if (!chosen) {
         // Rows exist but no subject could be chosen — honest, never a fabricated subject.
-        return fail("subject_unavailable", "the configured strategy resolved no subject from the evaluated page", workUnit);
+        return fail(
+            "subject_unavailable",
+            "the configured strategy resolved no subject from the evaluated page",
+            workUnit,
+            navFrame,
+        );
     }
     const subjectRow = page.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId)!;
     const subjectStageKey = strOrNull((subjectRow as Record<string, unknown>).stage_key);
@@ -741,7 +818,12 @@ export async function composeWorkUnitProvisioningAnswer(
     // ── U-P5/U-O4 current business state + U-O5 truthful primary action. Identity alone is NOT operational. ──
     const stage = stages.find((s) => s.key === subjectStageKey) ?? null;
     if (!stage) {
-        return fail("no_truthful_primary_action", `subject holds stage "${subjectStageKey}" which is not an active configured stage`, workUnit);
+        return fail(
+            "no_truthful_primary_action",
+            `subject holds stage "${subjectStageKey}" which is not an active configured stage`,
+            workUnit,
+            navFrame,
+        );
     }
     const plan = stage.stage_operating_plan_v1 ?? null;
     const template = plan?.work_templates?.find((t) => t.primary) ?? plan?.work_templates?.[0] ?? null;
@@ -751,6 +833,7 @@ export async function composeWorkUnitProvisioningAnswer(
             "no_truthful_primary_action",
             `stage "${stage.key}" offers no reachable primary action — the answer will not claim operational on identity alone`,
             workUnit,
+            navFrame,
         );
     }
 

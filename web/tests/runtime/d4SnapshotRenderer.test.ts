@@ -150,10 +150,25 @@ describe("D4 — snapshot renderer", () => {
         const m = workUnitSurfaceModelFromSnapshot(errored);
         expect(m.queue.error).toBe("records unavailable"); // renderState → "error" (role=alert)
         expect(m.queue.rows).toEqual([]);
-        expect(m.workViews).toEqual([]);       // no lens set pretending to be operational
         expect(m.selectedRecordId).toBeNull(); // no false subject
         expect(m.header.kpis).toEqual([]);
         expect(m.ready).toBe(true);            // an honest error IS committed, not pending
+
+        // The `errored` fixture carries NO `navigationFrame` — the honest shape for a failure that
+        // happened BEFORE lenses resolved (unauthorized / work-unit-not-found / no-business-process /
+        // no-active-view, and the kernel's deadline + transport terminals). Nothing to offer, so the
+        // strip stays empty.
+        //
+        // INTENT CORRECTED (2026-07-30). This line used to read "no lens set pretending to be
+        // operational" — asserting a law that is now wrong, and passing here only because the fixture
+        // omits the field. A refusal that happens AFTER lenses resolve DOES carry them: discarding them
+        // turned Firefly's grain-ambiguous "Active Pipeline" into a dead end with no in-surface way out
+        // (docs/runtime/REFUSAL-HONEST-NOT-FATAL.md). Offering the lens set is not "pretending to be
+        // operational" — the empty rows, null subject and empty KPIs asserted above are what prove it is
+        // not. The navigable case is covered by
+        // tests/adminV2/runtime/provisioningRefusalStaysNavigable.test.ts.
+        expect(m.workViews).toEqual([]);
+        expect(m.activeWorkViewId).toBeNull();
     });
 
     it("empty and error are never confused — the one distinction QueueRegion renders on", () => {
