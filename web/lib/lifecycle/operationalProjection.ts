@@ -347,15 +347,52 @@ export function resolveFocusPanelScope(params: {
     /** All configured Work Views — used to name the destination when out of the active view. */
     workViews?: readonly WorkViewConfigV1Stored[] | null;
 }): FocusPanelScopeState {
-    const { record, activeView } = params;
+    return resolveFocusPanelScopeForMembership({
+        hasSubject: params.record != null,
+        activeView: params.activeView,
+        workViews: params.workViews,
+        // The opportunity-shaped membership rule. This function is only correct for a FAMILY subject:
+        // `record` is an `OperationalProjectionRow` and the predicates read opportunity fields.
+        matches: (view) => recordMatchesWorkView(params.record as OperationalProjectionRow, view),
+    });
+}
+
+/**
+ * SCOPE CLASSIFICATION, INDEPENDENT OF WHAT A ROW IS.
+ *
+ * The shape of the question — "is this subject inside the active lens, and if not, which lens now
+ * holds it" — is the same for every grain. The MEMBERSHIP RULE is not: a family subject is matched by
+ * evaluating opportunity predicates, and a child subject is not matched that way at all (its
+ * membership was decided by its own provider, from effective stage or live participation).
+ *
+ * Splitting them here is what keeps a child row from being evaluated by an opportunity-shaped
+ * predicate — a comparison that cannot succeed and whose failure would be reported to the operator as
+ * "this record has moved", complete with a destination lens computed the same wrong way. Callers
+ * supply the membership rule for the grain they hold; nothing here guesses which one applies.
+ */
+export function resolveFocusPanelScopeForMembership(params: {
+    /** False only when the subject is not loaded yet — never assert out-of-scope on an absent subject. */
+    hasSubject: boolean;
+    activeView: WorkViewConfigV1Stored | null | undefined;
+    workViews?: readonly WorkViewConfigV1Stored[] | null;
+    /** Does this subject belong to that lens? Grain-specific, supplied by the caller. */
+    matches: (view: WorkViewConfigV1Stored) => boolean;
+}): FocusPanelScopeState {
+    const { activeView } = params;
     if (!activeView) return { kind: "no_active_view" };
-    if (!record) return { kind: "in_scope" }; // record not yet loaded — don't assert out-of-scope
-    if (recordMatchesWorkView(record, activeView)) return { kind: "in_scope" };
+    if (!params.hasSubject) return { kind: "in_scope" }; // not yet loaded — don't assert out-of-scope
+    if (params.matches(activeView)) return { kind: "in_scope" };
 
     const others = (params.workViews ?? []).filter(
         (view) => view.id !== activeView.id && view.visible_in_runtime !== false,
     );
-    const destination = firstMatchingVisibleWorkView(record, others);
+    // Same preference as `firstMatchingVisibleWorkView`: the narrowest matching lens wins, and an
+    // include-all lens is the last resort.
+    const withPredicates = others.filter((view) => (view.filters_v1?.length ?? 0) > 0);
+    const destination =
+        withPredicates.find((view) => params.matches(view))
+        ?? others.find((view) => !(view.filters_v1?.length ?? 0))
+        ?? null;
     return {
         kind: "out_of_scope",
         activeViewId: activeView.id,
