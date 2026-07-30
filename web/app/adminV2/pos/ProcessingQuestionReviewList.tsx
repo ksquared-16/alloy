@@ -47,7 +47,7 @@ const CONFIDENCE_TONE: Record<string, { label: string; cls: string }> = {
 };
 
 function resolvedFieldSource(question: ReviewQuestionInput) {
-    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel, question.section ?? "");
     const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
     return (
         question.field_source ??
@@ -66,7 +66,7 @@ function fieldMatchConfidence(question: ReviewQuestionInput): { label: string; p
     if (question.mappingOrigin === "operator_created") {
         return { label: "Operator mapped", percent: null };
     }
-    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel, question.section ?? "");
     const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
     const suggestion = suggestReviewDestinationField({
         evidenceLabel: question.evidenceLabel,
@@ -221,7 +221,7 @@ export function ProcessingQuestionReviewList({
                 {activeCount} active question{activeCount === 1 ? "" : "s"}
                 {questions.length > activeCount ? ` · ${questions.length - activeCount} ignored` : ""}
             </p>
-            <div className="divide-y divide-alloy-stone/10">
+            <div className="divide-y divide-alloy-stone/22">
                 {sections.map((section) => (
                     <section key={section.title} className="py-2 first:pt-0 last:pb-0">
                         <div className="mb-1 flex items-baseline justify-between gap-2">
@@ -264,12 +264,12 @@ export function ProcessingQuestionReviewList({
                                 </div>
                             );
                         })()}
-                        <ol className="divide-y divide-alloy-stone/[0.08]">
+                        <ol className="divide-y divide-alloy-stone/15">
                             {section.questions.map((q) => {
                                 const sel = selectedId === q.id;
                                 const isEditing = editingId === q.id;
                                 const mapped = typeof q.page === "number" && Array.isArray(q.bbox);
-                                const intent = inferQuestionIntent(q.evidenceLabel || q.displayLabel);
+                                const intent = inferQuestionIntent(q.evidenceLabel || q.displayLabel, q.section ?? "");
                                 const resolvedSubject = q.questionSubject ?? defaultSubjectForIntent(intent);
                                 const status = deriveResolutionStatus(q);
                                 const showNameRep =
@@ -406,7 +406,7 @@ function ReviewQuestionInspector({
     showNameRep: boolean;
     onUpdate: (id: string, patch: Partial<ReviewQuestionInput>) => void;
 }) {
-    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel, question.section ?? "");
     const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
     const eligibleFields = eligibleCanonicalFieldsForSubject(subject);
     const suggestion = suggestReviewDestinationField({

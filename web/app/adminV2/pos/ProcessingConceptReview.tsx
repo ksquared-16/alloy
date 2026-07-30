@@ -200,9 +200,17 @@ export default function ProcessingConceptReview({
                 {/* grouped concepts */}
                 <div className="mt-5 space-y-5">
                     {grouped.map(({ category, proposals }) => (
-                        <section key={category} data-testid={`concept-group-${category}`}>
-                            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">{CATEGORY_TITLE[category]}</h3>
-                            <div className="mt-2 space-y-1.5">
+                        // Each category is its own bounded group, so the eye can tell where one kind
+                        // of decision ends and the next begins instead of reading one long ribbon.
+                        <section
+                            key={category}
+                            className="overflow-hidden rounded-xl border border-alloy-stone/22 bg-white shadow-[0_1px_3px_rgba(24,39,58,0.04)]"
+                            data-testid={`concept-group-${category}`}
+                        >
+                            <h3 className="border-b border-alloy-stone/22 bg-alloy-stone/[0.04] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                {CATEGORY_TITLE[category]}
+                            </h3>
+                            <div className="space-y-1.5 p-2.5">
                                 {proposals.map((p) => {
                                     const concept = conceptById.get(p.candidate_id);
                                     const state = decisions[p.id] ?? p.decision_state;

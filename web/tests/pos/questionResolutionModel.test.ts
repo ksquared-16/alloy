@@ -18,9 +18,40 @@ describe("questionResolutionModel", () => {
         expect(defaultSubjectForIntent("date_of_birth")).toBe("child");
     });
 
-    it("defaults first-name evidence to first+last representation", () => {
+    it("a bare Name takes its subject from the SECTION it sits under", () => {
+        // Real forms print "Parent or Guardian #1" as a heading and then a bare "Name:" line. Reading
+        // the label alone made that generic -> processing_only, so every guardian name in the
+        // document reported "Form field only" and was stored nowhere.
+        expect(inferQuestionIntent("Name", "Parent or Guardian #1")).toBe("guardian_identity");
+        expect(inferQuestionIntent("Name:", "Emergency Contacts")).toBe("emergency_contact");
+        expect(inferQuestionIntent("First Name", "Parent or Guardian #2")).toBe("guardian_identity");
+        expect(inferQuestionIntent("Name", "Child Information")).toBe("child_identity");
+
+        // It now binds to the guardian, and splits into first + last.
+        const intent = inferQuestionIntent("Name", "Parent or Guardian #1");
+        expect(defaultSubjectForIntent(intent)).toBe("parent");
+        expect(defaultNameRepresentation(intent, "Name")).toBe("first_last");
+
+        // A section with no person in its title stays generic — the label still has to earn it.
+        expect(inferQuestionIntent("Name", "Contact Information")).toBe("generic");
+        // An explicit label still wins regardless of section.
+        expect(inferQuestionIntent("Child's Name", "Parent or Guardian #1")).toBe("child_identity");
+    });
+
+    it("defaults person names to first+last, honouring an explicit full-name request", () => {
+        // Deliberate product change: a bare "Name" line on paper used to become ONE full-name field,
+        // which operators then had to split by hand. Names now default to separate first + last.
         expect(defaultNameRepresentation("child_identity", "Child first name")).toBe("first_last");
-        expect(defaultNameRepresentation("child_identity", "Child's Name")).toBe("full_name");
+        expect(defaultNameRepresentation("child_identity", "Child's Name")).toBe("first_last");
+        expect(defaultNameRepresentation("guardian_identity", "Name")).toBe("first_last");
+        expect(defaultNameRepresentation("emergency_contact", "Name")).toBe("first_last");
+
+        // The document still wins when it explicitly asks for one field.
+        expect(defaultNameRepresentation("child_identity", "Child's Full Name")).toBe("full_name");
+        expect(defaultNameRepresentation("guardian_identity", "Legal name")).toBe("full_name");
+
+        // Intents that are not a person's name are unaffected.
+        expect(defaultNameRepresentation("date_of_birth", "Date of Birth")).toBe("full_name");
     });
 
     it("expands first+last child name into two draft fields with canonical bindings", () => {
@@ -82,7 +113,13 @@ describe("questionResolutionModel", () => {
             type: "text",
         });
         expect(storageSummaryLabel(source)).toMatch(/Child first name|Store on Child/);
-        expect(storageSummaryLabel(undefined)).toMatch(/Processing only/i);
+        // Unbound means "no record destination". The copy says so in operator language; the point of
+        // the assertion is that it never leaks a raw key.
+        expect(storageSummaryLabel(undefined)).toMatch(/not stored on a record/i);
+        // And an unbound question whose concept is still pending says so, rather than implying a
+        // decision Alloy has not made.
+        expect(storageSummaryLabel(undefined, null, { awaitingConceptDecision: true })).toMatch(/not decided yet/i);
+        expect(storageSummaryLabel(undefined, null, { relationshipLabel: "guardian" })).toMatch(/collected as guardian/i);
     });
 
     it("marks low-confidence unresolved questions as needs review", () => {
