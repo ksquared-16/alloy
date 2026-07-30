@@ -1,0 +1,171 @@
+{
+  "generated_at": "2026-07-30T14:46:56.183Z",
+  "base": "http://127.0.0.1:3021",
+  "missionId": "msn_d34d658b3d39c91781",
+  "openDecisionId": "dec_c31ddbee5dc819",
+  "default_shell": "mission_control",
+  "screenshots": [
+    {
+      "filename": "mc-01-missions.png",
+      "route": "/#/missions",
+      "url": "http://127.0.0.1:3021/#/missions",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 1366,
+      "demonstrates": "Primary Missions list",
+      "shell": {
+        "hash": "#/missions",
+        "mc": true,
+        "enabled": true,
+        "gated": false
+      }
+    },
+    {
+      "filename": "mc-02-mission-detail.png",
+      "route": "/#/missions/msn_d34d658b3d39c91781",
+      "url": "http://127.0.0.1:3021/#/missions/msn_d34d658b3d39c91781",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 1388,
+      "demonstrates": "Mission detail",
+      "shell": {
+        "hash": "#/missions/msn_d34d658b3d39c91781",
+        "mc": true,
+        "enabled": true,
+        "gated": false
+      }
+    },
+    {
+      "filename": "mc-03-timeline.png",
+      "route": "/#/timeline/msn_d34d658b3d39c91781",
+      "url": "http://127.0.0.1:3021/#/timeline/msn_d34d658b3d39c91781",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 1351,
+      "demonstrates": "Timeline for mission",
+      "shell": {
+        "hash": "#/timeline/msn_d34d658b3d39c91781",
+        "mc": true,
+        "enabled": true,
+        "gated": false
+      }
+    },
+    {
+      "filename": "mc-04-workers.png",
+      "route": "/#/workers",
+      "url": "http://127.0.0.1:3021/#/workers",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 1397,
+      "demonstrates": "Workers list",
+      "shell": {
+        "hash": "#/workers",
+        "mc": true,
+        "enabled": true,
+        "gated": false
+      }
+    },
+    {
+      "filename": "mc-05-worker-detail.png",
+      "route": "/#/workers/claude-6",
+      "url": "http://127.0.0.1:3021/#/workers/claude-6",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 1765,
+      "demonstrates": "Worker detail",
+      "shell": {
+        "hash": "#/workers/claude-6",
+        "mc": true,
+        "enabled": true,
+        "gated": false
+      }
+    },
+    {
+      "filename": "mc-06-decisions-desktop.png",
+      "route": "/#/decisions/dec_c31ddbee5dc819",
+      "url": "http://127.0.0.1:3021/#/decisions/dec_c31ddbee5dc819",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 1351,
+      "demonstrates": "Open decision desktop",
+      "shell": {
+        "hash": "#/decisions/dec_c31ddbee5dc819",
+        "mc": true,
+        "enabled": true,
+        "gated": false
+      }
+    },
+    {
+      "filename": "mc-07-decision-mobile.png",
+      "route": "/#/decisions/dec_c31ddbee5dc819",
+      "url": "http://127.0.0.1:3021/#/decisions/dec_c31ddbee5dc819",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "load_ms": 1353,
+      "demonstrates": "Open decision mobile",
+      "shell": {
+        "hash": "#/decisions/dec_c31ddbee5dc819",
+        "mc": true,
+        "enabled": true,
+        "gated": false
+      }
+    },
+    {
+      "filename": "mc-08-evidence.png",
+      "route": "/#/evidence/msn_d34d658b3d39c91781",
+      "url": "http://127.0.0.1:3021/#/evidence/msn_d34d658b3d39c91781",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 1378,
+      "demonstrates": "Evidence gallery",
+      "shell": {
+        "hash": "#/evidence/msn_d34d658b3d39c91781",
+        "mc": true,
+        "enabled": true,
+        "gated": false
+      }
+    },
+    {
+      "filename": "mc-09-kickoff.png",
+      "route": "/#/kickoff/msn_d34d658b3d39c91781",
+      "url": "http://127.0.0.1:3021/#/kickoff/msn_d34d658b3d39c91781",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 3363,
+      "demonstrates": "Mission Brief kickoff/readiness",
+      "shell": {
+        "hash": "#/kickoff/msn_d34d658b3d39c91781",
+        "mc": true,
+        "enabled": true,
+        "gated": false
+      }
+    }
+  ]
+}
