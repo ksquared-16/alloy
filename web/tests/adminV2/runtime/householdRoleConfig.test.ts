@@ -67,4 +67,52 @@ describe("household role-based configuration", () => {
         const group = config.groups.find((g) => g.key === "other_parent_guardian");
         expect(group?.sectionLabel).toBe("Secondary Parent");
     });
+
+    it("packs Context Facts half widths into paired rows on Primary Contact", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = {
+            ...config,
+            groups: config.groups.map((group) => {
+                if (group.key !== HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP) return group;
+                return {
+                    ...group,
+                    contextFieldKeys: ["person.first_name", "person.last_name", "person.phone", "person.email"],
+                    fieldLayoutWidthsByPurpose: {
+                        ...(group.fieldLayoutWidthsByPurpose ?? {}),
+                        context_facts: {
+                            "person.first_name": "half",
+                            "person.last_name": "half",
+                            "person.phone": "half",
+                            "person.email": "half",
+                        },
+                    },
+                    fieldIcons: {
+                        "person.phone": "phone",
+                        "person.email": "mail",
+                    },
+                    fieldModes: {
+                        ...(group.fieldModes ?? {}),
+                        "person.phone": { ...(group.fieldModes?.["person.phone"] ?? {}), showIcon: true },
+                        "person.email": { ...(group.fieldModes?.["person.email"] ?? {}), showIcon: true },
+                    },
+                };
+            }),
+        };
+        const primary = resolveHouseholdRoleMergedGroup(config, "primary_contact");
+        expect(primary?.fieldLayoutWidthsByPurpose?.context_facts?.["person.first_name"]).toBe("half");
+        expect(primary?.fieldIcons?.["person.phone"]).toBe("phone");
+
+        const contextPlacements = (primary?.fieldPlacements ?? []).filter(
+            (placement) => placement.tier === "context_fact",
+        );
+        expect(contextPlacements.filter((p) => p.row === 1).map((p) => p.fieldRef)).toEqual([
+            "person.first_name",
+            "person.last_name",
+        ]);
+        expect(contextPlacements.filter((p) => p.row === 2).map((p) => p.fieldRef)).toEqual([
+            "person.phone",
+            "person.email",
+        ]);
+        expect(contextPlacements.find((p) => p.fieldRef === "person.phone")?.icon).toBe("phone");
+    });
 });

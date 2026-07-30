@@ -20,8 +20,10 @@ import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import ChildFocusEdit from "@/components/admin/focusPanel/cards/ChildFocusEdit";
 import IdentityRecordSummary from "@/components/admin/focusPanel/identity/IdentityRecordSummary";
+import IdentityAvatar from "@/components/admin/focusPanel/identity/IdentityAvatar";
 import IdentityAvatarEditable from "@/components/admin/focusPanel/identity/IdentityAvatarEditable";
 import IdentityFieldGrid, { type IdentityFieldSaveArgs } from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
+import { resolveChildDisplayImageUrl } from "@/lib/adminV2/runtime/focusPanel/children/childAvatarSessionPreview";
 import IdentityExpandedDetails from "@/components/admin/focusPanel/identity/IdentityExpandedDetails";
 import IdentityDisclosureBackAction from "@/components/admin/focusPanel/identity/IdentityDisclosureBackAction";
 import IdentityDisclosureSurface from "@/components/admin/focusPanel/identity/IdentityDisclosureSurface";
@@ -152,6 +154,55 @@ function childRosterAvatarComposer(args: {
             size={args.size ?? 40}
             onSavePhoto={args.onSavePhoto}
             onClearPhoto={args.onClearPhoto}
+        />
+    );
+}
+
+/** Live Work Unit image URL — evidence + session preview after Save photo. */
+function childLiveImageUrl(child: ChildrenEvidenceChild): string | null {
+    return resolveChildDisplayImageUrl({
+        imageUrl: child.imageUrl,
+        childId: child.id,
+        personId: child.personId,
+        customerMemberId: child.customerMemberId,
+    });
+}
+
+/**
+ * Live avatar: upload only on Context Facts (`allowUpload`).
+ * Summary / Details show the kept photo without Add/Change controls.
+ */
+function childLiveAvatar(args: {
+    child: ChildrenEvidenceChild;
+    size?: number;
+    allowUpload: boolean;
+    onSavePhoto?: FocusPanelMutation["savePersonChildPhoto"];
+    onClearPhoto?: FocusPanelMutation["clearPersonChildPhoto"];
+}) {
+    const imageUrl = childLiveImageUrl(args.child);
+    if (args.allowUpload && args.onSavePhoto) {
+        return (
+            <IdentityAvatarEditable
+                name={args.child.name}
+                imageUrl={imageUrl}
+                recordId={args.child.id}
+                personId={args.child.personId ?? null}
+                customerMemberId={args.child.customerMemberId ?? null}
+                onSavePhoto={args.onSavePhoto}
+                onClearPhoto={args.onClearPhoto}
+                allowUpload
+                size={args.size ?? 40}
+                role="child"
+            />
+        );
+    }
+    return (
+        <IdentityAvatar
+            name={args.child.name}
+            imageUrl={imageUrl}
+            size={args.size ?? 40}
+            role="child"
+            recordId={args.child.id}
         />
     );
 }
@@ -797,9 +848,10 @@ export default function ChildrenCard({
                     onEditField={canEditChild ? () => setEditing(true) : undefined}
                     personId={focused.personId ?? null}
                     customerMemberId={focused.customerMemberId ?? null}
-                    photoUrl={focused.imageUrl ?? null}
-                    onSavePhoto={mutation?.savePersonChildPhoto}
-                    onClearPhoto={mutation?.clearPersonChildPhoto}
+                    photoUrl={childLiveImageUrl(focused)}
+                    // Photo upload is Context Facts only — Details shows the kept photo.
+                    onSavePhoto={undefined}
+                    onClearPhoto={undefined}
                 />
                 {disclosure.depth === "details" && emergencyContactsSection && childrenSurfaceConfig ? (
                     <EmergencyContactsSection
@@ -837,26 +889,20 @@ export default function ChildrenCard({
                                     child,
                                     previewImageUrl:
                                         composer?.childAvatarPreviewUrl(child.id)
-                                        ?? child.imageUrl
+                                        ?? childLiveImageUrl(child)
                                         ?? null,
                                     onSavePhoto: mutation?.savePersonChildPhoto,
                                     onClearPhoto: mutation?.clearPersonChildPhoto,
                                 });
                             }
-                            if (!canMutateIdentity || !mutation?.savePersonChildPhoto) return null;
-                            return (
-                                <IdentityAvatarEditable
-                                    name={child.name}
-                                    imageUrl={child.imageUrl ?? null}
-                                    recordId={child.id}
-                                    personId={child.personId ?? null}
-                                    customerMemberId={child.customerMemberId ?? null}
-                                    onSavePhoto={mutation.savePersonChildPhoto}
-                                    onClearPhoto={mutation.clearPersonChildPhoto}
-                                    size={40}
-                                    role="child"
-                                />
-                            );
+                            // Context Facts is the only live surface that stages/saves photos.
+                            return childLiveAvatar({
+                                child,
+                                size: 40,
+                                allowUpload: Boolean(canMutateIdentity && mutation?.savePersonChildPhoto),
+                                onSavePhoto: mutation?.savePersonChildPhoto,
+                                onClearPhoto: mutation?.clearPersonChildPhoto,
+                            });
                         }}
                     />
             </ComposableRegionShell>
@@ -1015,25 +1061,16 @@ function ChildSummaryRow({
         isFieldSaveSupported: (fieldRef) =>
             isChildIdentityFieldInlineSaveSupported(fieldRef) || isIdentityFieldSaveSupported(fieldRef),
     });
-    // Composer uses ChildProfileAvatarComposer; live Work Unit uses IdentityAvatarEditable
-    // so uploads stick across summary ↔ details ↔ context without a full refresh.
+    // Summary: show kept photo only — upload/Save lives on Context Facts.
     const liveAvatarSlot = composingChildrenSurface
         ? rosterAvatarComposer
-        : canMutate && onSavePhoto
-          ? (
-                <IdentityAvatarEditable
-                    name={child.name}
-                    imageUrl={child.imageUrl ?? null}
-                    recordId={child.id}
-                    personId={child.personId ?? null}
-                    customerMemberId={child.customerMemberId ?? null}
-                    onSavePhoto={onSavePhoto}
-                    onClearPhoto={onClearPhoto}
-                    size={30}
-                    role="child"
-                />
-            )
-          : undefined;
+        : childLiveAvatar({
+              child,
+              size: 30,
+              allowUpload: false,
+              onSavePhoto,
+              onClearPhoto,
+          });
     return (
         <div className="alloy-os-children__summary-row" data-children-child={child.id}>
             <IdentityRecordSummary
@@ -1417,7 +1454,8 @@ function FocusedChild({
 }) {
     const headerDob = childFocusView.headerShowDob || childFocusView.headerShowAge ? child.dobAge : null;
     const composer = useFocusPanelComposer();
-    const previewImageUrl = composer?.childAvatarPreviewUrl(child.id) ?? child.imageUrl;
+    const previewImageUrl =
+        composer?.childAvatarPreviewUrl(child.id) ?? childLiveImageUrl(child);
     const showHeaderAvatar = childrenSurfaceConfig
         ? groupShowAvatarForNestedGroup(childrenSurfaceConfig, "identity")
         : true;
@@ -1483,25 +1521,14 @@ function FocusedChild({
                     depth={disclosureDepth}
                     onEditField={onRequestEdit ? () => onRequestEdit() : undefined}
                     avatarSlot={
-                        showHeaderAvatar ? (
-                            <IdentityAvatarEditable
-                                name={child.name}
-                                imageUrl={
-                                    composer?.childAvatarPreviewUrl(child.id)
-                                    ?? child.imageUrl
-                                    ?? identityRecord.avatar?.imageUrl
-                                    ?? null
-                                }
-                                visible={showHeaderAvatar}
-                                role={identityRecord.avatar?.role}
-                                recordId={child.id}
-                                personId={child.personId ?? null}
-                                customerMemberId={child.customerMemberId ?? null}
-                                onSavePhoto={mutation?.savePersonChildPhoto}
-                                onClearPhoto={mutation?.clearPersonChildPhoto}
-                                size={40}
-                            />
-                        ) : undefined
+                        showHeaderAvatar
+                            ? childLiveAvatar({
+                                  child,
+                                  size: 40,
+                                  // Details/Evidence: display kept photo only (upload on Context Facts).
+                                  allowUpload: false,
+                              })
+                            : undefined
                     }
                 />
             )}

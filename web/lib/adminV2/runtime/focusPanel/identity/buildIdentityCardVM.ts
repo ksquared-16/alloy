@@ -259,7 +259,10 @@ function buildRecordRows(args: {
                 catalogLabel(placement.fieldRef, args.tenantFieldDefinitions),
             ),
             value,
-            icon: resolveIdentityFieldIcon({ group, fieldRef: placement.fieldRef }),
+            icon:
+                group.fieldModes?.[placement.fieldRef]?.showIcon === false
+                    ? undefined
+                    : resolveIdentityFieldIcon({ group, fieldRef: placement.fieldRef }),
             policy: effectivePolicy,
             editable,
             linked,

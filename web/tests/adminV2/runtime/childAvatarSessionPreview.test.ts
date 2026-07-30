@@ -4,6 +4,7 @@ import {
     clearChildAvatarSessionPreviewMatchingUrl,
     clearChildAvatarSessionPreviews,
     getChildAvatarSessionPreview,
+    resolveChildDisplayImageUrl,
     seedChildAvatarSessionPreviewForTests,
     setChildAvatarSessionPreview,
 } from "@/lib/adminV2/runtime/focusPanel/children/childAvatarSessionPreview";
@@ -42,5 +43,23 @@ describe("childAvatarSessionPreview", () => {
         setChildAvatarSessionPreview("child-1", "https://cdn.example/ok.jpg");
         setChildAvatarSessionPreview("child-1", null);
         expect(getChildAvatarSessionPreview("child-1")).toBeNull();
+    });
+
+    it("resolveChildDisplayImageUrl prefers evidence then session under any id", () => {
+        expect(
+            resolveChildDisplayImageUrl({
+                imageUrl: "https://cdn.example/evidence.jpg",
+                childId: "child-1",
+            }),
+        ).toBe("https://cdn.example/evidence.jpg");
+
+        setChildAvatarSessionPreview("person-1", "https://cdn.example/session.jpg");
+        expect(
+            resolveChildDisplayImageUrl({
+                imageUrl: null,
+                childId: "child-1",
+                personId: "person-1",
+            }),
+        ).toBe("https://cdn.example/session.jpg");
     });
 });

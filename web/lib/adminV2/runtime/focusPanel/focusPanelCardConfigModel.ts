@@ -148,6 +148,8 @@ export type FocusPanelCardAppearance = {
     titleOverride?: string | null;
     description?: string | null;
     density?: FocusPanelCardDensity | null;
+    /** Universal Card header icon name (Lucide key from UNIVERSAL_CARD_ICON_BY_NAME). */
+    iconName?: string | null;
 };
 
 export type FocusPanelCardExpansion = {
@@ -360,7 +362,8 @@ export function isFocusPanelCardConfigEmpty(config: FocusPanelCardConfig | null 
         !appearance ||
         ((!appearance.titleOverride || appearance.titleOverride.trim() === "") &&
             (!appearance.description || appearance.description.trim() === "") &&
-            !appearance.density);
+            !appearance.density &&
+            !(appearance.iconName && appearance.iconName.trim()));
     return (
         appearanceEmpty &&
         (!question || question.trim() === "") &&
@@ -602,12 +605,13 @@ export function composeEffectiveCardModel(
     const title = appearance?.titleOverride?.trim();
     const description = appearance?.description?.trim();
     const density = appearance?.density ?? null;
+    const iconName = appearance?.iconName?.trim() || null;
 
     // Read fields through `configFields` so evidence groups (V2) and the legacy flat
     // list render through the SAME path — grouping never forks the runtime.
     const fields = configFields(config);
     const hasFieldConfig = baseModel.archetype === "profile" && fields.length > 0;
-    if (!title && !description && !density && !hasFieldConfig) return baseModel;
+    if (!title && !description && !density && !iconName && !hasFieldConfig) return baseModel;
 
     let payload = baseModel.payload;
     if (hasFieldConfig) {
@@ -624,6 +628,7 @@ export function composeEffectiveCardModel(
         title: title || baseModel.title,
         insight: description || baseModel.insight,
         density: density ?? baseModel.density,
+        iconName: iconName || baseModel.iconName,
         payload,
     };
 }
