@@ -227,7 +227,10 @@ export async function materializeEnrollmentFromProcessInstance(
     const patch: Record<string, unknown> = { metadata: nextMeta, updated_at: nowIso };
     if (pi.state !== "enrolled") patch.state = "enrolled";
     const completedStage = trimOrNull(input.completedStageKey);
-    if (completedStage && pi.stage_key !== completedStage) patch.stage_key = completedStage;
+    if (completedStage && pi.stage_key !== completedStage) {
+        patch.stage_key = completedStage;
+        patch.stage_entered_at = nowIso;
+    }
     await supabase.from(PROCESS_INSTANCES_TABLE).update(patch).eq("id", pi.id).eq("org_id", input.orgId);
 
     return { ...base, ok: true, agreement_id: agreementId, trio };
