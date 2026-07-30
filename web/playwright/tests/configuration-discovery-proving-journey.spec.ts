@@ -1054,6 +1054,111 @@ test.describe("Configuration Discovery — proving journey", () => {
         const samItem = items.find((i) => (i.person_id ?? i.person?.id) === FX.multiRolePerson)!;
         expect(samItem.operational_roles.sort()).toEqual(["authorized_pickup", "guardian"]);
     });
+
+    test("17. LIVE SECURITY MATRIX — every spoof is rejected and writes nothing", async () => {
+        test.skip(!ON_CERT_STACK, "Runs only against the local certification stack");
+        const req = page.request;
+        const A = resolvedChild ?? FX.childA;
+
+        // The authority rule is only certified if the REAL route refuses these, not just the unit-
+        // tested gate. State is captured before and after so a rejection that still wrote something
+        // is caught — a 4xx with a side effect is worse than a 200.
+        const before = await relationshipSnapshot(req, A);
+        const beforeSibling = await relationshipSnapshot(req, FX.siblingB);
+
+        const pickup = proposals.find((p) => p.collection_provider_ref === "person.contact_role.authorized_pickups")!;
+        const commitUrl = (caseIdArg: string, proposalIdArg: string) =>
+            `/api/admin/processing/cases/${caseIdArg}/related-record-proposals/${proposalIdArg}/commit`;
+        const baseBody = (over: Json = {}) => ({
+            decision: { proposal_id: pickup.proposal_id, instance_decision: "approve", field_decisions: [] },
+            anchor_customer_member_id: A,
+            scope: "this_child",
+            expected_resolution_revision: reviewedRevision,
+            ...over,
+        });
+
+        type Case = { name: string; run: () => Promise<{ status: number; body: Json }> };
+        const post = async (url: string, data: Json, ctx: APIRequestContext = req) => {
+            const res = await ctx.post(url, { data, timeout: 120_000 });
+            let body: Json = {};
+            try {
+                body = await res.json();
+            } catch {
+                body = { non_json: (await res.text()).slice(0, 200) };
+            }
+            return { status: res.status(), body: body.data ?? body };
+        };
+
+        // An anonymous context — no operator session at all.
+        const anon = await page.context().browser()!.newContext();
+
+        const cases: Case[] = [
+            {
+                name: "unauthenticated caller",
+                run: () => post(commitUrl(submissionCaseId!, pickup.proposal_id), baseBody(), anon.request),
+            },
+            {
+                name: "unknown proposal id",
+                run: () => post(commitUrl(submissionCaseId!, "cdc10000-0000-4000-8000-0000000000f1"), baseBody()),
+            },
+            {
+                name: "proposal committed under a DIFFERENT case",
+                run: () => post(commitUrl("cdc10000-0000-4000-8000-0000000000f2", pickup.proposal_id), baseBody()),
+            },
+            {
+                name: "client asserts a different ROLE than the definition",
+                run: () => post(commitUrl(submissionCaseId!, pickup.proposal_id), baseBody({ asserted_role_key: "guardian" })),
+            },
+            {
+                name: "client asserts a different COMMAND than the definition",
+                run: () =>
+                    post(commitUrl(submissionCaseId!, pickup.proposal_id), baseBody({ asserted_command_key: "create_customer_member_contact" })),
+            },
+            {
+                name: "unsupported scope",
+                run: () => post(commitUrl(submissionCaseId!, pickup.proposal_id), baseBody({ scope: "entire_organization" })),
+            },
+            {
+                name: "anchor child OUTSIDE the resolved household",
+                run: () =>
+                    post(commitUrl(submissionCaseId!, pickup.proposal_id), baseBody({ anchor_customer_member_id: "cdc10000-0000-4000-8000-0000000000fe" })),
+            },
+            {
+                name: "stale resolution revision",
+                run: () => post(commitUrl(submissionCaseId!, pickup.proposal_id), baseBody({ expected_resolution_revision: "stale|revision|0" })),
+            },
+            {
+                name: "decision is NOT approve",
+                run: () =>
+                    post(
+                        commitUrl(submissionCaseId!, pickup.proposal_id),
+                        baseBody({ decision: { proposal_id: pickup.proposal_id, instance_decision: "defer", field_decisions: [] } }),
+                    ),
+            },
+        ];
+
+        const results: Array<{ name: string; status: number; code: string }> = [];
+        for (const c of cases) {
+            const r = await c.run();
+            const code = String(r.body.code ?? r.body.error ?? r.body.reason ?? "").slice(0, 80);
+            results.push({ name: c.name, status: r.status, code });
+        }
+        await anon.close();
+        console.log(`JOURNEY SECURITY ${JSON.stringify(results, null, 1)}`);
+
+        for (const r of results) {
+            expect(r.status, `SECURITY HOLE — "${r.name}" was ACCEPTED (${r.status})`).not.toBe(200);
+            expect(r.status, `"${r.name}" failed as a server error, not a refusal`).toBeLessThan(500);
+        }
+
+        // NOTHING may have changed. A refusal that still wrote is a worse defect than an acceptance.
+        const after = await relationshipSnapshot(req, A);
+        const afterSibling = await relationshipSnapshot(req, FX.siblingB);
+        expect(after.pcrRoles.sort(), "a rejected request still wrote a relationship edge").toEqual(before.pcrRoles.sort());
+        expect(after.cmcRoles.sort(), "a rejected request still wrote a guardian link").toEqual(before.cmcRoles.sort());
+        expect(after.personIds.sort(), "a rejected request still created a Person").toEqual(before.personIds.sort());
+        expect(afterSibling.pcrRoles.sort(), "a rejected request leaked onto the sibling").toEqual(beforeSibling.pcrRoles.sort());
+    });
 });
 
 /** Canonical relationship state for a child, read through supported admin APIs. */
