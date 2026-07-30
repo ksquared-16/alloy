@@ -28,6 +28,7 @@ import {
     COMMUNICATIONS_SEND_CAPABILITY_KEY,
     resolveEffectiveSufficientCommandResultOutcome,
 } from "@/lib/lifecycle/stageWorkCompletionPolicy";
+import { journeySegmentOrFamily } from "@/lib/lifecycle/grainVocabulary";
 
 /** Capability identity the communications send path publishes results under. */
 export const COMMUNICATIONS_SEND_CAPABILITY = COMMUNICATIONS_SEND_CAPABILITY_KEY;
@@ -130,7 +131,10 @@ export async function associateOutboundCommunicationToContactAttempt(
                 workId: task.id,
                 outcomeKey,
                 subject: {
-                    journey_segment: plan.journey_segment ?? "family",
+                    // This caller can only speak for the family — it names no child. `journeySegmentOrFamily`
+                    // keeps that tolerance NAMED and greppable instead of a bare `??`; on a
+                    // child-grain stage the outcome guard refuses the family subject.
+                    journey_segment: journeySegmentOrFamily({ planSegment: plan.journey_segment }),
                     opportunity_id: opportunityId,
                 },
                 declaration: { provenance: "integrated", channel: input.channel },

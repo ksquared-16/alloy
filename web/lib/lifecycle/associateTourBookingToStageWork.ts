@@ -21,6 +21,7 @@ import {
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import { resolveEffectiveSufficientCommandResultOutcome } from "@/lib/lifecycle/stageWorkCompletionPolicy";
+import { journeySegmentOrFamily } from "@/lib/lifecycle/grainVocabulary";
 
 export const SCHEDULE_TOUR_CAPABILITY = "schedule_tour";
 export const SCHEDULE_TOUR_CONFIRMED_RESULT = "confirmed";
@@ -116,7 +117,10 @@ export async function associateTourBookingToStageWork(
                 workId: task.id,
                 outcomeKey,
                 subject: {
-                    journey_segment: plan.journey_segment ?? "family",
+                    // This caller can only speak for the family — it names no child. `journeySegmentOrFamily`
+                    // keeps that tolerance NAMED and greppable instead of a bare `??`; on a
+                    // child-grain stage the outcome guard refuses the family subject.
+                    journey_segment: journeySegmentOrFamily({ planSegment: plan.journey_segment }),
                     opportunity_id: opportunityId,
                 },
                 declaration: {

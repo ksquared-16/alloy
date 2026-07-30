@@ -17,6 +17,7 @@ import {
     namesAChild,
     type ChildParticipationIdentity,
 } from "@/lib/lifecycle/childParticipationIdentity";
+import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
 import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import { resolvePrimaryWorkIntentForStage } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
@@ -389,7 +390,18 @@ export function projectStageWorkRuntimeSync(
     const departmentId = trimOrNull(params.departmentId);
     if (!departmentId) return null;
 
-    const journeySegment = plan.journey_segment ?? "family";
+    // The stage's declared grain and the plan's journey segment are two vocabularies for the same
+    // thing, declared independently and — until now — never reconciled. A stage configured
+    // `grain: "child"` whose plan still said `family` projected family stage work, carrying a family
+    // subject; the tenant had changed the grain and not republished the plan.
+    const segment = resolveJourneySegment({
+        planSegment: plan.journey_segment,
+        stageGrain: stageRecord?.grain,
+    });
+    // A configuration that contradicts itself produces no projection. There is no correct surface to
+    // render for it, and picking one of the two declarations would be the silent default again.
+    if (!segment.ok) return null;
+    const journeySegment = segment.segment;
     const sortedTemplates = sortTemplatesForProjection(
         plan.work_templates,
         primaryIntent?.template_key ?? null,
