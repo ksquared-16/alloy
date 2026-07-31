@@ -57,8 +57,48 @@ The three that matter most:
   revision`** — the refusal is atomic. A blocked publish leaves nothing behind, which is the
   difference between a conflict and a partial write.
 
+## `02-write-guard.sql` — publication is the only sanctioned writer
+
+Proves `20260730130000_business_process_projection_write_guard.sql`. Recorded run, 2026-07-30 —
+22/22 passing. Highlights:
+
+```
+PASS  direct lifecycle projection write REJECTED: lifecycle_builder_v1 is publication-owned; …
+PASS  rejected bypass left the projection untouched
+PASS  bootstrap-style whole-column replace REJECTED
+PASS  projection DELETE rejected
+PASS  sibling key lifecycle_activation_v1 writes freely
+PASS  sibling key opportunity_attention_rules writes freely
+PASS  bootstrap MAY initialize absent configuration
+PASS  bootstrap may NOT overwrite established configuration
+PASS  explicit migration mode permits a repair write
+PASS  runtime projection == latest publication payload
+PASS  an invalid draft may be saved
+PASS  invalid draft did NOT become runtime truth
+```
+
+Two halves matter equally: the bypass is **blocked**, and the guard is **narrow** — sibling metadata
+keys and non-metadata columns keep writing freely, which is what stops this from becoming a
+department-metadata migration.
+
+### A bug this harness caught
+
+The first run failed at `direct lifecycle projection write REJECTED`. The capability token is a
+transaction-local GUC, so after the publish RPC set it, it stayed set for the remainder of the
+transaction — any later write in that transaction inherited a standing bypass. Fixed by releasing
+the token immediately after the projection UPDATE (`end_lifecycle_projection_write`). Worth noting
+because the contract tests alone would not have found it; only executing the sequence did.
+
 ## Scope
 
-Publish-path CAS only. It does **not** prove that the ~15 direct `departments.metadata` writers are
-prevented from bypassing publication — they are not, yet. Converging them onto the publication
-boundary is the follow-on work, tracked in the design document.
+Publish-path CAS **and** projection write authority. What is *not* yet done: the ~15 product writers
+(Lifecycle Builder saves, Work Views persistence, stage/outcome editors) still attempt direct
+projection writes. The guard now makes them fail loudly rather than corrupt silently, but they must
+be routed onto draft persistence before the guard can run in `enforce` for a live product. Until
+then the guard supports a `warn` posture:
+
+```sql
+ALTER DATABASE <db> SET alloy.lifecycle_guard = 'warn';
+```
+
+`enforce` is the default and the end state.
