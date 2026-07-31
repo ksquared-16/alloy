@@ -64,7 +64,7 @@ export type QueueRowSubjectPresentation = {
     display_name: string;
     /** ISO date-of-birth when known from inquiry / household child payload. */
     date_of_birth?: string | null;
-    /** Compact age label (e.g. `2y`, `3m`) derived from DOB or inquiry age. */
+    /** Compact age label (e.g. `2y2m`, `6m`) derived from DOB or inquiry age. */
     age_label?: string | null;
     /** Gender label when hydrated on queue row inquiry child payload. */
     gender_label?: string | null;
@@ -114,7 +114,7 @@ export type RelatedSubjectSummary = {
     schedule_label?: string | null;
     /** ISO date-of-birth when known from inquiry / household child payload. */
     date_of_birth?: string | null;
-    /** Compact age label (e.g. `2y`, `3m`) derived from DOB or inquiry age. */
+    /** Compact age label (e.g. `2y2m`, `6m`) derived from DOB or inquiry age. */
     age_label?: string | null;
     /** Gender label when hydrated on queue row inquiry child payload. */
     gender_label?: string | null;

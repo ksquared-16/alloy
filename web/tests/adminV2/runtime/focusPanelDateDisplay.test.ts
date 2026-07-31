@@ -23,12 +23,15 @@ describe("Focus Panel date display doctrine", () => {
         expect(formatFocusPanelDobAgeLine(null)).toBeNull();
     });
 
-    it("pairs DOB with derived age", () => {
+    it("pairs DOB with derived years+months age", () => {
         const asOf = new Date(2026, 6, 8); // Jul 8, 2026 local
-        expect(formatFocusPanelDobAgeLine("2020-03-03", "stale", asOf)).toBe("Mar 3, 2020 · 6y");
+        expect(formatFocusPanelDobAgeLine("2020-03-03", "stale", asOf)).toBe("3/3/2020 (6y4m)");
+        expect(formatFocusPanelDobAgeLine("2026-01-01", null, asOf)).toBe("1/1/2026 (6m)");
+        expect(formatFocusPanelDobAgeLine("2020-01-01", null, asOf)).toBe("1/1/2020 (6y6m)");
     });
 
-    it("falls back to age string when DOB missing", () => {
+    it("falls back to compact age string when DOB missing", () => {
         expect(formatFocusPanelDobAgeLine(null, "4y")).toBe("4y");
+        expect(formatFocusPanelDobAgeLine(null, "2y 3m")).toBe("2y3m");
     });
 });
