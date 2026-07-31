@@ -98,6 +98,10 @@ import {
 import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { ChildProvisioningRow } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
 import { loadChildGrainMembersForLens } from "@/lib/runtime/provisioning/childGrainMembership";
+import {
+    PROCESS_POPULATION_CAP,
+    PROCESS_POPULATION_SELECT,
+} from "@/lib/runtime/provisioning/workUnitProcessPopulation";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import {
     resolveOpportunityStageWorkSlice,
@@ -602,13 +606,17 @@ export async function composeWorkUnitProvisioningAnswer(
     //    independent branch; it is awaited at the projection join below. This is still ONE atomic Preparation
     //    answer — an internal read reordering, never a second round-trip. Supabase returns errors in-band
     //    (no rejection), so an early return that never awaits this promise cannot leak an unhandled rejection.
+    //
+    // THE POPULATION IS SHARED WITH THE COUNT PATH. This read defines what "every record in this
+    // process" means; the totals route now derives its counts from the SAME definition, so an
+    // include-all Work View's rows and its pill can no longer be answers to different questions.
     const recordsPromise = (async () =>
         req.supabase
             .from("opportunities")
-            .select("id, org_id, work_unit_id, status_key, stage_key, stage_entered_at, created_at, updated_at, name, title, metadata, primary_person_id, location_id, customer_id")
+            .select(PROCESS_POPULATION_SELECT)
             .eq("org_id", req.orgId)
             .eq("work_unit_id", workUnit.id)
-            .limit(500))();
+            .limit(PROCESS_POPULATION_CAP))();
 
     // ── Configuration: Business Process, stages, lenses. ONE fetch. ──
     const tCfg = now();

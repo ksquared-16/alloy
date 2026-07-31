@@ -23,6 +23,7 @@ import {
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { resolveLensRowGrain } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import { countChildGrainMembersForLens } from "@/lib/runtime/provisioning/childGrainMembership";
+import { loadWorkUnitProcessPopulation } from "@/lib/runtime/provisioning/workUnitProcessPopulation";
 import { mapWithConcurrencyLimit } from "@/lib/workspace/mapWithConcurrencyLimit";
 import { buildQueueRowsServerTimingHeader } from "@/lib/perf/queueRowsServerTiming";
 
@@ -192,34 +193,66 @@ export async function POST(request: NextRequest) {
                         },
                 );
             }
-            // ONE base-lane fetch (exact all-records count + up to the cap of rows) for the whole
-            // group. COUNT-ONLY: the base-query operational fields carry the Work-View predicates —
-            // a total must never materialize presentation rows (persons/customers/household/
-            // activity/tasks/comms). Deployed defect fixed: this was `queue_list` (full enrichment).
-            const { result } = await getWorkUnitQueueItems({
-                orgId: gate.orgId,
-                workUnitId: group.workUnitId,
-                queueKey: group.queueKey,
-                limit: WORK_VIEW_QUEUE_FILTER_FETCH_CAP,
-                offset: 0,
-                countAccuracy: undefined,
-                omitTotalCount: false,
-                recordScopeImpossible,
-                recordScopeConstraints,
-                viewerDisplayTimeZone,
-                attentionBucketKey: null,
-                rowEnrichment: "count_only",
-            });
-            const items = Array.isArray(result.items) ? result.items : [];
-            const totals = aggregateWorkViewTotals({
-                baseRows: items as Record<string, unknown>[],
-                // LANE views only. Passing a child lens here is what produced the wrong number: it has
-                // no predicates, so the lane aggregator read it as include-all and returned the
-                // opportunity total.
-                workViews: laneViews,
-                exactLaneTotal: typeof result.total === "number" ? result.total : null,
-                baseTruncated: items.length >= WORK_VIEW_QUEUE_FILTER_FETCH_CAP,
-            });
+            // ── A WORK VIEW IS COUNTED OVER THE PROCESS POPULATION, NOT AN EXECUTION LANE. ──
+            //
+            // The lane path below (`getWorkUnitQueueItems(queueKey)`) counts a status-filtered SLICE of
+            // the process. `findAllRecordsQueueKey` hands back `primary_total_queue` without checking
+            // whether it is filtered, so on Firefly the "all records" lane IS `lifecycle_lead`, whose
+            // allowlist is `case_status in (open, new_inquiry, new)`. A family sitting at
+            // `tour_scheduled` is invisible to it — so "All Leads" (an include-all view) counted 7
+            // while the answer rendered 8, and every stage-scoped family view undercounted the same way.
+            //
+            // Where the Work Unit is governed by a Business Process, its population is knowable
+            // directly and is exactly what the provisioning answer publishes rows from. Counting over
+            // THAT makes rows and counts one answer, for every view, with the SAME predicate evaluator
+            // (`computeOperationalProjection`) applied on top — predicates are unchanged; only the
+            // population they run over stops being a worklist.
+            //
+            // Work units with no Business Process (no stages) keep the lane path untouched.
+            let totals: Record<string, { count: number; known: boolean }>;
+            if (stages.length > 0) {
+                const population = await loadWorkUnitProcessPopulation({
+                    supabase,
+                    orgId: gate.orgId,
+                    workUnitId: group.workUnitId,
+                    scope: recordScopeConstraints,
+                    scopeImpossible: recordScopeImpossible,
+                });
+                totals = aggregateWorkViewTotals({
+                    baseRows: population.rows,
+                    workViews: laneViews,
+                    // An include-all view is the population itself. There is no separate "lane total" to
+                    // prefer — preferring one is what substituted a worklist for the process.
+                    exactLaneTotal: population.truncated ? null : population.rows.length,
+                    baseTruncated: population.truncated,
+                });
+            } else {
+                // ONE base-lane fetch (exact all-records count + up to the cap of rows) for the whole
+                // group. COUNT-ONLY: the base-query operational fields carry the Work-View predicates —
+                // a total must never materialize presentation rows (persons/customers/household/
+                // activity/tasks/comms). Deployed defect fixed: this was `queue_list` (full enrichment).
+                const { result } = await getWorkUnitQueueItems({
+                    orgId: gate.orgId,
+                    workUnitId: group.workUnitId,
+                    queueKey: group.queueKey,
+                    limit: WORK_VIEW_QUEUE_FILTER_FETCH_CAP,
+                    offset: 0,
+                    countAccuracy: undefined,
+                    omitTotalCount: false,
+                    recordScopeImpossible,
+                    recordScopeConstraints,
+                    viewerDisplayTimeZone,
+                    attentionBucketKey: null,
+                    rowEnrichment: "count_only",
+                });
+                const items = Array.isArray(result.items) ? result.items : [];
+                totals = aggregateWorkViewTotals({
+                    baseRows: items as Record<string, unknown>[],
+                    workViews: laneViews,
+                    exactLaneTotal: typeof result.total === "number" ? result.total : null,
+                    baseTruncated: items.length >= WORK_VIEW_QUEUE_FILTER_FETCH_CAP,
+                });
+            }
             return [...group.viewIds].map((workViewId) => {
                 const child = childTotals.get(workViewId);
                 if (child) return child;
