@@ -9,22 +9,25 @@ import { buildCanonicalPrefillFieldMap } from "@/lib/forms/prefill/canonicalPref
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 
 describe("suggestFieldBinding (reusable, not MO500-specific)", () => {
-    it("maps child name variants to customer_member.display_name", () => {
+    // Names bind to the REGISTERED split fields. There is no person-level display_name/full_name in
+    // systemFieldRegistry, and form generation has always built first + last — so binding a name to a
+    // single unregistered field was the divergence, not the split.
+    it("maps child name variants to the registered child first-name field", () => {
         for (const label of ["Child's Name", "Child Name", "Student Name", "Name of Child"]) {
-            expect(suggestFieldBinding(label, "text")?.field_source).toEqual({ entity_type: "customer_member", field_key: "display_name" });
+            expect(suggestFieldBinding(label, "text")?.field_source).toMatchObject({ entity_type: "child", field_key: "child_first_name" });
         }
     });
     it("maps explicit child first/last name to split fields", () => {
-        expect(suggestFieldBinding("Child First Name", "text")?.field_source).toEqual({ entity_type: "customer_member", field_key: "first_name" });
-        expect(suggestFieldBinding("Student Last Name", "text")?.field_source).toEqual({ entity_type: "customer_member", field_key: "last_name" });
+        expect(suggestFieldBinding("Child First Name", "text")?.field_source).toMatchObject({ entity_type: "child", field_key: "child_first_name" });
+        expect(suggestFieldBinding("Student Last Name", "text")?.field_source).toMatchObject({ entity_type: "child", field_key: "child_last_name" });
     });
     it("maps DOB variants to customer_member.dob", () => {
         for (const label of ["Birthdate", "Date of Birth", "DOB", "D.O.B."]) {
             expect(suggestFieldBinding(label, "date")?.field_source).toEqual({ entity_type: "customer_member", field_key: "dob" });
         }
     });
-    it("maps parent/guardian fields to person.*", () => {
-        expect(suggestFieldBinding("Parent/Guardian Name", "text")?.field_source).toEqual({ entity_type: "person", field_key: "full_name" });
+    it("maps parent/guardian contact fields to person.*, and names to the registered guardian fields", () => {
+        expect(suggestFieldBinding("Parent/Guardian Name", "text")?.field_source).toMatchObject({ entity_type: "guardian", field_key: "guardian_first_name" });
         expect(suggestFieldBinding("Parent Email", "text")?.field_source).toEqual({ entity_type: "person", field_key: "email" });
         expect(suggestFieldBinding("Guardian Phone", "text")?.field_source).toEqual({ entity_type: "person", field_key: "phone" });
     });
@@ -54,7 +57,7 @@ describe("buildBindingProposals / applyBindingSuggestions", () => {
     it("proposes bindings for unbound fields and keeps existing", () => {
         const props = buildBindingProposals(fields);
         const by = Object.fromEntries(props.map((p) => [p.id, p]));
-        expect(by.f1.field_source).toEqual({ entity_type: "customer_member", field_key: "display_name" });
+        expect(by.f1.field_source).toMatchObject({ entity_type: "child", field_key: "child_first_name" });
         expect(by.f1.suggested).toBe(true);
         expect(by.f4.field_source).toBeNull();
         expect(by.f5.suggested).toBe(false); // existing binding preserved
@@ -63,7 +66,7 @@ describe("buildBindingProposals / applyBindingSuggestions", () => {
 
     it("applyBindingSuggestions persists field_source on unbound fields only", () => {
         const out = applyBindingSuggestions(fields);
-        expect(out[0].field_source).toEqual({ entity_type: "customer_member", field_key: "display_name" });
+        expect(out[0].field_source).toMatchObject({ entity_type: "child", field_key: "child_first_name" });
         expect(out[3].field_source).toBeUndefined(); // Notes stays unbound
         expect(out[4].field_source).toEqual({ entity_type: "opportunity", field_key: "status_key" }); // unchanged
     });
@@ -83,7 +86,9 @@ describe("P1 → P2: suggested bindings drive prefill", () => {
             fields: bound.map((b) => ({ id: b.id, label: b.label, required: false, type: b.type, ...(b.field_source ? { field_source: b.field_source } : {}) })) as FormSchemaV1["fields"],
         };
         const prefillMap = buildCanonicalPrefillFieldMap(schema);
-        expect(prefillMap.child_name_x).toBe("customer_member.display_name");
+        // The prefill layer deliberately bridges the domain entity ("child") to its storage root
+        // ("customer_member") and aliases the registered key to the real column.
+        expect(prefillMap.child_name_x).toBe("customer_member.first_name");
         expect(prefillMap.bday).toBe("customer_member.dob");
     });
 });

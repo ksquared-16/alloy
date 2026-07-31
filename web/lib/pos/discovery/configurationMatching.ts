@@ -87,11 +87,13 @@ const HEALTH_RE = /medical|health|immuniz|allerg|diabet|asthma|seizure|convuls|m
  */
 const CANONICAL_CONCEPT_BINDINGS: Record<string, { entity_type: string; field_key: string; band: Confidence["band"] }> = {
     "child.date_of_birth": { entity_type: "customer_member", field_key: "dob", band: "high" },
-    "child.name": { entity_type: "customer_member", field_key: "display_name", band: "high" },
+    // Names resolve to the REGISTERED split fields (see systemFieldRegistry): there is no
+    // person-level display_name/full_name system field, and generation has always built first+last.
+    "child.name": { entity_type: "child", field_key: "child_first_name", band: "high" },
     "child.allergies": { entity_type: "customer_member", field_key: "allergies", band: "review" },
     "person.email": { entity_type: "person", field_key: "email", band: "high" },
     "person.phone": { entity_type: "person", field_key: "phone", band: "high" },
-    "person.name": { entity_type: "person", field_key: "full_name", band: "high" },
+    "person.name": { entity_type: "guardian", field_key: "guardian_first_name", band: "high" },
     "household.address": { entity_type: "customer", field_key: "address", band: "review" },
 };
 
@@ -102,9 +104,9 @@ const CANONICAL_CONCEPT_BINDINGS: Record<string, { entity_type: string; field_ke
  * explanation now says so rather than leaving them to discover it after generating.
  */
 function nameCaptureNote(fieldKey: string): string {
-    return /(^|_)(display_name|full_name|name)$/i.test(fieldKey)
-        ? " Captured as separate first and last name fields."
-        : "";
+    // A name concept anchors on the FIRST-name field; generation adds the last-name field alongside
+    // it. Saying only "matched to child_first_name" would understate what the operator approves.
+    return /_first_name$/i.test(fieldKey) ? " Captured as separate first and last name fields." : "";
 }
 
 const SCREENING_SECTION_RE = /chronic|health history|nature of reaction|recurring/i;

@@ -48,6 +48,10 @@ const COLUMN_ALIASES: Record<PrefillRoot, Record<string, string>> = {
         display_name: "display_name",
         first_name: "first_name",
         last_name: "last_name",
+        // Registered system-field keys (systemFieldRegistry) — without these the split name fields
+        // fall through to a `child_first_name` column that does not exist and silently never prefill.
+        child_first_name: "first_name",
+        child_last_name: "last_name",
         dob: "dob",
         date_of_birth: "dob",
         birthdate: "dob",
@@ -59,6 +63,9 @@ const COLUMN_ALIASES: Record<PrefillRoot, Record<string, string>> = {
         parent_name: "full_name",
         first_name: "first_name",
         last_name: "last_name",
+        // Registered system-field keys for a guardian / emergency contact.
+        guardian_first_name: "first_name",
+        guardian_last_name: "last_name",
         email: "email",
         parent_email: "email",
         phone: "phone",
