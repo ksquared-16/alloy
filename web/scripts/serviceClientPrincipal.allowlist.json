@@ -1,0 +1,171 @@
+{
+  "$comment": [
+    "W-4 (I-3) — reviewed exception register for the service-client principal check.",
+    "Enforced by web/scripts/checkServiceClientPrincipal.mjs; locked by web/tests/access/serviceClientPrincipalCheck.test.ts.",
+    "",
+    "Three lists, three different meanings. Do not merge them.",
+    "  exceptions — a route with a VERIFIED orthogonal authorization model. Reviewed and permanent.",
+    "               Adding one is a security decision: name the model and cite the line that enforces it.",
+    "  baseline   — a route with NO verified model. Real W-15 remediation work, frozen 2026-07-31.",
+    "               FROZEN: entries may be removed as they are fixed, never added.",
+    "  advisory_transitive_only — reaches a service client through a helper rather than importing one,",
+    "               so it is outside the enforced predicate. Listed so the set cannot grow silently.",
+    "",
+    "All three lists may only shrink. A stale entry fails the check."
+  ],
+  "reviewed": "2026-07-31",
+  "reviewed_by": "assignment asg_d203f547736c16 (mission msn_2d054741a54698fa4c, W-4)",
+  "exceptions": [
+    {
+      "route": "app/api/action/[token]/route.ts",
+      "model": "capability-token",
+      "reason": "Read-only action-link metadata. The row is selected BY the bearer token (`.eq(\"token\", token)` at :22) — the token is the authorization, per I-4. No caller-supplied row selector."
+    },
+    {
+      "route": "app/api/action/[token]/consume/route.ts",
+      "model": "capability-token",
+      "reason": "Row selected by the bearer token (:17). Expiry and single-use are checked and return 410 (verified by phase 3 §13.1 / I-4)."
+    },
+    {
+      "route": "app/api/action-links/resolve/route.ts",
+      "model": "capability-token",
+      "reason": "Row selected by the bearer token from the query string (:20). Same action_links capability as /action/[token]."
+    },
+    {
+      "route": "app/api/action-links/consume-accept-job/route.ts",
+      "model": "capability-token",
+      "reason": "Row selected by the bearer token from the body (:75), documented as the same raw action_links.token as the /action/[token] URL."
+    },
+    {
+      "route": "app/api/action-links/consume-reschedule/route.ts",
+      "model": "capability-token",
+      "reason": "Row selected by the bearer token (:37); validity, consumption and expiry are checked before the write."
+    },
+    {
+      "route": "app/api/public/forms/[token]/resolve/route.ts",
+      "model": "capability-token",
+      "reason": "Embed bootstrap. `resolvePublicFormEmbedContext(supabase, token)` (:31) is the gate; every subsequent read is scoped to what the token resolved."
+    },
+    {
+      "route": "app/api/public/forms/[token]/submissions/route.ts",
+      "model": "capability-token",
+      "reason": "Creates a draft tied to the resolved public link (:46). Creates only — no caller-supplied row selector."
+    },
+    {
+      "route": "app/api/public/forms/[token]/submissions/[submissionId]/route.ts",
+      "model": "capability-token + subject-binding",
+      "reason": "Takes a caller-supplied submissionId, but binds it: `verifySubmissionBelongsToPublicEmbed(supabase, ctx, submissionId)` at :58 (GET) and :144 (PATCH) runs before the read/update. This is the subject-bound property I-4 requires."
+    },
+    {
+      "route": "app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts",
+      "model": "capability-token + subject-binding",
+      "reason": "Same binding check at :114 before the submit path executes."
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/resolve/route.ts",
+      "model": "capability-token",
+      "reason": "`resolveTourPublicBookingLinkByToken` (:21) selects by token; documented as minimal disclosure. Also rate-limited per token (:15)."
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/slots/route.ts",
+      "model": "capability-token",
+      "reason": "Token-resolved link scopes the availability read (:22); rate-limited per token (:16)."
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/book/route.ts",
+      "model": "capability-token",
+      "reason": "Token-resolved link scopes the booking write (:30); rate-limited per token (:24)."
+    },
+    {
+      "route": "app/api/webhooks/resend/route.ts",
+      "model": "webhook-signature",
+      "reason": "Svix `Webhook.verify` against RESEND_WEBHOOK_SECRET at :69, and it returns 400 before `createAdminClient()` is constructed at :91 — no statement reaches the database on an unsigned request. The handler documents that session auth MUST NOT gate it."
+    },
+    {
+      "route": "app/api/verticals/route.ts",
+      "model": "public-catalog-read",
+      "reason": "GET returning (id, name, slug) for active rows of the platform-global `verticals` table. No org-scoped or personal data, no caller-supplied selector, no write. RLS bypass discloses nothing tenant-specific."
+    },
+    {
+      "route": "app/api/public/booking-config/route.ts",
+      "model": "public-catalog-read + env-pinned-org",
+      "reason": "Pricing/addon catalogs for the public booking UI. The org is pinned to ALLOY_PUBLIC_ORG_ID from the environment (:26) — never caller-supplied — and the handler is read-only."
+    },
+    {
+      "route": "app/api/public/field-definitions/route.ts",
+      "model": "public-catalog-read + env-pinned-org",
+      "reason": "Org pinned to ALLOY_PUBLIC_ORG_ID and 500s without it (:17-20); entity_type is validated against a fixed allow-list (:32-38). Read-only, returns only fields explicitly flagged for public booking."
+    },
+    {
+      "route": "app/api/book-v2/availability/route.ts",
+      "model": "public-catalog-read + env-pinned-org",
+      "reason": "Read-only availability for the public booking funnel; timezone defaults to the ALLOY_PUBLIC_ORG_ID org. No caller-supplied row selector, no write."
+    },
+    {
+      "route": "app/api/book-v2/validate-promo/route.ts",
+      "model": "public-catalog-read",
+      "reason": "Validates a promo code against a quote subtotal and returns the verdict. Read-only; selects by the submitted code, which is the credential being tested, not a row identifier granting access to someone else's data."
+    },
+    {
+      "route": "app/api/vendor-application/route.ts",
+      "model": "public-intake-create + env-pinned-org",
+      "reason": "Unauthenticated vendor application intake. Org pinned to ALLOY_PUBLIC_ORG_ID and 500s without it (:33-37). Creates only — it selects no existing row by a caller-supplied id."
+    },
+    {
+      "route": "app/api/book-v2/quote-start/route.ts",
+      "model": "public-intake-create + env-pinned-org",
+      "reason": "Entry point of the public booking funnel; creates the person/opportunity and RETURNS the ids. Creates only — no caller-supplied id selects a pre-existing row."
+    },
+    {
+      "route": "app/api/book-v2/specialty-quote-start/route.ts",
+      "model": "public-intake-create + env-pinned-org",
+      "reason": "Same shape as quote-start for the specialty vertical: creates and returns ids rather than accepting one."
+    }
+  ],
+  "baseline": [
+    {
+      "route": "app/api/book-v2/confirm/route.ts",
+      "frozen": "2026-07-31",
+      "why_not_an_exception": "Accepts caller-supplied `opportunity_id`, `customer_id` and `person_id` from the request body (:626-631) and reads and updates those rows with a service-role client (:787, :818, :855). Nothing proves the caller is entitled to them — the id is unguessable, which is obscurity, not authorization.",
+      "w15_note": "The booking funnel needs a bearer capability for the in-progress quote (the action_links shape), or the ids must be re-derived server-side from something the caller has proven."
+    },
+    {
+      "route": "app/api/book-v2/quote-refine/route.ts",
+      "frozen": "2026-07-31",
+      "why_not_an_exception": "Accepts caller-supplied `opportunity_id` (:230) and updates that opportunity (:334) plus typed field values (:380), with no token and no principal.",
+      "w15_note": "Same capability-token remedy as confirm."
+    },
+    {
+      "route": "app/api/book-v2/service-details/route.ts",
+      "frozen": "2026-07-31",
+      "why_not_an_exception": "Requires caller-supplied `opportunity_id` (:57-59), reads it (:84) and updates it (:191) with a service-role client and no authorization of any kind.",
+      "w15_note": "Same capability-token remedy as confirm."
+    },
+    {
+      "route": "app/api/book-v2/opportunity-discount/route.ts",
+      "frozen": "2026-07-31",
+      "why_not_an_exception": "Requires caller-supplied `opportunity_id` (:44-46), reads it (:53) and writes discount fields to it (:84, :142). Unauthenticated write to a named existing row.",
+      "w15_note": "Same capability-token remedy as confirm."
+    },
+    {
+      "route": "app/api/book-v2/ensure-customer/route.ts",
+      "frozen": "2026-07-31",
+      "why_not_an_exception": "Accepts a caller-supplied `person_id` and materializes a customer for it (:32) with a service-role client. The org is env-pinned, but the subject is not — an arbitrary person_id is accepted.",
+      "w15_note": "Bind person_id to the funnel capability rather than trusting the body."
+    }
+  ],
+  "advisory_transitive_only": [
+    {
+      "route": "app/api/leads/gutters/route.ts",
+      "reason": "Public inbound gutter-lead intake. Reaches a service client through `@/lib/supabase` helpers rather than importing a constructor, so it sits outside the enforced predicate. Creates only (contact upsert + opportunity create); marked LEGACY_COMPAT in its own header. Flagged for W-15."
+    },
+    {
+      "route": "app/api/webhooks/twilio/sms-status/route.ts",
+      "reason": "Twilio status callback; delegates to `handleTwilioSmsStatus`, which holds the service client. Webhook model — signature verification lives in the helper, not the route, which is why the route itself shows no principal."
+    },
+    {
+      "route": "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts",
+      "reason": "Per-tenant subaccount variant of the same handler and the same model."
+    }
+  ]
+}

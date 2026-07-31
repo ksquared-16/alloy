@@ -13,11 +13,11 @@
 **Worktree** `wt6-vacilando-os-product-def` @ `agent/claude/6-vacilando-os-product-def`
 **Date** 2026-07-30 · **W-0 executed 2026-07-31** (mission `msn_2d054741a54698fa4c`, assignment `asg_708252478f6fdd`)
 · **W-1…W-3 executed 2026-07-31** (same mission, assignment `asg_d77353d7377647`)
+· **W-4 executed 2026-07-31** (same mission, assignment `asg_d203f547736c16`)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
-**Wave 1's W-1, W-2 and W-3 (§5) are implemented and green**; their execution records are in §5 and
-their locks are live in §13. W-4 was not in that assignment and remains a proposal, as does every
-other wave.
+**Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
+are in §5 and their locks are live in §13. Every other wave remains a proposal.
 
 ---
 
@@ -136,7 +136,7 @@ code never requires reverting data.
 | Wave | Theme | Workstreams | Gated on |
 |---|---|---|---|
 | **0** | Facts before changes — read-only live verification | W-0 | — · **DONE 2026-07-31** |
-| **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — · **W-1…W-3 DONE 2026-07-31** · W-4 open |
+| **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — · **DONE 2026-07-31** (W-1…W-4) |
 | **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | ~~W-0~~ **satisfied** |
 | **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) |
 | **4** | Admission and declaration | W-13 … W-15 | W-3, D2 |
@@ -439,6 +439,126 @@ principal and without an allow-list entry carrying a reason.
 **Exit.** The check runs in CI and the exception list is a reviewed artifact rather than a residue. **The
 initial count of exceptions is recorded as the baseline for W-15 and is expected to be large** — this
 workstream's value is that the number stops growing silently.
+
+#### W-4 execution record — **DONE 2026-07-31**
+
+| Field | Value |
+|---|---|
+| Check | [`web/scripts/checkServiceClientPrincipal.mjs`](../../../../../web/scripts/checkServiceClientPrincipal.mjs) — AST walk over TypeScript's own parser |
+| Register | [`web/scripts/serviceClientPrincipal.allowlist.json`](../../../../../web/scripts/serviceClientPrincipal.allowlist.json) — three lists, each entry reasoned |
+| Lock | `web/tests/access/serviceClientPrincipalCheck.test.ts` — **15 tests, all green** (RL-15, §13) |
+| CI | `web/package.json` → `prebuild` runs `check:service-client-principal`; the check exits 1 on any violation or stale entry, so `next build` cannot proceed past it |
+| Evidence | [`w4-service-client-principal-baseline.json`](./w4-service-client-principal-baseline.json) — full counts, per-route rows omitted; regenerate with `npm run check:service-client-principal:evidence` |
+
+##### The baseline
+
+| Measure | Count |
+|---|---|
+| API route files | **539** |
+| …hold a service-role client by direct import | **520** |
+| …of those, resolve a principal | **494** |
+| …of those, resolve none — **the exception baseline** | **26** |
+| — reviewed exceptions, each with a named authorization model | **21** |
+| — frozen W-15 remediation baseline, no model | **5** |
+| Reach a service client transitively (through a helper) | 536 |
+| …transitive-only *and* unresolved — advisory, not enforced | **3** |
+
+**The number is 26, not "large".** The exit criterion above predicted a large baseline; it is 26 of 520, and
+**only 5 of those are actual remediation work.** The prediction was wrong for a specific and checkable
+reason: the phase-1 figure it rested on ("517 of 539 route files hold a service-role client") counted
+*holding a client*, which is nearly universal in this codebase, and silently implied that holding one means
+gating nothing. In fact 494 of the 520 holders do resolve a principal — through wrappers four binding hops
+deep, which is exactly what a file-level or text-level census cannot see. Recount: **520** hold one directly,
+not 517.
+
+##### Why this is not the census C1 destroyed
+
+§10.2 forbids citing a grep count, and this check is built to survive that rule rather than route around it:
+
+1. **AST, not text.** Every edge is a real TypeScript binding, parsed by the compiler's parser. No regex
+   decides anything about authority. `auditAuthorityPaths.mjs` credited 440 routes to a module that only
+   *returns* the permission bundle, because `/permissionKeys\b/` cannot tell mention from branch.
+2. **Binding-level, not file-level.** A route is credited only through symbols it actually imports, and only
+   if *that symbol's own declaration* reaches the terminal primitive. Importing one function from a module
+   that also happens to export a resolver credits nothing. This is the specific over-credit that produced
+   the 30× error.
+3. **One terminal primitive, structurally defined.** The base case is `…auth.getUser()` / `.getClaims()` /
+   `.getSession()` — the only way this codebase turns a request into a principal
+   (`lib/admin/cachedAuthSession.ts:17-48`). Wrappers (`getAdminContextCached`, `loadAdminRouteGate`,
+   W-1's own `requireAnalyticsReadAccess`) are **discovered by the walk, never hand-listed**, so the check
+   does not rot as wrappers are added or renamed. The lock asserts this directly.
+4. **Proven non-vacuous.** The lock runs the check against an *empty* allow-list and asserts it goes red on
+   exactly 26 + 3 routes, asserts a gated route is credited through a four-hop wrapper, asserts an
+   unauthenticated public route is *not* credited, and asserts a stale entry fails. A check that cannot be
+   shown to fail is not evidence.
+
+One structural bug was found and fixed while building it: a **bare re-export route**
+(`export { GET } from "…"`, e.g. `admin/v2/view-models/drawer/person/[id]/route.ts`) carries no identifier
+reference in its module body, so the subtree walk missed it entirely and three correctly-gated admin routes
+read as ungated. The export table and star-re-export edges are now walked as well. That is a false *positive*
+this check would have produced — the same class of error as W-1's, found before it was published rather than
+after.
+
+##### The honest limit — read this before citing the number
+
+**This check proves a principal is *resolved*. It does not prove the result *gates* the handler.** W-1 found
+routes holding two access resolutions where only the first gated anything; a resolution whose result is
+discarded passes here. Proving the gate is W-14's declared capability table and W-15's sweep. Two further
+bounds, stated so the number is not over-read:
+
+- **The enforced subject is direct holding only.** Routes that reach a service client transitively are
+  *advisory*, because the transitive import graph over-credits in exactly the way §10.2 describes — 536 of
+  539 routes reach one. The 3 transitive-only unresolved routes are recorded in
+  `advisory_transitive_only` with reasons so the set cannot grow silently, but they do not fail the build.
+  Two are Twilio webhooks whose signature check lives in the helper; one is a legacy public intake route.
+- **`SUPABASE_SERVICE_ROLE_KEY` as a text marker** is the one non-AST predicate, used to catch a client
+  constructed inline rather than imported. It can only *widen* the subject set, never narrow it, so it
+  cannot cause a route to be missed.
+
+##### What the 5 baseline routes actually are
+
+The frozen baseline is not a residue of unclassified routes — it is a **named finding**. All five are
+`book-v2` public-funnel routes that accept a caller-supplied row id (`opportunity_id`, `customer_id`,
+`person_id`) from the request body and then read or write **that row** with a service-role client, with no
+token, no principal, and no binding of the id to anything the caller has proven:
+
+| Route | The unguarded operation |
+|---|---|
+| `book-v2/confirm` | reads and updates the named opportunity, customer and person (`:787`, `:818`, `:855`) |
+| `book-v2/quote-refine` | updates the named opportunity and its typed field values (`:334`, `:380`) |
+| `book-v2/service-details` | reads and updates the named opportunity (`:84`, `:191`) |
+| `book-v2/opportunity-discount` | writes discount fields to the named opportunity (`:84`, `:142`) |
+| `book-v2/ensure-customer` | materializes a customer for an arbitrary supplied `person_id` (`:32`) |
+
+The id is unguessable, which is **obscurity, not authorization**. The org is env-pinned in several of them;
+the *subject* is not. The remedy in all five is the same and is already the shape this codebase uses
+elsewhere — a bearer capability for the in-progress quote, i.e. the `action_links` model that the 21
+exceptions rest on — or re-deriving the ids server-side. **This is W-15 work by the assignment's scope, and
+it is recorded here rather than fixed.** It is called out because it is a larger live exposure than anything
+wave 1 closed, and a reader skimming "26 exceptions" would not see it.
+
+The other 21 are exceptions on stated grounds, in four models: **capability-token** (12 — the row is selected
+*by* the bearer token, per I-4; two of them additionally bind a caller-supplied `submissionId` to the
+embed before use), **webhook-signature** (1 — Svix `verify` returns 400 *before* `createAdminClient()` is
+constructed), **public-catalog-read** (5 — no org-scoped or personal data, org pinned to
+`ALLOY_PUBLIC_ORG_ID` where one is needed), and **public-intake-create** (3 — create-only, no caller-supplied
+id selects a pre-existing row). Two were re-verified line-by-line for this record
+(`api/verticals/route.ts`, `api/webhooks/resend/route.ts:69,91`); the rest carry their citation in the
+register.
+
+##### The ratchet
+
+Three lists, three meanings, and **all three may only shrink**:
+
+- `exceptions` — a verified orthogonal authorization model. Adding one is a security decision: the entry
+  must name the model and cite the enforcing line, and the lock requires both.
+- `baseline` — **frozen 2026-07-31**. The lock pins its contents to the five routes above, so it can be
+  emptied by fixing them and cannot be extended by adding a sixth.
+- `advisory_transitive_only` — must match the computed set exactly, in both directions.
+
+A **stale** entry is itself a failure — if a route is deleted, stops holding a service client, or starts
+resolving a principal, the check goes red until the list is updated. That is what stops the register
+decaying into residue, which is the failure mode the exit criterion names.
 
 ---
 
@@ -834,6 +954,12 @@ No exit criterion in this plan is satisfied by a grep count. W-14's declared tab
 conformance is a lookup. **W-14 retires the script**; until then, its output may not be cited as evidence in
 any workstream.
 
+**W-4's check is the counter-example, and it is worth stating why it qualifies where the census does not.**
+It is an AST walk over real TypeScript bindings, credited symbol by symbol rather than file by file, with one
+structurally-defined terminal primitive — and its lock runs it against an empty allow-list to prove it goes
+red. An import-walk is disqualified by *how it credits*, not by being static. See the W-4 execution record
+in §5, including its stated limit: it proves a principal is resolved, never that the result gates the handler.
+
 Second methodological rule, carried from phase 2 §12: **a passing route census proves nothing about scope.**
 G-C and G-D are independent — a route can gate capability correctly and read the whole org. Capability
 coverage and scope coverage are reported as two numbers, never one.
@@ -955,6 +1081,7 @@ contributor deleting one has to do it on purpose.
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
+| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts` |
 
 RL-2 is listed *because* it is temporary: W-3 adds it and W-10 replaces it. An assertion that becomes
 structurally unnecessary should be replaced deliberately, not quietly deleted when it starts failing.
@@ -1006,12 +1133,17 @@ Per the assignment constraints:
 ### 14.3 Limits
 
 1. **Static and file-grounded** when written, like phases 1 and 2 — no request issued, no browser used, no
-   source file modified. **Superseded twice on 2026-07-31:** W-0 has since been executed read-only against
-   the deployed database via a trusted host action, so §4 now carries live counts; and W-1…W-3 have since
-   been implemented, so §5 records shipped code and green tests. Everything else in this plan remains
+   source file modified. **Superseded three times on 2026-07-31:** W-0 has since been executed read-only
+   against the deployed database via a trusted host action, so §4 now carries live counts; W-1…W-3 have
+   since been implemented, so §5 records shipped code and green tests; and W-4 has since shipped a
+   build-time check whose counts are *measured* rather than estimated. Everything else in this plan remains
    static analysis.
 2. **Sizings are estimates**, calibrated to 539 routes and 289 migrations, not measured. W-15 (L) has the
-   widest error bar; W-4's exception baseline will sharpen it.
+   widest error bar; ~~W-4's exception baseline will sharpen it~~ — **W-4 has now measured one axis of it.**
+   Of 520 routes holding a service-role client, 494 already resolve a principal and 5 have no authorization
+   model at all, so the *service-client* half of W-15 is 5 routes, not ~500. This does **not** resize W-15
+   overall: its main body is bringing ~500 routes from "gates on portal eligibility" to a declared
+   capability, which W-4 does not measure and cannot — W-4 proves resolution, never gating.
 3. ~~**Wave 0 is a plan for queries, not their results.**~~ **RESOLVED 2026-07-31.** Wave 0 executed; its
    counts are in §4 and have been applied. The reordering it produced: W-20 stays in wave 5 (G1 latent), M8 is
    struck, and L2/L3/L4 have empty remediation sets. Waves 2 and 5 are no longer gated by W-0. The counts are
@@ -1023,6 +1155,10 @@ Per the assignment constraints:
    `settings/users-roles/members/route.ts` reads only. **W-5's audit is not discharged by this**: it was
    scoped to API routes, and says nothing about server actions, scripts, seeds, RPCs or migrations, which
    is where W-5's atomic path must also reach. It narrows the search, it does not end it.
+   **W-4 narrows it once more, on a different axis:** its AST walk enumerates every `web/app/api` route
+   that imports a service-role client, so any membership writer among the 539 routes is now mechanically
+   findable rather than grep-findable. It still says nothing about server actions, scripts, seeds, RPCs or
+   migrations.
 5. **The observation window for dual-read is not specified.** It depends on real traffic to the authority path,
    which is a deployment fact this phase cannot see. Each lockout-class workstream sets its own and states it.
    **W-0 largely dissolves this:** at 6 `(user, org)` pairs the population is exhaustively enumerable, so
@@ -1035,10 +1171,17 @@ Per the assignment constraints:
    conventions are consistent and the matrix can absorb them — but **F1–F10 do not yet exist as a shared
    artifact, and waves 2–5 cannot inherit what was not built.** It remains the highest-reuse unbuilt item.
    The same applies to the I-4 token tests §13.1 attaches to wave 1.
+   **Wave 1 has now closed without it** (W-4 was the last workstream and did not build it either), so this
+   is no longer a scheduling slip but a debt waves 2–5 inherit. The one partial exception is **F10**
+   — *service-role client, no principal* — which W-4 does not fixture but does enumerate exhaustively and
+   lock as a build check, so the population F10 was meant to exercise is at least named and frozen.
 7. **Wave 1 carries no tier D evidence, by design.** §10.4 requires browser evidence only for
-   lockout-class switches; W-1…W-3 are none of L1–L4. W-1 narrows three JSON data endpoints with no UI of
-   their own, and W-3's grid-row removal is visible in the Roles screen but changes no authority. Neither
-   was verified in a browser on `:3020`.
+   lockout-class switches; W-1…W-4 are none of L1–L4. W-1 narrows three JSON data endpoints with no UI of
+   their own, W-3's grid-row removal is visible in the Roles screen but changes no authority, and W-4 adds
+   a build-time check that changes no runtime behaviour at all. None was verified in a browser on `:3020`.
+9. **W-4 changes no route.** It measures and freezes; it remediates nothing. The five unauthorized
+   `book-v2` routes it names are live exposure today and remain so until W-15. Wave 1 being "complete" is a
+   statement about the wave's scope, not about the system being safe.
 8. **No effort is budgeted for governance-doc reconciliation.**
    `docs/platform/governance/roles-and-permissions.md` is `status: canonical` and states a rule the code does
    not follow, with a dead "Expanded reference" pointer (phase 2 §15.6). It should land with W-15, and is not
@@ -1086,3 +1229,26 @@ Changed, on commit `41610954c` (local only — not pushed):
 | `web/tests/access/analyticsRouteGates.test.ts` *(new)* · `web/tests/access/selfAuthorityMutation.test.ts` *(new)* · `web/tests/admin/permissionGrid.test.ts` · `web/tests/metrics/metricsResolveRoute.test.ts` · `web/tests/metrics/metricsTrendsRoute.test.ts` | QA |
 
 **No migration was written and none was applied.** §11 remains a register.
+
+### 15.2 W-4 execution (2026-07-31, assignment `asg_d203f547736c16`)
+
+Evidence: [`w4-service-client-principal-baseline.json`](./w4-service-client-principal-baseline.json) — the
+measured counts, the 26 unresolved routes with their list membership, and the 3 advisory transitive-only
+routes. Regenerate with `npm run check:service-client-principal:evidence` from `web/`.
+
+Changed (local only — not pushed):
+
+| File | Role |
+|---|---|
+| `web/scripts/checkServiceClientPrincipal.mjs` *(new)* | the tier A check |
+| `web/scripts/serviceClientPrincipal.allowlist.json` *(new)* | the reviewed register — 21 exceptions, 5 frozen baseline, 3 advisory |
+| `web/tests/access/serviceClientPrincipalCheck.test.ts` *(new)* | RL-15 — 15 tests, including the empty-allow-list red state |
+| `web/package.json` | `prebuild` gains the check; `check:service-client-principal` and `…:evidence` scripts |
+
+**Verification run** in `wt6-vacilando-os-product-def` @ `agent/claude/6-vacilando-os-product-def`:
+`npm run check:service-client-principal` → exit 0, `ok: true`, 0 violations, 0 stale, across 539 routes ·
+`vitest run tests/access/serviceClientPrincipalCheck.test.ts` → **15 passed**.
+
+**Method:** static, AST-grounded. No route handler, schema, migration or UI was modified, and no request was
+issued. The two exceptions spot-verified line-by-line for this record are `api/verticals/route.ts` and
+`api/webhooks/resend/route.ts`.

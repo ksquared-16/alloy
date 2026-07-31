@@ -4,9 +4,11 @@
     "private": true,
     "scripts": {
         "dev": "next dev",
-        "prebuild": "npm run verify:module-imports",
+        "prebuild": "npm run verify:module-imports && npm run check:service-client-principal",
         "build": "next build",
         "verify:module-imports": "tsx --tsconfig tsconfig.json scripts/verifyWebModuleImports.ts",
+        "check:service-client-principal": "node scripts/checkServiceClientPrincipal.mjs",
+        "check:service-client-principal:evidence": "node scripts/checkServiceClientPrincipal.mjs --out ../docs/platform/planning/vacilando-os/qa/access-identity-v2/w4-service-client-principal-baseline.json",
         "start": "next start",
         "lint": "eslint",
         "audit:motion": "node scripts/auditMotionTokens.mjs",
