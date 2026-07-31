@@ -11,8 +11,10 @@
 **Mission** `msn_e9133cdade883793d2` v1 · phase *Sequenced implementation & QA plan* · assignment `asg_c505e1d0d76acd`
 **contentHash** `a48a454dc1a5a25a537a345999d982dc`
 **Worktree** `wt6-vacilando-os-product-def` @ `agent/claude/6-vacilando-os-product-def`
-**Date** 2026-07-30
-**Status** Proposed — a plan to be scheduled, not a record of work done.
+**Date** 2026-07-30 · **W-0 executed 2026-07-31** (mission `msn_2d054741a54698fa4c`, assignment `asg_708252478f6fdd`)
+**Status** Proposed — a plan to be scheduled, not a record of work done. **Exception: Wave 0 (§4) is
+executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
+Every other wave remains a proposal.
 
 ---
 
@@ -73,6 +75,10 @@ Four workstreams have an unknown blast radius that only the deployed database ca
 None of these is answerable statically, and each is cheap to answer read-only. **Wave 0 is five SELECT
 statements**, and it is the highest-leverage step in the programme.
 
+**It proved so.** Executed 2026-07-31, Wave 0 emptied the remediation set for three of the four lockout-class
+workstreams, struck a migration (M8), kept W-20 in wave 5 by showing G1 is latent, and sized the one real
+remediation at two rows. Three of those four answers were *not* the conservative assumption the plan carried.
+
 ### 1.3 Declaring a capability per route is worthless until the vocabulary is settled
 
 I-24's declared `(route → capability)` table is the mechanism that converts I-17 from an audit into a build
@@ -126,12 +132,12 @@ code never requires reverting data.
 
 | Wave | Theme | Workstreams | Gated on |
 |---|---|---|---|
-| **0** | Facts before changes — read-only live verification | W-0 | — |
+| **0** | Facts before changes — read-only live verification | W-0 | — · **DONE 2026-07-31** |
 | **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — |
-| **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | W-0 |
+| **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | ~~W-0~~ **satisfied** |
 | **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) |
 | **4** | Admission and declaration | W-13 … W-15 | W-3, D2 |
-| **5** | Role-model coherence and the long tail | W-16 … W-22 | W-0, D3, D4 |
+| **5** | Role-model coherence and the long tail | W-16 … W-22 | ~~W-0~~ **satisfied** · D3, D4 |
 
 Waves 2 and 3 touch disjoint surfaces — scope tables and route handlers versus catalog tables and the grid —
 and can run concurrently by different people. Waves 4 and 5 both depend on wave 3.
@@ -181,18 +187,44 @@ population rather than a no-op.
 
 | Field | Value |
 |---|---|
-| Evidence file | [`wave0-authority-census.json`](./wave0-authority-census.json) — queries prepared, **counts not yet recorded** |
-| Queries | Q1–Q6 written and schema-verified against `supabase/migrations` in this worktree, plus one combined single-statement form that returns all answers as one JSON row |
-| Executed | **No** — blocked on live database access, in two independent sessions |
-| Blocker | A managed agent worktree holds no database credential by design. `web/.env.local.agent` carries public values only; the privileged tier (`ALLOY_SERVER_ENV_SOURCE`) is injected into the toolkit-owned Next process and never into the worktree (`alloy-config.example:70-73`, `lib/verify.sh:293-335`); `alloy-ro` declares `credential_access: false` and exposes no database verb; and no arbitrary-SQL RPC exists in `supabase/migrations`, so Q1's `pg_trigger` read is unreachable through PostgREST even with a service-role key. |
-| Decision taken | The operator authorized a single read-only `psql` session against the trusted `DATABASE_URL`. |
-| Outcome | **Not executable from a managed slot.** Mission Control's decision channel does not grant Claude Code tool permissions — they are a separate control — so every route to the credential was denied by the harness before any connection was attempted. Attempt 1 tried three routes (direct env read, sandboxed read, and a runner using the toolkit's own `alloy_load_trusted_server_env_exports`). Attempt 2 (assignment `asg_708252478f6fdd`) tried four more and hit **two independent controls**: a workspace boundary that refuses any read outside the worktree, and command approval. Both must be lifted, not either. |
-| Structural finding | `DATABASE_URL` is not incidentally absent — it is on the toolkit's explicit denylist twice, as a secret-like substring (`lib/verify.sh:202`) and as a named privileged variable (`:210`). The single function that reads it (`alloy_load_trusted_server_env_exports`, `:495-523`) exists solely to spawn the `alloy-dev-start` Next process. **No further attempt from inside a managed worktree is worth making**; this is a designed refusal working as intended. |
-| Resolution | An execution channel, not a further decision. `wave0-authority-census.json` → `execution.blocker.second_order.unblock_options` carries the recommended terminal command (now using the toolkit's own loader, so the credential is never printed, written, or handled by the operator), the permission grant that would let this slot run it, and the credential-free SQL-editor path. |
+| Evidence file | [`wave0-authority-census.json`](./wave0-authority-census.json) — **counts recorded; exit criteria met** |
+| Queries | Q1–Q6 written and schema-verified against `supabase/migrations`, plus one combined single-statement form returning all answers as one JSON row |
+| Executed | **Yes** — 2026-07-31T15:48:45Z, read-only, against the deployed database |
+| Channel | Vacilando **trusted host action** `database.read_census` (`tha_1e353138da1197`, auth `tha_auth_d8394598adbe`, query hash `743cd63b…`). The Director executed host-side and returned results only; no privileged credential reached the worker. |
+| Target | `alloy_deployed_primary`, fingerprint `b15dad2c6d030ed4`. Note `current_database()` = `postgres` on every Supabase project, so the project ref is **asserted by the channel, not proven by the output** — see the census file's `target.improvement_for_next_run`. |
+| Prior blockage | Two sessions and seven routes failed first. `DATABASE_URL` is on the toolkit's denylist twice — secret-like substring (`lib/verify.sh:202`) and named privileged variable (`:210`) — and its only reader exists solely to spawn the `alloy-dev-start` Next process. The refusal was working as designed; the trusted host action is the right resolution because it satisfies the read **without weakening the denylist**. Retained as `execution.blocker_history`. |
+| Reusable lesson | Every remaining live-evidence step in this programme — re-running this census before each lockout-class switch, and all ten §11 migration preflights — needs read-only queries against this same database. All of them should use this channel. **The unblock never required an operator to paste anything.** |
 
-**W-0 has not met its exit criteria.** §4 requires counts *and* query text; only the query text exists. Since
-§4 makes citing this file a precondition for all of L1–L4, **waves 2 and 5 remain gated**. Nothing about the
-thoroughness of the prepared SQL changes that.
+**W-0 has met its exit criteria.** Counts and query text for Q1–Q6 are committed, so L1–L4 can now cite it and
+**waves 2 and 5 are no longer gated by Wave 0.**
+
+#### Results
+
+| # | Answer | Rule fires? | Consequence |
+|---|---|---|---|
+| **Q1** | `handle_new_user()` is **defined but not attached**. All 54 triggers on `auth.users` are internal FK triggers; **zero** application triggers. | No | **G1 stays latent. W-20 stays in wave 5.** But the function still exists unreferenced — W-20 must give it an explicit disposition, because attaching it is a one-line migration away from restoring the default-to-`ops` path. |
+| **Q2** | **0** principals authorize only via the legacy fallback. Every auth user has a `user_roles` row. | No | **L4 population is empty.** W-20 needs no remediation and collapses from the four-step ritual to a straight deletion plus RL-12. |
+| **Q3** | **0** `user_roles.role` values lack a `role_definitions` row. | No | **L3 population is empty. M8 is removed from the §11 register**; M9's FK applies directly. |
+| **Q4** | **2** of **6** `(user, org)` pairs lack an access profile (from **8** membership rows). | **Yes** | **The only real remediation in the programme.** M1 is sized at exactly **2** rows. W-7 cannot precede it. |
+| **Q5** | **0** admin/ops `(org, role)` pairs lack a definition; **0** are defined-but-inactive. | No | **L2 population is empty.** M7 grants `portal.access` per `role_definitions` and misses no org. |
+| **Q6** | **1** principal holds admin/ops *and* an explicit `department_scope = 'restricted'` profile. | **Yes** | **W-8 is a behaviour change for 1 named principal**, not a no-op. Identify and announce before deleting the bypass. |
+
+**Four of six rules did not fire.** Three of the four lockout-class workstreams — L2 (W-13), L3 (W-16) and
+L4 (W-20) — have an **empty** remediation set. Only L1 has real work, and it is two rows. This is the
+single largest de-risking of the programme, and it is exactly what §1.2 predicted Wave 0 would buy.
+
+**Two things this does *not* license.** First, the defects are no less real: the same code ships to any tenant
+that grows, and Q4 will keep growing until W-5 lands, so **the counts are a snapshot and every switch must
+re-run the census rather than cite this one**. Second, Q3 and Q5 returning zero proves M9 and M7 safe against
+*today's* data — `user_roles.role` stays unconstrained text until M9 actually lands, so its preflight must
+re-run Q3 rather than trust this result.
+
+**A recommendation for the §2 ritual, for the workstream owners to accept or reject.** The four-step ritual's
+step 3 — *prove zero divergences across a stated observation window* — was designed for an unknown blast
+radius. At six pairs the population is not merely known, it is exhaustively enumerable, and this tenant has
+too little traffic for an observation window to mean much: "zero divergences observed" would mostly be
+evidence that nobody logged in. Satisfying step 3 by **enumerating all six pairs** and computing both answers
+for each is both stronger and cheaper, and it dissolves the unspecified-observation-window limit at §14.3.5.
 
 Three things were fixed while writing and re-verifying the queries, each of which would have produced a wrong
 number or a failed run:
@@ -207,13 +239,18 @@ number or a failed run:
 3. **Q1's `tgenabled` cast** (found on re-verification, 2026-07-31). `pg_trigger.tgenabled` is type `"char"`,
    not `text`, and inside `jsonb_build_object` it was relying on `to_jsonb`'s fallback for a non-JSON-native
    builtin. It is now cast explicitly. This was the likeliest first-contact failure and it sat in Q1 — the
-   first query the operator would hit.
+   first query the run would hit. **The run executed clean on the first attempt.**
 
-Every table and column the census names was re-verified against `supabase/migrations` in this worktree
+Every table and column the census names was re-verified against `supabase/migrations` before execution
 (`orgs`, `user_roles`, `role_definitions`, `user_profiles`, `app_users`, `user_access_profiles` — see the
-census file's `method.schema_reverification_2026_07_31`). One caveat that decides between the unblock options:
-**Q1 and Q2 read `auth.users`**, so a read-only role scoped to `public` would fail or under-report. Options (a)
-and (b) avoid that; option (c) requires an explicit `SELECT` grant on `auth.users`.
+census file's `method.schema_reverification_2026_07_31`). Execution then confirmed it live: all six queries
+resolved every table and column, which also **proves `20260504103000_user_access_scope_tables_v1.sql` is
+applied on the target**. It says nothing about the wider 28-migration Processing/Identity backlog, which
+remains an open concern for every §11 migration.
+
+One access note, recorded for whoever re-runs this: **Q1 and Q2 read `auth.users`**, and Q1 reads `pg_trigger`
+over it. A read-only role scoped to `public` would fail or silently under-report. The trusted host action has
+the necessary access; a hand-provisioned read-only role would need an explicit `SELECT` grant on `auth.users`.
 
 ---
 
@@ -325,6 +362,14 @@ ritual for L1.
 Preflight per §11: count of rows to be created must equal W-0 Q4; zero memberships left uncovered afterwards;
 no existing profile row modified.
 
+**W-0 answered this: 2 rows.** Of 6 distinct `(user, org)` pairs — across 8 membership rows — exactly **2**
+lack a profile. Note the three distinct numbers: the preflight rule means **2** (`pairs_without_profile`), not
+8 and not 6. W-0 also found **0 orphan profile rows**, so "no existing profile row modified" has nothing to
+collide with. **This is the only non-empty remediation population in the whole programme.**
+
+Because W-5 is still open, this count **grows with every membership the product creates**. Re-run the census
+immediately before M1 rather than citing 2; the number is a snapshot taken 2026-07-31.
+
 **QA.** Tier A: post-apply anti-join returns zero. Evidence file per §11.
 **Exit.** Every membership has exactly one profile row, and W-0 Q4 re-run returns 0.
 
@@ -352,8 +397,17 @@ product bypasses department scope** — the dimension is configurable, displayed
 Deleting the bypass without preparation would restrict administrators who are configured as restricted but
 have never experienced it. W-6 has already written `all` for every backfilled membership, so for those the
 removal is a no-op. The exposed set is principals with an explicit `department_scope = 'restricted'` profile
-*and* an `admin`/`ops` role — today those principals are silently unrestricted. **That count is a sixth Wave 0
-query in practice; add it to W-0 if W-8 is scheduled.**
+*and* an `admin`/`ops` role — today those principals are silently unrestricted. ~~That count is a sixth Wave 0
+query in practice; add it to W-0 if W-8 is scheduled.~~
+
+**W-0 Q6 answered this: 1 principal.** One `(user, org)` pair is configured department-restricted while
+holding `admin`/`ops`, so **W-8 is a behaviour change for exactly one named person, not a no-op**. Identify
+them and announce the change before the bypass is deleted.
+
+Corroborating: **2** pairs carry `site_scope = 'restricted'`, and site scope *is* enforced today. This operator
+demonstrably configures scope restriction and expects it to hold — which makes the department-scope bypass a
+live gap between configured and actual authority rather than a dormant setting nobody uses. That strengthens
+the case for W-8.
 
 **QA.** Tier B: `effectiveDepartmentScopeDimensions` returns the stored scope for every role, with the
 existing suite in `web/tests/admin/adminAccessScope.test.ts` extended rather than replaced. Tier C: an `admin`
@@ -451,6 +505,12 @@ receive it — that is a grant, not a code change, which is the entire point of 
 `admin`/`ops` without a corresponding definition row — possible because `user_roles.role` is unconstrained text
 (C2). Such an org would lose portal access entirely at step 4. Q5 must be zero, or remediated first.
 
+**W-0 Q5 answered this: zero — the hazard did not materialize.** All 3 admin/ops `(org, role)` pairs have a
+matching definition, and **0** are defined-but-inactive. M7 needs no remediation step and its §11 preflight
+should pass unchanged. The inactive count being zero also moots the open question of whether M7's `WHERE`
+should include inactive definitions — but **M7 must still state its choice**, because the answer changes if a
+definition is deactivated between now and the migration.
+
 Full ritual: seed grants (migration, preflight) → dual-read `portalEligible` from both the constant and the
 capability, enforcing the constant, logging divergence → prove zero → switch and delete `PORTAL_ROLES`.
 
@@ -509,12 +569,18 @@ Independent of each other; schedule against W-0's evidence and the decisions.
 Governance already claims this FK exists (`roles-and-permissions.md:20`); the constraint actually lives in one
 application write path (`.../role/route.ts:27-30`). Make the claim true.
 
-**Blocked on W-0 Q3.** Any `user_roles` row naming an undefined role fails the FK. Remediation — define the
-role, or correct the row — is a separate, reviewed migration ahead of the constraint.
+~~**Blocked on W-0 Q3.**~~ **UNBLOCKED.** W-0 Q3 returned **0** — no `user_roles` row names an undefined role,
+and the set of distinct undefined roles is empty. **M8 (remediation) is not required and is struck from the
+§11 register.** M9 applies directly.
+
+Two cautions before treating this as free. Q3 deliberately ignores `role_definitions.is_active`, because a
+foreign key does not — **M9's preflight must keep using Q3's form, not Q5's.** And `user_roles.role` remains
+unconstrained text until M9 actually lands, so a violating row can appear between the census and the
+migration: **re-run Q3 as the preflight rather than citing this result.**
 
 **QA.** Tier A schema: the FK exists. Tier C: inserting an undefined role fails at the database, not only in
 the API.
-**Exit.** Q3 = 0 and the constraint is enforced by the schema.
+**Exit.** Q3 re-runs to 0 at preflight and the constraint is enforced by the schema.
 
 ### W-17 — Multi-role write path *(M · I-10 · closes C7 · informed by D2)*
 
@@ -563,9 +629,20 @@ Three tables can make someone `admin`/`ops`, and `app_users` is joined on either
 linkage is itself ambiguous (`resolveAdminAccessCore.ts:44-68`, `remote_schema.sql:1010-1019`). Under the model
 exactly one source is legal.
 
-**Blocked on W-0 Q1 and Q2.** If Q2 > 0, those principals need real `user_roles` memberships first — a
-remediation migration under §11, then the ritual. If Q1 shows the trigger attached, G1's default-to-`ops` is
-live and this rises in priority.
+~~**Blocked on W-0 Q1 and Q2.**~~ **UNBLOCKED, and smaller than planned.**
+
+- **Q2 = 0.** Every auth user has at least one `user_roles` row, so the fallback — which fires *only* for
+  principals with zero membership rows — is unreachable for everyone alive in the database. **The L4 lockout
+  population is empty.** No remediation migration. Because it is zero rather than merely small, W-20 collapses
+  from the four-step ritual to a **straight deletion** plus its RL-12 lock.
+- **Q1: `handle_new_user()` is defined but NOT attached.** All 54 triggers on `auth.users` are internal FK
+  constraint triggers; there are zero application triggers. **G1 stays latent, so W-20 stays in wave 5.**
+
+**But W-20 gains one item.** The function still exists with nothing referencing it — an unattached trigger
+function named `handle_new_user` is one migration away from silently restoring the default-to-`ops` escalation
+path, and no static check would catch it. **W-20 must give it an explicit disposition: drop it, or document
+why it is retained.** This is a finding only a live census could produce — version control shows the function,
+never its attachment.
 
 **QA.** Tier B: a principal with no `user_roles` row resolves to no authority regardless of
 `user_profiles`/`app_users` content. Tier A: no authority-path module reads either table.
@@ -682,15 +759,15 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 
 | # | Workstream | Migration | Target | Preflight focus |
 |---|---|---|---|---|
-| M1 | W-6 | Backfill access profiles for memberships lacking one | shared | Row count == W-0 Q4; no existing profile modified |
+| M1 | W-6 | Backfill access profiles for memberships lacking one | shared | Row count == W-0 Q4 (**= 2** at census time, re-run before applying); no existing profile modified (**0 orphan profiles exist**) |
 | M2 | W-5 | Atomic membership+profile RPC | shared | Function only; no data effect |
 | M3 | W-9 | Catalog consolidation — repoint grants to one FK | shared | Every grant satisfies the surviving FK; no unexpected incoming FKs or dependent views |
 | M4 | W-9 | Drop retired catalog tables (**separate, later**) | shared | Zero readers proven since M3 |
 | M5 | W-11 | Catalog reconciliation — add enforced keys, delete unenforced | shared | Enumerated deletion list reviewed by the operator first |
 | M6 | W-12 | `seed_default_rbac()` enumerates grants | shared | Catalog width vs live — a new tenant must not silently get a thinner set |
-| M7 | W-13 | Seed `portal.access` and grant it | shared | Every org with an `admin`/`ops` membership receives the grant (W-0 Q5) |
-| M8 | W-16 | Remediate undefined `user_roles.role` values | shared | Equals W-0 Q3; each row's disposition reviewed |
-| M9 | W-16 | FK `user_roles.role` → `role_definitions` | shared | Zero violating rows after M8 |
+| M7 | W-13 | Seed `portal.access` and grant it | shared | Every org with an `admin`/`ops` membership receives the grant (**W-0 Q5 = 0**, so no org is missed) |
+| ~~M8~~ | ~~W-16~~ | ~~Remediate undefined `user_roles.role` values~~ **STRUCK — W-0 Q3 = 0, nothing to remediate** | — | — |
+| M9 | W-16 | FK `user_roles.role` → `role_definitions` | shared | Zero violating rows — re-run Q3 at preflight (M8 no longer precedes it) |
 | M10 | W-19 | Remove dead `owner`/`manager` RLS grants *(if D4=b)* | shared | No policy loses its only grant |
 
 **Every one targets `shared`.** Per [`MIGRATION-APPLY-GATE.md`](../../MIGRATION-APPLY-GATE.md), each therefore
@@ -704,8 +781,15 @@ Two rules from that document bear directly on this plan:
 - **Accept ≠ authorize-apply.** A gate of `needs_operator` must not complete a phase or advance the spine, even
   in autonomous mode. That bug shipped once on Access & Roles Phase 0 (2026-07-29).
 
-M3/M4 and M8/M9 are deliberately split across migrations: repoint before drop, remediate before constrain.
-Combining either pair produces a migration that cannot be applied safely and cannot be reverted cleanly.
+M3/M4 are deliberately split across migrations: repoint before drop. ~~M8/M9 likewise — remediate before
+constrain~~ — **M8 is struck, so M9 stands alone**; the remediate-before-constrain rule survives as a
+principle, and would return the moment Q3 becomes non-zero. Combining M3/M4 produces a migration that cannot
+be applied safely and cannot be reverted cleanly.
+
+**Nine migrations remain, not ten.** Each still requires its own read-only preflight against the target
+immediately before the authorization ask — W-0's counts are a 2026-07-31 snapshot, not a standing warrant.
+The trusted host action (`database.read_census`) is the channel for those preflights; none of them needs an
+operator to handle a credential.
 
 **This phase applies no migration and writes no SQL.** The register is a plan.
 
@@ -806,15 +890,24 @@ Per the assignment constraints:
 
 ### 14.3 Limits
 
-1. **Static and file-grounded**, like phases 1 and 2. No request was issued, no browser used, no live database
-   queried, no source file modified. The only file written by this phase is this document.
+1. **Static and file-grounded** when written, like phases 1 and 2 — no request issued, no browser used, no
+   source file modified. **Superseded in one respect on 2026-07-31:** W-0 has since been executed read-only
+   against the deployed database via a trusted host action, so §4 now carries live counts. Everything else in
+   this plan remains static analysis.
 2. **Sizings are estimates**, calibrated to 539 routes and 289 migrations, not measured. W-15 (L) has the
    widest error bar; W-4's exception baseline will sharpen it.
-3. **Wave 0 is a plan for queries, not their results.** Every count it produces can reorder waves 2 and 5.
+3. ~~**Wave 0 is a plan for queries, not their results.**~~ **RESOLVED 2026-07-31.** Wave 0 executed; its
+   counts are in §4 and have been applied. The reordering it produced: W-20 stays in wave 5 (G1 latent), M8 is
+   struck, and L2/L3/L4 have empty remediation sets. Waves 2 and 5 are no longer gated by W-0. The counts are
+   a snapshot — each lockout-class switch and each §11 preflight must re-run the census rather than cite it.
 4. **Membership writers beyond `POST /api/admin/users` were not enumerated.** W-5 carries that audit as its
    first step; if other writers exist, W-5 grows.
 5. **The observation window for dual-read is not specified.** It depends on real traffic to the authority path,
    which is a deployment fact this phase cannot see. Each lockout-class workstream sets its own and states it.
+   **W-0 largely dissolves this:** at 6 `(user, org)` pairs the population is exhaustively enumerable, so
+   step 3 is better satisfied by enumerating all six and computing both answers for each than by waiting on
+   traffic that may not come. The limit would return at a larger tenant — the recommendation is scale-bound,
+   not permanent.
 6. **No effort is budgeted for governance-doc reconciliation.**
    `docs/platform/governance/roles-and-permissions.md` is `status: canonical` and states a rule the code does
    not follow, with a dead "Expanded reference" pointer (phase 2 §15.6). It should land with W-15, and is not
